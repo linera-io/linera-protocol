@@ -60,14 +60,15 @@ Client <-||-> service workers <-> storage
   its account and may have *remote effects* on other accounts.
   -->
   Invariant: when executing a set of (valid) operations, remote
-  effects can be shuffled without affecting the final result.
+  effects can be shuffled/delayed without affecting the final result.
 
 * Sequence number: counter associated to the successive operations processed by an account
 --> Invariant: there is at most one certified operation per UID and per sequence number
 
 -------
 TODO:
-* specify all the admissible orderings for local/remote effects (causality dependencies with account creation)
+* specify all the admissible orderings for local/remote effects
+--> Some local operations may depend on remote effects (e.g. account creation)
 * current client is probably incomplete w.r.t confirmation of creation operations
 -------
 
@@ -81,11 +82,15 @@ TODO:
 
 ## Storage Layout
 
-### Certified operations
+### (Compressed) Certified operations
 
 * S3 bucket is optionally public-readable for fast validator sync-ing
 
-* 
+* Operations are chained -> only need to store the signatures for the last one (although information on past voters is useful -> perhaps compressed ?)
+
+TODO:
+* rollbacks for target accounts ?
+* account creation seen as predecessor ("parent process") for both local and remote accounts?
 
 ### Account states
 
