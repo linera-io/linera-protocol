@@ -40,6 +40,8 @@ Client <-||-> load balancer <-> workers <-||-> cloud storage
 
 * Several cloud providers should be eventually supported (storage + workers).
 
+* New validators should be able to verify data consistency lazily.
+
 
 ## Zefchain Concepts
 
