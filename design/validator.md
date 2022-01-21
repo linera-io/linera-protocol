@@ -1,50 +1,44 @@
-# Reference AWS implementation of a Zefchain validator
+# Reference implementation of a Zefchain validator
 
 
 ## Overview
 
-The reference Zefchain-AWS validator aims to provide a fully *elastic*
-implementation of the Zefchain protocol in AWS.
+The reference Zefchain validator aims to provide a fully *elastic* implementation of
+the Zefchain protocol.
 
 ```
-Internet || AWS instance
-         ||
-Client <-||-> service workers <-> storage
-         ||
+Internet ||     Zefchain validator        || Cloud Provider(s)
+         ||                               ||
+Client <-||-> load balancer <-> workers <-||-> cloud storage
 ```
 
 ### Primary design goals
 
-* The full Zefchain protocol should be supported with excellent
-  performance and cost efficiency in mind.
+* The full Zefchain protocol should be supported with excellent performance and cost
+  efficiency in mind.
 
-* Important variations in client traffic should lead to appropriate
-  up-scaling and down-scaling of service workers managed by AWS.
+* Important variations in client traffic should lead to appropriate up-scaling and
+  down-scaling of service workers.
 
-* The corresponding variable fees charged AWS should be always
-  strictly covered by the transaction fees (pre-)paid by Zefchain clients.
+* Operational costs charged by a cloud provider should be covered by the transaction fees
+  (pre-)paid by Zefchain clients.
 
 * The system should tolerate crashes in workers.
 
-* Cryptographic secrets should be protected using AWS abstractions.
+* Cryptographic secrets should be protected.
+
+* Cloud storage should support large-scale read-only accesses by auditors and new validators.
 
 ### Secondary design goals
 
-* AWS components should be kept as simple as possible, ideally using
-  only Serveless applications and S3 storage.
+* Workers should be as simple as possible. They may be also hosted by a cloud provider.
 
-* Fast synchronization with other AWS validator instances should be
-  supported (e.g. public S3 buckets).
-
-* Service logs should be created by workers and aggregated for
-  consumption by the AWS account owner (aka the operator).
+* Service logs should be created by workers and easily aggregated for consumption by the
+  account owner (aka the operator).
 
 * (MAYBE?) Physical shards should use different signing keys (PKI).
 
-### Non-goals
-
-* Decentralization will require translating this design to additional
-  service providers.
+* Several cloud providers should be eventually supported (storage + workers).
 
 
 ## Zefchain Concepts
