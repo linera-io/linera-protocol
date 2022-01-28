@@ -4,7 +4,7 @@
 
 use crate::{
     base_types::*, committee::Committee, downloader::*, ensure as my_ensure, error::Error,
-    messages::*,
+    messages::*, AsyncResult,
 };
 use failure::{bail, ensure};
 use futures::{future, StreamExt};
@@ -14,8 +14,6 @@ use std::collections::{btree_map, BTreeMap, HashMap};
 #[cfg(test)]
 #[path = "unit_tests/client_tests.rs"]
 mod client_tests;
-
-pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
 
 /// How to communicate with an authority.
 pub trait AuthorityClient {

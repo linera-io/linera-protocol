@@ -2,6 +2,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use futures::future;
+
 pub mod account;
 pub mod authority;
 pub mod base_types;
@@ -12,3 +14,5 @@ pub mod downloader;
 pub mod error;
 pub mod messages;
 pub mod serialize;
+
+pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
