@@ -3,10 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{base_types::*, ensure, error::Error, messages::*};
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// State of an account.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct AccountState {
     /// Owner of the account. An account without owner cannot execute operations.
