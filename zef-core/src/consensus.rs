@@ -3,10 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{base_types::*, ensure, error::Error, messages::*};
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// State of a one-shot consensus instance.
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct ConsensusState {
     /// Accounts expected to be locked and managed by the protocol.
