@@ -152,10 +152,7 @@ Error:
     3:
       InvalidSequenceNumber: UNIT
     4:
-      PreviousRequestMustBeConfirmedFirst:
-        STRUCT:
-          - pending:
-              TYPENAME: Value
+      PreviousRequestMustBeConfirmedFirst: UNIT
     5:
       MissingEarlierConfirmations:
         STRUCT:
@@ -198,56 +195,58 @@ Error:
         NEWTYPE:
           TYPENAME: AccountId
     20:
-      InvalidCoin: UNIT
-    21:
-      InvalidAsset: UNIT
-    22:
       CertificateNotFound: UNIT
-    23:
+    21:
       InvalidCrossShardRequest: UNIT
-    24:
+    22:
       InvalidRequestOrder: UNIT
-    25:
+    23:
       InvalidConfirmationOrder: UNIT
-    26:
+    24:
       InvalidCoinCreationOrder: UNIT
-    27:
+    25:
       ClientErrorWhileProcessingRequestOrder: UNIT
-    28:
+    26:
       ClientErrorWhileProcessingCoinCreationOrder: UNIT
-    29:
+    27:
       ClientErrorWhileRequestingCertificate: UNIT
-    30:
+    28:
       WrongShard: UNIT
-    31:
+    29:
       InvalidDecoding: UNIT
-    32:
+    30:
       UnexpectedMessage: UNIT
-    33:
+    31:
       ClientIoError:
         STRUCT:
           - error: STR
-    34:
+    32:
       UnknownConsensusInstance:
         NEWTYPE:
           TYPENAME: AccountId
-    35:
+    33:
       InvalidConsensusOrder: UNIT
-    36:
+    34:
       UnsafeConsensusProposal: UNIT
-    37:
+    35:
       MissingConsensusLock:
         STRUCT:
           - account_id:
               TYPENAME: AccountId
-    38:
+    36:
       InvalidConsensusProposal: UNIT
-    39:
+    37:
       UnsafeConsensusPreCommit: UNIT
 Functionality:
   ENUM:
     0:
-      AtomicSwap: UNIT
+      AtomicSwap:
+        STRUCT:
+          - accounts:
+              SEQ:
+                TUPLE:
+                  - TYPENAME: AccountId
+                  - TYPENAME: SequenceNumber
 Operation:
   ENUM:
     0:
@@ -282,11 +281,6 @@ Operation:
               TYPENAME: AccountId
           - functionality:
               TYPENAME: Functionality
-          - accounts:
-              SEQ:
-                TUPLE:
-                  - TYPENAME: AccountId
-                  - TYPENAME: SequenceNumber
     6:
       LockInto:
         STRUCT:

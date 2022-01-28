@@ -1,7 +1,10 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{base_types::*, committee::Committee, downloader::*, error::Error, messages::*};
+use crate::{
+    base_types::*, committee::Committee, downloader::*, ensure as my_ensure, error::Error,
+    messages::*,
+};
 use failure::{bail, ensure};
 use futures::{future, StreamExt};
 use rand::seq::SliceRandom;
@@ -441,7 +444,7 @@ where
                                 pending: Some(vote),
                                 ..
                             }) => {
-                                fp_ensure!(
+                                my_ensure!(
                                     vote.authority == name,
                                     Error::ClientErrorWhileProcessingRequestOrder
                                 );
@@ -552,7 +555,7 @@ where
                             .operation
                             .recipient()
                             .ok_or(Error::ClientErrorWhileRequestingCertificate)?;
-                        fp_ensure!(
+                        my_ensure!(
                             recipient == account_id,
                             Error::ClientErrorWhileRequestingCertificate
                         );

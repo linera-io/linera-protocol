@@ -2,7 +2,6 @@
 name = "zef-core"
 version = "0.1.0"
 authors = ["Zefchain <devops@zefchain.com>"]
-publish = false
 edition = "2021"
 
 [dependencies]

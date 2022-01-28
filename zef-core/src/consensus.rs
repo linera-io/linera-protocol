@@ -1,15 +1,13 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{base_types::*, error::Error, messages::*};
+use crate::{base_types::*, ensure, error::Error, messages::*};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// State of a one-shot consensus instance.
 #[derive(Debug)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct ConsensusState {
-    /// Functionality realized by this instance.
-    pub functionality: Functionality,
     /// Accounts expected to be locked and managed by the protocol.
     pub accounts: Vec<AccountId>,
     /// Expected sequence number for each locked account.
@@ -27,16 +25,11 @@ pub struct ConsensusState {
 }
 
 impl ConsensusState {
-    pub fn new(
-        functionality: Functionality,
-        expected: Vec<(AccountId, SequenceNumber)>,
-        received: Certificate,
-    ) -> Self {
+    pub fn new(expected: Vec<(AccountId, SequenceNumber)>, received: Certificate) -> Self {
         let accounts: Vec<_> = expected.iter().map(|(id, _)| id.clone()).collect();
         let sequence_numbers: BTreeMap<_, _> = expected.into_iter().collect();
         assert_eq!(accounts.len(), sequence_numbers.len());
         Self {
-            functionality,
             accounts,
             sequence_numbers,
             locked_accounts: BTreeMap::new(),
@@ -48,12 +41,12 @@ impl ConsensusState {
     }
 
     pub(crate) fn make_requests(&self, decision: ConsensusDecision) -> Result<Vec<Request>, Error> {
-        match (self.functionality, decision) {
-            (_, ConsensusDecision::Abort) => Ok(Vec::new()),
-            (Functionality::AtomicSwap, ConsensusDecision::Confirm) => {
+        match decision {
+            ConsensusDecision::Abort => Ok(Vec::new()),
+            ConsensusDecision::Confirm => {
                 let num_accounts = self.accounts.len();
                 for id in &self.accounts {
-                    fp_ensure!(
+                    ensure!(
                         self.locked_accounts.contains_key(id),
                         Error::MissingConsensusLock {
                             account_id: id.clone()

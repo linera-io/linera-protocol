@@ -1,7 +1,7 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{base_types::*, committee::Committee, error::Error};
+use super::{base_types::*, committee::Committee, ensure, error::Error};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 
@@ -40,7 +40,6 @@ pub enum Operation {
     StartConsensusInstance {
         new_id: AccountId,
         functionality: Functionality,
-        accounts: Vec<(AccountId, SequenceNumber)>,
     },
     /// Lock the account into the given consensus instance, managed by the given key.
     LockInto {
@@ -50,9 +49,11 @@ pub enum Operation {
 }
 
 /// A one-shot funtionality implemented in a consensus instance.
-#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Functionality {
-    AtomicSwap,
+    AtomicSwap {
+        accounts: Vec<(AccountId, SequenceNumber)>,
+    },
 }
 
 /// A request containing an account operation.
@@ -134,6 +135,22 @@ pub enum ConsensusOrder {
     },
     GetStatus {
         instance_id: AccountId,
+    },
+}
+
+/// The response to a consensus order.
+pub enum ConsensusResponse {
+    Info(ConsensusInfoResponse),
+    Vote(Vote),
+    Continuations(Vec<CrossShardContinuation>),
+}
+
+/// Next step of the confirmation of an operation.
+pub enum CrossShardContinuation {
+    Done,
+    Request {
+        shard_id: ShardId,
+        request: Box<CrossShardRequest>,
     },
 }
 
@@ -318,7 +335,7 @@ impl RequestOrder {
     }
 
     pub fn check(&self, authentication_method: &Option<AccountOwner>) -> Result<(), Error> {
-        fp_ensure!(
+        ensure!(
             authentication_method == &Some(self.owner),
             Error::InvalidOwner
         );
@@ -340,7 +357,7 @@ impl Vote {
     /// Verify the signature and return the non-zero voting right of the authority.
     pub fn check(&self, committee: &Committee) -> Result<usize, Error> {
         let weight = committee.weight(&self.authority);
-        fp_ensure!(weight > 0, Error::UnknownSigner);
+        ensure!(weight > 0, Error::UnknownSigner);
         self.signature.check(&self.value, self.authority)?;
         Ok(weight)
     }
@@ -377,14 +394,14 @@ impl<'a> SignatureAggregator<'a> {
     ) -> Result<Option<Certificate>, Error> {
         signature.check(&self.partial.value, authority)?;
         // Check that each authority only appears once.
-        fp_ensure!(
+        ensure!(
             !self.used_authorities.contains(&authority),
             Error::CertificateAuthorityReuse
         );
         self.used_authorities.insert(authority);
         // Update weight.
         let voting_rights = self.committee.weight(&authority);
-        fp_ensure!(voting_rights > 0, Error::UnknownSigner);
+        ensure!(voting_rights > 0, Error::UnknownSigner);
         self.weight += voting_rights;
         // Update certificate.
         self.partial.signatures.push((authority, signature));
@@ -406,17 +423,17 @@ impl Certificate {
         let mut used_authorities = HashSet::new();
         for (authority, _) in self.signatures.iter() {
             // Check that each authority only appears once.
-            fp_ensure!(
+            ensure!(
                 !used_authorities.contains(authority),
                 Error::CertificateAuthorityReuse
             );
             used_authorities.insert(*authority);
             // Update weight.
             let voting_rights = committee.weight(authority);
-            fp_ensure!(voting_rights > 0, Error::UnknownSigner);
+            ensure!(voting_rights > 0, Error::UnknownSigner);
             weight += voting_rights;
         }
-        fp_ensure!(
+        ensure!(
             weight >= committee.quorum_threshold(),
             Error::CertificateRequiresQuorum
         );

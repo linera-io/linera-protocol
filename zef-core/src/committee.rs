@@ -4,7 +4,7 @@
 use super::base_types::*;
 use std::collections::BTreeMap;
 
-#[derive(Eq, PartialEq, Clone, Debug)]
+#[derive(Eq, PartialEq, Clone, Debug, Default)]
 pub struct Committee {
     pub voting_rights: BTreeMap<AuthorityName, usize>,
     pub total_votes: usize,

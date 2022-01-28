@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    account::AccountState, base_types::*, committee::Committee, consensus::ConsensusState,
+    account::AccountState, base_types::*, committee::Committee, consensus::ConsensusState, ensure,
     error::Error, messages::*,
 };
 use std::collections::BTreeMap;
@@ -23,28 +23,10 @@ pub struct AuthorityState {
     pub accounts: BTreeMap<AccountId, AccountState>,
     /// States of consensus instances.
     pub instances: BTreeMap<AccountId, ConsensusState>,
-    /// The latest transaction index of the blockchain that the authority has seen.
-    pub last_transaction_index: SequenceNumber,
     /// The sharding ID of this authority shard. 0 if one shard.
     pub shard_id: ShardId,
     /// The number of shards. 1 if single shard.
     pub number_of_shards: u32,
-}
-
-/// Next step of the confirmation of an operation.
-pub enum CrossShardContinuation {
-    Done,
-    Request {
-        shard_id: ShardId,
-        request: Box<CrossShardRequest>,
-    },
-}
-
-/// The response to a consensus order.
-pub enum ConsensusResponse {
-    Info(ConsensusInfoResponse),
-    Vote(Vote),
-    Continuations(Vec<CrossShardContinuation>),
 }
 
 /// Interface provided by each (shard of an) authority.
@@ -82,7 +64,7 @@ impl AuthorityState {
         certificate: Certificate, // For logging purpose
     ) -> Result<(AccountInfoResponse, CrossShardContinuation), Error> {
         // Verify sharding.
-        fp_ensure!(self.in_shard(&request.account_id), Error::WrongShard);
+        ensure!(self.in_shard(&request.account_id), Error::WrongShard);
         // Obtain the sender's account.
         let sender = request.account_id.clone();
         let account = self
@@ -90,13 +72,13 @@ impl AuthorityState {
             .get_mut(&sender)
             .ok_or_else(|| Error::InactiveAccount(sender.clone()))?;
         // Check that the account is active and ready for this confirmation.
-        fp_ensure!(
+        ensure!(
             account.owner.is_some(),
             Error::InactiveAccount(sender.clone())
         );
         if account.next_sequence_number < request.sequence_number {
-            fp_bail!(Error::MissingEarlierConfirmations {
-                current_sequence_number: account.next_sequence_number
+            return Err(Error::MissingEarlierConfirmations {
+                current_sequence_number: account.next_sequence_number,
             });
         }
         if account.next_sequence_number > request.sequence_number {
@@ -144,19 +126,18 @@ impl AuthorityState {
         certificate: Certificate,
     ) -> Result<(), Error> {
         if let Some(recipient) = operation.recipient() {
-            fp_ensure!(self.in_shard(recipient), Error::WrongShard);
+            ensure!(self.in_shard(recipient), Error::WrongShard);
             // Execute the recipient's side of the operation.
             let account = self.accounts.entry(recipient.clone()).or_default();
             account.apply_operation_as_recipient(&operation, certificate)?;
         } else if let Operation::StartConsensusInstance {
             new_id,
-            accounts,
-            functionality,
+            functionality: Functionality::AtomicSwap { accounts },
         } = &operation
         {
-            fp_ensure!(self.in_shard(new_id), Error::WrongShard);
+            ensure!(self.in_shard(new_id), Error::WrongShard);
             assert!(!self.instances.contains_key(new_id)); // guaranteed under BFT assumptions.
-            let instance = ConsensusState::new(*functionality, accounts.clone(), certificate);
+            let instance = ConsensusState::new(accounts.clone(), certificate);
             self.instances.insert(new_id.clone(), instance);
         }
         // This concludes the confirmation of `certificate`.
@@ -167,13 +148,13 @@ impl AuthorityState {
 impl Authority for AuthorityState {
     fn handle_request_order(&mut self, order: RequestOrder) -> Result<AccountInfoResponse, Error> {
         // Verify sharding.
-        fp_ensure!(
+        ensure!(
             self.in_shard(&order.value.request.account_id),
             Error::WrongShard
         );
         // Verify that the order was meant for this authority.
         if let Some(authority) = &order.value.limited_to {
-            fp_ensure!(self.name == *authority, Error::InvalidRequestOrder);
+            ensure!(self.name == *authority, Error::InvalidRequestOrder);
         }
         // Obtain the sender's account.
         let sender = order.value.request.account_id.clone();
@@ -182,25 +163,23 @@ impl Authority for AuthorityState {
             .accounts
             .get_mut(&sender)
             .ok_or_else(|| Error::InactiveAccount(sender.clone()))?;
-        fp_ensure!(account.owner.is_some(), Error::InactiveAccount(sender));
+        ensure!(account.owner.is_some(), Error::InactiveAccount(sender));
         // Check authentication of the request.
         order.check(&account.owner)?;
         // Check the account is ready for this new request.
         let request = order.value.request;
-        fp_ensure!(
+        ensure!(
             request.sequence_number <= SequenceNumber::max(),
             Error::InvalidSequenceNumber
         );
-        fp_ensure!(
+        ensure!(
             account.next_sequence_number == request.sequence_number,
             Error::UnexpectedSequenceNumber
         );
         if let Some(pending) = &account.pending {
-            fp_ensure!(
+            ensure!(
                 matches!(&pending.value, Value::Confirm(r) | Value::Lock(r) if r == &request),
-                Error::PreviousRequestMustBeConfirmedFirst {
-                    pending: pending.value.clone()
-                }
+                Error::PreviousRequestMustBeConfirmedFirst
             );
             // This exact request was already signed. Return the previous vote.
             return Ok(account.make_account_info(sender));
@@ -274,11 +253,11 @@ impl Authority for AuthorityState {
                             instance.locked_accounts.insert(account_id, owner);
                             instance.participants.insert(owner);
                         }
-                        _ => fp_bail!(Error::InvalidConsensusOrder),
+                        _ => return Err(Error::InvalidConsensusOrder),
                     }
                 }
                 // Verify the signature and that the author of the signature is authorized.
-                fp_ensure!(
+                ensure!(
                     instance.participants.contains(&owner),
                     Error::InvalidConsensusOrder
                 );
@@ -288,7 +267,7 @@ impl Authority for AuthorityState {
                 // TODO: verify that `proposal.round` is "available".
                 // Verify safety.
                 if let Some(proposed) = &instance.proposed {
-                    fp_ensure!(
+                    ensure!(
                         (proposed.round == proposal.round
                             && proposed.decision == proposal.decision)
                             || proposed.round < proposal.round,
@@ -300,7 +279,7 @@ impl Authority for AuthorityState {
                     .as_ref()
                     .and_then(|cert| cert.value.pre_commit_proposal())
                 {
-                    fp_ensure!(
+                    ensure!(
                         locked.round < proposal.round && locked.decision == proposal.decision,
                         Error::UnsafeConsensusProposal
                     );
@@ -316,7 +295,7 @@ impl Authority for AuthorityState {
                 certificate.check(&self.committee)?;
                 let (proposal, requests) = match certificate.value.clone() {
                     Value::PreCommit { proposal, requests } => (proposal, requests),
-                    _ => fp_bail!(Error::InvalidConsensusOrder),
+                    _ => return Err(Error::InvalidConsensusOrder),
                 };
                 let instance = self
                     .instances
@@ -324,7 +303,7 @@ impl Authority for AuthorityState {
                     .ok_or_else(|| Error::UnknownConsensusInstance(proposal.instance_id.clone()))?;
                 // Verify safety.
                 if let Some(proposed) = &instance.proposed {
-                    fp_ensure!(
+                    ensure!(
                         proposed.round <= proposal.round,
                         Error::UnsafeConsensusPreCommit
                     );
@@ -334,7 +313,7 @@ impl Authority for AuthorityState {
                     .as_ref()
                     .and_then(|cert| cert.value.pre_commit_proposal())
                 {
-                    fp_ensure!(
+                    ensure!(
                         locked.round <= proposal.round,
                         Error::UnsafeConsensusPreCommit
                     );
@@ -350,7 +329,7 @@ impl Authority for AuthorityState {
                 certificate.check(&self.committee)?;
                 let (proposal, requests) = match &certificate.value {
                     Value::Commit { proposal, requests } => (proposal, requests),
-                    _ => fp_bail!(Error::InvalidConsensusOrder),
+                    _ => return Err(Error::InvalidConsensusOrder),
                 };
                 // Success.
                 // Only execute the requests in the commit once.
@@ -381,7 +360,7 @@ impl Authority for AuthorityState {
                                     sequence_number,
                                 });
                             }
-                            _ => fp_bail!(Error::InvalidConsensusOrder),
+                            _ => return Err(Error::InvalidConsensusOrder),
                         }
                     }
                 }
@@ -416,7 +395,7 @@ impl Authority for AuthorityState {
                 self.update_recipient_account(request.operation.clone(), certificate)
             }
             CrossShardRequest::DestroyAccount { account_id } => {
-                fp_ensure!(self.in_shard(&account_id), Error::WrongShard);
+                ensure!(self.in_shard(&account_id), Error::WrongShard);
                 self.accounts.remove(&account_id);
                 Ok(())
             }
@@ -434,14 +413,14 @@ impl Authority for AuthorityState {
         &self,
         query: AccountInfoQuery,
     ) -> Result<AccountInfoResponse, Error> {
-        fp_ensure!(self.in_shard(&query.account_id), Error::WrongShard);
+        ensure!(self.in_shard(&query.account_id), Error::WrongShard);
         let account = self.account_state(&query.account_id)?;
         let mut response = account.make_account_info(query.account_id);
         if let Some(seq) = query.query_sequence_number {
             if let Some(cert) = account.confirmed_log.get(usize::from(seq)) {
                 response.queried_certificate = Some(cert.clone());
             } else {
-                fp_bail!(Error::CertificateNotFound)
+                return Err(Error::CertificateNotFound);
             }
         }
         if let Some(idx) = query.query_received_certificates_excluding_first_nth {
@@ -459,7 +438,6 @@ impl AuthorityState {
             key_pair,
             accounts: BTreeMap::new(),
             instances: BTreeMap::new(),
-            last_transaction_index: SequenceNumber::new(),
             shard_id: 0,
             number_of_shards: 1,
         }
@@ -477,7 +455,6 @@ impl AuthorityState {
             key_pair,
             accounts: BTreeMap::new(),
             instances: BTreeMap::new(),
-            last_transaction_index: SequenceNumber::new(),
             shard_id,
             number_of_shards,
         }
@@ -503,7 +480,7 @@ impl AuthorityState {
             .accounts
             .get(account_id)
             .ok_or_else(|| Error::InactiveAccount(account_id.clone()))?;
-        fp_ensure!(
+        ensure!(
             account.owner.is_some(),
             Error::InactiveAccount(account_id.clone())
         );

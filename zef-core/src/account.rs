@@ -1,7 +1,7 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{base_types::*, error::Error, messages::*};
+use crate::{base_types::*, ensure, error::Error, messages::*};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// State of an account.
@@ -54,8 +54,8 @@ impl AccountState {
     pub(crate) fn validate_operation(&self, request: Request) -> Result<Value, Error> {
         let value = match &request.operation {
             Operation::Transfer { amount, .. } => {
-                fp_ensure!(*amount > Amount::zero(), Error::IncorrectTransferAmount);
-                fp_ensure!(
+                ensure!(*amount > Amount::zero(), Error::IncorrectTransferAmount);
+                ensure!(
                     self.balance >= (*amount).into(),
                     Error::InsufficientFunding {
                         current_balance: self.balance
@@ -65,18 +65,19 @@ impl AccountState {
             }
             Operation::OpenAccount { new_id, .. } => {
                 let expected_id = request.account_id.make_child(request.sequence_number);
-                fp_ensure!(
+                ensure!(
                     new_id == &expected_id,
                     Error::InvalidNewAccountId(new_id.clone())
                 );
                 Value::Confirm(request)
             }
             Operation::StartConsensusInstance {
-                new_id, accounts, ..
+                new_id,
+                functionality: Functionality::AtomicSwap { accounts },
             } => {
                 // Verify the new UID.
                 let expected_id = request.account_id.make_child(request.sequence_number);
-                fp_ensure!(
+                ensure!(
                     new_id == &expected_id,
                     Error::InvalidNewAccountId(new_id.clone())
                 );
@@ -85,7 +86,7 @@ impl AccountState {
                     .clone()
                     .into_iter()
                     .collect::<BTreeMap<AccountId, _>>();
-                fp_ensure!(numbers.len() == accounts.len(), Error::InvalidRequestOrder);
+                ensure!(numbers.len() == accounts.len(), Error::InvalidRequestOrder);
                 Value::Confirm(request)
             }
             Operation::Skip | Operation::CloseAccount | Operation::ChangeOwner { .. } => {
