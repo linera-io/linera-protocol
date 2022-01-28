@@ -1,4 +1,5 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
+// Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};

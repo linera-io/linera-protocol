@@ -1,4 +1,5 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
+// Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 #![allow(clippy::same_item_push)] // get_key_pair returns random elements
 
