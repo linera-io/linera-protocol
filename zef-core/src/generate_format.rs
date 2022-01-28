@@ -4,7 +4,7 @@
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use std::{fs::File, io::Write};
 use structopt::{clap::arg_enum, StructOpt};
-use zefchain_core::{error, messages, serialize};
+use zef_core::{error, messages, serialize};
 
 fn get_registry() -> Result<Registry> {
     let mut tracer = Tracer::new(
@@ -45,7 +45,7 @@ struct Options {
     action: Action,
 }
 
-const FILE_PATH: &str = "zefchain-core/tests/staged/formats.yaml";
+const FILE_PATH: &str = "zef-core/tests/staged/formats.yaml";
 
 fn main() {
     let options = Options::from_args();

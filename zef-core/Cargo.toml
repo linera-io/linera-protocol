@@ -1,7 +1,7 @@
 [package]
-name = "zefchain-core"
+name = "zef-core"
 version = "0.1.0"
-authors = ["Libra <oncall+libra@xmail.facebook.com>"]
+authors = ["Zefchain <devops@zefchain.com>"]
 publish = false
 edition = "2021"
 

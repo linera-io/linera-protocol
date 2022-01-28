@@ -1,8 +1,7 @@
 [workspace]
 members = [
         "aws-test",
-        "zefchain-storage",
-        "zefchain-core"
+        "zef-core"
 ]
 
 [profile.release]
