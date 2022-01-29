@@ -3,7 +3,7 @@
 
 # Zefchain Protocol
 
-This repository is dedicated to developping the Zefchain protocol.
+This repository is dedicated to developing the Zefchain protocol.
 
 ## Quickstart with the Zef service CLI
 
@@ -80,6 +80,15 @@ kill %1 %2 %3 %4 %5 %6 %7 %8 %9 %10 %11 %12 %13 %14 %15 %16
 
 cd ../..
 ```
+
+## Dealing with test failures `test_format` after code changes
+
+Getting an error with the test in [`zef-core/tests/format.rs`](zef-core/tests/format.rs) ?
+Probably the file [`zef-core/tests/staged/formats.yaml`](zef-core/tests/staged/formats.yaml) (recording message formats) is
+outdated. In the most case (but not always sadly), this can be fixed by running
+[`zef-core/generate-format.sh`](zef-core/generate-format.sh).
+
+See https://github.com/novifinancial/serde-reflection for more context.
 
 ## AWS Rust SDK demo with localstack
 
