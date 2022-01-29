@@ -5,13 +5,11 @@
 
 This repository is dedicated to developping the Zefchain protocol.
 
-## AWS with localstack
-
-```
-# localstack start
-AWS_ACCESS_KEY_ID= AWS_SECRET_ACCESS_KEY= AWS_REGION=us-west-2 LOCALSTACK=true cargo --bin aws-test run
-```
 ## Quickstart with the Zef service CLI
+
+The current code was imported from https://github.com/novifinancial/fastpay/pull/24 then
+cleaned up (e.g. removing coins and assets for now). Atomic swaps are still WIP (notably
+the client and CLI code is missing).
 
 The following script can be run with `cargo test -- --ignored`.
 
@@ -81,4 +79,11 @@ fgrep '"account_id"':"$ACCOUNT3" accounts.json
 kill %1 %2 %3 %4 %5 %6 %7 %8 %9 %10 %11 %12 %13 %14 %15 %16
 
 cd ../..
+```
+
+## AWS Rust SDK demo with localstack
+
+```
+# localstack start
+AWS_ACCESS_KEY_ID= AWS_SECRET_ACCESS_KEY= AWS_REGION=us-west-2 LOCALSTACK=true cargo --bin aws-test run
 ```
