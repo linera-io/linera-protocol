@@ -273,7 +273,7 @@ impl ClientContext {
             // Re-index orders by shard for this particular authority client.
             let mut sharded_requests = HashMap::new();
             for (account_id, buf) in &orders {
-                let shard = AuthorityState::get_shard(num_shards, account_id);
+                let shard = get_shard(num_shards, account_id);
                 sharded_requests
                     .entry(shard)
                     .or_insert_with(Vec::new)
