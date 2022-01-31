@@ -81,7 +81,22 @@ kill %1 %2 %3 %4 %5 %6 %7 %8 %9 %10 %11 %12 %13 %14 %15 %16
 cd ../..
 ```
 
-## Dealing with test failures `test_format` after code changes
+## Contributing
+
+### Formatting and linting
+
+Make sure to fix the lint errors reported by
+```
+cargo clippy --all-targets
+```
+and run `cargo fmt` like this:
+```
+cargo fmt -- --config unstable_features=true --config imports_granularity=Crate
+```
+
+The long command for `cargo fmt` is needed to normalize imports (see [rust-lang/rustfmt#4991](https://github.com/rust-lang/rustfmt/issues/4991) )
+
+### Dealing with test failures `test_format` after code changes
 
 Getting an error with the test in [`zef-core/tests/format.rs`](zef-core/tests/format.rs) ?
 Probably the file [`zef-core/tests/staged/formats.yaml`](zef-core/tests/staged/formats.yaml) (recording message formats) is
@@ -89,10 +104,3 @@ outdated. In the most case (but not always sadly), this can be fixed by running
 [`zef-core/generate-format.sh`](zef-core/generate-format.sh).
 
 See https://github.com/novifinancial/serde-reflection for more context.
-
-## AWS Rust SDK demo with localstack
-
-```
-# localstack start
-AWS_ACCESS_KEY_ID= AWS_SECRET_ACCESS_KEY= AWS_REGION=us-west-2 LOCALSTACK=true cargo --bin aws-test run
-```
