@@ -20,3 +20,7 @@ jobs:
       run: cargo build --verbose
     - name: Run tests
       run: cargo test --verbose
+    - name: Clippy (default features)
+      run: cargo clippy --all-targets
+    - name: Rustfmt
+      run: cargo fmt -- --check --config unstable_features=true --config imports_granularity=Crate
