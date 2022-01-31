@@ -43,4 +43,3 @@ fn s3_client(conf: &aws_types::config::Config) -> aws_sdk_s3::Client {
     }
     aws_sdk_s3::Client::from_conf(s3_config_builder.build())
 }
-

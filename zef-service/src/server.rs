@@ -4,8 +4,6 @@
 
 #![deny(warnings)]
 
-use zef_service::{config::*, network, transport};
-use zef_core::{account::AccountState, authority::*, base_types::*};
 use futures::future::join_all;
 use log::*;
 use std::{
@@ -14,6 +12,8 @@ use std::{
 };
 use structopt::StructOpt;
 use tokio::runtime::Runtime;
+use zef_core::{account::AccountState, authority::*, base_types::*};
+use zef_service::{config::*, network, transport};
 
 #[allow(clippy::too_many_arguments)]
 fn make_shard_server(
@@ -38,12 +38,7 @@ fn make_shard_server(
     let committee = committee_config.into_committee();
     let num_shards = server_config.authority.num_shards;
 
-    let mut state = AuthorityState::new_shard(
-        committee,
-        server_config.key,
-        shard,
-        num_shards,
-    );
+    let mut state = AuthorityState::new_shard(committee, server_config.key, shard, num_shards);
 
     // Load initial states
     for (id, owner, balance) in &initial_accounts_config.accounts {
@@ -163,10 +158,7 @@ fn make_server_config(options: AuthorityOptions) -> AuthorityServerConfig {
         base_port: options.port,
         num_shards: options.shards,
     };
-    AuthorityServerConfig {
-        authority,
-        key,
-    }
+    AuthorityServerConfig { authority, key }
 }
 
 #[derive(StructOpt)]
