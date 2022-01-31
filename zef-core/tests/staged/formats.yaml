@@ -237,6 +237,16 @@ Error:
       InvalidConsensusProposal: UNIT
     37:
       UnsafeConsensusPreCommit: UNIT
+    38:
+      MissingCertificate:
+        STRUCT:
+          - hash:
+              TYPENAME: HashValue
+    39:
+      MissingConsensusInstance:
+        STRUCT:
+          - id:
+              TYPENAME: AccountId
 Functionality:
   ENUM:
     0:
@@ -247,6 +257,11 @@ Functionality:
                 TUPLE:
                   - TYPENAME: AccountId
                   - TYPENAME: SequenceNumber
+HashValue:
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 64
 Operation:
   ENUM:
     0:

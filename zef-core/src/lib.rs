@@ -14,5 +14,6 @@ pub mod downloader;
 pub mod error;
 pub mod messages;
 pub mod serialize;
+pub mod storage;
 
 pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;

@@ -11,12 +11,16 @@ use std::{
     str::FromStr,
 };
 use structopt::StructOpt;
-use tokio::runtime::Runtime;
-use zef_core::{account::AccountState, authority::*, base_types::*};
+use zef_core::{
+    account::AccountState,
+    authority::*,
+    base_types::*,
+    storage::{InMemoryStoreClient, StorageClient},
+};
 use zef_service::{config::*, network, transport};
 
 #[allow(clippy::too_many_arguments)]
-fn make_shard_server(
+async fn make_shard_server<Storage>(
     local_ip_addr: &str,
     server_config_path: &Path,
     committee_config_path: &Path,
@@ -24,7 +28,11 @@ fn make_shard_server(
     buffer_size: usize,
     cross_shard_config: network::CrossShardConfig,
     shard: u32,
-) -> network::Server {
+    storage: Storage,
+) -> network::Server<Storage>
+where
+    Storage: StorageClient + Send + Sync + 'static,
+{
     let server_config =
         AuthorityServerConfig::read(server_config_path).expect("Fail to read server config");
     let committee_config =
@@ -38,15 +46,26 @@ fn make_shard_server(
     let committee = committee_config.into_committee();
     let num_shards = server_config.authority.num_shards;
 
-    let mut state = AuthorityState::new_shard(committee, server_config.key, shard, num_shards);
+    let mut state = WorkerState::new(
+        committee,
+        server_config.key.public(),
+        server_config.key,
+        shard,
+        num_shards,
+        storage,
+    );
 
     // Load initial states
     for (id, owner, balance) in &initial_accounts_config.accounts {
-        if AuthorityState::get_shard(num_shards, id) != shard {
+        if get_shard(num_shards, id) != shard {
             continue;
         }
-        let client = AccountState::new(*owner, *balance);
-        state.accounts.insert(id.clone(), client);
+        let account = AccountState::new(*owner, *balance);
+        state
+            .storage
+            .write_account(id.clone(), account)
+            .await
+            .unwrap();
     }
 
     network::Server::new(
@@ -59,29 +78,34 @@ fn make_shard_server(
     )
 }
 
-fn make_servers(
+async fn make_servers(
     local_ip_addr: &str,
     server_config_path: &Path,
     committee_config_path: &Path,
     initial_accounts_config_path: &Path,
     buffer_size: usize,
     cross_shard_config: network::CrossShardConfig,
-) -> Vec<network::Server> {
+) -> Vec<network::Server<InMemoryStoreClient>> {
     let server_config =
         AuthorityServerConfig::read(server_config_path).expect("Fail to read server config");
     let num_shards = server_config.authority.num_shards;
 
     let mut servers = Vec::new();
+    // TODO: create servers in parallel
     for shard in 0..num_shards {
-        servers.push(make_shard_server(
-            local_ip_addr,
-            server_config_path,
-            committee_config_path,
-            initial_accounts_config_path,
-            buffer_size,
-            cross_shard_config.clone(),
-            shard,
-        ))
+        servers.push(
+            make_shard_server(
+                local_ip_addr,
+                server_config_path,
+                committee_config_path,
+                initial_accounts_config_path,
+                buffer_size,
+                cross_shard_config.clone(),
+                shard,
+                InMemoryStoreClient::default(),
+            )
+            .await,
+        )
     }
     servers
 }
@@ -211,7 +235,8 @@ enum ServerCommands {
     },
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
         .format_timestamp_millis()
         .init();
@@ -241,7 +266,9 @@ fn main() {
                         buffer_size,
                         cross_shard_config,
                         shard,
-                    );
+                        InMemoryStoreClient::default(),
+                    )
+                    .await;
                     vec![server]
                 }
                 None => {
@@ -254,10 +281,10 @@ fn main() {
                         buffer_size,
                         cross_shard_config,
                     )
+                    .await
                 }
             };
 
-            let rt = Runtime::new().unwrap();
             let mut handles = Vec::new();
             for server in servers {
                 handles.push(async move {
@@ -273,7 +300,7 @@ fn main() {
                     }
                 });
             }
-            rt.block_on(join_all(handles));
+            join_all(handles).await;
         }
 
         ServerCommands::Generate { options } => {
