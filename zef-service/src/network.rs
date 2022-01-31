@@ -191,14 +191,20 @@ impl MessageHandler for RunningServerState {
                             .server
                             .state
                             .handle_request_order(*message)
-                            .map(|info| Some(serialize_message(&SerializedMessage::AccountInfoResponse(Box::new(info))))),
+                            .map(|info| {
+                                Some(serialize_message(&SerializedMessage::AccountInfoResponse(
+                                    Box::new(info),
+                                )))
+                            }),
                         SerializedMessage::ConfirmationOrder(message) => {
                             match self.server.state.handle_confirmation_order(*message) {
                                 Ok((info, continuation)) => {
                                     // Cross-shard request
                                     self.handle_continuation(continuation).await;
                                     // Response
-                                    Ok(Some(serialize_message(&SerializedMessage::AccountInfoResponse(Box::new(info)))))
+                                    Ok(Some(serialize_message(
+                                        &SerializedMessage::AccountInfoResponse(Box::new(info)),
+                                    )))
                                 }
                                 Err(error) => Err(error),
                             }
@@ -207,11 +213,15 @@ impl MessageHandler for RunningServerState {
                             match self.server.state.handle_consensus_order(*message) {
                                 Ok(ConsensusResponse::Info(info)) => {
                                     // Response
-                                    Ok(Some(serialize_message(&SerializedMessage::ConsensusInfoResponse(Box::new(info)))))
+                                    Ok(Some(serialize_message(
+                                        &SerializedMessage::ConsensusInfoResponse(Box::new(info)),
+                                    )))
                                 }
                                 Ok(ConsensusResponse::Vote(vote)) => {
                                     // Response
-                                    Ok(Some(serialize_message(&SerializedMessage::Vote(Box::new(vote)))))
+                                    Ok(Some(serialize_message(&SerializedMessage::Vote(Box::new(
+                                        vote,
+                                    )))))
                                 }
                                 Ok(ConsensusResponse::Continuations(continuations)) => {
                                     // Cross-shard requests
@@ -228,7 +238,11 @@ impl MessageHandler for RunningServerState {
                             .server
                             .state
                             .handle_account_info_query(*message)
-                            .map(|info| Some(serialize_message(&SerializedMessage::AccountInfoResponse(Box::new(info))))),
+                            .map(|info| {
+                                Some(serialize_message(&SerializedMessage::AccountInfoResponse(
+                                    Box::new(info),
+                                )))
+                            }),
                         SerializedMessage::CrossShardRequest(request) => {
                             match self.server.state.handle_cross_shard_request(*request) {
                                 Ok(()) => (),
@@ -265,7 +279,9 @@ impl MessageHandler for RunningServerState {
                 Err(error) => {
                     warn!("User query failed: {}", error);
                     self.server.user_errors += 1;
-                    Some(serialize_message(&SerializedMessage::Error(Box::new(error))))
+                    Some(serialize_message(&SerializedMessage::Error(Box::new(
+                        error,
+                    ))))
                 }
             }
         })
@@ -375,8 +391,11 @@ impl AuthorityClient for Client {
     ) -> AsyncResult<AccountInfoResponse, Error> {
         Box::pin(async move {
             let shard = AuthorityState::get_shard(self.num_shards, &order.value.request.account_id);
-            self.send_recv_info_bytes(shard, serialize_message(&SerializedMessage::RequestOrder(Box::new(order))))
-                .await
+            self.send_recv_info_bytes(
+                shard,
+                serialize_message(&SerializedMessage::RequestOrder(Box::new(order))),
+            )
+            .await
         })
     }
 
@@ -394,8 +413,11 @@ impl AuthorityClient for Client {
                     .confirm_account_id()
                     .ok_or(Error::InvalidConfirmationOrder)?,
             );
-            self.send_recv_info_bytes(shard, serialize_message(&SerializedMessage::ConfirmationOrder(Box::new(order))))
-                .await
+            self.send_recv_info_bytes(
+                shard,
+                serialize_message(&SerializedMessage::ConfirmationOrder(Box::new(order))),
+            )
+            .await
         })
     }
 
@@ -406,8 +428,11 @@ impl AuthorityClient for Client {
     ) -> AsyncResult<AccountInfoResponse, Error> {
         Box::pin(async move {
             let shard = AuthorityState::get_shard(self.num_shards, &request.account_id);
-            self.send_recv_info_bytes(shard, serialize_message(&SerializedMessage::AccountInfoQuery(Box::new(request))))
-                .await
+            self.send_recv_info_bytes(
+                shard,
+                serialize_message(&SerializedMessage::AccountInfoQuery(Box::new(request))),
+            )
+            .await
         })
     }
 }

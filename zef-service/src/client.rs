@@ -4,10 +4,10 @@
 
 #![deny(warnings)]
 
-use zef_service::{config::*, network, transport};
 use zef_core::{
     authority::*, base_types::*, client::*, committee::Committee, messages::*, serialize::*,
 };
+use zef_service::{config::*, network, transport};
 
 use bytes::Bytes;
 use futures::stream::StreamExt;
@@ -164,7 +164,8 @@ impl ClientContext {
             account.next_sequence_number.try_add_assign_one().unwrap();
             let order = RequestOrder::new(request.clone().into(), key_pair);
             orders.push(order.clone());
-            let serialized_order = serialize_message(&SerializedMessage::RequestOrder(Box::new(order)));
+            let serialized_order =
+                serialize_message(&SerializedMessage::RequestOrder(Box::new(order)));
             serialized_orders.push((account.account_id.clone(), serialized_order.into()));
             if serialized_orders.len() >= max_orders {
                 break;
@@ -202,8 +203,9 @@ impl ClientContext {
                 let sig = Signature::new(&certificate.value, secx);
                 certificate.signatures.push((*pubx, sig));
             }
-            let serialized_certificate =
-                serialize_message(&SerializedMessage::ConfirmationOrder(Box::new(ConfirmationOrder { certificate })));
+            let serialized_certificate = serialize_message(&SerializedMessage::ConfirmationOrder(
+                Box::new(ConfirmationOrder { certificate }),
+            ));
             serialized_certificates.push((
                 order.value.request.account_id,
                 serialized_certificate.into(),
@@ -239,8 +241,9 @@ impl ClientContext {
             match aggregator.append(vote.authority, vote.signature) {
                 Ok(Some(certificate)) => {
                     debug!("Found certificate: {:?}", certificate);
-                    let buf =
-                        serialize_message(&SerializedMessage::ConfirmationOrder(Box::new(ConfirmationOrder { certificate })));
+                    let buf = serialize_message(&SerializedMessage::ConfirmationOrder(Box::new(
+                        ConfirmationOrder { certificate },
+                    )));
                     certificates.push((account_id.clone(), buf.into()));
                     done_senders.insert(account_id);
                 }
