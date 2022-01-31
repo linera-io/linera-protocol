@@ -3,7 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::transport::*;
-use zef_core::{authority::*, base_types::*, client::*, error::*, messages::*, serialize::*};
+use zef_core::{
+    authority::*, base_types::*, client::*, error::*, messages::*, serialize::*, AsyncResult,
+};
 
 #[cfg(feature = "benchmark")]
 use crate::network_server::BenchmarkServer;
@@ -27,11 +29,11 @@ pub struct CrossShardConfig {
     retry_delay_ms: u64,
 }
 
-pub struct Server {
+pub struct Server<StorageClient> {
     network_protocol: NetworkProtocol,
     base_address: String,
     base_port: u32,
-    state: AuthorityState,
+    state: WorkerState<StorageClient>,
     buffer_size: usize,
     cross_shard_config: CrossShardConfig,
     // Stats
@@ -39,12 +41,15 @@ pub struct Server {
     user_errors: u64,
 }
 
-impl Server {
+impl<StorageClient> Server<StorageClient>
+where
+    StorageClient: zef_core::storage::StorageClient + Send + Sync + 'static,
+{
     pub fn new(
         network_protocol: NetworkProtocol,
         base_address: String,
         base_port: u32,
-        state: AuthorityState,
+        state: WorkerState<StorageClient>,
         buffer_size: usize,
         cross_shard_config: CrossShardConfig,
     ) -> Self {
@@ -171,12 +176,15 @@ impl Server {
     }
 }
 
-struct RunningServerState {
-    server: Server,
+struct RunningServerState<StorageClient> {
+    server: Server<StorageClient>,
     cross_shard_sender: mpsc::Sender<(Vec<u8>, ShardId)>,
 }
 
-impl MessageHandler for RunningServerState {
+impl<StorageClient> MessageHandler for RunningServerState<StorageClient>
+where
+    StorageClient: zef_core::storage::StorageClient + Send + Sync + 'static,
+{
     fn handle_message<'a>(
         &'a mut self,
         buffer: &'a [u8],
@@ -191,13 +199,14 @@ impl MessageHandler for RunningServerState {
                             .server
                             .state
                             .handle_request_order(*message)
+                            .await
                             .map(|info| {
                                 Some(serialize_message(&SerializedMessage::AccountInfoResponse(
                                     Box::new(info),
                                 )))
                             }),
                         SerializedMessage::ConfirmationOrder(message) => {
-                            match self.server.state.handle_confirmation_order(*message) {
+                            match self.server.state.handle_confirmation_order(*message).await {
                                 Ok((info, continuation)) => {
                                     // Cross-shard request
                                     self.handle_continuation(continuation).await;
@@ -210,7 +219,7 @@ impl MessageHandler for RunningServerState {
                             }
                         }
                         SerializedMessage::ConsensusOrder(message) => {
-                            match self.server.state.handle_consensus_order(*message) {
+                            match self.server.state.handle_consensus_order(*message).await {
                                 Ok(ConsensusResponse::Info(info)) => {
                                     // Response
                                     Ok(Some(serialize_message(
@@ -238,13 +247,14 @@ impl MessageHandler for RunningServerState {
                             .server
                             .state
                             .handle_account_info_query(*message)
+                            .await
                             .map(|info| {
                                 Some(serialize_message(&SerializedMessage::AccountInfoResponse(
                                     Box::new(info),
                                 )))
                             }),
                         SerializedMessage::CrossShardRequest(request) => {
-                            match self.server.state.handle_cross_shard_request(*request) {
+                            match self.server.state.handle_cross_shard_request(*request).await {
                                 Ok(()) => (),
                                 Err(error) => {
                                     error!("Failed to handle cross-shard request: {}", error);
@@ -288,7 +298,10 @@ impl MessageHandler for RunningServerState {
     }
 }
 
-impl RunningServerState {
+impl<StorageClient> RunningServerState<StorageClient>
+where
+    StorageClient: Send,
+{
     fn handle_continuation(
         &mut self,
         continuation: CrossShardContinuation,
@@ -390,7 +403,7 @@ impl AuthorityClient for Client {
         order: RequestOrder,
     ) -> AsyncResult<AccountInfoResponse, Error> {
         Box::pin(async move {
-            let shard = AuthorityState::get_shard(self.num_shards, &order.value.request.account_id);
+            let shard = get_shard(self.num_shards, &order.value.request.account_id);
             self.send_recv_info_bytes(
                 shard,
                 serialize_message(&SerializedMessage::RequestOrder(Box::new(order))),
@@ -405,7 +418,7 @@ impl AuthorityClient for Client {
         order: ConfirmationOrder,
     ) -> AsyncResult<AccountInfoResponse, Error> {
         Box::pin(async move {
-            let shard = AuthorityState::get_shard(
+            let shard = get_shard(
                 self.num_shards,
                 order
                     .certificate
@@ -427,7 +440,7 @@ impl AuthorityClient for Client {
         request: AccountInfoQuery,
     ) -> AsyncResult<AccountInfoResponse, Error> {
         Box::pin(async move {
-            let shard = AuthorityState::get_shard(self.num_shards, &request.account_id);
+            let shard = get_shard(self.num_shards, &request.account_id);
             self.send_recv_info_bytes(
                 shard,
                 serialize_message(&SerializedMessage::AccountInfoQuery(Box::new(request))),

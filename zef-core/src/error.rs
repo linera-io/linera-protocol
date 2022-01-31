@@ -128,4 +128,11 @@ pub enum Error {
     InvalidConsensusProposal,
     #[fail(display = "Unsafe consensus pre-commit.")]
     UnsafeConsensusPreCommit,
+
+    // Storage
+    #[fail(display = "Missing certificate: {:?}", hash)]
+    MissingCertificate { hash: HashValue },
+
+    #[fail(display = "Missing consensus instance: {}", id)]
+    MissingConsensusInstance { id: InstanceId },
 }

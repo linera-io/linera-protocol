@@ -49,6 +49,8 @@ pub struct PublicKeyBytes(pub [u8; dalek::PUBLIC_KEY_LENGTH]);
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Serialize, Deserialize, Default)]
 pub struct AccountId(pub Vec<SequenceNumber>);
 
+pub type InstanceId = AccountId;
+
 /// A Sha512 value.
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash, Serialize, Deserialize)]
 pub struct HashValue(generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Digest>::OutputSize>);
