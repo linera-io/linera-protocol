@@ -4,7 +4,7 @@
 
 use crate::{base_types::*, ensure, error::Error, messages::*};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, HashSet};
 
 /// State of an account.
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -18,12 +18,12 @@ pub struct AccountState {
     pub next_sequence_number: SequenceNumber,
     /// Whether we have signed a request for this sequence number already.
     pub pending: Option<Vote>,
-    /// All confirmed certificates for this sender.
-    pub confirmed_log: Vec<Certificate>,
-    /// All confirmed certificates as a receiver.
-    pub received_log: Vec<Certificate>,
-    /// The indexing keys of all confirmed certificates as a receiver.
-    pub received_keys: BTreeSet<(AccountId, SequenceNumber)>,
+    /// Hashes of all confirmed certificates for this sender.
+    pub confirmed_log: Vec<HashValue>,
+    /// Hashes of all confirmed certificates as a receiver.
+    pub received_log: Vec<HashValue>,
+    /// Same but as a set instead of a chronological log.
+    pub received_keys: HashSet<HashValue>,
 }
 
 impl AccountState {
@@ -47,7 +47,7 @@ impl AccountState {
             next_sequence_number: SequenceNumber::new(),
             pending: None,
             confirmed_log: Vec::new(),
-            received_keys: BTreeSet::new(),
+            received_keys: HashSet::new(),
             received_log: Vec::new(),
         }
     }
@@ -107,12 +107,8 @@ impl AccountState {
     pub(crate) fn apply_operation_as_sender(
         &mut self,
         operation: &Operation,
-        certificate: Certificate,
+        key: HashValue,
     ) -> Result<(), Error> {
-        assert_eq!(
-            &certificate.value.confirm_request().unwrap().operation,
-            operation
-        );
         match operation {
             Operation::OpenAccount { .. }
             | Operation::StartConsensusInstance { .. }
@@ -131,7 +127,7 @@ impl AccountState {
                 unreachable!("Spend and lock operation are never confirmed");
             }
         };
-        self.confirmed_log.push(certificate);
+        self.confirmed_log.push(key);
         Ok(())
     }
 
@@ -139,16 +135,11 @@ impl AccountState {
     pub(crate) fn apply_operation_as_recipient(
         &mut self,
         operation: &Operation,
-        certificate: Certificate,
-    ) -> Result<(), Error> {
-        assert_eq!(
-            &certificate.value.confirm_request().unwrap().operation,
-            operation
-        );
-        let key = certificate.value.confirm_key().unwrap();
+        key: HashValue,
+    ) -> Result<bool, Error> {
         if self.received_keys.contains(&key) {
             // Confirmation already happened.
-            return Ok(());
+            return Ok(false);
         }
         match operation {
             Operation::Transfer { amount, .. } => {
@@ -164,7 +155,7 @@ impl AccountState {
             _ => unreachable!("Not an operation with recipients"),
         }
         self.received_keys.insert(key);
-        self.received_log.push(certificate);
-        Ok(())
+        self.received_log.push(key);
+        Ok(true)
     }
 }

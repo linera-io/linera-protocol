@@ -31,7 +31,7 @@ async fn make_shard_server<Storage>(
     storage: Storage,
 ) -> network::Server<Storage>
 where
-    Storage: StorageClient + Send + Sync + 'static,
+    Storage: StorageClient + Send + Sync + Clone + 'static,
 {
     let server_config =
         AuthorityServerConfig::read(server_config_path).expect("Fail to read server config");

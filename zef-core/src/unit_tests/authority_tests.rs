@@ -408,7 +408,7 @@ async fn test_handle_confirmation_order_to_active_recipient_in_the_same_shard() 
             .await
             .unwrap()
             .confirmed_log,
-        vec![certificate.clone()]
+        vec![HashValue::new(&certificate.value)]
     );
 
     let recipient_account = state
@@ -472,7 +472,7 @@ async fn test_handle_confirmation_order_to_inactive_recipient_in_the_same_shard(
             .await
             .unwrap()
             .confirmed_log,
-        vec![certificate.clone()]
+        vec![HashValue::new(&certificate.value)]
     );
 }
 
