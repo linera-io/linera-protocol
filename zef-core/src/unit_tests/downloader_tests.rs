@@ -8,7 +8,6 @@ use std::sync::{
     atomic::{AtomicU32, Ordering},
     Arc,
 };
-use tokio::runtime::Runtime;
 
 #[derive(Clone)]
 struct LocalRequester(Arc<AtomicU32>);
@@ -28,20 +27,17 @@ impl Requester for LocalRequester {
     }
 }
 
-#[test]
-fn test_local_downloader() {
-    let rt = Runtime::new().unwrap();
-    rt.block_on(async move {
-        let requester = LocalRequester::new();
-        let (task, mut handle) = Downloader::start(requester, vec![("a", 10), ("d", 11)]);
-        assert_eq!(handle.query("b").await.unwrap(), 0);
-        assert_eq!(handle.query("a").await.unwrap(), 10);
-        assert_eq!(handle.query("d").await.unwrap(), 11);
-        assert_eq!(handle.query("c").await.unwrap(), 1);
-        assert_eq!(handle.query("b").await.unwrap(), 0);
-        handle.stop().await.unwrap();
-        let values: Vec<_> = task.await.unwrap().collect();
-        // Cached values are returned ordered by keys.
-        assert_eq!(values, vec![10, 0, 1, 11]);
-    });
+#[tokio::test]
+async fn test_local_downloader() {
+    let requester = LocalRequester::new();
+    let (task, mut handle) = Downloader::start(requester, vec![("a", 10), ("d", 11)]);
+    assert_eq!(handle.query("b").await.unwrap(), 0);
+    assert_eq!(handle.query("a").await.unwrap(), 10);
+    assert_eq!(handle.query("d").await.unwrap(), 11);
+    assert_eq!(handle.query("c").await.unwrap(), 1);
+    assert_eq!(handle.query("b").await.unwrap(), 0);
+    handle.stop().await.unwrap();
+    let values: Vec<_> = task.await.unwrap().collect();
+    // Cached values are returned ordered by keys.
+    assert_eq!(values, vec![10, 0, 1, 11]);
 }
