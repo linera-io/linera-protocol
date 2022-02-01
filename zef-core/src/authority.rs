@@ -7,6 +7,7 @@ use crate::{
     messages::*, storage::StorageClient,
 };
 use async_trait::async_trait;
+use futures::future;
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
@@ -77,6 +78,10 @@ where
     ) -> Result<(AccountInfoResponse, CrossShardContinuation), Error> {
         // Verify sharding.
         ensure!(self.in_shard(&request.account_id), Error::WrongShard);
+        assert_eq!(
+            &certificate.value.confirm_request().unwrap().operation,
+            &request.operation
+        );
         // Obtain the sender's account.
         let sender = request.account_id.clone();
         // Check that the account is active and ready for this confirmation.
@@ -91,9 +96,9 @@ where
             let info = account.make_account_info(sender.clone());
             return Ok((info, CrossShardContinuation::Done));
         }
-
         // Execute the sender's side of the operation.
-        account.apply_operation_as_sender(&request.operation, certificate.clone())?;
+        let key = HashValue::new(&certificate.value);
+        account.apply_operation_as_sender(&request.operation, key)?;
         // Advance to next sequence number.
         account.next_sequence_number.try_add_assign_one()?;
         account.pending = None;
@@ -105,6 +110,9 @@ where
             // the future.)
             self.storage.remove_account(sender.clone()).await?;
         } else {
+            self.storage
+                .write_certificate(key, certificate.clone())
+                .await?;
             self.storage.write_account(sender.clone(), account).await?;
         }
 
@@ -135,15 +143,23 @@ where
     ) -> Result<(), Error> {
         if let Some(recipient) = operation.recipient() {
             ensure!(self.in_shard(recipient), Error::WrongShard);
+            assert_eq!(
+                &certificate.value.confirm_request().unwrap().operation,
+                &operation
+            );
             // Execute the recipient's side of the operation.
             let mut account = self
                 .storage
                 .read_account_or_default(recipient.clone())
                 .await?;
-            account.apply_operation_as_recipient(&operation, certificate)?;
-            self.storage
-                .write_account(recipient.clone(), account)
-                .await?;
+            let key = HashValue::new(&certificate.value);
+            let need_update = account.apply_operation_as_recipient(&operation, key)?;
+            if need_update {
+                self.storage.write_certificate(key, certificate).await?;
+                self.storage
+                    .write_account(recipient.clone(), account)
+                    .await?;
+            }
         } else if let Operation::StartConsensusInstance {
             new_id,
             functionality: Functionality::AtomicSwap { accounts },
@@ -166,7 +182,7 @@ where
 #[async_trait]
 impl<Client> Authority for WorkerState<Client>
 where
-    Client: StorageClient + Send + Sync,
+    Client: StorageClient + Clone + Send + Sync + 'static,
 {
     async fn handle_request_order(
         &mut self,
@@ -431,14 +447,25 @@ where
             .await?;
         let mut response = account.make_account_info(query.account_id);
         if let Some(seq) = query.query_sequence_number {
-            if let Some(cert) = account.confirmed_log.get(usize::from(seq)) {
-                response.queried_certificate = Some(cert.clone());
+            if let Some(key) = account.confirmed_log.get(usize::from(seq)) {
+                let cert = self.storage.read_certificate(*key).await?;
+                response.queried_certificate = Some(cert);
             } else {
                 return Err(Error::CertificateNotFound);
             }
         }
         if let Some(idx) = query.query_received_certificates_excluding_first_nth {
-            response.queried_received_certificates = account.received_log[idx..].to_vec();
+            let tasks = account.received_log[idx..].iter().map(|key| {
+                let key = *key;
+                let mut client = self.storage.clone();
+                tokio::task::spawn(async move { client.read_certificate(key).await })
+            });
+            let results = future::join_all(tasks).await;
+            let mut certs = Vec::new();
+            for result in results {
+                certs.push(result.expect("task should not cancel or crash")?);
+            }
+            response.queried_received_certificates = certs;
         }
         Ok(response)
     }

@@ -3,10 +3,11 @@
 
 use crate::{
     account::AccountState,
-    base_types::{AccountId, InstanceId},
+    base_types::{AccountId, HashValue, InstanceId},
     consensus::ConsensusState,
     ensure,
     error::Error,
+    messages::Certificate,
 };
 use async_trait::async_trait;
 use futures::lock::Mutex;
@@ -35,6 +36,14 @@ pub trait StorageClient {
 
     async fn remove_account(&mut self, account_id: AccountId) -> Result<(), Error>;
 
+    async fn read_certificate(&mut self, value_hash: HashValue) -> Result<Certificate, Error>;
+
+    async fn write_certificate(
+        &mut self,
+        value_hash: HashValue,
+        certificate: Certificate,
+    ) -> Result<(), Error>;
+
     async fn has_consensus(&mut self, instance_id: InstanceId) -> Result<bool, Error>;
 
     async fn read_consensus(&mut self, instance_id: InstanceId) -> Result<ConsensusState, Error>;
@@ -52,6 +61,7 @@ pub trait StorageClient {
 #[derive(Debug, Default)]
 pub struct InMemoryStore {
     accounts: HashMap<AccountId, AccountState>,
+    certificates: HashMap<HashValue, Certificate>,
     instances: HashMap<InstanceId, ConsensusState>,
 }
 
@@ -95,6 +105,22 @@ impl StorageClient for InMemoryStoreClient {
     async fn remove_account(&mut self, id: AccountId) -> Result<(), Error> {
         let store = self.0.clone();
         store.lock().await.accounts.remove(&id);
+        Ok(())
+    }
+
+    async fn read_certificate(&mut self, hash: HashValue) -> Result<Certificate, Error> {
+        let store = self.0.clone();
+        let value = store.lock().await.certificates.get(&hash).cloned();
+        value.ok_or(Error::MissingCertificate { hash })
+    }
+
+    async fn write_certificate(
+        &mut self,
+        hash: HashValue,
+        value: Certificate,
+    ) -> Result<(), Error> {
+        let store = self.0.clone();
+        store.lock().await.certificates.insert(hash, value);
         Ok(())
     }
 
