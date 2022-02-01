@@ -4,8 +4,9 @@
 
 use crate::{
     base_types::*, committee::Committee, downloader::*, ensure as my_ensure, error::Error,
-    messages::*, AsyncResult,
+    messages::*,
 };
+use async_trait::async_trait;
 use failure::{bail, ensure};
 use futures::{future, StreamExt};
 use rand::seq::SliceRandom;
@@ -16,83 +17,89 @@ use std::collections::{btree_map, BTreeMap, HashMap};
 mod client_tests;
 
 /// How to communicate with an authority.
+#[async_trait]
 pub trait AuthorityClient {
     /// Initiate a new transfer.
-    fn handle_request_order(
+    async fn handle_request_order(
         &mut self,
         order: RequestOrder,
-    ) -> AsyncResult<AccountInfoResponse, Error>;
+    ) -> Result<AccountInfoResponse, Error>;
 
     /// Confirm a request.
-    fn handle_confirmation_order(
+    async fn handle_confirmation_order(
         &mut self,
         order: ConfirmationOrder,
-    ) -> AsyncResult<AccountInfoResponse, Error>;
+    ) -> Result<AccountInfoResponse, Error>;
 
     /// Handle information queries for this account.
-    fn handle_account_info_query(
+    async fn handle_account_info_query(
         &mut self,
         query: AccountInfoQuery,
-    ) -> AsyncResult<AccountInfoResponse, Error>;
+    ) -> Result<AccountInfoResponse, Error>;
 }
 
 /// How to communicate with an account across all the authorities. As a rule,
 /// operations are considered successful (and communication may stop) when they succeeded
 /// in gathering a quorum of responses.
+#[async_trait]
 pub trait AccountClient {
     /// Send money to an account.
-    fn transfer_to_account(
+    async fn transfer_to_account(
         &mut self,
         amount: Amount,
         recipient: AccountId,
         user_data: UserData,
-    ) -> AsyncResult<Certificate, failure::Error>;
+    ) -> Result<Certificate, failure::Error>;
 
     /// Burn money.
-    fn burn(
+    async fn burn(
         &mut self,
         amount: Amount,
         user_data: UserData,
-    ) -> AsyncResult<Certificate, failure::Error>;
+    ) -> Result<Certificate, failure::Error>;
 
     /// Process confirmed operation for which this account is a recipient.
-    fn receive_confirmation(&mut self, certificate: Certificate)
-        -> AsyncResult<(), failure::Error>;
+    async fn receive_confirmation(
+        &mut self,
+        certificate: Certificate,
+    ) -> Result<(), failure::Error>;
 
     /// Rotate the key of the account.
-    fn rotate_key_pair(&mut self, key_pair: KeyPair) -> AsyncResult<Certificate, failure::Error>;
+    async fn rotate_key_pair(&mut self, key_pair: KeyPair) -> Result<Certificate, failure::Error>;
 
     /// Transfer ownership of the account.
-    fn transfer_ownership(
+    async fn transfer_ownership(
         &mut self,
         new_owner: AccountOwner,
-    ) -> AsyncResult<Certificate, failure::Error>;
+    ) -> Result<Certificate, failure::Error>;
 
     /// Open a new account with a derived UID.
-    fn open_account(&mut self, new_owner: AccountOwner)
-        -> AsyncResult<Certificate, failure::Error>;
+    async fn open_account(
+        &mut self,
+        new_owner: AccountOwner,
+    ) -> Result<Certificate, failure::Error>;
 
     /// Close the account (and lose everything in it!!)
-    fn close_account(&mut self) -> AsyncResult<Certificate, failure::Error>;
+    async fn close_account(&mut self) -> Result<Certificate, failure::Error>;
 
     /// Send money to an account.
     /// Do not check balance. (This may block the client)
     /// Do not confirm the transaction.
-    fn transfer_to_account_unsafe_unconfirmed(
+    async fn transfer_to_account_unsafe_unconfirmed(
         &mut self,
         amount: Amount,
         recipient: AccountId,
         user_data: UserData,
-    ) -> AsyncResult<Certificate, failure::Error>;
+    ) -> Result<Certificate, failure::Error>;
 
     /// Compute a safe (i.e. pessimistic) balance by synchronizing our "sent" certificates
     /// with authorities, and otherwise using local data on received transfers (i.e.
     /// certificates that were locally processed by `receive_from_account`).
-    fn synchronize_balance(&mut self) -> AsyncResult<Balance, failure::Error>;
+    async fn synchronize_balance(&mut self) -> Result<Balance, failure::Error>;
 
     /// Find the highest balance that is backed by a quorum of authorities.
     /// NOTE: This is only safe in the synchronous model, assuming a sufficient timeout value.
-    fn query_strong_majority_balance(&mut self) -> future::BoxFuture<Balance>;
+    async fn query_strong_majority_balance(&mut self) -> Balance;
 }
 
 /// The status of the last request order that we have sent, if any.
@@ -222,6 +229,7 @@ impl<A> CertificateRequester<A> {
     }
 }
 
+#[async_trait]
 impl<A> Requester for CertificateRequester<A>
 where
     A: AuthorityClient + Send + Sync + 'static + Clone,
@@ -230,35 +238,33 @@ where
     type Value = Result<Certificate, Error>;
 
     /// Try to find a (confirmation) certificate for the given account_id and sequence number.
-    fn query(&mut self, sequence_number: SequenceNumber) -> AsyncResult<Certificate, Error> {
-        Box::pin(async move {
-            let query = AccountInfoQuery {
-                account_id: self.account_id.clone(),
-                query_sequence_number: Some(sequence_number),
-                query_received_certificates_excluding_first_nth: None,
-            };
-            // Sequentially try each authority in random order.
-            self.authority_clients.shuffle(&mut rand::thread_rng());
-            for client in self.authority_clients.iter_mut() {
-                let result = client.handle_account_info_query(query.clone()).await;
-                if let Ok(AccountInfoResponse {
-                    queried_certificate: Some(certificate),
-                    ..
-                }) = &result
-                {
-                    if certificate.check(&self.committee).is_ok() {
-                        if let Value::Confirm(request) = &certificate.value {
-                            if request.account_id == self.account_id
-                                && request.sequence_number == sequence_number
-                            {
-                                return Ok(certificate.clone());
-                            }
+    async fn query(&mut self, sequence_number: SequenceNumber) -> Result<Certificate, Error> {
+        let query = AccountInfoQuery {
+            account_id: self.account_id.clone(),
+            query_sequence_number: Some(sequence_number),
+            query_received_certificates_excluding_first_nth: None,
+        };
+        // Sequentially try each authority in random order.
+        self.authority_clients.shuffle(&mut rand::thread_rng());
+        for client in self.authority_clients.iter_mut() {
+            let result = client.handle_account_info_query(query.clone()).await;
+            if let Ok(AccountInfoResponse {
+                queried_certificate: Some(certificate),
+                ..
+            }) = &result
+            {
+                if certificate.check(&self.committee).is_ok() {
+                    if let Value::Confirm(request) = &certificate.value {
+                        if request.account_id == self.account_id
+                            && request.sequence_number == sequence_number
+                        {
+                            return Ok(certificate.clone());
                         }
                     }
                 }
             }
-            Err(Error::ClientErrorWhileRequestingCertificate)
-        })
+        }
+        Err(Error::ClientErrorWhileRequestingCertificate)
     }
 }
 
@@ -325,7 +331,7 @@ where
         execute: F,
     ) -> Result<Vec<V>, Option<Error>>
     where
-        F: Fn(AuthorityName, &'a mut A) -> AsyncResult<'a, V, Error> + Clone,
+        F: Fn(AuthorityName, &'a mut A) -> future::BoxFuture<'a, Result<V, Error>> + Clone,
     {
         let committee = &self.committee;
         let authority_clients = &mut self.authority_clients;
@@ -783,199 +789,186 @@ where
     }
 }
 
+#[async_trait]
 impl<A> AccountClient for AccountClientState<A>
 where
     A: AuthorityClient + Send + Sync + Clone + 'static,
 {
-    fn query_strong_majority_balance(&mut self) -> future::BoxFuture<Balance> {
-        Box::pin(async move {
-            let query = AccountInfoQuery {
-                account_id: self.account_id.clone(),
-                query_sequence_number: None,
-                query_received_certificates_excluding_first_nth: None,
-            };
-            let numbers: futures::stream::FuturesUnordered<_> = self
-                .authority_clients
-                .iter_mut()
-                .map(|(name, client)| {
-                    let fut = client.handle_account_info_query(query.clone());
-                    async move {
-                        match fut.await {
-                            Ok(info) => Some((*name, info.balance)),
-                            _ => None,
-                        }
+    async fn query_strong_majority_balance(&mut self) -> Balance {
+        let query = AccountInfoQuery {
+            account_id: self.account_id.clone(),
+            query_sequence_number: None,
+            query_received_certificates_excluding_first_nth: None,
+        };
+        let numbers: futures::stream::FuturesUnordered<_> = self
+            .authority_clients
+            .iter_mut()
+            .map(|(name, client)| {
+                let fut = client.handle_account_info_query(query.clone());
+                async move {
+                    match fut.await {
+                        Ok(info) => Some((*name, info.balance)),
+                        _ => None,
                     }
-                })
-                .collect();
-            self.committee.get_strong_majority_lower_bound(
-                numbers.filter_map(|x| async move { x }).collect().await,
-            )
-        })
+                }
+            })
+            .collect();
+        self.committee.get_strong_majority_lower_bound(
+            numbers.filter_map(|x| async move { x }).collect().await,
+        )
     }
 
-    fn transfer_to_account(
+    async fn transfer_to_account(
         &mut self,
         amount: Amount,
         recipient: AccountId,
         user_data: UserData,
-    ) -> AsyncResult<Certificate, failure::Error> {
-        Box::pin(self.transfer(amount, Address::Account(recipient), user_data))
+    ) -> Result<Certificate, failure::Error> {
+        self.transfer(amount, Address::Account(recipient), user_data)
+            .await
     }
 
-    fn burn(
+    async fn burn(
         &mut self,
         amount: Amount,
         user_data: UserData,
-    ) -> AsyncResult<Certificate, failure::Error> {
-        Box::pin(self.transfer(amount, Address::Burn, user_data))
+    ) -> Result<Certificate, failure::Error> {
+        self.transfer(amount, Address::Burn, user_data).await
     }
 
-    fn synchronize_balance(&mut self) -> AsyncResult<Balance, failure::Error> {
-        Box::pin(async move {
-            match self.pending_request.clone() {
-                PendingRequest::Regular(order) => {
-                    // Finish executing the previous request.
-                    self.execute_regular_request(order, /* with_confirmation */ false)
-                        .await?;
-                }
-                PendingRequest::Locking(order) => {
-                    // Finish executing the previous request.
-                    self.execute_locking_request(order).await?;
-                }
-                PendingRequest::None => (),
+    async fn synchronize_balance(&mut self) -> Result<Balance, failure::Error> {
+        match self.pending_request.clone() {
+            PendingRequest::Regular(order) => {
+                // Finish executing the previous request.
+                self.execute_regular_request(order, /* with_confirmation */ false)
+                    .await?;
             }
-            self.synchronize_received_certificates().await?;
-            self.download_missing_sent_certificates().await?;
-            Ok(self.balance)
-        })
+            PendingRequest::Locking(order) => {
+                // Finish executing the previous request.
+                self.execute_locking_request(order).await?;
+            }
+            PendingRequest::None => (),
+        }
+        self.synchronize_received_certificates().await?;
+        self.download_missing_sent_certificates().await?;
+        Ok(self.balance)
     }
 
-    fn receive_confirmation(
+    async fn receive_confirmation(
         &mut self,
         certificate: Certificate,
-    ) -> AsyncResult<(), failure::Error> {
-        Box::pin(async move {
-            let request = certificate.value.confirm_request().ok_or_else(|| {
-                failure::format_err!("Was expecting a confirmed account operation")
-            })?;
-            let account_id = &request.account_id;
-            ensure!(
-                request.operation.recipient() == Some(&self.account_id),
-                "Request should be received by us."
-            );
-            self.communicate_requests(
-                account_id.clone(),
-                vec![certificate.clone()],
-                CommunicateAction::SynchronizeNextSequenceNumber(
-                    request.sequence_number.try_add_one()?,
-                ),
-            )
-            .await?;
-            // Everything worked: update the local balance.
-            if let btree_map::Entry::Vacant(entry) = self
-                .received_certificates
-                .entry(certificate.value.confirm_key().unwrap())
-            {
-                if let Some(amount) = request.operation.received_amount() {
-                    self.balance.try_add_assign(amount.into())?;
-                }
-                entry.insert(certificate);
+    ) -> Result<(), failure::Error> {
+        let request = certificate
+            .value
+            .confirm_request()
+            .ok_or_else(|| failure::format_err!("Was expecting a confirmed account operation"))?;
+        let account_id = &request.account_id;
+        ensure!(
+            request.operation.recipient() == Some(&self.account_id),
+            "Request should be received by us."
+        );
+        self.communicate_requests(
+            account_id.clone(),
+            vec![certificate.clone()],
+            CommunicateAction::SynchronizeNextSequenceNumber(
+                request.sequence_number.try_add_one()?,
+            ),
+        )
+        .await?;
+        // Everything worked: update the local balance.
+        if let btree_map::Entry::Vacant(entry) = self
+            .received_certificates
+            .entry(certificate.value.confirm_key().unwrap())
+        {
+            if let Some(amount) = request.operation.received_amount() {
+                self.balance.try_add_assign(amount.into())?;
             }
-            Ok(())
-        })
+            entry.insert(certificate);
+        }
+        Ok(())
     }
 
-    fn rotate_key_pair(&mut self, key_pair: KeyPair) -> AsyncResult<Certificate, failure::Error> {
-        Box::pin(async move {
-            let new_owner = key_pair.public();
-            let request = Request {
-                account_id: self.account_id.clone(),
-                operation: Operation::ChangeOwner { new_owner },
-                sequence_number: self.next_sequence_number,
-            };
-            self.known_key_pairs.insert(key_pair.public(), key_pair);
-            let order = self.make_request_order(request)?;
+    async fn rotate_key_pair(&mut self, key_pair: KeyPair) -> Result<Certificate, failure::Error> {
+        let new_owner = key_pair.public();
+        let request = Request {
+            account_id: self.account_id.clone(),
+            operation: Operation::ChangeOwner { new_owner },
+            sequence_number: self.next_sequence_number,
+        };
+        self.known_key_pairs.insert(key_pair.public(), key_pair);
+        let order = self.make_request_order(request)?;
 
-            let certificate = self
-                .execute_regular_request(order, /* with_confirmation */ true)
-                .await?;
-            Ok(certificate)
-        })
+        let certificate = self
+            .execute_regular_request(order, /* with_confirmation */ true)
+            .await?;
+        Ok(certificate)
     }
 
-    fn transfer_ownership(
+    async fn transfer_ownership(
         &mut self,
         new_owner: AccountOwner,
-    ) -> AsyncResult<Certificate, failure::Error> {
-        Box::pin(async move {
-            let request = Request {
-                account_id: self.account_id.clone(),
-                operation: Operation::ChangeOwner { new_owner },
-                sequence_number: self.next_sequence_number,
-            };
-            let order = self.make_request_order(request)?;
-            let certificate = self
-                .execute_regular_request(order, /* with_confirmation */ true)
-                .await?;
-            Ok(certificate)
-        })
+    ) -> Result<Certificate, failure::Error> {
+        let request = Request {
+            account_id: self.account_id.clone(),
+            operation: Operation::ChangeOwner { new_owner },
+            sequence_number: self.next_sequence_number,
+        };
+        let order = self.make_request_order(request)?;
+        let certificate = self
+            .execute_regular_request(order, /* with_confirmation */ true)
+            .await?;
+        Ok(certificate)
     }
 
-    fn open_account(
+    async fn open_account(
         &mut self,
         new_owner: AccountOwner,
-    ) -> AsyncResult<Certificate, failure::Error> {
-        Box::pin(async move {
-            let new_id = self.account_id.make_child(self.next_sequence_number);
-            let request = Request {
-                account_id: self.account_id.clone(),
-                operation: Operation::OpenAccount { new_id, new_owner },
-                sequence_number: self.next_sequence_number,
-            };
-            let order = self.make_request_order(request)?;
-            let certificate = self
-                .execute_regular_request(order, /* with_confirmation */ true)
-                .await?;
-            Ok(certificate)
-        })
+    ) -> Result<Certificate, failure::Error> {
+        let new_id = self.account_id.make_child(self.next_sequence_number);
+        let request = Request {
+            account_id: self.account_id.clone(),
+            operation: Operation::OpenAccount { new_id, new_owner },
+            sequence_number: self.next_sequence_number,
+        };
+        let order = self.make_request_order(request)?;
+        let certificate = self
+            .execute_regular_request(order, /* with_confirmation */ true)
+            .await?;
+        Ok(certificate)
     }
 
-    fn close_account(&mut self) -> AsyncResult<Certificate, failure::Error> {
-        Box::pin(async move {
-            let request = Request {
-                account_id: self.account_id.clone(),
-                operation: Operation::CloseAccount,
-                sequence_number: self.next_sequence_number,
-            };
-            let order = self.make_request_order(request)?;
-            let certificate = self
-                .execute_regular_request(order, /* with_confirmation */ true)
-                .await?;
-            Ok(certificate)
-        })
+    async fn close_account(&mut self) -> Result<Certificate, failure::Error> {
+        let request = Request {
+            account_id: self.account_id.clone(),
+            operation: Operation::CloseAccount,
+            sequence_number: self.next_sequence_number,
+        };
+        let order = self.make_request_order(request)?;
+        let certificate = self
+            .execute_regular_request(order, /* with_confirmation */ true)
+            .await?;
+        Ok(certificate)
     }
 
-    fn transfer_to_account_unsafe_unconfirmed(
+    async fn transfer_to_account_unsafe_unconfirmed(
         &mut self,
         amount: Amount,
         recipient: AccountId,
         user_data: UserData,
-    ) -> AsyncResult<Certificate, failure::Error> {
-        Box::pin(async move {
-            let request = Request {
-                account_id: self.account_id.clone(),
-                operation: Operation::Transfer {
-                    recipient: Address::Account(recipient),
-                    amount,
-                    user_data,
-                },
-                sequence_number: self.next_sequence_number,
-            };
-            let order = self.make_request_order(request)?;
-            let new_certificate = self
-                .execute_regular_request(order, /* with_confirmation */ false)
-                .await?;
-            Ok(new_certificate)
-        })
+    ) -> Result<Certificate, failure::Error> {
+        let request = Request {
+            account_id: self.account_id.clone(),
+            operation: Operation::Transfer {
+                recipient: Address::Account(recipient),
+                amount,
+                user_data,
+            },
+            sequence_number: self.next_sequence_number,
+        };
+        let order = self.make_request_order(request)?;
+        let new_certificate = self
+            .execute_regular_request(order, /* with_confirmation */ false)
+            .await?;
+        Ok(new_certificate)
     }
 }
