@@ -8,6 +8,7 @@ use crate::{
     base_types::Amount,
     storage::{InMemoryStoreClient, StorageClient},
 };
+use async_trait::async_trait;
 use futures::lock::Mutex;
 use std::{
     collections::{BTreeMap, HashMap},
@@ -17,36 +18,43 @@ use std::{
 #[derive(Clone)]
 struct LocalAuthorityClient(Arc<Mutex<WorkerState<InMemoryStoreClient>>>);
 
+#[async_trait]
 impl AuthorityClient for LocalAuthorityClient {
-    fn handle_request_order(
+    async fn handle_request_order(
         &mut self,
         order: RequestOrder,
-    ) -> AsyncResult<AccountInfoResponse, Error> {
-        let state = self.0.clone();
-        Box::pin(async move { state.lock().await.handle_request_order(order).await })
+    ) -> Result<AccountInfoResponse, Error> {
+        self.0
+            .clone()
+            .lock()
+            .await
+            .handle_request_order(order)
+            .await
     }
 
-    fn handle_confirmation_order(
+    async fn handle_confirmation_order(
         &mut self,
         order: ConfirmationOrder,
-    ) -> AsyncResult<AccountInfoResponse, Error> {
-        let state = self.0.clone();
-        Box::pin(async move {
-            state
-                .lock()
-                .await
-                .handle_confirmation_order(order)
-                .await
-                .map(|(info, _)| info)
-        })
+    ) -> Result<AccountInfoResponse, Error> {
+        self.0
+            .clone()
+            .lock()
+            .await
+            .handle_confirmation_order(order)
+            .await
+            .map(|(info, _)| info)
     }
 
-    fn handle_account_info_query(
+    async fn handle_account_info_query(
         &mut self,
         query: AccountInfoQuery,
-    ) -> AsyncResult<AccountInfoResponse, Error> {
-        let state = self.0.clone();
-        Box::pin(async move { state.lock().await.handle_account_info_query(query).await })
+    ) -> Result<AccountInfoResponse, Error> {
+        self.0
+            .clone()
+            .lock()
+            .await
+            .handle_account_info_query(query)
+            .await
     }
 }
 
