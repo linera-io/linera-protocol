@@ -7,7 +7,7 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
     time::Duration,
 };
-use tokio::{runtime::Runtime, time::timeout};
+use tokio::time::timeout;
 
 async fn get_new_local_address() -> Result<String, std::io::Error> {
     let builder = net2::TcpBuilder::new_v4()?;
@@ -76,18 +76,16 @@ async fn test_server(protocol: NetworkProtocol) -> Result<(usize, usize), std::i
     Ok((counter.load(Ordering::Relaxed), received))
 }
 
-#[test]
-fn udp_server() {
-    let rt = Runtime::new().unwrap();
-    let (processed, received) = rt.block_on(test_server(NetworkProtocol::Udp)).unwrap();
+#[tokio::test]
+async fn udp_server() {
+    let (processed, received) = test_server(NetworkProtocol::Udp).await.unwrap();
     assert_eq!(processed, 13);
     assert_eq!(received, 10);
 }
 
-#[test]
-fn tcp_server() {
-    let rt = Runtime::new().unwrap();
-    let (processed, received) = rt.block_on(test_server(NetworkProtocol::Tcp)).unwrap();
+#[tokio::test]
+async fn tcp_server() {
+    let (processed, received) = test_server(NetworkProtocol::Tcp).await.unwrap();
     // Active TCP connections are allowed to finish before the server is gracefully killed.
     assert_eq!(processed, 17);
     assert_eq!(received, 14);
