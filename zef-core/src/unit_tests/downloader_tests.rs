@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use futures::future;
+use async_trait::async_trait;
 use std::sync::{
     atomic::{AtomicU32, Ordering},
     Arc,
@@ -18,12 +18,13 @@ impl LocalRequester {
     }
 }
 
+#[async_trait]
 impl Requester for LocalRequester {
     type Key = &'static str;
     type Value = u32;
 
-    fn query(&mut self, _key: Self::Key) -> future::BoxFuture<Self::Value> {
-        Box::pin(future::ready(self.0.fetch_add(1, Ordering::Relaxed)))
+    async fn query(&mut self, _key: Self::Key) -> Self::Value {
+        self.0.fetch_add(1, Ordering::Relaxed)
     }
 }
 

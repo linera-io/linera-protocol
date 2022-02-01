@@ -7,8 +7,8 @@ use crate::{
     consensus::ConsensusState,
     ensure,
     error::Error,
-    AsyncResult,
 };
+use async_trait::async_trait;
 use futures::lock::Mutex;
 use std::{collections::HashMap, sync::Arc};
 
@@ -18,33 +18,34 @@ use crate::base_types::{dbg_account, dbg_addr};
 /// How to communicate with a persistent storage.
 /// * Writes should be blocking until they are completed.
 /// * Reads should be optimized to hit a local cache.
+#[async_trait]
 pub trait StorageClient {
-    fn read_active_account(&mut self, account_id: AccountId) -> AsyncResult<AccountState, Error>;
+    async fn read_active_account(&mut self, account_id: AccountId) -> Result<AccountState, Error>;
 
-    fn read_account_or_default(
+    async fn read_account_or_default(
         &mut self,
         account_id: AccountId,
-    ) -> AsyncResult<AccountState, Error>;
+    ) -> Result<AccountState, Error>;
 
-    fn write_account(
+    async fn write_account(
         &mut self,
         account_id: AccountId,
         state: AccountState,
-    ) -> AsyncResult<(), Error>;
+    ) -> Result<(), Error>;
 
-    fn remove_account(&mut self, account_id: AccountId) -> AsyncResult<(), Error>;
+    async fn remove_account(&mut self, account_id: AccountId) -> Result<(), Error>;
 
-    fn has_consensus(&mut self, instance_id: InstanceId) -> AsyncResult<bool, Error>;
+    async fn has_consensus(&mut self, instance_id: InstanceId) -> Result<bool, Error>;
 
-    fn read_consensus(&mut self, instance_id: InstanceId) -> AsyncResult<ConsensusState, Error>;
+    async fn read_consensus(&mut self, instance_id: InstanceId) -> Result<ConsensusState, Error>;
 
-    fn write_consensus(
+    async fn write_consensus(
         &mut self,
         instance_id: InstanceId,
         state: ConsensusState,
-    ) -> AsyncResult<(), Error>;
+    ) -> Result<(), Error>;
 
-    fn remove_consensus(&mut self, id: InstanceId) -> AsyncResult<(), Error>;
+    async fn remove_consensus(&mut self, id: InstanceId) -> Result<(), Error>;
 }
 
 /// Vanilla in-memory key-value store.
@@ -58,80 +59,71 @@ pub struct InMemoryStore {
 #[derive(Clone, Default)]
 pub struct InMemoryStoreClient(Arc<Mutex<InMemoryStore>>);
 
+#[async_trait]
 impl StorageClient for InMemoryStoreClient {
-    fn read_active_account(&mut self, id: AccountId) -> AsyncResult<AccountState, Error> {
+    async fn read_active_account(&mut self, id: AccountId) -> Result<AccountState, Error> {
         let store = self.0.clone();
-        Box::pin(async move {
-            let store = store.lock().await;
-            let account = store.accounts.get(&id).cloned().unwrap_or_default();
-            ensure!(account.owner.is_some(), Error::InactiveAccount(id));
-            Ok(account)
-        })
+        let account = store
+            .lock()
+            .await
+            .accounts
+            .get(&id)
+            .cloned()
+            .unwrap_or_default();
+        ensure!(account.owner.is_some(), Error::InactiveAccount(id));
+        Ok(account)
     }
 
-    fn read_account_or_default(&mut self, id: AccountId) -> AsyncResult<AccountState, Error> {
+    async fn read_account_or_default(&mut self, id: AccountId) -> Result<AccountState, Error> {
         let store = self.0.clone();
-        Box::pin(async move {
-            let store = store.lock().await;
-            let account = store.accounts.get(&id).cloned().unwrap_or_default();
-            Ok(account)
-        })
+        let account = store
+            .lock()
+            .await
+            .accounts
+            .get(&id)
+            .cloned()
+            .unwrap_or_default();
+        Ok(account)
     }
 
-    fn write_account(&mut self, id: AccountId, value: AccountState) -> AsyncResult<(), Error> {
+    async fn write_account(&mut self, id: AccountId, value: AccountState) -> Result<(), Error> {
         let store = self.0.clone();
-        Box::pin(async move {
-            let mut store = store.lock().await;
-            store.accounts.insert(id, value);
-            Ok(())
-        })
+        store.lock().await.accounts.insert(id, value);
+        Ok(())
     }
 
-    fn remove_account(&mut self, id: AccountId) -> AsyncResult<(), Error> {
+    async fn remove_account(&mut self, id: AccountId) -> Result<(), Error> {
         let store = self.0.clone();
-        Box::pin(async move {
-            let mut store = store.lock().await;
-            store.accounts.remove(&id);
-            Ok(())
-        })
+        store.lock().await.accounts.remove(&id);
+        Ok(())
     }
 
-    fn has_consensus(&mut self, id: InstanceId) -> AsyncResult<bool, Error> {
+    async fn has_consensus(&mut self, id: InstanceId) -> Result<bool, Error> {
         let store = self.0.clone();
-        Box::pin(async move {
-            let store = store.lock().await;
-            Ok(store.instances.contains_key(&id))
-        })
+        let result = store.lock().await.instances.contains_key(&id);
+        Ok(result)
     }
 
-    fn read_consensus(&mut self, id: InstanceId) -> AsyncResult<ConsensusState, Error> {
+    async fn read_consensus(&mut self, id: InstanceId) -> Result<ConsensusState, Error> {
         let store = self.0.clone();
-        Box::pin(async move {
-            let store = store.lock().await;
-            store
-                .instances
-                .get(&id)
-                .cloned()
-                .ok_or(Error::MissingConsensusInstance { id })
-        })
+        let value = store.lock().await.instances.get(&id).cloned();
+        value.ok_or(Error::MissingConsensusInstance { id })
     }
 
-    fn write_consensus(&mut self, id: InstanceId, value: ConsensusState) -> AsyncResult<(), Error> {
+    async fn write_consensus(
+        &mut self,
+        id: InstanceId,
+        value: ConsensusState,
+    ) -> Result<(), Error> {
         let store = self.0.clone();
-        Box::pin(async move {
-            let mut store = store.lock().await;
-            store.instances.insert(id, value);
-            Ok(())
-        })
+        store.lock().await.instances.insert(id, value);
+        Ok(())
     }
 
-    fn remove_consensus(&mut self, id: InstanceId) -> AsyncResult<(), Error> {
+    async fn remove_consensus(&mut self, id: InstanceId) -> Result<(), Error> {
         let store = self.0.clone();
-        Box::pin(async move {
-            let mut store = store.lock().await;
-            store.instances.remove(&id);
-            Ok(())
-        })
+        store.lock().await.instances.remove(&id);
+        Ok(())
     }
 }
 
