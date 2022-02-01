@@ -3,11 +3,10 @@
 
 use crate::{
     account::AccountState,
-    base_types::{AccountId, HashValue, InstanceId},
+    base_types::{AccountId, InstanceId},
     consensus::ConsensusState,
     ensure,
     error::Error,
-    messages::Certificate,
     AsyncResult,
 };
 use futures::lock::Mutex;
@@ -35,14 +34,6 @@ pub trait StorageClient {
 
     fn remove_account(&mut self, account_id: AccountId) -> AsyncResult<(), Error>;
 
-    fn read_certificate(&mut self, value_hash: HashValue) -> AsyncResult<Certificate, Error>;
-
-    fn write_certificate(
-        &mut self,
-        value_hash: HashValue,
-        certificate: Certificate,
-    ) -> AsyncResult<(), Error>;
-
     fn has_consensus(&mut self, instance_id: InstanceId) -> AsyncResult<bool, Error>;
 
     fn read_consensus(&mut self, instance_id: InstanceId) -> AsyncResult<ConsensusState, Error>;
@@ -60,7 +51,6 @@ pub trait StorageClient {
 #[derive(Debug, Default)]
 pub struct InMemoryStore {
     accounts: HashMap<AccountId, AccountState>,
-    certificates: HashMap<HashValue, Certificate>,
     instances: HashMap<InstanceId, ConsensusState>,
 }
 
@@ -102,27 +92,6 @@ impl StorageClient for InMemoryStoreClient {
         Box::pin(async move {
             let mut store = store.lock().await;
             store.accounts.remove(&id);
-            Ok(())
-        })
-    }
-
-    fn read_certificate(&mut self, hash: HashValue) -> AsyncResult<Certificate, Error> {
-        let store = self.0.clone();
-        Box::pin(async move {
-            let store = store.lock().await;
-            store
-                .certificates
-                .get(&hash)
-                .cloned()
-                .ok_or(Error::MissingCertificate { hash })
-        })
-    }
-
-    fn write_certificate(&mut self, hash: HashValue, value: Certificate) -> AsyncResult<(), Error> {
-        let store = self.0.clone();
-        Box::pin(async move {
-            let mut store = store.lock().await;
-            store.certificates.insert(hash, value);
             Ok(())
         })
     }
