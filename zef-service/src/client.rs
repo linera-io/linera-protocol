@@ -18,7 +18,6 @@ use std::{
     time::{Duration, Instant},
 };
 use structopt::StructOpt;
-use tokio::runtime::Runtime;
 
 struct ClientContext {
     accounts_config_path: PathBuf,
@@ -450,116 +449,106 @@ enum ClientCommands {
     },
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let options = ClientOptions::from_args();
     let mut context = ClientContext::from_options(&options);
-    let rt = Runtime::new().unwrap();
     match options.cmd {
         ClientCommands::Transfer {
             sender,
             recipient,
             amount,
         } => {
-            rt.block_on(async move {
-                let mut client_state = context.make_account_client(sender);
-                info!("Starting transfer");
-                let time_start = Instant::now();
-                let certificate = client_state
-                    .transfer_to_account(amount, recipient.clone(), UserData::default())
-                    .await
-                    .unwrap();
-                let time_total = time_start.elapsed().as_micros();
-                info!("Operation confirmed after {} us", time_total);
-                info!("{:?}", certificate);
-                context.update_account_from_state(&client_state);
+            let mut client_state = context.make_account_client(sender);
+            info!("Starting transfer");
+            let time_start = Instant::now();
+            let certificate = client_state
+                .transfer_to_account(amount, recipient.clone(), UserData::default())
+                .await
+                .unwrap();
+            let time_total = time_start.elapsed().as_micros();
+            info!("Operation confirmed after {} us", time_total);
+            info!("{:?}", certificate);
+            context.update_account_from_state(&client_state);
 
-                info!("Updating recipient's local account");
-                context
-                    .update_recipient_account(certificate, None)
-                    .await
-                    .unwrap();
-                context.save_accounts();
-            });
+            info!("Updating recipient's local account");
+            context
+                .update_recipient_account(certificate, None)
+                .await
+                .unwrap();
+            context.save_accounts();
         }
 
         ClientCommands::OpenAccount { sender, owner } => {
-            rt.block_on(async move {
-                let mut client_state = context.make_account_client(sender);
-                let (new_owner, key_pair) = match owner {
-                    Some(key) => (key, None),
-                    None => {
-                        let key_pair = KeyPair::generate();
-                        (key_pair.public(), Some(key_pair))
-                    }
-                };
-                info!("Starting operation to open a new account");
-                let time_start = Instant::now();
-                let certificate = client_state.open_account(new_owner).await.unwrap();
-                let time_total = time_start.elapsed().as_micros();
-                info!("Operation confirmed after {} us", time_total);
-                info!("{:?}", certificate);
-                println!(
-                    "{}",
-                    certificate
-                        .value
-                        .confirm_request()
-                        .unwrap()
-                        .operation
-                        .recipient()
-                        .unwrap()
-                );
-                context.update_account_from_state(&client_state);
+            let mut client_state = context.make_account_client(sender);
+            let (new_owner, key_pair) = match owner {
+                Some(key) => (key, None),
+                None => {
+                    let key_pair = KeyPair::generate();
+                    (key_pair.public(), Some(key_pair))
+                }
+            };
+            info!("Starting operation to open a new account");
+            let time_start = Instant::now();
+            let certificate = client_state.open_account(new_owner).await.unwrap();
+            let time_total = time_start.elapsed().as_micros();
+            info!("Operation confirmed after {} us", time_total);
+            info!("{:?}", certificate);
+            println!(
+                "{}",
+                certificate
+                    .value
+                    .confirm_request()
+                    .unwrap()
+                    .operation
+                    .recipient()
+                    .unwrap()
+            );
+            context.update_account_from_state(&client_state);
 
-                info!("Updating recipient's local account");
-                context
-                    .update_recipient_account(certificate, key_pair)
-                    .await
-                    .unwrap();
-                context.save_accounts();
-            });
+            info!("Updating recipient's local account");
+            context
+                .update_recipient_account(certificate, key_pair)
+                .await
+                .unwrap();
+            context.save_accounts();
         }
 
         ClientCommands::CloseAccount { sender } => {
-            rt.block_on(async move {
-                let mut client_state = context.make_account_client(sender);
-                info!("Starting operation to close the account");
-                let time_start = Instant::now();
-                let certificate = client_state.close_account().await.unwrap();
-                let time_total = time_start.elapsed().as_micros();
-                info!("Operation confirmed after {} us", time_total);
-                info!("{:?}", certificate);
-                context.update_account_from_state(&client_state);
-                context.save_accounts();
-            });
+            let mut client_state = context.make_account_client(sender);
+            info!("Starting operation to close the account");
+            let time_start = Instant::now();
+            let certificate = client_state.close_account().await.unwrap();
+            let time_total = time_start.elapsed().as_micros();
+            info!("Operation confirmed after {} us", time_total);
+            info!("{:?}", certificate);
+            context.update_account_from_state(&client_state);
+            context.save_accounts();
         }
 
         ClientCommands::QueryBalance { account_id } => {
-            rt.block_on(async move {
-                let mut client_state = context.make_account_client(account_id);
-                info!("Starting query authorities for the account balance");
-                let time_start = Instant::now();
-                let balance = client_state.query_strong_majority_balance().await;
-                let time_total = time_start.elapsed().as_micros();
-                info!("Balance confirmed after {} us", time_total);
-                println!("{}", balance);
-                context.update_account_from_state(&client_state);
-                context.save_accounts();
-            });
+            let mut client_state = context.make_account_client(account_id);
+            info!("Starting query authorities for the account balance");
+            let time_start = Instant::now();
+            let balance = client_state.query_strong_majority_balance().await;
+            let time_total = time_start.elapsed().as_micros();
+            info!("Balance confirmed after {} us", time_total);
+            println!("{}", balance);
+            context.update_account_from_state(&client_state);
+            context.save_accounts();
         }
 
         ClientCommands::SynchronizeBalance { account_id } => {
-            rt.block_on(async move {
-                let mut client_state = context.make_account_client(account_id);
-                info!("Synchronize account information");
-                let time_start = Instant::now();
-                let balance = client_state.synchronize_balance().await.unwrap();
-                let time_total = time_start.elapsed().as_micros();
-                info!("Account balance synchronized after {} us", time_total);
-                println!("{}", balance);
-                context.update_account_from_state(&client_state);
-                context.save_accounts();
-            });
+            let mut client_state = context.make_account_client(account_id);
+            info!("Synchronize account information");
+            let time_start = Instant::now();
+            let balance = client_state.synchronize_balance().await.unwrap();
+            let time_total = time_start.elapsed().as_micros();
+            info!("Account balance synchronized after {} us", time_total);
+            println!("{}", balance);
+            context.update_account_from_state(&client_state);
+            context.save_accounts();
         }
 
         ClientCommands::Benchmark {
@@ -568,55 +557,53 @@ fn main() {
             server_configs,
         } => {
             let max_orders = max_orders.unwrap_or_else(|| context.accounts_config.num_accounts());
-            rt.block_on(async move {
-                warn!("Starting benchmark phase 1 (request orders)");
-                let (orders, serialize_orders) = context.make_benchmark_request_orders(max_orders);
-                let responses = context
-                    .mass_broadcast_orders("request", max_in_flight, serialize_orders)
-                    .await;
-                let votes: Vec<_> = responses
-                    .into_iter()
-                    .filter_map(|buf| deserialize_response(&buf[..]).and_then(|info| info.pending))
-                    .collect();
-                warn!("Received {} valid votes.", votes.len());
+            warn!("Starting benchmark phase 1 (request orders)");
+            let (orders, serialize_orders) = context.make_benchmark_request_orders(max_orders);
+            let responses = context
+                .mass_broadcast_orders("request", max_in_flight, serialize_orders)
+                .await;
+            let votes: Vec<_> = responses
+                .into_iter()
+                .filter_map(|buf| deserialize_response(&buf[..]).and_then(|info| info.pending))
+                .collect();
+            warn!("Received {} valid votes.", votes.len());
 
-                warn!("Starting benchmark phase 2 (confirmation orders)");
-                let certificates = if let Some(files) = server_configs {
-                    warn!("Using server configs provided by --server-configs");
-                    let files = files.iter().map(AsRef::as_ref).collect();
-                    ClientContext::make_benchmark_certificates_from_orders_and_server_configs(
-                        orders, files,
-                    )
-                } else {
-                    warn!("Using committee config");
-                    context.make_benchmark_certificates_from_votes(votes)
-                };
-                let responses = context
-                    .mass_broadcast_orders("confirmation", max_in_flight, certificates.clone())
-                    .await;
-                let mut confirmed = HashSet::new();
-                let num_valid =
-                    responses
-                        .iter()
-                        .fold(0, |acc, buf| match deserialize_response(&buf[..]) {
-                            Some(info) => {
-                                confirmed.insert(info.account_id);
-                                acc + 1
-                            }
-                            None => acc,
-                        });
-                warn!(
-                    "Received {} valid confirmations for {} requests.",
-                    num_valid,
-                    confirmed.len()
-                );
+            warn!("Starting benchmark phase 2 (confirmation orders)");
+            let certificates = if let Some(files) = server_configs {
+                warn!("Using server configs provided by --server-configs");
+                let files = files.iter().map(AsRef::as_ref).collect();
+                ClientContext::make_benchmark_certificates_from_orders_and_server_configs(
+                    orders, files,
+                )
+            } else {
+                warn!("Using committee config");
+                context.make_benchmark_certificates_from_votes(votes)
+            };
+            let responses = context
+                .mass_broadcast_orders("confirmation", max_in_flight, certificates.clone())
+                .await;
+            let mut confirmed = HashSet::new();
+            let num_valid =
+                responses
+                    .iter()
+                    .fold(0, |acc, buf| match deserialize_response(&buf[..]) {
+                        Some(info) => {
+                            confirmed.insert(info.account_id);
+                            acc + 1
+                        }
+                        None => acc,
+                    });
+            warn!(
+                "Received {} valid confirmations for {} requests.",
+                num_valid,
+                confirmed.len()
+            );
 
-                warn!("Updating local state of user accounts");
-                // Make sure that the local balances are accurate so that future
-                // balance checks of the non-mass client pass.
-                context.mass_update_recipients(certificates);
-                context.save_accounts();
-            });
+            warn!("Updating local state of user accounts");
+            // Make sure that the local balances are accurate so that future
+            // balance checks of the non-mass client pass.
+            context.mass_update_recipients(certificates);
+            context.save_accounts();
         }
 
         ClientCommands::CreateInitialAccounts {
