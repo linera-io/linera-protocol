@@ -1,0 +1,23 @@
+name: Documentation
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Checkout'
+        uses: actions/checkout@master
+      - name: 'Build only'
+        uses: shalzz/zola-deploy-action@master
+        env:
+          BUILD_DIR: documentation
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUILD_ONLY: true
