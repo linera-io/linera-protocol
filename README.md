@@ -5,6 +5,14 @@
 
 This repository is dedicated to developing the Zefchain protocol.
 
+## Building the documentation
+
+```
+# cargo install zola
+cd documentation
+zola serve
+```
+
 ## Quickstart with the Zef service CLI
 
 The current code was imported from https://github.com/novifinancial/fastpay/pull/24 then

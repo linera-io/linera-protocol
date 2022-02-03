@@ -1,0 +1,13 @@
+base_url = "https://easydocs.codeandmedia.com"
+title = "Docs"
+compile_sass = true
+build_search_index = true
+
+[markdown]
+highlight_code = true
+highlight_theme = "base16-ocean-light"
+
+[extra]
+logo = "https://easydocs.codeandmedia.com/logo.svg"
+release = "https://api.github.com/repos/getzola/zola/releases/latest"
+favicon = "https://www.getzola.org/favicon.ico"
