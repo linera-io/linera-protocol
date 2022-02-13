@@ -221,28 +221,36 @@ Error:
         STRUCT:
           - error: STR
     32:
+      StorageIoError:
+        STRUCT:
+          - error: STR
+    33:
+      StorageBcsError:
+        STRUCT:
+          - error: STR
+    34:
       UnknownConsensusInstance:
         NEWTYPE:
           TYPENAME: AccountId
-    33:
-      InvalidConsensusOrder: UNIT
-    34:
-      UnsafeConsensusProposal: UNIT
     35:
+      InvalidConsensusOrder: UNIT
+    36:
+      UnsafeConsensusProposal: UNIT
+    37:
       MissingConsensusLock:
         STRUCT:
           - account_id:
               TYPENAME: AccountId
-    36:
-      InvalidConsensusProposal: UNIT
-    37:
-      UnsafeConsensusPreCommit: UNIT
     38:
+      InvalidConsensusProposal: UNIT
+    39:
+      UnsafeConsensusPreCommit: UNIT
+    40:
       MissingCertificate:
         STRUCT:
           - hash:
               TYPENAME: HashValue
-    39:
+    41:
       MissingConsensusInstance:
         STRUCT:
           - id:

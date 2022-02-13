@@ -111,6 +111,10 @@ pub enum Error {
     UnexpectedMessage,
     #[fail(display = "Network error while querying service: {:?}.", error)]
     ClientIoError { error: String },
+    #[fail(display = "Storage error while querying service: {:?}.", error)]
+    StorageIoError { error: String },
+    #[fail(display = "Storage (de)serialization error: {:?}.", error)]
+    StorageBcsError { error: String },
 
     // Consensus
     #[fail(display = "Unknown consensus instance {:?}", 0)]
