@@ -69,9 +69,11 @@ impl FileStore {
                 error: format!("{}: {}", kind, e),
             })?;
         let result = match value {
-            Some(v) => Some(bcs::from_bytes(&v).map_err(|e| Error::StorageBcsError {
-                error: format!("{}: {}", kind, e),
-            })?),
+            Some(v) => Some(
+                serde_json::from_slice(&v).map_err(|e| Error::StorageBcsError {
+                    error: format!("{}: {}", kind, e),
+                })?,
+            ),
             None => None,
         };
         Ok(result)
@@ -84,7 +86,7 @@ impl FileStore {
     {
         let key = bcs::to_bytes(&key).expect("should not fail");
         let kind = serde_name::trace_name::<V>().expect("V must be a struct or an enum");
-        let value = bcs::to_bytes(&value).expect("should not fail");
+        let value = serde_json::to_vec(&value).expect("should not fail");
         self.write_value(kind, &key, &value)
             .await
             .map_err(|e| Error::StorageIoError {
