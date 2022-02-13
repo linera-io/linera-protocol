@@ -10,8 +10,9 @@ use crate::{
     messages::Certificate,
 };
 use async_trait::async_trait;
+use dyn_clone::DynClone;
 use futures::lock::Mutex;
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, ops::DerefMut, sync::Arc};
 
 #[cfg(test)]
 use crate::base_types::{dbg_account, dbg_addr};
@@ -20,7 +21,7 @@ use crate::base_types::{dbg_account, dbg_addr};
 /// * Writes should be blocking until they are completed.
 /// * Reads should be optimized to hit a local cache.
 #[async_trait]
-pub trait StorageClient {
+pub trait StorageClient: DynClone {
     async fn read_active_account(&mut self, account_id: AccountId) -> Result<AccountState, Error>;
 
     async fn read_account_or_default(
@@ -56,6 +57,8 @@ pub trait StorageClient {
 
     async fn remove_consensus(&mut self, id: InstanceId) -> Result<(), Error>;
 }
+
+dyn_clone::clone_trait_object!(StorageClient);
 
 /// Vanilla in-memory key-value store.
 #[derive(Debug, Default)]
@@ -150,6 +153,57 @@ impl StorageClient for InMemoryStoreClient {
         let store = self.0.clone();
         store.lock().await.instances.remove(&id);
         Ok(())
+    }
+}
+
+#[async_trait]
+impl StorageClient for Box<dyn StorageClient + Send + Sync> {
+    async fn read_active_account(&mut self, id: AccountId) -> Result<AccountState, Error> {
+        self.deref_mut().read_active_account(id).await
+    }
+
+    async fn read_account_or_default(&mut self, id: AccountId) -> Result<AccountState, Error> {
+        self.deref_mut().read_account_or_default(id).await
+    }
+
+    async fn write_account(&mut self, id: AccountId, value: AccountState) -> Result<(), Error> {
+        self.deref_mut().write_account(id, value).await
+    }
+
+    async fn remove_account(&mut self, id: AccountId) -> Result<(), Error> {
+        self.deref_mut().remove_account(id).await
+    }
+
+    async fn read_certificate(&mut self, hash: HashValue) -> Result<Certificate, Error> {
+        self.deref_mut().read_certificate(hash).await
+    }
+
+    async fn write_certificate(
+        &mut self,
+        hash: HashValue,
+        value: Certificate,
+    ) -> Result<(), Error> {
+        self.deref_mut().write_certificate(hash, value).await
+    }
+
+    async fn has_consensus(&mut self, id: InstanceId) -> Result<bool, Error> {
+        self.deref_mut().has_consensus(id).await
+    }
+
+    async fn read_consensus(&mut self, id: InstanceId) -> Result<ConsensusState, Error> {
+        self.deref_mut().read_consensus(id).await
+    }
+
+    async fn write_consensus(
+        &mut self,
+        id: InstanceId,
+        value: ConsensusState,
+    ) -> Result<(), Error> {
+        self.deref_mut().write_consensus(id, value).await
+    }
+
+    async fn remove_consensus(&mut self, id: InstanceId) -> Result<(), Error> {
+        self.deref_mut().remove_consensus(id).await
     }
 }
 

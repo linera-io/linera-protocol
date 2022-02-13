@@ -17,10 +17,19 @@ use zef_core::{
     base_types::*,
     storage::{InMemoryStoreClient, StorageClient},
 };
-use zef_service::{config::*, network, transport};
+use zef_service::{config::*, file_storage::FileStorageClient, network, transport};
+
+type Storage = Box<dyn StorageClient + Send + Sync>;
+
+fn make_storage(db_path: Option<&PathBuf>) -> Storage {
+    match db_path {
+        None => Box::new(InMemoryStoreClient::default()),
+        Some(path) => Box::new(FileStorageClient::new(path.clone())),
+    }
+}
 
 #[allow(clippy::too_many_arguments)]
-async fn make_shard_server<Storage>(
+async fn make_shard_server(
     local_ip_addr: &str,
     server_config_path: &Path,
     committee_config_path: &Path,
@@ -29,10 +38,7 @@ async fn make_shard_server<Storage>(
     cross_shard_config: network::CrossShardConfig,
     shard: u32,
     storage: Storage,
-) -> network::Server<Storage>
-where
-    Storage: StorageClient + Send + Sync + Clone + 'static,
-{
+) -> network::Server<Storage> {
     let server_config =
         AuthorityServerConfig::read(server_config_path).expect("Fail to read server config");
     let committee_config =
@@ -85,7 +91,8 @@ async fn make_servers(
     initial_accounts_config_path: &Path,
     buffer_size: usize,
     cross_shard_config: network::CrossShardConfig,
-) -> Vec<network::Server<InMemoryStoreClient>> {
+    db_path: Option<&PathBuf>,
+) -> Vec<network::Server<Storage>> {
     let server_config =
         AuthorityServerConfig::read(server_config_path).expect("Fail to read server config");
     let num_shards = server_config.authority.num_shards;
@@ -102,7 +109,7 @@ async fn make_servers(
                 buffer_size,
                 cross_shard_config.clone(),
                 shard,
-                InMemoryStoreClient::default(),
+                make_storage(db_path),
             )
             .await,
         )
@@ -194,6 +201,10 @@ enum ServerCommands {
         #[structopt(long = "server")]
         server_config_path: PathBuf,
 
+        /// Path to the file containing the server configuration of this Zef authority (including its secret key)
+        #[structopt(long = "db-path")]
+        db_path: Option<PathBuf>,
+
         /// Maximum size of datagrams received and sent (bytes)
         #[structopt(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE)]
         buffer_size: usize,
@@ -245,6 +256,7 @@ async fn main() {
     match options.cmd {
         ServerCommands::Run {
             server_config_path,
+            db_path,
             buffer_size,
             cross_shard_config,
             committee,
@@ -266,7 +278,7 @@ async fn main() {
                         buffer_size,
                         cross_shard_config,
                         shard,
-                        InMemoryStoreClient::default(),
+                        make_storage(db_path.as_ref()),
                     )
                     .await;
                     vec![server]
@@ -280,6 +292,7 @@ async fn main() {
                         &initial_accounts,
                         buffer_size,
                         cross_shard_config,
+                        db_path.as_ref(),
                     )
                     .await
                 }

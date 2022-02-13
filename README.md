@@ -44,9 +44,11 @@ rm -f *.json *.txt
 # Start servers
 for I in 1 2 3 4
 do
+    rm -Rf store_"$I"
+    mkdir -p store_"$I"
     for J in $(seq 0 3)
     do
-        ./server run --server server_"$I".json --shard "$J" --initial-accounts initial_accounts.txt --committee committee.json &
+        ./server run --server server_"$I".json --db-path store_"$I" --shard "$J" --initial-accounts initial_accounts.txt --committee committee.json &
     done
  done
 
@@ -76,7 +78,7 @@ fgrep '"account_id"':"$ACCOUNT3" accounts.json
 ./client --committee committee.json --accounts accounts.json query_balance "$ACCOUNT1"
 
 # Kill servers
-kill %1 %2 %3 %4 %5 %6 %7 %8 %9 %10 %11 %12 %13 %14 %15 %16
+kill -9 %1 %2 %3 %4 %5 %6 %7 %8 %9 %10 %11 %12 %13 %14 %15 %16
 
 cd ../..
 ```
