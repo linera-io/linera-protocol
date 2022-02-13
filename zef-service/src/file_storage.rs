@@ -63,7 +63,7 @@ impl FileStore {
         let key = bcs::to_bytes(&key).expect("should not fail");
         let kind = serde_name::trace_name::<V>().expect("V must be a struct or an enum");
         let value = self
-            .read_value(&kind, &key)
+            .read_value(kind, &key)
             .await
             .map_err(|e| Error::StorageIoError {
                 error: format!("{}: {}", kind, e),
@@ -85,7 +85,7 @@ impl FileStore {
         let key = bcs::to_bytes(&key).expect("should not fail");
         let kind = serde_name::trace_name::<V>().expect("V must be a struct or an enum");
         let value = bcs::to_bytes(&value).expect("should not fail");
-        self.write_value(&kind, &key, &value)
+        self.write_value(kind, &key, &value)
             .await
             .map_err(|e| Error::StorageIoError {
                 error: format!("{}", e),
@@ -100,7 +100,7 @@ impl FileStore {
     {
         let key = bcs::to_bytes(&key).expect("should not fail");
         let kind = serde_name::trace_name::<V>().expect("V must be a struct or an enum");
-        self.remove_value(&kind, &key)
+        self.remove_value(kind, &key)
             .await
             .map_err(|e| Error::StorageIoError {
                 error: format!("{}", e),
@@ -122,10 +122,7 @@ impl FileStoreClient {
 impl StorageClient for FileStoreClient {
     async fn read_active_account(&mut self, id: AccountId) -> Result<AccountState, Error> {
         let store = self.0.lock().await;
-        store
-            .read(&id)
-            .await?
-            .ok_or_else(|| Error::InactiveAccount(id))
+        store.read(&id).await?.ok_or(Error::InactiveAccount(id))
     }
 
     async fn read_account_or_default(&mut self, id: AccountId) -> Result<AccountState, Error> {
@@ -148,7 +145,7 @@ impl StorageClient for FileStoreClient {
         store
             .read(&hash)
             .await?
-            .ok_or_else(|| Error::MissingCertificate { hash })
+            .ok_or(Error::MissingCertificate { hash })
     }
 
     async fn write_certificate(
@@ -170,7 +167,7 @@ impl StorageClient for FileStoreClient {
         store
             .read(&id)
             .await?
-            .ok_or_else(|| Error::MissingConsensusInstance { id })
+            .ok_or(Error::MissingConsensusInstance { id })
     }
 
     async fn write_consensus(
