@@ -11,3 +11,6 @@ Cargo.lock
 
 # emacs
 *~
+
+# vim
+*.swp

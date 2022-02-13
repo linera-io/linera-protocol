@@ -2,9 +2,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![deny(warnings)]
+//#![deny(warnings)]
 
 pub mod config;
+pub mod file_storage;
 pub mod network;
 pub mod transport;
 
