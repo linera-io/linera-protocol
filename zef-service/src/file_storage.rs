@@ -15,13 +15,13 @@ use zef_core::{
 };
 
 /// File-based store.
-#[derive(Debug, Default, Clone)]
-pub struct FileStorage {
+#[derive(Debug, Clone)]
+pub struct FileStore {
     /// Base path.
     path: PathBuf,
 }
 
-impl FileStorage {
+impl FileStore {
     pub fn new(path: PathBuf) -> Self {
         assert!(path.is_dir());
         Self { path }
@@ -109,43 +109,43 @@ impl FileStorage {
     }
 }
 
-#[derive(Clone, Default)]
-pub struct FileStorageClient(Arc<Mutex<FileStorage>>);
+#[derive(Clone)]
+pub struct FileStoreClient(Arc<Mutex<FileStore>>);
 
-impl FileStorageClient {
+impl FileStoreClient {
     pub fn new(path: PathBuf) -> Self {
-        FileStorageClient(Arc::new(Mutex::new(FileStorage::new(path))))
+        FileStoreClient(Arc::new(Mutex::new(FileStore::new(path))))
     }
 }
 
 #[async_trait]
-impl StorageClient for FileStorageClient {
+impl StorageClient for FileStoreClient {
     async fn read_active_account(&mut self, id: AccountId) -> Result<AccountState, Error> {
-        let storage = self.0.lock().await;
-        storage
+        let store = self.0.lock().await;
+        store
             .read(&id)
             .await?
             .ok_or_else(|| Error::InactiveAccount(id))
     }
 
     async fn read_account_or_default(&mut self, id: AccountId) -> Result<AccountState, Error> {
-        let storage = self.0.lock().await;
-        Ok(storage.read(&id).await?.unwrap_or_default())
+        let store = self.0.lock().await;
+        Ok(store.read(&id).await?.unwrap_or_default())
     }
 
     async fn write_account(&mut self, id: AccountId, state: AccountState) -> Result<(), Error> {
-        let storage = self.0.lock().await;
-        storage.write(&id, &state).await
+        let store = self.0.lock().await;
+        store.write(&id, &state).await
     }
 
     async fn remove_account(&mut self, id: AccountId) -> Result<(), Error> {
-        let storage = self.0.lock().await;
-        storage.remove::<_, AccountState>(&id).await
+        let store = self.0.lock().await;
+        store.remove::<_, AccountState>(&id).await
     }
 
     async fn read_certificate(&mut self, hash: HashValue) -> Result<Certificate, Error> {
-        let storage = self.0.lock().await;
-        storage
+        let store = self.0.lock().await;
+        store
             .read(&hash)
             .await?
             .ok_or_else(|| Error::MissingCertificate { hash })
@@ -156,18 +156,18 @@ impl StorageClient for FileStorageClient {
         hash: HashValue,
         certificate: Certificate,
     ) -> Result<(), Error> {
-        let storage = self.0.lock().await;
-        storage.write(&hash, &certificate).await
+        let store = self.0.lock().await;
+        store.write(&hash, &certificate).await
     }
 
     async fn has_consensus(&mut self, id: InstanceId) -> Result<bool, Error> {
-        let storage = self.0.lock().await;
-        Ok(storage.read::<_, ConsensusState>(&id).await?.is_some())
+        let store = self.0.lock().await;
+        Ok(store.read::<_, ConsensusState>(&id).await?.is_some())
     }
 
     async fn read_consensus(&mut self, id: InstanceId) -> Result<ConsensusState, Error> {
-        let storage = self.0.lock().await;
-        storage
+        let store = self.0.lock().await;
+        store
             .read(&id)
             .await?
             .ok_or_else(|| Error::MissingConsensusInstance { id })
@@ -178,12 +178,12 @@ impl StorageClient for FileStorageClient {
         id: InstanceId,
         state: ConsensusState,
     ) -> Result<(), Error> {
-        let storage = self.0.lock().await;
-        storage.write(&id, &state).await
+        let store = self.0.lock().await;
+        store.write(&id, &state).await
     }
 
     async fn remove_consensus(&mut self, id: InstanceId) -> Result<(), Error> {
-        let storage = self.0.lock().await;
-        storage.remove::<_, ConsensusState>(&id).await
+        let store = self.0.lock().await;
+        store.remove::<_, ConsensusState>(&id).await
     }
 }

@@ -17,14 +17,14 @@ use zef_core::{
     base_types::*,
     storage::{InMemoryStoreClient, StorageClient},
 };
-use zef_service::{config::*, file_storage::FileStorageClient, network, transport};
+use zef_service::{config::*, file_storage::FileStoreClient, network, transport};
 
 type Storage = Box<dyn StorageClient + Send + Sync>;
 
 fn make_storage(db_path: Option<&PathBuf>) -> Storage {
     match db_path {
         None => Box::new(InMemoryStoreClient::default()),
-        Some(path) => Box::new(FileStorageClient::new(path.clone())),
+        Some(path) => Box::new(FileStoreClient::new(path.clone())),
     }
 }
 
