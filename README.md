@@ -78,7 +78,7 @@ fgrep '"account_id"':"$ACCOUNT3" accounts.json
 ./client --committee committee.json --accounts accounts.json query_balance "$ACCOUNT1"
 
 # Kill servers
-kill -9 %1 %2 %3 %4 %5 %6 %7 %8 %9 %10 %11 %12 %13 %14 %15 %16
+kill %1 %2 %3 %4 %5 %6 %7 %8 %9 %10 %11 %12 %13 %14 %15 %16
 
 cd ../..
 ```

@@ -34,11 +34,11 @@ impl FileStore {
 
     async fn read_value(&self, kind: &str, key: &[u8]) -> std::io::Result<Option<Vec<u8>>> {
         let path = self.get_path(kind, key);
-        if !path.is_file() {
-            return Ok(None);
+        match fs::read(path).await {
+            Ok(value) => Ok(Some(value)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e),
         }
-        let value = fs::read(path).await?;
-        Ok(Some(value))
     }
 
     async fn write_value(&self, kind: &str, key: &[u8], value: &[u8]) -> std::io::Result<()> {
