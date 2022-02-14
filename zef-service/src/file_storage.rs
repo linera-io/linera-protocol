@@ -14,6 +14,10 @@ use zef_core::{
     storage::StorageClient,
 };
 
+#[cfg(test)]
+#[path = "unit_tests/file_storage_tests.rs"]
+mod file_storage_tests;
+
 /// File-based store.
 #[derive(Debug, Clone)]
 pub struct FileStore {
