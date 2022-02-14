@@ -140,6 +140,7 @@ pub enum ConsensusOrder {
 }
 
 /// The response to a consensus order.
+#[allow(clippy::large_enum_variant)]
 pub enum ConsensusResponse {
     Info(ConsensusInfoResponse),
     Vote(Vote),
@@ -177,10 +178,15 @@ pub struct Vote {
 
 /// A certified statement from the committee. Note: Opaque coins have no external
 /// signatures and are authenticated at a lower level.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct Certificate {
+    /// The certified value.
     pub value: Value,
+    /// Hash of the vertified value (used as key for storage).
+    #[serde(skip_serializing)]
+    pub hash: HashValue,
+    /// Signatures on the value.
     pub signatures: Vec<(AuthorityName, Signature)>,
 }
 
@@ -374,11 +380,13 @@ pub struct SignatureAggregator<'a> {
 impl<'a> SignatureAggregator<'a> {
     /// Start aggregating signatures for the given value into a certificate.
     pub fn new(value: Value, committee: &'a Committee) -> Self {
+        let hash = HashValue::new(&value);
         Self {
             committee,
             weight: 0,
             used_authorities: HashSet::new(),
             partial: Certificate {
+                hash,
                 value,
                 signatures: Vec::new(),
             },
@@ -416,7 +424,33 @@ impl<'a> SignatureAggregator<'a> {
     }
 }
 
+impl<'a> Deserialize<'a> for Certificate {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::de::Deserializer<'a>,
+    {
+        #[derive(Deserialize)]
+        #[serde(rename = "Certificate")]
+        struct NetworkCertificate {
+            value: Value,
+            signatures: Vec<(AuthorityName, Signature)>,
+        }
+
+        let cert = NetworkCertificate::deserialize(deserializer)?;
+        Ok(Certificate::new(cert.value, cert.signatures))
+    }
+}
+
 impl Certificate {
+    pub fn new(value: Value, signatures: Vec<(AuthorityName, Signature)>) -> Self {
+        let hash = HashValue::new(&value);
+        Self {
+            value,
+            hash,
+            signatures,
+        }
+    }
+
     /// Verify the certificate.
     pub fn check<'a>(&'a self, committee: &Committee) -> Result<&'a Value, Error> {
         // Check the quorum.

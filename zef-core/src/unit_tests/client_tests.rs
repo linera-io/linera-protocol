@@ -156,10 +156,11 @@ async fn fund_account<I: IntoIterator<Item = i128>>(
             .try_lock()
             .unwrap()
             .storage
-            .write_account(
+            .write_account(AccountState::create(
                 account_id.clone(),
-                AccountState::new(owner, balances.next().unwrap_or_else(Balance::zero)),
-            )
+                owner,
+                balances.next().unwrap_or_else(Balance::zero),
+            ))
             .await
             .unwrap();
     }

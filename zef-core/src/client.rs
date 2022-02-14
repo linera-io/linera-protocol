@@ -494,20 +494,15 @@ where
             .collect();
         match action {
             CommunicateAction::ConfirmOrder(order) => {
-                let certificate = Certificate {
-                    value: Value::Confirm(order.value.request),
-                    signatures,
-                };
+                let certificate = Certificate::new(Value::Confirm(order.value.request), signatures);
                 // Certificate is valid because
-                // * `communicate_with_quorum` ensured a sufficient "weight" of (non-error) answers were returned by authorities.
+                // * `communicate_with_quorum` ensured a sufficient "weight" of
+                // (non-error) answers were returned by authorities.
                 // * each answer is a vote signed by the expected authority.
                 certificates.push(certificate);
             }
             CommunicateAction::LockOrder(order) => {
-                let certificate = Certificate {
-                    value: Value::Lock(order.value.request),
-                    signatures,
-                };
+                let certificate = Certificate::new(Value::Lock(order.value.request), signatures);
                 certificates.push(certificate);
             }
             CommunicateAction::SynchronizeNextSequenceNumber(_) => (),

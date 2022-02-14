@@ -10,6 +10,8 @@ use std::collections::{BTreeMap, BTreeSet};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct ConsensusState {
+    /// The UID of this consensus instance.
+    pub id: InstanceId,
     /// Accounts expected to be locked and managed by the protocol.
     pub accounts: Vec<AccountId>,
     /// Expected sequence number for each locked account.
@@ -27,11 +29,16 @@ pub struct ConsensusState {
 }
 
 impl ConsensusState {
-    pub fn new(expected: Vec<(AccountId, SequenceNumber)>, received: Certificate) -> Self {
+    pub fn new(
+        id: InstanceId,
+        expected: Vec<(AccountId, SequenceNumber)>,
+        received: Certificate,
+    ) -> Self {
         let accounts: Vec<_> = expected.iter().map(|(id, _)| id.clone()).collect();
         let sequence_numbers: BTreeMap<_, _> = expected.into_iter().collect();
         assert_eq!(accounts.len(), sequence_numbers.len());
         Self {
+            id,
             accounts,
             sequence_numbers,
             locked_accounts: BTreeMap::new(),

@@ -85,7 +85,7 @@ where
         // Obtain the sender's account.
         let sender = request.account_id.clone();
         // Check that the account is active and ready for this confirmation.
-        let mut account = self.storage.read_active_account(sender.clone()).await?;
+        let mut account = self.storage.read_active_account(&sender).await?;
         if account.next_sequence_number < request.sequence_number {
             return Err(Error::MissingEarlierConfirmations {
                 current_sequence_number: account.next_sequence_number,
@@ -93,27 +93,24 @@ where
         }
         if account.next_sequence_number > request.sequence_number {
             // Request was already confirmed.
-            let info = account.make_account_info(sender.clone());
+            let info = account.make_account_info();
             return Ok((info, CrossShardContinuation::Done));
         }
         // Execute the sender's side of the operation.
-        let key = HashValue::new(&certificate.value);
-        account.apply_operation_as_sender(&request.operation, key)?;
+        account.apply_operation_as_sender(&request.operation, certificate.hash)?;
         // Advance to next sequence number.
         account.next_sequence_number.try_add_assign_one()?;
         account.pending = None;
         // Final touch on the sender's account.
-        let info = account.make_account_info(sender.clone());
+        let info = account.make_account_info();
         if account.owner.is_none() {
             // Tentatively remove inactive account. (It might be created again as a
             // recipient, though. To solve this, we may implement additional cleanups in
             // the future.)
-            self.storage.remove_account(sender.clone()).await?;
+            self.storage.remove_account(&sender).await?;
         } else {
-            self.storage
-                .write_certificate(key, certificate.clone())
-                .await?;
-            self.storage.write_account(sender.clone(), account).await?;
+            self.storage.write_certificate(certificate.clone()).await?;
+            self.storage.write_account(account).await?;
         }
 
         if let Some(recipient) = request.operation.recipient() {
@@ -148,17 +145,11 @@ where
                 &operation
             );
             // Execute the recipient's side of the operation.
-            let mut account = self
-                .storage
-                .read_account_or_default(recipient.clone())
-                .await?;
-            let key = HashValue::new(&certificate.value);
-            let need_update = account.apply_operation_as_recipient(&operation, key)?;
+            let mut account = self.storage.read_account_or_default(recipient).await?;
+            let need_update = account.apply_operation_as_recipient(&operation, certificate.hash)?;
             if need_update {
-                self.storage.write_certificate(key, certificate).await?;
-                self.storage
-                    .write_account(recipient.clone(), account)
-                    .await?;
+                self.storage.write_certificate(certificate).await?;
+                self.storage.write_account(account).await?;
             }
         } else if let Operation::StartConsensusInstance {
             new_id,
@@ -167,11 +158,9 @@ where
         {
             ensure!(self.in_shard(new_id), Error::WrongShard);
             // Make sure cross shard requests to start a consensus instance cannot be replayed.
-            if !self.storage.has_consensus(new_id.clone()).await? {
-                let instance = ConsensusState::new(accounts.clone(), certificate);
-                self.storage
-                    .write_consensus(new_id.clone(), instance)
-                    .await?;
+            if !self.storage.has_consensus(new_id).await? {
+                let instance = ConsensusState::new(new_id.clone(), accounts.clone(), certificate);
+                self.storage.write_consensus(instance).await?;
             }
         }
         // This concludes the confirmation of `certificate`.
@@ -200,7 +189,7 @@ where
         // Obtain the sender's account.
         let sender = order.value.request.account_id.clone();
 
-        let mut account = self.storage.read_active_account(sender.clone()).await?;
+        let mut account = self.storage.read_active_account(&sender).await?;
         // Check authentication of the request.
         order.check(&account.owner)?;
         // Check the account is ready for this new request.
@@ -219,14 +208,14 @@ where
                 Error::PreviousRequestMustBeConfirmedFirst
             );
             // This exact request was already signed. Return the previous vote.
-            return Ok(account.make_account_info(sender));
+            return Ok(account.make_account_info());
         }
         // Verify that the request is safe, and return the value of the vote.
         let value = account.validate_operation(request)?;
         let vote = Vote::new(value, &self.key_pair);
         account.pending = Some(vote);
-        let info = account.make_account_info(sender.clone());
-        self.storage.write_account(sender, account).await?;
+        let info = account.make_account_info();
+        self.storage.write_account(account).await?;
         Ok(info)
     }
 
@@ -257,7 +246,7 @@ where
     ) -> Result<ConsensusResponse, Error> {
         match order {
             ConsensusOrder::GetStatus { instance_id } => {
-                let instance = self.storage.read_consensus(instance_id).await?;
+                let instance = self.storage.read_consensus(&instance_id).await?;
                 let info = ConsensusInfoResponse {
                     locked_accounts: instance.locked_accounts.clone(),
                     proposed: instance.proposed.clone(),
@@ -272,10 +261,7 @@ where
                 signature,
                 locks,
             } => {
-                let mut instance = self
-                    .storage
-                    .read_consensus(proposal.instance_id.clone())
-                    .await?;
+                let mut instance = self.storage.read_consensus(&proposal.instance_id).await?;
                 // Process lock certificates.
                 for lock in locks {
                     lock.check(&self.committee)?;
@@ -325,9 +311,7 @@ where
                 }
                 // Update proposed decision.
                 instance.proposed = Some(proposal.clone());
-                self.storage
-                    .write_consensus(proposal.instance_id.clone(), instance)
-                    .await?;
+                self.storage.write_consensus(instance).await?;
                 // Vote in favor of pre-commit (aka lock).
                 let value = Value::PreCommit { proposal, requests };
                 let vote = Vote::new(value, &self.key_pair);
@@ -339,10 +323,7 @@ where
                     Value::PreCommit { proposal, requests } => (proposal, requests),
                     _ => return Err(Error::InvalidConsensusOrder),
                 };
-                let mut instance = self
-                    .storage
-                    .read_consensus(proposal.instance_id.clone())
-                    .await?;
+                let mut instance = self.storage.read_consensus(&proposal.instance_id).await?;
                 // Verify safety.
                 if let Some(proposed) = &instance.proposed {
                     ensure!(
@@ -362,9 +343,7 @@ where
                 }
                 // Update locked decision.
                 instance.locked = Some(certificate);
-                self.storage
-                    .write_consensus(proposal.instance_id.clone(), instance)
-                    .await?;
+                self.storage.write_consensus(instance).await?;
                 // Vote in favor of commit.
                 let value = Value::Commit { proposal, requests };
                 let vote = Vote::new(value, &self.key_pair);
@@ -379,11 +358,7 @@ where
                 // Success.
                 // Only execute the requests in the commit once.
                 let mut requests = {
-                    if self
-                        .storage
-                        .has_consensus(proposal.instance_id.clone())
-                        .await?
-                    {
+                    if self.storage.has_consensus(&proposal.instance_id).await? {
                         requests.clone()
                     } else {
                         Vec::new()
@@ -414,9 +389,7 @@ where
                     }
                 }
                 // Remove the consensus instance if needed.
-                self.storage
-                    .remove_consensus(proposal.instance_id.clone())
-                    .await?;
+                self.storage.remove_consensus(&proposal.instance_id).await?;
                 // Prepare cross-shard requests.
                 let continuations = requests
                     .iter()
@@ -441,11 +414,8 @@ where
         query: AccountInfoQuery,
     ) -> Result<AccountInfoResponse, Error> {
         ensure!(self.in_shard(&query.account_id), Error::WrongShard);
-        let account = self
-            .storage
-            .read_active_account(query.account_id.clone())
-            .await?;
-        let mut response = account.make_account_info(query.account_id);
+        let account = self.storage.read_active_account(&query.account_id).await?;
+        let mut response = account.make_account_info();
         if let Some(seq) = query.query_sequence_number {
             if let Some(key) = account.confirmed_log.get(usize::from(seq)) {
                 let cert = self.storage.read_certificate(*key).await?;
@@ -491,7 +461,7 @@ where
             }
             CrossShardRequest::DestroyAccount { account_id } => {
                 ensure!(self.in_shard(&account_id), Error::WrongShard);
-                self.storage.remove_account(account_id).await?;
+                self.storage.remove_account(&account_id).await?;
                 Ok(())
             }
             CrossShardRequest::ProcessConfirmedRequest {
