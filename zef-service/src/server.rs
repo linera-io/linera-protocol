@@ -19,7 +19,7 @@ use zef_core::{
 };
 use zef_service::{config::*, file_storage::FileStoreClient, network, transport};
 
-type Storage = Box<dyn StorageClient + Send + Sync>;
+type Storage = Box<dyn StorageClient>;
 
 fn make_storage(db_path: Option<&PathBuf>) -> Storage {
     match db_path {
@@ -66,12 +66,8 @@ async fn make_shard_server(
         if get_shard(num_shards, id) != shard {
             continue;
         }
-        let account = AccountState::new(*owner, *balance);
-        state
-            .storage
-            .write_account(id.clone(), account)
-            .await
-            .unwrap();
+        let account = AccountState::create(id.clone(), *owner, *balance);
+        state.storage.write_account(account).await.unwrap();
     }
 
     network::Server::new(

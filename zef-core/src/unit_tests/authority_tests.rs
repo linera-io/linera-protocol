@@ -33,7 +33,7 @@ async fn test_handle_request_order_bad_signature() {
         .is_err());
     assert!(state
         .storage
-        .read_active_account(dbg_account(1))
+        .read_active_account(&dbg_account(1))
         .await
         .unwrap()
         .pending
@@ -58,7 +58,7 @@ async fn test_handle_request_order_zero_amount() {
         .is_err());
     assert!(state
         .storage
-        .read_active_account(dbg_account(1))
+        .read_active_account(&dbg_account(1))
         .await
         .unwrap()
         .pending
@@ -85,7 +85,7 @@ async fn test_handle_request_order_unknown_sender() {
         .is_err());
     assert!(state
         .storage
-        .read_active_account(dbg_account(1))
+        .read_active_account(&dbg_account(1))
         .await
         .unwrap()
         .pending
@@ -106,22 +106,18 @@ async fn test_handle_request_order_bad_sequence_number() {
 
     let mut sender_account = state
         .storage
-        .read_active_account(dbg_account(1))
+        .read_active_account(&dbg_account(1))
         .await
         .unwrap();
     sender_account
         .next_sequence_number
         .try_add_assign_one()
         .unwrap();
-    state
-        .storage
-        .write_account(dbg_account(1), sender_account)
-        .await
-        .unwrap();
+    state.storage.write_account(sender_account).await.unwrap();
     assert!(state.handle_request_order(request_order).await.is_err());
     assert!(state
         .storage
-        .read_active_account(dbg_account(1))
+        .read_active_account(&dbg_account(1))
         .await
         .unwrap()
         .pending
@@ -146,7 +142,7 @@ async fn test_handle_request_order_exceed_balance() {
     assert!(state.handle_request_order(request_order).await.is_err());
     assert!(state
         .storage
-        .read_active_account(dbg_account(1))
+        .read_active_account(&dbg_account(1))
         .await
         .unwrap()
         .pending
@@ -169,7 +165,7 @@ async fn test_handle_request_order() {
     let account_info = state.handle_request_order(request_order).await.unwrap();
     let pending = state
         .storage
-        .read_active_account(dbg_account(1))
+        .read_active_account(&dbg_account(1))
         .await
         .unwrap()
         .pending
@@ -264,7 +260,7 @@ async fn test_handle_confirmation_order_exceed_balance() {
         .is_ok());
     let sender_account = state
         .storage
-        .read_active_account(dbg_account(1))
+        .read_active_account(&dbg_account(1))
         .await
         .unwrap();
     assert_eq!(Balance::from(-995), sender_account.balance);
@@ -272,7 +268,7 @@ async fn test_handle_confirmation_order_exceed_balance() {
     assert_eq!(sender_account.confirmed_log.len(), 1);
     assert!(state
         .storage
-        .read_active_account(dbg_account(2))
+        .read_active_account(&dbg_account(2))
         .await
         .is_ok());
 }
@@ -299,7 +295,7 @@ async fn test_handle_confirmation_order_receiver_balance_overflow() {
         .is_ok());
     let new_sender_account = state
         .storage
-        .read_active_account(dbg_account(1))
+        .read_active_account(&dbg_account(1))
         .await
         .unwrap();
     assert_eq!(Balance::from(0), new_sender_account.balance);
@@ -310,7 +306,7 @@ async fn test_handle_confirmation_order_receiver_balance_overflow() {
     assert_eq!(new_sender_account.confirmed_log.len(), 1);
     let new_recipient_account = state
         .storage
-        .read_active_account(dbg_account(2))
+        .read_active_account(&dbg_account(2))
         .await
         .unwrap();
     assert_eq!(Balance::max(), new_recipient_account.balance);
@@ -335,7 +331,7 @@ async fn test_handle_confirmation_order_receiver_equal_sender() {
         .is_ok());
     let account = state
         .storage
-        .read_active_account(dbg_account(1))
+        .read_active_account(&dbg_account(1))
         .await
         .unwrap();
     assert_eq!(Balance::from(1), account.balance);
@@ -367,7 +363,7 @@ async fn test_update_recipient_account() {
         .is_ok());
     let account = state
         .storage
-        .read_active_account(dbg_account(2))
+        .read_active_account(&dbg_account(2))
         .await
         .unwrap();
     assert_eq!(Balance::from(11), account.balance);
@@ -404,16 +400,16 @@ async fn test_handle_confirmation_order_to_active_recipient_in_the_same_shard() 
     assert_eq!(
         state
             .storage
-            .read_active_account(dbg_account(1))
+            .read_active_account(&dbg_account(1))
             .await
             .unwrap()
             .confirmed_log,
-        vec![HashValue::new(&certificate.value)]
+        vec![certificate.hash]
     );
 
     let recipient_account = state
         .storage
-        .read_active_account(dbg_account(2))
+        .read_active_account(&dbg_account(2))
         .await
         .unwrap();
     assert_eq!(recipient_account.balance, Balance::from(5));
@@ -468,11 +464,11 @@ async fn test_handle_confirmation_order_to_inactive_recipient_in_the_same_shard(
     assert_eq!(
         state
             .storage
-            .read_active_account(dbg_account(1))
+            .read_active_account(&dbg_account(1))
             .await
             .unwrap()
             .confirmed_log,
-        vec![HashValue::new(&certificate.value)]
+        vec![certificate.hash]
     );
 }
 
@@ -480,7 +476,7 @@ async fn test_handle_confirmation_order_to_inactive_recipient_in_the_same_shard(
 async fn test_read_account_state() {
     let sender = dbg_account(1);
     let mut state = init_state_with_account(sender.clone(), dbg_addr(1), Balance::from(5)).await;
-    state.storage.read_active_account(sender).await.unwrap();
+    state.storage.read_active_account(&sender).await.unwrap();
 }
 
 #[tokio::test]
@@ -490,23 +486,19 @@ async fn test_read_account_state_unknown_account() {
     let mut state = init_state_with_account(sender, dbg_addr(1), Balance::from(5)).await;
     assert!(state
         .storage
-        .read_active_account(unknown_account_id.clone())
+        .read_active_account(&unknown_account_id)
         .await
         .is_err());
     let mut account = state
         .storage
-        .read_account_or_default(unknown_account_id.clone())
+        .read_account_or_default(&unknown_account_id)
         .await
         .unwrap();
     account.owner = Some(dbg_addr(4));
-    state
-        .storage
-        .write_account(unknown_account_id.clone(), account)
-        .await
-        .unwrap();
+    state.storage.write_account(account).await.unwrap();
     assert!(state
         .storage
-        .read_active_account(unknown_account_id)
+        .read_active_account(&unknown_account_id)
         .await
         .is_ok());
 }
@@ -550,8 +542,8 @@ async fn init_state_with_accounts<I: IntoIterator<Item = (AccountId, AccountOwne
 ) -> WorkerState<InMemoryStoreClient> {
     let mut state = init_state();
     for (id, owner, balance) in balances {
-        let account = AccountState::new(owner, balance);
-        state.storage.write_account(id, account).await.unwrap();
+        let account = AccountState::create(id, owner, balance);
+        state.storage.write_account(account).await.unwrap();
     }
     state
 }

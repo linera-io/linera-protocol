@@ -193,10 +193,8 @@ impl ClientContext {
         );
         let mut serialized_certificates = Vec::new();
         for order in orders {
-            let mut certificate = Certificate {
-                value: Value::Confirm(order.value.request.clone()),
-                signatures: Vec::new(),
-            };
+            let mut certificate =
+                Certificate::new(Value::Confirm(order.value.request.clone()), Vec::new());
             for i in 0..committee.quorum_threshold() {
                 let (pubx, secx) = keys.get(i).unwrap();
                 let sig = Signature::new(&certificate.value, secx);
