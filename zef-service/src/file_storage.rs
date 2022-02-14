@@ -134,22 +134,20 @@ impl FileStoreClient {
 
 #[async_trait]
 impl StorageClient for FileStoreClient {
-    async fn read_active_account(&mut self, id: AccountId) -> Result<AccountState, Error> {
+    async fn read_account_or_default(&mut self, id: &AccountId) -> Result<AccountState, Error> {
         let store = self.0.lock().await;
-        store.read(&id).await?.ok_or(Error::InactiveAccount(id))
+        Ok(store
+            .read(&id)
+            .await?
+            .unwrap_or_else(|| AccountState::new(id.clone())))
     }
 
-    async fn read_account_or_default(&mut self, id: AccountId) -> Result<AccountState, Error> {
-        let store = self.0.lock().await;
-        Ok(store.read(&id).await?.unwrap_or_default())
-    }
-
-    async fn write_account(&mut self, id: AccountId, state: AccountState) -> Result<(), Error> {
+    async fn write_account(&mut self, state: AccountState) -> Result<(), Error> {
         let mut store = self.0.lock().await;
-        store.write(&id, &state).await
+        store.write(&state.id, &state).await
     }
 
-    async fn remove_account(&mut self, id: AccountId) -> Result<(), Error> {
+    async fn remove_account(&mut self, id: &AccountId) -> Result<(), Error> {
         let store = self.0.lock().await;
         store.remove::<_, AccountState>(&id).await
     }
@@ -162,38 +160,30 @@ impl StorageClient for FileStoreClient {
             .ok_or(Error::MissingCertificate { hash })
     }
 
-    async fn write_certificate(
-        &mut self,
-        hash: HashValue,
-        certificate: Certificate,
-    ) -> Result<(), Error> {
+    async fn write_certificate(&mut self, certificate: Certificate) -> Result<(), Error> {
         let mut store = self.0.lock().await;
-        store.write(&hash, &certificate).await
+        store.write(&certificate.hash, &certificate).await
     }
 
-    async fn has_consensus(&mut self, id: InstanceId) -> Result<bool, Error> {
+    async fn has_consensus(&mut self, id: &InstanceId) -> Result<bool, Error> {
         let store = self.0.lock().await;
         Ok(store.read::<_, ConsensusState>(&id).await?.is_some())
     }
 
-    async fn read_consensus(&mut self, id: InstanceId) -> Result<ConsensusState, Error> {
+    async fn read_consensus(&mut self, id: &InstanceId) -> Result<ConsensusState, Error> {
         let store = self.0.lock().await;
         store
             .read(&id)
             .await?
-            .ok_or(Error::MissingConsensusInstance { id })
+            .ok_or(Error::MissingConsensusInstance { id: id.clone() })
     }
 
-    async fn write_consensus(
-        &mut self,
-        id: InstanceId,
-        state: ConsensusState,
-    ) -> Result<(), Error> {
+    async fn write_consensus(&mut self, state: ConsensusState) -> Result<(), Error> {
         let mut store = self.0.lock().await;
-        store.write(&id, &state).await
+        store.write(&state.id, &state).await
     }
 
-    async fn remove_consensus(&mut self, id: InstanceId) -> Result<(), Error> {
+    async fn remove_consensus(&mut self, id: &InstanceId) -> Result<(), Error> {
         let store = self.0.lock().await;
         store.remove::<_, ConsensusState>(&id).await
     }

@@ -7,9 +7,11 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 
 /// State of an account.
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct AccountState {
+    /// The UID of the account.
+    pub id: AccountId,
     /// Owner of the account. An account without owner cannot execute operations.
     pub owner: Option<AccountOwner>,
     /// Balance of the account.
@@ -27,9 +29,9 @@ pub struct AccountState {
 }
 
 impl AccountState {
-    pub(crate) fn make_account_info(&self, account_id: AccountId) -> AccountInfoResponse {
+    pub(crate) fn make_account_info(&self) -> AccountInfoResponse {
         AccountInfoResponse {
-            account_id,
+            account_id: self.id.clone(),
             owner: self.owner,
             balance: self.balance,
             next_sequence_number: self.next_sequence_number,
@@ -40,8 +42,22 @@ impl AccountState {
         }
     }
 
-    pub fn new(owner: AccountOwner, balance: Balance) -> Self {
+    pub fn new(id: AccountId) -> Self {
         Self {
+            id,
+            owner: None,
+            balance: Balance::default(),
+            next_sequence_number: SequenceNumber::new(),
+            pending: None,
+            confirmed_log: Vec::new(),
+            received_keys: HashSet::new(),
+            received_log: Vec::new(),
+        }
+    }
+
+    pub fn create(id: AccountId, owner: AccountOwner, balance: Balance) -> Self {
+        Self {
+            id,
             owner: Some(owner),
             balance,
             next_sequence_number: SequenceNumber::new(),
