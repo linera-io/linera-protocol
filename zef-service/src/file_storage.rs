@@ -3,6 +3,7 @@
 
 use async_trait::async_trait;
 use futures::lock::Mutex;
+use rand::{Rng, SeedableRng};
 use std::{path::PathBuf, sync::Arc};
 use tokio::fs;
 use zef_core::{
@@ -23,17 +24,20 @@ mod file_storage_tests;
 pub struct FileStore {
     /// Base path.
     path: PathBuf,
+    /// For generation of temporary names.
+    rng: rand::rngs::SmallRng,
 }
 
 impl FileStore {
     pub fn new(path: PathBuf) -> Self {
         assert!(path.is_dir());
-        Self { path }
+        let rng = rand::rngs::SmallRng::from_entropy();
+        Self { path, rng }
     }
 
     fn get_path(&self, kind: &str, key: &[u8]) -> PathBuf {
         let key = hex::encode(key);
-        self.path.join(format!("{}_{}", kind, key))
+        self.path.join(format!("{}_{}.json", kind, key))
     }
 
     async fn read_value(&self, kind: &str, key: &[u8]) -> std::io::Result<Option<Vec<u8>>> {
@@ -45,9 +49,13 @@ impl FileStore {
         }
     }
 
-    async fn write_value(&self, kind: &str, key: &[u8], value: &[u8]) -> std::io::Result<()> {
+    async fn write_value(&mut self, kind: &str, key: &[u8], value: &[u8]) -> std::io::Result<()> {
         let path = self.get_path(kind, key);
-        fs::write(&path, value).await?;
+        let seed: u64 = self.rng.gen();
+        let seed = format!("_{}", seed);
+        let tmp_path = std::path::Path::new(&seed);
+        fs::write(&tmp_path, value).await?;
+        fs::rename(&tmp_path, &path).await?;
         Ok(())
     }
 
@@ -83,7 +91,7 @@ impl FileStore {
         Ok(result)
     }
 
-    async fn write<'a, K, V>(&self, key: &K, value: &V) -> Result<(), Error>
+    async fn write<'a, K, V>(&mut self, key: &K, value: &V) -> Result<(), Error>
     where
         K: serde::Serialize,
         V: serde::Serialize + serde::Deserialize<'a>,
@@ -137,7 +145,7 @@ impl StorageClient for FileStoreClient {
     }
 
     async fn write_account(&mut self, id: AccountId, state: AccountState) -> Result<(), Error> {
-        let store = self.0.lock().await;
+        let mut store = self.0.lock().await;
         store.write(&id, &state).await
     }
 
@@ -159,7 +167,7 @@ impl StorageClient for FileStoreClient {
         hash: HashValue,
         certificate: Certificate,
     ) -> Result<(), Error> {
-        let store = self.0.lock().await;
+        let mut store = self.0.lock().await;
         store.write(&hash, &certificate).await
     }
 
@@ -181,7 +189,7 @@ impl StorageClient for FileStoreClient {
         id: InstanceId,
         state: ConsensusState,
     ) -> Result<(), Error> {
-        let store = self.0.lock().await;
+        let mut store = self.0.lock().await;
         store.write(&id, &state).await
     }
 
