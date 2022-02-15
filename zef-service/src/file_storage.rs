@@ -40,6 +40,8 @@ impl FileStore {
         let mut hasher = sha2::Sha512::default();
         hasher.update(key);
         let hash = hasher.finalize();
+        // Only encode the first 40 bytes to ensure that the resulting
+        // filename is well below 128 bytes.
         let key = hex::encode(&hash[0..40]);
         self.path.join(format!("{}_{}.json", kind, key))
     }
