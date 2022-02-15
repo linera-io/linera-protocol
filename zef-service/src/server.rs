@@ -33,7 +33,7 @@ async fn make_shard_server(
     local_ip_addr: &str,
     server_config_path: &Path,
     committee_config_path: &Path,
-    initial_accounts_config_path: &Path,
+    initial_accounts_config_path: Option<&PathBuf>,
     buffer_size: usize,
     cross_shard_config: network::CrossShardConfig,
     shard: u32,
@@ -43,8 +43,6 @@ async fn make_shard_server(
         AuthorityServerConfig::read(server_config_path).expect("Fail to read server config");
     let committee_config =
         CommitteeConfig::read(committee_config_path).expect("Fail to read committee config");
-    let initial_accounts_config = InitialStateConfig::read(initial_accounts_config_path)
-        .expect("Fail to read initial account config");
 
     // NOTE: This log entry is used to compute performance.
     info!("Shard booted on {}", server_config.authority.host);
@@ -61,13 +59,18 @@ async fn make_shard_server(
         storage,
     );
 
-    // Load initial states
-    for (id, owner, balance) in &initial_accounts_config.accounts {
-        if get_shard(num_shards, id) != shard {
-            continue;
+    if let Some(initial_accounts_config_path) = initial_accounts_config_path {
+        let initial_accounts_config = InitialStateConfig::read(initial_accounts_config_path)
+            .expect("Fail to read initial account config");
+
+        // Load initial states
+        for (id, owner, balance) in &initial_accounts_config.accounts {
+            if get_shard(num_shards, id) != shard {
+                continue;
+            }
+            let account = AccountState::create(id.clone(), *owner, *balance);
+            state.storage.write_account(account).await.unwrap();
         }
-        let account = AccountState::create(id.clone(), *owner, *balance);
-        state.storage.write_account(account).await.unwrap();
     }
 
     network::Server::new(
@@ -84,7 +87,7 @@ async fn make_servers(
     local_ip_addr: &str,
     server_config_path: &Path,
     committee_config_path: &Path,
-    initial_accounts_config_path: &Path,
+    initial_accounts_config_path: Option<&PathBuf>,
     buffer_size: usize,
     cross_shard_config: network::CrossShardConfig,
     db_path: Option<&PathBuf>,
@@ -197,7 +200,7 @@ enum ServerCommands {
         #[structopt(long = "server")]
         server_config_path: PathBuf,
 
-        /// Path to the file containing the server configuration of this Zef authority (including its secret key)
+        /// Optional directory containing the on-disk database
         #[structopt(long = "db-path")]
         db_path: Option<PathBuf>,
 
@@ -213,9 +216,9 @@ enum ServerCommands {
         #[structopt(long)]
         committee: PathBuf,
 
-        /// Path to the file describing the initial user accounts
+        /// Optional path to the file describing the initial user accounts
         #[structopt(long)]
-        initial_accounts: PathBuf,
+        initial_accounts: Option<PathBuf>,
 
         /// Runs a specific shard (from 0 to shards-1)
         #[structopt(long)]
@@ -270,7 +273,7 @@ async fn main() {
                         "0.0.0.0", // Allow local IP address to be different from the public one.
                         &server_config_path,
                         &committee,
-                        &initial_accounts,
+                        initial_accounts.as_ref(),
                         buffer_size,
                         cross_shard_config,
                         shard,
@@ -285,7 +288,7 @@ async fn main() {
                         "0.0.0.0", // Allow local IP address to be different from the public one.
                         &server_config_path,
                         &committee,
-                        &initial_accounts,
+                        initial_accounts.as_ref(),
                         buffer_size,
                         cross_shard_config,
                         db_path.as_ref(),
