@@ -4,6 +4,7 @@
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use rand::{Rng, SeedableRng};
+use sha2::Digest;
 use std::{path::PathBuf, sync::Arc};
 use tokio::fs;
 use zef_core::{
@@ -36,7 +37,12 @@ impl FileStore {
     }
 
     fn get_path(&self, kind: &str, key: &[u8]) -> PathBuf {
-        let key = hex::encode(key);
+        let mut hasher = sha2::Sha512::default();
+        hasher.update(key);
+        let hash = hasher.finalize();
+        // Only encode the first 40 bytes to ensure that the resulting
+        // filename is well below 128 bytes.
+        let key = hex::encode(&hash[0..40]);
         self.path.join(format!("{}_{}.json", kind, key))
     }
 
@@ -53,7 +59,9 @@ impl FileStore {
         let path = self.get_path(kind, key);
         let seed: u64 = self.rng.gen();
         let seed = format!("_{}", seed);
-        let tmp_path = std::path::Path::new(&seed);
+        let mut tmp_path = path.clone();
+        tmp_path.pop();
+        tmp_path.push(&seed);
         fs::write(&tmp_path, value).await?;
         fs::rename(&tmp_path, &path).await?;
         Ok(())
@@ -102,7 +110,7 @@ impl FileStore {
         self.write_value(kind, &key, &value)
             .await
             .map_err(|e| Error::StorageIoError {
-                error: format!("{}", e),
+                error: format!("write {}", e),
             })?;
         Ok(())
     }
@@ -117,7 +125,7 @@ impl FileStore {
         self.remove_value(kind, &key)
             .await
             .map_err(|e| Error::StorageIoError {
-                error: format!("{}", e),
+                error: format!("remove {}", e),
             })?;
         Ok(())
     }
