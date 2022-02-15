@@ -297,17 +297,22 @@ async fn main() {
                 }
             };
 
-            let mut handles = Vec::new();
+            let mut spawned_servers = Vec::new();
             for server in servers {
+                match server.spawn().await {
+                    Ok(server) => spawned_servers.push(server),
+                    Err(err) => {
+                        error!("Failed to start server: {}", err);
+                        return;
+                    }
+                };
+            }
+            let mut handles = Vec::new();
+            for mut server in spawned_servers {
                 handles.push(async move {
-                    let spawned_server = match server.spawn().await {
-                        Ok(server) => server,
-                        Err(err) => {
-                            error!("Failed to start server: {}", err);
-                            return;
-                        }
-                    };
-                    if let Err(err) = spawned_server.join().await {
+                    // Initialize servers once they are all up and running.
+                    server.ready();
+                    if let Err(err) = server.join().await {
                         error!("Server ended with an error: {}", err);
                     }
                 });

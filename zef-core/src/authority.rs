@@ -61,6 +61,9 @@ pub trait Authority {
 
 #[async_trait]
 pub trait Worker {
+    /// Initiate the worker. This may generate cross-shard requests.
+    async fn initialize(&mut self) -> Result<Vec<CrossShardContinuation>, Error>;
+
     /// Handle (trusted!) cross shard request.
     async fn handle_cross_shard_request(&mut self, request: CrossShardRequest)
         -> Result<(), Error>;
@@ -472,6 +475,10 @@ where
                 Ok(())
             }
         }
+    }
+
+    async fn initialize(&mut self) -> Result<Vec<CrossShardContinuation>, Error> {
+        Ok(Vec::new())
     }
 }
 

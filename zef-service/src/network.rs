@@ -180,120 +180,127 @@ struct RunningServerState<StorageClient> {
     cross_shard_sender: mpsc::Sender<(Vec<u8>, ShardId)>,
 }
 
+#[async_trait]
 impl<StorageClient> MessageHandler for RunningServerState<StorageClient>
 where
     StorageClient: zef_core::storage::StorageClient + Clone + 'static,
 {
-    fn handle_message<'a>(
-        &'a mut self,
-        buffer: &'a [u8],
-    ) -> futures::future::BoxFuture<'a, Option<Vec<u8>>> {
-        Box::pin(async move {
-            let result = deserialize_message(buffer);
-            let reply = match result {
-                Err(_) => Err(Error::InvalidDecoding),
-                Ok(result) => {
-                    match result {
-                        SerializedMessage::RequestOrder(message) => self
-                            .server
-                            .state
-                            .handle_request_order(*message)
-                            .await
-                            .map(|info| {
-                                Some(serialize_message(&SerializedMessage::AccountInfoResponse(
-                                    Box::new(info),
+    async fn ready(&mut self) {
+        let continuations = self
+            .server
+            .state
+            .initialize()
+            .await
+            .expect("worker initialization should not fail");
+        // Handle cross-shard requests
+        for continuation in continuations {
+            self.handle_continuation(continuation).await;
+        }
+    }
+
+    async fn handle_message(&mut self, buffer: &[u8]) -> Option<Vec<u8>> {
+        let result = deserialize_message(buffer);
+        let reply = match result {
+            Err(_) => Err(Error::InvalidDecoding),
+            Ok(result) => {
+                match result {
+                    SerializedMessage::RequestOrder(message) => self
+                        .server
+                        .state
+                        .handle_request_order(*message)
+                        .await
+                        .map(|info| {
+                            Some(serialize_message(&SerializedMessage::AccountInfoResponse(
+                                Box::new(info),
+                            )))
+                        }),
+                    SerializedMessage::ConfirmationOrder(message) => {
+                        match self.server.state.handle_confirmation_order(*message).await {
+                            Ok((info, continuation)) => {
+                                // Cross-shard request
+                                self.handle_continuation(continuation).await;
+                                // Response
+                                Ok(Some(serialize_message(
+                                    &SerializedMessage::AccountInfoResponse(Box::new(info)),
                                 )))
-                            }),
-                        SerializedMessage::ConfirmationOrder(message) => {
-                            match self.server.state.handle_confirmation_order(*message).await {
-                                Ok((info, continuation)) => {
-                                    // Cross-shard request
-                                    self.handle_continuation(continuation).await;
-                                    // Response
-                                    Ok(Some(serialize_message(
-                                        &SerializedMessage::AccountInfoResponse(Box::new(info)),
-                                    )))
-                                }
-                                Err(error) => Err(error),
                             }
-                        }
-                        SerializedMessage::ConsensusOrder(message) => {
-                            match self.server.state.handle_consensus_order(*message).await {
-                                Ok(ConsensusResponse::Info(info)) => {
-                                    // Response
-                                    Ok(Some(serialize_message(
-                                        &SerializedMessage::ConsensusInfoResponse(Box::new(info)),
-                                    )))
-                                }
-                                Ok(ConsensusResponse::Vote(vote)) => {
-                                    // Response
-                                    Ok(Some(serialize_message(&SerializedMessage::Vote(Box::new(
-                                        vote,
-                                    )))))
-                                }
-                                Ok(ConsensusResponse::Continuations(continuations)) => {
-                                    // Cross-shard requests
-                                    for continuation in continuations {
-                                        self.handle_continuation(continuation).await;
-                                    }
-                                    // No response. (TODO: this is a bit rough)
-                                    Ok(None)
-                                }
-                                Err(error) => Err(error),
-                            }
-                        }
-                        SerializedMessage::AccountInfoQuery(message) => self
-                            .server
-                            .state
-                            .handle_account_info_query(*message)
-                            .await
-                            .map(|info| {
-                                Some(serialize_message(&SerializedMessage::AccountInfoResponse(
-                                    Box::new(info),
-                                )))
-                            }),
-                        SerializedMessage::CrossShardRequest(request) => {
-                            match self.server.state.handle_cross_shard_request(*request).await {
-                                Ok(()) => (),
-                                Err(error) => {
-                                    error!("Failed to handle cross-shard request: {}", error);
-                                }
-                            }
-                            // No user to respond to.
-                            Ok(None)
-                        }
-                        SerializedMessage::Vote(_)
-                        | SerializedMessage::Error(_)
-                        | SerializedMessage::AccountInfoResponse(_)
-                        | SerializedMessage::ConsensusInfoResponse(_) => {
-                            Err(Error::UnexpectedMessage)
+                            Err(error) => Err(error),
                         }
                     }
+                    SerializedMessage::ConsensusOrder(message) => {
+                        match self.server.state.handle_consensus_order(*message).await {
+                            Ok(ConsensusResponse::Info(info)) => {
+                                // Response
+                                Ok(Some(serialize_message(
+                                    &SerializedMessage::ConsensusInfoResponse(Box::new(info)),
+                                )))
+                            }
+                            Ok(ConsensusResponse::Vote(vote)) => {
+                                // Response
+                                Ok(Some(serialize_message(&SerializedMessage::Vote(Box::new(
+                                    vote,
+                                )))))
+                            }
+                            Ok(ConsensusResponse::Continuations(continuations)) => {
+                                // Cross-shard requests
+                                for continuation in continuations {
+                                    self.handle_continuation(continuation).await;
+                                }
+                                // No response. (TODO: this is a bit rough)
+                                Ok(None)
+                            }
+                            Err(error) => Err(error),
+                        }
+                    }
+                    SerializedMessage::AccountInfoQuery(message) => self
+                        .server
+                        .state
+                        .handle_account_info_query(*message)
+                        .await
+                        .map(|info| {
+                            Some(serialize_message(&SerializedMessage::AccountInfoResponse(
+                                Box::new(info),
+                            )))
+                        }),
+                    SerializedMessage::CrossShardRequest(request) => {
+                        match self.server.state.handle_cross_shard_request(*request).await {
+                            Ok(()) => (),
+                            Err(error) => {
+                                error!("Failed to handle cross-shard request: {}", error);
+                            }
+                        }
+                        // No user to respond to.
+                        Ok(None)
+                    }
+                    SerializedMessage::Vote(_)
+                    | SerializedMessage::Error(_)
+                    | SerializedMessage::AccountInfoResponse(_)
+                    | SerializedMessage::ConsensusInfoResponse(_) => Err(Error::UnexpectedMessage),
                 }
-            };
-
-            self.server.packets_processed += 1;
-            if self.server.packets_processed % 5000 == 0 {
-                debug!(
-                    "{}:{} (shard {}) has processed {} packets",
-                    self.server.base_address,
-                    self.server.base_port + self.server.state.shard_id,
-                    self.server.state.shard_id,
-                    self.server.packets_processed
-                );
             }
+        };
 
-            match reply {
-                Ok(x) => x,
-                Err(error) => {
-                    warn!("User query failed: {}", error);
-                    self.server.user_errors += 1;
-                    Some(serialize_message(&SerializedMessage::Error(Box::new(
-                        error,
-                    ))))
-                }
+        self.server.packets_processed += 1;
+        if self.server.packets_processed % 5000 == 0 {
+            debug!(
+                "{}:{} (shard {}) has processed {} packets",
+                self.server.base_address,
+                self.server.base_port + self.server.state.shard_id,
+                self.server.state.shard_id,
+                self.server.packets_processed
+            );
+        }
+
+        match reply {
+            Ok(x) => x,
+            Err(error) => {
+                warn!("User query failed: {}", error);
+                self.server.user_errors += 1;
+                Some(serialize_message(&SerializedMessage::Error(Box::new(
+                    error,
+                ))))
             }
-        })
+        }
     }
 }
 

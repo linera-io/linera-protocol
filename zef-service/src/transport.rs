@@ -2,6 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use async_trait::async_trait;
 use clap::arg_enum;
 use futures::future;
 use log::*;
@@ -47,13 +48,15 @@ pub trait DataStreamPool: Send {
 }
 
 /// The handler required to create a service.
+#[async_trait]
 pub trait MessageHandler {
-    fn handle_message<'a>(&'a mut self, buffer: &'a [u8])
-        -> future::BoxFuture<'a, Option<Vec<u8>>>;
+    async fn handle_message(&mut self, buffer: &[u8]) -> Option<Vec<u8>>;
+    async fn ready(&mut self);
 }
 
 /// The result of spawning a server is oneshot channel to kill it and a handle to track completion.
 pub struct SpawnedServer {
+    pub ready: Option<futures::channel::oneshot::Sender<()>>,
     pub complete: futures::channel::oneshot::Sender<()>,
     pub handle: tokio::task::JoinHandle<Result<(), std::io::Error>>,
 }
@@ -63,6 +66,13 @@ impl SpawnedServer {
         // Note that dropping `self.complete` would terminate the server.
         self.handle.await??;
         Ok(())
+    }
+
+    pub fn ready(&mut self) {
+        let sender = std::mem::take(&mut self.ready);
+        if let Some(sender) = sender {
+            sender.send(()).unwrap();
+        }
     }
 
     pub async fn kill(self) -> Result<(), std::io::Error> {
@@ -107,18 +117,35 @@ impl NetworkProtocol {
     where
         S: MessageHandler + Send + 'static,
     {
-        let (complete, receiver) = futures::channel::oneshot::channel();
+        let (ready, ready_receiver) = futures::channel::oneshot::channel();
+        let (complete, complete_receiver) = futures::channel::oneshot::channel();
         let handle = match self {
             Self::Udp => {
                 let socket = UdpSocket::bind(&address).await?;
-                tokio::spawn(Self::run_udp_server(socket, state, receiver, buffer_size))
+                tokio::spawn(Self::run_udp_server(
+                    socket,
+                    state,
+                    ready_receiver,
+                    complete_receiver,
+                    buffer_size,
+                ))
             }
             Self::Tcp => {
                 let listener = TcpListener::bind(address).await?;
-                tokio::spawn(Self::run_tcp_server(listener, state, receiver, buffer_size))
+                tokio::spawn(Self::run_tcp_server(
+                    listener,
+                    state,
+                    ready_receiver,
+                    complete_receiver,
+                    buffer_size,
+                ))
             }
         };
-        Ok(SpawnedServer { complete, handle })
+        Ok(SpawnedServer {
+            ready: Some(ready),
+            complete,
+            handle,
+        })
     }
 }
 
@@ -190,6 +217,7 @@ impl NetworkProtocol {
     async fn run_udp_server<S>(
         socket: UdpSocket,
         mut state: S,
+        mut init_future: futures::channel::oneshot::Receiver<()>,
         mut exit_future: futures::channel::oneshot::Receiver<()>,
         buffer_size: usize,
     ) -> Result<(), std::io::Error>
@@ -198,20 +226,25 @@ impl NetworkProtocol {
     {
         let mut buffer = vec![0; buffer_size];
         loop {
-            let (size, peer) =
-                match future::select(exit_future, Box::pin(socket.recv_from(&mut buffer))).await {
-                    future::Either::Left(_) => break,
-                    future::Either::Right((value, new_exit_future)) => {
-                        exit_future = new_exit_future;
-                        value?
+            tokio::select! {
+                value = socket.recv_from(&mut buffer) => {
+                    let (size, peer) = value?;
+                    if let Some(reply) = state.handle_message(&buffer[..size]).await {
+                        let status = socket.send_to(&reply[..], &peer).await;
+                        if let Err(error) = status {
+                            error!("Failed to send query response: {}", error);
+                        }
                     }
-                };
-            if let Some(reply) = state.handle_message(&buffer[..size]).await {
-                let status = socket.send_to(&reply[..], &peer).await;
-                if let Err(error) = status {
-                    error!("Failed to send query response: {}", error);
-                }
-            }
+                },
+
+                Ok(()) = &mut init_future => {
+                     state.ready().await;
+                },
+
+                Ok(()) = &mut exit_future => {
+                     break;
+                },
+            };
         }
         Ok(())
     }
@@ -328,6 +361,7 @@ impl NetworkProtocol {
     async fn run_tcp_server<S>(
         listener: TcpListener,
         state: S,
+        mut init_future: futures::channel::oneshot::Receiver<()>,
         mut exit_future: futures::channel::oneshot::Receiver<()>,
         buffer_size: usize,
     ) -> Result<(), std::io::Error>
@@ -336,41 +370,44 @@ impl NetworkProtocol {
     {
         let guarded_state = Arc::new(futures::lock::Mutex::new(state));
         loop {
-            let (mut socket, _) =
-                match future::select(exit_future, Box::pin(listener.accept())).await {
-                    future::Either::Left(_) => break,
-                    future::Either::Right((value, new_exit_future)) => {
-                        exit_future = new_exit_future;
-                        value?
-                    }
-                };
-            let guarded_state = guarded_state.clone();
-            tokio::spawn(async move {
-                loop {
-                    let buffer = match TcpDataStream::tcp_read_data(&mut socket, buffer_size).await
-                    {
-                        Ok(buffer) => buffer,
-                        Err(err) => {
-                            // We expect some EOF or disconnect error at the end.
-                            if err.kind() != io::ErrorKind::UnexpectedEof
-                                && err.kind() != io::ErrorKind::ConnectionReset
-                            {
-                                error!("Error while reading TCP stream: {}", err);
-                            }
-                            break;
-                        }
-                    };
+            tokio::select! {
+                Ok(()) = &mut init_future => {
+                    guarded_state.lock().await.ready().await;
+                },
 
-                    if let Some(reply) =
-                        guarded_state.lock().await.handle_message(&buffer[..]).await
-                    {
-                        let status = TcpDataStream::tcp_write_data(&mut socket, &reply[..]).await;
-                        if let Err(error) = status {
-                            error!("Failed to send query response: {}", error);
+                Ok(()) = &mut exit_future => {
+                     break;
+                },
+
+                Ok((mut socket, _)) = listener.accept() => {
+                    let guarded_state = guarded_state.clone();
+                    tokio::spawn(async move {
+                        loop {
+                            let buffer = match TcpDataStream::tcp_read_data(&mut socket, buffer_size).await
+                            {
+                                Ok(buffer) => buffer,
+                                Err(err) => {
+                                    // We expect some EOF or disconnect error at the end.
+                                    if err.kind() != io::ErrorKind::UnexpectedEof
+                                        && err.kind() != io::ErrorKind::ConnectionReset
+                                    {
+                                        error!("Error while reading TCP stream: {}", err);
+                                    }
+                                    break;
+                                }
+                            };
+                            if let Some(reply) =
+                                guarded_state.lock().await.handle_message(&buffer[..]).await
+                            {
+                                let status = TcpDataStream::tcp_write_data(&mut socket, &reply[..]).await;
+                                if let Err(error) = status {
+                                    error!("Failed to send query response: {}", error);
+                                }
+                            };
                         }
-                    };
+                    });
                 }
-            });
+            }
         }
         Ok(())
     }
