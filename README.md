@@ -5,6 +5,14 @@
 
 This repository is dedicated to developing the Zefchain protocol.
 
+## Browse roadmap locally
+
+```
+cargo install mdbook
+mdbook serve roadmap
+```
+Then open URL as instructed.
+
 ## Quickstart with the Zef service CLI
 
 The current code was imported from https://github.com/novifinancial/fastpay/pull/24 then

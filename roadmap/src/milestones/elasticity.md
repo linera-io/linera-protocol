@@ -17,6 +17,7 @@ We also aim at fully supporting crashes and restarts of workers.
 * Clients do not send their queries directly to the shard but instead to a load balancer (i.e. the service entry-point).
     - The load balancer can detect if a worker is off-line, then re-assign its logical shards (aka user accounts).
     - To avoid downtime (see lease below), the load balancer should signal to a worker that a shard is moved out.
+    - Cross-shard requests need to be routed using the latest shard assignment.
 
 * To ensure sequential execution within each account (despite LB rebalancing or possible
   bugs etc), when a worker loads an account to it must takes a "lease" first on the
