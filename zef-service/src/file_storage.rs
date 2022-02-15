@@ -53,7 +53,9 @@ impl FileStore {
         let path = self.get_path(kind, key);
         let seed: u64 = self.rng.gen();
         let seed = format!("_{}", seed);
-        let tmp_path = std::path::Path::new(&seed);
+        let mut tmp_path = path.clone();
+        tmp_path.pop();
+        tmp_path.push(&seed);
         fs::write(&tmp_path, value).await?;
         fs::rename(&tmp_path, &path).await?;
         Ok(())
