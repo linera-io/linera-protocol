@@ -101,8 +101,11 @@ and run `cargo fmt` like this:
 ```
 cargo fmt -- --config unstable_features=true --config imports_granularity=Crate
 ```
-
-The long command for `cargo fmt` is needed to normalize imports (see [rust-lang/rustfmt#4991](https://github.com/rust-lang/rustfmt/issues/4991) )
+or (optimistically)
+```
+cargo fmt +nightly
+```
+(see also [rust-lang/rustfmt#4991](https://github.com/rust-lang/rustfmt/issues/4991))
 
 ### Dealing with test failures `test_format` after code changes
 
