@@ -1,9 +1,20 @@
 # Installation for Mac OS X
 
-* Homebrew (in user land ok: e.g. in $HOME/git/homebrew)
-* brew install python3
-* brew install rustup-init
-* python3 -mpip install localstack
+## Basics
+
+* Homebrew
+    - If possible, in user land e.g. in `$HOME/git/homebrew`
+    - See https://docs.brew.sh/Installation#untar-anywhere
+* `brew install rustup-init`
+
+## Service
+
+* `brew install python3`
+* `python3 -mpip install localstack`
 * https://aws.amazon.com/cli/
 * https://docs.docker.com/desktop/mac/install/
 
+## Additional tooling
+
+* `brew install gh`
+* `cargo install mdbook`
