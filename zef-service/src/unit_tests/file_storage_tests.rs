@@ -36,9 +36,6 @@ async fn test_file_storage_for_certificates() {
     };
     let certificate = Certificate::new(value, vec![]);
     client.write_certificate(certificate.clone()).await.unwrap();
-    let read_certificate = client
-        .read_certificate(certificate.hash)
-        .await
-        .unwrap();
+    let read_certificate = client.read_certificate(certificate.hash).await.unwrap();
     assert_eq!(read_certificate.hash, certificate.hash);
 }
