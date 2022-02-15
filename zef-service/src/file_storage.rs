@@ -110,7 +110,7 @@ impl FileStore {
         self.write_value(kind, &key, &value)
             .await
             .map_err(|e| Error::StorageIoError {
-                error: format!("write {} {:?}", e, self.get_path(kind, &key)),
+                error: format!("write {}", e),
             })?;
         Ok(())
     }
@@ -125,7 +125,7 @@ impl FileStore {
         self.remove_value(kind, &key)
             .await
             .map_err(|e| Error::StorageIoError {
-                error: format!("{} {:?}", e, self.get_path(kind, &key)),
+                error: format!("remove {}", e),
             })?;
         Ok(())
     }
