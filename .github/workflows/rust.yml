@@ -16,11 +16,16 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+    - name: Setup
+      run: |
+        rustup toolchain install 1.58.1-x86_64-unknown-linux-gnu
+        rustup component add rustfmt --toolchain 1.58.1-x86_64-unknown-linux-gnu
+        rustup component add clippy --toolchain 1.58.1-x86_64-unknown-linux-gnu
     - name: Build
       run: cargo build --verbose
     - name: Run tests
       run: cargo test --verbose
-    - name: Clippy (default features)
+    - name: Clippy
       run: cargo clippy --all-targets
     - name: Rustfmt
       run: cargo fmt -- --check --config unstable_features=true --config imports_granularity=Crate
