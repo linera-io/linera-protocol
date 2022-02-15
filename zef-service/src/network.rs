@@ -42,7 +42,7 @@ pub struct Server<StorageClient> {
 
 impl<StorageClient> Server<StorageClient>
 where
-    StorageClient: zef_core::storage::StorageClient + Send + Sync + Clone + 'static,
+    StorageClient: zef_core::storage::StorageClient + Clone + 'static,
 {
     pub fn new(
         network_protocol: NetworkProtocol,
@@ -182,7 +182,7 @@ struct RunningServerState<StorageClient> {
 
 impl<StorageClient> MessageHandler for RunningServerState<StorageClient>
 where
-    StorageClient: zef_core::storage::StorageClient + Send + Sync + Clone + 'static,
+    StorageClient: zef_core::storage::StorageClient + Clone + 'static,
 {
     fn handle_message<'a>(
         &'a mut self,

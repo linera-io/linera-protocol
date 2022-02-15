@@ -68,7 +68,7 @@ pub trait Worker {
 
 impl<Client> WorkerState<Client>
 where
-    Client: StorageClient + Send + Sync,
+    Client: StorageClient,
 {
     /// (Trusted) Process a confirmed request issued from an account.
     async fn process_confirmed_request(
@@ -171,7 +171,7 @@ where
 #[async_trait]
 impl<Client> Authority for WorkerState<Client>
 where
-    Client: StorageClient + Clone + Send + Sync + 'static,
+    Client: StorageClient + Clone + 'static,
 {
     async fn handle_request_order(
         &mut self,
@@ -444,7 +444,7 @@ where
 #[async_trait]
 impl<Client> Worker for WorkerState<Client>
 where
-    Client: StorageClient + Sync + Send,
+    Client: StorageClient,
 {
     async fn handle_cross_shard_request(
         &mut self,
