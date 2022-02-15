@@ -3,7 +3,6 @@
 
 use async_trait::async_trait;
 use futures::lock::Mutex;
-use rand::{Rng, SeedableRng};
 use sha2::Digest;
 use std::{path::PathBuf, sync::Arc};
 use tokio::fs;
@@ -25,15 +24,12 @@ mod file_storage_tests;
 pub struct FileStore {
     /// Base path.
     path: PathBuf,
-    /// For generation of temporary names.
-    rng: rand::rngs::SmallRng,
 }
 
 impl FileStore {
     pub fn new(path: PathBuf) -> Self {
         assert!(path.is_dir());
-        let rng = rand::rngs::SmallRng::from_entropy();
-        Self { path, rng }
+        Self { path }
     }
 
     fn get_path(&self, kind: &str, key: &[u8]) -> PathBuf {
@@ -57,13 +53,12 @@ impl FileStore {
 
     async fn write_value(&mut self, kind: &str, key: &[u8], value: &[u8]) -> std::io::Result<()> {
         let path = self.get_path(kind, key);
-        let seed: u64 = self.rng.gen();
-        let seed = format!("_{}", seed);
-        let mut tmp_path = path.clone();
-        tmp_path.pop();
-        tmp_path.push(&seed);
-        fs::write(&tmp_path, value).await?;
-        fs::rename(&tmp_path, &path).await?;
+        let dir_path = self.path.clone();
+        let temp_file =
+            tokio::task::spawn_blocking(|| tempfile::NamedTempFile::new_in(dir_path)).await??;
+        fs::write(&temp_file, value).await?;
+        // persist atomically replaces the destination.
+        tokio::task::spawn_blocking(|| temp_file.persist(path)).await??;
         Ok(())
     }
 
