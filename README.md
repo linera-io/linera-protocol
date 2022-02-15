@@ -44,7 +44,7 @@ trap 'kill $(jobs -p)' EXIT
 # * `initial_accounts.txt` is used to mint the corresponding initial balances at startup on the server side.
 ./client --committee committee.json --accounts accounts.json create_initial_accounts 1000 --initial-funding 100 >> initial_accounts.txt
 
-# Start servers
+# Start servers and create initial accounts in DB
 for I in 1 2 3 4
 do
     rm -Rf store_"$I"
@@ -55,6 +55,8 @@ do
     done
  done
 
+LAST_PID="$!"
+
 # Query balance for first and last user account
 ACCOUNT1="`head -n 1 initial_accounts.txt | awk -F: '{ print $1 }'`"
 ACCOUNT2="`tail -n -1 initial_accounts.txt | awk -F: '{ print $1 }'`"
@@ -63,6 +65,10 @@ ACCOUNT2="`tail -n -1 initial_accounts.txt | awk -F: '{ print $1 }'`"
 
 # Transfer 10 units
 ./client --committee committee.json --accounts accounts.json transfer 10 --from "$ACCOUNT1" --to "$ACCOUNT2"
+
+# Restart last server
+kill "$LAST_PID"
+./server run --server server_"$I".json --db-path store_"$I" --shard "$J" --committee committee.json &
 
 # Query balances again
 ./client --committee committee.json --accounts accounts.json query_balance "$ACCOUNT1"
