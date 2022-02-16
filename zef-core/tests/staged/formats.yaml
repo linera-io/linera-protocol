@@ -139,6 +139,13 @@ CrossShardRequest:
               TYPENAME: Request
           - certificate:
               TYPENAME: Certificate
+    3:
+      ConfirmUpdatedRecipient:
+        STRUCT:
+          - account_id:
+              TYPENAME: AccountId
+          - hash:
+              TYPENAME: HashValue
 Error:
   ENUM:
     0:

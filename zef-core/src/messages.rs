@@ -234,6 +234,10 @@ pub enum CrossShardRequest {
         request: Request,
         certificate: Certificate,
     },
+    ConfirmUpdatedRecipient {
+        account_id: AccountId,
+        hash: HashValue,
+    },
 }
 
 impl Operation {
