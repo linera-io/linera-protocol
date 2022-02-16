@@ -24,7 +24,10 @@ pub struct AccountState {
     pub confirmed_log: Vec<HashValue>,
     /// Hashes of all confirmed certificates as a receiver.
     pub received_log: Vec<HashValue>,
-    /// Same but as a set instead of a chronological log.
+
+    /// Keep sending these confirmed certificates until they are confirmed by receivers.
+    pub keep_sending: HashSet<HashValue>,
+    /// Same as received_log but used for deduplication.
     pub received_keys: HashSet<HashValue>,
 }
 
@@ -50,22 +53,17 @@ impl AccountState {
             next_sequence_number: SequenceNumber::new(),
             pending: None,
             confirmed_log: Vec::new(),
-            received_keys: HashSet::new(),
             received_log: Vec::new(),
+            keep_sending: HashSet::new(),
+            received_keys: HashSet::new(),
         }
     }
 
     pub fn create(id: AccountId, owner: AccountOwner, balance: Balance) -> Self {
-        Self {
-            id,
-            owner: Some(owner),
-            balance,
-            next_sequence_number: SequenceNumber::new(),
-            pending: None,
-            confirmed_log: Vec::new(),
-            received_keys: HashSet::new(),
-            received_log: Vec::new(),
-        }
+        let mut account = Self::new(id);
+        account.owner = Some(owner);
+        account.balance = balance;
+        account
     }
 
     /// Verify that the operation is valid and return the value to certify.

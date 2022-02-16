@@ -254,7 +254,9 @@ where
                             }),
                         SerializedMessage::CrossShardRequest(request) => {
                             match self.server.state.handle_cross_shard_request(*request).await {
-                                Ok(()) => (),
+                                Ok(continuation) => {
+                                    self.handle_continuation(continuation).await;
+                                }
                                 Err(error) => {
                                     error!("Failed to handle cross-shard request: {}", error);
                                 }
