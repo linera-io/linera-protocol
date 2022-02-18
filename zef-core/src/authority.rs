@@ -44,7 +44,7 @@ pub trait Authority {
     async fn handle_confirmation_order(
         &mut self,
         order: ConfirmationOrder,
-    ) -> Result<(AccountInfoResponse, CrossShardContinuation), Error>;
+    ) -> Result<(AccountInfoResponse, Vec<CrossShardRequest>), Error>;
 
     /// Process a message meant for a consensus instance.
     async fn handle_consensus_order(
@@ -65,7 +65,7 @@ pub trait Worker {
     async fn handle_cross_shard_request(
         &mut self,
         request: CrossShardRequest,
-    ) -> Result<CrossShardContinuation, Error>;
+    ) -> Result<Vec<CrossShardRequest>, Error>;
 }
 
 impl<Client> WorkerState<Client>
@@ -77,7 +77,7 @@ where
         &mut self,
         request: Request,
         certificate: Certificate, // For logging purpose
-    ) -> Result<(AccountInfoResponse, CrossShardContinuation), Error> {
+    ) -> Result<(AccountInfoResponse, Vec<CrossShardRequest>), Error> {
         // Verify sharding.
         ensure!(self.in_shard(&request.account_id), Error::WrongShard);
         assert_eq!(
@@ -96,7 +96,7 @@ where
         if account.next_sequence_number > request.sequence_number {
             // Request was already confirmed.
             let info = account.make_account_info();
-            return Ok((info, CrossShardContinuation::Done));
+            return Ok((info, Vec::new()));
         }
         // Execute the sender's side of the operation.
         account.apply_operation_as_sender(&request.operation, certificate.hash)?;
@@ -113,7 +113,7 @@ where
                 self.storage.remove_account(&sender).await?;
             }
             // Never send cross-shard requests from a deactivated account.
-            Ok((info, CrossShardContinuation::Done))
+            Ok((info, Vec::new()))
         } else {
             // Persist certificate.
             self.storage.write_certificate(certificate.clone()).await?;
@@ -122,7 +122,7 @@ where
             self.storage.write_account(account.clone()).await?;
             // Schedule cross-shard request if any.
             let cont = self.schedule_recipient_update(certificate.clone()).await?;
-            if let CrossShardContinuation::Done = cont {
+            if cont.is_empty() {
                 let mut account = self.storage.read_active_account(&sender).await?;
                 // Nothing to send any more.
                 account.keep_sending.remove(&certificate.hash);
@@ -136,7 +136,7 @@ where
     async fn schedule_recipient_update(
         &mut self,
         certificate: Certificate,
-    ) -> Result<CrossShardContinuation, Error> {
+    ) -> Result<Vec<CrossShardRequest>, Error> {
         let operation = certificate
             .value
             .confirm_request()
@@ -151,15 +151,11 @@ where
                     .await?;
             } else {
                 // Initiate a cross-shard request.
-                let shard_id = self.which_shard(recipient);
-                let cont = CrossShardContinuation::Request {
-                    shard_id,
-                    request: Box::new(CrossShardRequest::UpdateRecipient { certificate }),
-                };
+                let cont = vec![CrossShardRequest::UpdateRecipient { certificate }];
                 return Ok(cont);
             }
         }
-        Ok(CrossShardContinuation::Done)
+        Ok(Vec::new())
     }
 
     /// (Trusted) Try to update the recipient account in a confirmed request.
@@ -253,7 +249,7 @@ where
     async fn handle_confirmation_order(
         &mut self,
         confirmation_order: ConfirmationOrder,
-    ) -> Result<(AccountInfoResponse, CrossShardContinuation), Error> {
+    ) -> Result<(AccountInfoResponse, Vec<CrossShardRequest>), Error> {
         // Verify that the certified value is a confirmation.
         let certificate = confirmation_order.certificate;
         let request = certificate
@@ -421,20 +417,14 @@ where
                 // Remove the consensus instance if needed.
                 self.storage.remove_consensus(&proposal.instance_id).await?;
                 // Prepare cross-shard requests.
-                let continuations = requests
+                let requests = requests
                     .iter()
-                    .map(|request| {
-                        let shard_id = self.which_shard(&request.account_id);
-                        CrossShardContinuation::Request {
-                            shard_id,
-                            request: Box::new(CrossShardRequest::ProcessConfirmedRequest {
-                                request: request.clone(),
-                                certificate: certificate.clone(),
-                            }),
-                        }
+                    .map(|request| CrossShardRequest::ProcessConfirmedRequest {
+                        request: request.clone(),
+                        certificate: certificate.clone(),
                     })
                     .collect();
-                Ok(ConsensusResponse::Continuations(continuations))
+                Ok(ConsensusResponse::Continuation(requests))
             }
         }
     }
@@ -479,7 +469,7 @@ where
     async fn handle_cross_shard_request(
         &mut self,
         request: CrossShardRequest,
-    ) -> Result<CrossShardContinuation, Error> {
+    ) -> Result<Vec<CrossShardRequest>, Error> {
         match request {
             CrossShardRequest::UpdateRecipient { certificate } => {
                 let request = certificate
@@ -491,31 +481,27 @@ where
                 self.update_recipient_account(request.operation.clone(), certificate)
                     .await?;
                 if self.in_shard(&sender) {
-                    Ok(CrossShardContinuation::Done)
+                    Ok(Vec::new())
                 } else {
                     // Reply with a cross-shard request.
-                    let shard_id = self.which_shard(&sender);
-                    let cont = CrossShardContinuation::Request {
-                        shard_id,
-                        request: Box::new(CrossShardRequest::ConfirmUpdatedRecipient {
-                            account_id: sender,
-                            hash,
-                        }),
-                    };
+                    let cont = vec![CrossShardRequest::ConfirmUpdatedRecipient {
+                        account_id: sender,
+                        hash,
+                    }];
                     Ok(cont)
                 }
             }
             CrossShardRequest::DestroyAccount { account_id } => {
                 ensure!(self.in_shard(&account_id), Error::WrongShard);
                 self.storage.remove_account(&account_id).await?;
-                Ok(CrossShardContinuation::Done)
+                Ok(Vec::new())
             }
             CrossShardRequest::ProcessConfirmedRequest {
                 request,
                 certificate,
             } => {
                 self.process_confirmed_request(request, certificate).await?; // TODO: process continuations
-                Ok(CrossShardContinuation::Done)
+                Ok(Vec::new())
             }
             CrossShardRequest::ConfirmUpdatedRecipient { account_id, hash } => {
                 ensure!(self.in_shard(&account_id), Error::WrongShard);
@@ -523,7 +509,7 @@ where
                 if account.keep_sending.remove(&hash) {
                     self.storage.write_account(account).await?;
                 }
-                Ok(CrossShardContinuation::Done)
+                Ok(Vec::new())
             }
         }
     }
