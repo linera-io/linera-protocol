@@ -231,11 +231,9 @@ where
                                         vote,
                                     )))))
                                 }
-                                Ok(ConsensusResponse::Continuations(continuations)) => {
+                                Ok(ConsensusResponse::Continuation(continuation)) => {
                                     // Cross-shard requests
-                                    for continuation in continuations {
-                                        self.handle_continuation(continuation).await;
-                                    }
+                                    self.handle_continuation(continuation).await;
                                     // No response. (TODO: this is a bit rough)
                                     Ok(None)
                                 }
@@ -305,23 +303,21 @@ where
 {
     fn handle_continuation(
         &mut self,
-        continuation: CrossShardContinuation,
+        requests: Vec<CrossShardRequest>,
     ) -> futures::future::BoxFuture<()> {
         Box::pin(async move {
-            use CrossShardContinuation::*;
-            match continuation {
-                Done => (),
-                Request { shard_id, request } => {
-                    let buffer = serialize_message(&SerializedMessage::CrossShardRequest(request));
-                    debug!(
-                        "Scheduling cross shard query: {} -> {}",
-                        self.server.state.shard_id, shard_id
-                    );
-                    self.cross_shard_sender
-                        .send((buffer, shard_id))
-                        .await
-                        .expect("internal channel should not fail");
-                }
+            for request in requests {
+                let shard_id = self.server.state.which_shard(request.target_account_id());
+                let buffer =
+                    serialize_message(&SerializedMessage::CrossShardRequest(Box::new(request)));
+                debug!(
+                    "Scheduling cross shard query: {} -> {}",
+                    self.server.state.shard_id, shard_id
+                );
+                self.cross_shard_sender
+                    .send((buffer, shard_id))
+                    .await
+                    .expect("internal channel should not fail");
             }
         })
     }

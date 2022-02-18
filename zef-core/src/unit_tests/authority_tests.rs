@@ -392,7 +392,7 @@ async fn test_handle_confirmation_order_to_active_recipient_in_the_same_shard() 
         .handle_confirmation_order(ConfirmationOrder::new(certificate.clone()))
         .await
         .unwrap();
-    assert!(matches!(continuation, CrossShardContinuation::Done));
+    assert!(continuation.is_empty());
     assert_eq!(dbg_account(1), info.account_id);
     assert_eq!(Balance::from(0), info.balance);
     assert_eq!(SequenceNumber::from(1), info.next_sequence_number);
@@ -456,7 +456,7 @@ async fn test_handle_confirmation_order_to_inactive_recipient_in_the_same_shard(
         .handle_confirmation_order(ConfirmationOrder::new(certificate.clone()))
         .await
         .unwrap();
-    assert!(matches!(continuation, CrossShardContinuation::Done));
+    assert!(continuation.is_empty());
     assert_eq!(dbg_account(1), info.account_id);
     assert_eq!(Balance::from(0), info.balance);
     assert_eq!(SequenceNumber::from(1), info.next_sequence_number);

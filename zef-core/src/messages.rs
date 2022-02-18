@@ -144,16 +144,7 @@ pub enum ConsensusOrder {
 pub enum ConsensusResponse {
     Info(ConsensusInfoResponse),
     Vote(Vote),
-    Continuations(Vec<CrossShardContinuation>),
-}
-
-/// Next step of the confirmation of an operation.
-pub enum CrossShardContinuation {
-    Done,
-    Request {
-        shard_id: ShardId,
-        request: Box<CrossShardRequest>,
-    },
+    Continuation(Vec<CrossShardRequest>),
 }
 
 /// Current status of a consensus instance.
@@ -238,6 +229,31 @@ pub enum CrossShardRequest {
         account_id: AccountId,
         hash: HashValue,
     },
+}
+
+impl CrossShardRequest {
+    /// Where to send the cross-shard request.
+    pub fn target_account_id(&self) -> &AccountId {
+        use CrossShardRequest::*;
+        match self {
+            UpdateRecipient { certificate } => certificate
+                .value
+                .confirm_request()
+                .unwrap()
+                .operation
+                .recipient()
+                .unwrap(),
+            DestroyAccount { account_id } => account_id,
+            ProcessConfirmedRequest {
+                request,
+                certificate: _,
+            } => &request.account_id,
+            ConfirmUpdatedRecipient {
+                account_id,
+                hash: _,
+            } => account_id,
+        }
+    }
 }
 
 impl Operation {
