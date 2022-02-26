@@ -12,7 +12,9 @@
 
     - [Extensibility](./milestones/extensibility.md)
 
-    - [Order book](./milestones/order_book.md)
+    - [Multi-owner Account](./milestones/multi_owner.md)
+
+    - [Decentralized Trading](./milestones/order_book.md)
 
     - [Reconfiguration](./milestones/reconfiguration.md)
 
