@@ -66,7 +66,7 @@ pub trait Worker {
 
 impl<Client> WorkerState<Client>
 where
-    Client: StorageClient,
+    Client: StorageClient + Clone + 'static,
 {
     /// (Trusted) Process a confirmed request issued from an account.
     async fn process_confirmed_request(
@@ -87,11 +87,21 @@ where
                 current_sequence_number: account.next_sequence_number,
             });
         }
+        // Load pending cross-shard requests.
+        let mut continuation = self
+            .storage
+            .read_certificates(account.keep_sending.iter().cloned())
+            .await?
+            .into_iter()
+            .map(|certificate| CrossShardRequest::UpdateRecipient { certificate })
+            .collect();
         if account.next_sequence_number > request.sequence_number {
             // Request was already confirmed.
             let info = account.make_account_info();
-            return Ok((info, Vec::new()));
+            return Ok((info, continuation));
         }
+        // Persist certificate.
+        self.storage.write_certificate(certificate.clone()).await?;
         // Execute the sender's side of the operation.
         account.apply_operation_as_sender(&request.operation, certificate.hash)?;
         // Advance to next sequence number.
@@ -105,40 +115,21 @@ where
             // the future.)
             if account.keep_sending.is_empty() {
                 self.storage.remove_account(&sender).await?;
+                // Never send cross-shard requests from a deactivated account.
+                assert!(continuation.is_empty());
             }
-            // Never send cross-shard requests from a deactivated account.
-            Ok((info, Vec::new()))
         } else {
-            // Persist certificate.
-            self.storage.write_certificate(certificate.clone()).await?;
-            // Persist account and sending to do.
-            account.keep_sending.insert(certificate.hash);
-            self.storage.write_account(account.clone()).await?;
             // Schedule cross-shard request if any.
-            let cont = self.schedule_recipient_update(certificate.clone()).await?;
-            if cont.is_empty() {
-                let mut account = self.storage.read_active_account(&sender).await?;
-                // Nothing to send any more.
-                account.keep_sending.remove(&certificate.hash);
-                self.storage.write_account(account).await?;
+            let operation = &certificate.value.confirm_request().unwrap().operation;
+            if operation.recipient().is_some() {
+                // Schedule a new cross-shard request to update recipient.
+                account.keep_sending.insert(certificate.hash);
+                continuation.push(CrossShardRequest::UpdateRecipient { certificate });
             }
-            Ok((info, cont))
+            // Persist account.
+            self.storage.write_account(account.clone()).await?;
         }
-    }
-
-    /// (Trusted) Try to update the recipient account in a confirmed request.
-    async fn schedule_recipient_update(
-        &mut self,
-        certificate: Certificate,
-    ) -> Result<Vec<CrossShardRequest>, Error> {
-        let operation = &certificate.value.confirm_request().unwrap().operation;
-        if operation.recipient().is_some() {
-            // Initiate a cross-shard request to update recipient.
-            let cont = vec![CrossShardRequest::UpdateRecipient { certificate }];
-            Ok(cont)
-        } else {
-            Ok(Vec::new())
-        }
+        Ok((info, continuation))
     }
 
     /// (Trusted) Try to update the recipient account in a confirmed request.
@@ -439,7 +430,7 @@ where
 #[async_trait]
 impl<Client> Worker for WorkerState<Client>
 where
-    Client: StorageClient,
+    Client: StorageClient + Clone + 'static,
 {
     async fn handle_cross_shard_request(
         &mut self,
