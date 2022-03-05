@@ -461,8 +461,8 @@ where
                 request,
                 certificate,
             } => {
-                self.process_confirmed_request(request, certificate).await?; // TODO: process continuations
-                Ok(Vec::new())
+                let (_, cont) = self.process_confirmed_request(request, certificate).await?;
+                Ok(cont)
             }
             CrossShardRequest::ConfirmUpdatedRecipient { account_id, hash } => {
                 let mut account = self.storage.read_active_account(&account_id).await?;
