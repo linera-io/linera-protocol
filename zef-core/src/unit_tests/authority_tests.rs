@@ -2,10 +2,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//use super::*;
 use crate::{
     account::AccountState,
-    authority::{get_shard, Authority, WorkerState},
+    authority::{fully_handle_confirmation_order, Authority, WorkerState},
     base_types::*,
     committee::Committee,
     messages::*,
@@ -205,10 +204,11 @@ async fn test_handle_confirmation_order_unknown_sender() {
         Amount::from(5),
         &state,
     );
-    assert!(state
-        .handle_confirmation_order(ConfirmationOrder::new(certificate))
-        .await
-        .is_err());
+    assert!(
+        fully_handle_confirmation_order(&mut state, ConfirmationOrder::new(certificate))
+            .await
+            .is_err()
+    );
 }
 
 #[tokio::test]
@@ -227,14 +227,17 @@ async fn test_handle_confirmation_order_bad_sequence_number() {
         &state,
     );
     // Replays are ignored.
-    assert!(state
-        .handle_confirmation_order(ConfirmationOrder::new(certificate.clone()))
-        .await
-        .is_ok());
-    assert!(state
-        .handle_confirmation_order(ConfirmationOrder::new(certificate))
-        .await
-        .is_ok());
+    assert!(fully_handle_confirmation_order(
+        &mut state,
+        ConfirmationOrder::new(certificate.clone())
+    )
+    .await
+    .is_ok());
+    assert!(
+        fully_handle_confirmation_order(&mut state, ConfirmationOrder::new(certificate))
+            .await
+            .is_ok()
+    );
     // TODO: test the case of a sequence number in the future (aka lagging authority)
 }
 
@@ -254,10 +257,11 @@ async fn test_handle_confirmation_order_exceed_balance() {
         Amount::from(1000),
         &state,
     );
-    assert!(state
-        .handle_confirmation_order(ConfirmationOrder::new(certificate))
-        .await
-        .is_ok());
+    assert!(
+        fully_handle_confirmation_order(&mut state, ConfirmationOrder::new(certificate))
+            .await
+            .is_ok()
+    );
     let sender_account = state
         .storage
         .read_active_account(&dbg_account(1))
@@ -289,10 +293,11 @@ async fn test_handle_confirmation_order_receiver_balance_overflow() {
         Amount::from(1),
         &state,
     );
-    assert!(state
-        .handle_confirmation_order(ConfirmationOrder::new(certificate))
-        .await
-        .is_ok());
+    assert!(
+        fully_handle_confirmation_order(&mut state, ConfirmationOrder::new(certificate))
+            .await
+            .is_ok()
+    );
     let new_sender_account = state
         .storage
         .read_active_account(&dbg_account(1))
@@ -325,10 +330,11 @@ async fn test_handle_confirmation_order_receiver_equal_sender() {
         Amount::from(10),
         &state,
     );
-    assert!(state
-        .handle_confirmation_order(ConfirmationOrder::new(certificate))
-        .await
-        .is_ok());
+    assert!(
+        fully_handle_confirmation_order(&mut state, ConfirmationOrder::new(certificate))
+            .await
+            .is_ok()
+    );
     let account = state
         .storage
         .read_active_account(&dbg_account(1))
@@ -373,7 +379,7 @@ async fn test_update_recipient_account() {
 }
 
 #[tokio::test]
-async fn test_handle_confirmation_order_to_active_recipient_in_the_same_shard() {
+async fn test_handle_confirmation_order_to_active_recipient() {
     let sender_key_pair = KeyPair::generate();
     let mut state = init_state_with_accounts(vec![
         (dbg_account(1), sender_key_pair.public(), Balance::from(5)),
@@ -388,11 +394,10 @@ async fn test_handle_confirmation_order_to_active_recipient_in_the_same_shard() 
         &state,
     );
 
-    let (info, continuation) = state
-        .handle_confirmation_order(ConfirmationOrder::new(certificate.clone()))
-        .await
-        .unwrap();
-    assert!(continuation.is_empty());
+    let info =
+        fully_handle_confirmation_order(&mut state, ConfirmationOrder::new(certificate.clone()))
+            .await
+            .unwrap();
     assert_eq!(dbg_account(1), info.account_id);
     assert_eq!(Balance::from(0), info.balance);
     assert_eq!(SequenceNumber::from(1), info.next_sequence_number);
@@ -436,7 +441,7 @@ async fn test_handle_confirmation_order_to_active_recipient_in_the_same_shard() 
 }
 
 #[tokio::test]
-async fn test_handle_confirmation_order_to_inactive_recipient_in_the_same_shard() {
+async fn test_handle_confirmation_order_to_inactive_recipient() {
     let sender_key_pair = KeyPair::generate();
     let mut state = init_state_with_accounts(vec![(
         dbg_account(1),
@@ -452,11 +457,10 @@ async fn test_handle_confirmation_order_to_inactive_recipient_in_the_same_shard(
         &state,
     );
 
-    let (info, continuation) = state
-        .handle_confirmation_order(ConfirmationOrder::new(certificate.clone()))
-        .await
-        .unwrap();
-    assert!(continuation.is_empty());
+    let info =
+        fully_handle_confirmation_order(&mut state, ConfirmationOrder::new(certificate.clone()))
+            .await
+            .unwrap();
     assert_eq!(dbg_account(1), info.account_id);
     assert_eq!(Balance::from(0), info.balance);
     assert_eq!(SequenceNumber::from(1), info.next_sequence_number);
@@ -503,26 +507,6 @@ async fn test_read_account_state_unknown_account() {
         .is_ok());
 }
 
-#[test]
-fn test_get_shards() {
-    let num_shards = 16u32;
-    let mut found = vec![false; num_shards as usize];
-    let mut left = num_shards;
-    let mut i = 1;
-    loop {
-        let shard = get_shard(num_shards, &dbg_account(i)) as usize;
-        println!("found {}", shard);
-        if !found[shard] {
-            found[shard] = true;
-            left -= 1;
-            if left == 0 {
-                break;
-            }
-        }
-        i += 1;
-    }
-}
-
 // helpers
 
 fn init_state() -> WorkerState<InMemoryStoreClient> {
@@ -532,9 +516,7 @@ fn init_state() -> WorkerState<InMemoryStoreClient> {
     authorities.insert(name, /* voting right */ 1);
     let committee = Committee::new(authorities);
     let client = InMemoryStoreClient::default();
-    WorkerState::new(
-        committee, name, key_pair, /* shard_id */ 0, /* number of shards */ 1, client,
-    )
+    WorkerState::new(committee, name, key_pair, client)
 }
 
 async fn init_state_with_accounts<I: IntoIterator<Item = (AccountId, AccountOwner, Balance)>>(

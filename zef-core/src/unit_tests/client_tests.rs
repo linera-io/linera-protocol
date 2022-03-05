@@ -4,7 +4,7 @@
 use super::*;
 use crate::{
     account::AccountState,
-    authority::{Authority, WorkerState},
+    authority::{fully_handle_confirmation_order, Authority, WorkerState},
     base_types::Amount,
     storage::{InMemoryStoreClient, StorageClient},
 };
@@ -12,6 +12,7 @@ use async_trait::async_trait;
 use futures::lock::Mutex;
 use std::{
     collections::{BTreeMap, HashMap},
+    ops::DerefMut,
     sync::Arc,
 };
 
@@ -36,13 +37,9 @@ impl AuthorityClient for LocalAuthorityClient {
         &mut self,
         order: ConfirmationOrder,
     ) -> Result<AccountInfoResponse, Error> {
-        self.0
-            .clone()
-            .lock()
-            .await
-            .handle_confirmation_order(order)
-            .await
-            .map(|(info, _)| info)
+        let info =
+            fully_handle_confirmation_order(self.0.clone().lock().await.deref_mut(), order).await?;
+        Ok(info)
     }
 
     async fn handle_account_info_query(
@@ -82,8 +79,6 @@ fn init_local_authorities(
             committee.clone(),
             name,
             key_pair,
-            /* shard_id */ 0,
-            /* number of shards */ 1,
             InMemoryStoreClient::default(),
         );
         clients.insert(name, LocalAuthorityClient::new(state));
@@ -115,8 +110,6 @@ fn init_local_authorities_bad_1(
             committee.clone(),
             name,
             key_pair,
-            /* shard_id */ 0,
-            /* number of shards */ 1,
             InMemoryStoreClient::default(),
         );
         clients.insert(name, LocalAuthorityClient::new(state));
