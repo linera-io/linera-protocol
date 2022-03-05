@@ -15,6 +15,14 @@ use std::io;
 use structopt::StructOpt;
 use tokio::time;
 
+/// Static shard assignment
+pub fn get_shard(num_shards: u32, account_id: &AccountId) -> u32 {
+    use std::hash::{Hash, Hasher};
+    let mut s = std::collections::hash_map::DefaultHasher::new();
+    account_id.hash(&mut s);
+    (s.finish() % num_shards as u64) as u32
+}
+
 #[derive(Clone, Debug, StructOpt)]
 pub struct CrossShardConfig {
     /// Number of cross shards messages allowed before blocking the main server loop
@@ -28,11 +36,15 @@ pub struct CrossShardConfig {
     retry_delay_ms: u64,
 }
 
+pub type ShardId = u32;
+
 pub struct Server<StorageClient> {
     network_protocol: NetworkProtocol,
     base_address: String,
     base_port: u32,
     state: WorkerState<StorageClient>,
+    shard_id: ShardId,
+    num_shards: u32,
     buffer_size: usize,
     cross_shard_config: CrossShardConfig,
     // Stats
@@ -40,15 +52,15 @@ pub struct Server<StorageClient> {
     user_errors: u64,
 }
 
-impl<StorageClient> Server<StorageClient>
-where
-    StorageClient: zef_core::storage::StorageClient + Clone + 'static,
-{
+impl<StorageClient> Server<StorageClient> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         network_protocol: NetworkProtocol,
         base_address: String,
         base_port: u32,
         state: WorkerState<StorageClient>,
+        shard_id: ShardId,
+        num_shards: u32,
         buffer_size: usize,
         cross_shard_config: CrossShardConfig,
     ) -> Self {
@@ -57,11 +69,17 @@ where
             base_address,
             base_port,
             state,
+            shard_id,
+            num_shards,
             buffer_size,
             cross_shard_config,
             packets_processed: 0,
             user_errors: 0,
         }
+    }
+
+    pub(crate) fn which_shard(&self, account_id: &AccountId) -> ShardId {
+        get_shard(self.num_shards, account_id)
     }
 
     pub fn packets_processed(&self) -> u64 {
@@ -71,7 +89,12 @@ where
     pub fn user_errors(&self) -> u64 {
         self.user_errors
     }
+}
 
+impl<StorageClient> Server<StorageClient>
+where
+    StorageClient: zef_core::storage::StorageClient + Clone + 'static,
+{
     async fn forward_cross_shard_queries(
         network_protocol: NetworkProtocol,
         base_address: String,
@@ -134,13 +157,9 @@ where
             "Listening to {} traffic on {}:{}",
             self.network_protocol,
             self.base_address,
-            self.base_port + self.state.shard_id
+            self.base_port + self.shard_id
         );
-        let address = format!(
-            "{}:{}",
-            self.base_address,
-            self.base_port + self.state.shard_id
-        );
+        let address = format!("{}:{}", self.base_address, self.base_port + self.shard_id);
 
         let (cross_shard_sender, cross_shard_receiver) =
             mpsc::channel(self.cross_shard_config.queue_size);
@@ -150,7 +169,7 @@ where
             self.base_port,
             self.cross_shard_config.max_retries,
             self.cross_shard_config.retry_delay_ms,
-            self.state.shard_id,
+            self.shard_id,
             cross_shard_receiver,
         ));
 
@@ -277,8 +296,8 @@ where
                 debug!(
                     "{}:{} (shard {}) has processed {} packets",
                     self.server.base_address,
-                    self.server.base_port + self.server.state.shard_id,
-                    self.server.state.shard_id,
+                    self.server.base_port + self.server.shard_id,
+                    self.server.shard_id,
                     self.server.packets_processed
                 );
             }
@@ -307,12 +326,12 @@ where
     ) -> futures::future::BoxFuture<()> {
         Box::pin(async move {
             for request in requests {
-                let shard_id = self.server.state.which_shard(request.target_account_id());
+                let shard_id = self.server.which_shard(request.target_account_id());
                 let buffer =
                     serialize_message(&SerializedMessage::CrossShardRequest(Box::new(request)));
                 debug!(
                     "Scheduling cross shard query: {} -> {}",
-                    self.server.state.shard_id, shard_id
+                    self.server.shard_id, shard_id
                 );
                 self.cross_shard_sender
                     .send((buffer, shard_id))
@@ -562,5 +581,25 @@ impl MassClient {
             );
         }
         handles
+    }
+}
+
+#[test]
+fn test_get_shards() {
+    let num_shards = 16u32;
+    let mut found = vec![false; num_shards as usize];
+    let mut left = num_shards;
+    let mut i = 1;
+    loop {
+        let shard = get_shard(num_shards, &AccountId(vec![i.into()])) as usize;
+        println!("found {}", shard);
+        if !found[shard] {
+            found[shard] = true;
+            left -= 1;
+            if left == 0 {
+                break;
+            }
+        }
+        i += 1;
     }
 }

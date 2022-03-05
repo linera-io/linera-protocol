@@ -21,10 +21,6 @@ pub struct WorkerState<Client> {
     pub committee: Committee,
     /// The signature key pair of the authority.
     pub key_pair: KeyPair,
-    /// The sharding ID of this authority shard. 0 if one shard.
-    pub shard_id: ShardId,
-    /// The number of shards. 1 if single shard.
-    pub number_of_shards: u32,
     /// Access to local persistent storage.
     pub storage: Client,
 }
@@ -78,8 +74,6 @@ where
         request: Request,
         certificate: Certificate, // For logging purpose
     ) -> Result<(AccountInfoResponse, Vec<CrossShardRequest>), Error> {
-        // Verify sharding.
-        ensure!(self.in_shard(&request.account_id), Error::WrongShard);
         assert_eq!(
             &certificate.value.confirm_request().unwrap().operation,
             &request.operation
@@ -137,25 +131,14 @@ where
         &mut self,
         certificate: Certificate,
     ) -> Result<Vec<CrossShardRequest>, Error> {
-        let operation = certificate
-            .value
-            .confirm_request()
-            .unwrap()
-            .operation
-            .clone();
-        if let Some(recipient) = operation.recipient() {
-            // Update recipient.
-            if self.in_shard(recipient) {
-                // Execute the operation locally.
-                self.update_recipient_account(operation, certificate)
-                    .await?;
-            } else {
-                // Initiate a cross-shard request.
-                let cont = vec![CrossShardRequest::UpdateRecipient { certificate }];
-                return Ok(cont);
-            }
+        let operation = &certificate.value.confirm_request().unwrap().operation;
+        if operation.recipient().is_some() {
+            // Initiate a cross-shard request to update recipient.
+            let cont = vec![CrossShardRequest::UpdateRecipient { certificate }];
+            Ok(cont)
+        } else {
+            Ok(Vec::new())
         }
-        Ok(Vec::new())
     }
 
     /// (Trusted) Try to update the recipient account in a confirmed request.
@@ -165,7 +148,6 @@ where
         certificate: Certificate,
     ) -> Result<(), Error> {
         if let Some(recipient) = operation.recipient() {
-            ensure!(self.in_shard(recipient), Error::WrongShard);
             assert_eq!(
                 &certificate.value.confirm_request().unwrap().operation,
                 &operation
@@ -182,7 +164,6 @@ where
             functionality: Functionality::AtomicSwap { accounts },
         } = &operation
         {
-            ensure!(self.in_shard(new_id), Error::WrongShard);
             // Make sure cross shard requests to start a consensus instance cannot be replayed.
             if !self.storage.has_consensus(new_id).await? {
                 let instance = ConsensusState::new(new_id.clone(), accounts.clone(), certificate);
@@ -203,11 +184,6 @@ where
         &mut self,
         order: RequestOrder,
     ) -> Result<AccountInfoResponse, Error> {
-        // Verify sharding.
-        ensure!(
-            self.in_shard(&order.value.request.account_id),
-            Error::WrongShard
-        );
         // Verify that the order was meant for this authority.
         if let Some(authority) = &order.value.limited_to {
             ensure!(self.name == *authority, Error::InvalidRequestOrder);
@@ -433,7 +409,6 @@ where
         &mut self,
         query: AccountInfoQuery,
     ) -> Result<AccountInfoResponse, Error> {
-        ensure!(self.in_shard(&query.account_id), Error::WrongShard);
         let account = self.storage.read_active_account(&query.account_id).await?;
         let mut response = account.make_account_info();
         if let Some(seq) = query.query_sequence_number {
@@ -480,19 +455,14 @@ where
                 let hash = certificate.hash;
                 self.update_recipient_account(request.operation.clone(), certificate)
                     .await?;
-                if self.in_shard(&sender) {
-                    Ok(Vec::new())
-                } else {
-                    // Reply with a cross-shard request.
-                    let cont = vec![CrossShardRequest::ConfirmUpdatedRecipient {
-                        account_id: sender,
-                        hash,
-                    }];
-                    Ok(cont)
-                }
+                // Reply with a cross-shard request.
+                let cont = vec![CrossShardRequest::ConfirmUpdatedRecipient {
+                    account_id: sender,
+                    hash,
+                }];
+                Ok(cont)
             }
             CrossShardRequest::DestroyAccount { account_id } => {
-                ensure!(self.in_shard(&account_id), Error::WrongShard);
                 self.storage.remove_account(&account_id).await?;
                 Ok(Vec::new())
             }
@@ -504,7 +474,6 @@ where
                 Ok(Vec::new())
             }
             CrossShardRequest::ConfirmUpdatedRecipient { account_id, hash } => {
-                ensure!(self.in_shard(&account_id), Error::WrongShard);
                 let mut account = self.storage.read_active_account(&account_id).await?;
                 if account.keep_sending.remove(&hash) {
                     self.storage.write_account(account).await?;
@@ -515,38 +484,35 @@ where
     }
 }
 
-/// Static shard assignment
-pub fn get_shard(num_shards: u32, account_id: &AccountId) -> u32 {
-    use std::hash::{Hash, Hasher};
-    let mut s = std::collections::hash_map::DefaultHasher::new();
-    account_id.hash(&mut s);
-    (s.finish() % num_shards as u64) as u32
-}
-
 impl<Client> WorkerState<Client> {
     pub fn new(
         committee: Committee,
         name: AuthorityName,
         key_pair: KeyPair,
-        shard_id: u32,
-        number_of_shards: u32,
         storage: Client,
     ) -> Self {
         WorkerState {
             committee,
             name,
             key_pair,
-            shard_id,
-            number_of_shards,
             storage,
         }
     }
+}
 
-    pub fn in_shard(&self, account_id: &AccountId) -> bool {
-        self.which_shard(account_id) == self.shard_id
+#[cfg(test)]
+pub async fn fully_handle_confirmation_order<Client>(
+    state: &mut WorkerState<Client>,
+    confirmation_order: ConfirmationOrder,
+) -> Result<AccountInfoResponse, crate::error::Error>
+where
+    Client: StorageClient + Clone + 'static,
+{
+    let (info, mut requests) = state.handle_confirmation_order(confirmation_order).await?;
+    while let Some(request) = requests.pop() {
+        requests.extend(state.handle_cross_shard_request(request).await?);
     }
-
-    pub fn which_shard(&self, account_id: &AccountId) -> u32 {
-        get_shard(self.number_of_shards, account_id)
-    }
+    let account = state.storage.read_active_account(&info.account_id).await?;
+    let info = account.make_account_info();
+    Ok(info)
 }

@@ -4,9 +4,7 @@
 
 #![deny(warnings)]
 
-use zef_core::{
-    authority::*, base_types::*, client::*, committee::Committee, messages::*, serialize::*,
-};
+use zef_core::{base_types::*, client::*, committee::Committee, messages::*, serialize::*};
 use zef_service::{config::*, network, transport};
 
 use bytes::Bytes;
@@ -270,7 +268,7 @@ impl ClientContext {
             // Re-index orders by shard for this particular authority client.
             let mut sharded_requests = HashMap::new();
             for (account_id, buf) in &orders {
-                let shard = get_shard(num_shards, account_id);
+                let shard = network::get_shard(num_shards, account_id);
                 sharded_requests
                     .entry(shard)
                     .or_insert_with(Vec::new)

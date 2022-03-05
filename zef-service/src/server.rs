@@ -54,8 +54,6 @@ async fn make_shard_server(
         committee,
         server_config.key.public(),
         server_config.key,
-        shard,
-        num_shards,
         storage,
     );
 
@@ -65,7 +63,7 @@ async fn make_shard_server(
 
         // Load initial states
         for (id, owner, balance) in &initial_accounts_config.accounts {
-            if get_shard(num_shards, id) != shard {
+            if network::get_shard(num_shards, id) != shard {
                 continue;
             }
             let account = AccountState::create(id.clone(), *owner, *balance);
@@ -78,6 +76,8 @@ async fn make_shard_server(
         local_ip_addr.to_string(),
         server_config.authority.base_port,
         state,
+        shard,
+        num_shards,
         buffer_size,
         cross_shard_config,
     )

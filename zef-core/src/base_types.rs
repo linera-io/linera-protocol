@@ -55,9 +55,6 @@ pub type InstanceId = AccountId;
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash, Serialize, Deserialize)]
 pub struct HashValue(generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Digest>::OutputSize>);
 
-/// Alias for shard identifiers.
-pub type ShardId = u32;
-
 /// Alias for the identity of an authority.
 pub type AuthorityName = PublicKeyBytes;
 
