@@ -11,7 +11,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use dyn_clone::DynClone;
-use futures::lock::Mutex;
+use futures::{future, lock::Mutex};
 use std::{collections::HashMap, ops::DerefMut, sync::Arc};
 
 #[cfg(test)]
@@ -37,7 +37,22 @@ pub trait StorageClient: DynClone + Send + Sync {
 
     async fn remove_account(&mut self, account_id: &AccountId) -> Result<(), Error>;
 
-    async fn read_certificate(&mut self, value_hash: HashValue) -> Result<Certificate, Error>;
+    async fn read_certificate(&mut self, hash: HashValue) -> Result<Certificate, Error>;
+
+    async fn read_certificates<I: Iterator<Item = HashValue> + Send>(
+        &self,
+        hashes: I,
+    ) -> Result<Vec<Certificate>, Error>
+    where
+        Self: Clone + Send + 'static,
+    {
+        let mut handles = Vec::new();
+        for hash in hashes {
+            let mut client = self.clone();
+            handles.push(async move { client.read_certificate(hash).await });
+        }
+        future::join_all(handles).await.into_iter().collect()
+    }
 
     async fn write_certificate(&mut self, certificate: Certificate) -> Result<(), Error>;
 
