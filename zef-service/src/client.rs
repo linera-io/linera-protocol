@@ -560,7 +560,7 @@ async fn main() {
                 .await;
             let votes: Vec<_> = responses
                 .into_iter()
-                .filter_map(|buf| deserialize_response(&buf[..]).and_then(|info| info.pending))
+                .filter_map(|buf| deserialize_response(&buf[..]).and_then(|info| info.manager.pending().cloned()))
                 .collect();
             warn!("Received {} valid votes.", votes.len());
 

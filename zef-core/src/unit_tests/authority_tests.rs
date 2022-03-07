@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    account::AccountState,
+    account::{AccountState, AccountManager},
     authority::{fully_handle_confirmation_order, Authority, WorkerState},
     base_types::*,
     committee::Committee,
@@ -35,7 +35,7 @@ async fn test_handle_request_order_bad_signature() {
         .read_active_account(&dbg_account(1))
         .await
         .unwrap()
-        .pending
+        .manager.pending()
         .is_none());
 }
 
@@ -60,7 +60,7 @@ async fn test_handle_request_order_zero_amount() {
         .read_active_account(&dbg_account(1))
         .await
         .unwrap()
-        .pending
+        .manager.pending()
         .is_none());
 }
 
@@ -87,7 +87,7 @@ async fn test_handle_request_order_unknown_sender() {
         .read_active_account(&dbg_account(1))
         .await
         .unwrap()
-        .pending
+        .manager.pending()
         .is_none());
 }
 
@@ -119,7 +119,7 @@ async fn test_handle_request_order_bad_sequence_number() {
         .read_active_account(&dbg_account(1))
         .await
         .unwrap()
-        .pending
+        .manager.pending()
         .is_none());
 }
 
@@ -144,7 +144,7 @@ async fn test_handle_request_order_exceed_balance() {
         .read_active_account(&dbg_account(1))
         .await
         .unwrap()
-        .pending
+        .manager.pending()
         .is_none());
 }
 
@@ -167,9 +167,9 @@ async fn test_handle_request_order() {
         .read_active_account(&dbg_account(1))
         .await
         .unwrap()
-        .pending
+        .manager.pending().cloned()
         .unwrap();
-    assert_eq!(account_info.pending.unwrap(), pending);
+    assert_eq!(account_info.manager.pending().unwrap(), &pending);
 }
 
 #[tokio::test]
@@ -401,7 +401,7 @@ async fn test_handle_confirmation_order_to_active_recipient() {
     assert_eq!(dbg_account(1), info.account_id);
     assert_eq!(Balance::from(0), info.balance);
     assert_eq!(SequenceNumber::from(1), info.next_sequence_number);
-    assert_eq!(None, info.pending);
+    assert_eq!(None, info.manager.pending());
     assert_eq!(
         state
             .storage
@@ -418,7 +418,7 @@ async fn test_handle_confirmation_order_to_active_recipient() {
         .await
         .unwrap();
     assert_eq!(recipient_account.balance, Balance::from(5));
-    assert_eq!(recipient_account.owner, Some(dbg_addr(2)));
+    assert_eq!(recipient_account.manager.owner(), Some(&dbg_addr(2)));
     assert_eq!(recipient_account.confirmed_log.len(), 0);
     assert_eq!(recipient_account.received_log.len(), 1);
 
@@ -464,7 +464,7 @@ async fn test_handle_confirmation_order_to_inactive_recipient() {
     assert_eq!(dbg_account(1), info.account_id);
     assert_eq!(Balance::from(0), info.balance);
     assert_eq!(SequenceNumber::from(1), info.next_sequence_number);
-    assert_eq!(None, info.pending);
+    assert_eq!(None, info.manager.pending());
     assert_eq!(
         state
             .storage
@@ -498,7 +498,7 @@ async fn test_read_account_state_unknown_account() {
         .read_account_or_default(&unknown_account_id)
         .await
         .unwrap();
-    account.owner = Some(dbg_addr(4));
+    account.manager = AccountManager::single(dbg_addr(4));
     state.storage.write_account(account).await.unwrap();
     assert!(state
         .storage

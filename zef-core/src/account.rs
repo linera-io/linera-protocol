@@ -12,14 +12,12 @@ use std::collections::{BTreeMap, HashSet};
 pub struct AccountState {
     /// The UID of the account.
     pub id: AccountId,
-    /// Owner of the account. An account without owner cannot execute operations.
-    pub owner: Option<AccountOwner>,
+    /// Manager of the account.
+    pub manager: AccountManager,
     /// Balance of the account.
     pub balance: Balance,
     /// Sequence number tracking requests.
     pub next_sequence_number: SequenceNumber,
-    /// Whether we have signed a request for this sequence number already.
-    pub pending: Option<Vote>,
     /// Hashes of all confirmed certificates for this sender.
     pub confirmed_log: Vec<HashValue>,
     /// Hashes of all confirmed certificates as a receiver.
@@ -31,14 +29,78 @@ pub struct AccountState {
     pub received_keys: HashSet<HashValue>,
 }
 
+/// How to produce new commands.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
+pub enum AccountManager {
+    /// The account is not active. (No blocks can be created)
+    None,
+    /// The account is managed by a single owner. (We track pending votes to ensure safety.)
+    Single(Box<SingleOwnerManager>),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
+pub struct SingleOwnerManager {
+    /// The owner of the account.
+    owner: AccountOwner,
+    /// Whether we have signed a request for this sequence number already.
+    pending: Option<Vote>,
+}
+
+impl Default for AccountManager {
+    fn default() -> Self {
+        AccountManager::None
+    }
+}
+
+impl AccountManager {
+    pub fn single(owner: AccountOwner) -> Self {
+        AccountManager::Single(Box::new(SingleOwnerManager { owner, pending: None }))
+    }
+
+    pub fn reset(&mut self) {
+        match self {
+            AccountManager::None => (),
+            AccountManager::Single(manager) => {
+                manager.pending = None;
+            }
+        }
+    }
+
+    pub fn is_active(&self) -> bool {
+        !matches!(self, AccountManager::None)
+    }
+
+    pub fn owner(&self) -> Option<&AccountOwner> {
+        match self {
+            AccountManager::Single(manager) => Some(&manager.owner),
+            _ => None,
+        }
+    }
+
+    pub fn pending(&self) -> Option<&Vote> {
+        match self {
+            AccountManager::Single(manager) => manager.pending.as_ref(),
+            _ => None,
+        }
+    }
+
+    pub fn set_pending(&mut self, vote: Vote) {
+        match self {
+            AccountManager::Single(manager) => manager.pending = Some(vote),
+            _ => panic!("invalid account manager"),
+        }
+    }
+}
+
 impl AccountState {
     pub(crate) fn make_account_info(&self) -> AccountInfoResponse {
         AccountInfoResponse {
             account_id: self.id.clone(),
-            owner: self.owner,
+            manager: self.manager.clone(),
             balance: self.balance,
             next_sequence_number: self.next_sequence_number,
-            pending: self.pending.clone(),
             count_received_certificates: self.received_log.len(),
             queried_certificate: None,
             queried_received_certificates: Vec::new(),
@@ -48,10 +110,9 @@ impl AccountState {
     pub fn new(id: AccountId) -> Self {
         Self {
             id,
-            owner: None,
+            manager: AccountManager::None,
             balance: Balance::default(),
             next_sequence_number: SequenceNumber::new(),
-            pending: None,
             confirmed_log: Vec::new(),
             received_log: Vec::new(),
             keep_sending: HashSet::new(),
@@ -61,7 +122,7 @@ impl AccountState {
 
     pub fn create(id: AccountId, owner: AccountOwner, balance: Balance) -> Self {
         let mut account = Self::new(id);
-        account.owner = Some(owner);
+        account.manager = AccountManager::single(owner);
         account.balance = balance;
         account
     }
@@ -128,10 +189,10 @@ impl AccountState {
             | Operation::StartConsensusInstance { .. }
             | Operation::Skip => (),
             Operation::ChangeOwner { new_owner } => {
-                self.owner = Some(*new_owner);
+                self.manager = AccountManager::single(*new_owner);
             }
             Operation::CloseAccount => {
-                self.owner = None;
+                self.manager = AccountManager::default();
             }
             Operation::Transfer { amount, .. } => {
                 self.balance.try_sub_assign((*amount).into())?;
@@ -163,8 +224,8 @@ impl AccountState {
                     .unwrap_or_else(|_| Balance::max());
             }
             Operation::OpenAccount { new_owner, .. } => {
-                assert!(self.owner.is_none()); // guaranteed under BFT assumptions.
-                self.owner = Some(*new_owner);
+                assert!(!self.manager.is_active()); // guaranteed under BFT assumptions.
+                self.manager = AccountManager::single(*new_owner);
             }
             _ => unreachable!("Not an operation with recipients"),
         }
