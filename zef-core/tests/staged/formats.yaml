@@ -36,7 +36,11 @@ AccountManager:
     1:
       Single:
         NEWTYPE:
-          TYPENAME: SingleAccountManager
+          TYPENAME: SingleOwnerManager
+    2:
+      Multi:
+        NEWTYPE:
+          TYPENAME: MultiOwnerManager
 Address:
   ENUM:
     0:
@@ -281,6 +285,17 @@ HashValue:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 64
+MultiOwnerManager:
+  STRUCT:
+    - owners:
+        SEQ:
+          TYPENAME: PublicKeyBytes
+    - pending:
+        OPTION:
+          TYPENAME: Vote
+    - locked:
+        OPTION:
+          TYPENAME: Certificate
 Operation:
   ENUM:
     0:
@@ -350,6 +365,9 @@ RequestValue:
     - limited_to:
         OPTION:
           TYPENAME: PublicKeyBytes
+    - round:
+        OPTION:
+          TYPENAME: SequenceNumber
 SequenceNumber:
   NEWTYPESTRUCT: U64
 SerializedMessage:
@@ -395,7 +413,7 @@ Signature:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 64
-SingleAccountManager:
+SingleOwnerManager:
   STRUCT:
     - owner:
         TYPENAME: PublicKeyBytes
@@ -411,14 +429,21 @@ UserData:
 Value:
   ENUM:
     0:
-      Lock:
+      Locked:
         NEWTYPE:
           TYPENAME: Request
     1:
-      Confirm:
+      Validated:
+        STRUCT:
+          - request:
+              TYPENAME: Request
+          - round:
+              TYPENAME: SequenceNumber
+    2:
+      Final:
         NEWTYPE:
           TYPENAME: Request
-    2:
+    3:
       PreCommit:
         STRUCT:
           - proposal:
@@ -426,7 +451,7 @@ Value:
           - requests:
               SEQ:
                 TYPENAME: Request
-    3:
+    4:
       Commit:
         STRUCT:
           - proposal:

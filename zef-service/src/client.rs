@@ -109,7 +109,7 @@ impl ClientContext {
         key_pair: Option<KeyPair>,
     ) -> Result<(), failure::Error> {
         let recipient = match &certificate.value {
-            Value::Confirm(request) => request.operation.recipient().unwrap().clone(),
+            Value::Confirmed(request) => request.operation.recipient().unwrap().clone(),
             _ => failure::bail!("unexpected value in certificate"),
         };
         let committee = self.committee_config.clone().into_committee();
@@ -192,7 +192,7 @@ impl ClientContext {
         let mut serialized_certificates = Vec::new();
         for order in orders {
             let mut certificate =
-                Certificate::new(Value::Confirm(order.value.request.clone()), Vec::new());
+                Certificate::new(Value::Confirmed(order.value.request.clone()), Vec::new());
             for i in 0..committee.quorum_threshold() {
                 let (pubx, secx) = keys.get(i).unwrap();
                 let sig = Signature::new(&certificate.value, secx);
@@ -560,7 +560,9 @@ async fn main() {
                 .await;
             let votes: Vec<_> = responses
                 .into_iter()
-                .filter_map(|buf| deserialize_response(&buf[..]).and_then(|info| info.manager.pending().cloned()))
+                .filter_map(|buf| {
+                    deserialize_response(&buf[..]).and_then(|info| info.manager.pending().cloned())
+                })
                 .collect();
             warn!("Received {} valid votes.", votes.len());
 

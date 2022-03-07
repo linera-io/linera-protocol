@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    account::{AccountState, AccountManager},
+    account::{AccountManager, AccountState},
     authority::{fully_handle_confirmation_order, Authority, WorkerState},
     base_types::*,
     committee::Committee,
@@ -35,7 +35,8 @@ async fn test_handle_request_order_bad_signature() {
         .read_active_account(&dbg_account(1))
         .await
         .unwrap()
-        .manager.pending()
+        .manager
+        .pending()
         .is_none());
 }
 
@@ -60,7 +61,8 @@ async fn test_handle_request_order_zero_amount() {
         .read_active_account(&dbg_account(1))
         .await
         .unwrap()
-        .manager.pending()
+        .manager
+        .pending()
         .is_none());
 }
 
@@ -87,7 +89,8 @@ async fn test_handle_request_order_unknown_sender() {
         .read_active_account(&dbg_account(1))
         .await
         .unwrap()
-        .manager.pending()
+        .manager
+        .pending()
         .is_none());
 }
 
@@ -119,7 +122,8 @@ async fn test_handle_request_order_bad_sequence_number() {
         .read_active_account(&dbg_account(1))
         .await
         .unwrap()
-        .manager.pending()
+        .manager
+        .pending()
         .is_none());
 }
 
@@ -144,7 +148,8 @@ async fn test_handle_request_order_exceed_balance() {
         .read_active_account(&dbg_account(1))
         .await
         .unwrap()
-        .manager.pending()
+        .manager
+        .pending()
         .is_none());
 }
 
@@ -167,7 +172,9 @@ async fn test_handle_request_order() {
         .read_active_account(&dbg_account(1))
         .await
         .unwrap()
-        .manager.pending().cloned()
+        .manager
+        .pending()
+        .cloned()
         .unwrap();
     assert_eq!(account_info.manager.pending().unwrap(), &pending);
 }
@@ -418,7 +425,7 @@ async fn test_handle_confirmation_order_to_active_recipient() {
         .await
         .unwrap();
     assert_eq!(recipient_account.balance, Balance::from(5));
-    assert_eq!(recipient_account.manager.owner(), Some(&dbg_addr(2)));
+    assert!(recipient_account.manager.has_owner(&dbg_addr(2)));
     assert_eq!(recipient_account.confirmed_log.len(), 0);
     assert_eq!(recipient_account.received_log.len(), 1);
 
@@ -575,6 +582,6 @@ fn make_transfer_certificate(
     let request = make_transfer_request_order(account_id, key_pair, recipient, amount)
         .value
         .request;
-    let value = Value::Confirm(request);
+    let value = Value::Confirmed(request);
     make_certificate(state, value)
 }
