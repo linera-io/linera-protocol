@@ -254,7 +254,7 @@ where
             }) = &result
             {
                 if certificate.check(&self.committee).is_ok() {
-                    if let Value::Confirm(request) = &certificate.value {
+                    if let Value::Confirmed(request) = &certificate.value {
                         if request.account_id == self.account_id
                             && request.sequence_number == sequence_number
                         {
@@ -445,22 +445,17 @@ where
                     {
                         let result = client.handle_request_order(order).await;
                         match result {
-                            Ok(AccountInfoResponse {
-                                manager,
-                                ..
-                            }) => {
-                                match manager.pending() {
-                                    Some(vote) => {
-                                        my_ensure!(
-                                            vote.authority == name,
-                                            Error::ClientErrorWhileProcessingRequestOrder
-                                        );
-                                        vote.check(committee)?;
-                                        return Ok(Some(vote.clone()));
-                                    }
-                                    None => return Err(Error::ClientErrorWhileProcessingRequestOrder),
+                            Ok(AccountInfoResponse { manager, .. }) => match manager.pending() {
+                                Some(vote) => {
+                                    my_ensure!(
+                                        vote.authority == name,
+                                        Error::ClientErrorWhileProcessingRequestOrder
+                                    );
+                                    vote.check(committee)?;
+                                    return Ok(Some(vote.clone()));
                                 }
-                            }
+                                None => return Err(Error::ClientErrorWhileProcessingRequestOrder),
+                            },
                             Err(err) => return Err(err),
                         }
                     }
@@ -498,7 +493,8 @@ where
             .collect();
         match action {
             CommunicateAction::ConfirmOrder(order) => {
-                let certificate = Certificate::new(Value::Confirm(order.value.request), signatures);
+                let certificate =
+                    Certificate::new(Value::Confirmed(order.value.request), signatures);
                 // Certificate is valid because
                 // * `communicate_with_quorum` ensured a sufficient "weight" of
                 // (non-error) answers were returned by authorities.
@@ -506,7 +502,7 @@ where
                 certificates.push(certificate);
             }
             CommunicateAction::LockOrder(order) => {
-                let certificate = Certificate::new(Value::Lock(order.value.request), signatures);
+                let certificate = Certificate::new(Value::Locked(order.value.request), signatures);
                 certificates.push(certificate);
             }
             CommunicateAction::SynchronizeNextSequenceNumber(_) => (),
@@ -719,7 +715,7 @@ where
                 .last()
                 .expect("last order should be confirmed now")
                 .value,
-            Value::Confirm(order.value.request)
+            Value::Confirmed(order.value.request)
         );
         self.pending_request = PendingRequest::None;
         // Confirm last request certificate if needed.
@@ -742,7 +738,7 @@ where
         match &self.lock_certificate {
             Some(certificate) => {
                 ensure!(
-                    matches!(&certificate.value, Value::Lock(r) if &order.value.request == r),
+                    matches!(&certificate.value, Value::Locked(r) if &order.value.request == r),
                     "Account has already been locked for a different operation."
                 );
                 return Ok(certificate.clone());
@@ -774,7 +770,7 @@ where
                 .as_ref()
                 .expect("last order should be locked now")
                 .value,
-            Value::Lock(order.value.request)
+            Value::Locked(order.value.request)
         );
         self.pending_request = PendingRequest::None;
         Ok(self.lock_certificate.as_ref().unwrap().clone())

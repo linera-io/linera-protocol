@@ -341,7 +341,7 @@ async fn test_open_account() {
             .unwrap(),
         certificate
     );
-    assert!(matches!(&certificate.value, Value::Confirm(
+    assert!(matches!(&certificate.value, Value::Confirmed(
         Request {
             operation: Operation::OpenAccount { new_id:id, .. },
             ..
@@ -379,7 +379,7 @@ async fn test_close_account() {
     let certificate = sender.close_account().await.unwrap();
     assert!(matches!(
         &certificate.value,
-        Value::Confirm(Request {
+        Value::Confirmed(Request {
             operation: Operation::CloseAccount,
             ..
         })

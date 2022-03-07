@@ -5,7 +5,7 @@
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use std::{fs::File, io::Write};
 use structopt::{clap::arg_enum, StructOpt};
-use zef_core::{error, messages, serialize, account};
+use zef_core::{account, error, messages, serialize};
 
 fn get_registry() -> Result<Registry> {
     let mut tracer = Tracer::new(

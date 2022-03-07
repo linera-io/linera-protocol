@@ -36,7 +36,7 @@ pub trait Authority {
         order: RequestOrder,
     ) -> Result<AccountInfoResponse, Error>;
 
-    /// Confirm a request.
+    /// Execute a confirmed request.
     async fn handle_confirmation_order(
         &mut self,
         order: ConfirmationOrder,
@@ -132,6 +132,44 @@ where
         Ok((info, continuation))
     }
 
+    /// (Trusted) Process a validated request issued from a multi-owner account.
+    async fn process_validated_request(
+        &mut self,
+        request: Request,
+        round: SequenceNumber,
+        certificate: Certificate,
+    ) -> Result<AccountInfoResponse, Error> {
+        // assert_eq!(
+        //     &certificate.value.validated_request().unwrap(),
+        //     &request
+        // );
+        // Obtain the sender's account.
+        let sender = request.account_id.clone();
+        // Check that the account is active and ready for this confirmation.
+        let mut account = self.storage.read_active_account(&sender).await?;
+        if account.next_sequence_number < request.sequence_number {
+            return Err(Error::MissingEarlierConfirmations {
+                current_sequence_number: account.next_sequence_number,
+            });
+        }
+        if account.next_sequence_number > request.sequence_number {
+            // Request was already confirmed.
+            let info = account.make_account_info();
+            return Ok(info);
+        }
+        if account.manager.check_validated_request(&request, round)? {
+            // If we just processed the same pending request, return the account info
+            // unchanged.
+            return Ok(account.make_account_info());
+        }
+        account
+            .manager
+            .create_final_vote(request, certificate, &self.key_pair);
+        let info = account.make_account_info();
+        self.storage.write_account(account).await?;
+        Ok(info)
+    }
+
     /// (Trusted) Try to update the recipient account in a confirmed request.
     async fn update_recipient_account(
         &mut self,
@@ -181,32 +219,31 @@ where
         }
         // Obtain the sender's account.
         let sender = order.value.request.account_id.clone();
-
         let mut account = self.storage.read_active_account(&sender).await?;
         // Check authentication of the request.
-        order.check(account.manager.owner())?;
+        order.check(&account.manager)?;
         // Check the account is ready for this new request.
         let request = order.value.request;
+        let round = order.value.round;
+        let number = request.sequence_number;
         ensure!(
-            request.sequence_number <= SequenceNumber::max(),
+            number <= SequenceNumber::max(),
             Error::InvalidSequenceNumber
         );
         ensure!(
-            account.next_sequence_number == request.sequence_number,
+            number == account.next_sequence_number,
             Error::UnexpectedSequenceNumber
         );
-        if let Some(pending) = account.manager.pending() {
-            ensure!(
-                matches!(&pending.value, Value::Confirm(r) | Value::Lock(r) if r == &request),
-                Error::PreviousRequestMustBeConfirmedFirst
-            );
-            // This exact request was already signed. Return the previous vote.
+        // Check the well-formedness of the request.
+        if account.manager.check_pending_request(&request, round)? {
+            // If we just processed the same pending request, return the account info
+            // unchanged.
             return Ok(account.make_account_info());
         }
-        // Verify that the request is safe, and return the value of the vote.
-        let value = account.validate_operation(request)?;
-        let vote = Vote::new(value, &self.key_pair);
-        account.manager.set_pending(vote);
+        // Verify that the request is valid.
+        account.validate_operation(&request)?;
+        // Create the vote and store it in the account.
+        account.manager.create_vote(request, round, &self.key_pair);
         let info = account.make_account_info();
         self.storage.write_account(account).await?;
         Ok(info)
@@ -219,17 +256,24 @@ where
     ) -> Result<(AccountInfoResponse, Vec<CrossShardRequest>), Error> {
         // Verify that the certified value is a confirmation.
         let certificate = confirmation_order.certificate;
-        let request = certificate
-            .value
-            .confirm_request()
-            .ok_or(Error::InvalidConfirmationOrder)?;
         // Verify the certificate.
         certificate.check(&self.committee)?;
-        // Process the request.
-        let r = self
-            .process_confirmed_request(request.clone(), certificate)
-            .await?;
-        Ok(r)
+        // Process the order.
+        match &certificate.value {
+            Value::Confirmed(request) => {
+                // Execute the final request.
+                self.process_confirmed_request(request.clone(), certificate)
+                    .await
+            }
+            Value::Validated { request, round } => {
+                // Finalize the valid request.
+                let info = self
+                    .process_validated_request(request.clone(), *round, certificate)
+                    .await?;
+                Ok((info, Vec::new()))
+            }
+            _ => Err(Error::InvalidConfirmationOrder),
+        }
     }
 
     /// Process a message meant for a consensus instance.
@@ -259,7 +303,7 @@ where
                 for lock in locks {
                     lock.check(&self.committee)?;
                     match lock.value {
-                        Value::Lock(Request {
+                        Value::Locked(Request {
                             account_id,
                             operation: Operation::LockInto { instance_id, owner },
                             sequence_number,
@@ -362,7 +406,7 @@ where
                     for lock in locks {
                         lock.check(&self.committee)?;
                         match lock.value {
-                            Value::Lock(Request {
+                            Value::Locked(Request {
                                 account_id,
                                 operation:
                                     Operation::LockInto {

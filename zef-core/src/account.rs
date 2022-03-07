@@ -35,17 +35,32 @@ pub struct AccountState {
 pub enum AccountManager {
     /// The account is not active. (No blocks can be created)
     None,
-    /// The account is managed by a single owner. (We track pending votes to ensure safety.)
+    /// The account is managed by a single owner.
     Single(Box<SingleOwnerManager>),
+    /// The account is managed by multiple owners.
+    Multi(Box<MultiOwnerManager>),
 }
 
+/// The specific state of an account managed by one owner.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct SingleOwnerManager {
     /// The owner of the account.
-    owner: AccountOwner,
+    pub owner: AccountOwner,
     /// Whether we have signed a request for this sequence number already.
-    pending: Option<Vote>,
+    pub pending: Option<Vote>,
+}
+
+/// The specific state of an account managed by multiple owners.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
+pub struct MultiOwnerManager {
+    /// The co-owners of the account.
+    pub owners: HashSet<AccountOwner>,
+    /// Pending proposal that we have validated and perhaps locked (i.e. voted to be final).
+    pub pending: Option<Vote>,
+    /// Validation certificate of a proposal that we have locked.
+    pub locked: Option<Certificate>,
 }
 
 impl Default for AccountManager {
@@ -56,7 +71,10 @@ impl Default for AccountManager {
 
 impl AccountManager {
     pub fn single(owner: AccountOwner) -> Self {
-        AccountManager::Single(Box::new(SingleOwnerManager { owner, pending: None }))
+        AccountManager::Single(Box::new(SingleOwnerManager {
+            owner,
+            pending: None,
+        }))
     }
 
     pub fn reset(&mut self) {
@@ -65,6 +83,10 @@ impl AccountManager {
             AccountManager::Single(manager) => {
                 manager.pending = None;
             }
+            AccountManager::Multi(manager) => {
+                manager.pending = None;
+                manager.locked = None;
+            }
         }
     }
 
@@ -72,24 +94,146 @@ impl AccountManager {
         !matches!(self, AccountManager::None)
     }
 
-    pub fn owner(&self) -> Option<&AccountOwner> {
+    pub fn has_owner(&self, owner: &AccountOwner) -> bool {
         match self {
-            AccountManager::Single(manager) => Some(&manager.owner),
-            _ => None,
+            AccountManager::Single(manager) => manager.owner == *owner,
+            AccountManager::Multi(manager) => manager.owners.contains(owner),
+            AccountManager::None => false,
         }
     }
 
     pub fn pending(&self) -> Option<&Vote> {
         match self {
             AccountManager::Single(manager) => manager.pending.as_ref(),
+            AccountManager::Multi(manager) => manager.pending.as_ref(),
             _ => None,
         }
     }
 
-    pub fn set_pending(&mut self, vote: Vote) {
+    /// Verify the safety of the request w.r.t. voting rules.
+    /// Returns true if the same request has been handled already.
+    pub fn check_pending_request(
+        &self,
+        new_request: &Request,
+        new_round: Option<SequenceNumber>,
+    ) -> Result<bool, Error> {
         match self {
-            AccountManager::Single(manager) => manager.pending = Some(vote),
-            _ => panic!("invalid account manager"),
+            AccountManager::Single(manager) => match &manager.pending {
+                Some(pending) => {
+                    ensure!(
+                        matches!(&pending.value, Value::Confirmed(request) if request == new_request),
+                        Error::PreviousRequestMustBeConfirmedFirst
+                    );
+                    ensure!(new_round.is_none(), Error::InvalidRequestOrder);
+                    Ok(true)
+                }
+                None => Ok(false),
+            },
+            AccountManager::Multi(manager) => {
+                let new_round = new_round.ok_or(Error::InvalidRequestOrder)?;
+                if let Some(pending) = &manager.pending {
+                    match &pending.value {
+                        Value::Validated { request, round }
+                            if *round == new_round && request == new_request =>
+                        {
+                            return Ok(true);
+                        }
+                        Value::Validated { round, .. } if *round < new_round => (),
+                        Value::Confirmed(_) => {
+                            // Verification continues below.
+                            assert!(manager.locked.is_some());
+                        }
+                        _ => {
+                            return Err(Error::InvalidRequestOrder);
+                        }
+                    }
+                }
+                if let Some(locked) = &manager.locked {
+                    ensure!(
+                        matches!(&locked.value, Value::Validated { request, round } if *round < new_round && request == new_request),
+                        Error::InvalidRequestOrder
+                    );
+                }
+                Ok(false)
+            }
+            _ => panic!("unexpected account manager"),
+        }
+    }
+
+    pub fn create_vote(
+        &mut self,
+        request: Request,
+        round: Option<SequenceNumber>,
+        key_pair: &KeyPair,
+    ) {
+        match self {
+            AccountManager::Single(manager) => {
+                let value = Value::Confirmed(request);
+                let vote = Vote::new(value, key_pair);
+                manager.pending = Some(vote);
+            }
+            AccountManager::Multi(manager) => {
+                let round = round.unwrap();
+                let value = Value::Validated { request, round };
+                let vote = Vote::new(value, key_pair);
+                manager.pending = Some(vote);
+            }
+            _ => panic!("unexpected account manager"),
+        }
+    }
+
+    /// Returns true if the same request has been handled already.
+    pub fn check_validated_request(
+        &self,
+        new_request: &Request,
+        new_round: SequenceNumber,
+    ) -> Result<bool, Error> {
+        match self {
+            AccountManager::Multi(manager) => {
+                if let Some(pending) = &manager.pending {
+                    match &pending.value {
+                        Value::Confirmed(request) if request == new_request => {
+                            return Ok(true);
+                        }
+                        Value::Validated { round, .. } if *round <= new_round => (),
+                        Value::Confirmed(_) => {
+                            // Verification continues below.
+                            assert!(manager.locked.is_some());
+                        }
+                        _ => {
+                            return Err(Error::InvalidConfirmationOrder);
+                        }
+                    }
+                }
+                if let Some(locked) = &manager.locked {
+                    ensure!(
+                        matches!(&locked.value, Value::Validated { round, .. } if *round <= new_round),
+                        Error::InvalidConfirmationOrder
+                    );
+                }
+                Ok(false)
+            }
+            _ => panic!("unexpected account manager"),
+        }
+    }
+
+    pub fn create_final_vote(
+        &mut self,
+        request: Request,
+        certificate: Certificate,
+        key_pair: &KeyPair,
+    ) {
+        match self {
+            AccountManager::Multi(manager) => {
+                let value = Value::Confirmed(request);
+                let vote = Vote::new(value, key_pair);
+                // Record confirmation.
+                manager.locked = Some(certificate);
+                // Ok to overwrite validation votes with confirmation votes at equal or
+                // higher round.
+                manager.pending = Some(vote);
+            }
+            _ => panic!("unexpected account manager"),
         }
     }
 }
@@ -128,8 +272,8 @@ impl AccountState {
     }
 
     /// Verify that the operation is valid and return the value to certify.
-    pub(crate) fn validate_operation(&self, request: Request) -> Result<Value, Error> {
-        let value = match &request.operation {
+    pub(crate) fn validate_operation(&self, request: &Request) -> Result<(), Error> {
+        match &request.operation {
             Operation::Transfer { amount, .. } => {
                 ensure!(*amount > Amount::zero(), Error::IncorrectTransferAmount);
                 ensure!(
@@ -138,7 +282,6 @@ impl AccountState {
                         current_balance: self.balance
                     }
                 );
-                Value::Confirm(request)
             }
             Operation::OpenAccount { new_id, .. } => {
                 let expected_id = request.account_id.make_child(request.sequence_number);
@@ -146,7 +289,6 @@ impl AccountState {
                     new_id == &expected_id,
                     Error::InvalidNewAccountId(new_id.clone())
                 );
-                Value::Confirm(request)
             }
             Operation::StartConsensusInstance {
                 new_id,
@@ -164,18 +306,15 @@ impl AccountState {
                     .into_iter()
                     .collect::<BTreeMap<AccountId, _>>();
                 ensure!(numbers.len() == accounts.len(), Error::InvalidRequestOrder);
-                Value::Confirm(request)
             }
             Operation::Skip | Operation::CloseAccount | Operation::ChangeOwner { .. } => {
                 // Nothing to check.
-                Value::Confirm(request)
             }
             Operation::LockInto { .. } => {
                 // Nothing to check.
-                Value::Lock(request)
             }
-        };
-        Ok(value)
+        }
+        Ok(())
     }
 
     /// Execute the sender's side of the operation.
