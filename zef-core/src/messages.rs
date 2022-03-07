@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{base_types::*, committee::Committee, ensure, error::Error};
+use super::{base_types::*, committee::Committee, ensure, error::Error, account::AccountManager};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 
@@ -202,10 +202,9 @@ pub struct AccountInfoQuery {
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct AccountInfoResponse {
     pub account_id: AccountId,
-    pub owner: Option<AccountOwner>,
+    pub manager: AccountManager,
     pub balance: Balance,
     pub next_sequence_number: SequenceNumber,
-    pub pending: Option<Vote>,
     pub count_received_certificates: usize,
     pub queried_certificate: Option<Certificate>,
     pub queried_received_certificates: Vec<Certificate>,
@@ -361,9 +360,9 @@ impl RequestOrder {
         }
     }
 
-    pub fn check(&self, authentication_method: &Option<AccountOwner>) -> Result<(), Error> {
+    pub fn check(&self, authentication_method: Option<&AccountOwner>) -> Result<(), Error> {
         ensure!(
-            authentication_method == &Some(self.owner),
+            authentication_method == Some(&self.owner),
             Error::InvalidOwner
         );
         self.signature.check(&self.value, self.owner)
