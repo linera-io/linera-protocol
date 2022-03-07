@@ -106,10 +106,10 @@ where
         account.apply_operation_as_sender(&request.operation, certificate.hash)?;
         // Advance to next sequence number.
         account.next_sequence_number.try_add_assign_one()?;
-        account.pending = None;
+        account.manager.reset();
         // Final touch on the sender's account.
         let info = account.make_account_info();
-        if account.owner.is_none() {
+        if !account.manager.is_active() {
             // Tentatively remove inactive account. (It might be created again as a
             // recipient, though. To solve this, we may implement additional cleanups in
             // the future.)
@@ -184,7 +184,7 @@ where
 
         let mut account = self.storage.read_active_account(&sender).await?;
         // Check authentication of the request.
-        order.check(&account.owner)?;
+        order.check(account.manager.owner())?;
         // Check the account is ready for this new request.
         let request = order.value.request;
         ensure!(
@@ -195,7 +195,7 @@ where
             account.next_sequence_number == request.sequence_number,
             Error::UnexpectedSequenceNumber
         );
-        if let Some(pending) = &account.pending {
+        if let Some(pending) = account.manager.pending() {
             ensure!(
                 matches!(&pending.value, Value::Confirm(r) | Value::Lock(r) if r == &request),
                 Error::PreviousRequestMustBeConfirmedFirst
@@ -206,7 +206,7 @@ where
         // Verify that the request is safe, and return the value of the vote.
         let value = account.validate_operation(request)?;
         let vote = Vote::new(value, &self.key_pair);
-        account.pending = Some(vote);
+        account.manager.set_pending(vote);
         let info = account.make_account_info();
         self.storage.write_account(account).await?;
         Ok(info)

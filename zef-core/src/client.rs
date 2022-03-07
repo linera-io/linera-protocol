@@ -446,18 +446,22 @@ where
                         let result = client.handle_request_order(order).await;
                         match result {
                             Ok(AccountInfoResponse {
-                                pending: Some(vote),
+                                manager,
                                 ..
                             }) => {
-                                my_ensure!(
-                                    vote.authority == name,
-                                    Error::ClientErrorWhileProcessingRequestOrder
-                                );
-                                vote.check(committee)?;
-                                return Ok(Some(vote));
+                                match manager.pending() {
+                                    Some(vote) => {
+                                        my_ensure!(
+                                            vote.authority == name,
+                                            Error::ClientErrorWhileProcessingRequestOrder
+                                        );
+                                        vote.check(committee)?;
+                                        return Ok(Some(vote.clone()));
+                                    }
+                                    None => return Err(Error::ClientErrorWhileProcessingRequestOrder),
+                                }
                             }
                             Err(err) => return Err(err),
-                            _ => return Err(Error::ClientErrorWhileProcessingRequestOrder),
                         }
                     }
                     Ok(None)

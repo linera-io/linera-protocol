@@ -16,16 +16,12 @@ AccountInfoResponse:
   STRUCT:
     - account_id:
         TYPENAME: AccountId
-    - owner:
-        OPTION:
-          TYPENAME: PublicKeyBytes
+    - manager:
+        TYPENAME: AccountManager
     - balance:
         TYPENAME: Balance
     - next_sequence_number:
         TYPENAME: SequenceNumber
-    - pending:
-        OPTION:
-          TYPENAME: Vote
     - count_received_certificates: U64
     - queried_certificate:
         OPTION:
@@ -33,6 +29,14 @@ AccountInfoResponse:
     - queried_received_certificates:
         SEQ:
           TYPENAME: Certificate
+AccountManager:
+  ENUM:
+    0:
+      None: UNIT
+    1:
+      Single:
+        NEWTYPE:
+          TYPENAME: SingleAccountManager
 Address:
   ENUM:
     0:
@@ -391,6 +395,13 @@ Signature:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 64
+SingleAccountManager:
+  STRUCT:
+    - owner:
+        TYPENAME: PublicKeyBytes
+    - pending:
+        OPTION:
+          TYPENAME: Vote
 UserData:
   NEWTYPESTRUCT:
     OPTION:
