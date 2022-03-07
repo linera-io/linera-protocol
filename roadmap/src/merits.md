@@ -3,7 +3,7 @@
 ## Expected Key Benefits
 
 * Linear scalability
-    - Validators can upscale/downscale to follow any thorough
+    - Validators can upscale/downscale to follow any throughput
 
 * High performance
     - Low latency
@@ -16,7 +16,9 @@
 * Usability
     - Predictable fees
     - Clients can query validators directly
-    - Fast and cheap order book enables familiar trading activity (e.g. limit orders)
+    - Fast and cheap protocols enables familiar trading activity
+
+NOTE: Some protocols (e.g. tradition order book based on sequential execution) may require tradeoffs.
 
 ## Challenges
 
@@ -32,6 +34,8 @@
 * Technical novelty / complexity
 
     - This requires great documentation, runbooks, and high-quality clients.
+
+* Competition on yield?
 
 ### For user adoption
 
@@ -61,6 +65,6 @@
 
 ### For market-maker adoption
 
-* Requires a more active role (and/or an intermediate) compared to being a liquidity provider in an AMM
+* Competition on yield?
 
-* Fierce competition on yield?
+* Requires a more active role (and/or an intermediate) compared to being a liquidity provider in an AMM

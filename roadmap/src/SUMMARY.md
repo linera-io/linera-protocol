@@ -10,12 +10,16 @@
 
     - [Auditability](./milestones/auditability.md)
 
-    - [Extensibility](./milestones/extensibility.md)
+    - [Multi-Owner Accounts](./milestones/multi_owner.md)
 
-    - [Multi-owner Account](./milestones/multi_owner.md)
-
-    - [Decentralized Trading](./milestones/order_book.md)
+    - [Mempool-Driven Accounts](./milestones/mempools.md)
 
     - [Reconfiguration](./milestones/reconfiguration.md)
 
-    - [Incentives](./milestones/incentives.md)
+    - [Extensibility](./milestones/extensibility.md)
+
+    - [Proof of Stake](./milestones/proof_of_stake.md)
+
+    - [User Fees](./milestones/fees.md)
+
+    - [Decentralized Trading](./milestones/order_book.md)
