@@ -162,7 +162,7 @@ impl AccountsConfig {
 
     pub fn update_for_received_request(&mut self, certificate: Certificate) {
         let request = match &certificate.value {
-            Value::Confirm(r) => r,
+            Value::Confirmed(r) => r,
             _ => return,
         };
         if let Operation::Transfer {

@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{base_types::*, committee::Committee, ensure, error::Error, account::AccountManager};
+use super::{account::AccountManager, base_types::*, committee::Committee, ensure, error::Error};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 
@@ -68,8 +68,12 @@ pub struct Request {
 /// The content of a request to be signed in a RequestOrder.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct RequestValue {
+    /// The account request
     pub request: Request,
+    /// Optional field limiting the scope of the request to a particular entity.
     pub limited_to: Option<AuthorityName>,
+    /// Optional round in the case of a multi-owner account.
+    pub round: Option<SequenceNumber>,
 }
 
 /// An authenticated request plus additional certified assets.
@@ -100,10 +104,15 @@ pub struct ConsensusProposal {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Value {
     // -- Account management --
+    /// The request was validated but does not support confirmation.
+    Locked(Request),
     /// The request was validated but confirmation will require additional steps.
-    Lock(Request),
-    /// The request is ready to be confirmed (i.e. executed).
-    Confirm(Request),
+    Validated {
+        request: Request,
+        round: SequenceNumber,
+    },
+    /// The request is validated and final (i.e. ready to be executed).
+    Confirmed(Request),
     // -- Consensus --
     /// The proposal was validated but confirmation will require additional steps.
     PreCommit {
@@ -280,21 +289,21 @@ impl Operation {
 impl Value {
     pub fn confirm_account_id(&self) -> Option<&AccountId> {
         match self {
-            Value::Confirm(r) => Some(&r.account_id),
+            Value::Confirmed(r) => Some(&r.account_id),
             _ => None,
         }
     }
 
     pub fn confirm_sequence_number(&self) -> Option<SequenceNumber> {
         match self {
-            Value::Confirm(r) => Some(r.sequence_number),
+            Value::Confirmed(r) => Some(r.sequence_number),
             _ => None,
         }
     }
 
     pub fn confirm_request(&self) -> Option<&Request> {
         match self {
-            Value::Confirm(r) => Some(r),
+            Value::Confirmed(r) => Some(r),
             _ => None,
         }
     }
@@ -302,21 +311,21 @@ impl Value {
     #[cfg(test)]
     pub fn confirm_request_mut(&mut self) -> Option<&mut Request> {
         match self {
-            Value::Confirm(r) => Some(r),
+            Value::Confirmed(r) => Some(r),
             _ => None,
         }
     }
 
     pub fn confirm_key(&self) -> Option<(AccountId, SequenceNumber)> {
         match self {
-            Value::Confirm(r) => Some((r.account_id.clone(), r.sequence_number)),
+            Value::Confirmed(r) => Some((r.account_id.clone(), r.sequence_number)),
             _ => None,
         }
     }
 
     pub fn lock_account_id(&self) -> Option<&AccountId> {
         match self {
-            Value::Lock(r) => Some(&r.account_id),
+            Value::Locked(r) => Some(&r.account_id),
             _ => None,
         }
     }
@@ -346,6 +355,7 @@ impl From<Request> for RequestValue {
         Self {
             request,
             limited_to: None,
+            round: None,
         }
     }
 }
@@ -360,11 +370,8 @@ impl RequestOrder {
         }
     }
 
-    pub fn check(&self, authentication_method: Option<&AccountOwner>) -> Result<(), Error> {
-        ensure!(
-            authentication_method == Some(&self.owner),
-            Error::InvalidOwner
-        );
+    pub fn check(&self, manager: &AccountManager) -> Result<(), Error> {
+        ensure!(manager.has_owner(&self.owner), Error::InvalidOwner);
         self.signature.check(&self.value, self.owner)
     }
 }

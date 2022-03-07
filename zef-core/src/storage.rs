@@ -26,7 +26,10 @@ use crate::base_types::{dbg_account, dbg_addr};
 pub trait StorageClient: DynClone + Send + Sync {
     async fn read_active_account(&mut self, id: &AccountId) -> Result<AccountState, Error> {
         let account = self.read_account_or_default(id).await?;
-        ensure!(account.manager.is_active(), Error::InactiveAccount(id.clone()));
+        ensure!(
+            account.manager.is_active(),
+            Error::InactiveAccount(id.clone())
+        );
         Ok(account)
     }
 
