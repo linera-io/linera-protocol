@@ -35,6 +35,8 @@ pub enum Operation {
     CloseAccount,
     /// Change the authentication key of the account.
     ChangeOwner { new_owner: AccountOwner },
+    /// Change the authentication key of the account.
+    ChangeMultipleOwners { new_owners: Vec<AccountOwner> },
 }
 
 /// A request containing an account operation.

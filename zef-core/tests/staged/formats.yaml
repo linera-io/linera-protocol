@@ -215,6 +215,12 @@ Operation:
         STRUCT:
           - new_owner:
               TYPENAME: PublicKeyBytes
+    4:
+      ChangeMultipleOwners:
+        STRUCT:
+          - new_owners:
+              SEQ:
+                TYPENAME: PublicKeyBytes
 PublicKeyBytes:
   NEWTYPESTRUCT:
     TUPLEARRAY:
