@@ -115,20 +115,22 @@ impl AccountManager {
     pub fn check_pending_request(
         &self,
         new_request: &Request,
-        new_round: Option<SequenceNumber>,
+        new_round: Option<RoundNumber>,
     ) -> Result<bool, Error> {
         match self {
-            AccountManager::Single(manager) => match &manager.pending {
-                Some(pending) => {
-                    ensure!(
-                        matches!(&pending.value, Value::Confirmed(request) if request == new_request),
-                        Error::PreviousRequestMustBeConfirmedFirst
-                    );
-                    ensure!(new_round.is_none(), Error::InvalidRequestOrder);
-                    Ok(true)
+            AccountManager::Single(manager) => {
+                ensure!(new_round.is_none(), Error::InvalidRequestOrder);
+                match &manager.pending {
+                    Some(pending) => {
+                        ensure!(
+                            matches!(&pending.value, Value::Confirmed(request) if request == new_request),
+                            Error::PreviousRequestMustBeConfirmedFirst
+                        );
+                        Ok(true)
+                    }
+                    None => Ok(false),
                 }
-                None => Ok(false),
-            },
+            }
             AccountManager::Multi(manager) => {
                 let new_round = new_round.ok_or(Error::InvalidRequestOrder)?;
                 if let Some(pending) = &manager.pending {
@@ -150,7 +152,10 @@ impl AccountManager {
                 }
                 if let Some(locked) = &manager.locked {
                     ensure!(
-                        matches!(&locked.value, Value::Validated { request, round } if *round < new_round && request == new_request),
+                        matches!(
+                            &locked.value,
+                            Value::Validated { request, round } if *round < new_round && request == new_request
+                        ),
                         Error::InvalidRequestOrder
                     );
                 }
@@ -163,7 +168,7 @@ impl AccountManager {
     pub fn create_vote(
         &mut self,
         request: Request,
-        round: Option<SequenceNumber>,
+        round: Option<RoundNumber>,
         key_pair: &KeyPair,
     ) {
         match self {
@@ -186,7 +191,7 @@ impl AccountManager {
     pub fn check_validated_request(
         &self,
         new_request: &Request,
-        new_round: SequenceNumber,
+        new_round: RoundNumber,
     ) -> Result<bool, Error> {
         match self {
             AccountManager::Multi(manager) => {
@@ -207,7 +212,10 @@ impl AccountManager {
                 }
                 if let Some(locked) = &manager.locked {
                     ensure!(
-                        matches!(&locked.value, Value::Validated { round, .. } if *round <= new_round),
+                        matches!(
+                            &locked.value,
+                            Value::Validated { round, .. } if *round <= new_round
+                        ),
                         Error::InvalidConfirmationOrder
                     );
                 }

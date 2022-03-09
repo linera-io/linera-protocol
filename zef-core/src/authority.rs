@@ -129,7 +129,7 @@ where
     async fn process_validated_request(
         &mut self,
         request: Request,
-        round: SequenceNumber,
+        round: RoundNumber,
         certificate: Certificate,
     ) -> Result<AccountInfoResponse, Error> {
         // assert_eq!(
@@ -244,7 +244,7 @@ where
         // Process the order.
         match &certificate.value {
             Value::Confirmed(request) => {
-                // Execute the final request.
+                // Execute the finalized request.
                 self.process_confirmed_request(request.clone(), certificate)
                     .await
             }

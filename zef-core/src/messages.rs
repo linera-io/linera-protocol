@@ -56,7 +56,7 @@ pub struct RequestValue {
     /// Optional field limiting the scope of the request to a particular entity.
     pub limited_to: Option<AuthorityName>,
     /// Optional round in the case of a multi-owner account.
-    pub round: Option<SequenceNumber>,
+    pub round: Option<RoundNumber>,
 }
 
 /// An authenticated request plus additional certified assets.
@@ -68,28 +68,13 @@ pub struct RequestOrder {
     pub signature: Signature,
 }
 
-/// Functionality-dependent consensus decision.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
-pub enum ConsensusDecision {
-    Abort,
-    Confirm,
-}
-
-/// The proposal of a particular decision during consensus.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct ConsensusProposal {
-    pub instance_id: AccountId,
-    pub round: SequenceNumber,
-    pub decision: ConsensusDecision,
-}
-
 /// A statement to be certified by the authorities.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Value {
     /// The request was validated but confirmation will require additional steps.
     Validated {
         request: Request,
-        round: SequenceNumber,
+        round: RoundNumber,
     },
     /// The request is validated and final (i.e. ready to be executed).
     Confirmed(Request),
@@ -414,4 +399,3 @@ impl ConfirmationOrder {
 
 impl BcsSignable for RequestValue {}
 impl BcsSignable for Value {}
-impl BcsSignable for ConsensusProposal {}
