@@ -56,6 +56,7 @@ pub struct RequestValue {
     /// The account request
     pub request: Request,
     /// Optional field limiting the scope of the request to a particular entity.
+    // TODO: There could also be Unix timestamp as TTL
     pub limited_to: Option<AuthorityName>,
     /// Optional round in the case of a multi-owner account.
     pub round: Option<RoundNumber>,
@@ -79,7 +80,7 @@ pub enum Value {
         round: RoundNumber,
     },
     /// The request is validated and final (i.e. ready to be executed).
-    Confirmed(Request),
+    Confirmed { request: Request },
 }
 
 /// A vote on a statement from an authority.
@@ -103,13 +104,6 @@ pub struct Certificate {
     pub hash: HashValue,
     /// Signatures on the value.
     pub signatures: Vec<(AuthorityName, Signature)>,
-}
-
-/// Order to process a confirmed request.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
-pub struct ConfirmationOrder {
-    pub certificate: Certificate,
 }
 
 /// Message to obtain information on an account.
@@ -154,7 +148,7 @@ impl CrossShardRequest {
         match self {
             UpdateRecipient { certificate } => certificate
                 .value
-                .confirm_request()
+                .confirmed_request()
                 .unwrap()
                 .operation
                 .recipient()
@@ -190,38 +184,47 @@ impl Operation {
 }
 
 impl Value {
-    pub fn confirm_account_id(&self) -> Option<&AccountId> {
+    pub fn confirmed_account_id(&self) -> Option<&AccountId> {
         match self {
-            Value::Confirmed(r) => Some(&r.account_id),
+            Value::Confirmed { request } => Some(&request.account_id),
             _ => None,
         }
     }
 
-    pub fn confirm_sequence_number(&self) -> Option<SequenceNumber> {
+    pub fn confirmed_sequence_number(&self) -> Option<SequenceNumber> {
         match self {
-            Value::Confirmed(r) => Some(r.sequence_number),
+            Value::Confirmed { request } => Some(request.sequence_number),
             _ => None,
         }
     }
 
-    pub fn confirm_request(&self) -> Option<&Request> {
+    pub fn confirmed_request(&self) -> Option<&Request> {
         match self {
-            Value::Confirmed(r) => Some(r),
+            Value::Confirmed { request } => Some(request),
+            _ => None,
+        }
+    }
+
+    pub fn validated_request(&self) -> Option<&Request> {
+        match self {
+            Value::Validated { request, .. } => Some(request),
             _ => None,
         }
     }
 
     #[cfg(test)]
-    pub fn confirm_request_mut(&mut self) -> Option<&mut Request> {
+    pub fn confirmed_request_mut(&mut self) -> Option<&mut Request> {
         match self {
-            Value::Confirmed(r) => Some(r),
+            Value::Confirmed { request } => Some(request),
             _ => None,
         }
     }
 
-    pub fn confirm_key(&self) -> Option<(AccountId, SequenceNumber)> {
+    pub fn confirmed_key(&self) -> Option<(AccountId, SequenceNumber)> {
         match self {
-            Value::Confirmed(r) => Some((r.account_id.clone(), r.sequence_number)),
+            Value::Confirmed { request } => {
+                Some((request.account_id.clone(), request.sequence_number))
+            }
             _ => None,
         }
     }
@@ -390,12 +393,6 @@ impl Certificate {
         // All what is left is checking signatures!
         Signature::verify_batch(&self.value, &self.signatures)?;
         Ok(&self.value)
-    }
-}
-
-impl ConfirmationOrder {
-    pub fn new(certificate: Certificate) -> Self {
-        Self { certificate }
     }
 }
 

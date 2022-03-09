@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 pub enum SerializedMessage {
     // Inbound
     RequestOrder(Box<RequestOrder>),
-    ConfirmationOrder(Box<ConfirmationOrder>),
+    Certificate(Box<Certificate>),
     AccountInfoQuery(Box<AccountInfoQuery>),
     // Outbound
     Vote(Box<Vote>),

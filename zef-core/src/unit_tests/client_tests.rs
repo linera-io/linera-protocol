@@ -4,7 +4,7 @@
 use super::*;
 use crate::{
     account::AccountState,
-    authority::{fully_handle_confirmation_order, Authority, WorkerState},
+    authority::{fully_handle_certificate, Authority, WorkerState},
     base_types::Amount,
     storage::{InMemoryStoreClient, StorageClient},
 };
@@ -33,12 +33,12 @@ impl AuthorityClient for LocalAuthorityClient {
             .await
     }
 
-    async fn handle_confirmation_order(
+    async fn handle_certificate(
         &mut self,
-        order: ConfirmationOrder,
+        certificate: Certificate,
     ) -> Result<AccountInfoResponse, Error> {
         let info =
-            fully_handle_confirmation_order(self.0.clone().lock().await.deref_mut(), order).await?;
+            fully_handle_certificate(self.0.clone().lock().await.deref_mut(), certificate).await?;
         Ok(info)
     }
 
@@ -239,7 +239,7 @@ async fn test_initiating_valid_transfer() {
         .await
         .unwrap();
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
-    assert!(matches!(sender.pending_request, PendingRequest::None));
+    assert!(matches!(sender.pending_request, None));
     assert_eq!(
         sender.query_strong_majority_balance().await,
         Balance::from(1)
@@ -261,7 +261,7 @@ async fn test_rotate_key_pair() {
     let new_pubk = new_key_pair.public();
     let certificate = sender.rotate_key_pair(new_key_pair).await.unwrap();
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
-    assert!(matches!(sender.pending_request, PendingRequest::None));
+    assert!(matches!(sender.pending_request, None));
     assert_eq!(sender.owner().unwrap(), new_pubk);
     assert_eq!(
         sender
@@ -293,7 +293,7 @@ async fn test_transfer_ownership() {
     let new_pubk = new_key_pair.public();
     let certificate = sender.transfer_ownership(new_pubk).await.unwrap();
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
-    assert!(matches!(sender.pending_request, PendingRequest::None));
+    assert!(matches!(sender.pending_request, None));
     assert!(sender.key_pair.is_none());
     assert_eq!(
         sender
@@ -318,6 +318,61 @@ async fn test_transfer_ownership() {
 }
 
 #[tokio::test]
+async fn test_share_ownership() {
+    let mut sender = init_local_client_state(vec![2, 4, 4, 4]).await;
+    sender.balance = Balance::from(4);
+    let new_key_pair = KeyPair::generate();
+    let new_pubk = new_key_pair.public();
+    let certificate = sender.share_ownership(new_pubk).await.unwrap();
+    assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
+    assert!(matches!(sender.pending_request, None));
+    assert!(sender.key_pair.is_some());
+    assert_eq!(
+        sender
+            .query_certificate(sender.account_id.clone(), SequenceNumber::from(0))
+            .await
+            .unwrap(),
+        certificate
+    );
+    assert_eq!(
+        sender.query_strong_majority_balance().await,
+        Balance::from(4)
+    );
+    assert_eq!(
+        sender.synchronize_balance().await.unwrap(),
+        Balance::from(4)
+    );
+    // Can still use the account wuth the old.
+    assert!(sender
+        .transfer_to_account(Amount::from(3), dbg_account(2), UserData::default())
+        .await
+        .is_ok());
+    // Make a client to try the new key.
+    let mut client = AccountClientState::new(
+        sender.account_id,
+        Some(new_key_pair),
+        sender.committee.clone(),
+        sender.authority_clients,
+        SequenceNumber::from(2), // Latest sequence number must be given
+        Vec::new(),
+        Vec::new(),
+        Balance::from(4), // Genesis balance must be correct
+    );
+    assert_eq!(
+        client.query_strong_majority_balance().await,
+        Balance::from(1)
+    );
+    assert_eq!(
+        client.synchronize_balance().await.unwrap(),
+        Balance::from(1)
+    );
+    client
+        .transfer_to_account(Amount::from(1), dbg_account(3), UserData::default())
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
 async fn test_open_account() {
     let mut sender = init_local_client_state(vec![2, 4, 4, 4]).await;
     sender.balance = Balance::from(4);
@@ -332,7 +387,7 @@ async fn test_open_account() {
     // Open the new account.
     let certificate = sender.open_account(new_pubk).await.unwrap();
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(2));
-    assert!(matches!(sender.pending_request, PendingRequest::None));
+    assert!(matches!(sender.pending_request, None));
     assert!(sender.key_pair.is_some());
     assert_eq!(
         sender
@@ -341,11 +396,11 @@ async fn test_open_account() {
             .unwrap(),
         certificate
     );
-    assert!(matches!(&certificate.value, Value::Confirmed(
-        Request {
+    assert!(matches!(&certificate.value, Value::Confirmed{
+        request: Request {
             operation: Operation::OpenAccount { new_id:id, .. },
             ..
-        }) if &new_id == id
+        }} if &new_id == id
     ));
     // Make a client to try the new account.
     let mut client = AccountClientState::new(
@@ -379,13 +434,15 @@ async fn test_close_account() {
     let certificate = sender.close_account().await.unwrap();
     assert!(matches!(
         &certificate.value,
-        Value::Confirmed(Request {
-            operation: Operation::CloseAccount,
-            ..
-        })
+        Value::Confirmed {
+            request: Request {
+                operation: Operation::CloseAccount,
+                ..
+            }
+        }
     ));
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
-    assert!(matches!(sender.pending_request, PendingRequest::None));
+    assert!(matches!(sender.pending_request, None));
     assert!(sender.key_pair.is_none());
     // Cannot query the certificate.
     assert!(sender
@@ -412,7 +469,7 @@ async fn test_initiating_valid_transfer_despite_bad_authority() {
         .await
         .unwrap();
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
-    assert!(matches!(sender.pending_request, PendingRequest::None));
+    assert!(matches!(sender.pending_request, None));
     assert_eq!(
         sender.query_strong_majority_balance().await,
         Balance::from(1)
@@ -436,7 +493,7 @@ async fn test_initiating_transfer_low_funds() {
         .is_err());
     // Trying to overspend does not block an account.
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(0));
-    assert!(matches!(sender.pending_request, PendingRequest::None));
+    assert!(matches!(sender.pending_request, None));
     assert_eq!(
         sender.query_strong_majority_balance().await,
         Balance::from(2)
@@ -476,7 +533,7 @@ async fn test_bidirectional_transfer() {
         .unwrap();
 
     assert_eq!(client1.next_sequence_number, SequenceNumber::from(1));
-    assert!(matches!(client1.pending_request, PendingRequest::None));
+    assert!(matches!(client1.pending_request, None));
     assert_eq!(
         client1.query_strong_majority_balance().await,
         Balance::from(0)
@@ -521,7 +578,7 @@ async fn test_bidirectional_transfer() {
         .await
         .unwrap();
     assert_eq!(client2.next_sequence_number, SequenceNumber::from(1));
-    assert!(matches!(client2.pending_request, PendingRequest::None));
+    assert!(matches!(client2.pending_request, None));
     assert_eq!(
         client2.query_strong_majority_balance().await,
         Balance::from(2)
@@ -569,7 +626,7 @@ async fn test_receiving_unconfirmed_transfer() {
     // Transfer was executed locally, creating negative balance.
     assert_eq!(client1.balance, Balance::from(-2));
     assert_eq!(client1.next_sequence_number, SequenceNumber::from(1));
-    assert!(matches!(client1.pending_request, PendingRequest::None));
+    assert!(matches!(client1.pending_request, None));
     // ..but not confirmed remotely, hence an unchanged balance and sequence number.
     assert_eq!(
         client1.query_strong_majority_balance().await,
@@ -582,7 +639,7 @@ async fn test_receiving_unconfirmed_transfer() {
         SequenceNumber::from(0)
     );
     // Let the receiver confirm in last resort.
-    client2.receive_confirmation(certificate).await.unwrap();
+    client2.receive_certificate(certificate).await.unwrap();
     assert_eq!(
         client2.query_strong_majority_balance().await,
         Balance::from(2)
@@ -655,10 +712,10 @@ async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
     // Requests were executed locally, possibly creating negative balances.
     assert_eq!(client0.balance, Balance::from(-2));
     assert_eq!(client0.next_sequence_number, SequenceNumber::from(2));
-    assert!(matches!(client0.pending_request, PendingRequest::None));
+    assert!(matches!(client0.pending_request, None));
     assert_eq!(client1.balance, Balance::from(-2));
     assert_eq!(client1.next_sequence_number, SequenceNumber::from(1));
-    assert!(matches!(client1.pending_request, PendingRequest::None));
+    assert!(matches!(client1.pending_request, None));
     // Last one was not confirmed remotely, hence an unchanged (remote) balance and sequence number.
     assert_eq!(
         client1.query_strong_majority_balance().await,
@@ -671,7 +728,7 @@ async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
         SequenceNumber::from(0)
     );
     // Let the receiver confirm in last resort.
-    client2.receive_confirmation(certificate).await.unwrap();
+    client2.receive_certificate(certificate).await.unwrap();
     assert_eq!(
         client2.query_strong_majority_balance().await,
         Balance::from(2)

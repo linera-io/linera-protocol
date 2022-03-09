@@ -109,7 +109,7 @@ impl ClientContext {
         key_pair: Option<KeyPair>,
     ) -> Result<(), failure::Error> {
         let recipient = match &certificate.value {
-            Value::Confirmed(request) => request.operation.recipient().unwrap().clone(),
+            Value::Confirmed { request } => request.operation.recipient().unwrap().clone(),
             _ => failure::bail!("unexpected value in certificate"),
         };
         let committee = self.committee_config.clone().into_committee();
@@ -125,7 +125,7 @@ impl ClientContext {
             account.received_certificates.clone(),
             account.balance,
         );
-        client.receive_confirmation(certificate).await?;
+        client.receive_certificate(certificate).await?;
         self.update_account_from_state(&client);
         Ok(())
     }
@@ -191,16 +191,19 @@ impl ClientContext {
         );
         let mut serialized_certificates = Vec::new();
         for order in orders {
-            let mut certificate =
-                Certificate::new(Value::Confirmed(order.value.request.clone()), Vec::new());
+            let mut certificate = Certificate::new(
+                Value::Confirmed {
+                    request: order.value.request.clone(),
+                },
+                Vec::new(),
+            );
             for i in 0..committee.quorum_threshold() {
                 let (pubx, secx) = keys.get(i).unwrap();
                 let sig = Signature::new(&certificate.value, secx);
                 certificate.signatures.push((*pubx, sig));
             }
-            let serialized_certificate = serialize_message(&SerializedMessage::ConfirmationOrder(
-                Box::new(ConfirmationOrder { certificate }),
-            ));
+            let serialized_certificate =
+                serialize_message(&SerializedMessage::Certificate(Box::new(certificate)));
             serialized_certificates.push((
                 order.value.request.account_id,
                 serialized_certificate.into(),
@@ -219,7 +222,7 @@ impl ClientContext {
             // We aggregate votes indexed by sender.
             let account_id = vote
                 .value
-                .confirm_account_id()
+                .confirmed_account_id()
                 .expect("this should be a commit")
                 .clone();
             if done_senders.contains(&account_id) {
@@ -236,9 +239,8 @@ impl ClientContext {
             match aggregator.append(vote.authority, vote.signature) {
                 Ok(Some(certificate)) => {
                     debug!("Found certificate: {:?}", certificate);
-                    let buf = serialize_message(&SerializedMessage::ConfirmationOrder(Box::new(
-                        ConfirmationOrder { certificate },
-                    )));
+                    let buf =
+                        serialize_message(&SerializedMessage::Certificate(Box::new(certificate)));
                     certificates.push((account_id.clone(), buf.into()));
                     done_senders.insert(account_id);
                 }
@@ -293,9 +295,9 @@ impl ClientContext {
 
     fn mass_update_recipients(&mut self, certificates: Vec<(AccountId, Bytes)>) {
         for (_sender, buf) in certificates {
-            if let Ok(SerializedMessage::ConfirmationOrder(order)) = deserialize_message(&buf[..]) {
+            if let Ok(SerializedMessage::Certificate(certificate)) = deserialize_message(&buf[..]) {
                 self.accounts_config
-                    .update_for_received_request(order.certificate);
+                    .update_for_received_request(*certificate);
             }
         }
     }
@@ -335,7 +337,7 @@ fn deserialize_response(response: &[u8]) -> Option<AccountInfoResponse> {
 
 #[derive(StructOpt)]
 #[structopt(
-    name = "FastPay Client",
+    name = "Zef Client",
     about = "A Byzantine-fault tolerant sidechain with low-latency finality and high throughput"
 )]
 struct ClientOptions {
@@ -495,7 +497,7 @@ async fn main() {
                 "{}",
                 certificate
                     .value
-                    .confirm_request()
+                    .confirmed_request()
                     .unwrap()
                     .operation
                     .recipient()

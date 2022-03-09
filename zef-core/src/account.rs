@@ -131,7 +131,7 @@ impl AccountManager {
                 match &manager.pending {
                     Some(pending) => {
                         ensure!(
-                            matches!(&pending.value, Value::Confirmed(request) if request == new_request),
+                            matches!(&pending.value, Value::Confirmed {request} if request == new_request),
                             Error::PreviousRequestMustBeConfirmedFirst
                         );
                         Ok(true)
@@ -149,7 +149,7 @@ impl AccountManager {
                             return Ok(true);
                         }
                         Value::Validated { round, .. } if *round < new_round => (),
-                        Value::Confirmed(_) => {
+                        Value::Confirmed { .. } => {
                             // Verification continues below.
                             assert!(manager.locked.is_some());
                         }
@@ -181,7 +181,7 @@ impl AccountManager {
     ) {
         match self {
             AccountManager::Single(manager) => {
-                let value = Value::Confirmed(request);
+                let value = Value::Confirmed { request };
                 let vote = Vote::new(value, key_pair);
                 manager.pending = Some(vote);
             }
@@ -205,11 +205,11 @@ impl AccountManager {
             AccountManager::Multi(manager) => {
                 if let Some(pending) = &manager.pending {
                     match &pending.value {
-                        Value::Confirmed(request) if request == new_request => {
+                        Value::Confirmed { request } if request == new_request => {
                             return Ok(true);
                         }
                         Value::Validated { round, .. } if *round <= new_round => (),
-                        Value::Confirmed(_) => {
+                        Value::Confirmed { .. } => {
                             // Verification continues below.
                             assert!(manager.locked.is_some());
                         }
@@ -241,7 +241,7 @@ impl AccountManager {
     ) {
         match self {
             AccountManager::Multi(manager) => {
-                let value = Value::Confirmed(request);
+                let value = Value::Confirmed { request };
                 let vote = Vote::new(value, key_pair);
                 // Record confirmation.
                 manager.locked = Some(certificate);

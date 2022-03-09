@@ -4,7 +4,7 @@
 
 use crate::{
     account::{AccountManager, AccountState},
-    authority::{fully_handle_confirmation_order, Authority, WorkerState},
+    authority::{fully_handle_certificate, Authority, WorkerState},
     base_types::*,
     committee::Committee,
     messages::*,
@@ -200,7 +200,7 @@ async fn test_handle_request_order_replay() {
 }
 
 #[tokio::test]
-async fn test_handle_confirmation_order_unknown_sender() {
+async fn test_handle_certificate_unknown_sender() {
     let sender_key_pair = KeyPair::generate();
     let mut state =
         init_state_with_accounts(vec![(dbg_account(2), dbg_addr(2), Balance::from(0))]).await;
@@ -211,15 +211,13 @@ async fn test_handle_confirmation_order_unknown_sender() {
         Amount::from(5),
         &state,
     );
-    assert!(
-        fully_handle_confirmation_order(&mut state, ConfirmationOrder::new(certificate))
-            .await
-            .is_err()
-    );
+    assert!(fully_handle_certificate(&mut state, certificate)
+        .await
+        .is_err());
 }
 
 #[tokio::test]
-async fn test_handle_confirmation_order_bad_sequence_number() {
+async fn test_handle_certificate_bad_sequence_number() {
     let sender_key_pair = KeyPair::generate();
     let mut state = init_state_with_accounts(vec![
         (dbg_account(1), sender_key_pair.public(), Balance::from(5)),
@@ -234,22 +232,17 @@ async fn test_handle_confirmation_order_bad_sequence_number() {
         &state,
     );
     // Replays are ignored.
-    assert!(fully_handle_confirmation_order(
-        &mut state,
-        ConfirmationOrder::new(certificate.clone())
-    )
-    .await
-    .is_ok());
-    assert!(
-        fully_handle_confirmation_order(&mut state, ConfirmationOrder::new(certificate))
-            .await
-            .is_ok()
-    );
+    assert!(fully_handle_certificate(&mut state, certificate.clone())
+        .await
+        .is_ok());
+    assert!(fully_handle_certificate(&mut state, certificate)
+        .await
+        .is_ok());
     // TODO: test the case of a sequence number in the future (aka lagging authority)
 }
 
 #[tokio::test]
-async fn test_handle_confirmation_order_exceed_balance() {
+async fn test_handle_certificate_exceed_balance() {
     let sender_key_pair = KeyPair::generate();
     let mut state = init_state_with_accounts(vec![
         (dbg_account(1), sender_key_pair.public(), Balance::from(5)),
@@ -264,11 +257,9 @@ async fn test_handle_confirmation_order_exceed_balance() {
         Amount::from(1000),
         &state,
     );
-    assert!(
-        fully_handle_confirmation_order(&mut state, ConfirmationOrder::new(certificate))
-            .await
-            .is_ok()
-    );
+    assert!(fully_handle_certificate(&mut state, certificate)
+        .await
+        .is_ok());
     let sender_account = state
         .storage
         .read_active_account(&dbg_account(1))
@@ -285,7 +276,7 @@ async fn test_handle_confirmation_order_exceed_balance() {
 }
 
 #[tokio::test]
-async fn test_handle_confirmation_order_receiver_balance_overflow() {
+async fn test_handle_certificate_receiver_balance_overflow() {
     let sender_key_pair = KeyPair::generate();
     let mut state = init_state_with_accounts(vec![
         (dbg_account(1), sender_key_pair.public(), Balance::from(1)),
@@ -300,11 +291,9 @@ async fn test_handle_confirmation_order_receiver_balance_overflow() {
         Amount::from(1),
         &state,
     );
-    assert!(
-        fully_handle_confirmation_order(&mut state, ConfirmationOrder::new(certificate))
-            .await
-            .is_ok()
-    );
+    assert!(fully_handle_certificate(&mut state, certificate)
+        .await
+        .is_ok());
     let new_sender_account = state
         .storage
         .read_active_account(&dbg_account(1))
@@ -325,7 +314,7 @@ async fn test_handle_confirmation_order_receiver_balance_overflow() {
 }
 
 #[tokio::test]
-async fn test_handle_confirmation_order_receiver_equal_sender() {
+async fn test_handle_certificate_receiver_equal_sender() {
     let key_pair = KeyPair::generate();
     let name = key_pair.public();
     let mut state = init_state_with_account(dbg_account(1), name, Balance::from(1)).await;
@@ -337,11 +326,9 @@ async fn test_handle_confirmation_order_receiver_equal_sender() {
         Amount::from(10),
         &state,
     );
-    assert!(
-        fully_handle_confirmation_order(&mut state, ConfirmationOrder::new(certificate))
-            .await
-            .is_ok()
-    );
+    assert!(fully_handle_certificate(&mut state, certificate)
+        .await
+        .is_ok());
     let account = state
         .storage
         .read_active_account(&dbg_account(1))
@@ -366,7 +353,7 @@ async fn test_update_recipient_account() {
     );
     let operation = certificate
         .value
-        .confirm_request()
+        .confirmed_request()
         .unwrap()
         .operation
         .clone();
@@ -386,7 +373,7 @@ async fn test_update_recipient_account() {
 }
 
 #[tokio::test]
-async fn test_handle_confirmation_order_to_active_recipient() {
+async fn test_handle_certificate_to_active_recipient() {
     let sender_key_pair = KeyPair::generate();
     let mut state = init_state_with_accounts(vec![
         (dbg_account(1), sender_key_pair.public(), Balance::from(5)),
@@ -401,10 +388,9 @@ async fn test_handle_confirmation_order_to_active_recipient() {
         &state,
     );
 
-    let info =
-        fully_handle_confirmation_order(&mut state, ConfirmationOrder::new(certificate.clone()))
-            .await
-            .unwrap();
+    let info = fully_handle_certificate(&mut state, certificate.clone())
+        .await
+        .unwrap();
     assert_eq!(dbg_account(1), info.account_id);
     assert_eq!(Balance::from(0), info.balance);
     assert_eq!(SequenceNumber::from(1), info.next_sequence_number);
@@ -439,7 +425,7 @@ async fn test_handle_confirmation_order_to_active_recipient() {
     assert_eq!(
         response.queried_received_certificates[0]
             .value
-            .confirm_request()
+            .confirmed_request()
             .unwrap()
             .amount()
             .unwrap(),
@@ -448,7 +434,7 @@ async fn test_handle_confirmation_order_to_active_recipient() {
 }
 
 #[tokio::test]
-async fn test_handle_confirmation_order_to_inactive_recipient() {
+async fn test_handle_certificate_to_inactive_recipient() {
     let sender_key_pair = KeyPair::generate();
     let mut state = init_state_with_accounts(vec![(
         dbg_account(1),
@@ -464,10 +450,9 @@ async fn test_handle_confirmation_order_to_inactive_recipient() {
         &state,
     );
 
-    let info =
-        fully_handle_confirmation_order(&mut state, ConfirmationOrder::new(certificate.clone()))
-            .await
-            .unwrap();
+    let info = fully_handle_certificate(&mut state, certificate.clone())
+        .await
+        .unwrap();
     assert_eq!(dbg_account(1), info.account_id);
     assert_eq!(Balance::from(0), info.balance);
     assert_eq!(SequenceNumber::from(1), info.next_sequence_number);
@@ -582,6 +567,6 @@ fn make_transfer_certificate(
     let request = make_transfer_request_order(account_id, key_pair, recipient, amount)
         .value
         .request;
-    let value = Value::Confirmed(request);
+    let value = Value::Confirmed { request };
     make_certificate(state, value)
 }

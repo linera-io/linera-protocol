@@ -223,8 +223,8 @@ where
                                     Box::new(info),
                                 )))
                             }),
-                        SerializedMessage::ConfirmationOrder(message) => {
-                            match self.server.state.handle_confirmation_order(*message).await {
+                        SerializedMessage::Certificate(message) => {
+                            match self.server.state.handle_certificate(*message).await {
                                 Ok((info, continuation)) => {
                                     // Cross-shard request
                                     self.handle_continuation(continuation).await;
@@ -390,7 +390,7 @@ impl Client {
 
 #[async_trait]
 impl AuthorityClient for Client {
-    /// Initiate a new request to a FastPay or Primary account.
+    /// Initiate a new request.
     async fn handle_request_order(
         &mut self,
         order: RequestOrder,
@@ -403,22 +403,21 @@ impl AuthorityClient for Client {
         .await
     }
 
-    /// Confirm a request to a FastPay or Primary account.
-    async fn handle_confirmation_order(
+    /// Process a certificate.
+    async fn handle_certificate(
         &mut self,
-        order: ConfirmationOrder,
+        certificate: Certificate,
     ) -> Result<AccountInfoResponse, Error> {
         let shard = get_shard(
             self.num_shards,
-            order
-                .certificate
+            certificate
                 .value
-                .confirm_account_id()
+                .confirmed_account_id()
                 .ok_or(Error::InvalidConfirmationOrder)?,
         );
         self.send_recv_info_bytes(
             shard,
-            serialize_message(&SerializedMessage::ConfirmationOrder(Box::new(order))),
+            serialize_message(&SerializedMessage::Certificate(Box::new(certificate))),
         )
         .await
     }
