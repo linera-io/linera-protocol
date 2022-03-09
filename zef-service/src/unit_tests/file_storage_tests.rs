@@ -25,15 +25,12 @@ async fn test_file_storage_for_accounts() {
 async fn test_file_storage_for_certificates() {
     let dir = tempfile::TempDir::new().unwrap();
     let mut client = FileStoreClient::new(dir.path().to_path_buf());
-    let proposal = ConsensusProposal {
-        instance_id: AccountId::default(),
-        round: SequenceNumber::default(),
-        decision: ConsensusDecision::Confirm,
+    let request = Request {
+        account_id: AccountId::default(),
+        operation: Operation::CloseAccount,
+        sequence_number: SequenceNumber::default(),
     };
-    let value = Value::PreCommit {
-        proposal,
-        requests: vec![],
-    };
+    let value = Value::Confirmed(request);
     let certificate = Certificate::new(value, vec![]);
     client.write_certificate(certificate.clone()).await.unwrap();
     let read_certificate = client.read_certificate(certificate.hash).await.unwrap();

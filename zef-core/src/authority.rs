@@ -3,8 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    base_types::*, committee::Committee, consensus::ConsensusState, ensure, error::Error,
-    messages::*, storage::StorageClient,
+    base_types::*, committee::Committee, ensure, error::Error, messages::*, storage::StorageClient,
 };
 use async_trait::async_trait;
 use futures::future;
@@ -41,12 +40,6 @@ pub trait Authority {
         &mut self,
         order: ConfirmationOrder,
     ) -> Result<(AccountInfoResponse, Vec<CrossShardRequest>), Error>;
-
-    /// Process a message meant for a consensus instance.
-    async fn handle_consensus_order(
-        &mut self,
-        order: ConsensusOrder,
-    ) -> Result<ConsensusResponse, Error>;
 
     /// Handle information queries for this account.
     async fn handle_account_info_query(
@@ -188,16 +181,6 @@ where
                 self.storage.write_certificate(certificate).await?;
                 self.storage.write_account(account).await?;
             }
-        } else if let Operation::StartConsensusInstance {
-            new_id,
-            functionality: Functionality::AtomicSwap { accounts },
-        } = &operation
-        {
-            // Make sure cross shard requests to start a consensus instance cannot be replayed.
-            if !self.storage.has_consensus(new_id).await? {
-                let instance = ConsensusState::new(new_id.clone(), accounts.clone(), certificate);
-                self.storage.write_consensus(instance).await?;
-            }
         }
         // This concludes the confirmation of `certificate`.
         Ok(())
@@ -272,171 +255,6 @@ where
                     .await?;
                 Ok((info, Vec::new()))
             }
-            _ => Err(Error::InvalidConfirmationOrder),
-        }
-    }
-
-    /// Process a message meant for a consensus instance.
-    async fn handle_consensus_order(
-        &mut self,
-        order: ConsensusOrder,
-    ) -> Result<ConsensusResponse, Error> {
-        match order {
-            ConsensusOrder::GetStatus { instance_id } => {
-                let instance = self.storage.read_consensus(&instance_id).await?;
-                let info = ConsensusInfoResponse {
-                    locked_accounts: instance.locked_accounts.clone(),
-                    proposed: instance.proposed.clone(),
-                    locked: instance.locked.clone(),
-                    received: instance.received,
-                };
-                Ok(ConsensusResponse::Info(info))
-            }
-            ConsensusOrder::Propose {
-                proposal,
-                owner,
-                signature,
-                locks,
-            } => {
-                let mut instance = self.storage.read_consensus(&proposal.instance_id).await?;
-                // Process lock certificates.
-                for lock in locks {
-                    lock.check(&self.committee)?;
-                    match lock.value {
-                        Value::Locked(Request {
-                            account_id,
-                            operation: Operation::LockInto { instance_id, owner },
-                            sequence_number,
-                        }) if instance_id == proposal.instance_id
-                            && Some(&sequence_number)
-                                == instance.sequence_numbers.get(&account_id) =>
-                        {
-                            // Update locking status for `account_id`.
-                            instance.locked_accounts.insert(account_id, owner);
-                            instance.participants.insert(owner);
-                        }
-                        _ => return Err(Error::InvalidConsensusOrder),
-                    }
-                }
-                // Verify the signature and that the author of the signature is authorized.
-                ensure!(
-                    instance.participants.contains(&owner),
-                    Error::InvalidConsensusOrder
-                );
-                signature.check(&proposal, owner)?;
-                // Check validity of the proposal and obtain the corresponding requests.
-                let requests = instance.make_requests(proposal.decision)?;
-                // TODO: verify that `proposal.round` is "available".
-                // Verify safety.
-                if let Some(proposed) = &instance.proposed {
-                    ensure!(
-                        (proposed.round == proposal.round
-                            && proposed.decision == proposal.decision)
-                            || proposed.round < proposal.round,
-                        Error::UnsafeConsensusProposal
-                    );
-                }
-                if let Some(locked) = instance
-                    .locked
-                    .as_ref()
-                    .and_then(|cert| cert.value.pre_commit_proposal())
-                {
-                    ensure!(
-                        locked.round < proposal.round && locked.decision == proposal.decision,
-                        Error::UnsafeConsensusProposal
-                    );
-                }
-                // Update proposed decision.
-                instance.proposed = Some(proposal.clone());
-                self.storage.write_consensus(instance).await?;
-                // Vote in favor of pre-commit (aka lock).
-                let value = Value::PreCommit { proposal, requests };
-                let vote = Vote::new(value, &self.key_pair);
-                Ok(ConsensusResponse::Vote(vote))
-            }
-            ConsensusOrder::HandlePreCommit { certificate } => {
-                certificate.check(&self.committee)?;
-                let (proposal, requests) = match certificate.value.clone() {
-                    Value::PreCommit { proposal, requests } => (proposal, requests),
-                    _ => return Err(Error::InvalidConsensusOrder),
-                };
-                let mut instance = self.storage.read_consensus(&proposal.instance_id).await?;
-                // Verify safety.
-                if let Some(proposed) = &instance.proposed {
-                    ensure!(
-                        proposed.round <= proposal.round,
-                        Error::UnsafeConsensusPreCommit
-                    );
-                }
-                if let Some(locked) = instance
-                    .locked
-                    .as_ref()
-                    .and_then(|cert| cert.value.pre_commit_proposal())
-                {
-                    ensure!(
-                        locked.round <= proposal.round,
-                        Error::UnsafeConsensusPreCommit
-                    );
-                }
-                // Update locked decision.
-                instance.locked = Some(certificate);
-                self.storage.write_consensus(instance).await?;
-                // Vote in favor of commit.
-                let value = Value::Commit { proposal, requests };
-                let vote = Vote::new(value, &self.key_pair);
-                Ok(ConsensusResponse::Vote(vote))
-            }
-            ConsensusOrder::HandleCommit { certificate, locks } => {
-                certificate.check(&self.committee)?;
-                let (proposal, requests) = match &certificate.value {
-                    Value::Commit { proposal, requests } => (proposal, requests),
-                    _ => return Err(Error::InvalidConsensusOrder),
-                };
-                // Success.
-                // Only execute the requests in the commit once.
-                let mut requests = {
-                    if self.storage.has_consensus(&proposal.instance_id).await? {
-                        requests.clone()
-                    } else {
-                        Vec::new()
-                    }
-                };
-                // Process lock certificates to add skip requests if needed.
-                if let ConsensusDecision::Abort = &proposal.decision {
-                    for lock in locks {
-                        lock.check(&self.committee)?;
-                        match lock.value {
-                            Value::Locked(Request {
-                                account_id,
-                                operation:
-                                    Operation::LockInto {
-                                        instance_id,
-                                        owner: _,
-                                    },
-                                sequence_number,
-                            }) if instance_id == proposal.instance_id => {
-                                requests.push(Request {
-                                    account_id: account_id.clone(),
-                                    operation: Operation::Skip,
-                                    sequence_number,
-                                });
-                            }
-                            _ => return Err(Error::InvalidConsensusOrder),
-                        }
-                    }
-                }
-                // Remove the consensus instance if needed.
-                self.storage.remove_consensus(&proposal.instance_id).await?;
-                // Prepare cross-shard requests.
-                let requests = requests
-                    .iter()
-                    .map(|request| CrossShardRequest::ProcessConfirmedRequest {
-                        request: request.clone(),
-                        certificate: certificate.clone(),
-                    })
-                    .collect();
-                Ok(ConsensusResponse::Continuation(requests))
-            }
         }
     }
 
@@ -495,17 +313,6 @@ where
                     account_id: sender,
                     hash,
                 }];
-                Ok(cont)
-            }
-            CrossShardRequest::DestroyAccount { account_id } => {
-                self.storage.remove_account(&account_id).await?;
-                Ok(Vec::new())
-            }
-            CrossShardRequest::ProcessConfirmedRequest {
-                request,
-                certificate,
-            } => {
-                let (_, cont) = self.process_confirmed_request(request, certificate).await?;
                 Ok(cont)
             }
             CrossShardRequest::ConfirmUpdatedRecipient { account_id, hash } => {

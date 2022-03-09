@@ -8,8 +8,7 @@ use std::{path::PathBuf, sync::Arc};
 use tokio::fs;
 use zef_core::{
     account::AccountState,
-    base_types::{AccountId, HashValue, InstanceId},
-    consensus::ConsensusState,
+    base_types::{AccountId, HashValue},
     error::Error,
     messages::Certificate,
     storage::StorageClient,
@@ -166,28 +165,5 @@ impl StorageClient for FileStoreClient {
     async fn write_certificate(&mut self, certificate: Certificate) -> Result<(), Error> {
         let mut store = self.0.lock().await;
         store.write(&certificate.hash, &certificate).await
-    }
-
-    async fn has_consensus(&mut self, id: &InstanceId) -> Result<bool, Error> {
-        let store = self.0.lock().await;
-        Ok(store.read::<_, ConsensusState>(&id).await?.is_some())
-    }
-
-    async fn read_consensus(&mut self, id: &InstanceId) -> Result<ConsensusState, Error> {
-        let store = self.0.lock().await;
-        store
-            .read(&id)
-            .await?
-            .ok_or(Error::MissingConsensusInstance { id: id.clone() })
-    }
-
-    async fn write_consensus(&mut self, state: ConsensusState) -> Result<(), Error> {
-        let mut store = self.0.lock().await;
-        store.write(&state.id, &state).await
-    }
-
-    async fn remove_consensus(&mut self, id: &InstanceId) -> Result<(), Error> {
-        let store = self.0.lock().await;
-        store.remove::<_, ConsensusState>(&id).await
     }
 }

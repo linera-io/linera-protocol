@@ -66,68 +66,6 @@ ConfirmationOrder:
   STRUCT:
     - certificate:
         TYPENAME: Certificate
-ConsensusDecision:
-  ENUM:
-    0:
-      Abort: UNIT
-    1:
-      Confirm: UNIT
-ConsensusInfoResponse:
-  STRUCT:
-    - locked_accounts:
-        MAP:
-          KEY:
-            TYPENAME: AccountId
-          VALUE:
-            TYPENAME: PublicKeyBytes
-    - proposed:
-        OPTION:
-          TYPENAME: ConsensusProposal
-    - locked:
-        OPTION:
-          TYPENAME: Certificate
-    - received:
-        TYPENAME: Certificate
-ConsensusOrder:
-  ENUM:
-    0:
-      Propose:
-        STRUCT:
-          - proposal:
-              TYPENAME: ConsensusProposal
-          - owner:
-              TYPENAME: PublicKeyBytes
-          - signature:
-              TYPENAME: Signature
-          - locks:
-              SEQ:
-                TYPENAME: Certificate
-    1:
-      HandlePreCommit:
-        STRUCT:
-          - certificate:
-              TYPENAME: Certificate
-    2:
-      HandleCommit:
-        STRUCT:
-          - certificate:
-              TYPENAME: Certificate
-          - locks:
-              SEQ:
-                TYPENAME: Certificate
-    3:
-      GetStatus:
-        STRUCT:
-          - instance_id:
-              TYPENAME: AccountId
-ConsensusProposal:
-  STRUCT:
-    - instance_id:
-        TYPENAME: AccountId
-    - round:
-        TYPENAME: SequenceNumber
-    - decision:
-        TYPENAME: ConsensusDecision
 CrossShardRequest:
   ENUM:
     0:
@@ -136,18 +74,6 @@ CrossShardRequest:
           - certificate:
               TYPENAME: Certificate
     1:
-      DestroyAccount:
-        STRUCT:
-          - account_id:
-              TYPENAME: AccountId
-    2:
-      ProcessConfirmedRequest:
-        STRUCT:
-          - request:
-              TYPENAME: Request
-          - certificate:
-              TYPENAME: Certificate
-    3:
       ConfirmUpdatedRecipient:
         STRUCT:
           - account_id:
@@ -244,42 +170,10 @@ Error:
         STRUCT:
           - error: STR
     34:
-      UnknownConsensusInstance:
-        NEWTYPE:
-          TYPENAME: AccountId
-    35:
-      InvalidConsensusOrder: UNIT
-    36:
-      UnsafeConsensusProposal: UNIT
-    37:
-      MissingConsensusLock:
-        STRUCT:
-          - account_id:
-              TYPENAME: AccountId
-    38:
-      InvalidConsensusProposal: UNIT
-    39:
-      UnsafeConsensusPreCommit: UNIT
-    40:
       MissingCertificate:
         STRUCT:
           - hash:
               TYPENAME: HashValue
-    41:
-      MissingConsensusInstance:
-        STRUCT:
-          - id:
-              TYPENAME: AccountId
-Functionality:
-  ENUM:
-    0:
-      AtomicSwap:
-        STRUCT:
-          - accounts:
-              SEQ:
-                TUPLE:
-                  - TYPENAME: AccountId
-                  - TYPENAME: SequenceNumber
 HashValue:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -315,27 +209,11 @@ Operation:
           - new_owner:
               TYPENAME: PublicKeyBytes
     2:
-      Skip: UNIT
-    3:
       CloseAccount: UNIT
-    4:
+    3:
       ChangeOwner:
         STRUCT:
           - new_owner:
-              TYPENAME: PublicKeyBytes
-    5:
-      StartConsensusInstance:
-        STRUCT:
-          - new_id:
-              TYPENAME: AccountId
-          - functionality:
-              TYPENAME: Functionality
-    6:
-      LockInto:
-        STRUCT:
-          - instance_id:
-              TYPENAME: AccountId
-          - owner:
               TYPENAME: PublicKeyBytes
 PublicKeyBytes:
   NEWTYPESTRUCT:
@@ -381,30 +259,22 @@ SerializedMessage:
         NEWTYPE:
           TYPENAME: ConfirmationOrder
     2:
-      ConsensusOrder:
-        NEWTYPE:
-          TYPENAME: ConsensusOrder
-    3:
       AccountInfoQuery:
         NEWTYPE:
           TYPENAME: AccountInfoQuery
-    4:
+    3:
       Vote:
         NEWTYPE:
           TYPENAME: Vote
-    5:
+    4:
       AccountInfoResponse:
         NEWTYPE:
           TYPENAME: AccountInfoResponse
-    6:
-      ConsensusInfoResponse:
-        NEWTYPE:
-          TYPENAME: ConsensusInfoResponse
-    7:
+    5:
       Error:
         NEWTYPE:
           TYPENAME: Error
-    8:
+    6:
       CrossShardRequest:
         NEWTYPE:
           TYPENAME: CrossShardRequest
@@ -429,36 +299,16 @@ UserData:
 Value:
   ENUM:
     0:
-      Locked:
-        NEWTYPE:
-          TYPENAME: Request
-    1:
       Validated:
         STRUCT:
           - request:
               TYPENAME: Request
           - round:
               TYPENAME: SequenceNumber
-    2:
-      Final:
+    1:
+      Confirmed:
         NEWTYPE:
           TYPENAME: Request
-    3:
-      PreCommit:
-        STRUCT:
-          - proposal:
-              TYPENAME: ConsensusProposal
-          - requests:
-              SEQ:
-                TYPENAME: Request
-    4:
-      Commit:
-        STRUCT:
-          - proposal:
-              TYPENAME: ConsensusProposal
-          - requests:
-              SEQ:
-                TYPENAME: Request
 Vote:
   STRUCT:
     - value:

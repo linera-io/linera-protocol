@@ -4,7 +4,7 @@
 
 use crate::{base_types::*, ensure, error::Error, messages::*};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::HashSet;
 
 /// State of an account.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -290,27 +290,7 @@ impl AccountState {
                     Error::InvalidNewAccountId(new_id.clone())
                 );
             }
-            Operation::StartConsensusInstance {
-                new_id,
-                functionality: Functionality::AtomicSwap { accounts },
-            } => {
-                // Verify the new UID.
-                let expected_id = request.account_id.make_child(request.sequence_number);
-                ensure!(
-                    new_id == &expected_id,
-                    Error::InvalidNewAccountId(new_id.clone())
-                );
-                // Make sure accounts are unique.
-                let numbers = accounts
-                    .clone()
-                    .into_iter()
-                    .collect::<BTreeMap<AccountId, _>>();
-                ensure!(numbers.len() == accounts.len(), Error::InvalidRequestOrder);
-            }
-            Operation::Skip | Operation::CloseAccount | Operation::ChangeOwner { .. } => {
-                // Nothing to check.
-            }
-            Operation::LockInto { .. } => {
+            Operation::CloseAccount | Operation::ChangeOwner { .. } => {
                 // Nothing to check.
             }
         }
@@ -324,9 +304,7 @@ impl AccountState {
         key: HashValue,
     ) -> Result<(), Error> {
         match operation {
-            Operation::OpenAccount { .. }
-            | Operation::StartConsensusInstance { .. }
-            | Operation::Skip => (),
+            Operation::OpenAccount { .. } => (),
             Operation::ChangeOwner { new_owner } => {
                 self.manager = AccountManager::single(*new_owner);
             }
@@ -335,10 +313,6 @@ impl AccountState {
             }
             Operation::Transfer { amount, .. } => {
                 self.balance.try_sub_assign((*amount).into())?;
-            }
-            Operation::LockInto { .. } => {
-                // impossible under BFT assumptions.
-                unreachable!("Spend and lock operation are never confirmed");
             }
         };
         self.confirmed_log.push(key);
