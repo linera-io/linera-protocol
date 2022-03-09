@@ -245,7 +245,9 @@ RequestValue:
           TYPENAME: PublicKeyBytes
     - round:
         OPTION:
-          TYPENAME: SequenceNumber
+          TYPENAME: RoundNumber
+RoundNumber:
+  NEWTYPESTRUCT: U64
 SequenceNumber:
   NEWTYPESTRUCT: U64
 SerializedMessage:
@@ -304,7 +306,7 @@ Value:
           - request:
               TYPENAME: Request
           - round:
-              TYPENAME: SequenceNumber
+              TYPENAME: RoundNumber
     1:
       Confirmed:
         NEWTYPE:
