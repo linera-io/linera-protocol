@@ -4,7 +4,7 @@
 
 use super::{account::AccountManager, base_types::*, committee::Committee, ensure, error::Error};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::HashSet;
 
 #[cfg(test)]
 #[path = "unit_tests/messages_tests.rs"]
@@ -31,37 +31,20 @@ pub enum Operation {
         new_id: AccountId,
         new_owner: AccountOwner,
     },
-    /// Do nothing. (This can be used for testing or to unlock accounts after a consensus decisions.)
-    Skip,
     /// Close the account.
     CloseAccount,
     /// Change the authentication key of the account.
     ChangeOwner { new_owner: AccountOwner },
-    /// Start a consensus protocol `new_id` to manage the given `accounts`.
-    StartConsensusInstance {
-        new_id: AccountId,
-        functionality: Functionality,
-    },
-    /// Lock the account into the given consensus instance, managed by the given key.
-    LockInto {
-        instance_id: AccountId,
-        owner: AccountOwner,
-    },
-}
-
-/// A one-shot funtionality implemented in a consensus instance.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub enum Functionality {
-    AtomicSwap {
-        accounts: Vec<(AccountId, SequenceNumber)>,
-    },
 }
 
 /// A request containing an account operation.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct Request {
+    /// The account that is subject of the operation.
     pub account_id: AccountId,
+    /// The operation to execute.
     pub operation: Operation,
+    /// The sequence number.
     pub sequence_number: SequenceNumber,
 }
 
@@ -103,9 +86,6 @@ pub struct ConsensusProposal {
 /// A statement to be certified by the authorities.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Value {
-    // -- Account management --
-    /// The request was validated but does not support confirmation.
-    Locked(Request),
     /// The request was validated but confirmation will require additional steps.
     Validated {
         request: Request,
@@ -113,58 +93,6 @@ pub enum Value {
     },
     /// The request is validated and final (i.e. ready to be executed).
     Confirmed(Request),
-    // -- Consensus --
-    /// The proposal was validated but confirmation will require additional steps.
-    PreCommit {
-        proposal: ConsensusProposal,
-        requests: Vec<Request>,
-    },
-    /// The proposal is ready to be committed, thus confirming a number of requests.
-    Commit {
-        proposal: ConsensusProposal,
-        requests: Vec<Request>,
-    },
-}
-
-/// Same as RequestOrder but meant for a consensus instance.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
-pub enum ConsensusOrder {
-    Propose {
-        proposal: ConsensusProposal,
-        owner: AccountOwner,
-        signature: Signature,
-        locks: Vec<Certificate>,
-    },
-    HandlePreCommit {
-        certificate: Certificate,
-    },
-    HandleCommit {
-        certificate: Certificate,
-        locks: Vec<Certificate>,
-    },
-    GetStatus {
-        instance_id: AccountId,
-    },
-}
-
-/// The response to a consensus order.
-#[allow(clippy::large_enum_variant)]
-pub enum ConsensusResponse {
-    Info(ConsensusInfoResponse),
-    Vote(Vote),
-    Continuation(Vec<CrossShardRequest>),
-}
-
-/// Current status of a consensus instance.
-/// TODO: Information on available rounds.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
-pub struct ConsensusInfoResponse {
-    pub locked_accounts: BTreeMap<AccountId, AccountOwner>,
-    pub proposed: Option<ConsensusProposal>,
-    pub locked: Option<Certificate>,
-    pub received: Certificate,
 }
 
 /// A vote on a statement from an authority.
@@ -226,13 +154,6 @@ pub enum CrossShardRequest {
     UpdateRecipient {
         certificate: Certificate,
     },
-    DestroyAccount {
-        account_id: AccountId,
-    },
-    ProcessConfirmedRequest {
-        request: Request,
-        certificate: Certificate,
-    },
     ConfirmUpdatedRecipient {
         account_id: AccountId,
         hash: HashValue,
@@ -251,11 +172,6 @@ impl CrossShardRequest {
                 .operation
                 .recipient()
                 .unwrap(),
-            DestroyAccount { account_id } => account_id,
-            ProcessConfirmedRequest {
-                request,
-                certificate: _,
-            } => &request.account_id,
             ConfirmUpdatedRecipient {
                 account_id,
                 hash: _,
@@ -319,20 +235,6 @@ impl Value {
     pub fn confirm_key(&self) -> Option<(AccountId, SequenceNumber)> {
         match self {
             Value::Confirmed(r) => Some((r.account_id.clone(), r.sequence_number)),
-            _ => None,
-        }
-    }
-
-    pub fn lock_account_id(&self) -> Option<&AccountId> {
-        match self {
-            Value::Locked(r) => Some(&r.account_id),
-            _ => None,
-        }
-    }
-
-    pub fn pre_commit_proposal(&self) -> Option<&ConsensusProposal> {
-        match self {
-            Value::PreCommit { proposal, .. } => Some(proposal),
             _ => None,
         }
     }

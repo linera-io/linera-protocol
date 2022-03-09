@@ -3,8 +3,7 @@
 
 use crate::{
     account::AccountState,
-    base_types::{AccountId, HashValue, InstanceId},
-    consensus::ConsensusState,
+    base_types::{AccountId, HashValue},
     ensure,
     error::Error,
     messages::Certificate,
@@ -60,14 +59,6 @@ pub trait StorageClient: DynClone + Send + Sync {
     }
 
     async fn write_certificate(&mut self, certificate: Certificate) -> Result<(), Error>;
-
-    async fn has_consensus(&mut self, instance_id: &InstanceId) -> Result<bool, Error>;
-
-    async fn read_consensus(&mut self, instance_id: &InstanceId) -> Result<ConsensusState, Error>;
-
-    async fn write_consensus(&mut self, state: ConsensusState) -> Result<(), Error>;
-
-    async fn remove_consensus(&mut self, id: &InstanceId) -> Result<(), Error>;
 }
 
 dyn_clone::clone_trait_object!(StorageClient);
@@ -77,7 +68,6 @@ dyn_clone::clone_trait_object!(StorageClient);
 pub struct InMemoryStore {
     accounts: HashMap<AccountId, AccountState>,
     certificates: HashMap<HashValue, Certificate>,
-    instances: HashMap<InstanceId, ConsensusState>,
 }
 
 /// The corresponding vanilla client.
@@ -121,30 +111,6 @@ impl StorageClient for InMemoryStoreClient {
         store.lock().await.certificates.insert(value.hash, value);
         Ok(())
     }
-
-    async fn has_consensus(&mut self, id: &InstanceId) -> Result<bool, Error> {
-        let store = self.0.clone();
-        let result = store.lock().await.instances.contains_key(id);
-        Ok(result)
-    }
-
-    async fn read_consensus(&mut self, id: &InstanceId) -> Result<ConsensusState, Error> {
-        let store = self.0.clone();
-        let value = store.lock().await.instances.get(id).cloned();
-        value.ok_or(Error::MissingConsensusInstance { id: id.clone() })
-    }
-
-    async fn write_consensus(&mut self, value: ConsensusState) -> Result<(), Error> {
-        let store = self.0.clone();
-        store.lock().await.instances.insert(value.id.clone(), value);
-        Ok(())
-    }
-
-    async fn remove_consensus(&mut self, id: &InstanceId) -> Result<(), Error> {
-        let store = self.0.clone();
-        store.lock().await.instances.remove(id);
-        Ok(())
-    }
 }
 
 #[async_trait]
@@ -167,22 +133,6 @@ impl StorageClient for Box<dyn StorageClient> {
 
     async fn write_certificate(&mut self, value: Certificate) -> Result<(), Error> {
         self.deref_mut().write_certificate(value).await
-    }
-
-    async fn has_consensus(&mut self, id: &InstanceId) -> Result<bool, Error> {
-        self.deref_mut().has_consensus(id).await
-    }
-
-    async fn read_consensus(&mut self, id: &InstanceId) -> Result<ConsensusState, Error> {
-        self.deref_mut().read_consensus(id).await
-    }
-
-    async fn write_consensus(&mut self, value: ConsensusState) -> Result<(), Error> {
-        self.deref_mut().write_consensus(value).await
-    }
-
-    async fn remove_consensus(&mut self, id: &InstanceId) -> Result<(), Error> {
-        self.deref_mut().remove_consensus(id).await
     }
 }
 
