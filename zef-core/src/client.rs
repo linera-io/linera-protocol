@@ -103,14 +103,13 @@ pub trait AccountClient {
 }
 
 /// The status of the last request order that we have sent, if any.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone)]
 pub enum PendingRequest {
     /// No request.
     None,
     /// A "regular" request meant to be confirmed.
     Regular(RequestOrder),
-    /// A "locking" request that cannot be confirmed.
-    Locking(RequestOrder),
 }
 
 /// Reference implementation of the `AccountClient` trait using many instances of
@@ -129,8 +128,6 @@ pub struct AccountClientState<AuthorityClient> {
     next_sequence_number: SequenceNumber,
     /// Pending request.
     pending_request: PendingRequest,
-    /// Proof that this account was locked / spent.
-    lock_certificate: Option<Certificate>,
     /// Known key pairs (past and future).
     known_key_pairs: BTreeMap<AccountOwner, KeyPair>,
 
@@ -168,7 +165,6 @@ impl<A> AccountClientState<A> {
             next_sequence_number,
             pending_request: PendingRequest::None,
             known_key_pairs: BTreeMap::new(),
-            lock_certificate: None,
             sent_certificates,
             received_certificates: received_certificates
                 .into_iter()
@@ -269,10 +265,10 @@ where
 }
 
 /// Used for communicate_requests
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone)]
 enum CommunicateAction {
     ConfirmOrder(RequestOrder),
-    LockOrder(RequestOrder),
     SynchronizeNextSequenceNumber(SequenceNumber),
 }
 
@@ -381,9 +377,7 @@ where
         action: CommunicateAction,
     ) -> Result<Vec<Certificate>, failure::Error> {
         let target_sequence_number = match &action {
-            CommunicateAction::ConfirmOrder(order) | CommunicateAction::LockOrder(order) => {
-                order.value.request.sequence_number
-            }
+            CommunicateAction::ConfirmOrder(order) => order.value.request.sequence_number,
             CommunicateAction::SynchronizeNextSequenceNumber(seq) => *seq,
         };
         let requester = CertificateRequester::new(
@@ -440,9 +434,7 @@ where
                             .await?;
                     }
                     // Send the request order (if any) and return a vote.
-                    if let CommunicateAction::ConfirmOrder(order)
-                    | CommunicateAction::LockOrder(order) = action
-                    {
+                    if let CommunicateAction::ConfirmOrder(order) = action {
                         let result = client.handle_request_order(order).await;
                         match result {
                             Ok(AccountInfoResponse { manager, .. }) => match manager.pending() {
@@ -499,10 +491,6 @@ where
                 // * `communicate_with_quorum` ensured a sufficient "weight" of
                 // (non-error) answers were returned by authorities.
                 // * each answer is a vote signed by the expected authority.
-                certificates.push(certificate);
-            }
-            CommunicateAction::LockOrder(order) => {
-                let certificate = Certificate::new(Value::Locked(order.value.request), signatures);
                 certificates.push(certificate);
             }
             CommunicateAction::SynchronizeNextSequenceNumber(_) => (),
@@ -671,10 +659,7 @@ where
             Operation::CloseAccount => {
                 self.key_pair = None;
             }
-            Operation::OpenAccount { .. }
-            | Operation::Skip
-            | Operation::LockInto { .. }
-            | Operation::StartConsensusInstance { .. } => (),
+            Operation::OpenAccount { .. } => (),
         }
         // Record certificate.
         self.sent_certificates.push(certificate);
@@ -728,52 +713,6 @@ where
             .await?;
         }
         Ok(self.sent_certificates.last().unwrap().clone())
-    }
-
-    /// Execute (or retry) a locking request order. Update local balance.
-    async fn execute_locking_request(
-        &mut self,
-        order: RequestOrder,
-    ) -> Result<Certificate, failure::Error> {
-        match &self.lock_certificate {
-            Some(certificate) => {
-                ensure!(
-                    matches!(&certificate.value, Value::Locked(r) if &order.value.request == r),
-                    "Account has already been locked for a different operation."
-                );
-                return Ok(certificate.clone());
-            }
-            None => (),
-        }
-        ensure!(
-            matches!(&self.pending_request, PendingRequest::None)
-                || matches!(&self.pending_request, PendingRequest::Locking(o) if o.value.request == order.value.request),
-            "Client state has a different pending request",
-        );
-        ensure!(
-            order.value.request.sequence_number == self.next_sequence_number,
-            "Unexpected sequence number"
-        );
-        self.download_missing_sent_certificates().await?;
-        self.pending_request = PendingRequest::Locking(order.clone());
-        let mut certificates = self
-            .communicate_requests(
-                self.account_id.clone(),
-                self.sent_certificates.clone(),
-                CommunicateAction::LockOrder(order.clone()),
-            )
-            .await?;
-        self.lock_certificate = certificates.pop();
-        self.update_sent_certificates(certificates)?;
-        assert_eq!(
-            self.lock_certificate
-                .as_ref()
-                .expect("last order should be locked now")
-                .value,
-            Value::Locked(order.value.request)
-        );
-        self.pending_request = PendingRequest::None;
-        Ok(self.lock_certificate.as_ref().unwrap().clone())
     }
 
     fn make_request_order(&self, request: Request) -> Result<RequestOrder, failure::Error> {
@@ -837,10 +776,6 @@ where
                 // Finish executing the previous request.
                 self.execute_regular_request(order, /* with_confirmation */ false)
                     .await?;
-            }
-            PendingRequest::Locking(order) => {
-                // Finish executing the previous request.
-                self.execute_locking_request(order).await?;
             }
             PendingRequest::None => (),
         }

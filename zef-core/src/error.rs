@@ -116,27 +116,7 @@ pub enum Error {
     #[fail(display = "Storage (de)serialization error: {:?}.", error)]
     StorageBcsError { error: String },
 
-    // Consensus
-    #[fail(display = "Unknown consensus instance {:?}", 0)]
-    UnknownConsensusInstance(AccountId),
-    #[fail(display = "Invalid consensus order.")]
-    InvalidConsensusOrder,
-    #[fail(display = "Unsafe consensus proposal.")]
-    UnsafeConsensusProposal,
-    #[fail(
-        display = "The following account has not been locked yet: {}",
-        account_id
-    )]
-    MissingConsensusLock { account_id: AccountId },
-    #[fail(display = "Invalid consensus proposal.")]
-    InvalidConsensusProposal,
-    #[fail(display = "Unsafe consensus pre-commit.")]
-    UnsafeConsensusPreCommit,
-
     // Storage
     #[fail(display = "Missing certificate: {:?}", hash)]
     MissingCertificate { hash: HashValue },
-
-    #[fail(display = "Missing consensus instance: {}", id)]
-    MissingConsensusInstance { id: InstanceId },
 }

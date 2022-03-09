@@ -13,12 +13,10 @@ pub enum SerializedMessage {
     // Inbound
     RequestOrder(Box<RequestOrder>),
     ConfirmationOrder(Box<ConfirmationOrder>),
-    ConsensusOrder(Box<ConsensusOrder>),
     AccountInfoQuery(Box<AccountInfoQuery>),
     // Outbound
     Vote(Box<Vote>),
     AccountInfoResponse(Box<AccountInfoResponse>),
-    ConsensusInfoResponse(Box<ConsensusInfoResponse>),
     Error(Box<Error>),
     // Internal to an authority
     CrossShardRequest(Box<CrossShardRequest>),

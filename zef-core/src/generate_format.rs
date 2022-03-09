@@ -20,8 +20,6 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<messages::Operation>(&samples)?;
     tracer.trace_type::<messages::Value>(&samples)?;
     tracer.trace_type::<account::AccountManager>(&samples)?;
-    tracer.trace_type::<messages::ConsensusDecision>(&samples)?;
-    tracer.trace_type::<messages::ConsensusOrder>(&samples)?;
     tracer.trace_type::<messages::CrossShardRequest>(&samples)?;
     tracer.trace_type::<error::Error>(&samples)?;
     tracer.trace_type::<serialize::SerializedMessage>(&samples)?;
