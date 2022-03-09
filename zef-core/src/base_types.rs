@@ -34,6 +34,12 @@ pub struct Balance(i128);
 )]
 pub struct SequenceNumber(pub u64);
 
+/// A number to identify successive attempts to decide a value in a consensus protocol.
+#[derive(
+    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
+)]
+pub struct RoundNumber(pub u64);
+
 /// Optional user message attached to a transfer.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]
 pub struct UserData(pub Option<[u8; 32]>);
