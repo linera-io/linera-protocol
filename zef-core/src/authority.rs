@@ -35,10 +35,10 @@ pub trait Authority {
         order: RequestOrder,
     ) -> Result<AccountInfoResponse, Error>;
 
-    /// Execute a confirmed request.
-    async fn handle_confirmation_order(
+    /// Process a certificate, for instance to execute a confirmed request.
+    async fn handle_certificate(
         &mut self,
-        order: ConfirmationOrder,
+        certificate: Certificate,
     ) -> Result<(AccountInfoResponse, Vec<CrossShardRequest>), Error>;
 
     /// Handle information queries for this account.
@@ -68,7 +68,7 @@ where
         certificate: Certificate, // For logging purpose
     ) -> Result<(AccountInfoResponse, Vec<CrossShardRequest>), Error> {
         assert_eq!(
-            &certificate.value.confirm_request().unwrap().operation,
+            &certificate.value.confirmed_request().unwrap().operation,
             &request.operation
         );
         // Obtain the sender's account.
@@ -113,7 +113,7 @@ where
             }
         } else {
             // Schedule cross-shard request if any.
-            let operation = &certificate.value.confirm_request().unwrap().operation;
+            let operation = &certificate.value.confirmed_request().unwrap().operation;
             if operation.recipient().is_some() {
                 // Schedule a new cross-shard request to update recipient.
                 account.keep_sending.insert(certificate.hash);
@@ -171,7 +171,7 @@ where
     ) -> Result<(), Error> {
         if let Some(recipient) = operation.recipient() {
             assert_eq!(
-                &certificate.value.confirm_request().unwrap().operation,
+                &certificate.value.confirmed_request().unwrap().operation,
                 &operation
             );
             // Execute the recipient's side of the operation.
@@ -232,18 +232,16 @@ where
         Ok(info)
     }
 
-    /// Confirm a request.
-    async fn handle_confirmation_order(
+    /// Process a certificate.
+    async fn handle_certificate(
         &mut self,
-        confirmation_order: ConfirmationOrder,
+        certificate: Certificate,
     ) -> Result<(AccountInfoResponse, Vec<CrossShardRequest>), Error> {
-        // Verify that the certified value is a confirmation.
-        let certificate = confirmation_order.certificate;
         // Verify the certificate.
         certificate.check(&self.committee)?;
         // Process the order.
         match &certificate.value {
-            Value::Confirmed(request) => {
+            Value::Confirmed { request } => {
                 // Execute the finalized request.
                 self.process_confirmed_request(request.clone(), certificate)
                     .await
@@ -302,7 +300,7 @@ where
             CrossShardRequest::UpdateRecipient { certificate } => {
                 let request = certificate
                     .value
-                    .confirm_request()
+                    .confirmed_request()
                     .ok_or(Error::InvalidCrossShardRequest)?;
                 let sender = request.account_id.clone();
                 let hash = certificate.hash;
@@ -343,14 +341,14 @@ impl<Client> WorkerState<Client> {
 }
 
 #[cfg(test)]
-pub async fn fully_handle_confirmation_order<Client>(
+pub async fn fully_handle_certificate<Client>(
     state: &mut WorkerState<Client>,
-    confirmation_order: ConfirmationOrder,
+    certificate: Certificate,
 ) -> Result<AccountInfoResponse, crate::error::Error>
 where
     Client: StorageClient + Clone + 'static,
 {
-    let (info, mut requests) = state.handle_confirmation_order(confirmation_order).await?;
+    let (info, mut requests) = state.handle_certificate(certificate).await?;
     while let Some(request) = requests.pop() {
         requests.extend(state.handle_cross_shard_request(request).await?);
     }

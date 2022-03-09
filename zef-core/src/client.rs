@@ -25,10 +25,10 @@ pub trait AuthorityClient {
         order: RequestOrder,
     ) -> Result<AccountInfoResponse, Error>;
 
-    /// Confirm a request.
-    async fn handle_confirmation_order(
+    /// Process a certificate.
+    async fn handle_certificate(
         &mut self,
-        order: ConfirmationOrder,
+        certificate: Certificate,
     ) -> Result<AccountInfoResponse, Error>;
 
     /// Handle information queries for this account.
@@ -59,16 +59,20 @@ pub trait AccountClient {
     ) -> Result<Certificate, failure::Error>;
 
     /// Process confirmed operation for which this account is a recipient.
-    async fn receive_confirmation(
-        &mut self,
-        certificate: Certificate,
-    ) -> Result<(), failure::Error>;
+    async fn receive_certificate(&mut self, certificate: Certificate)
+        -> Result<(), failure::Error>;
 
     /// Rotate the key of the account.
     async fn rotate_key_pair(&mut self, key_pair: KeyPair) -> Result<Certificate, failure::Error>;
 
     /// Transfer ownership of the account.
     async fn transfer_ownership(
+        &mut self,
+        new_owner: AccountOwner,
+    ) -> Result<Certificate, failure::Error>;
+
+    /// Add another owner to the account.
+    async fn share_ownership(
         &mut self,
         new_owner: AccountOwner,
     ) -> Result<Certificate, failure::Error>;
@@ -102,18 +106,6 @@ pub trait AccountClient {
     async fn query_strong_majority_balance(&mut self) -> Balance;
 }
 
-/// The status of the last request order that we have sent, if any.
-#[allow(clippy::large_enum_variant)]
-#[derive(Debug, Clone)]
-pub enum PendingRequest {
-    /// No request.
-    None,
-    /// A request meant to be validated.
-    Validating(RequestOrder),
-    /// (multi-owner account) A validated request ready to be confirmed.
-    Confirming(ConfirmationOrder),
-}
-
 /// Reference implementation of the `AccountClient` trait using many instances of
 /// some `AuthorityClient` implementation for communication.
 pub struct AccountClientState<AuthorityClient> {
@@ -128,8 +120,10 @@ pub struct AccountClientState<AuthorityClient> {
     /// Expected sequence number for the next certified request.
     /// This is also the number of request certificates that we have created.
     next_sequence_number: SequenceNumber,
+    /// Whether the account is owned by several owners.
+    has_multiple_owners: bool,
     /// Pending request.
-    pending_request: PendingRequest,
+    pending_request: Option<Request>,
     /// Known key pairs (past and future).
     known_key_pairs: BTreeMap<AccountOwner, KeyPair>,
 
@@ -165,12 +159,13 @@ impl<A> AccountClientState<A> {
             committee,
             authority_clients,
             next_sequence_number,
-            pending_request: PendingRequest::None,
+            pending_request: None,
+            has_multiple_owners: false,
             known_key_pairs: BTreeMap::new(),
             sent_certificates,
             received_certificates: received_certificates
                 .into_iter()
-                .filter_map(|cert| Some((cert.value.confirm_key()?, cert)))
+                .filter_map(|cert| Some((cert.value.confirmed_key()?, cert)))
                 .collect(),
             received_certificate_trackers: HashMap::new(),
             balance,
@@ -197,7 +192,7 @@ impl<A> AccountClientState<A> {
         self.balance
     }
 
-    pub fn pending_request(&self) -> &PendingRequest {
+    pub fn pending_request(&self) -> &Option<Request> {
         &self.pending_request
     }
 
@@ -252,7 +247,7 @@ where
             }) = &result
             {
                 if certificate.check(&self.committee).is_ok() {
-                    if let Value::Confirmed(request) = &certificate.value {
+                    if let Value::Confirmed { request } = &certificate.value {
                         if request.account_id == self.account_id
                             && request.sequence_number == sequence_number
                         {
@@ -270,7 +265,8 @@ where
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone)]
 enum CommunicateAction {
-    ConfirmOrder(RequestOrder),
+    SubmitRequest(RequestOrder),
+    FinalizeRequest(Certificate),
     SynchronizeNextSequenceNumber(SequenceNumber),
 }
 
@@ -379,7 +375,14 @@ where
         action: CommunicateAction,
     ) -> Result<Vec<Certificate>, failure::Error> {
         let target_sequence_number = match &action {
-            CommunicateAction::ConfirmOrder(order) => order.value.request.sequence_number,
+            CommunicateAction::SubmitRequest(order) => order.value.request.sequence_number,
+            CommunicateAction::FinalizeRequest(certificate) => {
+                certificate
+                    .value
+                    .validated_request()
+                    .unwrap()
+                    .sequence_number
+            }
             CommunicateAction::SynchronizeNextSequenceNumber(seq) => *seq,
         };
         let requester = CertificateRequester::new(
@@ -390,7 +393,7 @@ where
         let (task, mut handle) = Downloader::start(
             requester,
             known_certificates.into_iter().filter_map(|cert| {
-                let request = cert.value.confirm_request()?;
+                let request = cert.value.confirmed_request()?;
                 if request.account_id == account_id {
                     Some((request.sequence_number, Ok(cert)))
                 } else {
@@ -431,27 +434,57 @@ where
                     // Send all missing confirmation orders.
                     missing_certificates.reverse();
                     for certificate in missing_certificates {
-                        client
-                            .handle_confirmation_order(ConfirmationOrder::new(certificate))
-                            .await?;
+                        client.handle_certificate(certificate).await?;
                     }
                     // Send the request order (if any) and return a vote.
-                    if let CommunicateAction::ConfirmOrder(order) = action {
-                        let result = client.handle_request_order(order).await;
-                        match result {
-                            Ok(AccountInfoResponse { manager, .. }) => match manager.pending() {
-                                Some(vote) => {
-                                    my_ensure!(
-                                        vote.authority == name,
-                                        Error::ClientErrorWhileProcessingRequestOrder
-                                    );
-                                    vote.check(committee)?;
-                                    return Ok(Some(vote.clone()));
+                    match action {
+                        CommunicateAction::SubmitRequest(order) => {
+                            let result = client.handle_request_order(order).await;
+                            match result {
+                                Ok(AccountInfoResponse { manager, .. }) => {
+                                    match manager.pending() {
+                                        Some(vote) => {
+                                            my_ensure!(
+                                                vote.authority == name,
+                                                Error::ClientErrorWhileProcessingRequestOrder
+                                            );
+                                            vote.check(committee)?;
+                                            return Ok(Some(vote.clone()));
+                                        }
+                                        None => {
+                                            return Err(
+                                                Error::ClientErrorWhileProcessingRequestOrder,
+                                            )
+                                        }
+                                    }
                                 }
-                                None => return Err(Error::ClientErrorWhileProcessingRequestOrder),
-                            },
-                            Err(err) => return Err(err),
+                                Err(err) => return Err(err),
+                            }
                         }
+                        CommunicateAction::FinalizeRequest(certificate) => {
+                            let result = client.handle_certificate(certificate).await;
+                            match result {
+                                Ok(AccountInfoResponse { manager, .. }) => {
+                                    match manager.pending() {
+                                        Some(vote) => {
+                                            my_ensure!(
+                                                vote.authority == name,
+                                                Error::ClientErrorWhileProcessingRequestOrder
+                                            );
+                                            vote.check(committee)?;
+                                            return Ok(Some(vote.clone()));
+                                        }
+                                        None => {
+                                            return Err(
+                                                Error::ClientErrorWhileProcessingRequestOrder,
+                                            )
+                                        }
+                                    }
+                                }
+                                Err(err) => return Err(err),
+                            }
+                        }
+                        CommunicateAction::SynchronizeNextSequenceNumber(_) => (),
                     }
                     Ok(None)
                 })
@@ -486,13 +519,30 @@ where
             })
             .collect();
         match action {
-            CommunicateAction::ConfirmOrder(order) => {
-                let certificate =
-                    Certificate::new(Value::Confirmed(order.value.request), signatures);
+            CommunicateAction::SubmitRequest(order) => {
+                let value = match order.value.round {
+                    Some(round) => Value::Validated {
+                        request: order.value.request,
+                        round,
+                    },
+                    None => Value::Confirmed {
+                        request: order.value.request,
+                    },
+                };
+                let certificate = Certificate::new(value, signatures);
                 // Certificate is valid because
                 // * `communicate_with_quorum` ensured a sufficient "weight" of
                 // (non-error) answers were returned by authorities.
                 // * each answer is a vote signed by the expected authority.
+                certificates.push(certificate);
+            }
+            CommunicateAction::FinalizeRequest(validity_certificate) => {
+                let request = validity_certificate
+                    .value
+                    .validated_request()
+                    .unwrap()
+                    .clone();
+                let certificate = Certificate::new(Value::Confirmed { request }, signatures);
                 certificates.push(certificate);
             }
             CommunicateAction::SynchronizeNextSequenceNumber(_) => (),
@@ -539,7 +589,7 @@ where
                         certificate.check(committee)?;
                         let request = certificate
                             .value
-                            .confirm_request()
+                            .confirmed_request()
                             .ok_or(Error::ClientErrorWhileRequestingCertificate)?;
                         let recipient = request
                             .operation
@@ -559,7 +609,7 @@ where
                 for (name, response) in responses {
                     // Process received certificates.
                     for certificate in response.queried_received_certificates {
-                        self.receive_confirmation(certificate).await.unwrap_or(());
+                        self.receive_certificate(certificate).await.unwrap_or(());
                     }
                     // Update tracker.
                     self.received_certificate_trackers
@@ -607,9 +657,8 @@ where
             },
             sequence_number: self.next_sequence_number,
         };
-        let order = self.make_request_order(request)?;
         let certificate = self
-            .execute_request(order, /* with_confirmation */ true)
+            .execute_request(request, /* with_confirmation */ true)
             .await?;
         Ok(certificate)
     }
@@ -632,7 +681,7 @@ where
     fn add_sent_certificate(&mut self, certificate: Certificate) -> Result<(), Error> {
         let request = certificate
             .value
-            .confirm_request()
+            .confirmed_request()
             .expect("was expecting a confirmation certificate");
         assert_eq!(
             u64::from(request.sequence_number),
@@ -643,15 +692,12 @@ where
             Operation::Transfer { amount, .. } => {
                 self.balance.try_sub_assign((*amount).into())?;
             }
-            Operation::ChangeOwner { new_owner }
-                if matches!(
-                    &self.key_pair,
-                    Some(kp) if kp.public() == *new_owner
-                ) =>
-            {
+            Operation::ChangeOwner { new_owner } if self.owner() == Some(*new_owner) => {
+                self.has_multiple_owners = false;
                 // Keep the current key.
             }
             Operation::ChangeOwner { new_owner } => {
+                self.has_multiple_owners = false;
                 // Change or remove the current key.
                 let old = std::mem::take(&mut self.key_pair);
                 if let Some(value) = self.known_key_pairs.remove(new_owner) {
@@ -663,15 +709,13 @@ where
                     self.known_key_pairs.insert(kp.public(), kp);
                 }
             }
-            Operation::ChangeMultipleOwners { new_owners }
-                if matches!(
-                    &self.key_pair,
-                    Some(kp) if new_owners.iter().find(|p| **p == kp.public()).is_some()
-                ) =>
+            Operation::ChangeMultipleOwners { new_owners } if matches!(self.owner(), Some(owner) if new_owners.iter().any(|p| *p == owner)) =>
             {
+                self.has_multiple_owners = true;
                 // Keep the current key.
             }
             Operation::ChangeMultipleOwners { new_owners } => {
+                self.has_multiple_owners = true;
                 // Change or remove the current key.
                 let old = std::mem::take(&mut self.key_pair);
                 for owner in new_owners {
@@ -702,39 +746,96 @@ where
         Ok(())
     }
 
+    async fn make_request_order(
+        &mut self,
+        request: Request,
+    ) -> Result<RequestOrder, failure::Error> {
+        let key_pair = self.key_pair.as_ref().ok_or_else(|| {
+            failure::format_err!("Cannot make request for an account that we don't own")
+        })?;
+        if !self.has_multiple_owners {
+            return Ok(RequestOrder::new(request.into(), key_pair));
+        }
+        // TODO
+        let request_value = RequestValue {
+            request,
+            limited_to: None,
+            round: Some(RoundNumber::default()),
+        };
+        Ok(RequestOrder::new(request_value, key_pair))
+    }
+
     /// Execute (or retry) a regular request order. Update local balance.
+    /// If `with_confirmation` is false, we stop short of executing the finalized request.
     async fn execute_request(
         &mut self,
-        order: RequestOrder,
+        request: Request,
         with_confirmation: bool,
     ) -> Result<Certificate, failure::Error> {
         ensure!(
-            matches!(&self.pending_request, PendingRequest::None)
-                || matches!(&self.pending_request, PendingRequest::Validating(o) if o.value.request == order.value.request),
+            matches!(&self.pending_request, None)
+                || matches!(&self.pending_request, Some(r) if *r == request),
             "Client state has a different pending request",
         );
         ensure!(
-            order.value.request.sequence_number == self.next_sequence_number,
+            request.sequence_number == self.next_sequence_number,
             "Unexpected sequence number"
         );
+        // Remember what we are trying to do
+        self.pending_request = Some(request.clone());
+        // Download (hypothetically) missing historical data.
         self.download_missing_sent_certificates().await?;
-        self.pending_request = PendingRequest::Validating(order.clone());
-        let certificates = self
-            .communicate_requests(
-                self.account_id.clone(),
-                self.sent_certificates.clone(),
-                CommunicateAction::ConfirmOrder(order.clone()),
-            )
-            .await?;
-        self.update_sent_certificates(certificates)?;
-        assert_eq!(
+        // Build the initial query.
+        let order = self.make_request_order(request).await?;
+        // Send the query.
+        if self.has_multiple_owners {
+            // Need two-round trips.
+            let mut certificates = self
+                .communicate_requests(
+                    self.account_id.clone(),
+                    self.sent_certificates.clone(),
+                    CommunicateAction::SubmitRequest(order.clone()),
+                )
+                .await?;
+            let certificate = certificates
+                .pop()
+                .expect("last order should have been validated");
+            assert_eq!(
+                certificate.value.validated_request(),
+                Some(&order.value.request)
+            );
+            self.update_sent_certificates(certificates)?;
+
+            let certificates = self
+                .communicate_requests(
+                    self.account_id.clone(),
+                    self.sent_certificates.clone(),
+                    CommunicateAction::FinalizeRequest(certificate),
+                )
+                .await?;
+            self.update_sent_certificates(certificates)?;
+        } else {
+            // Only one round-trip is needed
+            let certificates = self
+                .communicate_requests(
+                    self.account_id.clone(),
+                    self.sent_certificates.clone(),
+                    CommunicateAction::SubmitRequest(order.clone()),
+                )
+                .await?;
+            self.update_sent_certificates(certificates)?;
+        };
+        // By now the request should be final.
+        ensure!(
             self.sent_certificates
                 .last()
-                .expect("last order should be confirmed now")
-                .value,
-            Value::Confirmed(order.value.request)
+                .expect("last order should have been confirmed")
+                .value
+                .confirmed_request()
+                == Some(&order.value.request),
+            "A different operation was executed in parallel (consider retrying the operation)"
         );
-        self.pending_request = PendingRequest::None;
+        self.pending_request = None;
         // Confirm last request certificate if needed.
         if with_confirmation {
             self.communicate_requests(
@@ -745,13 +846,6 @@ where
             .await?;
         }
         Ok(self.sent_certificates.last().unwrap().clone())
-    }
-
-    fn make_request_order(&self, request: Request) -> Result<RequestOrder, failure::Error> {
-        let key_pair = self.key_pair.as_ref().ok_or_else(|| {
-            failure::format_err!("Cannot make request for an account that we don't own")
-        })?;
-        Ok(RequestOrder::new(request.into(), key_pair))
     }
 }
 
@@ -803,26 +897,24 @@ where
     }
 
     async fn synchronize_balance(&mut self) -> Result<Balance, failure::Error> {
-        match self.pending_request.clone() {
-            PendingRequest::Validating(order) => {
-                // Finish executing the previous request.
-                self.execute_request(order, /* with_confirmation */ false)
-                    .await?;
-            }
-            PendingRequest::None => (),
+        if let Some(request) = &self.pending_request {
+            // Finish executing the previous request.
+            let request = request.clone();
+            self.execute_request(request, /* with_confirmation */ false)
+                .await?;
         }
         self.synchronize_received_certificates().await?;
         self.download_missing_sent_certificates().await?;
         Ok(self.balance)
     }
 
-    async fn receive_confirmation(
+    async fn receive_certificate(
         &mut self,
         certificate: Certificate,
     ) -> Result<(), failure::Error> {
         let request = certificate
             .value
-            .confirm_request()
+            .confirmed_request()
             .ok_or_else(|| failure::format_err!("Was expecting a confirmed account operation"))?;
         let account_id = &request.account_id;
         ensure!(
@@ -840,7 +932,7 @@ where
         // Everything worked: update the local balance.
         if let btree_map::Entry::Vacant(entry) = self
             .received_certificates
-            .entry(certificate.value.confirm_key().unwrap())
+            .entry(certificate.value.confirmed_key().unwrap())
         {
             if let Some(amount) = request.operation.received_amount() {
                 self.balance.try_add_assign(amount.into())?;
@@ -858,10 +950,8 @@ where
             sequence_number: self.next_sequence_number,
         };
         self.known_key_pairs.insert(key_pair.public(), key_pair);
-        let order = self.make_request_order(request)?;
-
         let certificate = self
-            .execute_request(order, /* with_confirmation */ true)
+            .execute_request(request, /* with_confirmation */ true)
             .await?;
         Ok(certificate)
     }
@@ -875,9 +965,28 @@ where
             operation: Operation::ChangeOwner { new_owner },
             sequence_number: self.next_sequence_number,
         };
-        let order = self.make_request_order(request)?;
         let certificate = self
-            .execute_request(order, /* with_confirmation */ true)
+            .execute_request(request, /* with_confirmation */ true)
+            .await?;
+        Ok(certificate)
+    }
+
+    async fn share_ownership(
+        &mut self,
+        new_owner: AccountOwner,
+    ) -> Result<Certificate, failure::Error> {
+        let owner = self.owner().ok_or_else(|| {
+            failure::format_err!("Cannot share ownership for an account that we don't own")
+        })?;
+        let request = Request {
+            account_id: self.account_id.clone(),
+            operation: Operation::ChangeMultipleOwners {
+                new_owners: vec![owner, new_owner],
+            },
+            sequence_number: self.next_sequence_number,
+        };
+        let certificate = self
+            .execute_request(request, /* with_confirmation */ true)
             .await?;
         Ok(certificate)
     }
@@ -892,9 +1001,8 @@ where
             operation: Operation::OpenAccount { new_id, new_owner },
             sequence_number: self.next_sequence_number,
         };
-        let order = self.make_request_order(request)?;
         let certificate = self
-            .execute_request(order, /* with_confirmation */ true)
+            .execute_request(request, /* with_confirmation */ true)
             .await?;
         Ok(certificate)
     }
@@ -905,9 +1013,8 @@ where
             operation: Operation::CloseAccount,
             sequence_number: self.next_sequence_number,
         };
-        let order = self.make_request_order(request)?;
         let certificate = self
-            .execute_request(order, /* with_confirmation */ true)
+            .execute_request(request, /* with_confirmation */ true)
             .await?;
         Ok(certificate)
     }
@@ -927,9 +1034,8 @@ where
             },
             sequence_number: self.next_sequence_number,
         };
-        let order = self.make_request_order(request)?;
         let new_certificate = self
-            .execute_request(order, /* with_confirmation */ false)
+            .execute_request(request, /* with_confirmation */ false)
             .await?;
         Ok(new_certificate)
     }

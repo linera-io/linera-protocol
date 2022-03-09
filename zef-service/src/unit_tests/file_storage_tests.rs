@@ -30,7 +30,7 @@ async fn test_file_storage_for_certificates() {
         operation: Operation::CloseAccount,
         sequence_number: SequenceNumber::default(),
     };
-    let value = Value::Confirmed(request);
+    let value = Value::Confirmed { request };
     let certificate = Certificate::new(value, vec![]);
     client.write_certificate(certificate.clone()).await.unwrap();
     let read_certificate = client.read_certificate(certificate.hash).await.unwrap();
