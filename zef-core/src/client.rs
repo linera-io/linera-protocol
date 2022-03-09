@@ -108,8 +108,10 @@ pub trait AccountClient {
 pub enum PendingRequest {
     /// No request.
     None,
-    /// A "regular" request meant to be confirmed.
-    Regular(RequestOrder),
+    /// A request meant to be validated.
+    Validating(RequestOrder),
+    /// (multi-owner account) A validated request ready to be confirmed.
+    Confirming(ConfirmationOrder),
 }
 
 /// Reference implementation of the `AccountClient` trait using many instances of
@@ -607,7 +609,7 @@ where
         };
         let order = self.make_request_order(request)?;
         let certificate = self
-            .execute_regular_request(order, /* with_confirmation */ true)
+            .execute_request(order, /* with_confirmation */ true)
             .await?;
         Ok(certificate)
     }
@@ -641,21 +643,51 @@ where
             Operation::Transfer { amount, .. } => {
                 self.balance.try_sub_assign((*amount).into())?;
             }
-            Operation::ChangeOwner { new_owner } => match self.known_key_pairs.entry(*new_owner) {
-                btree_map::Entry::Occupied(kp) => {
-                    let old = std::mem::take(&mut self.key_pair);
-                    self.key_pair = Some(kp.remove());
-                    if let Some(kp) = old {
-                        self.known_key_pairs.insert(kp.public(), kp);
+            Operation::ChangeOwner { new_owner }
+                if matches!(
+                    &self.key_pair,
+                    Some(kp) if kp.public() == *new_owner
+                ) =>
+            {
+                // Keep the current key.
+            }
+            Operation::ChangeOwner { new_owner } => {
+                // Change or remove the current key.
+                let old = std::mem::take(&mut self.key_pair);
+                if let Some(value) = self.known_key_pairs.remove(new_owner) {
+                    // We know the new private key so let's install it.
+                    self.key_pair = Some(value);
+                }
+                if let Some(kp) = old {
+                    // Do not forget the old key pair.
+                    self.known_key_pairs.insert(kp.public(), kp);
+                }
+            }
+            Operation::ChangeMultipleOwners { new_owners }
+                if matches!(
+                    &self.key_pair,
+                    Some(kp) if new_owners.iter().find(|p| **p == kp.public()).is_some()
+                ) =>
+            {
+                // Keep the current key.
+            }
+            Operation::ChangeMultipleOwners { new_owners } => {
+                // Change or remove the current key.
+                let old = std::mem::take(&mut self.key_pair);
+                for owner in new_owners {
+                    if let Some(value) = self.known_key_pairs.remove(owner) {
+                        // We know the new private key so let's install it.
+                        self.key_pair = Some(value);
+                        // TODO: We probably shouldn't choose the first identity that
+                        // works like this.
+                        break;
                     }
                 }
-                btree_map::Entry::Vacant(_) => {
-                    let old = std::mem::take(&mut self.key_pair);
-                    if let Some(kp) = old {
-                        self.known_key_pairs.insert(kp.public(), kp);
-                    }
+                if let Some(kp) = old {
+                    // Do not forget the old key pair.
+                    self.known_key_pairs.insert(kp.public(), kp);
                 }
-            },
+            }
             Operation::CloseAccount => {
                 self.key_pair = None;
             }
@@ -671,14 +703,14 @@ where
     }
 
     /// Execute (or retry) a regular request order. Update local balance.
-    async fn execute_regular_request(
+    async fn execute_request(
         &mut self,
         order: RequestOrder,
         with_confirmation: bool,
     ) -> Result<Certificate, failure::Error> {
         ensure!(
             matches!(&self.pending_request, PendingRequest::None)
-                || matches!(&self.pending_request, PendingRequest::Regular(o) if o.value.request == order.value.request),
+                || matches!(&self.pending_request, PendingRequest::Validating(o) if o.value.request == order.value.request),
             "Client state has a different pending request",
         );
         ensure!(
@@ -686,7 +718,7 @@ where
             "Unexpected sequence number"
         );
         self.download_missing_sent_certificates().await?;
-        self.pending_request = PendingRequest::Regular(order.clone());
+        self.pending_request = PendingRequest::Validating(order.clone());
         let certificates = self
             .communicate_requests(
                 self.account_id.clone(),
@@ -772,9 +804,9 @@ where
 
     async fn synchronize_balance(&mut self) -> Result<Balance, failure::Error> {
         match self.pending_request.clone() {
-            PendingRequest::Regular(order) => {
+            PendingRequest::Validating(order) => {
                 // Finish executing the previous request.
-                self.execute_regular_request(order, /* with_confirmation */ false)
+                self.execute_request(order, /* with_confirmation */ false)
                     .await?;
             }
             PendingRequest::None => (),
@@ -829,7 +861,7 @@ where
         let order = self.make_request_order(request)?;
 
         let certificate = self
-            .execute_regular_request(order, /* with_confirmation */ true)
+            .execute_request(order, /* with_confirmation */ true)
             .await?;
         Ok(certificate)
     }
@@ -845,7 +877,7 @@ where
         };
         let order = self.make_request_order(request)?;
         let certificate = self
-            .execute_regular_request(order, /* with_confirmation */ true)
+            .execute_request(order, /* with_confirmation */ true)
             .await?;
         Ok(certificate)
     }
@@ -862,7 +894,7 @@ where
         };
         let order = self.make_request_order(request)?;
         let certificate = self
-            .execute_regular_request(order, /* with_confirmation */ true)
+            .execute_request(order, /* with_confirmation */ true)
             .await?;
         Ok(certificate)
     }
@@ -875,7 +907,7 @@ where
         };
         let order = self.make_request_order(request)?;
         let certificate = self
-            .execute_regular_request(order, /* with_confirmation */ true)
+            .execute_request(order, /* with_confirmation */ true)
             .await?;
         Ok(certificate)
     }
@@ -897,7 +929,7 @@ where
         };
         let order = self.make_request_order(request)?;
         let new_certificate = self
-            .execute_regular_request(order, /* with_confirmation */ false)
+            .execute_request(order, /* with_confirmation */ false)
             .await?;
         Ok(new_certificate)
     }

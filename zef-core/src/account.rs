@@ -77,6 +77,14 @@ impl AccountManager {
         }))
     }
 
+    pub fn multiple(owners: Vec<AccountOwner>) -> Self {
+        AccountManager::Multi(Box::new(MultiOwnerManager {
+            owners: owners.into_iter().collect(),
+            pending: None,
+            locked: None,
+        }))
+    }
+
     pub fn reset(&mut self) {
         match self {
             AccountManager::None => (),
@@ -298,7 +306,9 @@ impl AccountState {
                     Error::InvalidNewAccountId(new_id.clone())
                 );
             }
-            Operation::CloseAccount | Operation::ChangeOwner { .. } => {
+            Operation::CloseAccount
+            | Operation::ChangeOwner { .. }
+            | Operation::ChangeMultipleOwners { .. } => {
                 // Nothing to check.
             }
         }
@@ -315,6 +325,9 @@ impl AccountState {
             Operation::OpenAccount { .. } => (),
             Operation::ChangeOwner { new_owner } => {
                 self.manager = AccountManager::single(*new_owner);
+            }
+            Operation::ChangeMultipleOwners { new_owners } => {
+                self.manager = AccountManager::multiple(new_owners.clone());
             }
             Operation::CloseAccount => {
                 self.manager = AccountManager::default();
