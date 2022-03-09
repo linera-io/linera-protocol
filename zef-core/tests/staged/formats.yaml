@@ -62,10 +62,6 @@ Certificate:
           TUPLE:
             - TYPENAME: PublicKeyBytes
             - TYPENAME: Signature
-ConfirmationOrder:
-  STRUCT:
-    - certificate:
-        TYPENAME: Certificate
 CrossShardRequest:
   ENUM:
     0:
@@ -263,9 +259,9 @@ SerializedMessage:
         NEWTYPE:
           TYPENAME: RequestOrder
     1:
-      ConfirmationOrder:
+      Certificate:
         NEWTYPE:
-          TYPENAME: ConfirmationOrder
+          TYPENAME: Certificate
     2:
       AccountInfoQuery:
         NEWTYPE:
@@ -315,8 +311,9 @@ Value:
               TYPENAME: RoundNumber
     1:
       Confirmed:
-        NEWTYPE:
-          TYPENAME: Request
+        STRUCT:
+          - request:
+              TYPENAME: Request
 Vote:
   STRUCT:
     - value:

@@ -27,7 +27,7 @@ fn test_signed_values() {
         },
         sequence_number: SequenceNumber::new(),
     };
-    let value = Value::Confirmed(request);
+    let value = Value::Confirmed { request };
 
     let v = Vote::new(value.clone(), &key1);
     assert!(v.check(&committee).is_ok());
@@ -61,7 +61,7 @@ fn test_certificates() {
         },
         sequence_number: SequenceNumber::new(),
     };
-    let value = Value::Confirmed(request);
+    let value = Value::Confirmed { request };
 
     let v1 = Vote::new(value.clone(), &key1);
     let v2 = Vote::new(value.clone(), &key2);
