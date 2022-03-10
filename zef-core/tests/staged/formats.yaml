@@ -96,76 +96,76 @@ Error:
           - current_sequence_number:
               TYPENAME: SequenceNumber
     6:
-      UnexpectedTransactionIndex: UNIT
-    7:
       SequenceOverflow: UNIT
-    8:
+    7:
       SequenceUnderflow: UNIT
-    9:
+    8:
       AmountOverflow: UNIT
-    10:
+    9:
       AmountUnderflow: UNIT
-    11:
+    10:
       BalanceOverflow: UNIT
-    12:
+    11:
       BalanceUnderflow: UNIT
-    13:
+    12:
       InvalidSignature:
         STRUCT:
           - error: STR
           - type_name: STR
-    14:
+    13:
       UnknownSigner: UNIT
-    15:
+    14:
       CertificateRequiresQuorum: UNIT
-    16:
+    15:
       CertificateAuthorityReuse: UNIT
-    17:
+    16:
       IncorrectTransferAmount: UNIT
-    18:
+    17:
       InsufficientFunding:
         STRUCT:
           - current_balance:
               TYPENAME: Balance
-    19:
+    18:
       InvalidNewAccountId:
         NEWTYPE:
           TYPENAME: AccountId
+    19:
+      InsufficientRound:
+        NEWTYPE:
+          TYPENAME: RoundNumber
     20:
-      CertificateNotFound: UNIT
+      HasLockedRequest:
+        NEWTYPE:
+          TYPENAME: Request
     21:
-      InvalidCrossShardRequest: UNIT
+      CertificateNotFound: UNIT
     22:
-      InvalidRequestOrder: UNIT
+      InvalidCrossShardRequest: UNIT
     23:
-      InvalidConfirmationOrder: UNIT
+      InvalidRequestOrder: UNIT
     24:
-      InvalidCoinCreationOrder: UNIT
-    25:
       ClientErrorWhileProcessingRequestOrder: UNIT
-    26:
-      ClientErrorWhileProcessingCoinCreationOrder: UNIT
-    27:
+    25:
       ClientErrorWhileRequestingCertificate: UNIT
-    28:
+    26:
       WrongShard: UNIT
-    29:
+    27:
       InvalidDecoding: UNIT
-    30:
+    28:
       UnexpectedMessage: UNIT
-    31:
+    29:
       ClientIoError:
         STRUCT:
           - error: STR
-    32:
+    30:
       StorageIoError:
         STRUCT:
           - error: STR
-    33:
+    31:
       StorageBcsError:
         STRUCT:
           - error: STR
-    34:
+    32:
       MissingCertificate:
         STRUCT:
           - hash:

@@ -408,13 +408,7 @@ impl AuthorityClient for Client {
         &mut self,
         certificate: Certificate,
     ) -> Result<AccountInfoResponse, Error> {
-        let shard = get_shard(
-            self.num_shards,
-            certificate
-                .value
-                .confirmed_account_id()
-                .ok_or(Error::InvalidConfirmationOrder)?,
-        );
+        let shard = get_shard(self.num_shards, certificate.value.account_id());
         self.send_recv_info_bytes(
             shard,
             serialize_message(&SerializedMessage::Certificate(Box::new(certificate))),
