@@ -439,6 +439,42 @@ impl SequenceNumber {
     }
 }
 
+impl RoundNumber {
+    #[inline]
+    pub fn new() -> Self {
+        RoundNumber(0)
+    }
+
+    #[inline]
+    pub fn max() -> Self {
+        RoundNumber(0x7fff_ffff_ffff_ffff)
+    }
+
+    #[inline]
+    pub fn try_add_one(self) -> Result<RoundNumber, Error> {
+        let val = self.0.checked_add(1).ok_or(Error::SequenceOverflow)?;
+        Ok(Self(val))
+    }
+
+    #[inline]
+    pub fn try_sub_one(self) -> Result<RoundNumber, Error> {
+        let val = self.0.checked_sub(1).ok_or(Error::SequenceUnderflow)?;
+        Ok(Self(val))
+    }
+
+    #[inline]
+    pub fn try_add_assign_one(&mut self) -> Result<(), Error> {
+        self.0 = self.0.checked_add(1).ok_or(Error::SequenceOverflow)?;
+        Ok(())
+    }
+
+    #[inline]
+    pub fn try_sub_assign_one(&mut self) -> Result<(), Error> {
+        self.0 = self.0.checked_sub(1).ok_or(Error::SequenceUnderflow)?;
+        Ok(())
+    }
+}
+
 impl From<SequenceNumber> for u64 {
     fn from(val: SequenceNumber) -> Self {
         val.0

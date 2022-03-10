@@ -47,7 +47,7 @@ pub enum AccountManager {
 pub struct SingleOwnerManager {
     /// The owner of the account.
     pub owner: AccountOwner,
-    /// Whether we have signed a request for this sequence number already.
+    /// Latest proposal that we have voted on last (both to validate and confirm it).
     pub pending: Option<Vote>,
 }
 
@@ -57,10 +57,17 @@ pub struct SingleOwnerManager {
 pub struct MultiOwnerManager {
     /// The co-owners of the account.
     pub owners: HashSet<AccountOwner>,
-    /// Pending proposal that we have validated and perhaps locked (i.e. voted to be final).
+    /// Latest proposal that we have voted on (either to validate or to confirm it).
     pub pending: Option<Vote>,
-    /// Validation certificate of a proposal that we have locked.
+    /// Latest validated proposal that we have seen (and voted to confirm).
     pub locked: Option<Certificate>,
+}
+
+/// The result of verifying a (valid) query.
+#[derive(Eq, PartialEq)]
+pub enum Outcome {
+    Accept,
+    Skip,
 }
 
 impl Default for AccountManager {
@@ -119,25 +126,26 @@ impl AccountManager {
     }
 
     /// Verify the safety of the request w.r.t. voting rules.
-    /// Returns true if the same request has been handled already.
-    pub fn check_pending_request(
+    pub fn check_request(
         &self,
         new_request: &Request,
         new_round: Option<RoundNumber>,
-    ) -> Result<bool, Error> {
+    ) -> Result<Outcome, Error> {
         match self {
             AccountManager::Single(manager) => {
                 ensure!(new_round.is_none(), Error::InvalidRequestOrder);
-                match &manager.pending {
-                    Some(pending) => {
-                        ensure!(
-                            matches!(&pending.value, Value::Confirmed {request} if request == new_request),
-                            Error::PreviousRequestMustBeConfirmedFirst
-                        );
-                        Ok(true)
+                if let Some(pending) = &manager.pending {
+                    match &pending.value {
+                        Value::Confirmed { request } if request != new_request => {
+                            return Err(Error::PreviousRequestMustBeConfirmedFirst);
+                        }
+                        Value::Validated { .. } => {
+                            return Err(Error::InvalidRequestOrder);
+                        }
+                        _ => (),
                     }
-                    None => Ok(false),
                 }
+                Ok(Outcome::Accept)
             }
             AccountManager::Multi(manager) => {
                 let new_round = new_round.ok_or(Error::InvalidRequestOrder)?;
@@ -146,28 +154,58 @@ impl AccountManager {
                         Value::Validated { request, round }
                             if *round == new_round && request == new_request =>
                         {
-                            return Ok(true);
+                            return Ok(Outcome::Skip);
                         }
-                        Value::Validated { round, .. } if *round < new_round => (),
-                        Value::Confirmed { .. } => {
-                            // Verification continues below.
-                            assert!(manager.locked.is_some());
+                        Value::Validated { round, .. } if new_round <= *round => {
+                            return Err(Error::InsufficientRound(*round));
                         }
-                        _ => {
-                            return Err(Error::InvalidRequestOrder);
-                        }
+                        _ => (),
                     }
                 }
                 if let Some(locked) = &manager.locked {
-                    ensure!(
-                        matches!(
-                            &locked.value,
-                            Value::Validated { request, round } if *round < new_round && request == new_request
-                        ),
-                        Error::InvalidRequestOrder
-                    );
+                    match &locked.value {
+                        Value::Validated { round, .. } if new_round <= *round => {
+                            return Err(Error::InsufficientRound(*round));
+                        }
+                        Value::Validated { request, .. } if new_request != request => {
+                            return Err(Error::HasLockedRequest(request.clone()));
+                        }
+                        _ => (),
+                    }
                 }
-                Ok(false)
+                Ok(Outcome::Accept)
+            }
+            _ => panic!("unexpected account manager"),
+        }
+    }
+
+    pub fn check_validated_request(
+        &self,
+        new_request: &Request,
+        new_round: RoundNumber,
+    ) -> Result<Outcome, Error> {
+        match self {
+            AccountManager::Multi(manager) => {
+                if let Some(pending) = &manager.pending {
+                    match &pending.value {
+                        Value::Confirmed { request } if request == new_request => {
+                            return Ok(Outcome::Skip);
+                        }
+                        Value::Validated { round, .. } if new_round < *round => {
+                            return Err(Error::InsufficientRound(round.try_sub_one().unwrap()));
+                        }
+                        _ => (),
+                    }
+                }
+                if let Some(locked) = &manager.locked {
+                    match &locked.value {
+                        Value::Validated { round, .. } if new_round < *round => {
+                            return Err(Error::InsufficientRound(round.try_sub_one().unwrap()));
+                        }
+                        _ => (),
+                    }
+                }
+                Ok(Outcome::Accept)
             }
             _ => panic!("unexpected account manager"),
         }
@@ -186,48 +224,10 @@ impl AccountManager {
                 manager.pending = Some(vote);
             }
             AccountManager::Multi(manager) => {
-                let round = round.unwrap();
+                let round = round.expect("round was checked");
                 let value = Value::Validated { request, round };
                 let vote = Vote::new(value, key_pair);
                 manager.pending = Some(vote);
-            }
-            _ => panic!("unexpected account manager"),
-        }
-    }
-
-    /// Returns true if the same request has been handled already.
-    pub fn check_validated_request(
-        &self,
-        new_request: &Request,
-        new_round: RoundNumber,
-    ) -> Result<bool, Error> {
-        match self {
-            AccountManager::Multi(manager) => {
-                if let Some(pending) = &manager.pending {
-                    match &pending.value {
-                        Value::Confirmed { request } if request == new_request => {
-                            return Ok(true);
-                        }
-                        Value::Validated { round, .. } if *round <= new_round => (),
-                        Value::Confirmed { .. } => {
-                            // Verification continues below.
-                            assert!(manager.locked.is_some());
-                        }
-                        _ => {
-                            return Err(Error::InvalidConfirmationOrder);
-                        }
-                    }
-                }
-                if let Some(locked) = &manager.locked {
-                    ensure!(
-                        matches!(
-                            &locked.value,
-                            Value::Validated { round, .. } if *round <= new_round
-                        ),
-                        Error::InvalidConfirmationOrder
-                    );
-                }
-                Ok(false)
             }
             _ => panic!("unexpected account manager"),
         }

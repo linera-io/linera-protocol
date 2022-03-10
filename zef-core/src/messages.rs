@@ -92,8 +92,7 @@ pub struct Vote {
     pub signature: Signature,
 }
 
-/// A certified statement from the committee. Note: Opaque coins have no external
-/// signatures and are authenticated at a lower level.
+/// A certified statement from the committee.
 #[derive(Clone, Debug, Serialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct Certificate {
@@ -184,13 +183,14 @@ impl Operation {
 }
 
 impl Value {
-    pub fn confirmed_account_id(&self) -> Option<&AccountId> {
+    pub fn account_id(&self) -> &AccountId {
         match self {
-            Value::Confirmed { request } => Some(&request.account_id),
-            _ => None,
+            Value::Confirmed { request } => &request.account_id,
+            Value::Validated { request, .. } => &request.account_id,
         }
     }
 
+    #[cfg(test)]
     pub fn confirmed_sequence_number(&self) -> Option<SequenceNumber> {
         match self {
             Value::Confirmed { request } => Some(request.sequence_number),

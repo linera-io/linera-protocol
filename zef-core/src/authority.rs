@@ -3,7 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    base_types::*, committee::Committee, ensure, error::Error, messages::*, storage::StorageClient,
+    account::Outcome, base_types::*, committee::Committee, ensure, error::Error, messages::*,
+    storage::StorageClient,
 };
 use async_trait::async_trait;
 use futures::future;
@@ -132,10 +133,7 @@ where
         round: RoundNumber,
         certificate: Certificate,
     ) -> Result<AccountInfoResponse, Error> {
-        // assert_eq!(
-        //     &certificate.value.validated_request().unwrap(),
-        //     &request
-        // );
+        assert_eq!(certificate.value.validated_request().unwrap(), &request);
         // Obtain the sender's account.
         let sender = request.account_id.clone();
         // Check that the account is active and ready for this confirmation.
@@ -147,10 +145,9 @@ where
         }
         if account.next_sequence_number > request.sequence_number {
             // Request was already confirmed.
-            let info = account.make_account_info();
-            return Ok(info);
+            return Ok(account.make_account_info());
         }
-        if account.manager.check_validated_request(&request, round)? {
+        if account.manager.check_validated_request(&request, round)? == Outcome::Skip {
             // If we just processed the same pending request, return the account info
             // unchanged.
             return Ok(account.make_account_info());
@@ -218,7 +215,7 @@ where
             Error::UnexpectedSequenceNumber
         );
         // Check the well-formedness of the request.
-        if account.manager.check_pending_request(&request, round)? {
+        if account.manager.check_request(&request, round)? == Outcome::Skip {
             // If we just processed the same pending request, return the account info
             // unchanged.
             return Ok(account.make_account_info());
@@ -241,17 +238,17 @@ where
         certificate.check(&self.committee)?;
         // Process the order.
         match &certificate.value {
-            Value::Confirmed { request } => {
-                // Execute the finalized request.
-                self.process_confirmed_request(request.clone(), certificate)
-                    .await
-            }
             Value::Validated { request, round } => {
-                // Finalize the valid request.
+                // Confirm the validated request.
                 let info = self
                     .process_validated_request(request.clone(), *round, certificate)
                     .await?;
                 Ok((info, Vec::new()))
+            }
+            Value::Confirmed { request } => {
+                // Execute the confirmed request.
+                self.process_confirmed_request(request.clone(), certificate)
+                    .await
             }
         }
     }
