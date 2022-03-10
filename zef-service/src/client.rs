@@ -220,11 +220,7 @@ impl ClientContext {
         let mut done_senders = HashSet::new();
         for vote in votes {
             // We aggregate votes indexed by sender.
-            let account_id = vote
-                .value
-                .confirmed_account_id()
-                .expect("this should be a commit")
-                .clone();
+            let account_id = vote.value.account_id().clone();
             if done_senders.contains(&account_id) {
                 continue;
             }

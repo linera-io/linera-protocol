@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::*;
+use crate::{base_types::*, messages::Request};
 use failure::Fail;
 use serde::{Deserialize, Serialize};
 
@@ -43,10 +43,6 @@ pub enum Error {
         current_sequence_number: SequenceNumber,
     },
 
-    // Smart-contract sequencing
-    #[fail(display = "Transaction index must increase by one")]
-    UnexpectedTransactionIndex,
-
     // Algorithmic operations
     #[fail(display = "Sequence number overflow.")]
     SequenceOverflow,
@@ -81,6 +77,10 @@ pub enum Error {
     InsufficientFunding { current_balance: Balance },
     #[fail(display = "Invalid new account id: {}", 0)]
     InvalidNewAccountId(AccountId),
+    #[fail(display = "Round number should be greater than {:?}", 0)]
+    InsufficientRound(RoundNumber),
+    #[fail(display = "A different request was locked: {:?}", 0)]
+    HasLockedRequest(Request),
 
     // Other server-side errors
     #[fail(display = "No certificate for this account and sequence number")]
@@ -89,16 +89,10 @@ pub enum Error {
     InvalidCrossShardRequest,
     #[fail(display = "Invalid request order.")]
     InvalidRequestOrder,
-    #[fail(display = "Invalid confirmation order.")]
-    InvalidConfirmationOrder,
-    #[fail(display = "Invalid coin creation order.")]
-    InvalidCoinCreationOrder,
 
     // Client errors
     #[fail(display = "Client failed to obtain a valid response to the request order")]
     ClientErrorWhileProcessingRequestOrder,
-    #[fail(display = "Client failed to obtain a valid response to the coin creation order")]
-    ClientErrorWhileProcessingCoinCreationOrder,
     #[fail(display = "Client failed to obtain a valid response to the certificate request")]
     ClientErrorWhileRequestingCertificate,
 
