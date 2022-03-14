@@ -76,31 +76,43 @@ impl Default for AccountManager {
     }
 }
 
-impl AccountManager {
-    pub fn single(owner: AccountOwner) -> Self {
-        AccountManager::Single(Box::new(SingleOwnerManager {
+impl SingleOwnerManager {
+    pub fn new(owner: AccountOwner) -> Self {
+        SingleOwnerManager {
             owner,
             pending: None,
-        }))
+        }
     }
+}
 
-    pub fn multiple(owners: Vec<AccountOwner>) -> Self {
-        AccountManager::Multi(Box::new(MultiOwnerManager {
-            owners: owners.into_iter().collect(),
+impl MultiOwnerManager {
+    pub fn new(owners: HashSet<AccountOwner>) -> Self {
+        MultiOwnerManager {
+            owners,
             pending: None,
             locked: None,
-        }))
+        }
+    }
+}
+
+impl AccountManager {
+    pub fn single(owner: AccountOwner) -> Self {
+        AccountManager::Single(Box::new(SingleOwnerManager::new(owner)))
+    }
+
+    pub fn multiple(owners: HashSet<AccountOwner>) -> Self {
+        AccountManager::Multi(Box::new(MultiOwnerManager::new(owners)))
     }
 
     pub fn reset(&mut self) {
         match self {
             AccountManager::None => (),
             AccountManager::Single(manager) => {
-                manager.pending = None;
+                *manager = Box::new(SingleOwnerManager::new(manager.owner));
             }
             AccountManager::Multi(manager) => {
-                manager.pending = None;
-                manager.locked = None;
+                let owners = std::mem::take(&mut manager.owners);
+                *manager = Box::new(MultiOwnerManager::new(owners));
             }
         }
     }
@@ -219,11 +231,13 @@ impl AccountManager {
     ) {
         match self {
             AccountManager::Single(manager) => {
+                // Vote to confirm
                 let value = Value::Confirmed { request };
                 let vote = Vote::new(value, key_pair);
                 manager.pending = Some(vote);
             }
             AccountManager::Multi(manager) => {
+                // Vote to validate
                 let round = round.expect("round was checked");
                 let value = Value::Validated { request, round };
                 let vote = Vote::new(value, key_pair);
@@ -241,10 +255,11 @@ impl AccountManager {
     ) {
         match self {
             AccountManager::Multi(manager) => {
+                // Record validity certificate.
+                manager.locked = Some(certificate);
+                // Vote to confirm
                 let value = Value::Confirmed { request };
                 let vote = Vote::new(value, key_pair);
-                // Record confirmation.
-                manager.locked = Some(certificate);
                 // Ok to overwrite validation votes with confirmation votes at equal or
                 // higher round.
                 manager.pending = Some(vote);
@@ -327,7 +342,7 @@ impl AccountState {
                 self.manager = AccountManager::single(*new_owner);
             }
             Operation::ChangeMultipleOwners { new_owners } => {
-                self.manager = AccountManager::multiple(new_owners.clone());
+                self.manager = AccountManager::multiple(new_owners.iter().cloned().collect());
             }
             Operation::CloseAccount => {
                 self.manager = AccountManager::default();
