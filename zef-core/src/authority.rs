@@ -203,7 +203,7 @@ where
         // Check authentication of the request.
         order.check(&account.manager)?;
         // Check the account is ready for this new request.
-        let request = order.value.request;
+        let request = &order.value.request;
         let round = order.value.round;
         let number = request.sequence_number;
         ensure!(
@@ -215,15 +215,15 @@ where
             Error::UnexpectedSequenceNumber
         );
         // Check the well-formedness of the request.
-        if account.manager.check_request(&request, round)? == Outcome::Skip {
+        if account.manager.check_request(request, round)? == Outcome::Skip {
             // If we just processed the same pending request, return the account info
             // unchanged.
             return Ok(account.make_account_info());
         }
         // Verify that the request is valid.
-        account.validate_operation(&request)?;
+        account.validate_operation(request)?;
         // Create the vote and store it in the account.
-        account.manager.create_vote(request, round, &self.key_pair);
+        account.manager.create_vote(order, &self.key_pair);
         let info = account.make_account_info();
         self.storage.write_account(account).await?;
         Ok(info)

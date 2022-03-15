@@ -3,14 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    base_types::*, committee::Committee, downloader::*, ensure as my_ensure, error::Error,
-    messages::*,
+    account::AccountManager, base_types::*, committee::Committee, downloader::*,
+    ensure as my_ensure, error::Error, messages::*,
 };
 use async_trait::async_trait;
 use failure::{bail, ensure};
 use futures::{future, StreamExt};
 use rand::seq::SliceRandom;
-use std::collections::{btree_map, BTreeMap, HashMap};
+use std::collections::{btree_map, BTreeMap, HashMap, HashSet};
 
 #[cfg(test)]
 #[path = "unit_tests/client_tests.rs"]
@@ -118,7 +118,7 @@ pub struct AccountClientState<AuthorityClient> {
     /// How to talk to this committee.
     authority_clients: HashMap<AuthorityName, AuthorityClient>,
     /// Expected sequence number for the next certified request.
-    /// This is also the number of request certificates that we have created.
+    /// This is also the number of certificates that we have created.
     next_sequence_number: SequenceNumber,
     /// Whether the account is owned by several owners.
     has_multiple_owners: bool,
@@ -290,33 +290,100 @@ where
     }
 
     /// Find the highest sequence number that is known to a quorum of authorities.
-    /// NOTE: This is only reliable in the synchronous model, with a sufficient timeout value.
-    #[cfg(test)]
-    async fn get_strong_majority_sequence_number(
+    /// NOTE: This assumes network connectivity and a sufficient timeout value.
+    async fn broadcast_account_info_query(
         &mut self,
         account_id: AccountId,
-    ) -> SequenceNumber {
+    ) -> Vec<(AuthorityName, AccountInfoResponse)> {
         let query = AccountInfoQuery {
             account_id,
             query_sequence_number: None,
             query_received_certificates_excluding_first_nth: None,
         };
-        let numbers: futures::stream::FuturesUnordered<_> = self
+        let infos: futures::stream::FuturesUnordered<_> = self
             .authority_clients
             .iter_mut()
             .map(|(name, client)| {
                 let fut = client.handle_account_info_query(query.clone());
                 async move {
                     match fut.await {
-                        Ok(info) => Some((*name, info.next_sequence_number)),
+                        Ok(info) => Some((*name, info)),
                         _ => None,
                     }
                 }
             })
             .collect();
-        self.committee.get_strong_majority_lower_bound(
-            numbers.filter_map(|x| async move { x }).collect().await,
-        )
+        infos.filter_map(|x| async move { x }).collect().await
+    }
+
+    /// Find the highest sequence number that is known to a quorum of authorities.
+    /// This is meant only for testing.
+    #[cfg(test)]
+    async fn get_strong_majority_sequence_number(
+        &mut self,
+        account_id: AccountId,
+    ) -> SequenceNumber {
+        let infos = self.broadcast_account_info_query(account_id).await;
+        let numbers = infos
+            .into_iter()
+            .map(|(name, info)| (name, info.next_sequence_number))
+            .collect();
+        self.committee.get_strong_majority_lower_bound(numbers)
+    }
+
+    /// Update our view of the account to include possible actions from another client.
+    /// NOTE: This assumes network connectivity and a sufficient timeout value.
+    // TODO: not quite the API we need yet.
+    #[allow(dead_code)]
+    async fn synchronize_account_information(
+        &mut self,
+        account_id: AccountId,
+        sequence_number: SequenceNumber,
+        owners: &HashSet<AccountOwner>,
+    ) -> (RoundNumber, Option<(RoundNumber, Request)>) {
+        let infos = self.broadcast_account_info_query(account_id).await;
+        let mut used_round = RoundNumber::default();
+        let mut locked_request = None;
+        for (_, info) in infos {
+            if info.next_sequence_number != sequence_number {
+                continue;
+            }
+            let manager = match info.manager {
+                AccountManager::Multi(manager) => *manager,
+                _ => continue,
+            };
+            if let Some(order) = manager.order {
+                if owners.contains(&order.owner)
+                    && order.signature.check(&order.value, order.owner).is_ok()
+                {
+                    // This is a minimal check to ensure that the previous round was
+                    // consumed by a legitimate owner.
+                    if let Some(round) = order.value.round {
+                        if round > used_round {
+                            used_round = round;
+                        }
+                    }
+                }
+            }
+            if let Some(cert) = manager.locked {
+                if cert.check(&self.committee).is_err() {
+                    continue;
+                }
+                if let Value::Validated { round, request } = cert.value {
+                    match &mut locked_request {
+                        lr @ None => {
+                            *lr = Some((round, request));
+                        }
+                        Some((rnd, req)) if round > *rnd => {
+                            *rnd = round;
+                            *req = request;
+                        }
+                        _ => (),
+                    }
+                }
+            }
+        }
+        (used_round, locked_request)
     }
 
     /// Execute a sequence of actions in parallel for a quorum of authorities.

@@ -57,6 +57,8 @@ pub struct SingleOwnerManager {
 pub struct MultiOwnerManager {
     /// The co-owners of the account.
     pub owners: HashSet<AccountOwner>,
+    /// Latest authenticated request that we have received.
+    pub order: Option<RequestOrder>,
     /// Latest proposal that we have voted on (either to validate or to confirm it).
     pub pending: Option<Vote>,
     /// Latest validated proposal that we have seen (and voted to confirm).
@@ -89,6 +91,7 @@ impl MultiOwnerManager {
     pub fn new(owners: HashSet<AccountOwner>) -> Self {
         MultiOwnerManager {
             owners,
+            order: None,
             pending: None,
             locked: None,
         }
@@ -146,8 +149,8 @@ impl AccountManager {
         match self {
             AccountManager::Single(manager) => {
                 ensure!(new_round.is_none(), Error::InvalidRequestOrder);
-                if let Some(pending) = &manager.pending {
-                    match &pending.value {
+                if let Some(vote) = &manager.pending {
+                    match &vote.value {
                         Value::Confirmed { request } if request != new_request => {
                             return Err(Error::PreviousRequestMustBeConfirmedFirst);
                         }
@@ -161,8 +164,8 @@ impl AccountManager {
             }
             AccountManager::Multi(manager) => {
                 let new_round = new_round.ok_or(Error::InvalidRequestOrder)?;
-                if let Some(pending) = &manager.pending {
-                    match &pending.value {
+                if let Some(vote) = &manager.pending {
+                    match &vote.value {
                         Value::Validated { request, round }
                             if *round == new_round && request == new_request =>
                         {
@@ -174,8 +177,8 @@ impl AccountManager {
                         _ => (),
                     }
                 }
-                if let Some(locked) = &manager.locked {
-                    match &locked.value {
+                if let Some(cert) = &manager.locked {
+                    match &cert.value {
                         Value::Validated { round, .. } if new_round <= *round => {
                             return Err(Error::InsufficientRound(*round));
                         }
@@ -198,8 +201,8 @@ impl AccountManager {
     ) -> Result<Outcome, Error> {
         match self {
             AccountManager::Multi(manager) => {
-                if let Some(pending) = &manager.pending {
-                    match &pending.value {
+                if let Some(vote) = &manager.pending {
+                    match &vote.value {
                         Value::Confirmed { request } if request == new_request => {
                             return Ok(Outcome::Skip);
                         }
@@ -209,8 +212,8 @@ impl AccountManager {
                         _ => (),
                     }
                 }
-                if let Some(locked) = &manager.locked {
-                    match &locked.value {
+                if let Some(cert) = &manager.locked {
+                    match &cert.value {
                         Value::Validated { round, .. } if new_round < *round => {
                             return Err(Error::InsufficientRound(round.try_sub_one().unwrap()));
                         }
@@ -223,22 +226,21 @@ impl AccountManager {
         }
     }
 
-    pub fn create_vote(
-        &mut self,
-        request: Request,
-        round: Option<RoundNumber>,
-        key_pair: &KeyPair,
-    ) {
+    pub fn create_vote(&mut self, order: RequestOrder, key_pair: &KeyPair) {
         match self {
             AccountManager::Single(manager) => {
                 // Vote to confirm
+                let request = order.value.request;
                 let value = Value::Confirmed { request };
                 let vote = Vote::new(value, key_pair);
                 manager.pending = Some(vote);
             }
             AccountManager::Multi(manager) => {
+                // Record the user's authenticated request
+                manager.order = Some(order.clone());
                 // Vote to validate
-                let round = round.expect("round was checked");
+                let round = order.value.round.expect("round was checked");
+                let request = order.value.request;
                 let value = Value::Validated { request, round };
                 let vote = Vote::new(value, key_pair);
                 manager.pending = Some(vote);
@@ -356,6 +358,7 @@ impl AccountState {
     }
 
     /// Execute the recipient's side of an operation.
+    /// Returns true if the operation changed the account state.
     pub(crate) fn apply_operation_as_recipient(
         &mut self,
         operation: &Operation,
