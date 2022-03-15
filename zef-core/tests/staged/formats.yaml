@@ -180,6 +180,9 @@ MultiOwnerManager:
     - owners:
         SEQ:
           TYPENAME: PublicKeyBytes
+    - order:
+        OPTION:
+          TYPENAME: RequestOrder
     - pending:
         OPTION:
           TYPENAME: Vote
