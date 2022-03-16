@@ -13,16 +13,16 @@ use futures::future;
 #[path = "unit_tests/authority_tests.rs"]
 mod authority_tests;
 
-/// State of a worker in an authority.
-pub struct WorkerState<Client> {
+/// State of a worker in an authority or a client.
+pub struct WorkerState<StorageClient> {
     /// The name of this authority.
     pub name: AuthorityName,
     /// Committee of this instance.
     pub committee: Committee,
     /// The signature key pair of the authority.
-    pub key_pair: KeyPair,
+    pub key_pair: Option<KeyPair>,
     /// Access to local persistent storage.
-    pub storage: Client,
+    pub storage: StorageClient,
 }
 
 /// Interface provided by each (shard of an) authority.
@@ -152,12 +152,17 @@ where
             // unchanged.
             return Ok(account.make_account_info());
         }
-        account
-            .manager
-            .create_final_vote(request, certificate, &self.key_pair);
-        let info = account.make_account_info();
-        self.storage.write_account(account).await?;
-        Ok(info)
+        match &self.key_pair {
+            Some(key_pair) => {
+                account
+                    .manager
+                    .create_final_vote(request, certificate, key_pair);
+                let info = account.make_account_info();
+                self.storage.write_account(account).await?;
+                Ok(info)
+            }
+            None => Ok(account.make_account_info()),
+        }
     }
 
     /// (Trusted) Try to update the recipient account in a confirmed request.
@@ -222,11 +227,16 @@ where
         }
         // Verify that the request is valid.
         account.validate_operation(request)?;
-        // Create the vote and store it in the account.
-        account.manager.create_vote(order, &self.key_pair);
-        let info = account.make_account_info();
-        self.storage.write_account(account).await?;
-        Ok(info)
+        match &self.key_pair {
+            Some(key_pair) => {
+                // Create the vote and store it in the account.
+                account.manager.create_vote(order, key_pair);
+                let info = account.make_account_info();
+                self.storage.write_account(account).await?;
+                Ok(info)
+            }
+            None => Ok(account.make_account_info()),
+        }
     }
 
     /// Process a certificate.
@@ -325,7 +335,7 @@ impl<Client> WorkerState<Client> {
     pub fn new(
         committee: Committee,
         name: AuthorityName,
-        key_pair: KeyPair,
+        key_pair: Option<KeyPair>,
         storage: Client,
     ) -> Self {
         WorkerState {
