@@ -53,7 +53,7 @@ async fn make_shard_server(
     let mut state = WorkerState::new(
         committee,
         server_config.key.public(),
-        server_config.key,
+        Some(server_config.key),
         storage,
     );
 

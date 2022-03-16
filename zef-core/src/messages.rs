@@ -190,6 +190,13 @@ impl Value {
         }
     }
 
+    pub fn request(&self) -> &Request {
+        match self {
+            Value::Confirmed { request } => request,
+            Value::Validated { request, .. } => request,
+        }
+    }
+
     #[cfg(test)]
     pub fn confirmed_sequence_number(&self) -> Option<SequenceNumber> {
         match self {

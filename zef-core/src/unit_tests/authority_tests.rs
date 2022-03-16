@@ -508,7 +508,7 @@ fn init_state() -> WorkerState<InMemoryStoreClient> {
     authorities.insert(name, /* voting right */ 1);
     let committee = Committee::new(authorities);
     let client = InMemoryStoreClient::default();
-    WorkerState::new(committee, name, key_pair, client)
+    WorkerState::new(committee, name, Some(key_pair), client)
 }
 
 async fn init_state_with_accounts<I: IntoIterator<Item = (AccountId, AccountOwner, Balance)>>(
@@ -549,7 +549,7 @@ fn make_transfer_request_order(
 }
 
 fn make_certificate(state: &WorkerState<InMemoryStoreClient>, value: Value) -> Certificate {
-    let vote = Vote::new(value.clone(), &state.key_pair);
+    let vote = Vote::new(value.clone(), state.key_pair.as_ref().unwrap());
     let mut builder = SignatureAggregator::new(value, &state.committee);
     builder
         .append(vote.authority, vote.signature)
