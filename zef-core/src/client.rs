@@ -142,7 +142,7 @@ pub struct AccountClientState<AuthorityClient> {
     /// Consensus: next available round
     next_round: RoundNumber,
     /// Consensus: locked request
-    locked_request: Option<(RoundNumber, Request)>,
+    locked_request: Option<Request>,
 }
 
 impl<A> AccountClientState<A> {
@@ -290,7 +290,8 @@ where
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone)]
 enum CommunicateAction {
-    SubmitRequest(RequestOrder),
+    SubmitRequestForConfirmation(RequestOrder),
+    SubmitRequestForValidation(RequestOrder),
     FinalizeRequest(Certificate),
     SynchronizeNextSequenceNumber(SequenceNumber),
 }
@@ -399,27 +400,25 @@ where
             };
             if let Some(order) = manager.order {
                 // Check the sequence number.
-                if order.value.request.sequence_number != self.next_sequence_number {
+                if order.request.sequence_number != self.next_sequence_number {
                     continue;
                 }
                 // Make sure the order comes from a legitimate owner.
                 if owners.contains(&order.owner)
-                    && order.signature.check(&order.value, order.owner).is_err()
+                    && order.signature.check(&order.request, order.owner).is_err()
                 {
                     continue;
                 }
-                if let Some(round) = order.value.round {
-                    // Update the round.
-                    if round >= self.next_round {
-                        self.next_round = round.try_add_one()?;
-                    }
+                // Update the round.
+                if order.request.round >= self.next_round {
+                    self.next_round = order.request.round.try_add_one()?;
                 }
             }
             if let Some(cert) = manager.locked {
                 if cert.check(&self.committee).is_err() {
                     continue;
                 }
-                if let Value::Validated { round, request } = cert.value {
+                if let Value::Validated { request } = cert.value {
                     // Check the sequence number.
                     if request.sequence_number != self.next_sequence_number {
                         continue;
@@ -427,10 +426,9 @@ where
                     // Update the locked request.
                     match &mut self.locked_request {
                         lr @ None => {
-                            *lr = Some((round, request));
+                            *lr = Some(request);
                         }
-                        Some((rnd, req)) if round > *rnd => {
-                            *rnd = round;
+                        Some(req) if request.round > req.round => {
                             *req = request;
                         }
                         _ => (),
@@ -497,7 +495,10 @@ where
         action: CommunicateAction,
     ) -> Result<Vec<Certificate>, failure::Error> {
         let target_sequence_number = match &action {
-            CommunicateAction::SubmitRequest(order) => order.value.request.sequence_number,
+            CommunicateAction::SubmitRequestForValidation(order)
+            | CommunicateAction::SubmitRequestForConfirmation(order) => {
+                order.request.sequence_number
+            }
             CommunicateAction::FinalizeRequest(certificate) => {
                 certificate
                     .value
@@ -560,7 +561,8 @@ where
                     }
                     // Send the request order (if any) and return a vote.
                     match action {
-                        CommunicateAction::SubmitRequest(order) => {
+                        CommunicateAction::SubmitRequestForValidation(order)
+                        | CommunicateAction::SubmitRequestForConfirmation(order) => {
                             let result = client.handle_request_order(order).await;
                             match result {
                                 Ok(AccountInfoResponse { manager, .. }) => {
@@ -641,21 +643,22 @@ where
             })
             .collect();
         match action {
-            CommunicateAction::SubmitRequest(order) => {
-                let value = match order.value.round {
-                    Some(round) => Value::Validated {
-                        request: order.value.request,
-                        round,
-                    },
-                    None => Value::Confirmed {
-                        request: order.value.request,
-                    },
+            CommunicateAction::SubmitRequestForConfirmation(order) => {
+                let value = Value::Confirmed {
+                    request: order.request,
                 };
                 let certificate = Certificate::new(value, signatures);
                 // Certificate is valid because
                 // * `communicate_with_quorum` ensured a sufficient "weight" of
                 // (non-error) answers were returned by authorities.
                 // * each answer is a vote signed by the expected authority.
+                certificates.push(certificate);
+            }
+            CommunicateAction::SubmitRequestForValidation(order) => {
+                let value = Value::Validated {
+                    request: order.request,
+                };
+                let certificate = Certificate::new(value, signatures);
                 certificates.push(certificate);
             }
             CommunicateAction::FinalizeRequest(validity_certificate) => {
@@ -778,6 +781,7 @@ where
                 user_data,
             },
             sequence_number: self.next_sequence_number,
+            round: self.next_round,
         };
         let certificate = self
             .execute_request(request, /* with_confirmation */ true)
@@ -850,23 +854,6 @@ where
         Ok(())
     }
 
-    async fn make_request_order(
-        &mut self,
-        request: Request,
-    ) -> Result<RequestOrder, failure::Error> {
-        if self.multi_owners.is_none() {
-            let key_pair = self.key_pair()?;
-            return Ok(RequestOrder::new(request.into(), key_pair));
-        }
-        let request_value = RequestValue {
-            request,
-            limited_to: None,
-            round: Some(self.next_round),
-        };
-        let key_pair = self.key_pair()?;
-        Ok(RequestOrder::new(request_value, key_pair))
-    }
-
     /// Execute (or retry) a regular request order. Update local balance.
     /// If `with_confirmation` is false, we stop short of executing the finalized request.
     async fn execute_request(
@@ -892,7 +879,8 @@ where
         // Remember what we are trying to do
         self.pending_request = Some(request.clone());
         // Build the initial query.
-        let order = self.make_request_order(request).await?;
+        let key_pair = self.key_pair()?;
+        let order = RequestOrder::new(request, key_pair);
         // Send the query.
         if self.multi_owners.is_some() {
             // Need two-round trips.
@@ -900,16 +888,13 @@ where
                 .communicate_requests(
                     self.account_id.clone(),
                     self.sent_certificates.clone(),
-                    CommunicateAction::SubmitRequest(order.clone()),
+                    CommunicateAction::SubmitRequestForValidation(order.clone()),
                 )
                 .await?;
             let certificate = certificates
                 .pop()
                 .expect("last order should have been validated");
-            assert_eq!(
-                certificate.value.validated_request(),
-                Some(&order.value.request)
-            );
+            assert_eq!(certificate.value.validated_request(), Some(&order.request));
             self.update_sent_certificates(certificates)?;
 
             let certificates = self
@@ -926,7 +911,7 @@ where
                 .communicate_requests(
                     self.account_id.clone(),
                     self.sent_certificates.clone(),
-                    CommunicateAction::SubmitRequest(order.clone()),
+                    CommunicateAction::SubmitRequestForConfirmation(order.clone()),
                 )
                 .await?;
             self.update_sent_certificates(certificates)?;
@@ -938,7 +923,7 @@ where
                 .expect("last order should have been confirmed")
                 .value
                 .confirmed_request()
-                == Some(&order.value.request),
+                == Some(&order.request),
             "A different operation was executed in parallel (consider retrying the operation)"
         );
         self.pending_request = None;
@@ -1054,6 +1039,7 @@ where
             account_id: self.account_id.clone(),
             operation: Operation::ChangeOwner { new_owner },
             sequence_number: self.next_sequence_number,
+            round: self.next_round,
         };
         self.known_key_pairs.insert(key_pair.public(), key_pair);
         let certificate = self
@@ -1070,6 +1056,7 @@ where
             account_id: self.account_id.clone(),
             operation: Operation::ChangeOwner { new_owner },
             sequence_number: self.next_sequence_number,
+            round: self.next_round,
         };
         let certificate = self
             .execute_request(request, /* with_confirmation */ true)
@@ -1090,6 +1077,7 @@ where
                 new_owners: vec![owner, new_owner],
             },
             sequence_number: self.next_sequence_number,
+            round: self.next_round,
         };
         let certificate = self
             .execute_request(request, /* with_confirmation */ true)
@@ -1106,6 +1094,7 @@ where
             account_id: self.account_id.clone(),
             operation: Operation::OpenAccount { new_id, new_owner },
             sequence_number: self.next_sequence_number,
+            round: self.next_round,
         };
         let certificate = self
             .execute_request(request, /* with_confirmation */ true)
@@ -1118,6 +1107,7 @@ where
             account_id: self.account_id.clone(),
             operation: Operation::CloseAccount,
             sequence_number: self.next_sequence_number,
+            round: self.next_round,
         };
         let certificate = self
             .execute_request(request, /* with_confirmation */ true)
@@ -1139,6 +1129,7 @@ where
                 user_data,
             },
             sequence_number: self.next_sequence_number,
+            round: self.next_round,
         };
         let new_certificate = self
             .execute_request(request, /* with_confirmation */ false)

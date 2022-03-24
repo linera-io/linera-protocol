@@ -29,6 +29,7 @@ async fn test_file_storage_for_certificates() {
         account_id: AccountId::default(),
         operation: Operation::CloseAccount,
         sequence_number: SequenceNumber::default(),
+        round: RoundNumber::default(),
     };
     let value = Value::Confirmed { request };
     let certificate = Certificate::new(value, vec![]);

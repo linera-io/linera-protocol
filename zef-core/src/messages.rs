@@ -48,8 +48,8 @@ pub struct Request {
     pub operation: Operation,
     /// The sequence number.
     pub sequence_number: SequenceNumber,
-    /// Optional round number in the case of a multi-owner account.
-    pub round: Option<RoundNumber>,
+    /// Round number (used for multi-owner accounts, otherwise zero).
+    pub round: RoundNumber,
 }
 
 /// An authenticated request, aka an "order".
@@ -246,28 +246,20 @@ impl Request {
     }
 }
 
-impl From<Request> for RequestValue {
-    fn from(request: Request) -> Self {
+impl RequestOrder {
+    pub fn new(request: Request, secret: &KeyPair) -> Self {
+        let signature = Signature::new(&request, secret);
         Self {
             request,
-            round: None,
-        }
-    }
-}
-
-impl RequestOrder {
-    pub fn new(value: RequestValue, secret: &KeyPair) -> Self {
-        let signature = Signature::new(&value, secret);
-        Self {
-            value,
             owner: secret.public(),
             signature,
         }
     }
 
+    // TODO: this API is not great
     pub fn check(&self, manager: &AccountManager) -> Result<(), Error> {
         ensure!(manager.has_owner(&self.owner), Error::InvalidOwner);
-        self.signature.check(&self.value, self.owner)
+        self.signature.check(&self.request, self.owner)
     }
 }
 
@@ -399,5 +391,5 @@ impl Certificate {
     }
 }
 
-impl BcsSignable for RequestValue {}
+impl BcsSignable for Request {}
 impl BcsSignable for Value {}
