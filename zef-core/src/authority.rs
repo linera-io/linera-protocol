@@ -20,7 +20,7 @@ pub struct WorkerState<StorageClient> {
     /// without voting rights (possibly with a partial view of accounts).
     key_pair: Option<KeyPair>,
     /// Access to local persistent storage.
-    pub(crate) storage: StorageClient,
+    storage: StorageClient,
 }
 
 /// Interface provided by each (shard of an) authority.
@@ -60,6 +60,10 @@ impl<Client> WorkerState<Client>
 where
     Client: StorageClient + Clone + 'static,
 {
+    pub(crate) fn storage_client(&self) -> &Client {
+        &self.storage
+    }
+
     /// (Trusted) Process a confirmed request issued from an account.
     async fn process_confirmed_request(
         &mut self,
@@ -101,26 +105,15 @@ where
         account.manager.reset();
         // Final touch on the sender's account.
         let info = account.make_account_info();
-        if !account.manager.is_active() {
-            // Tentatively remove inactive account. (It might be created again as a
-            // recipient, though. To solve this, we may implement additional cleanups in
-            // the future.)
-            if account.keep_sending.is_empty() {
-                self.storage.remove_account(&sender).await?;
-                // Never send cross-shard requests from a deactivated account.
-                assert!(continuation.is_empty());
-            }
-        } else {
-            // Schedule cross-shard request if any.
-            let operation = &certificate.value.confirmed_request().unwrap().operation;
-            if operation.recipient().is_some() {
-                // Schedule a new cross-shard request to update recipient.
-                account.keep_sending.insert(certificate.hash);
-                continuation.push(CrossShardRequest::UpdateRecipient { certificate });
-            }
-            // Persist account.
-            self.storage.write_account(account.clone()).await?;
+        // Schedule cross-shard request if any.
+        let operation = &certificate.value.confirmed_request().unwrap().operation;
+        if operation.recipient().is_some() {
+            // Schedule a new cross-shard request to update recipient.
+            account.keep_sending.insert(certificate.hash);
+            continuation.push(CrossShardRequest::UpdateRecipient { certificate });
         }
+        // Persist account.
+        self.storage.write_account(account.clone()).await?;
         Ok((info, continuation))
     }
 
