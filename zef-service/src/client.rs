@@ -156,10 +156,11 @@ impl ClientContext {
                     user_data: UserData::default(),
                 },
                 sequence_number: account.next_sequence_number,
+                round: RoundNumber::default(),
             };
             debug!("Preparing request order: {:?}", request);
             account.next_sequence_number.try_add_assign_one().unwrap();
-            let order = RequestOrder::new(request.clone().into(), key_pair);
+            let order = RequestOrder::new(request.clone(), key_pair);
             orders.push(order.clone());
             let serialized_order =
                 serialize_message(&SerializedMessage::RequestOrder(Box::new(order)));
@@ -193,7 +194,7 @@ impl ClientContext {
         for order in orders {
             let mut certificate = Certificate::new(
                 Value::Confirmed {
-                    request: order.value.request.clone(),
+                    request: order.request.clone(),
                 },
                 Vec::new(),
             );
@@ -204,10 +205,7 @@ impl ClientContext {
             }
             let serialized_certificate =
                 serialize_message(&SerializedMessage::Certificate(Box::new(certificate)));
-            serialized_certificates.push((
-                order.value.request.account_id,
-                serialized_certificate.into(),
-            ));
+            serialized_certificates.push((order.request.account_id, serialized_certificate.into()));
         }
         serialized_certificates
     }

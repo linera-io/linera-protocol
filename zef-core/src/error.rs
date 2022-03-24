@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{base_types::*, messages::Request};
+use crate::{base_types::*, messages::Operation};
 use failure::Fail;
 use serde::{Deserialize, Serialize};
 
@@ -79,8 +79,11 @@ pub enum Error {
     InvalidNewAccountId(AccountId),
     #[fail(display = "Round number should be greater than {:?}", 0)]
     InsufficientRound(RoundNumber),
-    #[fail(display = "A different request was locked: {:?}", 0)]
-    HasLockedRequest(Request),
+    #[fail(
+        display = "A different operation was already locked for this account and sequence number: {:?}",
+        0
+    )]
+    HasLockedOperation(Operation),
 
     // Other server-side errors
     #[fail(display = "No certificate for this account and sequence number")]

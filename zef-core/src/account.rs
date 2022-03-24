@@ -143,12 +143,23 @@ impl AccountManager {
     /// Verify the safety of the request w.r.t. voting rules.
     pub fn check_request(
         &self,
+        next_sequence_number: SequenceNumber,
         new_request: &Request,
-        new_round: Option<RoundNumber>,
     ) -> Result<Outcome, Error> {
+        ensure!(
+            new_request.sequence_number <= SequenceNumber::max(),
+            Error::InvalidSequenceNumber
+        );
+        ensure!(
+            new_request.sequence_number == next_sequence_number,
+            Error::UnexpectedSequenceNumber
+        );
         match self {
             AccountManager::Single(manager) => {
-                ensure!(new_round.is_none(), Error::InvalidRequestOrder);
+                ensure!(
+                    new_request.round == RoundNumber::default(),
+                    Error::InvalidRequestOrder
+                );
                 if let Some(vote) = &manager.pending {
                     match &vote.value {
                         Value::Confirmed { request } if request != new_request => {
@@ -163,27 +174,26 @@ impl AccountManager {
                 Ok(Outcome::Accept)
             }
             AccountManager::Multi(manager) => {
-                let new_round = new_round.ok_or(Error::InvalidRequestOrder)?;
                 if let Some(vote) = &manager.pending {
                     match &vote.value {
-                        Value::Validated { request, round }
-                            if *round == new_round && request == new_request =>
-                        {
+                        Value::Validated { request } if request == new_request => {
                             return Ok(Outcome::Skip);
                         }
-                        Value::Validated { round, .. } if new_round <= *round => {
-                            return Err(Error::InsufficientRound(*round));
+                        Value::Validated { request } if new_request.round <= request.round => {
+                            return Err(Error::InsufficientRound(request.round));
                         }
                         _ => (),
                     }
                 }
                 if let Some(cert) = &manager.locked {
                     match &cert.value {
-                        Value::Validated { round, .. } if new_round <= *round => {
-                            return Err(Error::InsufficientRound(*round));
+                        Value::Validated { request } if new_request.round <= request.round => {
+                            return Err(Error::InsufficientRound(request.round));
                         }
-                        Value::Validated { request, .. } if new_request != request => {
-                            return Err(Error::HasLockedRequest(request.clone()));
+                        Value::Validated { request }
+                            if new_request.operation != request.operation =>
+                        {
+                            return Err(Error::HasLockedOperation(request.operation.clone()));
                         }
                         _ => (),
                     }
@@ -196,9 +206,18 @@ impl AccountManager {
 
     pub fn check_validated_request(
         &self,
+        next_sequence_number: SequenceNumber,
         new_request: &Request,
-        new_round: RoundNumber,
     ) -> Result<Outcome, Error> {
+        if next_sequence_number < new_request.sequence_number {
+            return Err(Error::MissingEarlierConfirmations {
+                current_sequence_number: next_sequence_number,
+            });
+        }
+        if next_sequence_number > new_request.sequence_number {
+            // Request was already confirmed.
+            return Ok(Outcome::Skip);
+        }
         match self {
             AccountManager::Multi(manager) => {
                 if let Some(vote) = &manager.pending {
@@ -206,16 +225,20 @@ impl AccountManager {
                         Value::Confirmed { request } if request == new_request => {
                             return Ok(Outcome::Skip);
                         }
-                        Value::Validated { round, .. } if new_round < *round => {
-                            return Err(Error::InsufficientRound(round.try_sub_one().unwrap()));
+                        Value::Validated { request } if new_request.round < request.round => {
+                            return Err(Error::InsufficientRound(
+                                request.round.try_sub_one().unwrap(),
+                            ));
                         }
                         _ => (),
                     }
                 }
                 if let Some(cert) = &manager.locked {
                     match &cert.value {
-                        Value::Validated { round, .. } if new_round < *round => {
-                            return Err(Error::InsufficientRound(round.try_sub_one().unwrap()));
+                        Value::Validated { request } if new_request.round < request.round => {
+                            return Err(Error::InsufficientRound(
+                                request.round.try_sub_one().unwrap(),
+                            ));
                         }
                         _ => (),
                     }
@@ -231,7 +254,7 @@ impl AccountManager {
             AccountManager::Single(manager) => {
                 if let Some(key_pair) = key_pair {
                     // Vote to confirm
-                    let request = order.value.request;
+                    let request = order.request;
                     let value = Value::Confirmed { request };
                     let vote = Vote::new(value, key_pair);
                     manager.pending = Some(vote);
@@ -242,9 +265,8 @@ impl AccountManager {
                 manager.order = Some(order.clone());
                 if let Some(key_pair) = key_pair {
                     // Vote to validate
-                    let round = order.value.round.expect("round was checked");
-                    let request = order.value.request;
-                    let value = Value::Validated { request, round };
+                    let request = order.request;
+                    let value = Value::Validated { request };
                     let vote = Vote::new(value, key_pair);
                     manager.pending = Some(vote);
                 }
