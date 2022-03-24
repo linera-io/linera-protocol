@@ -226,24 +226,28 @@ impl AccountManager {
         }
     }
 
-    pub fn create_vote(&mut self, order: RequestOrder, key_pair: &KeyPair) {
+    pub fn create_vote(&mut self, order: RequestOrder, key_pair: Option<&KeyPair>) {
         match self {
             AccountManager::Single(manager) => {
-                // Vote to confirm
-                let request = order.value.request;
-                let value = Value::Confirmed { request };
-                let vote = Vote::new(value, key_pair);
-                manager.pending = Some(vote);
+                if let Some(key_pair) = key_pair {
+                    // Vote to confirm
+                    let request = order.value.request;
+                    let value = Value::Confirmed { request };
+                    let vote = Vote::new(value, key_pair);
+                    manager.pending = Some(vote);
+                }
             }
             AccountManager::Multi(manager) => {
                 // Record the user's authenticated request
                 manager.order = Some(order.clone());
-                // Vote to validate
-                let round = order.value.round.expect("round was checked");
-                let request = order.value.request;
-                let value = Value::Validated { request, round };
-                let vote = Vote::new(value, key_pair);
-                manager.pending = Some(vote);
+                if let Some(key_pair) = key_pair {
+                    // Vote to validate
+                    let round = order.value.round.expect("round was checked");
+                    let request = order.value.request;
+                    let value = Value::Validated { request, round };
+                    let vote = Vote::new(value, key_pair);
+                    manager.pending = Some(vote);
+                }
             }
             _ => panic!("unexpected account manager"),
         }
@@ -253,18 +257,20 @@ impl AccountManager {
         &mut self,
         request: Request,
         certificate: Certificate,
-        key_pair: &KeyPair,
+        key_pair: Option<&KeyPair>,
     ) {
         match self {
             AccountManager::Multi(manager) => {
                 // Record validity certificate.
                 manager.locked = Some(certificate);
-                // Vote to confirm
-                let value = Value::Confirmed { request };
-                let vote = Vote::new(value, key_pair);
-                // Ok to overwrite validation votes with confirmation votes at equal or
-                // higher round.
-                manager.pending = Some(vote);
+                if let Some(key_pair) = key_pair {
+                    // Vote to confirm
+                    let value = Value::Confirmed { request };
+                    let vote = Vote::new(value, key_pair);
+                    // Ok to overwrite validation votes with confirmation votes at equal or
+                    // higher round.
+                    manager.pending = Some(vote);
+                }
             }
             _ => panic!("unexpected account manager"),
         }

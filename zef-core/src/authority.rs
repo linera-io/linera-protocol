@@ -18,7 +18,8 @@ pub struct WorkerState<StorageClient> {
     pub name: AuthorityName,
     /// Committee of this instance.
     pub committee: Committee,
-    /// The signature key pair of the authority.
+    /// The signature key pair of the authority. The key may be missing for replicas
+    /// without voting rights (possibly with a partial view of accounts).
     pub key_pair: Option<KeyPair>,
     /// Access to local persistent storage.
     pub storage: StorageClient,
@@ -151,17 +152,12 @@ where
             // unchanged.
             return Ok(account.make_account_info());
         }
-        match &self.key_pair {
-            Some(key_pair) => {
-                account
-                    .manager
-                    .create_final_vote(request, certificate, key_pair);
-                let info = account.make_account_info();
-                self.storage.write_account(account).await?;
-                Ok(info)
-            }
-            None => Ok(account.make_account_info()),
-        }
+        account
+            .manager
+            .create_final_vote(request, certificate, self.key_pair.as_ref());
+        let info = account.make_account_info();
+        self.storage.write_account(account).await?;
+        Ok(info)
     }
 
     /// (Trusted) Try to update the recipient account in a confirmed request.
@@ -226,16 +222,11 @@ where
         }
         // Verify that the request is valid.
         account.validate_operation(request)?;
-        match &self.key_pair {
-            Some(key_pair) => {
-                // Create the vote and store it in the account.
-                account.manager.create_vote(order, key_pair);
-                let info = account.make_account_info();
-                self.storage.write_account(account).await?;
-                Ok(info)
-            }
-            None => Ok(account.make_account_info()),
-        }
+        // Create the vote and store it in the account.
+        account.manager.create_vote(order, self.key_pair.as_ref());
+        let info = account.make_account_info();
+        self.storage.write_account(account).await?;
+        Ok(info)
     }
 
     /// Process a certificate.
