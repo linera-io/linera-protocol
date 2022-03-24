@@ -55,9 +55,6 @@ pub struct Request {
 pub struct RequestValue {
     /// The account request
     pub request: Request,
-    /// Optional field limiting the scope of the request to a particular entity.
-    // TODO: There could also be Unix timestamp as TTL
-    pub limited_to: Option<AuthorityName>,
     /// Optional round in the case of a multi-owner account.
     pub round: Option<RoundNumber>,
 }
@@ -263,7 +260,6 @@ impl From<Request> for RequestValue {
     fn from(request: Request) -> Self {
         Self {
             request,
-            limited_to: None,
             round: None,
         }
     }
