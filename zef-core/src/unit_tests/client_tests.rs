@@ -166,7 +166,7 @@ async fn init_local_client_state(balances: Vec<i128>) -> AccountClientState<Loca
     fund_account(
         &mut authority_clients,
         client1.account_id.clone(),
-        client1.owner().unwrap(),
+        client1.identity().unwrap(),
         balances,
     )
     .await;
@@ -174,7 +174,7 @@ async fn init_local_client_state(balances: Vec<i128>) -> AccountClientState<Loca
     fund_account(
         &mut authority_clients,
         client2.account_id.clone(),
-        client2.owner().unwrap(),
+        client2.identity().unwrap(),
         zeroes,
     )
     .await;
@@ -190,7 +190,7 @@ async fn init_local_client_state_with_bad_authority(
     fund_account(
         &mut authority_clients,
         client1.account_id.clone(),
-        client1.owner().unwrap(),
+        client1.identity().unwrap(),
         balances,
     )
     .await;
@@ -198,7 +198,7 @@ async fn init_local_client_state_with_bad_authority(
     fund_account(
         &mut authority_clients,
         client2.account_id.clone(),
-        client2.owner().unwrap(),
+        client2.identity().unwrap(),
         zeroes,
     )
     .await;
@@ -262,7 +262,7 @@ async fn test_rotate_key_pair() {
     let certificate = sender.rotate_key_pair(new_key_pair).await.unwrap();
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
     assert!(matches!(sender.pending_request, None));
-    assert_eq!(sender.owner().unwrap(), new_pubk);
+    assert_eq!(sender.identity().unwrap(), new_pubk);
     assert_eq!(
         sender
             .query_certificate(sender.account_id.clone(), SequenceNumber::from(0))
@@ -294,7 +294,7 @@ async fn test_transfer_ownership() {
     let certificate = sender.transfer_ownership(new_pubk).await.unwrap();
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
     assert!(matches!(sender.pending_request, None));
-    assert!(sender.key_pair.is_none());
+    assert!(sender.key_pair().is_err());
     assert_eq!(
         sender
             .query_certificate(sender.account_id.clone(), SequenceNumber::from(0))
@@ -326,7 +326,7 @@ async fn test_share_ownership() {
     let certificate = sender.share_ownership(new_pubk).await.unwrap();
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
     assert!(matches!(sender.pending_request, None));
-    assert!(sender.key_pair.is_some());
+    assert!(sender.key_pair().is_ok());
     assert_eq!(
         sender
             .query_certificate(sender.account_id.clone(), SequenceNumber::from(0))
@@ -388,7 +388,7 @@ async fn test_open_account() {
     let certificate = sender.open_account(new_pubk).await.unwrap();
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(2));
     assert!(matches!(sender.pending_request, None));
-    assert!(sender.key_pair.is_some());
+    assert!(sender.key_pair().is_ok());
     assert_eq!(
         sender
             .query_certificate(sender.account_id.clone(), SequenceNumber::from(1))
@@ -443,7 +443,7 @@ async fn test_close_account() {
     ));
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
     assert!(matches!(sender.pending_request, None));
-    assert!(sender.key_pair.is_none());
+    assert!(sender.key_pair().is_err());
     // Cannot query the certificate.
     assert!(sender
         .query_certificate(sender.account_id.clone(), SequenceNumber::from(0))
@@ -508,14 +508,14 @@ async fn test_bidirectional_transfer() {
     fund_account(
         &mut authority_clients,
         client1.account_id.clone(),
-        client1.owner().unwrap(),
+        client1.identity().unwrap(),
         vec![2, 3, 4, 4],
     )
     .await;
     fund_account(
         &mut authority_clients,
         client2.account_id.clone(),
-        client2.owner().unwrap(),
+        client2.identity().unwrap(),
         vec![0; 4],
     )
     .await;
@@ -603,14 +603,14 @@ async fn test_receiving_unconfirmed_transfer() {
     fund_account(
         &mut authority_clients,
         client1.account_id.clone(),
-        client1.owner().unwrap(),
+        client1.identity().unwrap(),
         vec![2, 3, 4, 4],
     )
     .await;
     fund_account(
         &mut authority_clients,
         client2.account_id.clone(),
-        client2.owner().unwrap(),
+        client2.identity().unwrap(),
         vec![0; 4],
     )
     .await;
@@ -655,21 +655,21 @@ async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
     fund_account(
         &mut authority_clients,
         client0.account_id.clone(),
-        client0.owner().unwrap(),
+        client0.identity().unwrap(),
         vec![2, 3, 4, 4],
     )
     .await;
     fund_account(
         &mut authority_clients,
         client1.account_id.clone(),
-        client1.owner().unwrap(),
+        client1.identity().unwrap(),
         vec![0; 4],
     )
     .await;
     fund_account(
         &mut authority_clients,
         client2.account_id.clone(),
-        client2.owner().unwrap(),
+        client2.identity().unwrap(),
         vec![0; 4],
     )
     .await;

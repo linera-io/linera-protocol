@@ -111,8 +111,8 @@ pub trait AccountClient {
 pub struct AccountClientState<AuthorityClient> {
     /// The off-chain account id.
     account_id: AccountId,
-    /// The current signature key, if we own this account.
-    key_pair: Option<KeyPair>,
+    /// Current identity as an owner.
+    identity: Option<AccountOwner>,
     /// The committee.
     committee: Committee,
     /// How to talk to this committee.
@@ -120,11 +120,11 @@ pub struct AccountClientState<AuthorityClient> {
     /// Expected sequence number for the next certified request.
     /// This is also the number of certificates that we have created.
     next_sequence_number: SequenceNumber,
-    /// Whether the account is owned by several owners.
-    has_multiple_owners: bool,
+    /// Our identity plus other owners.
+    multi_owners: Option<HashSet<AccountOwner>>,
     /// Pending request.
     pending_request: Option<Request>,
-    /// Known key pairs (past and future).
+    /// Known key pairs from present and past identities.
     known_key_pairs: BTreeMap<AccountOwner, KeyPair>,
 
     // The remaining fields are used to minimize networking, and may not always be persisted locally.
@@ -153,15 +153,24 @@ impl<A> AccountClientState<A> {
         received_certificates: Vec<Certificate>,
         balance: Balance,
     ) -> Self {
+        let mut known_key_pairs = BTreeMap::new();
+        let identity = match key_pair {
+            None => None,
+            Some(kp) => {
+                let id = kp.public();
+                known_key_pairs.insert(kp.public(), kp);
+                Some(id)
+            }
+        };
         Self {
             account_id,
-            key_pair,
+            identity,
             committee,
             authority_clients,
             next_sequence_number,
             pending_request: None,
-            has_multiple_owners: false,
-            known_key_pairs: BTreeMap::new(),
+            multi_owners: None,
+            known_key_pairs,
             sent_certificates,
             received_certificates: received_certificates
                 .into_iter()
@@ -176,12 +185,17 @@ impl<A> AccountClientState<A> {
         &self.account_id
     }
 
-    pub fn owner(&self) -> Option<AccountOwner> {
-        self.key_pair.as_ref().map(|kp| kp.public())
+    pub fn identity(&self) -> Option<AccountOwner> {
+        self.identity
     }
 
-    pub fn key_pair(&self) -> Option<&KeyPair> {
-        self.key_pair.as_ref()
+    pub fn key_pair(&self) -> Result<&KeyPair, failure::Error> {
+        let id = self
+            .identity
+            .ok_or_else(|| failure::format_err!("No identity was setup"))?;
+        self.known_key_pairs.get(&id).ok_or_else(|| {
+            failure::format_err!("Cannot make request for an account that we don't own")
+        })
     }
 
     pub fn next_sequence_number(&self) -> SequenceNumber {
@@ -795,48 +809,28 @@ where
             Operation::Transfer { amount, .. } => {
                 self.balance.try_sub_assign((*amount).into())?;
             }
-            Operation::ChangeOwner { new_owner } if self.owner() == Some(*new_owner) => {
-                self.has_multiple_owners = false;
-                // Keep the current key.
-            }
             Operation::ChangeOwner { new_owner } => {
-                self.has_multiple_owners = false;
-                // Change or remove the current key.
-                let old = std::mem::take(&mut self.key_pair);
-                if let Some(value) = self.known_key_pairs.remove(new_owner) {
-                    // We know the new private key so let's install it.
-                    self.key_pair = Some(value);
-                }
-                if let Some(kp) = old {
-                    // Do not forget the old key pair.
-                    self.known_key_pairs.insert(kp.public(), kp);
-                }
-            }
-            Operation::ChangeMultipleOwners { new_owners } if matches!(self.owner(), Some(owner) if new_owners.iter().any(|p| *p == owner)) =>
-            {
-                self.has_multiple_owners = true;
-                // Keep the current key.
+                self.identity = Some(*new_owner);
+                self.multi_owners = None;
             }
             Operation::ChangeMultipleOwners { new_owners } => {
-                self.has_multiple_owners = true;
-                // Change or remove the current key.
-                let old = std::mem::take(&mut self.key_pair);
-                for owner in new_owners {
-                    if let Some(value) = self.known_key_pairs.remove(owner) {
-                        // We know the new private key so let's install it.
-                        self.key_pair = Some(value);
-                        // TODO: We probably shouldn't choose the first identity that
-                        // works like this.
-                        break;
+                self.multi_owners = Some(new_owners.iter().cloned().collect());
+                if self.identity.is_none() || !new_owners.contains(self.identity.as_ref().unwrap())
+                {
+                    self.identity = None;
+                    // Search for a new identity that works.
+                    // TODO: We probably shouldn't choose the first identity that
+                    // works like this.
+                    for owner in new_owners {
+                        if let Some(value) = self.known_key_pairs.get(owner) {
+                            self.identity = Some(value.public());
+                            break;
+                        }
                     }
-                }
-                if let Some(kp) = old {
-                    // Do not forget the old key pair.
-                    self.known_key_pairs.insert(kp.public(), kp);
                 }
             }
             Operation::CloseAccount => {
-                self.key_pair = None;
+                self.identity = None;
             }
             Operation::OpenAccount { .. } => (),
         }
@@ -853,10 +847,8 @@ where
         &mut self,
         request: Request,
     ) -> Result<RequestOrder, failure::Error> {
-        let key_pair = self.key_pair.as_ref().ok_or_else(|| {
-            failure::format_err!("Cannot make request for an account that we don't own")
-        })?;
-        if !self.has_multiple_owners {
+        let key_pair = self.key_pair()?;
+        if self.multi_owners.is_none() {
             return Ok(RequestOrder::new(request.into(), key_pair));
         }
         // TODO
@@ -891,7 +883,7 @@ where
         // Build the initial query.
         let order = self.make_request_order(request).await?;
         // Send the query.
-        if self.has_multiple_owners {
+        if self.multi_owners.is_some() {
             // Need two-round trips.
             let mut certificates = self
                 .communicate_requests(
@@ -1078,7 +1070,7 @@ where
         &mut self,
         new_owner: AccountOwner,
     ) -> Result<Certificate, failure::Error> {
-        let owner = self.owner().ok_or_else(|| {
+        let owner = self.identity.ok_or_else(|| {
             failure::format_err!("Cannot share ownership for an account that we don't own")
         })?;
         let request = Request {

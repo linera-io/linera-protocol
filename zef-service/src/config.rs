@@ -153,7 +153,7 @@ impl AccountsConfig {
             .accounts
             .entry(state.account_id().clone())
             .or_insert_with(|| UserAccount::new(state.account_id().clone()));
-        account.key_pair = state.key_pair().map(|k| k.copy());
+        account.key_pair = state.key_pair().map(|k| k.copy()).ok();
         account.next_sequence_number = state.next_sequence_number();
         account.balance = state.balance();
         account.sent_certificates = state.sent_certificates().clone();
