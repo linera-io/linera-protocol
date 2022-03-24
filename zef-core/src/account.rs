@@ -96,6 +96,25 @@ impl MultiOwnerManager {
             locked: None,
         }
     }
+
+    pub fn round(&self) -> RoundNumber {
+        let mut round = RoundNumber::default();
+        if let Some(vote) = &self.pending {
+            if let Value::Validated { request } = &vote.value {
+                if round < request.round {
+                    round = request.round;
+                }
+            }
+        }
+        if let Some(cert) = &self.locked {
+            if let Value::Validated { request } = &cert.value {
+                if round < request.round {
+                    round = request.round;
+                }
+            }
+        }
+        round
+    }
 }
 
 impl AccountManager {

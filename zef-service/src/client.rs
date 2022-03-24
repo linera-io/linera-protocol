@@ -4,7 +4,10 @@
 
 #![deny(warnings)]
 
-use zef_core::{base_types::*, client::*, committee::Committee, messages::*, serialize::*};
+use zef_core::{
+    base_types::*, client::*, committee::Committee, messages::*, serialize::*,
+    storage::InMemoryStoreClient,
+};
 use zef_service::{config::*, network, transport};
 
 use bytes::Bytes;
@@ -84,7 +87,10 @@ impl ClientContext {
         authority_clients
     }
 
-    fn make_account_client(&self, account_id: AccountId) -> AccountClientState<network::Client> {
+    fn make_account_client(
+        &self,
+        account_id: AccountId,
+    ) -> AccountClientState<network::Client, InMemoryStoreClient> {
         let account = self
             .accounts_config
             .get(&account_id)
@@ -96,10 +102,11 @@ impl ClientContext {
             account.key_pair.as_ref().map(|kp| kp.copy()),
             committee,
             authority_clients,
+            InMemoryStoreClient::default(), // TODO
             account.next_sequence_number,
-            account.sent_certificates.clone(),
-            account.received_certificates.clone(),
-            account.balance,
+            //            account.sent_certificates.clone(),
+            //            account.received_certificates.clone(),
+            //            account.balance,
         )
     }
 
@@ -120,13 +127,14 @@ impl ClientContext {
             account.key_pair.as_ref().map(|kp| kp.copy()).or(key_pair),
             committee,
             authority_clients,
+            InMemoryStoreClient::default(), // TODO: prepopulate certificates?
             account.next_sequence_number,
-            account.sent_certificates.clone(),
-            account.received_certificates.clone(),
-            account.balance,
+            //            account.sent_certificates.clone(),
+            //            account.received_certificates.clone(),
+            //            account.balance,
         );
         client.receive_certificate(certificate).await?;
-        self.update_account_from_state(&client);
+        self.update_account_from_state(&mut client).await;
         Ok(())
     }
 
@@ -303,8 +311,13 @@ impl ClientContext {
         info!("Saved user account states");
     }
 
-    fn update_account_from_state<A>(&mut self, state: &AccountClientState<A>) {
-        self.accounts_config.update_from_state(state)
+    async fn update_account_from_state<A>(
+        &mut self,
+        state: &mut AccountClientState<A, InMemoryStoreClient>,
+    ) where
+        A: AuthorityClient + Send + Sync + 'static + Clone,
+    {
+        self.accounts_config.update_from_state(state).await
     }
 }
 
@@ -462,7 +475,7 @@ async fn main() {
             let time_total = time_start.elapsed().as_micros();
             info!("Operation confirmed after {} us", time_total);
             info!("{:?}", certificate);
-            context.update_account_from_state(&client_state);
+            context.update_account_from_state(&mut client_state).await;
 
             info!("Updating recipient's local account");
             context
@@ -497,7 +510,7 @@ async fn main() {
                     .recipient()
                     .unwrap()
             );
-            context.update_account_from_state(&client_state);
+            context.update_account_from_state(&mut client_state).await;
 
             info!("Updating recipient's local account");
             context
@@ -515,7 +528,7 @@ async fn main() {
             let time_total = time_start.elapsed().as_micros();
             info!("Operation confirmed after {} us", time_total);
             info!("{:?}", certificate);
-            context.update_account_from_state(&client_state);
+            context.update_account_from_state(&mut client_state).await;
             context.save_accounts();
         }
 
@@ -527,7 +540,7 @@ async fn main() {
             let time_total = time_start.elapsed().as_micros();
             info!("Balance confirmed after {} us", time_total);
             println!("{}", balance);
-            context.update_account_from_state(&client_state);
+            context.update_account_from_state(&mut client_state).await;
             context.save_accounts();
         }
 
@@ -539,7 +552,7 @@ async fn main() {
             let time_total = time_start.elapsed().as_micros();
             info!("Account balance synchronized after {} us", time_total);
             println!("{}", balance);
-            context.update_account_from_state(&client_state);
+            context.update_account_from_state(&mut client_state).await;
             context.save_accounts();
         }
 

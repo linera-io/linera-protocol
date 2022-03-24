@@ -3,14 +3,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    account::AccountManager, base_types::*, committee::Committee, downloader::*,
-    ensure as my_ensure, error::Error, messages::*,
+    account::AccountManager,
+    authority::{Authority, Worker, WorkerState},
+    base_types::*,
+    committee::Committee,
+    ensure as my_ensure,
+    error::Error,
+    messages::*,
+    storage::StorageClient,
 };
 use async_trait::async_trait;
 use failure::{bail, ensure};
 use futures::{future, StreamExt};
 use rand::seq::SliceRandom;
-use std::collections::{btree_map, BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 #[cfg(test)]
 #[path = "unit_tests/client_tests.rs"]
@@ -106,9 +112,10 @@ pub trait AccountClient {
     async fn query_safe_balance(&mut self) -> Balance;
 }
 
-/// Reference implementation of the `AccountClient` trait using many instances of
-/// some `AuthorityClient` implementation for communication.
-pub struct AccountClientState<AuthorityClient> {
+/// Reference implementation of the `AccountClient` trait using many instances of some
+/// `AuthorityClient` implementation for communication, and a client to some (local)
+/// storage.
+pub struct AccountClientState<AuthorityClient, StorageClient> {
     /// The off-chain account id.
     account_id: AccountId,
     /// Current identity as an owner.
@@ -125,37 +132,21 @@ pub struct AccountClientState<AuthorityClient> {
     /// Known key pairs from present and past identities.
     known_key_pairs: BTreeMap<AccountOwner, KeyPair>,
 
-    // The remaining fields are used to minimize networking, and may not always be persisted locally.
-    /// Confirmed requests that we have created ("sent") and already included in the state
-    /// of this account client. Certificate at index `i` should have sequence number `i`.
-    /// When no certificate is pending/missing, `sent_certificates` should be of size `next_sequence_number`.
-    sent_certificates: Vec<Certificate>,
-    /// Known received certificates, indexed by account_id and sequence number.
-    received_certificates: BTreeMap<(AccountId, SequenceNumber), Certificate>,
-    /// The known spendable balance (including a possible initial funding for testing
-    /// purposes, excluding unknown sent or received certificates).
-    balance: Balance,
-    /// Our identity plus other owners.
-    multi_owners: Option<HashSet<AccountOwner>>,
     /// Support synchronization of received certificates.
     received_certificate_trackers: HashMap<AuthorityName, usize>,
-    /// Consensus: next available round
-    next_round: RoundNumber,
-    /// Consensus: locked request
-    locked_request: Option<Request>,
+    /// Manage the execution state and the local storage of the accounts that we are
+    /// tracking.
+    state: WorkerState<StorageClient>,
 }
 
-impl<A> AccountClientState<A> {
-    #[allow(clippy::too_many_arguments)]
+impl<A, S> AccountClientState<A, S> {
     pub fn new(
         account_id: AccountId,
         key_pair: Option<KeyPair>,
         committee: Committee,
         authority_clients: HashMap<AuthorityName, A>,
+        storage_client: S,
         next_sequence_number: SequenceNumber,
-        sent_certificates: Vec<Certificate>,
-        received_certificates: Vec<Certificate>,
-        balance: Balance,
     ) -> Self {
         let mut known_key_pairs = BTreeMap::new();
         let identity = match key_pair {
@@ -166,6 +157,7 @@ impl<A> AccountClientState<A> {
                 Some(id)
             }
         };
+        let state = WorkerState::new(committee.clone(), None, storage_client);
         Self {
             account_id,
             identity,
@@ -173,17 +165,9 @@ impl<A> AccountClientState<A> {
             authority_clients,
             next_sequence_number,
             pending_request: None,
-            multi_owners: None,
             known_key_pairs,
-            sent_certificates,
-            received_certificates: received_certificates
-                .into_iter()
-                .filter_map(|cert| Some((cert.value.confirmed_key()?, cert)))
-                .collect(),
             received_certificate_trackers: HashMap::new(),
-            balance,
-            next_round: RoundNumber::default(),
-            locked_request: None,
+            state,
         }
     }
 
@@ -208,82 +192,93 @@ impl<A> AccountClientState<A> {
         self.next_sequence_number
     }
 
-    pub fn balance(&self) -> Balance {
-        self.balance
-    }
-
     pub fn pending_request(&self) -> &Option<Request> {
         &self.pending_request
     }
-
-    pub fn sent_certificates(&self) -> &Vec<Certificate> {
-        &self.sent_certificates
-    }
-
-    pub fn received_certificates(&self) -> impl Iterator<Item = &Certificate> {
-        self.received_certificates.values()
-    }
 }
 
-#[derive(Clone)]
-struct CertificateRequester<A> {
-    committee: Committee,
-    authority_clients: Vec<A>,
-    account_id: AccountId,
-}
-
-impl<A> CertificateRequester<A> {
-    fn new(committee: Committee, authority_clients: Vec<A>, account_id: AccountId) -> Self {
-        Self {
-            committee,
-            authority_clients,
-            account_id,
-        }
-    }
-}
-
-#[async_trait]
-impl<A> Requester for CertificateRequester<A>
+// TODO: The following APIs should be removed eventually.
+impl<A, S> AccountClientState<A, S>
 where
     A: AuthorityClient + Send + Sync + 'static + Clone,
+    S: StorageClient + Clone + 'static,
 {
-    type Key = SequenceNumber;
-    type Value = Result<Certificate, Error>;
-
-    /// Try to find a (confirmation) certificate for the given account_id and sequence number.
-    async fn query(&mut self, sequence_number: SequenceNumber) -> Result<Certificate, Error> {
+    pub async fn sent_certificates(&mut self) -> Vec<Certificate> {
+        let range = SequenceNumberRange {
+            start: SequenceNumber::default(),
+            limit: None,
+        };
         let query = AccountInfoQuery {
             account_id: self.account_id.clone(),
             check_next_sequence_number: None,
-            query_sent_certificates_in_range: Some(SequenceNumberRange {
-                start: sequence_number,
-                limit: Some(1),
-            }),
+            query_sent_certificates_in_range: Some(range),
             query_received_certificates_excluding_first_nth: None,
         };
-        // Sequentially try each authority in random order.
-        self.authority_clients.shuffle(&mut rand::thread_rng());
-        for client in self.authority_clients.iter_mut() {
-            let result = client.handle_account_info_query(query.clone()).await;
-            if let Ok(AccountInfoResponse {
-                queried_sent_certificates,
-                ..
-            }) = &result
-            {
-                if let Some(certificate) = queried_sent_certificates.first() {
-                    if certificate.check(&self.committee).is_ok() {
-                        if let Value::Confirmed { request } = &certificate.value {
-                            if request.account_id == self.account_id
-                                && request.sequence_number == sequence_number
-                            {
-                                return Ok(certificate.clone());
-                            }
-                        }
-                    }
-                }
-            }
+        let response = self.state.handle_account_info_query(query).await.unwrap();
+        response.queried_sent_certificates
+    }
+
+    pub async fn count_sent_certificates(&mut self, account_id: AccountId) -> Result<usize, Error> {
+        let query = AccountInfoQuery {
+            account_id,
+            check_next_sequence_number: None,
+            query_sent_certificates_in_range: None,
+            query_received_certificates_excluding_first_nth: None,
+        };
+        let response = self.state.handle_account_info_query(query).await?;
+        Ok(response.next_sequence_number.into())
+    }
+
+    pub async fn manager(&mut self) -> AccountManager {
+        let query = AccountInfoQuery {
+            account_id: self.account_id.clone(),
+            check_next_sequence_number: None,
+            query_sent_certificates_in_range: None,
+            query_received_certificates_excluding_first_nth: None,
+        };
+        let response = self.state.handle_account_info_query(query).await.unwrap();
+        response.manager
+    }
+
+    pub async fn multi_owners(&mut self) -> Option<HashSet<AccountOwner>> {
+        let manager = self.manager().await;
+        match manager {
+            AccountManager::Multi(m) => Some(m.owners),
+            _ => None,
         }
-        Err(Error::ClientErrorWhileRequestingCertificate)
+    }
+
+    pub async fn next_round(&mut self) -> RoundNumber {
+        let manager = self.manager().await;
+        match manager {
+            AccountManager::Multi(m) => {
+                let round = m.round();
+                round.try_add_one().unwrap_or(round)
+            }
+            _ => RoundNumber::default(),
+        }
+    }
+
+    pub async fn balance(&mut self) -> Balance {
+        let query = AccountInfoQuery {
+            account_id: self.account_id.clone(),
+            check_next_sequence_number: None,
+            query_sent_certificates_in_range: None,
+            query_received_certificates_excluding_first_nth: Some(0),
+        };
+        let response = self.state.handle_account_info_query(query).await.unwrap();
+        response.balance
+    }
+
+    pub async fn received_certificates(&mut self) -> Vec<Certificate> {
+        let query = AccountInfoQuery {
+            account_id: self.account_id.clone(),
+            check_next_sequence_number: None,
+            query_sent_certificates_in_range: None,
+            query_received_certificates_excluding_first_nth: Some(0),
+        };
+        let response = self.state.handle_account_info_query(query).await.unwrap();
+        response.queried_received_certificates
     }
 }
 
@@ -297,23 +292,50 @@ enum CommunicateAction {
     SynchronizeNextSequenceNumber(SequenceNumber),
 }
 
-impl<A> AccountClientState<A>
+impl<A, S> AccountClientState<A, S>
 where
     A: AuthorityClient + Send + Sync + 'static + Clone,
+    S: StorageClient + Clone + 'static,
 {
-    #[cfg(test)]
+    /// Try to find a (confirmation) certificate for the given account_id and sequence number.
     async fn query_certificate(
         &mut self,
         account_id: AccountId,
         sequence_number: SequenceNumber,
     ) -> Result<Certificate, Error> {
-        CertificateRequester::new(
-            self.committee.clone(),
-            self.authority_clients.values().cloned().collect(),
-            account_id,
-        )
-        .query(sequence_number)
-        .await
+        let query = AccountInfoQuery {
+            account_id: account_id.clone(),
+            check_next_sequence_number: None,
+            query_sent_certificates_in_range: Some(SequenceNumberRange {
+                start: sequence_number,
+                limit: Some(1),
+            }),
+            query_received_certificates_excluding_first_nth: None,
+        };
+        // Sequentially try each authority in random order.
+        let mut authority_clients = self.authority_clients.values().cloned().collect::<Vec<_>>();
+        authority_clients.shuffle(&mut rand::thread_rng());
+        for client in authority_clients.iter_mut() {
+            let result = client.handle_account_info_query(query.clone()).await;
+            if let Ok(AccountInfoResponse {
+                queried_sent_certificates,
+                ..
+            }) = &result
+            {
+                if let Some(certificate) = queried_sent_certificates.first() {
+                    if certificate.check(&self.committee).is_ok() {
+                        if let Value::Confirmed { request } = &certificate.value {
+                            if request.account_id == account_id
+                                && request.sequence_number == sequence_number
+                            {
+                                return Ok(certificate.clone());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Err(Error::ClientErrorWhileRequestingCertificate)
     }
 
     /// Find the highest sequence number that is known to a quorum of authorities.
@@ -348,9 +370,11 @@ where
 
     /// Update our view of the account to include possible actions from another client.
     /// NOTE: This assumes network connectivity and a sufficient timeout value.
-    async fn hard_synchronize_account_information(&mut self) -> Result<(), Error> {
+    async fn hard_synchronize_sent_certificates(&mut self) -> Result<(), Error> {
         assert_eq!(
-            self.sent_certificates.len(),
+            self.count_sent_certificates(self.account_id.clone())
+                .await
+                .unwrap(),
             usize::from(self.next_sequence_number),
         );
         let infos = self
@@ -364,16 +388,12 @@ where
                         if request.account_id == self.account_id
                             && request.sequence_number == self.next_sequence_number
                         {
-                            self.add_sent_certificate(certificate.clone())?;
+                            self.process_certificate(certificate.clone()).await?;
                         }
                     }
                 }
             }
         }
-        let owners = match &self.multi_owners {
-            None => return Ok(()),
-            Some(owners) => owners,
-        };
         // Second pass to update the current round number and locked_request.
         for (_, info) in infos {
             // Optional consistency checks.
@@ -386,38 +406,25 @@ where
             };
             if let Some(order) = manager.order {
                 // Check the sequence number.
-                if order.request.sequence_number != self.next_sequence_number {
-                    continue;
-                }
-                // Make sure the order comes from a legitimate owner.
-                if owners.contains(&order.owner)
-                    && order.signature.check(&order.request, order.owner).is_err()
+                if order.request.account_id != self.account_id
+                    || order.request.sequence_number != self.next_sequence_number
                 {
                     continue;
                 }
-                // Update the round.
-                if order.request.round >= self.next_round {
-                    self.next_round = order.request.round.try_add_one()?;
+                if let Err(e) = self.state.handle_request_order(order).await {
+                    log::warn!("Invalid request order: {}", e);
                 }
             }
             if let Some(cert) = manager.locked {
-                if cert.check(&self.committee).is_err() {
-                    continue;
-                }
-                if let Value::Validated { request } = cert.value {
+                if let Value::Validated { request } = &cert.value {
                     // Check the sequence number.
-                    if request.sequence_number != self.next_sequence_number {
+                    if request.account_id != self.account_id
+                        || request.sequence_number != self.next_sequence_number
+                    {
                         continue;
                     }
-                    // Update the locked request.
-                    match &mut self.locked_request {
-                        lr @ None => {
-                            *lr = Some(request);
-                        }
-                        Some(req) if request.round > req.round => {
-                            *req = request;
-                        }
-                        _ => (),
+                    if let Err(e) = self.state.handle_certificate(cert).await {
+                        log::warn!("Invalid certificate: {}", e);
                     }
                 }
             }
@@ -477,9 +484,8 @@ where
     async fn communicate_requests(
         &mut self,
         account_id: AccountId,
-        known_certificates: Vec<Certificate>,
         action: CommunicateAction,
-    ) -> Result<Vec<Certificate>, failure::Error> {
+    ) -> Result<Option<Certificate>, failure::Error> {
         let target_sequence_number = match &action {
             CommunicateAction::SubmitRequestForValidation(order)
             | CommunicateAction::SubmitRequestForConfirmation(order) => {
@@ -494,30 +500,17 @@ where
             }
             CommunicateAction::SynchronizeNextSequenceNumber(seq) => *seq,
         };
-        let requester = CertificateRequester::new(
-            self.committee.clone(),
-            self.authority_clients.values().cloned().collect(),
-            account_id.clone(),
-        );
-        let (task, mut handle) = Downloader::start(
-            requester,
-            known_certificates.into_iter().filter_map(|cert| {
-                let request = cert.value.confirmed_request()?;
-                if request.account_id == account_id {
-                    Some((request.sequence_number, Ok(cert)))
-                } else {
-                    None
-                }
-            }),
-        );
         let committee = self.committee.clone();
+        let storage_client = self.state.storage_client().clone();
         let result = self
             .communicate_with_quorum(|name, client| {
-                let mut handle = handle.clone();
                 let action = action.clone();
+                let mut storage_client = storage_client.clone();
                 let committee = &committee;
                 let account_id = account_id.clone();
                 Box::pin(async move {
+                    // Obtain account state.
+                    let account = storage_client.read_account_or_default(&account_id).await?;
                     // Figure out which certificates this authority is missing.
                     let query = AccountInfoQuery {
                         account_id,
@@ -526,25 +519,16 @@ where
                         query_received_certificates_excluding_first_nth: None,
                     };
                     let response = client.handle_account_info_query(query).await?;
-                    let current_sequence_number = response.next_sequence_number;
-                    // Download each missing certificate in reverse order using the downloader.
-                    let mut missing_certificates = Vec::new();
-                    let mut number = target_sequence_number.try_sub_one();
-                    while let Ok(value) = number {
-                        if value < current_sequence_number {
-                            break;
-                        }
-                        let certificate = handle
-                            .query(value)
-                            .await
-                            .map_err(|_| Error::ClientErrorWhileRequestingCertificate)??;
-                        missing_certificates.push(certificate);
-                        number = value.try_sub_one();
-                    }
-                    // Send all missing confirmation orders.
-                    missing_certificates.reverse();
-                    for certificate in missing_certificates {
-                        client.handle_certificate(certificate).await?;
+                    // Send the requested certificates in order.
+                    for number in usize::from(response.next_sequence_number)
+                        ..usize::from(target_sequence_number)
+                    {
+                        let key = account
+                            .confirmed_log
+                            .get(number)
+                            .expect("certificate should be known locally");
+                        let cert = storage_client.read_certificate(*key).await?;
+                        client.handle_certificate(cert).await?;
                     }
                     // Send the request order (if any) and return a vote.
                     match action {
@@ -609,7 +593,7 @@ where
             {
                 // The account is visibly not active (yet or any more) so there is no need
                 // to synchronize sequence numbers.
-                return Ok(Vec::new());
+                return Ok(None);
             }
             Err(Some(err)) => bail!(
                 "Failed to communicate with a quorum of authorities: {}",
@@ -619,9 +603,6 @@ where
                 bail!("Failed to communicate with a quorum of authorities (multiple errors)")
             }
         };
-        // Terminate downloader task and retrieve the content of the cache.
-        handle.stop().await?;
-        let mut certificates: Vec<_> = task.await.unwrap().filter_map(Result::ok).collect();
         let signatures: Vec<_> = votes
             .into_iter()
             .filter_map(|vote| match vote {
@@ -639,14 +620,14 @@ where
                 // * `communicate_with_quorum` ensured a sufficient "weight" of
                 // (non-error) answers were returned by authorities.
                 // * each answer is a vote signed by the expected authority.
-                certificates.push(certificate);
+                Ok(Some(certificate))
             }
             CommunicateAction::SubmitRequestForValidation(order) => {
                 let value = Value::Validated {
                     request: order.request,
                 };
                 let certificate = Certificate::new(value, signatures);
-                certificates.push(certificate);
+                Ok(Some(certificate))
             }
             CommunicateAction::FinalizeRequest(validity_certificate) => {
                 let request = validity_certificate
@@ -655,30 +636,48 @@ where
                     .unwrap()
                     .clone();
                 let certificate = Certificate::new(Value::Confirmed { request }, signatures);
-                certificates.push(certificate);
+                Ok(Some(certificate))
             }
-            CommunicateAction::SynchronizeNextSequenceNumber(_) => (),
+            CommunicateAction::SynchronizeNextSequenceNumber(_) => Ok(None),
         }
-        Ok(certificates)
+    }
+
+    /// Make sure we have all the certificates of this account with sequence number in the
+    /// range 0..next_sequence_number
+    async fn synchronize_sent_certificates_for_account(
+        &mut self,
+        account_id: AccountId,
+        next_sequence_number: SequenceNumber,
+    ) -> Result<(), Error> {
+        let last_id = match next_sequence_number.try_sub_one() {
+            Ok(num) => account_id.make_child(num),
+            Err(_) => account_id,
+        };
+        for ancestor_id in last_id.ancestors() {
+            if let Some((account_id, sequence_number)) = ancestor_id.split() {
+                let storage_number = self.count_sent_certificates(account_id.clone()).await?;
+                for number in storage_number..=sequence_number.into() {
+                    let certificate = self
+                        .query_certificate(account_id.clone(), SequenceNumber::from(number as u64))
+                        .await?;
+                    self.process_certificate(certificate).await?;
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Make sure we have all our certificates with sequence number
     /// in the range 0..self.next_sequence_number
-    async fn synchronize_account_information(&mut self) -> Result<(), Error> {
-        let mut requester = CertificateRequester::new(
-            self.committee.clone(),
-            self.authority_clients.values().cloned().collect(),
+    async fn synchronize_sent_certificates(&mut self) -> Result<(), Error> {
+        self.synchronize_sent_certificates_for_account(
             self.account_id.clone(),
-        );
-        while self.sent_certificates.len() < self.next_sequence_number.into() {
-            let certificate = requester
-                .query(SequenceNumber::from(self.sent_certificates.len() as u64))
-                .await?;
-            self.add_sent_certificate(certificate)?;
-        }
-        if self.multi_owners.is_some() {
+            self.next_sequence_number,
+        )
+        .await?;
+        if self.multi_owners().await.is_some() {
             // We could be missing recent certificates created by other owners.
-            self.hard_synchronize_account_information().await?;
+            self.hard_synchronize_sent_certificates().await?;
         }
         Ok(())
     }
@@ -721,18 +720,8 @@ where
                 })
             })
             .await;
-        match result {
-            Ok(responses) => {
-                for (name, response) in responses {
-                    // Process received certificates.
-                    for certificate in response.queried_received_certificates {
-                        self.receive_certificate(certificate).await.unwrap_or(());
-                    }
-                    // Update tracker.
-                    self.received_certificate_trackers
-                        .insert(name, response.count_received_certificates);
-                }
-            }
+        let responses = match result {
+            Ok(responses) => responses,
             Err(Some(Error::InactiveAccount(id))) if id == account_id => {
                 // The account is visibly not active (yet or any more) so there is no need
                 // to synchronize received certificates.
@@ -746,6 +735,18 @@ where
                 bail!("Failed to communicate with a quorum of authorities (multiple errors)")
             }
         };
+        'outer: for (name, response) in responses {
+            // Process received certificates.
+            for certificate in response.queried_received_certificates {
+                if self.receive_certificate(certificate).await.is_err() {
+                    // Do not update `name`'s tracker in case of error.
+                    continue 'outer;
+                }
+            }
+            // Update tracker.
+            self.received_certificate_trackers
+                .insert(name, response.count_received_certificates);
+        }
         Ok(())
     }
 
@@ -756,8 +757,6 @@ where
         recipient: Address,
         user_data: UserData,
     ) -> Result<Certificate, failure::Error> {
-        // Trying to overspend may block the account. To prevent this, we compare with
-        // the balance as we know it.
         let balance = self.synchronize_balance().await?;
         ensure!(
             Balance::from(amount) <= balance,
@@ -773,7 +772,7 @@ where
                 user_data,
             },
             sequence_number: self.next_sequence_number,
-            round: self.next_round,
+            round: self.next_round().await,
         };
         let certificate = self
             .execute_request(request, /* with_confirmation */ true)
@@ -781,67 +780,45 @@ where
         Ok(certificate)
     }
 
-    fn update_sent_certificates(
-        &mut self,
-        sent_certificates: Vec<Certificate>,
-    ) -> Result<(), Error> {
-        let n = self.sent_certificates.len();
-        for (i, certificate) in sent_certificates.into_iter().enumerate() {
-            if i < n {
-                assert_eq!(certificate.value, self.sent_certificates[i].value);
-            } else {
-                self.add_sent_certificate(certificate)?;
+    async fn process_certificate(&mut self, certificate: Certificate) -> Result<(), Error> {
+        // Start by having our worker handle the certificate.
+        let (_, mut requests) = self.state.handle_certificate(certificate.clone()).await?;
+        // If the certificate is from us, update the client-specific state as well.
+        if let Some(request) = certificate.value.confirmed_request() {
+            if request.account_id == self.account_id {
+                self.next_sequence_number = request.sequence_number.try_add_one()?;
+                self.pending_request = None;
             }
-        }
-        Ok(())
-    }
-
-    fn add_sent_certificate(&mut self, certificate: Certificate) -> Result<(), Error> {
-        let request = certificate
-            .value
-            .confirmed_request()
-            .expect("was expecting a confirmation certificate");
-        assert_eq!(
-            u64::from(request.sequence_number),
-            self.sent_certificates.len() as u64
-        );
-        // Execute operation locally.
-        match &request.operation {
-            Operation::Transfer { amount, .. } => {
-                self.balance.try_sub_assign((*amount).into())?;
-            }
-            Operation::ChangeOwner { new_owner } => {
-                self.identity = Some(*new_owner);
-                self.multi_owners = None;
-            }
-            Operation::ChangeMultipleOwners { new_owners } => {
-                self.multi_owners = Some(new_owners.iter().cloned().collect());
-                if self.identity.is_none() || !new_owners.contains(self.identity.as_ref().unwrap())
-                {
-                    self.identity = None;
-                    // Search for a new identity that works.
-                    // TODO: We probably shouldn't choose the first identity that
-                    // works like this.
-                    for owner in new_owners {
-                        if let Some(value) = self.known_key_pairs.get(owner) {
-                            self.identity = Some(value.public());
-                            break;
+            // Manage our identity
+            match &request.operation {
+                Operation::ChangeOwner { new_owner } => {
+                    self.identity = Some(*new_owner);
+                }
+                Operation::ChangeMultipleOwners { new_owners } => {
+                    if self.identity.is_none()
+                        || !new_owners.contains(self.identity.as_ref().unwrap())
+                    {
+                        self.identity = None;
+                        // Search for a new identity that works.
+                        // TODO: We probably shouldn't choose the first identity that
+                        // works like this.
+                        for owner in new_owners {
+                            if let Some(value) = self.known_key_pairs.get(owner) {
+                                self.identity = Some(value.public());
+                                break;
+                            }
                         }
                     }
                 }
+                Operation::CloseAccount => {
+                    self.identity = None;
+                }
+                _ => (),
             }
-            Operation::CloseAccount => {
-                self.identity = None;
-            }
-            Operation::OpenAccount { .. } => (),
         }
-        // Record certificate.
-        self.sent_certificates.push(certificate);
-        let next_sequence_number = SequenceNumber::from(self.sent_certificates.len() as u64);
-        if self.next_sequence_number < next_sequence_number {
-            self.next_sequence_number = next_sequence_number;
-            self.next_round = RoundNumber::default();
-            self.locked_request = None;
+        // Finally, handle the relevant cross-shard requests.
+        while let Some(request) = requests.pop() {
+            requests.extend(self.state.handle_cross_shard_request(request).await?);
         }
         Ok(())
     }
@@ -868,68 +845,56 @@ where
         let key_pair = self.key_pair()?;
         let order = RequestOrder::new(request, key_pair);
         // Send the query.
-        if self.multi_owners.is_some() {
-            // Need two-round trips.
-            let mut certificates = self
-                .communicate_requests(
+        let final_certificate = {
+            if self.multi_owners().await.is_some() {
+                // Need two-round trips.
+                let certificate = self
+                    .communicate_requests(
+                        self.account_id.clone(),
+                        CommunicateAction::SubmitRequestForValidation(order.clone()),
+                    )
+                    .await?
+                    .expect("a certificate");
+                assert_eq!(certificate.value.validated_request(), Some(&order.request));
+                self.communicate_requests(
                     self.account_id.clone(),
-                    self.sent_certificates.clone(),
-                    CommunicateAction::SubmitRequestForValidation(order.clone()),
-                )
-                .await?;
-            let certificate = certificates
-                .pop()
-                .expect("last order should have been validated");
-            assert_eq!(certificate.value.validated_request(), Some(&order.request));
-            self.update_sent_certificates(certificates)?;
-
-            let certificates = self
-                .communicate_requests(
-                    self.account_id.clone(),
-                    self.sent_certificates.clone(),
                     CommunicateAction::FinalizeRequest(certificate),
                 )
-                .await?;
-            self.update_sent_certificates(certificates)?;
-        } else {
-            // Only one round-trip is needed
-            let certificates = self
-                .communicate_requests(
+                .await?
+                .expect("a certificate")
+            } else {
+                // Only one round-trip is needed
+                self.communicate_requests(
                     self.account_id.clone(),
-                    self.sent_certificates.clone(),
                     CommunicateAction::SubmitRequestForConfirmation(order.clone()),
                 )
-                .await?;
-            self.update_sent_certificates(certificates)?;
+                .await?
+                .expect("a certificate")
+            }
         };
         // By now the request should be final.
         ensure!(
-            self.sent_certificates
-                .last()
-                .expect("last order should have been confirmed")
-                .value
-                .confirmed_request()
-                == Some(&order.request),
+            final_certificate.value.confirmed_request() == Some(&order.request),
             "A different operation was executed in parallel (consider retrying the operation)"
         );
-        self.pending_request = None;
+        self.process_certificate(final_certificate.clone()).await?;
         // Confirm last request certificate if needed.
         if with_confirmation {
             self.communicate_requests(
                 self.account_id.clone(),
-                self.sent_certificates.clone(),
                 CommunicateAction::SynchronizeNextSequenceNumber(self.next_sequence_number),
             )
             .await?;
         }
-        Ok(self.sent_certificates.last().unwrap().clone())
+        Ok(final_certificate)
     }
 }
 
 #[async_trait]
-impl<A> AccountClient for AccountClientState<A>
+impl<A, S> AccountClient for AccountClientState<A, S>
 where
     A: AuthorityClient + Send + Sync + Clone + 'static,
+    S: StorageClient + Clone + 'static,
 {
     async fn query_safe_balance(&mut self) -> Balance {
         let query = AccountInfoQuery {
@@ -981,9 +946,9 @@ where
             self.execute_request(request, /* with_confirmation */ false)
                 .await?;
         }
-        self.synchronize_account_information().await?;
+        self.synchronize_sent_certificates().await?;
         self.synchronize_received_certificates().await?;
-        Ok(self.balance)
+        Ok(self.balance().await)
     }
 
     async fn receive_certificate(
@@ -993,41 +958,37 @@ where
         let request = certificate
             .value
             .confirmed_request()
-            .ok_or_else(|| failure::format_err!("Was expecting a confirmed account operation"))?;
+            .ok_or_else(|| failure::format_err!("Was expecting a confirmed account operation"))?
+            .clone();
         let account_id = &request.account_id;
         ensure!(
             request.operation.recipient() == Some(&self.account_id),
             "Request should be received by us."
         );
+        // Recover history from the network.
+        self.synchronize_sent_certificates_for_account(account_id.clone(), request.sequence_number)
+            .await?;
+        // Process the received operation.
+        self.process_certificate(certificate).await?;
+        // Make sure all authorities are up-to-date.
         self.communicate_requests(
             account_id.clone(),
-            vec![certificate.clone()],
             CommunicateAction::SynchronizeNextSequenceNumber(
                 request.sequence_number.try_add_one()?,
             ),
         )
         .await?;
-        // Everything worked: update the local balance.
-        if let btree_map::Entry::Vacant(entry) = self
-            .received_certificates
-            .entry(certificate.value.confirmed_key().unwrap())
-        {
-            if let Some(amount) = request.operation.received_amount() {
-                self.balance.try_add_assign(amount.into())?;
-            }
-            entry.insert(certificate);
-        }
         Ok(())
     }
 
     async fn rotate_key_pair(&mut self, key_pair: KeyPair) -> Result<Certificate, failure::Error> {
-        self.synchronize_account_information().await?;
+        self.synchronize_sent_certificates().await?;
         let new_owner = key_pair.public();
         let request = Request {
             account_id: self.account_id.clone(),
             operation: Operation::ChangeOwner { new_owner },
             sequence_number: self.next_sequence_number,
-            round: self.next_round,
+            round: self.next_round().await,
         };
         self.known_key_pairs.insert(key_pair.public(), key_pair);
         let certificate = self
@@ -1040,12 +1001,12 @@ where
         &mut self,
         new_owner: AccountOwner,
     ) -> Result<Certificate, failure::Error> {
-        self.synchronize_account_information().await?;
+        self.synchronize_sent_certificates().await?;
         let request = Request {
             account_id: self.account_id.clone(),
             operation: Operation::ChangeOwner { new_owner },
             sequence_number: self.next_sequence_number,
-            round: self.next_round,
+            round: self.next_round().await,
         };
         let certificate = self
             .execute_request(request, /* with_confirmation */ true)
@@ -1057,7 +1018,7 @@ where
         &mut self,
         new_owner: AccountOwner,
     ) -> Result<Certificate, failure::Error> {
-        self.synchronize_account_information().await?;
+        self.synchronize_sent_certificates().await?;
         let owner = self.identity.ok_or_else(|| {
             failure::format_err!("Cannot share ownership for an account that we don't own")
         })?;
@@ -1067,7 +1028,7 @@ where
                 new_owners: vec![owner, new_owner],
             },
             sequence_number: self.next_sequence_number,
-            round: self.next_round,
+            round: self.next_round().await,
         };
         let certificate = self
             .execute_request(request, /* with_confirmation */ true)
@@ -1079,13 +1040,13 @@ where
         &mut self,
         new_owner: AccountOwner,
     ) -> Result<Certificate, failure::Error> {
-        self.synchronize_account_information().await?;
+        self.synchronize_sent_certificates().await?;
         let new_id = self.account_id.make_child(self.next_sequence_number);
         let request = Request {
             account_id: self.account_id.clone(),
             operation: Operation::OpenAccount { new_id, new_owner },
             sequence_number: self.next_sequence_number,
-            round: self.next_round,
+            round: self.next_round().await,
         };
         let certificate = self
             .execute_request(request, /* with_confirmation */ true)
@@ -1094,12 +1055,12 @@ where
     }
 
     async fn close_account(&mut self) -> Result<Certificate, failure::Error> {
-        self.synchronize_account_information().await?;
+        self.synchronize_sent_certificates().await?;
         let request = Request {
             account_id: self.account_id.clone(),
             operation: Operation::CloseAccount,
             sequence_number: self.next_sequence_number,
-            round: self.next_round,
+            round: self.next_round().await,
         };
         let certificate = self
             .execute_request(request, /* with_confirmation */ true)
@@ -1113,7 +1074,7 @@ where
         recipient: AccountId,
         user_data: UserData,
     ) -> Result<Certificate, failure::Error> {
-        self.synchronize_account_information().await?;
+        self.synchronize_sent_certificates().await?;
         let request = Request {
             account_id: self.account_id.clone(),
             operation: Operation::Transfer {
@@ -1122,7 +1083,7 @@ where
                 user_data,
             },
             sequence_number: self.next_sequence_number,
-            round: self.next_round,
+            round: self.next_round().await,
         };
         let new_certificate = self
             .execute_request(request, /* with_confirmation */ false)
