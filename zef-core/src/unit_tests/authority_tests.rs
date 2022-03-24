@@ -503,12 +503,11 @@ async fn test_read_account_state_unknown_account() {
 
 fn init_state() -> WorkerState<InMemoryStoreClient> {
     let key_pair = KeyPair::generate();
-    let name = key_pair.public();
     let mut authorities = BTreeMap::new();
-    authorities.insert(name, /* voting right */ 1);
+    authorities.insert(key_pair.public(), /* voting right */ 1);
     let committee = Committee::new(authorities);
     let client = InMemoryStoreClient::default();
-    WorkerState::new(committee, name, Some(key_pair), client)
+    WorkerState::new(committee, Some(key_pair), client)
 }
 
 async fn init_state_with_accounts<I: IntoIterator<Item = (AccountId, AccountOwner, Balance)>>(

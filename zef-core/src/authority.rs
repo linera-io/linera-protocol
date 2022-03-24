@@ -14,8 +14,6 @@ mod authority_tests;
 
 /// State of a worker in an authority or a client.
 pub struct WorkerState<StorageClient> {
-    /// The name of this authority.
-    pub name: AuthorityName,
     /// Committee of this instance.
     pub committee: Committee,
     /// The signature key pair of the authority. The key may be missing for replicas
@@ -193,10 +191,6 @@ where
         &mut self,
         order: RequestOrder,
     ) -> Result<AccountInfoResponse, Error> {
-        // Verify that the order was meant for this authority.
-        if let Some(authority) = &order.value.limited_to {
-            ensure!(self.name == *authority, Error::InvalidRequestOrder);
-        }
         // Obtain the sender's account.
         let sender = order.value.request.account_id.clone();
         let mut account = self.storage.read_active_account(&sender).await?;
@@ -319,13 +313,11 @@ where
 impl<Client> WorkerState<Client> {
     pub fn new(
         committee: Committee,
-        name: AuthorityName,
         key_pair: Option<KeyPair>,
         storage: Client,
     ) -> Self {
         WorkerState {
             committee,
-            name,
             key_pair,
             storage,
         }
