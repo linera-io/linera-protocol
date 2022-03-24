@@ -299,10 +299,12 @@ where
     async fn broadcast_account_info_query(
         &mut self,
         account_id: AccountId,
+        next_sequence_number: Option<SequenceNumber>,
     ) -> Vec<(AuthorityName, AccountInfoResponse)> {
+        let range = next_sequence_number.map(|start| SequenceNumberRange { start, limit: None });
         let query = AccountInfoQuery {
             account_id,
-            query_sent_certificates_in_range: None,
+            query_sent_certificates_in_range: range,
             query_received_certificates_excluding_first_nth: None,
         };
         let infos: futures::stream::FuturesUnordered<_> = self
@@ -328,7 +330,7 @@ where
         &mut self,
         account_id: AccountId,
     ) -> SequenceNumber {
-        let infos = self.broadcast_account_info_query(account_id).await;
+        let infos = self.broadcast_account_info_query(account_id, None).await;
         let numbers = infos
             .into_iter()
             .map(|(name, info)| (name, info.next_sequence_number))
@@ -338,19 +340,38 @@ where
 
     /// Update our view of the account to include possible actions from another client.
     /// NOTE: This assumes network connectivity and a sufficient timeout value.
-    // TODO: not quite the API we need yet.
     #[allow(dead_code)]
-    async fn synchronize_round_information(
+    async fn synchronize_account_information(
         &mut self,
-        account_id: AccountId,
-        sequence_number: SequenceNumber,
-        owners: &HashSet<AccountOwner>,
-    ) -> (RoundNumber, Option<(RoundNumber, Request)>) {
-        let infos = self.broadcast_account_info_query(account_id).await;
+        owners: &HashSet<AccountOwner>, // TODO
+    ) -> Result<(RoundNumber, Option<(RoundNumber, Request)>), Error> {
+        assert_eq!(
+            self.sent_certificates.len(),
+            usize::from(self.next_sequence_number),
+            "download_missing_sent_certificates must be called first"
+        );
+        let infos = self
+            .broadcast_account_info_query(self.account_id.clone(), Some(self.next_sequence_number))
+            .await;
+        // First pass to update our local sequence number.
+        for (_, info) in &infos {
+            for certificate in &info.queried_sent_certificates {
+                if certificate.check(&self.committee).is_ok() {
+                    if let Value::Confirmed { request } = &certificate.value {
+                        if request.account_id == self.account_id
+                            && request.sequence_number == self.next_sequence_number
+                        {
+                            self.add_sent_certificate(certificate.clone())?;
+                        }
+                    }
+                }
+            }
+        }
+        // Second pass to determine the current round number.
         let mut used_round = RoundNumber::default();
         let mut locked_request = None;
         for (_, info) in infos {
-            if info.next_sequence_number != sequence_number {
+            if info.next_sequence_number != self.next_sequence_number {
                 continue;
             }
             let manager = match info.manager {
@@ -358,15 +379,20 @@ where
                 _ => continue,
             };
             if let Some(order) = manager.order {
+                // Check the sequence number.
+                if order.value.request.sequence_number != self.next_sequence_number {
+                    continue;
+                }
+                // Make sure the order comes from a legitimate owner.
                 if owners.contains(&order.owner)
-                    && order.signature.check(&order.value, order.owner).is_ok()
+                    && order.signature.check(&order.value, order.owner).is_err()
                 {
-                    // This is a minimal check to ensure that the previous round was
-                    // consumed by a legitimate owner.
-                    if let Some(round) = order.value.round {
-                        if round > used_round {
-                            used_round = round;
-                        }
+                    continue;
+                }
+                if let Some(round) = order.value.round {
+                    // Update the round.
+                    if round > used_round {
+                        used_round = round;
                     }
                 }
             }
@@ -375,6 +401,11 @@ where
                     continue;
                 }
                 if let Value::Validated { round, request } = cert.value {
+                    // Check the sequence number.
+                    if request.sequence_number != self.next_sequence_number {
+                        continue;
+                    }
+                    // Update the locked request.
                     match &mut locked_request {
                         lr @ None => {
                             *lr = Some((round, request));
@@ -388,7 +419,7 @@ where
                 }
             }
         }
-        (used_round, locked_request)
+        Ok((used_round, locked_request))
     }
 
     /// Execute a sequence of actions in parallel for a quorum of authorities.
