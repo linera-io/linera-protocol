@@ -860,7 +860,6 @@ where
         }
         let request_value = RequestValue {
             request,
-            limited_to: None,
             round: Some(self.next_round),
         };
         let key_pair = self.key_pair()?;

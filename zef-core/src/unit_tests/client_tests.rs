@@ -77,7 +77,6 @@ fn init_local_authorities(
         let name = key_pair.public();
         let state = WorkerState::new(
             committee.clone(),
-            name,
             Some(key_pair),
             InMemoryStoreClient::default(),
         );
@@ -108,7 +107,6 @@ fn init_local_authorities_bad_1(
         let name = key_pair.public();
         let state = WorkerState::new(
             committee.clone(),
-            name,
             Some(key_pair),
             InMemoryStoreClient::default(),
         );
