@@ -7,7 +7,6 @@ use crate::{
     storage::StorageClient,
 };
 use async_trait::async_trait;
-use futures::future;
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
@@ -269,25 +268,20 @@ where
     ) -> Result<AccountInfoResponse, Error> {
         let account = self.storage.read_active_account(&query.account_id).await?;
         let mut response = account.make_account_info();
-        if let Some(seq) = query.query_sequence_number {
-            if let Some(key) = account.confirmed_log.get(usize::from(seq)) {
-                let cert = self.storage.read_certificate(*key).await?;
-                response.queried_certificate = Some(cert);
-            } else {
-                return Err(Error::CertificateNotFound);
-            }
+        if let Some(range) = query.query_sent_certificates_in_range {
+            let keys = account.confirmed_log[..]
+                .iter()
+                .skip(range.start.into())
+                .cloned();
+            let certs = match range.limit {
+                None => self.storage.read_certificates(keys).await?,
+                Some(count) => self.storage.read_certificates(keys.take(count)).await?,
+            };
+            response.queried_sent_certificates = certs;
         }
         if let Some(idx) = query.query_received_certificates_excluding_first_nth {
-            let tasks = account.received_log[idx..].iter().map(|key| {
-                let key = *key;
-                let mut client = self.storage.clone();
-                tokio::task::spawn(async move { client.read_certificate(key).await })
-            });
-            let results = future::join_all(tasks).await;
-            let mut certs = Vec::new();
-            for result in results {
-                certs.push(result.expect("task should not cancel or crash")?);
-            }
+            let keys = account.received_log[..].iter().skip(idx).cloned();
+            let certs = self.storage.read_certificates(keys).await?;
             response.queried_received_certificates = certs;
         }
         Ok(response)
