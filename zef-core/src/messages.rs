@@ -105,12 +105,22 @@ pub struct Certificate {
     pub signatures: Vec<(AuthorityName, Signature)>,
 }
 
+/// A range of sequence numbers as used in AccountInfoQuery.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
+pub struct SequenceNumberRange {
+    /// Starting point
+    pub start: SequenceNumber,
+    /// Optional limit on the number of elements.
+    pub limit: Option<usize>,
+}
+
 /// Message to obtain information on an account.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct AccountInfoQuery {
     pub account_id: AccountId,
-    pub query_sequence_number: Option<SequenceNumber>,
+    pub query_sent_certificates_in_range: Option<SequenceNumberRange>,
     pub query_received_certificates_excluding_first_nth: Option<usize>,
 }
 
@@ -122,8 +132,8 @@ pub struct AccountInfoResponse {
     pub manager: AccountManager,
     pub balance: Balance,
     pub next_sequence_number: SequenceNumber,
+    pub queried_sent_certificates: Vec<Certificate>,
     pub count_received_certificates: usize,
-    pub queried_certificate: Option<Certificate>,
     pub queried_received_certificates: Vec<Certificate>,
 }
 

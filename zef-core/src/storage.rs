@@ -45,17 +45,24 @@ pub trait StorageClient: DynClone + Send + Sync {
 
     async fn read_certificates<I: Iterator<Item = HashValue> + Send>(
         &self,
-        hashes: I,
+        keys: I,
     ) -> Result<Vec<Certificate>, Error>
     where
         Self: Clone + Send + 'static,
     {
-        let mut handles = Vec::new();
-        for hash in hashes {
+        let mut tasks = Vec::new();
+        for key in keys {
             let mut client = self.clone();
-            handles.push(async move { client.read_certificate(hash).await });
+            tasks.push(tokio::task::spawn(async move {
+                client.read_certificate(key).await
+            }));
         }
-        future::join_all(handles).await.into_iter().collect()
+        let results = future::join_all(tasks).await;
+        let mut certs = Vec::new();
+        for result in results {
+            certs.push(result.expect("storage access should not cancel or crash")?);
+        }
+        Ok(certs)
     }
 
     async fn write_certificate(&mut self, certificate: Certificate) -> Result<(), Error>;
