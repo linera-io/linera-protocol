@@ -48,22 +48,15 @@ pub struct Request {
     pub operation: Operation,
     /// The sequence number.
     pub sequence_number: SequenceNumber,
-}
-
-/// The content of a request to be signed in a RequestOrder.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct RequestValue {
-    /// The account request
-    pub request: Request,
-    /// Optional round in the case of a multi-owner account.
+    /// Optional round number in the case of a multi-owner account.
     pub round: Option<RoundNumber>,
 }
 
-/// An authenticated request plus additional certified assets.
+/// An authenticated request, aka an "order".
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct RequestOrder {
-    pub value: RequestValue,
+    pub request: Request,
     pub owner: AccountOwner,
     pub signature: Signature,
 }
@@ -72,10 +65,7 @@ pub struct RequestOrder {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Value {
     /// The request was validated but confirmation will require additional steps.
-    Validated {
-        request: Request,
-        round: RoundNumber,
-    },
+    Validated { request: Request },
     /// The request is validated and final (i.e. ready to be executed).
     Confirmed { request: Request },
 }

@@ -245,6 +245,9 @@ RequestValue:
   STRUCT:
     - request:
         TYPENAME: Request
+    - limited_to:
+        OPTION:
+          TYPENAME: PublicKeyBytes
     - round:
         OPTION:
           TYPENAME: RoundNumber
