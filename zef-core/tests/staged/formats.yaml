@@ -7,9 +7,9 @@ AccountInfoQuery:
   STRUCT:
     - account_id:
         TYPENAME: AccountId
-    - query_sent_certificates_at_or_after:
+    - query_sent_certificates_in_range:
         OPTION:
-          TYPENAME: SequenceNumber
+          TYPENAME: SequenceNumberRange
     - query_received_certificates_excluding_first_nth:
         OPTION: U64
 AccountInfoResponse:
@@ -255,6 +255,12 @@ RoundNumber:
   NEWTYPESTRUCT: U64
 SequenceNumber:
   NEWTYPESTRUCT: U64
+SequenceNumberRange:
+  STRUCT:
+    - start:
+        TYPENAME: SequenceNumber
+    - limit:
+        OPTION: U64
 SerializedMessage:
   ENUM:
     0:
