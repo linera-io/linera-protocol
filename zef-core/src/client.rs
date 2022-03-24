@@ -120,8 +120,6 @@ pub struct AccountClientState<AuthorityClient> {
     /// Expected sequence number for the next certified request.
     /// This is also the number of certificates that we have created.
     next_sequence_number: SequenceNumber,
-    /// Our identity plus other owners.
-    multi_owners: Option<HashSet<AccountOwner>>,
     /// Pending request.
     pending_request: Option<Request>,
     /// Known key pairs from present and past identities.
@@ -137,8 +135,14 @@ pub struct AccountClientState<AuthorityClient> {
     /// The known spendable balance (including a possible initial funding for testing
     /// purposes, excluding unknown sent or received certificates).
     balance: Balance,
+    /// Our identity plus other owners.
+    multi_owners: Option<HashSet<AccountOwner>>,
     /// Support synchronization of received certificates.
     received_certificate_trackers: HashMap<AuthorityName, usize>,
+    /// Consensus: next available round
+    next_round: RoundNumber,
+    /// Consensus: locked request
+    locked_request: Option<(RoundNumber, Request)>,
 }
 
 impl<A> AccountClientState<A> {
@@ -178,6 +182,8 @@ impl<A> AccountClientState<A> {
                 .collect(),
             received_certificate_trackers: HashMap::new(),
             balance,
+            next_round: RoundNumber::default(),
+            locked_request: None,
         }
     }
 
@@ -354,11 +360,7 @@ where
 
     /// Update our view of the account to include possible actions from another client.
     /// NOTE: This assumes network connectivity and a sufficient timeout value.
-    #[allow(dead_code)]
-    async fn synchronize_account_information(
-        &mut self,
-        owners: &HashSet<AccountOwner>, // TODO
-    ) -> Result<(RoundNumber, Option<(RoundNumber, Request)>), Error> {
+    async fn synchronize_account_information(&mut self) -> Result<(), Error> {
         assert_eq!(
             self.sent_certificates.len(),
             usize::from(self.next_sequence_number),
@@ -381,10 +383,13 @@ where
                 }
             }
         }
-        // Second pass to determine the current round number.
-        let mut used_round = RoundNumber::default();
-        let mut locked_request = None;
+        let owners = match &self.multi_owners {
+            None => return Ok(()),
+            Some(owners) => owners,
+        };
+        // Second pass to update the current round number and locked_request.
         for (_, info) in infos {
+            // Optional consistency checks.
             if info.next_sequence_number != self.next_sequence_number {
                 continue;
             }
@@ -405,8 +410,8 @@ where
                 }
                 if let Some(round) = order.value.round {
                     // Update the round.
-                    if round > used_round {
-                        used_round = round;
+                    if round >= self.next_round {
+                        self.next_round = round.try_add_one()?;
                     }
                 }
             }
@@ -420,7 +425,7 @@ where
                         continue;
                     }
                     // Update the locked request.
-                    match &mut locked_request {
+                    match &mut self.locked_request {
                         lr @ None => {
                             *lr = Some((round, request));
                         }
@@ -433,7 +438,7 @@ where
                 }
             }
         }
-        Ok((used_round, locked_request))
+        Ok(())
     }
 
     /// Execute a sequence of actions in parallel for a quorum of authorities.
@@ -839,6 +844,8 @@ where
         let next_sequence_number = SequenceNumber::from(self.sent_certificates.len() as u64);
         if self.next_sequence_number < next_sequence_number {
             self.next_sequence_number = next_sequence_number;
+            self.next_round = RoundNumber::default();
+            self.locked_request = None;
         }
         Ok(())
     }
@@ -847,16 +854,16 @@ where
         &mut self,
         request: Request,
     ) -> Result<RequestOrder, failure::Error> {
-        let key_pair = self.key_pair()?;
         if self.multi_owners.is_none() {
+            let key_pair = self.key_pair()?;
             return Ok(RequestOrder::new(request.into(), key_pair));
         }
-        // TODO
         let request_value = RequestValue {
             request,
             limited_to: None,
-            round: Some(RoundNumber::default()),
+            round: Some(self.next_round),
         };
+        let key_pair = self.key_pair()?;
         Ok(RequestOrder::new(request_value, key_pair))
     }
 
@@ -867,6 +874,12 @@ where
         request: Request,
         with_confirmation: bool,
     ) -> Result<Certificate, failure::Error> {
+        // Download (hypothetically) missing historical data.
+        self.download_missing_sent_certificates().await?;
+        if self.multi_owners.is_some() {
+            // We could be missing recent certificates created by other owners.
+            self.synchronize_account_information().await?;
+        }
         ensure!(
             matches!(&self.pending_request, None)
                 || matches!(&self.pending_request, Some(r) if *r == request),
@@ -878,8 +891,6 @@ where
         );
         // Remember what we are trying to do
         self.pending_request = Some(request.clone());
-        // Download (hypothetically) missing historical data.
-        self.download_missing_sent_certificates().await?;
         // Build the initial query.
         let order = self.make_request_order(request).await?;
         // Send the query.
