@@ -7,7 +7,7 @@ AccountInfoQuery:
   STRUCT:
     - account_id:
         TYPENAME: AccountId
-    - query_sequence_number:
+    - query_sent_certificates_at_or_after:
         OPTION:
           TYPENAME: SequenceNumber
     - query_received_certificates_excluding_first_nth:
@@ -22,10 +22,10 @@ AccountInfoResponse:
         TYPENAME: Balance
     - next_sequence_number:
         TYPENAME: SequenceNumber
-    - count_received_certificates: U64
-    - queried_certificate:
-        OPTION:
+    - queried_sent_certificates:
+        SEQ:
           TYPENAME: Certificate
+    - count_received_certificates: U64
     - queried_received_certificates:
         SEQ:
           TYPENAME: Certificate

@@ -234,7 +234,10 @@ where
     async fn query(&mut self, sequence_number: SequenceNumber) -> Result<Certificate, Error> {
         let query = AccountInfoQuery {
             account_id: self.account_id.clone(),
-            query_sequence_number: Some(sequence_number),
+            query_sent_certificates_in_range: Some(SequenceNumberRange {
+                start: sequence_number,
+                limit: Some(1),
+            }),
             query_received_certificates_excluding_first_nth: None,
         };
         // Sequentially try each authority in random order.
@@ -242,16 +245,18 @@ where
         for client in self.authority_clients.iter_mut() {
             let result = client.handle_account_info_query(query.clone()).await;
             if let Ok(AccountInfoResponse {
-                queried_certificate: Some(certificate),
+                queried_sent_certificates,
                 ..
             }) = &result
             {
-                if certificate.check(&self.committee).is_ok() {
-                    if let Value::Confirmed { request } = &certificate.value {
-                        if request.account_id == self.account_id
-                            && request.sequence_number == sequence_number
-                        {
-                            return Ok(certificate.clone());
+                if let Some(certificate) = queried_sent_certificates.first() {
+                    if certificate.check(&self.committee).is_ok() {
+                        if let Value::Confirmed { request } = &certificate.value {
+                            if request.account_id == self.account_id
+                                && request.sequence_number == sequence_number
+                            {
+                                return Ok(certificate.clone());
+                            }
                         }
                     }
                 }
@@ -297,7 +302,7 @@ where
     ) -> Vec<(AuthorityName, AccountInfoResponse)> {
         let query = AccountInfoQuery {
             account_id,
-            query_sequence_number: None,
+            query_sent_certificates_in_range: None,
             query_received_certificates_excluding_first_nth: None,
         };
         let infos: futures::stream::FuturesUnordered<_> = self
@@ -335,7 +340,7 @@ where
     /// NOTE: This assumes network connectivity and a sufficient timeout value.
     // TODO: not quite the API we need yet.
     #[allow(dead_code)]
-    async fn synchronize_account_information(
+    async fn synchronize_round_information(
         &mut self,
         account_id: AccountId,
         sequence_number: SequenceNumber,
@@ -479,7 +484,7 @@ where
                     // Figure out which certificates this authority is missing.
                     let query = AccountInfoQuery {
                         account_id,
-                        query_sequence_number: None,
+                        query_sent_certificates_in_range: None,
                         query_received_certificates_excluding_first_nth: None,
                     };
                     let response = client.handle_account_info_query(query).await?;
@@ -648,7 +653,7 @@ where
                     // Retrieve new received certificates from this authority.
                     let query = AccountInfoQuery {
                         account_id: account_id.clone(),
-                        query_sequence_number: None,
+                        query_sent_certificates_in_range: None,
                         query_received_certificates_excluding_first_nth: Some(tracker),
                     };
                     let response = client.handle_account_info_query(query).await?;
@@ -924,7 +929,7 @@ where
     async fn query_strong_majority_balance(&mut self) -> Balance {
         let query = AccountInfoQuery {
             account_id: self.account_id.clone(),
-            query_sequence_number: None,
+            query_sent_certificates_in_range: None,
             query_received_certificates_excluding_first_nth: None,
         };
         let numbers: futures::stream::FuturesUnordered<_> = self
