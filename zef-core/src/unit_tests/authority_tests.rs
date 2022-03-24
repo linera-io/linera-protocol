@@ -25,7 +25,8 @@ async fn test_handle_request_order_bad_signature() {
         make_transfer_request_order(dbg_account(1), &sender_key_pair, recipient, Amount::from(5));
     let unknown_key_pair = KeyPair::generate();
     let mut bad_signature_request_order = request_order.clone();
-    bad_signature_request_order.signature = Signature::new(&request_order.value, &unknown_key_pair);
+    bad_signature_request_order.signature =
+        Signature::new(&request_order.request, &unknown_key_pair);
     assert!(state
         .handle_request_order(bad_signature_request_order)
         .await
@@ -79,7 +80,7 @@ async fn test_handle_request_order_unknown_sender() {
         make_transfer_request_order(dbg_account(1), &sender_key_pair, recipient, Amount::from(5));
     let unknown_key = KeyPair::generate();
 
-    let unknown_sender_request_order = RequestOrder::new(request_order.value, &unknown_key);
+    let unknown_sender_request_order = RequestOrder::new(request_order.request, &unknown_key);
     assert!(state
         .handle_request_order(unknown_sender_request_order)
         .await
@@ -543,8 +544,9 @@ fn make_transfer_request_order(
             user_data: UserData::default(),
         },
         sequence_number: SequenceNumber::new(),
+        round: RoundNumber::default(),
     };
-    RequestOrder::new(request.into(), secret)
+    RequestOrder::new(request, secret)
 }
 
 fn make_certificate(state: &WorkerState<InMemoryStoreClient>, value: Value) -> Certificate {
@@ -563,9 +565,7 @@ fn make_transfer_certificate(
     amount: Amount,
     state: &WorkerState<InMemoryStoreClient>,
 ) -> Certificate {
-    let request = make_transfer_request_order(account_id, key_pair, recipient, amount)
-        .value
-        .request;
+    let request = make_transfer_request_order(account_id, key_pair, recipient, amount).request;
     let value = Value::Confirmed { request };
     make_certificate(state, value)
 }

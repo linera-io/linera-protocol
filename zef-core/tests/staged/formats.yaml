@@ -134,9 +134,9 @@ Error:
         NEWTYPE:
           TYPENAME: RoundNumber
     20:
-      HasLockedRequest:
+      HasLockedOperation:
         NEWTYPE:
-          TYPENAME: Request
+          TYPENAME: Operation
     21:
       CertificateNotFound: UNIT
     22:
@@ -233,24 +233,16 @@ Request:
         TYPENAME: Operation
     - sequence_number:
         TYPENAME: SequenceNumber
+    - round:
+        TYPENAME: RoundNumber
 RequestOrder:
   STRUCT:
-    - value:
-        TYPENAME: RequestValue
+    - request:
+        TYPENAME: Request
     - owner:
         TYPENAME: PublicKeyBytes
     - signature:
         TYPENAME: Signature
-RequestValue:
-  STRUCT:
-    - request:
-        TYPENAME: Request
-    - limited_to:
-        OPTION:
-          TYPENAME: PublicKeyBytes
-    - round:
-        OPTION:
-          TYPENAME: RoundNumber
 RoundNumber:
   NEWTYPESTRUCT: U64
 SequenceNumber:
@@ -316,8 +308,6 @@ Value:
         STRUCT:
           - request:
               TYPENAME: Request
-          - round:
-              TYPENAME: RoundNumber
     1:
       Confirmed:
         STRUCT:

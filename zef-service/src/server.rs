@@ -50,11 +50,7 @@ async fn make_shard_server(
     let committee = committee_config.into_committee();
     let num_shards = server_config.authority.num_shards;
 
-    let mut state = WorkerState::new(
-        committee,
-        Some(server_config.key),
-        storage,
-    );
+    let mut state = WorkerState::new(committee, Some(server_config.key), storage);
 
     if let Some(initial_accounts_config_path) = initial_accounts_config_path {
         let initial_accounts_config = InitialStateConfig::read(initial_accounts_config_path)

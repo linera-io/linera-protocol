@@ -395,7 +395,7 @@ impl AuthorityClient for Client {
         &mut self,
         order: RequestOrder,
     ) -> Result<AccountInfoResponse, Error> {
-        let shard = get_shard(self.num_shards, &order.value.request.account_id);
+        let shard = get_shard(self.num_shards, &order.request.account_id);
         self.send_recv_info_bytes(
             shard,
             serialize_message(&SerializedMessage::RequestOrder(Box::new(order))),

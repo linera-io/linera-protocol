@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    account::Outcome, base_types::*, committee::Committee, ensure, error::Error, messages::*,
+    account::Outcome, base_types::*, committee::Committee, error::Error, messages::*,
     storage::StorageClient,
 };
 use async_trait::async_trait;
@@ -128,24 +128,19 @@ where
     async fn process_validated_request(
         &mut self,
         request: Request,
-        round: RoundNumber,
         certificate: Certificate,
     ) -> Result<AccountInfoResponse, Error> {
         assert_eq!(certificate.value.validated_request().unwrap(), &request);
-        // Obtain the sender's account.
-        let sender = request.account_id.clone();
         // Check that the account is active and ready for this confirmation.
-        let mut account = self.storage.read_active_account(&sender).await?;
-        if account.next_sequence_number < request.sequence_number {
-            return Err(Error::MissingEarlierConfirmations {
-                current_sequence_number: account.next_sequence_number,
-            });
-        }
-        if account.next_sequence_number > request.sequence_number {
-            // Request was already confirmed.
-            return Ok(account.make_account_info());
-        }
-        if account.manager.check_validated_request(&request, round)? == Outcome::Skip {
+        let mut account = self
+            .storage
+            .read_active_account(&request.account_id)
+            .await?;
+        if account
+            .manager
+            .check_validated_request(account.next_sequence_number, &request)?
+            == Outcome::Skip
+        {
             // If we just processed the same pending request, return the account info
             // unchanged.
             return Ok(account.make_account_info());
@@ -192,30 +187,22 @@ where
         order: RequestOrder,
     ) -> Result<AccountInfoResponse, Error> {
         // Obtain the sender's account.
-        let sender = order.value.request.account_id.clone();
+        let sender = order.request.account_id.clone();
         let mut account = self.storage.read_active_account(&sender).await?;
         // Check authentication of the request.
         order.check(&account.manager)?;
-        // Check the account is ready for this new request.
-        let request = &order.value.request;
-        let round = order.value.round;
-        let number = request.sequence_number;
-        ensure!(
-            number <= SequenceNumber::max(),
-            Error::InvalidSequenceNumber
-        );
-        ensure!(
-            number == account.next_sequence_number,
-            Error::UnexpectedSequenceNumber
-        );
-        // Check the well-formedness of the request.
-        if account.manager.check_request(request, round)? == Outcome::Skip {
+        // Check if the account ready and if the request is well-formed.
+        if account
+            .manager
+            .check_request(account.next_sequence_number, &order.request)?
+            == Outcome::Skip
+        {
             // If we just processed the same pending request, return the account info
             // unchanged.
             return Ok(account.make_account_info());
         }
         // Verify that the request is valid.
-        account.validate_operation(request)?;
+        account.validate_operation(&order.request)?;
         // Create the vote and store it in the account.
         account.manager.create_vote(order, self.key_pair.as_ref());
         let info = account.make_account_info();
@@ -232,10 +219,10 @@ where
         certificate.check(&self.committee)?;
         // Process the order.
         match &certificate.value {
-            Value::Validated { request, round } => {
+            Value::Validated { request } => {
                 // Confirm the validated request.
                 let info = self
-                    .process_validated_request(request.clone(), *round, certificate)
+                    .process_validated_request(request.clone(), certificate)
                     .await?;
                 Ok((info, Vec::new()))
             }
@@ -311,11 +298,7 @@ where
 }
 
 impl<Client> WorkerState<Client> {
-    pub fn new(
-        committee: Committee,
-        key_pair: Option<KeyPair>,
-        storage: Client,
-    ) -> Self {
+    pub fn new(committee: Committee, key_pair: Option<KeyPair>, storage: Client) -> Self {
         WorkerState {
             committee,
             key_pair,

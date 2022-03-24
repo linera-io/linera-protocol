@@ -26,6 +26,7 @@ fn test_signed_values() {
             user_data: UserData::default(),
         },
         sequence_number: SequenceNumber::new(),
+        round: RoundNumber::default(),
     };
     let value = Value::Confirmed { request };
 
@@ -60,6 +61,7 @@ fn test_certificates() {
             user_data: UserData::default(),
         },
         sequence_number: SequenceNumber::new(),
+        round: RoundNumber::default(),
     };
     let value = Value::Confirmed { request };
 
