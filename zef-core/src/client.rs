@@ -361,11 +361,10 @@ where
 
     /// Update our view of the account to include possible actions from another client.
     /// NOTE: This assumes network connectivity and a sufficient timeout value.
-    async fn synchronize_account_information(&mut self) -> Result<(), Error> {
+    async fn hard_synchronize_account_information(&mut self) -> Result<(), Error> {
         assert_eq!(
             self.sent_certificates.len(),
             usize::from(self.next_sequence_number),
-            "download_missing_sent_certificates must be called first"
         );
         let infos = self
             .broadcast_account_info_query(self.account_id.clone(), Some(self.next_sequence_number))
@@ -677,7 +676,7 @@ where
 
     /// Make sure we have all our certificates with sequence number
     /// in the range 0..self.next_sequence_number
-    async fn download_missing_sent_certificates(&mut self) -> Result<(), Error> {
+    async fn synchronize_account_information(&mut self) -> Result<(), Error> {
         let mut requester = CertificateRequester::new(
             self.committee.clone(),
             self.authority_clients.values().cloned().collect(),
@@ -688,6 +687,10 @@ where
                 .query(SequenceNumber::from(self.sent_certificates.len() as u64))
                 .await?;
             self.add_sent_certificate(certificate)?;
+        }
+        if self.multi_owners.is_some() {
+            // We could be missing recent certificates created by other owners.
+            self.hard_synchronize_account_information().await?;
         }
         Ok(())
     }
@@ -861,12 +864,6 @@ where
         request: Request,
         with_confirmation: bool,
     ) -> Result<Certificate, failure::Error> {
-        // Download (hypothetically) missing historical data.
-        self.download_missing_sent_certificates().await?;
-        if self.multi_owners.is_some() {
-            // We could be missing recent certificates created by other owners.
-            self.synchronize_account_information().await?;
-        }
         ensure!(
             matches!(&self.pending_request, None)
                 || matches!(&self.pending_request, Some(r) if *r == request),
@@ -994,8 +991,8 @@ where
             self.execute_request(request, /* with_confirmation */ false)
                 .await?;
         }
+        self.synchronize_account_information().await?;
         self.synchronize_received_certificates().await?;
-        self.download_missing_sent_certificates().await?;
         Ok(self.balance)
     }
 
@@ -1034,6 +1031,7 @@ where
     }
 
     async fn rotate_key_pair(&mut self, key_pair: KeyPair) -> Result<Certificate, failure::Error> {
+        self.synchronize_account_information().await?;
         let new_owner = key_pair.public();
         let request = Request {
             account_id: self.account_id.clone(),
@@ -1052,6 +1050,7 @@ where
         &mut self,
         new_owner: AccountOwner,
     ) -> Result<Certificate, failure::Error> {
+        self.synchronize_account_information().await?;
         let request = Request {
             account_id: self.account_id.clone(),
             operation: Operation::ChangeOwner { new_owner },
@@ -1068,6 +1067,7 @@ where
         &mut self,
         new_owner: AccountOwner,
     ) -> Result<Certificate, failure::Error> {
+        self.synchronize_account_information().await?;
         let owner = self.identity.ok_or_else(|| {
             failure::format_err!("Cannot share ownership for an account that we don't own")
         })?;
@@ -1089,6 +1089,7 @@ where
         &mut self,
         new_owner: AccountOwner,
     ) -> Result<Certificate, failure::Error> {
+        self.synchronize_account_information().await?;
         let new_id = self.account_id.make_child(self.next_sequence_number);
         let request = Request {
             account_id: self.account_id.clone(),
@@ -1103,6 +1104,7 @@ where
     }
 
     async fn close_account(&mut self) -> Result<Certificate, failure::Error> {
+        self.synchronize_account_information().await?;
         let request = Request {
             account_id: self.account_id.clone(),
             operation: Operation::CloseAccount,
@@ -1121,6 +1123,7 @@ where
         recipient: AccountId,
         user_data: UserData,
     ) -> Result<Certificate, failure::Error> {
+        self.synchronize_account_information().await?;
         let request = Request {
             account_id: self.account_id.clone(),
             operation: Operation::Transfer {
