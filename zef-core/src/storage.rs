@@ -71,7 +71,7 @@ pub trait StorageClient: DynClone + Send + Sync {
 dyn_clone::clone_trait_object!(StorageClient);
 
 /// Vanilla in-memory key-value store.
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct InMemoryStore {
     accounts: HashMap<AccountId, AccountState>,
     certificates: HashMap<HashValue, Certificate>,
@@ -80,6 +80,14 @@ pub struct InMemoryStore {
 /// The corresponding vanilla client.
 #[derive(Clone, Default)]
 pub struct InMemoryStoreClient(Arc<Mutex<InMemoryStore>>);
+
+impl InMemoryStoreClient {
+    /// Create a distinct copy of the data.
+    pub async fn copy(&self) -> Self {
+        let store = self.0.clone().lock().await.clone();
+        Self(Arc::new(Mutex::new(store)))
+    }
+}
 
 #[async_trait]
 impl StorageClient for InMemoryStoreClient {

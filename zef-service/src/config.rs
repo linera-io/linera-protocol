@@ -12,9 +12,10 @@ use std::{
 };
 use zef_core::{
     base_types::*,
-    client::AccountClientState,
+    client::{AccountClientState, AuthorityClient},
     committee::Committee,
     messages::{Address, Certificate, Operation, Value},
+    storage::StorageClient,
 };
 
 pub trait Import: DeserializeOwned {
@@ -148,16 +149,20 @@ impl AccountsConfig {
         self.accounts.values_mut()
     }
 
-    pub fn update_from_state<A>(&mut self, state: &AccountClientState<A>) {
+    pub async fn update_from_state<A, S>(&mut self, state: &mut AccountClientState<A, S>)
+    where
+        A: AuthorityClient + Send + Sync + 'static + Clone,
+        S: StorageClient + Clone + 'static,
+    {
         let account = self
             .accounts
             .entry(state.account_id().clone())
             .or_insert_with(|| UserAccount::new(state.account_id().clone()));
         account.key_pair = state.key_pair().map(|k| k.copy()).ok();
         account.next_sequence_number = state.next_sequence_number();
-        account.balance = state.balance();
-        account.sent_certificates = state.sent_certificates().clone();
-        account.received_certificates = state.received_certificates().cloned().collect();
+        account.balance = state.balance().await;
+        account.sent_certificates = state.sent_certificates().await;
+        account.received_certificates = state.received_certificates().await;
     }
 
     pub fn update_for_received_request(&mut self, certificate: Certificate) {
