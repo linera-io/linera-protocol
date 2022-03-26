@@ -61,6 +61,10 @@ impl LocalAuthorityClient {
     }
 }
 
+/// IMPORTANT: To communicate with a quorum of authorities, clients iterate over the
+/// HashMap keyed by authority names (i.e. public keys). At the same time, initial
+/// balances of accounts are assigned by iterating over the BTreeMap inside the committee.
+/// This means that communication with a quorum does not always query the same balances during tests.
 fn init_local_authorities(
     count: usize,
 ) -> (HashMap<AuthorityName, LocalAuthorityClient>, Committee) {
@@ -90,21 +94,22 @@ fn init_local_authorities_bad_1(
 ) -> (HashMap<AuthorityName, LocalAuthorityClient>, Committee) {
     let mut key_pairs = Vec::new();
     let mut voting_rights = BTreeMap::new();
-    for i in 0..count {
+    for _ in 0..count {
         let key_pair = KeyPair::generate();
         voting_rights.insert(key_pair.public(), 1);
-        if i + 1 < (count + 2) / 3 {
-            // init 1 authority with a bad keypair
-            key_pairs.push(KeyPair::generate());
-        } else {
-            key_pairs.push(key_pair);
-        }
+        key_pairs.push(key_pair);
     }
     let committee = Committee::new(voting_rights);
 
     let mut clients = HashMap::new();
-    for key_pair in key_pairs {
+    for (i, key_pair) in key_pairs.into_iter().enumerate() {
         let name = key_pair.public();
+        let key_pair = if i == 0 {
+            // init 1 authority with a bad keypair
+            KeyPair::generate()
+        } else {
+            key_pair
+        };
         let state = WorkerState::new(
             committee.clone(),
             Some(key_pair),
@@ -133,34 +138,43 @@ fn make_client(
     )
 }
 
-async fn fund_account<I: IntoIterator<Item = i128>>(
+async fn fund_account<I: IntoIterator<Item = (AuthorityName, Balance)>>(
     clients: &mut HashMap<AuthorityName, LocalAuthorityClient>,
     account_id: AccountId,
     owner: AccountOwner,
     balances: I,
 ) {
-    let mut balances = balances.into_iter().map(Balance::from);
-    for (_, client) in clients.iter_mut() {
+    for (name, balance) in balances {
+        let client = clients.get_mut(&name).unwrap();
+        let account = AccountState::create(account_id.clone(), owner, balance);
         client
             .0
             .as_ref()
             .try_lock()
             .unwrap()
             .storage
-            .write_account(AccountState::create(
-                account_id.clone(),
-                owner,
-                balances.next().unwrap_or_else(Balance::zero),
-            ))
+            .write_account(account)
             .await
             .unwrap();
     }
 }
 
+fn make_balances(committee: &Committee, balances: Vec<i128>) -> Vec<(AuthorityName, Balance)> {
+    assert_eq!(committee.voting_rights.len(), balances.len());
+    committee
+        .voting_rights
+        .keys()
+        .cloned()
+        .zip(balances.into_iter().map(Balance::from))
+        .collect()
+}
+
 async fn init_local_client_state(balances: Vec<i128>) -> AccountClientState<LocalAuthorityClient> {
     let (mut authority_clients, committee) = init_local_authorities(balances.len());
-    let zeroes = vec![0; balances.len()];
-    let client1 = make_client(dbg_account(1), authority_clients.clone(), committee.clone());
+    let balances = make_balances(&committee, balances.clone());
+    let zeroes = make_balances(&committee, vec![0; balances.len()]);
+    let mut client1 = make_client(dbg_account(1), authority_clients.clone(), committee.clone());
+    client1.balance = committee.get_strong_majority_lower_bound(balances.clone());
     fund_account(
         &mut authority_clients,
         client1.account_id.clone(),
@@ -183,8 +197,10 @@ async fn init_local_client_state_with_bad_authority(
     balances: Vec<i128>,
 ) -> AccountClientState<LocalAuthorityClient> {
     let (mut authority_clients, committee) = init_local_authorities_bad_1(balances.len());
-    let zeroes = vec![0; balances.len()];
-    let client1 = make_client(dbg_account(1), authority_clients.clone(), committee.clone());
+    let balances = make_balances(&committee, balances.clone());
+    let zeroes = make_balances(&committee, vec![0; balances.len()]);
+    let mut client1 = make_client(dbg_account(1), authority_clients.clone(), committee.clone());
+    client1.balance = committee.get_strong_majority_lower_bound(balances.clone());
     fund_account(
         &mut authority_clients,
         client1.account_id.clone(),
@@ -204,30 +220,20 @@ async fn init_local_client_state_with_bad_authority(
 }
 
 #[tokio::test]
-async fn test_get_strong_majority_balance() {
-    let mut client = init_local_client_state(vec![3, 4, 4, 4]).await;
-    assert_eq!(
-        client.query_strong_majority_balance().await,
-        Balance::from(4)
-    );
+async fn test_query_balance() {
+    let mut client = init_local_client_state(vec![1, 2, 3, 4]).await;
+    assert_eq!(client.query_safe_balance().await, Balance::from(3));
 
-    let mut client = init_local_client_state(vec![0, 3, 4, 4]).await;
-    assert_eq!(
-        client.query_strong_majority_balance().await,
-        Balance::from(3)
-    );
+    let mut client = init_local_client_state(vec![2, 2, 4, 1]).await;
+    assert_eq!(client.query_safe_balance().await, Balance::from(2));
 
-    let mut client = init_local_client_state(vec![0, 3, 4]).await;
-    assert_eq!(
-        client.query_strong_majority_balance().await,
-        Balance::from(0)
-    );
+    let mut client = init_local_client_state(vec![2, 3, 4]).await;
+    assert_eq!(client.query_safe_balance().await, Balance::from(4));
 }
 
 #[tokio::test]
 async fn test_initiating_valid_transfer() {
     let mut sender = init_local_client_state(vec![2, 4, 4, 4]).await;
-    sender.balance = Balance::from(4);
     let certificate = sender
         .transfer_to_account(
             Amount::from(3),
@@ -238,10 +244,7 @@ async fn test_initiating_valid_transfer() {
         .unwrap();
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
     assert!(matches!(sender.pending_request, None));
-    assert_eq!(
-        sender.query_strong_majority_balance().await,
-        Balance::from(1)
-    );
+    assert_eq!(sender.query_safe_balance().await, Balance::from(1));
     assert_eq!(
         sender
             .query_certificate(sender.account_id.clone(), SequenceNumber::from(0))
@@ -254,7 +257,6 @@ async fn test_initiating_valid_transfer() {
 #[tokio::test]
 async fn test_rotate_key_pair() {
     let mut sender = init_local_client_state(vec![2, 4, 4, 4]).await;
-    sender.balance = Balance::from(4);
     let new_key_pair = KeyPair::generate();
     let new_pubk = new_key_pair.public();
     let certificate = sender.rotate_key_pair(new_key_pair).await.unwrap();
@@ -268,10 +270,7 @@ async fn test_rotate_key_pair() {
             .unwrap(),
         certificate
     );
-    assert_eq!(
-        sender.query_strong_majority_balance().await,
-        Balance::from(4)
-    );
+    assert_eq!(sender.query_safe_balance().await, Balance::from(4));
     assert_eq!(
         sender.synchronize_balance().await.unwrap(),
         Balance::from(4)
@@ -286,7 +285,6 @@ async fn test_rotate_key_pair() {
 #[tokio::test]
 async fn test_transfer_ownership() {
     let mut sender = init_local_client_state(vec![2, 4, 4, 4]).await;
-    sender.balance = Balance::from(4);
     let new_key_pair = KeyPair::generate();
     let new_pubk = new_key_pair.public();
     let certificate = sender.transfer_ownership(new_pubk).await.unwrap();
@@ -300,10 +298,7 @@ async fn test_transfer_ownership() {
             .unwrap(),
         certificate
     );
-    assert_eq!(
-        sender.query_strong_majority_balance().await,
-        Balance::from(4)
-    );
+    assert_eq!(sender.query_safe_balance().await, Balance::from(4));
     assert_eq!(
         sender.synchronize_balance().await.unwrap(),
         Balance::from(4)
@@ -318,7 +313,6 @@ async fn test_transfer_ownership() {
 #[tokio::test]
 async fn test_share_ownership() {
     let mut sender = init_local_client_state(vec![2, 4, 4, 4]).await;
-    sender.balance = Balance::from(4);
     let new_key_pair = KeyPair::generate();
     let new_pubk = new_key_pair.public();
     let certificate = sender.share_ownership(new_pubk).await.unwrap();
@@ -332,10 +326,7 @@ async fn test_share_ownership() {
             .unwrap(),
         certificate
     );
-    assert_eq!(
-        sender.query_strong_majority_balance().await,
-        Balance::from(4)
-    );
+    assert_eq!(sender.query_safe_balance().await, Balance::from(4));
     assert_eq!(
         sender.synchronize_balance().await.unwrap(),
         Balance::from(4)
@@ -356,10 +347,7 @@ async fn test_share_ownership() {
         Vec::new(),
         Balance::from(4), // Genesis balance must be correct
     );
-    assert_eq!(
-        client.query_strong_majority_balance().await,
-        Balance::from(1)
-    );
+    assert_eq!(client.query_safe_balance().await, Balance::from(1));
     assert_eq!(
         client.synchronize_balance().await.unwrap(),
         Balance::from(1)
@@ -373,7 +361,6 @@ async fn test_share_ownership() {
 #[tokio::test]
 async fn test_open_account() {
     let mut sender = init_local_client_state(vec![2, 4, 4, 4]).await;
-    sender.balance = Balance::from(4);
     let new_key_pair = KeyPair::generate();
     let new_pubk = new_key_pair.public();
     let new_id = AccountId::new(vec![SequenceNumber::from(1), SequenceNumber::from(1)]);
@@ -411,10 +398,7 @@ async fn test_open_account() {
         Vec::new(),
         Balance::from(0),
     );
-    assert_eq!(
-        client.query_strong_majority_balance().await,
-        Balance::from(3)
-    );
+    assert_eq!(client.query_safe_balance().await, Balance::from(3));
     assert_eq!(
         client.synchronize_balance().await.unwrap(),
         Balance::from(3)
@@ -428,7 +412,6 @@ async fn test_open_account() {
 #[tokio::test]
 async fn test_close_account() {
     let mut sender = init_local_client_state(vec![2, 4, 4, 4]).await;
-    sender.balance = Balance::from(4);
     let certificate = sender.close_account().await.unwrap();
     assert!(matches!(
         &certificate.value,
@@ -457,7 +440,6 @@ async fn test_close_account() {
 #[tokio::test]
 async fn test_initiating_valid_transfer_despite_bad_authority() {
     let mut sender = init_local_client_state_with_bad_authority(vec![4, 4, 4, 4]).await;
-    sender.balance = Balance::from(4);
     let certificate = sender
         .transfer_to_account(
             Amount::from(3),
@@ -468,10 +450,7 @@ async fn test_initiating_valid_transfer_despite_bad_authority() {
         .unwrap();
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
     assert!(matches!(sender.pending_request, None));
-    assert_eq!(
-        sender.query_strong_majority_balance().await,
-        Balance::from(1)
-    );
+    assert_eq!(sender.query_safe_balance().await, Balance::from(1));
     assert_eq!(
         sender
             .query_certificate(sender.account_id.clone(), SequenceNumber::from(0))
@@ -484,7 +463,6 @@ async fn test_initiating_valid_transfer_despite_bad_authority() {
 #[tokio::test]
 async fn test_initiating_transfer_low_funds() {
     let mut sender = init_local_client_state(vec![2, 2, 4, 4]).await;
-    sender.balance = Balance::from(2);
     assert!(sender
         .transfer_to_account(Amount::from(3), dbg_account(2), UserData::default())
         .await
@@ -492,34 +470,30 @@ async fn test_initiating_transfer_low_funds() {
     // Trying to overspend does not block an account.
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(0));
     assert!(matches!(sender.pending_request, None));
-    assert_eq!(
-        sender.query_strong_majority_balance().await,
-        Balance::from(2)
-    );
+    assert_eq!(sender.query_safe_balance().await, Balance::from(4));
 }
 
 #[tokio::test]
 async fn test_bidirectional_transfer() {
     let (mut authority_clients, committee) = init_local_authorities(4);
     let mut client1 = make_client(dbg_account(1), authority_clients.clone(), committee.clone());
-    let mut client2 = make_client(dbg_account(2), authority_clients.clone(), committee);
+    let mut client2 = make_client(dbg_account(2), authority_clients.clone(), committee.clone());
     fund_account(
         &mut authority_clients,
         client1.account_id.clone(),
         client1.identity().unwrap(),
-        vec![2, 3, 4, 4],
+        make_balances(&committee, vec![2, 3, 3, 3]),
     )
     .await;
     fund_account(
         &mut authority_clients,
         client2.account_id.clone(),
         client2.identity().unwrap(),
-        vec![0; 4],
+        make_balances(&committee, vec![0; 4]),
     )
     .await;
-    // Update client1's local balance accordingly.
-    client1.balance = client1.query_strong_majority_balance().await;
-    assert_eq!(client1.balance, Balance::from(3));
+    client1.balance = Balance::from(3);
+    assert_eq!(client1.query_safe_balance().await, Balance::from(3));
 
     let certificate = client1
         .transfer_to_account(
@@ -532,17 +506,8 @@ async fn test_bidirectional_transfer() {
 
     assert_eq!(client1.next_sequence_number, SequenceNumber::from(1));
     assert!(matches!(client1.pending_request, None));
-    assert_eq!(
-        client1.query_strong_majority_balance().await,
-        Balance::from(0)
-    );
     assert_eq!(client1.balance, Balance::from(0));
-    assert_eq!(
-        client1
-            .get_strong_majority_sequence_number(client1.account_id.clone())
-            .await,
-        SequenceNumber::from(1)
-    );
+    assert_eq!(client1.query_safe_balance().await, Balance::from(0));
 
     assert_eq!(
         client1
@@ -552,10 +517,7 @@ async fn test_bidirectional_transfer() {
         certificate
     );
     // Our sender already confirmed.
-    assert_eq!(
-        client2.query_strong_majority_balance().await,
-        Balance::from(3)
-    );
+    assert_eq!(client2.query_safe_balance().await, Balance::from(3));
     // But local balance is lagging.
     assert_eq!(client2.balance, Balance::from(0));
     // Force synchronization of local balance.
@@ -577,41 +539,30 @@ async fn test_bidirectional_transfer() {
         .unwrap();
     assert_eq!(client2.next_sequence_number, SequenceNumber::from(1));
     assert!(matches!(client2.pending_request, None));
-    assert_eq!(
-        client2.query_strong_majority_balance().await,
-        Balance::from(2)
-    );
-    assert_eq!(
-        client2
-            .get_strong_majority_sequence_number(client2.account_id.clone())
-            .await,
-        SequenceNumber::from(1)
-    );
-    assert_eq!(
-        client1.query_strong_majority_balance().await,
-        Balance::from(1)
-    );
+    assert_eq!(client2.query_safe_balance().await, Balance::from(2));
+    assert_eq!(client1.query_safe_balance().await, Balance::from(1));
 }
 
 #[tokio::test]
 async fn test_receiving_unconfirmed_transfer() {
     let (mut authority_clients, committee) = init_local_authorities(4);
     let mut client1 = make_client(dbg_account(1), authority_clients.clone(), committee.clone());
-    let mut client2 = make_client(dbg_account(2), authority_clients.clone(), committee);
+    let mut client2 = make_client(dbg_account(2), authority_clients.clone(), committee.clone());
     fund_account(
         &mut authority_clients,
         client1.account_id.clone(),
         client1.identity().unwrap(),
-        vec![2, 3, 4, 4],
+        make_balances(&committee, vec![2, 3, 3, 3]),
     )
     .await;
     fund_account(
         &mut authority_clients,
         client2.account_id.clone(),
         client2.identity().unwrap(),
-        vec![0; 4],
+        make_balances(&committee, vec![0; 4]),
     )
     .await;
+    client1.balance = Balance::from(3);
 
     let certificate = client1
         .transfer_to_account_unsafe_unconfirmed(
@@ -621,27 +572,15 @@ async fn test_receiving_unconfirmed_transfer() {
         )
         .await
         .unwrap();
-    // Transfer was executed locally, creating negative balance.
-    assert_eq!(client1.balance, Balance::from(-2));
+    // Transfer was executed locally.
+    assert_eq!(client1.balance, Balance::from(1));
     assert_eq!(client1.next_sequence_number, SequenceNumber::from(1));
     assert!(matches!(client1.pending_request, None));
-    // ..but not confirmed remotely, hence an unchanged balance and sequence number.
-    assert_eq!(
-        client1.query_strong_majority_balance().await,
-        Balance::from(3)
-    );
-    assert_eq!(
-        client1
-            .get_strong_majority_sequence_number(client1.account_id.clone())
-            .await,
-        SequenceNumber::from(0)
-    );
+    // ..but not confirmed remotely, hence a conservative result.
+    assert_eq!(client1.query_safe_balance().await, Balance::from(0));
     // Let the receiver confirm in last resort.
     client2.receive_certificate(certificate).await.unwrap();
-    assert_eq!(
-        client2.query_strong_majority_balance().await,
-        Balance::from(2)
-    );
+    assert_eq!(client2.query_safe_balance().await, Balance::from(2));
 }
 
 #[tokio::test]
@@ -649,26 +588,27 @@ async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
     let (mut authority_clients, committee) = init_local_authorities(4);
     let mut client0 = make_client(dbg_account(1), authority_clients.clone(), committee.clone());
     let mut client1 = make_client(dbg_account(2), authority_clients.clone(), committee.clone());
-    let mut client2 = make_client(dbg_account(3), authority_clients.clone(), committee);
+    let mut client2 = make_client(dbg_account(3), authority_clients.clone(), committee.clone());
     fund_account(
         &mut authority_clients,
         client0.account_id.clone(),
         client0.identity().unwrap(),
-        vec![2, 3, 4, 4],
+        make_balances(&committee, vec![2, 3, 3, 3]),
     )
     .await;
+    client0.balance = Balance::from(3);
     fund_account(
         &mut authority_clients,
         client1.account_id.clone(),
         client1.identity().unwrap(),
-        vec![0; 4],
+        make_balances(&committee, vec![0; 4]),
     )
     .await;
     fund_account(
         &mut authority_clients,
         client2.account_id.clone(),
         client2.identity().unwrap(),
-        vec![0; 4],
+        make_balances(&committee, vec![0; 4]),
     )
     .await;
 
@@ -708,27 +648,15 @@ async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
         .await
         .unwrap();
     // Requests were executed locally, possibly creating negative balances.
-    assert_eq!(client0.balance, Balance::from(-2));
+    assert_eq!(client0.balance, Balance::from(1));
     assert_eq!(client0.next_sequence_number, SequenceNumber::from(2));
     assert!(matches!(client0.pending_request, None));
     assert_eq!(client1.balance, Balance::from(-2));
     assert_eq!(client1.next_sequence_number, SequenceNumber::from(1));
     assert!(matches!(client1.pending_request, None));
-    // Last one was not confirmed remotely, hence an unchanged (remote) balance and sequence number.
-    assert_eq!(
-        client1.query_strong_majority_balance().await,
-        Balance::from(2)
-    );
-    assert_eq!(
-        client1
-            .get_strong_majority_sequence_number(client1.account_id.clone())
-            .await,
-        SequenceNumber::from(0)
-    );
+    // Last one was not confirmed remotely, hence a conservative balance.
+    assert_eq!(client1.query_safe_balance().await, Balance::from(0));
     // Let the receiver confirm in last resort.
     client2.receive_certificate(certificate).await.unwrap();
-    assert_eq!(
-        client2.query_strong_majority_balance().await,
-        Balance::from(2)
-    );
+    assert_eq!(client2.query_safe_balance().await, Balance::from(2));
 }

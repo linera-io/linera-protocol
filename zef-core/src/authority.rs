@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    account::Outcome, base_types::*, committee::Committee, error::Error, messages::*,
+    account::Outcome, base_types::*, committee::Committee, ensure, error::Error, messages::*,
     storage::StorageClient,
 };
 use async_trait::async_trait;
@@ -240,6 +240,12 @@ where
     ) -> Result<AccountInfoResponse, Error> {
         let account = self.storage.read_active_account(&query.account_id).await?;
         let mut response = account.make_account_info();
+        if let Some(next_sequence_number) = query.check_next_sequence_number {
+            ensure!(
+                account.next_sequence_number == next_sequence_number,
+                Error::UnexpectedSequenceNumber
+            );
+        }
         if let Some(range) = query.query_sent_certificates_in_range {
             let keys = account.confirmed_log[..]
                 .iter()

@@ -418,6 +418,7 @@ async fn test_handle_certificate_to_active_recipient() {
 
     let info_query = AccountInfoQuery {
         account_id: dbg_account(2),
+        check_next_sequence_number: None,
         query_sent_certificates_in_range: None,
         query_received_certificates_excluding_first_nth: Some(0),
     };
