@@ -15,12 +15,12 @@ mod authority_tests;
 /// State of a worker in an authority or a client.
 pub struct WorkerState<StorageClient> {
     /// Committee of this instance.
-    pub committee: Committee,
+    committee: Committee,
     /// The signature key pair of the authority. The key may be missing for replicas
     /// without voting rights (possibly with a partial view of accounts).
-    pub key_pair: Option<KeyPair>,
+    key_pair: Option<KeyPair>,
     /// Access to local persistent storage.
-    pub storage: StorageClient,
+    pub(crate) storage: StorageClient,
 }
 
 /// Interface provided by each (shard of an) authority.
