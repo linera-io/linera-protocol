@@ -37,7 +37,7 @@ async fn make_shard_server(
     buffer_size: usize,
     cross_shard_config: network::CrossShardConfig,
     shard: u32,
-    storage: Storage,
+    mut storage: Storage,
 ) -> network::Server<Storage> {
     let server_config =
         AuthorityServerConfig::read(server_config_path).expect("Fail to read server config");
@@ -50,8 +50,6 @@ async fn make_shard_server(
     let committee = committee_config.into_committee();
     let num_shards = server_config.authority.num_shards;
 
-    let mut state = WorkerState::new(committee, Some(server_config.key), storage);
-
     if let Some(initial_accounts_config_path) = initial_accounts_config_path {
         let initial_accounts_config = InitialStateConfig::read(initial_accounts_config_path)
             .expect("Fail to read initial account config");
@@ -62,10 +60,10 @@ async fn make_shard_server(
                 continue;
             }
             let account = AccountState::create(id.clone(), *owner, *balance);
-            state.storage.write_account(account).await.unwrap();
+            storage.write_account(account).await.unwrap();
         }
     }
-
+    let state = WorkerState::new(committee, Some(server_config.key), storage);
     network::Server::new(
         server_config.authority.network_protocol,
         local_ip_addr.to_string(),
