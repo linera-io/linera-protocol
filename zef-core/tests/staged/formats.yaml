@@ -7,6 +7,9 @@ AccountInfoQuery:
   STRUCT:
     - account_id:
         TYPENAME: AccountId
+    - check_next_sequence_number:
+        OPTION:
+          TYPENAME: SequenceNumber
     - query_sent_certificates_in_range:
         OPTION:
           TYPENAME: SequenceNumberRange

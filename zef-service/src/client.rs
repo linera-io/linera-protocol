@@ -523,7 +523,7 @@ async fn main() {
             let mut client_state = context.make_account_client(account_id);
             info!("Starting query authorities for the account balance");
             let time_start = Instant::now();
-            let balance = client_state.query_strong_majority_balance().await;
+            let balance = client_state.query_safe_balance().await;
             let time_total = time_start.elapsed().as_micros();
             info!("Balance confirmed after {} us", time_total);
             println!("{}", balance);

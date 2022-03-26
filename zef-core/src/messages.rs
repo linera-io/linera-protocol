@@ -106,8 +106,13 @@ pub struct SequenceNumberRange {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct AccountInfoQuery {
+    /// The account id
     pub account_id: AccountId,
+    /// Optionally request that the sequence number is the one expected.
+    pub check_next_sequence_number: Option<SequenceNumber>,
+    /// Query a range of certificates sent from the account.
     pub query_sent_certificates_in_range: Option<SequenceNumberRange>,
+    /// Query new certificates received from the account.
     pub query_received_certificates_excluding_first_nth: Option<usize>,
 }
 
@@ -115,12 +120,19 @@ pub struct AccountInfoQuery {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct AccountInfoResponse {
+    /// The account id
     pub account_id: AccountId,
+    /// The state of the account authentication.
     pub manager: AccountManager,
+    /// The current balance.
     pub balance: Balance,
+    /// The current sequence number
     pub next_sequence_number: SequenceNumber,
+    /// The response to `query_sent_certificates_in_range`
     pub queried_sent_certificates: Vec<Certificate>,
+    /// The current number of received certificates (useful for `query_received_certificates_excluding_first_nth`)
     pub count_received_certificates: usize,
+    /// The response to `query_received_certificates_excluding_first_nth`
     pub queried_received_certificates: Vec<Certificate>,
 }
 
