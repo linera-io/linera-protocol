@@ -101,9 +101,9 @@ pub trait AccountClient {
     /// certificates that were locally processed by `receive_from_account`).
     async fn synchronize_balance(&mut self) -> Result<Balance, failure::Error>;
 
-    /// Find the highest balance that is backed by a quorum of authorities.
-    /// NOTE: This is only safe in the synchronous model, assuming a sufficient timeout value.
-    async fn query_strong_majority_balance(&mut self) -> Balance;
+    /// Find the highest balance that is provably backed by at least one honest
+    /// (sufficiently up-to-date) authority. This is a conservative approximation.
+    async fn query_safe_balance(&mut self) -> Balance;
 }
 
 /// Reference implementation of the `AccountClient` trait using many instances of
@@ -254,6 +254,7 @@ where
     async fn query(&mut self, sequence_number: SequenceNumber) -> Result<Certificate, Error> {
         let query = AccountInfoQuery {
             account_id: self.account_id.clone(),
+            check_next_sequence_number: None,
             query_sent_certificates_in_range: Some(SequenceNumberRange {
                 start: sequence_number,
                 limit: Some(1),
@@ -325,6 +326,7 @@ where
         let range = next_sequence_number.map(|start| SequenceNumberRange { start, limit: None });
         let query = AccountInfoQuery {
             account_id,
+            check_next_sequence_number: None,
             query_sent_certificates_in_range: range,
             query_received_certificates_excluding_first_nth: None,
         };
@@ -342,21 +344,6 @@ where
             })
             .collect();
         infos.filter_map(|x| async move { x }).collect().await
-    }
-
-    /// Find the highest sequence number that is known to a quorum of authorities.
-    /// This is meant only for testing.
-    #[cfg(test)]
-    async fn get_strong_majority_sequence_number(
-        &mut self,
-        account_id: AccountId,
-    ) -> SequenceNumber {
-        let infos = self.broadcast_account_info_query(account_id, None).await;
-        let numbers = infos
-            .into_iter()
-            .map(|(name, info)| (name, info.next_sequence_number))
-            .collect();
-        self.committee.get_strong_majority_lower_bound(numbers)
     }
 
     /// Update our view of the account to include possible actions from another client.
@@ -534,6 +521,7 @@ where
                     // Figure out which certificates this authority is missing.
                     let query = AccountInfoQuery {
                         account_id,
+                        check_next_sequence_number: None,
                         query_sent_certificates_in_range: None,
                         query_received_certificates_excluding_first_nth: None,
                     };
@@ -709,6 +697,7 @@ where
                     // Retrieve new received certificates from this authority.
                     let query = AccountInfoQuery {
                         account_id: account_id.clone(),
+                        check_next_sequence_number: None,
                         query_sent_certificates_in_range: None,
                         query_received_certificates_excluding_first_nth: Some(tracker),
                     };
@@ -942,9 +931,11 @@ impl<A> AccountClient for AccountClientState<A>
 where
     A: AuthorityClient + Send + Sync + Clone + 'static,
 {
-    async fn query_strong_majority_balance(&mut self) -> Balance {
+    async fn query_safe_balance(&mut self) -> Balance {
         let query = AccountInfoQuery {
             account_id: self.account_id.clone(),
+            /// This is necessary to make sure that the response is conservative.
+            check_next_sequence_number: Some(self.next_sequence_number),
             query_sent_certificates_in_range: None,
             query_received_certificates_excluding_first_nth: None,
         };
@@ -961,9 +952,8 @@ where
                 }
             })
             .collect();
-        self.committee.get_strong_majority_lower_bound(
-            numbers.filter_map(|x| async move { x }).collect().await,
-        )
+        self.committee
+            .get_validity_lower_bound(numbers.filter_map(|x| async move { x }).collect().await)
     }
 
     async fn transfer_to_account(
