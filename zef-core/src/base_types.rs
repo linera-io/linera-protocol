@@ -262,17 +262,21 @@ impl AccountId {
         Self(numbers)
     }
 
-    pub fn parent(&self) -> Option<AccountId> {
+    pub fn split(&self) -> Option<(AccountId, SequenceNumber)> {
         if self.0.len() <= 1 {
             return None;
         }
         let mut parent = self.clone();
-        parent.0.pop()?;
-        Some(parent)
+        let num = parent.0.pop().unwrap();
+        Some((parent, num))
     }
 
-    pub fn sequence_number(&self) -> Option<SequenceNumber> {
-        self.0.last().cloned()
+    pub fn ancestors(&self) -> Vec<AccountId> {
+        let mut ancestors = Vec::new();
+        for i in 1..=self.0.len() {
+            ancestors.push(Self(self.0[0..i].to_vec()));
+        }
+        ancestors
     }
 
     pub fn make_child(&self, num: SequenceNumber) -> Self {
