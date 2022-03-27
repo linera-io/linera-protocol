@@ -282,7 +282,7 @@ where
     }
 }
 
-/// Used for communicate_requests
+/// Used for `communicate_account_updates`
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone)]
 enum CommunicateAction {
@@ -479,13 +479,68 @@ where
         Err(None)
     }
 
-    /// Broadcast confirmation orders and optionally one more request order.
-    /// The corresponding sequence numbers should be consecutive and increasing.
-    async fn communicate_requests(
-        &mut self,
+    async fn send_account_information(
+        storage_client: &mut S,
+        authority_client: &mut A,
+        mut account_id: AccountId,
+        mut target_sequence_number: SequenceNumber,
+    ) -> Result<(), Error> {
+        let mut jobs = Vec::new();
+        loop {
+            // Figure out which certificates this authority is missing.
+            let query = AccountInfoQuery {
+                account_id: account_id.clone(),
+                check_next_sequence_number: None,
+                query_sent_certificates_in_range: None,
+                query_received_certificates_excluding_first_nth: None,
+            };
+            match authority_client.handle_account_info_query(query).await {
+                Ok(response) => {
+                    jobs.push((
+                        account_id,
+                        response.next_sequence_number,
+                        target_sequence_number,
+                    ));
+                    break;
+                }
+                Err(Error::InactiveAccount(id)) if id == account_id => match account_id.split() {
+                    None => return Err(Error::InactiveAccount(id)),
+                    Some((parent_id, number)) => {
+                        jobs.push((account_id, SequenceNumber::from(0), target_sequence_number));
+                        account_id = parent_id;
+                        target_sequence_number = number.try_add_one()?;
+                    }
+                },
+                Err(e) => return Err(e),
+            }
+        }
+        for (account_id, initial_sequence_number, target_sequence_number) in jobs.into_iter().rev()
+        {
+            // TODO: wait for the account to be created
+            // Obtain account state.
+            let account = storage_client.read_account_or_default(&account_id).await?;
+            // Send the requested certificates in order.
+            for number in usize::from(initial_sequence_number)..usize::from(target_sequence_number)
+            {
+                let key = account
+                    .confirmed_log
+                    .get(number)
+                    .expect("certificate should be known locally");
+                let cert = storage_client.read_certificate(*key).await?;
+                authority_client.handle_certificate(cert).await?;
+            }
+        }
+        Ok(())
+    }
+
+    async fn send_account_update(
+        committee: &Committee,
+        mut storage_client: S,
         account_id: AccountId,
         action: CommunicateAction,
-    ) -> Result<Option<Certificate>, failure::Error> {
+        name: AuthorityName,
+        authority_client: &mut A,
+    ) -> Result<Option<Vote>, Error> {
         let target_sequence_number = match &action {
             CommunicateAction::SubmitRequestForValidation(order)
             | CommunicateAction::SubmitRequestForConfirmation(order) => {
@@ -500,88 +555,82 @@ where
             }
             CommunicateAction::SynchronizeNextSequenceNumber(seq) => *seq,
         };
+        // Update the authority with missing information, if needed.
+        Self::send_account_information(
+            &mut storage_client,
+            authority_client,
+            account_id,
+            target_sequence_number,
+            // TODO: target_balance
+        )
+        .await?;
+        // Send the request order (if any) and return a vote.
+        match action {
+            CommunicateAction::SubmitRequestForValidation(order)
+            | CommunicateAction::SubmitRequestForConfirmation(order) => {
+                let result = authority_client.handle_request_order(order).await;
+                match result {
+                    Ok(AccountInfoResponse { manager, .. }) => match manager.pending() {
+                        Some(vote) => {
+                            my_ensure!(
+                                vote.authority == name,
+                                Error::ClientErrorWhileProcessingRequestOrder
+                            );
+                            vote.check(committee)?;
+                            return Ok(Some(vote.clone()));
+                        }
+                        None => return Err(Error::ClientErrorWhileProcessingRequestOrder),
+                    },
+                    Err(err) => return Err(err),
+                }
+            }
+            CommunicateAction::FinalizeRequest(certificate) => {
+                let result = authority_client.handle_certificate(certificate).await;
+                match result {
+                    Ok(AccountInfoResponse { manager, .. }) => match manager.pending() {
+                        Some(vote) => {
+                            my_ensure!(
+                                vote.authority == name,
+                                Error::ClientErrorWhileProcessingRequestOrder
+                            );
+                            vote.check(committee)?;
+                            return Ok(Some(vote.clone()));
+                        }
+                        None => return Err(Error::ClientErrorWhileProcessingRequestOrder),
+                    },
+                    Err(err) => return Err(err),
+                }
+            }
+            CommunicateAction::SynchronizeNextSequenceNumber(_) => (),
+        }
+        Ok(None)
+    }
+
+    /// Broadcast confirmation orders and optionally one more request order.
+    /// The corresponding sequence numbers should be consecutive and increasing.
+    async fn communicate_account_updates(
+        &mut self,
+        account_id: AccountId,
+        action: CommunicateAction,
+    ) -> Result<Option<Certificate>, failure::Error> {
         let committee = self.committee.clone();
         let storage_client = self.state.storage_client().clone();
         let result = self
-            .communicate_with_quorum(|name, client| {
+            .communicate_with_quorum(|name, authority_client| {
                 let action = action.clone();
-                let mut storage_client = storage_client.clone();
+                let storage_client = storage_client.clone();
                 let committee = &committee;
                 let account_id = account_id.clone();
                 Box::pin(async move {
-                    // Obtain account state.
-                    let account = storage_client.read_account_or_default(&account_id).await?;
-                    // Figure out which certificates this authority is missing.
-                    let query = AccountInfoQuery {
+                    Self::send_account_update(
+                        committee,
+                        storage_client,
                         account_id,
-                        check_next_sequence_number: None,
-                        query_sent_certificates_in_range: None,
-                        query_received_certificates_excluding_first_nth: None,
-                    };
-                    let response = client.handle_account_info_query(query).await?;
-                    // Send the requested certificates in order.
-                    for number in usize::from(response.next_sequence_number)
-                        ..usize::from(target_sequence_number)
-                    {
-                        let key = account
-                            .confirmed_log
-                            .get(number)
-                            .expect("certificate should be known locally");
-                        let cert = storage_client.read_certificate(*key).await?;
-                        client.handle_certificate(cert).await?;
-                    }
-                    // Send the request order (if any) and return a vote.
-                    match action {
-                        CommunicateAction::SubmitRequestForValidation(order)
-                        | CommunicateAction::SubmitRequestForConfirmation(order) => {
-                            let result = client.handle_request_order(order).await;
-                            match result {
-                                Ok(AccountInfoResponse { manager, .. }) => {
-                                    match manager.pending() {
-                                        Some(vote) => {
-                                            my_ensure!(
-                                                vote.authority == name,
-                                                Error::ClientErrorWhileProcessingRequestOrder
-                                            );
-                                            vote.check(committee)?;
-                                            return Ok(Some(vote.clone()));
-                                        }
-                                        None => {
-                                            return Err(
-                                                Error::ClientErrorWhileProcessingRequestOrder,
-                                            )
-                                        }
-                                    }
-                                }
-                                Err(err) => return Err(err),
-                            }
-                        }
-                        CommunicateAction::FinalizeRequest(certificate) => {
-                            let result = client.handle_certificate(certificate).await;
-                            match result {
-                                Ok(AccountInfoResponse { manager, .. }) => {
-                                    match manager.pending() {
-                                        Some(vote) => {
-                                            my_ensure!(
-                                                vote.authority == name,
-                                                Error::ClientErrorWhileProcessingRequestOrder
-                                            );
-                                            vote.check(committee)?;
-                                            return Ok(Some(vote.clone()));
-                                        }
-                                        None => {
-                                            return Err(
-                                                Error::ClientErrorWhileProcessingRequestOrder,
-                                            )
-                                        }
-                                    }
-                                }
-                                Err(err) => return Err(err),
-                            }
-                        }
-                        CommunicateAction::SynchronizeNextSequenceNumber(_) => (),
-                    }
-                    Ok(None)
+                        action,
+                        name,
+                        authority_client,
+                    )
+                    .await
                 })
             })
             .await;
@@ -787,7 +836,6 @@ where
         if let Some(request) = certificate.value.confirmed_request() {
             if request.account_id == self.account_id {
                 self.next_sequence_number = request.sequence_number.try_add_one()?;
-                self.pending_request = None;
             }
             // Manage our identity
             match &request.operation {
@@ -849,14 +897,14 @@ where
             if self.multi_owners().await.is_some() {
                 // Need two-round trips.
                 let certificate = self
-                    .communicate_requests(
+                    .communicate_account_updates(
                         self.account_id.clone(),
                         CommunicateAction::SubmitRequestForValidation(order.clone()),
                     )
                     .await?
                     .expect("a certificate");
                 assert_eq!(certificate.value.validated_request(), Some(&order.request));
-                self.communicate_requests(
+                self.communicate_account_updates(
                     self.account_id.clone(),
                     CommunicateAction::FinalizeRequest(certificate),
                 )
@@ -864,7 +912,7 @@ where
                 .expect("a certificate")
             } else {
                 // Only one round-trip is needed
-                self.communicate_requests(
+                self.communicate_account_updates(
                     self.account_id.clone(),
                     CommunicateAction::SubmitRequestForConfirmation(order.clone()),
                 )
@@ -878,9 +926,10 @@ where
             "A different operation was executed in parallel (consider retrying the operation)"
         );
         self.process_certificate(final_certificate.clone()).await?;
-        // Confirm last request certificate if needed.
+        self.pending_request = None;
+        // Communicate the new certificate now if needed.
         if with_confirmation {
-            self.communicate_requests(
+            self.communicate_account_updates(
                 self.account_id.clone(),
                 CommunicateAction::SynchronizeNextSequenceNumber(self.next_sequence_number),
             )
@@ -971,7 +1020,7 @@ where
         // Process the received operation.
         self.process_certificate(certificate).await?;
         // Make sure all authorities are up-to-date.
-        self.communicate_requests(
+        self.communicate_account_updates(
             account_id.clone(),
             CommunicateAction::SynchronizeNextSequenceNumber(
                 request.sequence_number.try_add_one()?,
