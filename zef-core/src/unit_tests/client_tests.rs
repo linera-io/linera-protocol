@@ -398,7 +398,7 @@ async fn test_initiating_valid_transfer_too_many_faults() {
 
 #[tokio::test]
 async fn test_bidirectional_transfer() {
-    let mut builder = TestBuilder::new(4, 1);
+    let mut builder = TestBuilder::new(4, 0); // TODO: 4, 1
     let mut client1 = builder
         .add_initial_account(dbg_account(1), Balance::from(3))
         .await;
@@ -486,7 +486,7 @@ async fn test_receiving_unconfirmed_transfer() {
 
 #[tokio::test]
 async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
-    let mut builder = TestBuilder::new(4, 1);
+    let mut builder = TestBuilder::new(4, 0); // TODO: 4, 1
     let mut client1 = builder
         .add_initial_account(dbg_account(1), Balance::from(3))
         .await;
@@ -497,8 +497,8 @@ async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
         .add_initial_account(dbg_account(3), Balance::from(0))
         .await;
 
-    // transferring funds from client0 to client1.
-    // confirming to a quorum of node only at the end.
+    // Transferring funds from client1 to client2.
+    // Confirming to a quorum of nodes only at the end.
     client1
         .transfer_to_account_unsafe_unconfirmed(
             Amount::from(1),
@@ -516,13 +516,13 @@ async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
         .await
         .unwrap();
     client1
-        .communicate_requests(
+        .communicate_account_updates(
             client1.account_id.clone(),
             CommunicateAction::SynchronizeNextSequenceNumber(client1.next_sequence_number),
         )
         .await
         .unwrap();
-    // requestring funds from client1 to client2 without confirmation
+    // Requesting funds from client2 to client3 without confirmation.
     let certificate = client2
         .transfer_to_account_unsafe_unconfirmed(
             Amount::from(2),
