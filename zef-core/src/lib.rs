@@ -7,7 +7,6 @@ pub mod authority;
 pub mod base_types;
 pub mod client;
 pub mod committee;
-pub mod downloader;
 pub mod error;
 pub mod messages;
 pub mod serialize;
