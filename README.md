@@ -49,8 +49,8 @@ trap 'kill $(jobs -p)' EXIT
 
 # Create configuration files for 1000 user accounts.
 # * Private account states are stored in one local wallet `accounts.json`.
-# * `initial_accounts.txt` is used to mint the corresponding initial balances at startup on the server side.
-./client --committee committee.json --accounts accounts.json --initial-accounts initial_accounts.txt create_initial_accounts 1000 --initial-funding 100
+# * `genesis.txt` is used to mint the corresponding initial balances at startup on the server side.
+./client --committee committee.json --accounts accounts.json --genesis genesis.txt create_genesis_config 1000 --initial-funding 100
 
 # Start servers and create initial accounts in DB
 for I in 1 2 3 4
@@ -58,40 +58,40 @@ do
     rm -rf store_"$I"
     for J in $(seq 0 3)
     do
-        ./server run --server server_"$I".json --storage store_"$I" --shard "$J" --initial-accounts initial_accounts.txt --committee committee.json &
+        ./server run --server server_"$I".json --storage store_"$I" --shard "$J" --genesis genesis.txt --committee committee.json &
     done
  done
 
 LAST_PID="$!"
 
 # Query balance for first and last user account
-ACCOUNT1="`head -n 1 initial_accounts.txt | awk -F: '{ print $1 }'`"
-ACCOUNT2="`tail -n -1 initial_accounts.txt | awk -F: '{ print $1 }'`"
-./client --committee committee.json --accounts accounts.json --initial-accounts initial_accounts.txt query_balance "$ACCOUNT1"
-./client --committee committee.json --accounts accounts.json --initial-accounts initial_accounts.txt query_balance "$ACCOUNT2"
+ACCOUNT1="`head -n 1 genesis.txt | awk -F: '{ print $1 }'`"
+ACCOUNT2="`tail -n -1 genesis.txt | awk -F: '{ print $1 }'`"
+./client --committee committee.json --accounts accounts.json --genesis genesis.txt query_balance "$ACCOUNT1"
+./client --committee committee.json --accounts accounts.json --genesis genesis.txt query_balance "$ACCOUNT2"
 
 # Transfer 10 units
-./client --committee committee.json --accounts accounts.json --initial-accounts initial_accounts.txt transfer 10 --from "$ACCOUNT1" --to "$ACCOUNT2"
+./client --committee committee.json --accounts accounts.json --genesis genesis.txt transfer 10 --from "$ACCOUNT1" --to "$ACCOUNT2"
 
 # Restart last server
 kill "$LAST_PID"
-./server run --server server_"$I".json --storage store_"$I" --shard "$J" --initial-accounts initial_accounts.txt --committee committee.json &
+./server run --server server_"$I".json --storage store_"$I" --shard "$J" --genesis genesis.txt --committee committee.json &
 
 # Query balances again
-./client --committee committee.json --accounts accounts.json --initial-accounts initial_accounts.txt query_balance "$ACCOUNT1"
-./client --committee committee.json --accounts accounts.json --initial-accounts initial_accounts.txt query_balance "$ACCOUNT2"
+./client --committee committee.json --accounts accounts.json --genesis genesis.txt query_balance "$ACCOUNT1"
+./client --committee committee.json --accounts accounts.json --genesis genesis.txt query_balance "$ACCOUNT2"
 
 # Launch local benchmark using all user accounts
-./client --committee committee.json --accounts accounts.json --initial-accounts initial_accounts.txt benchmark
+./client --committee committee.json --accounts accounts.json --genesis genesis.txt benchmark
 
 # Create derived account
-ACCOUNT3="`./client --committee committee.json --accounts accounts.json --initial-accounts initial_accounts.txt open_account --from "$ACCOUNT1"`"
+ACCOUNT3="`./client --committee committee.json --accounts accounts.json --genesis genesis.txt open_account --from "$ACCOUNT1"`"
 
 # Inspect state of derived account
 fgrep '"account_id"':"$ACCOUNT3" accounts.json
 
 # Query the balance of the first account
-./client --committee committee.json --accounts accounts.json --initial-accounts initial_accounts.txt query_balance "$ACCOUNT1"
+./client --committee committee.json --accounts accounts.json --genesis genesis.txt query_balance "$ACCOUNT1"
 
 cd ../..
 ```
