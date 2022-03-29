@@ -47,10 +47,9 @@ trap 'kill $(jobs -p)' EXIT
 # Start servers and create initial accounts in DB
 for I in 1 2 3 4
 do
-    rm -rf store_"$I"
     for J in $(seq 0 3)
     do
-        ./server run --server server_"$I".json --storage store_"$I" --shard "$J" --genesis genesis.txt --committee committee.json &
+        ./server run --server server_"$I".json --shard "$J" --genesis genesis.txt --committee committee.json &
     done
  done
 
@@ -67,7 +66,7 @@ ACCOUNT2="`tail -n -1 genesis.txt | awk -F: '{ print $1 }'`"
 
 # Restart last server
 kill "$LAST_PID"
-./server run --server server_"$I".json --storage store_"$I" --shard "$J" --genesis genesis.txt --committee committee.json &
+./server run --server server_"$I".json --shard "$J" --genesis genesis.txt --committee committee.json &
 
 # Query balances again
 ./client --committee committee.json --accounts accounts.json --genesis genesis.txt query_balance "$ACCOUNT1"
