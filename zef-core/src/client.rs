@@ -197,7 +197,6 @@ impl<A, S> AccountClientState<A, S> {
     }
 }
 
-// TODO: The following APIs should be removed eventually.
 impl<A, S> AccountClientState<A, S>
 where
     A: AuthorityClient + Send + Sync + 'static + Clone,
@@ -294,6 +293,7 @@ where
             }) = &result
             {
                 if let Some(certificate) = queried_sent_certificates.first() {
+                    // TODO: use "process_certificate" instead of trying to check the certificate.
                     if certificate.check(&self.committee).is_ok() {
                         if let Value::Confirmed { request } = &certificate.value {
                             if request.account_id == account_id
@@ -354,6 +354,7 @@ where
         // First pass to update our local sequence number.
         for (_, info) in &infos {
             for certificate in &info.queried_sent_certificates {
+                // TODO: merge with with `process_certificate`
                 if certificate.check(&self.committee).is_ok() {
                     if let Value::Confirmed { request } = &certificate.value {
                         if request.account_id == self.account_id
@@ -409,14 +410,16 @@ where
         execute: F,
     ) -> Result<Vec<V>, Option<Error>>
     where
-        F: Fn(AuthorityName, &'a mut A) -> future::BoxFuture<'a, Result<V, Error>> + Clone,
+        F: Fn(AuthorityName, /* TODO: pubkey */ &'a mut A) -> future::BoxFuture<'a, Result<V, Error>> + Clone,
     {
         let committee = &self.committee;
         let authority_clients = &mut self.authority_clients;
+        // TODO: optional shuffle?
         let mut responses: futures::stream::FuturesUnordered<_> = authority_clients
             .iter_mut()
             .map(|(name, client)| {
                 let execute = execute.clone();
+                // TODO: skip if weight == 0 ??
                 async move { (*name, execute(*name, client).await) }
             })
             .collect();
@@ -505,7 +508,7 @@ where
     }
 
     async fn send_account_update(
-        committee: &Committee,
+        committee: &Committee, // TODO: pass the pubkey of the authority instead
         mut storage_client: S,
         account_id: AccountId,
         action: CommunicateAction,
@@ -677,6 +680,7 @@ where
             if let Some((account_id, sequence_number)) = ancestor_id.split() {
                 let storage_number = self.count_sent_certificates(account_id.clone()).await?;
                 for number in storage_number..=sequence_number.into() {
+                    // TODO: merge the two lines
                     let certificate = self
                         .query_certificate(account_id.clone(), SequenceNumber::from(number as u64))
                         .await?;
@@ -722,6 +726,7 @@ where
                     };
                     let response = client.handle_account_info_query(query).await?;
                     for certificate in &response.queried_received_certificates {
+                        // TODO: remove line and check signed info response instead
                         certificate.check(committee)?;
                         let request = certificate
                             .value
@@ -818,9 +823,8 @@ where
                         || !new_owners.contains(self.identity.as_ref().unwrap())
                     {
                         self.identity = None;
-                        // Search for a new identity that works.
-                        // TODO: We probably shouldn't choose the first identity that
-                        // works like this.
+                        // Search for a new identity that works. TODO: We probably
+                        // shouldn't just pick the first identity that works.
                         for owner in new_owners {
                             if let Some(value) = self.known_key_pairs.get(owner) {
                                 self.identity = Some(value.public());

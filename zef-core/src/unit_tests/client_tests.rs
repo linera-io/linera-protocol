@@ -289,7 +289,7 @@ async fn test_share_ownership() {
         sender.synchronize_balance().await.unwrap(),
         Balance::from(4)
     );
-    // Can still use the account wuth the old.
+    // Can still use the account with the old client.
     assert!(sender
         .transfer_to_account(Amount::from(3), dbg_account(2), UserData::default())
         .await
