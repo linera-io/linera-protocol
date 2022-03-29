@@ -5,10 +5,14 @@
 #![deny(warnings)]
 
 use zef_core::{
-    base_types::*, client::*, committee::Committee, messages::*, serialize::*,
-    storage::InMemoryStoreClient,
+    base_types::*,
+    client::*,
+    committee::Committee,
+    messages::*,
+    serialize::*,
+    storage::{InMemoryStoreClient, StorageClient},
 };
-use zef_service::{config::*, network, transport};
+use zef_service::{config::*, network, storage::Storage, transport};
 
 use bytes::Bytes;
 use futures::stream::StreamExt;
@@ -21,31 +25,50 @@ use std::{
 use structopt::StructOpt;
 
 struct ClientContext {
-    accounts_config_path: PathBuf,
     committee_config: CommitteeConfig,
+    accounts_config_path: PathBuf,
     accounts_config: AccountsConfig,
+    storage_client: Storage,
     buffer_size: usize,
     send_timeout: std::time::Duration,
     recv_timeout: std::time::Duration,
 }
 
 impl ClientContext {
-    fn from_options(options: &ClientOptions) -> Self {
-        let send_timeout = Duration::from_micros(options.send_timeout);
-        let recv_timeout = Duration::from_micros(options.recv_timeout);
+    async fn from_options(options: &ClientOptions) -> Self {
+        let committee_config = CommitteeConfig::read(&options.committee)
+            .expect("Unable to read committee config file");
         let accounts_config_path = options.accounts.clone();
-        let committee_config_path = &options.committee;
-        let buffer_size = options.buffer_size;
-
         let accounts_config = AccountsConfig::read_or_create(&accounts_config_path)
             .expect("Unable to read user accounts");
-        let committee_config = CommitteeConfig::read(committee_config_path)
-            .expect("Unable to read committee config file");
+        let storage_client: Storage = match options.cmd {
+            ClientCommands::CreateInitialAccounts { .. } => {
+                // This is a placeholder to avoid create a DB on disk at this point.
+                Box::new(InMemoryStoreClient::default())
+            }
+            _ => {
+                // Every other command uses the real account storage.
+                let initial_state_config = options
+                    .initial_accounts
+                    .as_ref()
+                    .map(|path| {
+                        InitialStateConfig::read(path).expect("Fail to read initial account config")
+                    })
+                    .unwrap_or_default();
+                zef_service::storage::make_storage(options.storage.as_ref(), &initial_state_config)
+                    .await
+                    .unwrap()
+            }
+        };
+        let buffer_size = options.buffer_size;
+        let send_timeout = Duration::from_micros(options.send_timeout);
+        let recv_timeout = Duration::from_micros(options.recv_timeout);
 
         ClientContext {
-            accounts_config_path,
             committee_config,
+            accounts_config_path,
             accounts_config,
+            storage_client,
             send_timeout,
             recv_timeout,
             buffer_size,
@@ -90,7 +113,7 @@ impl ClientContext {
     fn make_account_client(
         &self,
         account_id: AccountId,
-    ) -> AccountClientState<network::Client, InMemoryStoreClient> {
+    ) -> AccountClientState<network::Client, Storage> {
         let account = self
             .accounts_config
             .get(&account_id)
@@ -102,11 +125,8 @@ impl ClientContext {
             account.key_pair.as_ref().map(|kp| kp.copy()),
             committee,
             authority_clients,
-            InMemoryStoreClient::default(), // TODO
+            self.storage_client.clone(),
             account.next_sequence_number,
-            //            account.sent_certificates.clone(),
-            //            account.received_certificates.clone(),
-            //            account.balance,
         )
     }
 
@@ -127,11 +147,8 @@ impl ClientContext {
             account.key_pair.as_ref().map(|kp| kp.copy()).or(key_pair),
             committee,
             authority_clients,
-            InMemoryStoreClient::default(), // TODO: prepopulate certificates?
+            self.storage_client.clone(),
             account.next_sequence_number,
-            //            account.sent_certificates.clone(),
-            //            account.received_certificates.clone(),
-            //            account.balance,
         );
         client.receive_certificate(certificate).await?;
         self.update_account_from_state(&mut client).await;
@@ -295,15 +312,6 @@ impl ClientContext {
         responses
     }
 
-    fn mass_update_recipients(&mut self, certificates: Vec<(AccountId, Bytes)>) {
-        for (_sender, buf) in certificates {
-            if let Ok(SerializedMessage::Certificate(certificate)) = deserialize_message(&buf[..]) {
-                self.accounts_config
-                    .update_for_received_request(*certificate);
-            }
-        }
-    }
-
     fn save_accounts(&self) {
         self.accounts_config
             .write(&self.accounts_config_path)
@@ -311,11 +319,10 @@ impl ClientContext {
         info!("Saved user account states");
     }
 
-    async fn update_account_from_state<A>(
-        &mut self,
-        state: &mut AccountClientState<A, InMemoryStoreClient>,
-    ) where
+    async fn update_account_from_state<A, S>(&mut self, state: &mut AccountClientState<A, S>)
+    where
         A: AuthorityClient + Send + Sync + 'static + Clone,
+        S: StorageClient + Clone + 'static,
     {
         self.accounts_config.update_from_state(state).await
     }
@@ -348,9 +355,17 @@ fn deserialize_response(response: &[u8]) -> Option<AccountInfoResponse> {
     about = "A Byzantine-fault tolerant sidechain with low-latency finality and high throughput"
 )]
 struct ClientOptions {
-    /// Sets the file storing the state of our user accounts (an empty one will be created if missing)
+    /// Sets the file storing the private state of user accounts (an empty one will be created if missing)
     #[structopt(long)]
     accounts: PathBuf,
+
+    /// Optional directory for the file storage of account public states.
+    #[structopt(long)]
+    storage: Option<PathBuf>,
+
+    /// Optional path to the file describing the initial user accounts (aka genesis state)
+    #[structopt(long)]
+    initial_accounts: Option<PathBuf>,
 
     /// Sets the file describing the public configurations of all authorities
     #[structopt(long)]
@@ -458,7 +473,7 @@ enum ClientCommands {
 async fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let options = ClientOptions::from_args();
-    let mut context = ClientContext::from_options(&options);
+    let mut context = ClientContext::from_options(&options).await;
     match options.cmd {
         ClientCommands::Transfer {
             sender,
@@ -607,9 +622,6 @@ async fn main() {
             );
 
             warn!("Updating local state of user accounts");
-            // Make sure that the local balances are accurate so that future
-            // balance checks of the non-mass client pass.
-            context.mass_update_recipients(certificates);
             context.save_accounts();
         }
 
@@ -617,20 +629,26 @@ async fn main() {
             initial_funding,
             num,
         } => {
+            let mut initial_state_config = InitialStateConfig::default();
             for i in 0..num {
-                let account = UserAccount::make_initial(
-                    AccountId::new(vec![SequenceNumber::from(i as u64)]),
-                    initial_funding,
-                );
-                println!(
-                    "{}:{}:{}",
-                    account.account_id,
+                // Create keys.
+                let account =
+                    UserAccount::make_initial(AccountId::new(vec![SequenceNumber::from(i as u64)]));
+                // Public "genesis" state.
+                initial_state_config.accounts.push((
+                    account.account_id.clone(),
                     account.key_pair.as_ref().unwrap().public(),
                     initial_funding,
-                );
+                ));
+                // Private keys.
                 context.accounts_config.insert(account);
             }
             context.save_accounts();
+            let path = options
+                .initial_accounts
+                .as_ref()
+                .expect("--initial-accounts should be set");
+            initial_state_config.write(path).unwrap();
         }
     }
 }

@@ -11,33 +11,23 @@ use std::{
     str::FromStr,
 };
 use structopt::StructOpt;
-use zef_core::{
-    account::AccountState,
-    authority::*,
-    base_types::*,
-    storage::{InMemoryStoreClient, StorageClient},
+use zef_core::{authority::*, base_types::*};
+use zef_service::{
+    config::*,
+    network,
+    storage::{make_storage, Storage},
+    transport,
 };
-use zef_service::{config::*, file_storage::FileStoreClient, network, transport};
-
-type Storage = Box<dyn StorageClient>;
-
-fn make_storage(db_path: Option<&PathBuf>) -> Storage {
-    match db_path {
-        None => Box::new(InMemoryStoreClient::default()),
-        Some(path) => Box::new(FileStoreClient::new(path.clone())),
-    }
-}
 
 #[allow(clippy::too_many_arguments)]
 async fn make_shard_server(
     local_ip_addr: &str,
     server_config_path: &Path,
     committee_config_path: &Path,
-    initial_accounts_config_path: Option<&PathBuf>,
     buffer_size: usize,
     cross_shard_config: network::CrossShardConfig,
     shard: u32,
-    mut storage: Storage,
+    storage: Storage,
 ) -> network::Server<Storage> {
     let server_config =
         AuthorityServerConfig::read(server_config_path).expect("Fail to read server config");
@@ -49,20 +39,6 @@ async fn make_shard_server(
 
     let committee = committee_config.into_committee();
     let num_shards = server_config.authority.num_shards;
-
-    if let Some(initial_accounts_config_path) = initial_accounts_config_path {
-        let initial_accounts_config = InitialStateConfig::read(initial_accounts_config_path)
-            .expect("Fail to read initial account config");
-
-        // Load initial states
-        for (id, owner, balance) in &initial_accounts_config.accounts {
-            if network::get_shard(num_shards, id) != shard {
-                continue;
-            }
-            let account = AccountState::create(id.clone(), *owner, *balance);
-            storage.write_account(account).await.unwrap();
-        }
-    }
     let state = WorkerState::new(committee, Some(server_config.key), storage);
     network::Server::new(
         server_config.authority.network_protocol,
@@ -80,10 +56,10 @@ async fn make_servers(
     local_ip_addr: &str,
     server_config_path: &Path,
     committee_config_path: &Path,
-    initial_accounts_config_path: Option<&PathBuf>,
+    initial_state_config: &InitialStateConfig,
     buffer_size: usize,
     cross_shard_config: network::CrossShardConfig,
-    db_path: Option<&PathBuf>,
+    storage: Option<&PathBuf>,
 ) -> Vec<network::Server<Storage>> {
     let server_config =
         AuthorityServerConfig::read(server_config_path).expect("Fail to read server config");
@@ -92,19 +68,18 @@ async fn make_servers(
     let mut servers = Vec::new();
     // TODO: create servers in parallel
     for shard in 0..num_shards {
-        servers.push(
-            make_shard_server(
-                local_ip_addr,
-                server_config_path,
-                committee_config_path,
-                initial_accounts_config_path,
-                buffer_size,
-                cross_shard_config.clone(),
-                shard,
-                make_storage(db_path),
-            )
-            .await,
+        let storage = make_storage(storage, initial_state_config).await.unwrap();
+        let server = make_shard_server(
+            local_ip_addr,
+            server_config_path,
+            committee_config_path,
+            buffer_size,
+            cross_shard_config.clone(),
+            shard,
+            storage,
         )
+        .await;
+        servers.push(server)
     }
     servers
 }
@@ -194,8 +169,8 @@ enum ServerCommands {
         server_config_path: PathBuf,
 
         /// Optional directory containing the on-disk database
-        #[structopt(long = "db-path")]
-        db_path: Option<PathBuf>,
+        #[structopt(long = "storage")]
+        storage_path: Option<PathBuf>,
 
         /// Maximum size of datagrams received and sent (bytes)
         #[structopt(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE)]
@@ -209,7 +184,7 @@ enum ServerCommands {
         #[structopt(long)]
         committee: PathBuf,
 
-        /// Optional path to the file describing the initial user accounts
+        /// Optional path to the file describing the initial user accounts (aka genesis state)
         #[structopt(long)]
         initial_accounts: Option<PathBuf>,
 
@@ -248,7 +223,7 @@ async fn main() {
     match options.cmd {
         ServerCommands::Run {
             server_config_path,
-            db_path,
+            storage_path,
             buffer_size,
             cross_shard_config,
             committee,
@@ -258,19 +233,28 @@ async fn main() {
             #[cfg(feature = "benchmark")]
             warn!("The server is running in benchmark mode: Do not use it in production");
 
+            let initial_state_config = initial_accounts
+                .map(|path| {
+                    InitialStateConfig::read(path.as_ref())
+                        .expect("Fail to read initial account config")
+                })
+                .unwrap_or_default();
+
             // Run the server
             let servers = match shard {
                 Some(shard) => {
                     info!("Running shard number {}", shard);
+                    let storage = make_storage(storage_path.as_ref(), &initial_state_config)
+                        .await
+                        .unwrap();
                     let server = make_shard_server(
                         "0.0.0.0", // Allow local IP address to be different from the public one.
                         &server_config_path,
                         &committee,
-                        initial_accounts.as_ref(),
                         buffer_size,
                         cross_shard_config,
                         shard,
-                        make_storage(db_path.as_ref()),
+                        storage,
                     )
                     .await;
                     vec![server]
@@ -281,10 +265,10 @@ async fn main() {
                         "0.0.0.0", // Allow local IP address to be different from the public one.
                         &server_config_path,
                         &committee,
-                        initial_accounts.as_ref(),
+                        &initial_state_config,
                         buffer_size,
                         cross_shard_config,
-                        db_path.as_ref(),
+                        storage_path.as_ref(),
                     )
                     .await
                 }
