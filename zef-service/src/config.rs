@@ -181,11 +181,11 @@ impl AccountsConfig {
 }
 
 #[derive(Default)]
-pub struct InitialStateConfig {
+pub struct GenesisConfig {
     pub accounts: Vec<(AccountId, AccountOwner, Balance)>,
 }
 
-impl InitialStateConfig {
+impl GenesisConfig {
     pub fn read(path: &Path) -> Result<Self, failure::Error> {
         let file = File::open(path)?;
         let reader = BufReader::new(file);
@@ -213,16 +213,16 @@ impl InitialStateConfig {
         Ok(())
     }
 
-    pub async fn initialize_public_store<S>(
+    pub async fn initialize_store<S>(
         &self,
-        public_store: &mut S,
+        store: &mut S,
     ) -> Result<(), failure::Error>
     where
         S: StorageClient + Clone + 'static,
     {
         for (account_id, owner, balance) in &self.accounts {
             let account = AccountState::create(account_id.clone(), *owner, *balance);
-            public_store.write_account(account.clone()).await?;
+            store.write_account(account.clone()).await?;
         }
         Ok(())
     }

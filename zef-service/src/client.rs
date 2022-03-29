@@ -42,20 +42,20 @@ impl ClientContext {
         let accounts_config = AccountsConfig::read_or_create(&accounts_config_path)
             .expect("Unable to read user accounts");
         let storage_client: Storage = match options.cmd {
-            ClientCommands::CreateInitialAccounts { .. } => {
+            ClientCommands::CreateGenesisConfig { .. } => {
                 // This is a placeholder to avoid create a DB on disk at this point.
                 Box::new(InMemoryStoreClient::default())
             }
             _ => {
                 // Every other command uses the real account storage.
-                let initial_state_config = options
-                    .initial_accounts
+                let genesis_config = options
+                    .genesis_config_path
                     .as_ref()
                     .map(|path| {
-                        InitialStateConfig::read(path).expect("Fail to read initial account config")
+                        GenesisConfig::read(path).expect("Fail to read initial account config")
                     })
                     .unwrap_or_default();
-                zef_service::storage::make_storage(options.storage.as_ref(), &initial_state_config)
+                zef_service::storage::make_storage(options.storage.as_ref(), &genesis_config)
                     .await
                     .unwrap()
             }
@@ -364,8 +364,8 @@ struct ClientOptions {
     storage: Option<PathBuf>,
 
     /// Optional path to the file describing the initial user accounts (aka genesis state)
-    #[structopt(long)]
-    initial_accounts: Option<PathBuf>,
+    #[structopt(long = "genesis")]
+    genesis_config_path: Option<PathBuf>,
 
     /// Sets the file describing the public configurations of all authorities
     #[structopt(long)]
@@ -458,8 +458,8 @@ enum ClientCommands {
     },
 
     /// Create initial user accounts and print information to be used for initialization of authority setup.
-    #[structopt(name = "create_initial_accounts")]
-    CreateInitialAccounts {
+    #[structopt(name = "create_genesis_config")]
+    CreateGenesisConfig {
         /// Known initial balance of the account
         #[structopt(long, default_value = "0")]
         initial_funding: Balance,
@@ -625,17 +625,17 @@ async fn main() {
             context.save_accounts();
         }
 
-        ClientCommands::CreateInitialAccounts {
+        ClientCommands::CreateGenesisConfig {
             initial_funding,
             num,
         } => {
-            let mut initial_state_config = InitialStateConfig::default();
+            let mut genesis_config = GenesisConfig::default();
             for i in 0..num {
                 // Create keys.
                 let account =
                     UserAccount::make_initial(AccountId::new(vec![SequenceNumber::from(i as u64)]));
                 // Public "genesis" state.
-                initial_state_config.accounts.push((
+                genesis_config.accounts.push((
                     account.account_id.clone(),
                     account.key_pair.as_ref().unwrap().public(),
                     initial_funding,
@@ -645,10 +645,10 @@ async fn main() {
             }
             context.save_accounts();
             let path = options
-                .initial_accounts
+                .genesis_config_path
                 .as_ref()
-                .expect("--initial-accounts should be set");
-            initial_state_config.write(path).unwrap();
+                .expect("--genesis should be set");
+            genesis_config.write(path).unwrap();
         }
     }
 }

@@ -56,7 +56,7 @@ async fn make_servers(
     local_ip_addr: &str,
     server_config_path: &Path,
     committee_config_path: &Path,
-    initial_state_config: &InitialStateConfig,
+    genesis_config: &GenesisConfig,
     buffer_size: usize,
     cross_shard_config: network::CrossShardConfig,
     storage: Option<&PathBuf>,
@@ -68,7 +68,7 @@ async fn make_servers(
     let mut servers = Vec::new();
     // TODO: create servers in parallel
     for shard in 0..num_shards {
-        let storage = make_storage(storage, initial_state_config).await.unwrap();
+        let storage = make_storage(storage, genesis_config).await.unwrap();
         let server = make_shard_server(
             local_ip_addr,
             server_config_path,
@@ -185,8 +185,8 @@ enum ServerCommands {
         committee: PathBuf,
 
         /// Optional path to the file describing the initial user accounts (aka genesis state)
-        #[structopt(long)]
-        initial_accounts: Option<PathBuf>,
+        #[structopt(long = "genesis")]
+        genesis_config_path: Option<PathBuf>,
 
         /// Runs a specific shard (from 0 to shards-1)
         #[structopt(long)]
@@ -227,15 +227,15 @@ async fn main() {
             buffer_size,
             cross_shard_config,
             committee,
-            initial_accounts,
+            genesis_config_path,
             shard,
         } => {
             #[cfg(feature = "benchmark")]
             warn!("The server is running in benchmark mode: Do not use it in production");
 
-            let initial_state_config = initial_accounts
+            let genesis_config = genesis_config_path
                 .map(|path| {
-                    InitialStateConfig::read(path.as_ref())
+                    GenesisConfig::read(path.as_ref())
                         .expect("Fail to read initial account config")
                 })
                 .unwrap_or_default();
@@ -244,7 +244,7 @@ async fn main() {
             let servers = match shard {
                 Some(shard) => {
                     info!("Running shard number {}", shard);
-                    let storage = make_storage(storage_path.as_ref(), &initial_state_config)
+                    let storage = make_storage(storage_path.as_ref(), &genesis_config)
                         .await
                         .unwrap();
                     let server = make_shard_server(
@@ -265,7 +265,7 @@ async fn main() {
                         "0.0.0.0", // Allow local IP address to be different from the public one.
                         &server_config_path,
                         &committee,
-                        &initial_state_config,
+                        &genesis_config,
                         buffer_size,
                         cross_shard_config,
                         storage_path.as_ref(),
