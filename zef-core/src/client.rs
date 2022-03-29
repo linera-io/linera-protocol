@@ -16,7 +16,7 @@ use async_trait::async_trait;
 use failure::{bail, ensure};
 use futures::{future, StreamExt};
 use rand::seq::SliceRandom;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 
 #[cfg(test)]
 #[path = "unit_tests/client_tests.rs"]
@@ -203,22 +203,7 @@ where
     A: AuthorityClient + Send + Sync + 'static + Clone,
     S: StorageClient + Clone + 'static,
 {
-    pub async fn sent_certificates(&mut self) -> Vec<Certificate> {
-        let range = SequenceNumberRange {
-            start: SequenceNumber::default(),
-            limit: None,
-        };
-        let query = AccountInfoQuery {
-            account_id: self.account_id.clone(),
-            check_next_sequence_number: None,
-            query_sent_certificates_in_range: Some(range),
-            query_received_certificates_excluding_first_nth: None,
-        };
-        let response = self.state.handle_account_info_query(query).await.unwrap();
-        response.queried_sent_certificates
-    }
-
-    pub async fn count_sent_certificates(&mut self, account_id: AccountId) -> Result<usize, Error> {
+    async fn count_sent_certificates(&mut self, account_id: AccountId) -> Result<usize, Error> {
         let query = AccountInfoQuery {
             account_id,
             check_next_sequence_number: None,
@@ -229,7 +214,7 @@ where
         Ok(response.next_sequence_number.into())
     }
 
-    pub async fn manager(&mut self) -> AccountManager {
+    async fn manager(&mut self) -> AccountManager {
         let query = AccountInfoQuery {
             account_id: self.account_id.clone(),
             check_next_sequence_number: None,
@@ -240,15 +225,12 @@ where
         response.manager
     }
 
-    pub async fn multi_owners(&mut self) -> Option<HashSet<AccountOwner>> {
+    async fn has_multi_owners(&mut self) -> bool {
         let manager = self.manager().await;
-        match manager {
-            AccountManager::Multi(m) => Some(m.owners),
-            _ => None,
-        }
+        matches!(manager, AccountManager::Multi(_))
     }
 
-    pub async fn next_round(&mut self) -> RoundNumber {
+    async fn next_round(&mut self) -> RoundNumber {
         let manager = self.manager().await;
         match manager {
             AccountManager::Multi(m) => {
@@ -259,7 +241,7 @@ where
         }
     }
 
-    pub async fn balance(&mut self) -> Balance {
+    async fn balance(&mut self) -> Balance {
         let query = AccountInfoQuery {
             account_id: self.account_id.clone(),
             check_next_sequence_number: None,
@@ -268,17 +250,6 @@ where
         };
         let response = self.state.handle_account_info_query(query).await.unwrap();
         response.balance
-    }
-
-    pub async fn received_certificates(&mut self) -> Vec<Certificate> {
-        let query = AccountInfoQuery {
-            account_id: self.account_id.clone(),
-            check_next_sequence_number: None,
-            query_sent_certificates_in_range: None,
-            query_received_certificates_excluding_first_nth: Some(0),
-        };
-        let response = self.state.handle_account_info_query(query).await.unwrap();
-        response.queried_received_certificates
     }
 }
 
@@ -724,7 +695,7 @@ where
             self.next_sequence_number,
         )
         .await?;
-        if self.multi_owners().await.is_some() {
+        if self.has_multi_owners().await {
             // We could be missing recent certificates created by other owners.
             self.hard_synchronize_sent_certificates().await?;
         }
@@ -894,7 +865,7 @@ where
         let order = RequestOrder::new(request, key_pair);
         // Send the query.
         let final_certificate = {
-            if self.multi_owners().await.is_some() {
+            if self.has_multi_owners().await {
                 // Need two-round trips.
                 let certificate = self
                     .communicate_account_updates(
