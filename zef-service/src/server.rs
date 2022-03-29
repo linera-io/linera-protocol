@@ -181,8 +181,8 @@ enum ServerCommands {
         cross_shard_config: network::CrossShardConfig,
 
         /// Path to the file containing the public description of all authorities in this Zef committee
-        #[structopt(long)]
-        committee: PathBuf,
+        #[structopt(long = "committee")]
+        committee_config_path: PathBuf,
 
         /// Optional path to the file describing the initial user accounts (aka genesis state)
         #[structopt(long = "genesis")]
@@ -226,7 +226,7 @@ async fn main() {
             storage_path,
             buffer_size,
             cross_shard_config,
-            committee,
+            committee_config_path,
             genesis_config_path,
             shard,
         } => {
@@ -235,8 +235,7 @@ async fn main() {
 
             let genesis_config = genesis_config_path
                 .map(|path| {
-                    GenesisConfig::read(path.as_ref())
-                        .expect("Fail to read initial account config")
+                    GenesisConfig::read(path.as_ref()).expect("Fail to read initial account config")
                 })
                 .unwrap_or_default();
 
@@ -250,7 +249,7 @@ async fn main() {
                     let server = make_shard_server(
                         "0.0.0.0", // Allow local IP address to be different from the public one.
                         &server_config_path,
-                        &committee,
+                        &committee_config_path,
                         buffer_size,
                         cross_shard_config,
                         shard,
@@ -264,7 +263,7 @@ async fn main() {
                     make_servers(
                         "0.0.0.0", // Allow local IP address to be different from the public one.
                         &server_config_path,
-                        &committee,
+                        &committee_config_path,
                         &genesis_config,
                         buffer_size,
                         cross_shard_config,
