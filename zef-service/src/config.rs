@@ -11,10 +11,10 @@ use std::{
     path::Path,
 };
 use zef_core::{
+    account::AccountState,
     base_types::*,
     client::{AccountClientState, AuthorityClient},
     committee::Committee,
-    messages::{Address, Certificate, Operation, Value},
     storage::StorageClient,
 };
 
@@ -88,9 +88,6 @@ pub struct UserAccount {
     pub account_id: AccountId,
     pub key_pair: Option<KeyPair>,
     pub next_sequence_number: SequenceNumber,
-    pub balance: Balance,
-    pub sent_certificates: Vec<Certificate>,
-    pub received_certificates: Vec<Certificate>,
 }
 
 impl UserAccount {
@@ -99,21 +96,15 @@ impl UserAccount {
             account_id,
             key_pair: None,
             next_sequence_number: SequenceNumber::new(),
-            balance: Balance::default(),
-            sent_certificates: Vec::new(),
-            received_certificates: Vec::new(),
         }
     }
 
-    pub fn make_initial(account_id: AccountId, balance: Balance) -> Self {
+    pub fn make_initial(account_id: AccountId) -> Self {
         let key_pair = KeyPair::generate();
         Self {
             account_id,
             key_pair: Some(key_pair),
             next_sequence_number: SequenceNumber::new(),
-            balance,
-            sent_certificates: Vec::new(),
-            received_certificates: Vec::new(),
         }
     }
 }
@@ -160,34 +151,6 @@ impl AccountsConfig {
             .or_insert_with(|| UserAccount::new(state.account_id().clone()));
         account.key_pair = state.key_pair().map(|k| k.copy()).ok();
         account.next_sequence_number = state.next_sequence_number();
-        account.balance = state.balance().await;
-        account.sent_certificates = state.sent_certificates().await;
-        account.received_certificates = state.received_certificates().await;
-    }
-
-    pub fn update_for_received_request(&mut self, certificate: Certificate) {
-        let request = match &certificate.value {
-            Value::Confirmed { request } => request,
-            _ => return,
-        };
-        if let Operation::Transfer {
-            recipient: Address::Account(recipient),
-            amount,
-            ..
-        } = &request.operation
-        {
-            if let Some(config) = self.accounts.get_mut(recipient) {
-                if let Err(position) = config
-                    .received_certificates
-                    .binary_search_by_key(&certificate.value.confirmed_key(), |order| {
-                        order.value.confirmed_key()
-                    })
-                {
-                    config.balance = config.balance.try_add((*amount).into()).unwrap();
-                    config.received_certificates.insert(position, certificate)
-                }
-            }
-        }
     }
 
     pub fn read_or_create(path: &Path) -> Result<Self, std::io::Error> {
@@ -217,6 +180,7 @@ impl AccountsConfig {
     }
 }
 
+#[derive(Default)]
 pub struct InitialStateConfig {
     pub accounts: Vec<(AccountId, AccountOwner, Balance)>,
 }
@@ -245,6 +209,20 @@ impl InitialStateConfig {
         let mut writer = BufWriter::new(file);
         for (id, pubkey, balance) in &self.accounts {
             writeln!(writer, "{}:{}:{}", id, pubkey, balance)?;
+        }
+        Ok(())
+    }
+
+    pub async fn initialize_public_store<S>(
+        &self,
+        public_store: &mut S,
+    ) -> Result<(), failure::Error>
+    where
+        S: StorageClient + Clone + 'static,
+    {
+        for (account_id, owner, balance) in &self.accounts {
+            let account = AccountState::create(account_id.clone(), *owner, *balance);
+            public_store.write_account(account.clone()).await?;
         }
         Ok(())
     }
