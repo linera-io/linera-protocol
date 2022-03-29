@@ -109,11 +109,11 @@ impl UserAccount {
     }
 }
 
-pub struct AccountsConfig {
+pub struct WalletState {
     accounts: BTreeMap<AccountId, UserAccount>,
 }
 
-impl AccountsConfig {
+impl WalletState {
     pub fn get(&self, account_id: &AccountId) -> Option<&UserAccount> {
         self.accounts.get(account_id)
     }
@@ -213,10 +213,7 @@ impl GenesisConfig {
         Ok(())
     }
 
-    pub async fn initialize_store<S>(
-        &self,
-        store: &mut S,
-    ) -> Result<(), failure::Error>
+    pub async fn initialize_store<S>(&self, store: &mut S) -> Result<(), failure::Error>
     where
         S: StorageClient + Clone + 'static,
     {
