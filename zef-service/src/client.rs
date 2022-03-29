@@ -26,8 +26,8 @@ use structopt::StructOpt;
 
 struct ClientContext {
     committee_config: CommitteeConfig,
-    accounts_config_path: PathBuf,
-    accounts_config: AccountsConfig,
+    wallet_state_path: PathBuf,
+    wallet_state: WalletState,
     storage_client: Storage,
     buffer_size: usize,
     send_timeout: std::time::Duration,
@@ -36,11 +36,11 @@ struct ClientContext {
 
 impl ClientContext {
     async fn from_options(options: &ClientOptions) -> Self {
-        let committee_config = CommitteeConfig::read(&options.committee)
+        let committee_config = CommitteeConfig::read(&options.committee_config_path)
             .expect("Unable to read committee config file");
-        let accounts_config_path = options.accounts.clone();
-        let accounts_config = AccountsConfig::read_or_create(&accounts_config_path)
-            .expect("Unable to read user accounts");
+        let wallet_state_path = options.wallet_state_path.clone();
+        let wallet_state =
+            WalletState::read_or_create(&wallet_state_path).expect("Unable to read user accounts");
         let storage_client: Storage = match options.cmd {
             ClientCommands::CreateGenesisConfig { .. } => {
                 // This is a placeholder to avoid create a DB on disk at this point.
@@ -55,7 +55,7 @@ impl ClientContext {
                         GenesisConfig::read(path).expect("Fail to read initial account config")
                     })
                     .unwrap_or_default();
-                zef_service::storage::make_storage(options.storage.as_ref(), &genesis_config)
+                zef_service::storage::make_storage(options.storage_path.as_ref(), &genesis_config)
                     .await
                     .unwrap()
             }
@@ -66,8 +66,8 @@ impl ClientContext {
 
         ClientContext {
             committee_config,
-            accounts_config_path,
-            accounts_config,
+            wallet_state_path,
+            wallet_state,
             storage_client,
             send_timeout,
             recv_timeout,
@@ -114,10 +114,7 @@ impl ClientContext {
         &self,
         account_id: AccountId,
     ) -> AccountClientState<network::Client, Storage> {
-        let account = self
-            .accounts_config
-            .get(&account_id)
-            .expect("Unknown account");
+        let account = self.wallet_state.get(&account_id).expect("Unknown account");
         let committee = self.committee_config.clone().into_committee();
         let authority_clients = self.make_authority_clients();
         AccountClientState::new(
@@ -141,7 +138,7 @@ impl ClientContext {
         };
         let committee = self.committee_config.clone().into_committee();
         let authority_clients = self.make_authority_clients();
-        let account = self.accounts_config.get_or_insert(recipient.clone());
+        let account = self.wallet_state.get_or_insert(recipient.clone());
         let mut client = AccountClientState::new(
             recipient,
             account.key_pair.as_ref().map(|kp| kp.copy()).or(key_pair),
@@ -162,13 +159,8 @@ impl ClientContext {
     ) -> (Vec<RequestOrder>, Vec<(AccountId, Bytes)>) {
         let mut orders = Vec::new();
         let mut serialized_orders = Vec::new();
-        let mut next_recipient = self
-            .accounts_config
-            .last_account()
-            .unwrap()
-            .account_id
-            .clone();
-        for account in self.accounts_config.accounts_mut() {
+        let mut next_recipient = self.wallet_state.last_account().unwrap().account_id.clone();
+        for account in self.wallet_state.accounts_mut() {
             let key_pair = match &account.key_pair {
                 Some(kp) => kp,
                 None => continue,
@@ -313,8 +305,8 @@ impl ClientContext {
     }
 
     fn save_accounts(&self) {
-        self.accounts_config
-            .write(&self.accounts_config_path)
+        self.wallet_state
+            .write(&self.wallet_state_path)
             .expect("Unable to write user accounts");
         info!("Saved user account states");
     }
@@ -324,7 +316,7 @@ impl ClientContext {
         A: AuthorityClient + Send + Sync + 'static + Clone,
         S: StorageClient + Clone + 'static,
     {
-        self.accounts_config.update_from_state(state).await
+        self.wallet_state.update_from_state(state).await
     }
 }
 
@@ -356,20 +348,20 @@ fn deserialize_response(response: &[u8]) -> Option<AccountInfoResponse> {
 )]
 struct ClientOptions {
     /// Sets the file storing the private state of user accounts (an empty one will be created if missing)
-    #[structopt(long)]
-    accounts: PathBuf,
+    #[structopt(long = "wallet")]
+    wallet_state_path: PathBuf,
 
     /// Optional directory for the file storage of account public states.
-    #[structopt(long)]
-    storage: Option<PathBuf>,
+    #[structopt(long = "storage")]
+    storage_path: Option<PathBuf>,
 
     /// Optional path to the file describing the initial user accounts (aka genesis state)
     #[structopt(long = "genesis")]
     genesis_config_path: Option<PathBuf>,
 
     /// Sets the file describing the public configurations of all authorities
-    #[structopt(long)]
-    committee: PathBuf,
+    #[structopt(long = "committee")]
+    committee_config_path: PathBuf,
 
     /// Timeout for sending queries (us)
     #[structopt(long, default_value = "4000000")]
@@ -576,7 +568,7 @@ async fn main() {
             max_orders,
             server_configs,
         } => {
-            let max_orders = max_orders.unwrap_or_else(|| context.accounts_config.num_accounts());
+            let max_orders = max_orders.unwrap_or_else(|| context.wallet_state.num_accounts());
             warn!("Starting benchmark phase 1 (request orders)");
             let (orders, serialize_orders) = context.make_benchmark_request_orders(max_orders);
             let responses = context
@@ -641,7 +633,7 @@ async fn main() {
                     initial_funding,
                 ));
                 // Private keys.
-                context.accounts_config.insert(account);
+                context.wallet_state.insert(account);
             }
             context.save_accounts();
             let path = options
