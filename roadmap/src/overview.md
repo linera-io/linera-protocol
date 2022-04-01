@@ -5,9 +5,9 @@ Zefchain Labs on our way to a testnet.
 
 In general, the highest priority should be given to the milestones and tasks that de-risk the project:
 
-1. by confirming technical assumptions (or "bets") in our designs,
+1. by confirming technical assumptions ("big bets") in our designs,
 
-2. by validating the expected benefits of a minimum viable product (MVP),
+2. by validating the expected benefits of a Minimum Viable Product (MVP),
 
 3. by making it easier to communicate about our work and build a community around us.
 
@@ -40,21 +40,15 @@ Our expertise:
 
 * Crash-tolerant protocols (inside validators, between shards)
 
-* Virtualization / containerization
-
 * Cryptography
 
-* Machine learning
-
-* Smart contracts (*)
+* DeFI (*)
 
 * Crypto-economics (*)
 
-* Oracles (*)
+* Validity rollups (*)
 
-* ZK rollups (*)
-
-(*) = TODO
+(*) = need additional investments
 
 ## Current Target Product
 
