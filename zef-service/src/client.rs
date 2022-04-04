@@ -577,7 +577,8 @@ async fn main() {
             let votes: Vec<_> = responses
                 .into_iter()
                 .filter_map(|buf| {
-                    deserialize_response(&buf[..]).and_then(|info| info.manager.pending().cloned())
+                    deserialize_response(&buf[..])
+                        .and_then(|response| response.info.manager.pending().cloned())
                 })
                 .collect();
             warn!("Received {} valid votes.", votes.len());
@@ -601,8 +602,8 @@ async fn main() {
                 responses
                     .iter()
                     .fold(0, |acc, buf| match deserialize_response(&buf[..]) {
-                        Some(info) => {
-                            confirmed.insert(info.account_id);
+                        Some(response) => {
+                            confirmed.insert(response.info.account_id);
                             acc + 1
                         }
                         None => acc,

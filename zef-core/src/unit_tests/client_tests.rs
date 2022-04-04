@@ -20,8 +20,15 @@ use std::{
     sync::Arc,
 };
 
+/// An authority used for testing. "Faulty" authorities ignore request orders (but not
+/// certificates or info queries) and have the wrong initial balance for all accounts.
+struct LocalAuthority {
+    is_faulty: bool,
+    state: WorkerState<InMemoryStoreClient>,
+}
+
 #[derive(Clone)]
-struct LocalAuthorityClient(Arc<Mutex<WorkerState<InMemoryStoreClient>>>);
+struct LocalAuthorityClient(Arc<Mutex<LocalAuthority>>);
 
 #[async_trait]
 impl AuthorityClient for LocalAuthorityClient {
@@ -29,20 +36,24 @@ impl AuthorityClient for LocalAuthorityClient {
         &mut self,
         order: RequestOrder,
     ) -> Result<AccountInfoResponse, Error> {
-        self.0
-            .clone()
-            .lock()
-            .await
-            .handle_request_order(order)
-            .await
+        let authority = self.0.clone();
+        let mut authority = authority.lock().await;
+        if authority.is_faulty {
+            Err(Error::InvalidOwner)
+        } else {
+            authority.state.handle_request_order(order).await
+        }
     }
 
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
     ) -> Result<AccountInfoResponse, Error> {
-        let info =
-            fully_handle_certificate(self.0.clone().lock().await.deref_mut(), certificate).await?;
+        let info = fully_handle_certificate(
+            &mut self.0.clone().lock().await.deref_mut().state,
+            certificate,
+        )
+        .await?;
         Ok(info)
     }
 
@@ -54,14 +65,16 @@ impl AuthorityClient for LocalAuthorityClient {
             .clone()
             .lock()
             .await
+            .state
             .handle_account_info_query(query)
             .await
     }
 }
 
 impl LocalAuthorityClient {
-    fn new(state: WorkerState<InMemoryStoreClient>) -> Self {
-        Self(Arc::new(Mutex::new(state)))
+    fn new(is_faulty: bool, state: WorkerState<InMemoryStoreClient>) -> Self {
+        let authority = LocalAuthority { is_faulty, state };
+        Self(Arc::new(Mutex::new(authority)))
     }
 }
 
@@ -96,14 +109,14 @@ impl TestBuilder {
         for (i, key_pair) in key_pairs.into_iter().enumerate() {
             let name = key_pair.public();
             let store = InMemoryStoreClient::default();
-            let key_pair = if i < with_faulty_authorities {
-                faulty_authorities.insert(name);
-                KeyPair::generate()
-            } else {
-                key_pair
-            };
             let state = WorkerState::new(committee.clone(), Some(key_pair), store.clone());
-            authority_clients.insert(name, LocalAuthorityClient::new(state));
+            let authority = if i < with_faulty_authorities {
+                faulty_authorities.insert(name);
+                LocalAuthorityClient::new(true, state)
+            } else {
+                LocalAuthorityClient::new(false, state)
+            };
+            authority_clients.insert(name, authority);
             authority_stores.insert(name, store);
         }
         Self {
@@ -290,10 +303,10 @@ async fn test_share_ownership() {
         Balance::from(4)
     );
     // Can still use the account with the old client.
-    assert!(sender
+    sender
         .transfer_to_account(Amount::from(3), dbg_account(2), UserData::default())
         .await
-        .is_ok());
+        .unwrap();
     // Make a client to try the new key.
     let mut client = builder
         .make_client(sender.account_id, new_key_pair, SequenceNumber::from(2))
@@ -388,7 +401,7 @@ async fn test_close_account() {
 async fn test_initiating_valid_transfer_too_many_faults() {
     let mut sender = TestBuilder::single_account(4, 2, Balance::from(4)).await;
     assert!(sender
-        .transfer_to_account(
+        .transfer_to_account_unsafe_unconfirmed(
             Amount::from(3),
             dbg_account(2),
             UserData(Some(*b"hello...........hello...........")),

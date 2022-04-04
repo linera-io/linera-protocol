@@ -3,19 +3,7 @@ AccountId:
   NEWTYPESTRUCT:
     SEQ:
       TYPENAME: SequenceNumber
-AccountInfoQuery:
-  STRUCT:
-    - account_id:
-        TYPENAME: AccountId
-    - check_next_sequence_number:
-        OPTION:
-          TYPENAME: SequenceNumber
-    - query_sent_certificates_in_range:
-        OPTION:
-          TYPENAME: SequenceNumberRange
-    - query_received_certificates_excluding_first_nth:
-        OPTION: U64
-AccountInfoResponse:
+AccountInfo:
   STRUCT:
     - account_id:
         TYPENAME: AccountId
@@ -32,6 +20,25 @@ AccountInfoResponse:
     - queried_received_certificates:
         SEQ:
           TYPENAME: Certificate
+AccountInfoQuery:
+  STRUCT:
+    - account_id:
+        TYPENAME: AccountId
+    - check_next_sequence_number:
+        OPTION:
+          TYPENAME: SequenceNumber
+    - query_sent_certificates_in_range:
+        OPTION:
+          TYPENAME: SequenceNumberRange
+    - query_received_certificates_excluding_first_nth:
+        OPTION: U64
+AccountInfoResponse:
+  STRUCT:
+    - info:
+        TYPENAME: AccountInfo
+    - signature:
+        OPTION:
+          TYPENAME: Signature
 AccountManager:
   ENUM:
     0:
@@ -124,53 +131,55 @@ Error:
     16:
       InvalidCertificate: UNIT
     17:
-      IncorrectTransferAmount: UNIT
+      InvalidAccountInfoResponse: UNIT
     18:
+      IncorrectTransferAmount: UNIT
+    19:
       InsufficientFunding:
         STRUCT:
           - current_balance:
               TYPENAME: Balance
-    19:
+    20:
       InvalidNewAccountId:
         NEWTYPE:
           TYPENAME: AccountId
-    20:
+    21:
       InsufficientRound:
         NEWTYPE:
           TYPENAME: RoundNumber
-    21:
+    22:
       HasLockedOperation:
         NEWTYPE:
           TYPENAME: Operation
-    22:
-      CertificateNotFound: UNIT
     23:
-      InvalidCrossShardRequest: UNIT
+      CertificateNotFound: UNIT
     24:
-      InvalidRequestOrder: UNIT
+      InvalidCrossShardRequest: UNIT
     25:
-      ClientErrorWhileProcessingRequestOrder: UNIT
+      InvalidRequestOrder: UNIT
     26:
-      ClientErrorWhileRequestingCertificate: UNIT
+      ClientErrorWhileProcessingRequestOrder: UNIT
     27:
-      WrongShard: UNIT
+      ClientErrorWhileRequestingCertificate: UNIT
     28:
-      InvalidDecoding: UNIT
+      WrongShard: UNIT
     29:
-      UnexpectedMessage: UNIT
+      InvalidDecoding: UNIT
     30:
+      UnexpectedMessage: UNIT
+    31:
       ClientIoError:
         STRUCT:
           - error: STR
-    31:
+    32:
       StorageIoError:
         STRUCT:
           - error: STR
-    32:
+    33:
       StorageBcsError:
         STRUCT:
           - error: STR
-    33:
+    34:
       MissingCertificate:
         STRUCT:
           - hash:

@@ -116,10 +116,9 @@ pub struct AccountInfoQuery {
     pub query_received_certificates_excluding_first_nth: Option<usize>,
 }
 
-/// The response to an `AccountInfoQuery`
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
-pub struct AccountInfoResponse {
+pub struct AccountInfo {
     /// The account id
     pub account_id: AccountId,
     /// The state of the account authentication.
@@ -134,6 +133,14 @@ pub struct AccountInfoResponse {
     pub count_received_certificates: usize,
     /// The response to `query_received_certificates_excluding_first_nth`
     pub queried_received_certificates: Vec<Certificate>,
+}
+
+/// The response to an `AccountInfoQuery`
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
+pub struct AccountInfoResponse {
+    pub info: AccountInfo,
+    pub signature: Option<Signature>,
 }
 
 /// A (trusted) cross-shard request with an authority.
@@ -288,8 +295,21 @@ impl Vote {
 
     /// Verify the signature in the vote.
     pub fn check(&self, name: AuthorityName) -> Result<(), Error> {
-        ensure!(self.authority == name, Error::InvalidSigner);
-        self.signature.check(&self.value, self.authority)
+        self.signature.check(&self.value, name)
+    }
+}
+
+impl AccountInfoResponse {
+    pub fn new(info: AccountInfo, key_pair: Option<&KeyPair>) -> Self {
+        let signature = key_pair.map(|kp| Signature::new(&info, kp));
+        Self { info, signature }
+    }
+
+    pub fn check(&self, name: AuthorityName) -> Result<(), Error> {
+        match self.signature {
+            Some(sig) => sig.check(&self.info, name),
+            None => Err(Error::InvalidAccountInfoResponse),
+        }
     }
 }
 
@@ -401,5 +421,6 @@ impl Certificate {
     }
 }
 
+impl BcsSignable for AccountInfo {}
 impl BcsSignable for Request {}
 impl BcsSignable for Value {}
