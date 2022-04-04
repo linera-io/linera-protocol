@@ -286,12 +286,10 @@ impl Vote {
         }
     }
 
-    /// Verify the signature and return the non-zero voting right of the authority.
-    pub fn check(&self, committee: &Committee) -> Result<usize, Error> {
-        let weight = committee.weight(&self.authority);
-        ensure!(weight > 0, Error::UnknownSigner);
-        self.signature.check(&self.value, self.authority)?;
-        Ok(weight)
+    /// Verify the signature in the vote.
+    pub fn check(&self, name: AuthorityName) -> Result<(), Error> {
+        ensure!(self.authority == name, Error::InvalidSigner);
+        self.signature.check(&self.value, self.authority)
     }
 }
 
@@ -335,7 +333,7 @@ impl<'a> SignatureAggregator<'a> {
         self.used_authorities.insert(authority);
         // Update weight.
         let voting_rights = self.committee.weight(&authority);
-        ensure!(voting_rights > 0, Error::UnknownSigner);
+        ensure!(voting_rights > 0, Error::InvalidSigner);
         self.weight += voting_rights;
         // Update certificate.
         self.partial.signatures.push((authority, signature));
@@ -390,7 +388,7 @@ impl Certificate {
             used_authorities.insert(*authority);
             // Update weight.
             let voting_rights = committee.weight(authority);
-            ensure!(voting_rights > 0, Error::UnknownSigner);
+            ensure!(voting_rights > 0, Error::InvalidSigner);
             weight += voting_rights;
         }
         ensure!(

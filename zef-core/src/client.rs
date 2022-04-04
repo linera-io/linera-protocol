@@ -427,21 +427,22 @@ where
         execute: F,
     ) -> Result<Vec<V>, Option<Error>>
     where
-        F: Fn(
-                AuthorityName,
-                /* TODO: pubkey */ &'a mut A,
-            ) -> future::BoxFuture<'a, Result<V, Error>>
-            + Clone,
+        F: Fn(AuthorityName, &'a mut A) -> future::BoxFuture<'a, Result<V, Error>> + Clone,
     {
         let committee = &self.committee;
         let authority_clients = &mut self.authority_clients;
         // TODO: optional shuffle?
         let mut responses: futures::stream::FuturesUnordered<_> = authority_clients
             .iter_mut()
-            .map(|(name, client)| {
+            .filter_map(|(name, client)| {
                 let execute = execute.clone();
-                // TODO: skip if weight == 0 ??
-                async move { (*name, execute(*name, client).await) }
+                if committee.weight(name) > 0 {
+                    Some(async move { (*name, execute(*name, client).await) })
+                } else {
+                    // This should not happen but better prevent it because certificates
+                    // are not allowed to include votes with weight 0.
+                    None
+                }
             })
             .collect();
 
@@ -529,7 +530,6 @@ where
     }
 
     async fn send_account_update(
-        committee: &Committee, // TODO: pass the pubkey of the authority instead
         mut storage_client: S,
         account_id: AccountId,
         action: CommunicateAction,
@@ -567,11 +567,7 @@ where
                 match result {
                     Ok(AccountInfoResponse { manager, .. }) => match manager.pending() {
                         Some(vote) => {
-                            my_ensure!(
-                                vote.authority == name,
-                                Error::ClientErrorWhileProcessingRequestOrder
-                            );
-                            vote.check(committee)?;
+                            vote.check(name)?;
                             return Ok(Some(vote.clone()));
                         }
                         None => return Err(Error::ClientErrorWhileProcessingRequestOrder),
@@ -584,11 +580,7 @@ where
                 match result {
                     Ok(AccountInfoResponse { manager, .. }) => match manager.pending() {
                         Some(vote) => {
-                            my_ensure!(
-                                vote.authority == name,
-                                Error::ClientErrorWhileProcessingRequestOrder
-                            );
-                            vote.check(committee)?;
+                            vote.check(name)?;
                             return Ok(Some(vote.clone()));
                         }
                         None => return Err(Error::ClientErrorWhileProcessingRequestOrder),
@@ -608,17 +600,14 @@ where
         account_id: AccountId,
         action: CommunicateAction,
     ) -> Result<Option<Certificate>, failure::Error> {
-        let committee = self.committee.clone();
         let storage_client = self.state.storage_client().clone();
         let result = self
             .communicate_with_quorum(|name, authority_client| {
                 let action = action.clone();
                 let storage_client = storage_client.clone();
-                let committee = &committee;
                 let account_id = account_id.clone();
                 Box::pin(async move {
                     Self::send_account_update(
-                        committee,
                         storage_client,
                         account_id,
                         action,
