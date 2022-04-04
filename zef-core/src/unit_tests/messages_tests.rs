@@ -7,16 +7,9 @@ use std::collections::BTreeMap;
 
 #[test]
 fn test_signed_values() {
-    let mut authorities = BTreeMap::new();
     let key1 = KeyPair::generate();
     let key2 = KeyPair::generate();
-    let key3 = KeyPair::generate();
     let name1 = key1.public();
-    let name2 = key2.public();
-
-    authorities.insert(name1, /* voting right */ 1);
-    authorities.insert(name2, /* voting right */ 0);
-    let committee = Committee::new(authorities);
 
     let request = Request {
         account_id: dbg_account(1),
@@ -31,13 +24,10 @@ fn test_signed_values() {
     let value = Value::Confirmed { request };
 
     let v = Vote::new(value.clone(), &key1);
-    assert!(v.check(&committee).is_ok());
+    assert!(v.check(name1).is_ok());
 
-    let v = Vote::new(value.clone(), &key2);
-    assert!(v.check(&committee).is_err());
-
-    let v = Vote::new(value, &key3);
-    assert!(v.check(&committee).is_err());
+    let v = Vote::new(value, &key2);
+    assert!(v.check(name1).is_err());
 }
 
 #[test]
