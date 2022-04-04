@@ -210,7 +210,7 @@ where
             query_received_certificates_excluding_first_nth: None,
         };
         let response = self.state.handle_account_info_query(query).await?;
-        Ok(response.next_sequence_number.into())
+        Ok(response.info.next_sequence_number.into())
     }
 
     async fn manager(&mut self) -> AccountManager {
@@ -221,7 +221,7 @@ where
             query_received_certificates_excluding_first_nth: None,
         };
         let response = self.state.handle_account_info_query(query).await.unwrap();
-        response.manager
+        response.info.manager
     }
 
     async fn has_multi_owners(&mut self) -> bool {
@@ -248,7 +248,7 @@ where
             query_received_certificates_excluding_first_nth: Some(0),
         };
         let response = self.state.handle_account_info_query(query).await.unwrap();
-        response.balance
+        response.info.balance
     }
 }
 
@@ -283,31 +283,36 @@ where
             query_received_certificates_excluding_first_nth: None,
         };
         // Sequentially try each authority in random order.
-        let mut authority_clients = self.authority_clients.values().cloned().collect::<Vec<_>>();
+        let mut authority_clients = self
+            .authority_clients
+            .iter()
+            .map(|(k, v)| (*k, v.clone()))
+            .collect::<Vec<_>>();
         authority_clients.shuffle(&mut rand::thread_rng());
-        for client in authority_clients.iter_mut() {
-            let result = client.handle_account_info_query(query.clone()).await;
-            if let Ok(AccountInfoResponse {
-                mut queried_sent_certificates,
-                ..
-            }) = result
-            {
-                if let Some(certificate) = queried_sent_certificates.pop() {
-                    if let Value::Confirmed { request } = &certificate.value {
-                        if request.account_id == account_id
-                            && request.sequence_number == sequence_number
-                        {
-                            match self.process_certificate(certificate.clone()).await {
-                                Ok(()) => {
-                                    // Success
-                                    return Ok(certificate);
-                                }
-                                Err(Error::InvalidCertificate) => {
-                                    // Try another authority.
-                                }
-                                Err(e) => {
-                                    // Something is wrong: a valid certificate should not fail to execute.
-                                    return Err(e);
+        for (name, mut client) in authority_clients {
+            if let Ok(response) = client.handle_account_info_query(query.clone()).await {
+                if response.check(name).is_ok() {
+                    let AccountInfo {
+                        mut queried_sent_certificates,
+                        ..
+                    } = response.info;
+                    if let Some(certificate) = queried_sent_certificates.pop() {
+                        if let Value::Confirmed { request } = &certificate.value {
+                            if request.account_id == account_id
+                                && request.sequence_number == sequence_number
+                            {
+                                match self.process_certificate(certificate.clone()).await {
+                                    Ok(()) => {
+                                        // Success
+                                        return Ok(certificate);
+                                    }
+                                    Err(Error::InvalidCertificate) => {
+                                        // Try another authority.
+                                    }
+                                    Err(e) => {
+                                        // Something is wrong: a valid certificate should not fail to execute.
+                                        return Err(e);
+                                    }
                                 }
                             }
                         }
@@ -318,21 +323,10 @@ where
         Err(Error::ClientErrorWhileRequestingCertificate)
     }
 
-    /// Find the highest sequence number that is known to a quorum of authorities.
-    /// NOTE: This assumes network connectivity and a sufficient timeout value.
     async fn broadcast_account_info_query(
         &mut self,
-        account_id: AccountId,
-        query_sent_certificates_from_sequence_number: Option<SequenceNumber>,
-    ) -> Vec<(AuthorityName, AccountInfoResponse)> {
-        let range = query_sent_certificates_from_sequence_number
-            .map(|start| SequenceNumberRange { start, limit: None });
-        let query = AccountInfoQuery {
-            account_id,
-            check_next_sequence_number: None,
-            query_sent_certificates_in_range: range,
-            query_received_certificates_excluding_first_nth: None,
-        };
+        query: AccountInfoQuery,
+    ) -> Vec<(AuthorityName, AccountInfo)> {
         let infos: futures::stream::FuturesUnordered<_> = self
             .authority_clients
             .iter_mut()
@@ -340,7 +334,13 @@ where
                 let fut = client.handle_account_info_query(query.clone());
                 async move {
                     match fut.await {
-                        Ok(info) => Some((*name, info)),
+                        Ok(response) => {
+                            if response.check(*name).is_ok() {
+                                Some((*name, response.info))
+                            } else {
+                                None
+                            }
+                        }
                         _ => None,
                     }
                 }
@@ -358,9 +358,17 @@ where
                 .unwrap(),
             usize::from(self.next_sequence_number),
         );
-        let infos = self
-            .broadcast_account_info_query(self.account_id.clone(), Some(self.next_sequence_number))
-            .await;
+        let range = SequenceNumberRange {
+            start: self.next_sequence_number,
+            limit: None,
+        };
+        let query = AccountInfoQuery {
+            account_id: self.account_id.clone(),
+            check_next_sequence_number: None,
+            query_sent_certificates_in_range: Some(range),
+            query_received_certificates_excluding_first_nth: None,
+        };
+        let infos = self.broadcast_account_info_query(query).await;
         // First pass to update our local sequence number.
         'outer: for (_, info) in &infos {
             for certificate in &info.queried_sent_certificates {
@@ -477,6 +485,7 @@ where
 
     async fn send_account_information(
         storage_client: &mut S,
+        authority_name: AuthorityName,
         authority_client: &mut A,
         mut account_id: AccountId,
         mut target_sequence_number: SequenceNumber,
@@ -492,9 +501,10 @@ where
             };
             match authority_client.handle_account_info_query(query).await {
                 Ok(response) => {
+                    response.check(authority_name)?;
                     jobs.push((
                         account_id,
-                        response.next_sequence_number,
+                        response.info.next_sequence_number,
                         target_sequence_number,
                     ));
                     break;
@@ -553,6 +563,7 @@ where
         // Update the authority with missing information, if needed.
         Self::send_account_information(
             &mut storage_client,
+            name,
             authority_client,
             account_id,
             target_sequence_number,
@@ -565,26 +576,32 @@ where
             | CommunicateAction::SubmitRequestForConfirmation(order) => {
                 let result = authority_client.handle_request_order(order).await;
                 match result {
-                    Ok(AccountInfoResponse { manager, .. }) => match manager.pending() {
-                        Some(vote) => {
-                            vote.check(name)?;
-                            return Ok(Some(vote.clone()));
+                    Ok(response) => {
+                        response.check(name)?;
+                        match response.info.manager.pending() {
+                            Some(vote) => {
+                                vote.check(name)?;
+                                return Ok(Some(vote.clone()));
+                            }
+                            None => return Err(Error::ClientErrorWhileProcessingRequestOrder),
                         }
-                        None => return Err(Error::ClientErrorWhileProcessingRequestOrder),
-                    },
+                    }
                     Err(err) => return Err(err),
                 }
             }
             CommunicateAction::FinalizeRequest(certificate) => {
                 let result = authority_client.handle_certificate(certificate).await;
                 match result {
-                    Ok(AccountInfoResponse { manager, .. }) => match manager.pending() {
-                        Some(vote) => {
-                            vote.check(name)?;
-                            return Ok(Some(vote.clone()));
+                    Ok(response) => {
+                        response.check(name)?;
+                        match response.info.manager.pending() {
+                            Some(vote) => {
+                                vote.check(name)?;
+                                return Ok(Some(vote.clone()));
+                            }
+                            None => return Err(Error::ClientErrorWhileProcessingRequestOrder),
                         }
-                        None => return Err(Error::ClientErrorWhileProcessingRequestOrder),
-                    },
+                    }
                     Err(err) => return Err(err),
                 }
             }
@@ -721,10 +738,8 @@ where
     async fn synchronize_received_certificates(&mut self) -> Result<(), failure::Error> {
         let account_id = self.account_id.clone();
         let trackers = self.received_certificate_trackers.clone();
-        let committee = self.committee.clone();
         let result = self
             .communicate_with_quorum(|name, client| {
-                let committee = &committee;
                 let account_id = &account_id;
                 let tracker = *trackers.get(&name).unwrap_or(&0);
                 Box::pin(async move {
@@ -736,9 +751,9 @@ where
                         query_received_certificates_excluding_first_nth: Some(tracker),
                     };
                     let response = client.handle_account_info_query(query).await?;
-                    for certificate in &response.queried_received_certificates {
-                        // TODO: remove line and check signed info response instead
-                        certificate.check(committee)?;
+                    // Quick verifications.
+                    response.check(name)?;
+                    for certificate in &response.info.queried_received_certificates {
                         let request = certificate
                             .value
                             .confirmed_request()
@@ -752,7 +767,7 @@ where
                             Error::ClientErrorWhileRequestingCertificate
                         );
                     }
-                    Ok((name, response))
+                    Ok((name, response.info))
                 })
             })
             .await;
@@ -940,21 +955,13 @@ where
             query_sent_certificates_in_range: None,
             query_received_certificates_excluding_first_nth: None,
         };
-        let numbers: futures::stream::FuturesUnordered<_> = self
-            .authority_clients
-            .iter_mut()
-            .map(|(name, client)| {
-                let fut = client.handle_account_info_query(query.clone());
-                async move {
-                    match fut.await {
-                        Ok(info) => Some((*name, info.balance)),
-                        _ => None,
-                    }
-                }
-            })
-            .collect();
-        self.committee
-            .get_validity_lower_bound(numbers.filter_map(|x| async move { x }).collect().await)
+        let infos = self.broadcast_account_info_query(query).await;
+        self.committee.get_validity_lower_bound(
+            infos
+                .into_iter()
+                .map(|(name, info)| (name, info.balance))
+                .collect(),
+        )
     }
 
     async fn transfer_to_account(

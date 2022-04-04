@@ -167,7 +167,10 @@ async fn test_handle_request_order() {
     let request_order =
         make_transfer_request_order(dbg_account(1), &sender_key_pair, recipient, Amount::from(5));
 
-    let account_info = state.handle_request_order(request_order).await.unwrap();
+    let account_info_response = state.handle_request_order(request_order).await.unwrap();
+    account_info_response
+        .check(state.key_pair.unwrap().public())
+        .unwrap();
     let pending = state
         .storage
         .read_active_account(&dbg_account(1))
@@ -177,7 +180,10 @@ async fn test_handle_request_order() {
         .pending()
         .cloned()
         .unwrap();
-    assert_eq!(account_info.manager.pending().unwrap(), &pending);
+    assert_eq!(
+        account_info_response.info.manager.pending().unwrap(),
+        &pending
+    );
 }
 
 #[tokio::test]
@@ -195,6 +201,9 @@ async fn test_handle_request_order_replay() {
     let vote = state
         .handle_request_order(request_order.clone())
         .await
+        .unwrap();
+    vote.check(state.key_pair.as_ref().unwrap().public())
+        .as_ref()
         .unwrap();
     let replay_vote = state.handle_request_order(request_order).await.unwrap();
     assert_eq!(vote, replay_vote);
@@ -391,7 +400,8 @@ async fn test_handle_certificate_to_active_recipient() {
 
     let info = fully_handle_certificate(&mut state, certificate.clone())
         .await
-        .unwrap();
+        .unwrap()
+        .info;
     assert_eq!(dbg_account(1), info.account_id);
     assert_eq!(Balance::from(0), info.balance);
     assert_eq!(SequenceNumber::from(1), info.next_sequence_number);
@@ -423,9 +433,9 @@ async fn test_handle_certificate_to_active_recipient() {
         query_received_certificates_excluding_first_nth: Some(0),
     };
     let response = state.handle_account_info_query(info_query).await.unwrap();
-    assert_eq!(response.queried_received_certificates.len(), 1);
+    assert_eq!(response.info.queried_received_certificates.len(), 1);
     assert_eq!(
-        response.queried_received_certificates[0]
+        response.info.queried_received_certificates[0]
             .value
             .confirmed_request()
             .unwrap()
@@ -454,7 +464,8 @@ async fn test_handle_certificate_to_inactive_recipient() {
 
     let info = fully_handle_certificate(&mut state, certificate.clone())
         .await
-        .unwrap();
+        .unwrap()
+        .info;
     assert_eq!(dbg_account(1), info.account_id);
     assert_eq!(Balance::from(0), info.balance);
     assert_eq!(SequenceNumber::from(1), info.next_sequence_number);
