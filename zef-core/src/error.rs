@@ -60,8 +60,8 @@ pub enum Error {
     // Signatures and certificates
     #[fail(display = "Signature for object {} is not valid: {}", type_name, error)]
     InvalidSignature { error: String, type_name: String },
-    #[fail(display = "Value was not signed by a known authority")]
-    UnknownSigner,
+    #[fail(display = "The signature was not created by a valid entity")]
+    InvalidSigner,
     #[fail(display = "Signatures in a certificate must form a quorum")]
     CertificateRequiresQuorum,
     #[fail(display = "Signatures in a certificate must be from different authorities.")]

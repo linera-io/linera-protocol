@@ -116,7 +116,7 @@ Error:
           - error: STR
           - type_name: STR
     13:
-      UnknownSigner: UNIT
+      InvalidSigner: UNIT
     14:
       CertificateRequiresQuorum: UNIT
     15:
