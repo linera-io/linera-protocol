@@ -66,6 +66,8 @@ pub enum Error {
     CertificateRequiresQuorum,
     #[fail(display = "Signatures in a certificate must be from different authorities.")]
     CertificateAuthorityReuse,
+    #[fail(display = "The given certificate is invalid.")]
+    InvalidCertificate,
 
     // Validation of operations and requests
     #[fail(display = "Transfers must have positive amount")]

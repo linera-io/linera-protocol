@@ -208,8 +208,10 @@ where
         &mut self,
         certificate: Certificate,
     ) -> Result<(AccountInfoResponse, Vec<CrossShardRequest>), Error> {
-        // Verify the certificate.
-        certificate.check(&self.committee)?;
+        // Verify the certificate. Returns a catch-all error to make client code more robust.
+        certificate
+            .check(&self.committee)
+            .map_err(|_| Error::InvalidCertificate)?;
         // Process the order.
         match &certificate.value {
             Value::Validated { request } => {
