@@ -268,7 +268,7 @@ where
     S: StorageClient + Clone + 'static,
 {
     /// Try to find a (confirmation) certificate for the given account_id and sequence number.
-    async fn query_certificate(
+    async fn fetch_and_process_certificate(
         &mut self,
         account_id: AccountId,
         sequence_number: SequenceNumber,
@@ -288,18 +288,27 @@ where
         for client in authority_clients.iter_mut() {
             let result = client.handle_account_info_query(query.clone()).await;
             if let Ok(AccountInfoResponse {
-                queried_sent_certificates,
+                mut queried_sent_certificates,
                 ..
-            }) = &result
+            }) = result
             {
-                if let Some(certificate) = queried_sent_certificates.first() {
-                    // TODO: use "process_certificate" instead of trying to check the certificate.
-                    if certificate.check(&self.committee).is_ok() {
-                        if let Value::Confirmed { request } = &certificate.value {
-                            if request.account_id == account_id
-                                && request.sequence_number == sequence_number
-                            {
-                                return Ok(certificate.clone());
+                if let Some(certificate) = queried_sent_certificates.pop() {
+                    if let Value::Confirmed { request } = &certificate.value {
+                        if request.account_id == account_id
+                            && request.sequence_number == sequence_number
+                        {
+                            match self.process_certificate(certificate.clone()).await {
+                                Ok(()) => {
+                                    // Success
+                                    return Ok(certificate);
+                                }
+                                Err(Error::InvalidCertificate) => {
+                                    // Try another authority.
+                                }
+                                Err(e) => {
+                                    // Something is wrong: a valid certificate should not fail to execute.
+                                    return Err(e);
+                                }
                             }
                         }
                     }
@@ -314,9 +323,10 @@ where
     async fn broadcast_account_info_query(
         &mut self,
         account_id: AccountId,
-        next_sequence_number: Option<SequenceNumber>,
+        query_sent_certificates_from_sequence_number: Option<SequenceNumber>,
     ) -> Vec<(AuthorityName, AccountInfoResponse)> {
-        let range = next_sequence_number.map(|start| SequenceNumberRange { start, limit: None });
+        let range = query_sent_certificates_from_sequence_number
+            .map(|start| SequenceNumberRange { start, limit: None });
         let query = AccountInfoQuery {
             account_id,
             check_next_sequence_number: None,
@@ -352,15 +362,22 @@ where
             .broadcast_account_info_query(self.account_id.clone(), Some(self.next_sequence_number))
             .await;
         // First pass to update our local sequence number.
-        for (_, info) in &infos {
+        'outer: for (_, info) in &infos {
             for certificate in &info.queried_sent_certificates {
-                // TODO: merge with with `process_certificate`
-                if certificate.check(&self.committee).is_ok() {
-                    if let Value::Confirmed { request } = &certificate.value {
-                        if request.account_id == self.account_id
-                            && request.sequence_number == self.next_sequence_number
-                        {
-                            self.process_certificate(certificate.clone()).await?;
+                if let Value::Confirmed { request } = &certificate.value {
+                    if request.account_id == self.account_id
+                        && request.sequence_number == self.next_sequence_number
+                    {
+                        match self.process_certificate(certificate.clone()).await {
+                            Ok(_) => (),
+                            Err(Error::InvalidCertificate) => {
+                                // Try another authority.
+                                continue 'outer;
+                            }
+                            Err(e) => {
+                                // Something is wrong: a valid certificate should not fail to execute.
+                                return Err(e);
+                            }
                         }
                     }
                 }
@@ -410,7 +427,11 @@ where
         execute: F,
     ) -> Result<Vec<V>, Option<Error>>
     where
-        F: Fn(AuthorityName, /* TODO: pubkey */ &'a mut A) -> future::BoxFuture<'a, Result<V, Error>> + Clone,
+        F: Fn(
+                AuthorityName,
+                /* TODO: pubkey */ &'a mut A,
+            ) -> future::BoxFuture<'a, Result<V, Error>>
+            + Clone,
     {
         let committee = &self.committee;
         let authority_clients = &mut self.authority_clients;
@@ -666,7 +687,8 @@ where
     }
 
     /// Make sure we have all the certificates of this account with sequence number in the
-    /// range 0..next_sequence_number
+    /// range 0..next_sequence_number. Due to the account creation protocol, we make sure
+    /// that ancestor accounts are also synchronized.
     async fn synchronize_sent_certificates_for_account(
         &mut self,
         account_id: AccountId,
@@ -680,11 +702,11 @@ where
             if let Some((account_id, sequence_number)) = ancestor_id.split() {
                 let storage_number = self.count_sent_certificates(account_id.clone()).await?;
                 for number in storage_number..=sequence_number.into() {
-                    // TODO: merge the two lines
-                    let certificate = self
-                        .query_certificate(account_id.clone(), SequenceNumber::from(number as u64))
-                        .await?;
-                    self.process_certificate(certificate).await?;
+                    self.fetch_and_process_certificate(
+                        account_id.clone(),
+                        SequenceNumber::from(number as u64),
+                    )
+                    .await?;
                 }
             }
         }
@@ -764,7 +786,8 @@ where
             // Process received certificates.
             for certificate in response.queried_received_certificates {
                 if self.receive_certificate(certificate).await.is_err() {
-                    // Do not update `name`'s tracker in case of error.
+                    // Do not update the authority's tracker in case of error.
+                    // Move on to the next authority.
                     continue 'outer;
                 }
             }
@@ -994,7 +1017,7 @@ where
             .await?;
         // Process the received operation.
         self.process_certificate(certificate).await?;
-        // Make sure all authorities are up-to-date.
+        // Make sure a quorum of authorities are up-to-date.
         self.communicate_account_updates(
             account_id.clone(),
             CommunicateAction::SynchronizeNextSequenceNumber(
