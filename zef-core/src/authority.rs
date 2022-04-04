@@ -93,7 +93,7 @@ where
             .collect();
         if account.next_sequence_number > request.sequence_number {
             // Request was already confirmed.
-            let info = account.make_account_info();
+            let info = account.make_account_info(self.key_pair.as_ref());
             return Ok((info, continuation));
         }
         // Persist certificate.
@@ -104,7 +104,7 @@ where
         account.next_sequence_number.try_add_assign_one()?;
         account.manager.reset();
         // Final touch on the sender's account.
-        let info = account.make_account_info();
+        let info = account.make_account_info(self.key_pair.as_ref());
         // Schedule cross-shard request if any.
         let operation = &certificate.value.confirmed_request().unwrap().operation;
         if operation.recipient().is_some() {
@@ -136,12 +136,12 @@ where
         {
             // If we just processed the same pending request, return the account info
             // unchanged.
-            return Ok(account.make_account_info());
+            return Ok(account.make_account_info(self.key_pair.as_ref()));
         }
         account
             .manager
             .create_final_vote(request, certificate, self.key_pair.as_ref());
-        let info = account.make_account_info();
+        let info = account.make_account_info(self.key_pair.as_ref());
         self.storage.write_account(account).await?;
         Ok(info)
     }
@@ -192,13 +192,13 @@ where
         {
             // If we just processed the same pending request, return the account info
             // unchanged.
-            return Ok(account.make_account_info());
+            return Ok(account.make_account_info(self.key_pair.as_ref()));
         }
         // Verify that the request is valid.
         account.validate_operation(&order.request)?;
         // Create the vote and store it in the account.
         account.manager.create_vote(order, self.key_pair.as_ref());
-        let info = account.make_account_info();
+        let info = account.make_account_info(self.key_pair.as_ref());
         self.storage.write_account(account).await?;
         Ok(info)
     }
@@ -234,7 +234,7 @@ where
         query: AccountInfoQuery,
     ) -> Result<AccountInfoResponse, Error> {
         let account = self.storage.read_active_account(&query.account_id).await?;
-        let mut response = account.make_account_info();
+        let mut info = account.make_account_info(None).info;
         if let Some(next_sequence_number) = query.check_next_sequence_number {
             ensure!(
                 account.next_sequence_number == next_sequence_number,
@@ -250,13 +250,14 @@ where
                 None => self.storage.read_certificates(keys).await?,
                 Some(count) => self.storage.read_certificates(keys.take(count)).await?,
             };
-            response.queried_sent_certificates = certs;
+            info.queried_sent_certificates = certs;
         }
         if let Some(idx) = query.query_received_certificates_excluding_first_nth {
             let keys = account.received_log[..].iter().skip(idx).cloned();
             let certs = self.storage.read_certificates(keys).await?;
-            response.queried_received_certificates = certs;
+            info.queried_received_certificates = certs;
         }
+        let response = AccountInfoResponse::new(info, self.key_pair.as_ref());
         Ok(response)
     }
 }
@@ -316,11 +317,9 @@ pub async fn fully_handle_certificate<Client>(
 where
     Client: StorageClient + Clone + 'static,
 {
-    let (info, mut requests) = state.handle_certificate(certificate).await?;
+    let (response, mut requests) = state.handle_certificate(certificate).await?;
     while let Some(request) = requests.pop() {
         requests.extend(state.handle_cross_shard_request(request).await?);
     }
-    let account = state.storage.read_active_account(&info.account_id).await?;
-    let info = account.make_account_info();
-    Ok(info)
+    Ok(response)
 }

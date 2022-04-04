@@ -319,8 +319,8 @@ impl AccountManager {
 }
 
 impl AccountState {
-    pub(crate) fn make_account_info(&self) -> AccountInfoResponse {
-        AccountInfoResponse {
+    pub(crate) fn make_account_info(&self, key_pair: Option<&KeyPair>) -> AccountInfoResponse {
+        let info = AccountInfo {
             account_id: self.id.clone(),
             manager: self.manager.clone(),
             balance: self.balance,
@@ -328,7 +328,8 @@ impl AccountState {
             queried_sent_certificates: Vec::new(),
             count_received_certificates: self.received_log.len(),
             queried_received_certificates: Vec::new(),
-        }
+        };
+        AccountInfoResponse::new(info, key_pair)
     }
 
     pub fn new(id: AccountId) -> Self {

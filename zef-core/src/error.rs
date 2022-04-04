@@ -68,6 +68,8 @@ pub enum Error {
     CertificateAuthorityReuse,
     #[fail(display = "The given certificate is invalid.")]
     InvalidCertificate,
+    #[fail(display = "The given account info response is invalid.")]
+    InvalidAccountInfoResponse,
 
     // Validation of operations and requests
     #[fail(display = "Transfers must have positive amount")]
