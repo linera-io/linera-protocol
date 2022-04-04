@@ -202,7 +202,7 @@ async fn test_initiating_valid_transfer() {
     assert_eq!(sender.query_safe_balance().await, Balance::from(1));
     assert_eq!(
         sender
-            .query_certificate(sender.account_id.clone(), SequenceNumber::from(0))
+            .fetch_and_process_certificate(sender.account_id.clone(), SequenceNumber::from(0))
             .await
             .unwrap(),
         certificate
@@ -220,7 +220,7 @@ async fn test_rotate_key_pair() {
     assert_eq!(sender.identity().unwrap(), new_pubk);
     assert_eq!(
         sender
-            .query_certificate(sender.account_id.clone(), SequenceNumber::from(0))
+            .fetch_and_process_certificate(sender.account_id.clone(), SequenceNumber::from(0))
             .await
             .unwrap(),
         certificate
@@ -248,7 +248,7 @@ async fn test_transfer_ownership() {
     assert!(sender.key_pair().is_err());
     assert_eq!(
         sender
-            .query_certificate(sender.account_id.clone(), SequenceNumber::from(0))
+            .fetch_and_process_certificate(sender.account_id.clone(), SequenceNumber::from(0))
             .await
             .unwrap(),
         certificate
@@ -279,7 +279,7 @@ async fn test_share_ownership() {
     assert!(sender.key_pair().is_ok());
     assert_eq!(
         sender
-            .query_certificate(sender.account_id.clone(), SequenceNumber::from(0))
+            .fetch_and_process_certificate(sender.account_id.clone(), SequenceNumber::from(0))
             .await
             .unwrap(),
         certificate
@@ -330,7 +330,7 @@ async fn test_open_account() {
     assert!(sender.key_pair().is_ok());
     assert_eq!(
         sender
-            .query_certificate(sender.account_id.clone(), SequenceNumber::from(1))
+            .fetch_and_process_certificate(sender.account_id.clone(), SequenceNumber::from(1))
             .await
             .unwrap(),
         certificate
@@ -374,7 +374,7 @@ async fn test_close_account() {
     assert!(sender.key_pair().is_err());
     // Cannot query the certificate.
     assert!(sender
-        .query_certificate(sender.account_id.clone(), SequenceNumber::from(0))
+        .fetch_and_process_certificate(sender.account_id.clone(), SequenceNumber::from(0))
         .await
         .is_err());
     // Cannot use the account any more.
@@ -428,7 +428,7 @@ async fn test_bidirectional_transfer() {
 
     assert_eq!(
         client1
-            .query_certificate(client1.account_id.clone(), SequenceNumber::from(0))
+            .fetch_and_process_certificate(client1.account_id.clone(), SequenceNumber::from(0))
             .await
             .unwrap(),
         certificate

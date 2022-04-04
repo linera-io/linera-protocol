@@ -122,53 +122,55 @@ Error:
     15:
       CertificateAuthorityReuse: UNIT
     16:
-      IncorrectTransferAmount: UNIT
+      InvalidCertificate: UNIT
     17:
+      IncorrectTransferAmount: UNIT
+    18:
       InsufficientFunding:
         STRUCT:
           - current_balance:
               TYPENAME: Balance
-    18:
+    19:
       InvalidNewAccountId:
         NEWTYPE:
           TYPENAME: AccountId
-    19:
+    20:
       InsufficientRound:
         NEWTYPE:
           TYPENAME: RoundNumber
-    20:
+    21:
       HasLockedOperation:
         NEWTYPE:
           TYPENAME: Operation
-    21:
-      CertificateNotFound: UNIT
     22:
-      InvalidCrossShardRequest: UNIT
+      CertificateNotFound: UNIT
     23:
-      InvalidRequestOrder: UNIT
+      InvalidCrossShardRequest: UNIT
     24:
-      ClientErrorWhileProcessingRequestOrder: UNIT
+      InvalidRequestOrder: UNIT
     25:
-      ClientErrorWhileRequestingCertificate: UNIT
+      ClientErrorWhileProcessingRequestOrder: UNIT
     26:
-      WrongShard: UNIT
+      ClientErrorWhileRequestingCertificate: UNIT
     27:
-      InvalidDecoding: UNIT
+      WrongShard: UNIT
     28:
-      UnexpectedMessage: UNIT
+      InvalidDecoding: UNIT
     29:
+      UnexpectedMessage: UNIT
+    30:
       ClientIoError:
         STRUCT:
           - error: STR
-    30:
+    31:
       StorageIoError:
         STRUCT:
           - error: STR
-    31:
+    32:
       StorageBcsError:
         STRUCT:
           - error: STR
-    32:
+    33:
       MissingCertificate:
         STRUCT:
           - hash:
