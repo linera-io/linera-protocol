@@ -4,7 +4,7 @@
 
 use crate::{base_types::*, ensure, error::Error, messages::*};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 /// State of an account.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -22,6 +22,9 @@ pub struct AccountState {
     pub confirmed_log: Vec<HashValue>,
     /// Hashes of all confirmed certificates as a receiver.
     pub received_log: Vec<HashValue>,
+    /// Maximum sequence number of all received updates indexed by sender.
+    /// This is needed for clients.
+    pub received_index: HashMap<AccountId, SequenceNumber>,
 
     /// Keep sending these confirmed certificates until they are confirmed by receivers.
     pub keep_sending: HashSet<HashValue>,
@@ -340,6 +343,7 @@ impl AccountState {
             next_sequence_number: SequenceNumber::new(),
             confirmed_log: Vec::new(),
             received_log: Vec::new(),
+            received_index: HashMap::new(),
             keep_sending: HashSet::new(),
             received_keys: HashSet::new(),
         }
@@ -380,6 +384,21 @@ impl AccountState {
         Ok(())
     }
 
+    /// Whether an invalid operation for this request can become valid later.
+    pub(crate) fn is_retriable_validation_error(request: &Request, error: &Error) -> bool {
+        match (&request.operation, error) {
+            (Operation::Transfer { .. }, Error::InsufficientFunding { .. }) => true,
+            (Operation::Transfer { .. }, _) => false,
+            (
+                Operation::OpenAccount { .. }
+                | Operation::CloseAccount
+                | Operation::ChangeOwner { .. }
+                | Operation::ChangeMultipleOwners { .. },
+                _,
+            ) => false,
+        }
+    }
+
     /// Execute the sender's side of the operation.
     pub(crate) fn apply_operation_as_sender(
         &mut self,
@@ -410,7 +429,10 @@ impl AccountState {
     pub(crate) fn apply_operation_as_recipient(
         &mut self,
         operation: &Operation,
+        // The rest is for logging purposes.
         key: HashValue,
+        sender_id: AccountId,
+        sequence_number: SequenceNumber,
     ) -> Result<bool, Error> {
         if self.received_keys.contains(&key) {
             // Confirmation already happened.
@@ -431,6 +453,13 @@ impl AccountState {
         }
         self.received_keys.insert(key);
         self.received_log.push(key);
+        let current = self
+            .received_index
+            .entry(sender_id)
+            .or_insert(sequence_number);
+        if sequence_number > *current {
+            *current = sequence_number;
+        }
         Ok(true)
     }
 }

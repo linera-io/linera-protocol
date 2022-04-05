@@ -153,13 +153,16 @@ where
         certificate: Certificate,
     ) -> Result<(), Error> {
         if let Some(recipient) = operation.recipient() {
-            assert_eq!(
-                &certificate.value.confirmed_request().unwrap().operation,
-                &operation
-            );
+            let request = certificate.value.confirmed_request().unwrap();
+            assert_eq!(&request.operation, &operation);
             // Execute the recipient's side of the operation.
             let mut account = self.storage.read_account_or_default(recipient).await?;
-            let need_update = account.apply_operation_as_recipient(&operation, certificate.hash)?;
+            let need_update = account.apply_operation_as_recipient(
+                &operation,
+                certificate.hash,
+                request.account_id.clone(),
+                request.sequence_number,
+            )?;
             if need_update {
                 self.storage.write_certificate(certificate).await?;
                 self.storage.write_account(account).await?;
