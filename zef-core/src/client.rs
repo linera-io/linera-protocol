@@ -16,7 +16,10 @@ use async_trait::async_trait;
 use failure::{bail, ensure};
 use futures::{future, StreamExt};
 use rand::seq::SliceRandom;
-use std::collections::{BTreeMap, HashMap};
+use std::{
+    collections::{BTreeMap, HashMap},
+    time::Duration,
+};
 
 #[cfg(test)]
 #[path = "unit_tests/client_tests.rs"]
@@ -123,7 +126,7 @@ pub struct AccountClientState<AuthorityClient, StorageClient> {
     /// The committee.
     committee: Committee,
     /// How to talk to this committee.
-    authority_clients: HashMap<AuthorityName, AuthorityClient>,
+    authority_clients: Vec<(AuthorityName, AuthorityClient)>,
     /// Expected sequence number for the next certified request.
     /// This is also the number of certificates that we have created.
     next_sequence_number: SequenceNumber,
@@ -134,6 +137,10 @@ pub struct AccountClientState<AuthorityClient, StorageClient> {
 
     /// Support synchronization of received certificates.
     received_certificate_trackers: HashMap<AuthorityName, usize>,
+    /// How much time to wait between attempts when we wait for a cross-shard update.
+    cross_shard_delay: Duration,
+    /// How many times we are willing to retry a request that depends on cross-shard updates.
+    cross_shard_retries: usize,
     /// Manage the execution state and the local storage of the accounts that we are
     /// tracking.
     state: WorkerState<StorageClient>,
@@ -144,9 +151,11 @@ impl<A, S> AccountClientState<A, S> {
         account_id: AccountId,
         key_pair: Option<KeyPair>,
         committee: Committee,
-        authority_clients: HashMap<AuthorityName, A>,
+        authority_clients: Vec<(AuthorityName, A)>,
         storage_client: S,
         next_sequence_number: SequenceNumber,
+        cross_shard_delay: Duration,
+        cross_shard_retries: usize,
     ) -> Self {
         let mut known_key_pairs = BTreeMap::new();
         let identity = match key_pair {
@@ -167,6 +176,8 @@ impl<A, S> AccountClientState<A, S> {
             pending_request: None,
             known_key_pairs,
             received_certificate_trackers: HashMap::new(),
+            cross_shard_delay,
+            cross_shard_retries,
             state,
         }
     }
@@ -439,7 +450,6 @@ where
     {
         let committee = &self.committee;
         let authority_clients = &mut self.authority_clients;
-        // TODO: optional shuffle?
         let mut responses: futures::stream::FuturesUnordered<_> = authority_clients
             .iter_mut()
             .filter_map(|(name, client)| {
@@ -468,6 +478,7 @@ where
                     }
                 }
                 Err(err) => {
+                    eprintln!("{}", err);
                     let entry = error_scores.entry(err.clone()).or_insert(0);
                     *entry += committee.weight(&name);
                     if *entry >= committee.validity_threshold() {
@@ -483,12 +494,75 @@ where
         Err(None)
     }
 
+    async fn send_certificate(
+        name: AuthorityName,
+        client: &mut A,
+        delay: Duration,
+        retries: usize,
+        certificate: Certificate,
+    ) -> Result<AccountInfo, Error> {
+        let mut count = 0;
+        loop {
+            match client.handle_certificate(certificate.clone()).await {
+                Ok(response) => {
+                    response.check(name)?;
+                    // Succeed
+                    eprintln!("{} <- {:?}", name, certificate.value);
+                    return Ok(response.info);
+                }
+                Err(Error::InactiveAccount(_)) if count < retries => {
+                    // Retry
+                    tokio::time::sleep(delay).await;
+                    count += 1;
+                    continue;
+                }
+                Err(e) => {
+                    // Fail
+                    eprintln!("Giving up with {} <- {:?}", name, certificate.value);
+                    return Err(e);
+                }
+            }
+        }
+    }
+
+    async fn send_request_order(
+        name: AuthorityName,
+        client: &mut A,
+        delay: Duration,
+        retries: usize,
+        order: RequestOrder,
+    ) -> Result<AccountInfo, Error> {
+        let mut count = 0;
+        loop {
+            match client.handle_request_order(order.clone()).await {
+                Ok(response) => {
+                    response.check(name)?;
+                    // Succeed
+                    return Ok(response.info);
+                }
+                Err(Error::InactiveAccount(_)) | Err(Error::InvalidOwner) if count < retries => {
+                    // Retry
+                    tokio::time::sleep(delay).await;
+                    count += 1;
+                    continue;
+                }
+                Err(e) => {
+                    // Fail
+                    eprintln!("Giving up with {} <- {:?}", name, order);
+                    return Err(e);
+                }
+            }
+        }
+    }
+
     async fn send_account_information(
         storage_client: &mut S,
         authority_name: AuthorityName,
         authority_client: &mut A,
         mut account_id: AccountId,
         mut target_sequence_number: SequenceNumber,
+        cross_shard_delay: Duration,
+        cross_shard_retries: usize,
     ) -> Result<(), Error> {
         let mut jobs = Vec::new();
         loop {
@@ -506,13 +580,19 @@ where
                         account_id,
                         response.info.next_sequence_number,
                         target_sequence_number,
+                        0,
                     ));
                     break;
                 }
                 Err(Error::InactiveAccount(id)) if id == account_id => match account_id.split() {
                     None => return Err(Error::InactiveAccount(id)),
                     Some((parent_id, number)) => {
-                        jobs.push((account_id, SequenceNumber::from(0), target_sequence_number));
+                        jobs.push((
+                            account_id,
+                            SequenceNumber::from(0),
+                            target_sequence_number,
+                            cross_shard_retries,
+                        ));
                         account_id = parent_id;
                         target_sequence_number = number.try_add_one()?;
                     }
@@ -520,9 +600,9 @@ where
                 Err(e) => return Err(e),
             }
         }
-        for (account_id, initial_sequence_number, target_sequence_number) in jobs.into_iter().rev()
+        for (account_id, initial_sequence_number, target_sequence_number, retries) in
+            jobs.into_iter().rev()
         {
-            // TODO: wait for the account to be created
             // Obtain account state.
             let account = storage_client.read_account_or_default(&account_id).await?;
             // Send the requested certificates in order.
@@ -533,7 +613,14 @@ where
                     .get(number)
                     .expect("certificate should be known locally");
                 let cert = storage_client.read_certificate(*key).await?;
-                authority_client.handle_certificate(cert).await?;
+                Self::send_certificate(
+                    authority_name,
+                    authority_client,
+                    cross_shard_delay,
+                    retries,
+                    cert,
+                )
+                .await?;
             }
         }
         Ok(())
@@ -543,8 +630,10 @@ where
         mut storage_client: S,
         account_id: AccountId,
         action: CommunicateAction,
-        name: AuthorityName,
+        authority_name: AuthorityName,
         authority_client: &mut A,
+        cross_shard_delay: Duration,
+        cross_shard_retries: usize,
     ) -> Result<Option<Vote>, Error> {
         let target_sequence_number = match &action {
             CommunicateAction::SubmitRequestForValidation(order)
@@ -563,10 +652,12 @@ where
         // Update the authority with missing information, if needed.
         Self::send_account_information(
             &mut storage_client,
-            name,
+            authority_name,
             authority_client,
             account_id,
             target_sequence_number,
+            cross_shard_delay,
+            cross_shard_retries,
             // TODO: target_balance
         )
         .await?;
@@ -574,35 +665,45 @@ where
         match action {
             CommunicateAction::SubmitRequestForValidation(order)
             | CommunicateAction::SubmitRequestForConfirmation(order) => {
-                let result = authority_client.handle_request_order(order).await;
-                match result {
-                    Ok(response) => {
-                        response.check(name)?;
-                        match response.info.manager.pending() {
-                            Some(vote) => {
-                                vote.check(name)?;
-                                return Ok(Some(vote.clone()));
-                            }
-                            None => return Err(Error::ClientErrorWhileProcessingRequestOrder),
-                        }
+                let info = Self::send_request_order(
+                    authority_name,
+                    authority_client,
+                    cross_shard_delay,
+                    cross_shard_retries,
+                    order,
+                )
+                .await?;
+                match info.manager.pending() {
+                    Some(vote) => {
+                        vote.check(authority_name)?;
+                        return Ok(Some(vote.clone()));
                     }
-                    Err(err) => return Err(err),
+                    None => return Err(Error::ClientErrorWhileProcessingRequestOrder),
                 }
             }
             CommunicateAction::FinalizeRequest(certificate) => {
-                let result = authority_client.handle_certificate(certificate).await;
-                match result {
-                    Ok(response) => {
-                        response.check(name)?;
-                        match response.info.manager.pending() {
-                            Some(vote) => {
-                                vote.check(name)?;
-                                return Ok(Some(vote.clone()));
-                            }
-                            None => return Err(Error::ClientErrorWhileProcessingRequestOrder),
-                        }
+                // The only cause for a retry is that the first certificate of a newly opened account.
+                let cross_shard_retries = {
+                    if target_sequence_number == SequenceNumber::default() {
+                        cross_shard_retries
+                    } else {
+                        0
                     }
-                    Err(err) => return Err(err),
+                };
+                let info = Self::send_certificate(
+                    authority_name,
+                    authority_client,
+                    cross_shard_delay,
+                    cross_shard_retries,
+                    certificate,
+                )
+                .await?;
+                match info.manager.pending() {
+                    Some(vote) => {
+                        vote.check(authority_name)?;
+                        return Ok(Some(vote.clone()));
+                    }
+                    None => return Err(Error::ClientErrorWhileProcessingRequestOrder),
                 }
             }
             CommunicateAction::SynchronizeNextSequenceNumber(_) => (),
@@ -618,6 +719,8 @@ where
         action: CommunicateAction,
     ) -> Result<Option<Certificate>, failure::Error> {
         let storage_client = self.state.storage_client().clone();
+        let cross_shard_delay = self.cross_shard_delay;
+        let cross_shard_retries = self.cross_shard_retries;
         let result = self
             .communicate_with_quorum(|name, authority_client| {
                 let action = action.clone();
@@ -630,6 +733,8 @@ where
                         action,
                         name,
                         authority_client,
+                        cross_shard_delay,
+                        cross_shard_retries,
                     )
                     .await
                 })

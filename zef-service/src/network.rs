@@ -11,7 +11,7 @@ use crate::network_server::BenchmarkServer;
 use bytes::Bytes;
 use futures::{channel::mpsc, future::FutureExt, sink::SinkExt, stream::StreamExt};
 use log::*;
-use std::io;
+use std::{io, time::Duration};
 use structopt::StructOpt;
 use tokio::time;
 
@@ -100,7 +100,7 @@ where
         base_address: String,
         base_port: u32,
         cross_shard_max_retries: usize,
-        cross_shard_retry_delay_ms: u64,
+        cross_shard_retry_delay: Duration,
         this_shard: ShardId,
         mut receiver: mpsc::Receiver<(Vec<u8>, ShardId)>,
     ) {
@@ -122,10 +122,7 @@ where
                                 "Failed to send cross-shard query ({}-th retry): {}",
                                 i, error
                             );
-                            tokio::time::sleep(tokio::time::Duration::from_millis(
-                                cross_shard_retry_delay_ms,
-                            ))
-                            .await;
+                            tokio::time::sleep(cross_shard_retry_delay).await;
                         } else {
                             error!(
                                 "Failed to send cross-shard query (giving up after {} retries): {}",
@@ -168,7 +165,7 @@ where
             self.base_address.clone(),
             self.base_port,
             self.cross_shard_config.max_retries,
-            self.cross_shard_config.retry_delay_ms,
+            Duration::from_millis(self.cross_shard_config.retry_delay_ms),
             self.shard_id,
             cross_shard_receiver,
         ));
