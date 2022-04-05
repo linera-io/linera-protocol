@@ -30,8 +30,10 @@ struct ClientContext {
     wallet_state: WalletState,
     storage_client: Storage,
     buffer_size: usize,
-    send_timeout: std::time::Duration,
-    recv_timeout: std::time::Duration,
+    send_timeout: Duration,
+    recv_timeout: Duration,
+    cross_shard_delay: Duration,
+    cross_shard_retries: usize,
 }
 
 impl ClientContext {
@@ -60,23 +62,25 @@ impl ClientContext {
                     .unwrap()
             }
         };
-        let buffer_size = options.buffer_size;
-        let send_timeout = Duration::from_micros(options.send_timeout);
-        let recv_timeout = Duration::from_micros(options.recv_timeout);
+        let send_timeout = Duration::from_micros(options.send_timeout_us);
+        let recv_timeout = Duration::from_micros(options.recv_timeout_us);
+        let cross_shard_delay = Duration::from_micros(options.cross_shard_delay_ms);
 
         ClientContext {
             committee_config,
             wallet_state_path,
             wallet_state,
             storage_client,
+            buffer_size: options.buffer_size,
             send_timeout,
             recv_timeout,
-            buffer_size,
+            cross_shard_delay,
+            cross_shard_retries: options.cross_shard_retries,
         }
     }
 
-    fn make_authority_clients(&self) -> HashMap<AuthorityName, network::Client> {
-        let mut authority_clients = HashMap::new();
+    fn make_authority_clients(&self) -> Vec<(AuthorityName, network::Client)> {
+        let mut authority_clients = Vec::new();
         for config in &self.committee_config.authorities {
             let config = config.clone();
             let client = network::Client::new(
@@ -88,7 +92,7 @@ impl ClientContext {
                 self.send_timeout,
                 self.recv_timeout,
             );
-            authority_clients.insert(config.name, client);
+            authority_clients.push((config.name, client));
         }
         authority_clients
     }
@@ -124,6 +128,8 @@ impl ClientContext {
             authority_clients,
             self.storage_client.clone(),
             account.next_sequence_number,
+            self.cross_shard_delay,
+            self.cross_shard_retries,
         )
     }
 
@@ -146,6 +152,8 @@ impl ClientContext {
             authority_clients,
             self.storage_client.clone(),
             account.next_sequence_number,
+            Duration::default(),
+            0,
         );
         client.receive_certificate(certificate).await?;
         self.update_account_from_state(&mut client).await;
@@ -365,15 +373,22 @@ struct ClientOptions {
 
     /// Timeout for sending queries (us)
     #[structopt(long, default_value = "4000000")]
-    send_timeout: u64,
+    send_timeout_us: u64,
 
     /// Timeout for receiving responses (us)
     #[structopt(long, default_value = "4000000")]
-    recv_timeout: u64,
+    recv_timeout_us: u64,
 
     /// Maximum size of datagrams received and sent (bytes)
     #[structopt(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE)]
     buffer_size: usize,
+
+    /// Time between attempts while waiting on cross-shard updates (ms)
+    #[structopt(long, default_value = "4000")]
+    cross_shard_delay_ms: u64,
+
+    #[structopt(long, default_value = "10")]
+    cross_shard_retries: usize,
 
     /// Subcommands.
     #[structopt(subcommand)]
