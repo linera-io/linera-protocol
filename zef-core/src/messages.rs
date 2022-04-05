@@ -277,6 +277,10 @@ impl RequestOrder {
 
     // TODO: this API is not great
     pub fn check(&self, manager: &AccountManager) -> Result<(), Error> {
+        ensure!(
+            manager.is_active(),
+            Error::InactiveAccount(self.request.account_id.clone())
+        );
         ensure!(manager.has_owner(&self.owner), Error::InvalidOwner);
         self.signature.check(&self.request, self.owner)
     }
