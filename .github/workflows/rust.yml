@@ -23,8 +23,10 @@ jobs:
         rustup component add clippy --toolchain 1.58.1-x86_64-unknown-linux-gnu
     - name: Build
       run: cargo build --verbose
-    - name: Run tests
+    - name: Run unit tests
       run: cargo test --verbose
+    - name: Run integration tests
+      run: cargo test --verbose -- --ignored
     - name: Clippy
       run: cargo clippy --all-targets
     - name: Rustfmt
