@@ -39,7 +39,7 @@ impl AuthorityClient for LocalAuthorityClient {
         let authority = self.0.clone();
         let mut authority = authority.lock().await;
         if authority.is_faulty {
-            Err(Error::InvalidOwner)
+            Err(Error::SequenceOverflow)
         } else {
             authority.state.handle_request_order(order).await
         }
@@ -88,7 +88,7 @@ struct TestBuilder {
     committee: Committee,
     genesis_store: InMemoryStoreClient,
     faulty_authorities: HashSet<AuthorityName>,
-    authority_clients: HashMap<AuthorityName, LocalAuthorityClient>,
+    authority_clients: Vec<(AuthorityName, LocalAuthorityClient)>,
     authority_stores: HashMap<AuthorityName, InMemoryStoreClient>,
     account_client_stores: Vec<InMemoryStoreClient>,
 }
@@ -103,7 +103,7 @@ impl TestBuilder {
             key_pairs.push(key_pair);
         }
         let committee = Committee::new(voting_rights);
-        let mut authority_clients = HashMap::new();
+        let mut authority_clients = Vec::new();
         let mut authority_stores = HashMap::new();
         let mut faulty_authorities = HashSet::new();
         for (i, key_pair) in key_pairs.into_iter().enumerate() {
@@ -116,9 +116,10 @@ impl TestBuilder {
             } else {
                 LocalAuthorityClient::new(false, state)
             };
-            authority_clients.insert(name, authority);
+            authority_clients.push((name, authority));
             authority_stores.insert(name, store);
         }
+        eprintln!("faulty authorities: {:?}", faulty_authorities);
         Self {
             committee,
             genesis_store: InMemoryStoreClient::default(),
@@ -174,6 +175,8 @@ impl TestBuilder {
             self.authority_clients.clone(),
             store,
             sequence_number,
+            std::time::Duration::from_millis(500),
+            10,
         )
     }
 
@@ -323,7 +326,29 @@ async fn test_share_ownership() {
 }
 
 #[tokio::test]
-async fn test_open_account() {
+async fn test_open_account_then_close_it() {
+    let mut builder = TestBuilder::new(4, 1);
+    let mut sender = builder
+        .add_initial_account(dbg_account(1), Balance::from(4))
+        .await;
+    let new_key_pair = KeyPair::generate();
+    let new_pubk = new_key_pair.public();
+    let new_id = AccountId::new(vec![1, 0].into_iter().map(SequenceNumber::from).collect());
+    // Open the new account.
+    sender.open_account(new_pubk).await.unwrap();
+    assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
+    assert!(sender.pending_request.is_none());
+    assert!(sender.key_pair().is_ok());
+    // Make a client to try the new account.
+    let mut client = builder
+        .make_client(new_id, new_key_pair, SequenceNumber::from(0))
+        .await;
+    assert_eq!(client.query_safe_balance().await, Balance::from(0));
+    client.close_account().await.unwrap();
+}
+
+#[tokio::test]
+async fn test_open_account_after_transfer() {
     let mut builder = TestBuilder::new(4, 1);
     let mut sender = builder
         .add_initial_account(dbg_account(1), Balance::from(4))
@@ -332,10 +357,10 @@ async fn test_open_account() {
     let new_pubk = new_key_pair.public();
     let new_id = AccountId::new(vec![1, 1].into_iter().map(SequenceNumber::from).collect());
     // Transfer before creating the account.
-    assert!(sender
+    sender
         .transfer_to_account(Amount::from(3), new_id.clone(), UserData::default())
         .await
-        .is_ok());
+        .unwrap();
     // Open the new account.
     let certificate = sender.open_account(new_pubk).await.unwrap();
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(2));
@@ -354,6 +379,40 @@ async fn test_open_account() {
             ..
         }} if &new_id == id
     ));
+    // Make a client to try the new account.
+    let mut client = builder
+        .make_client(new_id, new_key_pair, SequenceNumber::from(0))
+        .await;
+    assert_eq!(client.query_safe_balance().await, Balance::from(3));
+    assert_eq!(
+        client.synchronize_balance().await.unwrap(),
+        Balance::from(3)
+    );
+    client
+        .transfer_to_account(Amount::from(3), dbg_account(3), UserData::default())
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn test_open_account_before_transfer() {
+    let mut builder = TestBuilder::new(4, 0); // TODO: 4, 1
+    let mut sender = builder
+        .add_initial_account(dbg_account(1), Balance::from(4))
+        .await;
+    let new_key_pair = KeyPair::generate();
+    let new_pubk = new_key_pair.public();
+    let new_id = AccountId::new(vec![1, 0].into_iter().map(SequenceNumber::from).collect());
+    // Open the new account.
+    sender.open_account(new_pubk).await.unwrap();
+    // Transfer after creating the account.
+    sender
+        .transfer_to_account(Amount::from(3), new_id.clone(), UserData::default())
+        .await
+        .unwrap();
+    assert_eq!(sender.next_sequence_number, SequenceNumber::from(2));
+    assert!(sender.pending_request.is_none());
+    assert!(sender.key_pair().is_ok());
     // Make a client to try the new account.
     let mut client = builder
         .make_client(new_id, new_key_pair, SequenceNumber::from(0))
