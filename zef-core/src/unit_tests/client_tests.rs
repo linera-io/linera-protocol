@@ -396,7 +396,7 @@ async fn test_open_account_after_transfer() {
 
 #[tokio::test]
 async fn test_open_account_before_transfer() {
-    let mut builder = TestBuilder::new(4, 0); // TODO: 4, 1
+    let mut builder = TestBuilder::new(4, 1);
     let mut sender = builder
         .add_initial_account(dbg_account(1), Balance::from(4))
         .await;
@@ -474,7 +474,7 @@ async fn test_initiating_valid_transfer_too_many_faults() {
 
 #[tokio::test]
 async fn test_bidirectional_transfer() {
-    let mut builder = TestBuilder::new(4, 0); // TODO: 4, 1
+    let mut builder = TestBuilder::new(4, 1);
     let mut client1 = builder
         .add_initial_account(dbg_account(1), Balance::from(3))
         .await;
@@ -562,7 +562,7 @@ async fn test_receiving_unconfirmed_transfer() {
 
 #[tokio::test]
 async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
-    let mut builder = TestBuilder::new(4, 0); // TODO: 4, 1
+    let mut builder = TestBuilder::new(4, 1);
     let mut client1 = builder
         .add_initial_account(dbg_account(1), Balance::from(3))
         .await;
@@ -594,24 +594,29 @@ async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
     client1
         .communicate_account_updates(
             client1.account_id.clone(),
-            CommunicateAction::SynchronizeNextSequenceNumber(client1.next_sequence_number),
+            CommunicateAction::AdvanceToNextSequenceNumber(client1.next_sequence_number),
         )
         .await
         .unwrap();
-    // Requesting funds from client2 to client3 without confirmation.
-    let certificate = client2
+    // Sending an unchecked transfer request from client2 to client3 fails because one
+    // honest authority is lagging and client2 doesn't know about the missing received
+    // certificate.
+    assert!(client2
         .transfer_to_account_unsafe_unconfirmed(
             Amount::from(2),
             client3.account_id.clone(),
             UserData::default(),
         )
         .await
-        .unwrap();
+        .is_err());
+    // Retrying works because it starts by investigating possible missing received
+    // certificates.
+    let certificate = client2.retry_pending_request().await.unwrap().unwrap();
     // Requests were executed locally.
     assert_eq!(client1.balance().await, Balance::from(1));
     assert_eq!(client1.next_sequence_number, SequenceNumber::from(2));
     assert!(client1.pending_request.is_none());
-    assert_eq!(client2.balance().await, Balance::from(-2));
+    assert_eq!(client2.balance().await, Balance::from(0));
     assert_eq!(client2.next_sequence_number, SequenceNumber::from(1));
     assert!(client2.pending_request.is_none());
     // Last one was not confirmed remotely, hence a conservative balance.

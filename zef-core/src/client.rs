@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    account::AccountManager,
+    account::{AccountManager, AccountState},
     authority::{Authority, Worker, WorkerState},
     base_types::*,
     committee::Committee,
@@ -110,6 +110,12 @@ pub trait AccountClient {
     /// certificates that were locally processed by `receive_from_account`).
     async fn synchronize_balance(&mut self) -> Result<Balance, failure::Error>;
 
+    /// Attempt to resume an operation that previously failed.
+    async fn retry_pending_request(&mut self) -> Result<Option<Certificate>, failure::Error>;
+
+    /// Attempt to resume an operation that previously failed.
+    async fn clear_pending_request(&mut self);
+
     /// Find the highest balance that is provably backed by at least one honest
     /// (sufficiently up-to-date) authority. This is a conservative approximation.
     async fn query_safe_balance(&mut self) -> Balance;
@@ -147,6 +153,7 @@ pub struct AccountClientState<AuthorityClient, StorageClient> {
 }
 
 impl<A, S> AccountClientState<A, S> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         account_id: AccountId,
         key_pair: Option<KeyPair>,
@@ -270,7 +277,7 @@ enum CommunicateAction {
     SubmitRequestForConfirmation(RequestOrder),
     SubmitRequestForValidation(RequestOrder),
     FinalizeRequest(Certificate),
-    SynchronizeNextSequenceNumber(SequenceNumber),
+    AdvanceToNextSequenceNumber(SequenceNumber),
 }
 
 impl<A, S> AccountClientState<A, S>
@@ -478,7 +485,6 @@ where
                     }
                 }
                 Err(err) => {
-                    eprintln!("{}", err);
                     let entry = error_scores.entry(err.clone()).or_insert(0);
                     *entry += committee.weight(&name);
                     if *entry >= committee.validity_threshold() {
@@ -507,7 +513,6 @@ where
                 Ok(response) => {
                     response.check(name)?;
                     // Succeed
-                    eprintln!("{} <- {:?}", name, certificate.value);
                     return Ok(response.info);
                 }
                 Err(Error::InactiveAccount(_)) if count < retries => {
@@ -518,7 +523,6 @@ where
                 }
                 Err(e) => {
                     // Fail
-                    eprintln!("Giving up with {} <- {:?}", name, certificate.value);
                     return Err(e);
                 }
             }
@@ -540,7 +544,7 @@ where
                     // Succeed
                     return Ok(response.info);
                 }
-                Err(Error::InactiveAccount(_)) | Err(Error::InvalidOwner) if count < retries => {
+                Err(Error::InactiveAccount(_)) if count < retries => {
                     // Retry
                     tokio::time::sleep(delay).await;
                     count += 1;
@@ -548,7 +552,6 @@ where
                 }
                 Err(e) => {
                     // Fail
-                    eprintln!("Giving up with {} <- {:?}", name, order);
                     return Err(e);
                 }
             }
@@ -626,6 +629,31 @@ where
         Ok(())
     }
 
+    async fn send_account_information_as_a_receiver(
+        storage_client: &mut S,
+        authority_name: AuthorityName,
+        authority_client: &mut A,
+        account_id: AccountId,
+        cross_shard_delay: Duration,
+        cross_shard_retries: usize,
+    ) -> Result<(), Error> {
+        // Obtain account state.
+        let account = storage_client.read_account_or_default(&account_id).await?;
+        for (sender_id, sequence_number) in account.received_index.iter() {
+            Self::send_account_information(
+                storage_client,
+                authority_name,
+                authority_client,
+                sender_id.clone(),
+                sequence_number.try_add_one()?,
+                cross_shard_delay,
+                cross_shard_retries,
+            )
+            .await?;
+        }
+        Ok(())
+    }
+
     async fn send_account_update(
         mut storage_client: S,
         account_id: AccountId,
@@ -647,32 +675,60 @@ where
                     .unwrap()
                     .sequence_number
             }
-            CommunicateAction::SynchronizeNextSequenceNumber(seq) => *seq,
+            CommunicateAction::AdvanceToNextSequenceNumber(seq) => *seq,
         };
         // Update the authority with missing information, if needed.
         Self::send_account_information(
             &mut storage_client,
             authority_name,
             authority_client,
-            account_id,
+            account_id.clone(),
             target_sequence_number,
             cross_shard_delay,
             cross_shard_retries,
-            // TODO: target_balance
         )
         .await?;
         // Send the request order (if any) and return a vote.
         match action {
             CommunicateAction::SubmitRequestForValidation(order)
             | CommunicateAction::SubmitRequestForConfirmation(order) => {
-                let info = Self::send_request_order(
+                let result = Self::send_request_order(
                     authority_name,
                     authority_client,
                     cross_shard_delay,
                     cross_shard_retries,
-                    order,
+                    order.clone(),
                 )
-                .await?;
+                .await;
+                let info = match result {
+                    Ok(info) => info,
+                    Err(e) if AccountState::is_retriable_validation_error(&order.request, &e) => {
+                        // Some received certificates may be missing for this authority
+                        // (e.g. to make the balance sufficient) so we are going to
+                        // synchronize them now.
+                        Self::send_account_information_as_a_receiver(
+                            &mut storage_client,
+                            authority_name,
+                            authority_client,
+                            account_id,
+                            cross_shard_delay,
+                            cross_shard_retries,
+                        )
+                        .await?;
+                        // Now retry the request.
+                        Self::send_request_order(
+                            authority_name,
+                            authority_client,
+                            cross_shard_delay,
+                            cross_shard_retries,
+                            order,
+                        )
+                        .await?
+                    }
+                    Err(e) => {
+                        return Err(e);
+                    }
+                };
                 match info.manager.pending() {
                     Some(vote) => {
                         vote.check(authority_name)?;
@@ -706,7 +762,7 @@ where
                     None => return Err(Error::ClientErrorWhileProcessingRequestOrder),
                 }
             }
-            CommunicateAction::SynchronizeNextSequenceNumber(_) => (),
+            CommunicateAction::AdvanceToNextSequenceNumber(_) => (),
         }
         Ok(None)
     }
@@ -744,7 +800,7 @@ where
             Ok(votes) => votes,
             Err(Some(Error::InactiveAccount(id)))
                 if id == account_id
-                    && matches!(action, CommunicateAction::SynchronizeNextSequenceNumber(_)) =>
+                    && matches!(action, CommunicateAction::AdvanceToNextSequenceNumber(_)) =>
             {
                 // The account is visibly not active (yet or any more) so there is no need
                 // to synchronize sequence numbers.
@@ -793,7 +849,7 @@ where
                 let certificate = Certificate::new(Value::Confirmed { request }, signatures);
                 Ok(Some(certificate))
             }
-            CommunicateAction::SynchronizeNextSequenceNumber(_) => Ok(None),
+            CommunicateAction::AdvanceToNextSequenceNumber(_) => Ok(None),
         }
     }
 
@@ -856,7 +912,11 @@ where
                         query_received_certificates_excluding_first_nth: Some(tracker),
                     };
                     let response = client.handle_account_info_query(query).await?;
-                    // Quick verifications.
+                    // TODO: These quick verifications are not enough to discard (1) all
+                    // invalid certificates or (2) spammy received certificates. (1): a
+                    // dishonest authority could try to make us work by producing
+                    // good-looking certificates with high sequence numbers. (2): Other
+                    // users could send us a lot of uninteresting transactions.
                     response.check(name)?;
                     for certificate in &response.info.queried_received_certificates {
                         let request = certificate
@@ -1038,7 +1098,7 @@ where
         if with_confirmation {
             self.communicate_account_updates(
                 self.account_id.clone(),
-                CommunicateAction::SynchronizeNextSequenceNumber(self.next_sequence_number),
+                CommunicateAction::AdvanceToNextSequenceNumber(self.next_sequence_number),
             )
             .await?;
         }
@@ -1088,15 +1148,30 @@ where
     }
 
     async fn synchronize_balance(&mut self) -> Result<Balance, failure::Error> {
-        if let Some(request) = &self.pending_request {
-            // Finish executing the previous request.
-            let request = request.clone();
-            self.execute_request(request, /* with_confirmation */ false)
-                .await?;
-        }
-        self.synchronize_sent_certificates().await?;
         self.synchronize_received_certificates().await?;
+        self.synchronize_sent_certificates().await?;
         Ok(self.balance().await)
+    }
+
+    async fn retry_pending_request(&mut self) -> Result<Option<Certificate>, failure::Error> {
+        self.synchronize_received_certificates().await?;
+        self.synchronize_sent_certificates().await?;
+        match &self.pending_request {
+            Some(request) => {
+                // Finish executing the previous request.
+                let mut request = request.clone();
+                request.round = self.next_round().await;
+                let certificate = self
+                    .execute_request(request, /* with_confirmation */ true)
+                    .await?;
+                Ok(Some(certificate))
+            }
+            None => Ok(None),
+        }
+    }
+
+    async fn clear_pending_request(&mut self) {
+        self.pending_request = None;
     }
 
     async fn receive_certificate(
@@ -1118,12 +1193,10 @@ where
             .await?;
         // Process the received operation.
         self.process_certificate(certificate).await?;
-        // Make sure a quorum of authorities are up-to-date.
+        // Make sure a quorum of authorities are up-to-date for data availability.
         self.communicate_account_updates(
             account_id.clone(),
-            CommunicateAction::SynchronizeNextSequenceNumber(
-                request.sequence_number.try_add_one()?,
-            ),
+            CommunicateAction::AdvanceToNextSequenceNumber(request.sequence_number.try_add_one()?),
         )
         .await?;
         Ok(())
