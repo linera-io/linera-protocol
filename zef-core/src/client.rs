@@ -118,7 +118,7 @@ pub trait AccountClient {
 
     /// Find the highest balance that is provably backed by at least one honest
     /// (sufficiently up-to-date) authority. This is a conservative approximation.
-    async fn query_safe_balance(&mut self) -> Balance;
+    async fn query_safe_balance(&mut self) -> Result<Balance, Error>;
 }
 
 /// Reference implementation of the `AccountClient` trait using many instances of some
@@ -1112,7 +1112,7 @@ where
     A: AuthorityClient + Send + Sync + Clone + 'static,
     S: StorageClient + Clone + 'static,
 {
-    async fn query_safe_balance(&mut self) -> Balance {
+    async fn query_safe_balance(&mut self) -> Result<Balance, Error> {
         let query = AccountInfoQuery {
             account_id: self.account_id.clone(),
             /// This is necessary to make sure that the response is conservative.
@@ -1121,12 +1121,13 @@ where
             query_received_certificates_excluding_first_nth: None,
         };
         let infos = self.broadcast_account_info_query(query).await;
-        self.committee.get_validity_lower_bound(
+        let value = self.committee.get_validity_lower_bound(
             infos
                 .into_iter()
                 .map(|(name, info)| (name, info.balance))
                 .collect(),
-        )
+        );
+        Ok(value)
     }
 
     async fn transfer_to_account(
