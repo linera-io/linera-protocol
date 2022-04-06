@@ -14,8 +14,6 @@ mod authority_tests;
 
 /// State of a worker in an authority or a client.
 pub struct WorkerState<StorageClient> {
-    /// Committee of this instance.
-    committee: Committee,
     /// The signature key pair of the authority. The key may be missing for replicas
     /// without voting rights (possibly with a partial view of accounts).
     key_pair: Option<KeyPair>,
@@ -83,6 +81,10 @@ where
                 current_sequence_number: account.next_sequence_number,
             });
         }
+        // Verify the certificate. Returns a catch-all error to make client code more robust.
+        certificate
+            .check(account.committee.as_ref().expect("account is active"))
+            .map_err(|_| Error::InvalidCertificate)?;
         // Load pending cross-shard requests.
         let mut continuation = self
             .storage
@@ -143,6 +145,10 @@ where
             .storage
             .read_active_account(&request.account_id)
             .await?;
+        // Verify the certificate. Returns a catch-all error to make client code more robust.
+        certificate
+            .check(account.committee.as_ref().expect("account is active"))
+            .map_err(|_| Error::InvalidCertificate)?;
         if account
             .manager
             .check_validated_request(account.next_sequence_number, &request)?
@@ -227,10 +233,6 @@ where
         &mut self,
         certificate: Certificate,
     ) -> Result<(AccountInfoResponse, Vec<CrossShardRequest>), Error> {
-        // Verify the certificate. Returns a catch-all error to make client code more robust.
-        certificate
-            .check(&self.committee)
-            .map_err(|_| Error::InvalidCertificate)?;
         // Process the order.
         match &certificate.value {
             Value::Validated { request } => {
@@ -322,12 +324,8 @@ where
 }
 
 impl<Client> WorkerState<Client> {
-    pub fn new(committee: Committee, key_pair: Option<KeyPair>, storage: Client) -> Self {
-        WorkerState {
-            committee,
-            key_pair,
-            storage,
-        }
+    pub fn new(key_pair: Option<KeyPair>, storage: Client) -> Self {
+        WorkerState { key_pair, storage }
     }
 }
 

@@ -109,7 +109,7 @@ impl TestBuilder {
         for (i, key_pair) in key_pairs.into_iter().enumerate() {
             let name = key_pair.public();
             let store = InMemoryStoreClient::default();
-            let state = WorkerState::new(committee.clone(), Some(key_pair), store.clone());
+            let state = WorkerState::new(Some(key_pair), store.clone());
             let authority = if i < with_faulty_authorities {
                 faulty_authorities.insert(name);
                 LocalAuthorityClient::new(true, state)
