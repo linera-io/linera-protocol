@@ -129,8 +129,6 @@ pub struct AccountClientState<AuthorityClient, StorageClient> {
     account_id: AccountId,
     /// Current identity as an owner.
     identity: Option<AccountOwner>,
-    /// The committee.
-    committee: Committee,
     /// How to talk to this committee.
     authority_clients: Vec<(AuthorityName, AuthorityClient)>,
     /// Expected sequence number for the next certified request.
@@ -157,7 +155,6 @@ impl<A, S> AccountClientState<A, S> {
     pub fn new(
         account_id: AccountId,
         key_pair: Option<KeyPair>,
-        committee: Committee,
         authority_clients: Vec<(AuthorityName, A)>,
         storage_client: S,
         next_sequence_number: SequenceNumber,
@@ -177,7 +174,6 @@ impl<A, S> AccountClientState<A, S> {
         Self {
             account_id,
             identity,
-            committee,
             authority_clients,
             next_sequence_number,
             pending_request: None,
@@ -242,6 +238,21 @@ where
         };
         let response = self.state.handle_account_info_query(query).await.unwrap();
         response.info.manager
+    }
+
+    async fn committee(&mut self) -> Result<Committee, Error> {
+        let query = AccountInfoQuery {
+            account_id: self.account_id.clone(),
+            check_next_sequence_number: None,
+            query_committee: true,
+            query_sent_certificates_in_range: None,
+            query_received_certificates_excluding_first_nth: None,
+        };
+        let response = self.state.handle_account_info_query(query).await.unwrap();
+        response
+            .info
+            .queried_committee
+            .ok_or_else(|| Error::InactiveAccount(self.account_id.clone()))
     }
 
     async fn has_multi_owners(&mut self) -> bool {
@@ -455,12 +466,12 @@ where
     /// Execute a sequence of actions in parallel for a quorum of authorities.
     async fn communicate_with_quorum<'a, V, F>(
         &'a mut self,
+        committee: &Committee,
         execute: F,
     ) -> Result<Vec<V>, Option<Error>>
     where
         F: Fn(AuthorityName, &'a mut A) -> future::BoxFuture<'a, Result<V, Error>> + Clone,
     {
-        let committee = &self.committee;
         let authority_clients = &mut self.authority_clients;
         let mut responses: futures::stream::FuturesUnordered<_> = authority_clients
             .iter_mut()
@@ -780,6 +791,7 @@ where
     /// The corresponding sequence numbers should be consecutive and increasing.
     async fn communicate_account_updates(
         &mut self,
+        committee: &Committee,
         account_id: AccountId,
         action: CommunicateAction,
     ) -> Result<Option<Certificate>, failure::Error> {
@@ -787,7 +799,7 @@ where
         let cross_shard_delay = self.cross_shard_delay;
         let cross_shard_retries = self.cross_shard_retries;
         let result = self
-            .communicate_with_quorum(|name, authority_client| {
+            .communicate_with_quorum(committee, |name, authority_client| {
                 let action = action.clone();
                 let storage_client = storage_client.clone();
                 let account_id = account_id.clone();
@@ -907,9 +919,10 @@ where
     /// Attempt to download new received certificates.
     async fn synchronize_received_certificates(&mut self) -> Result<(), failure::Error> {
         let account_id = self.account_id.clone();
+        let committee = self.committee().await?;
         let trackers = self.received_certificate_trackers.clone();
         let result = self
-            .communicate_with_quorum(|name, client| {
+            .communicate_with_quorum(&committee, |name, client| {
                 let account_id = &account_id;
                 let tracker = *trackers.get(&name).unwrap_or(&0);
                 Box::pin(async move {
@@ -1070,11 +1083,13 @@ where
         let key_pair = self.key_pair()?;
         let order = RequestOrder::new(request, key_pair);
         // Send the query.
+        let committee = self.committee().await?;
         let final_certificate = {
             if self.has_multi_owners().await {
                 // Need two-round trips.
                 let certificate = self
                     .communicate_account_updates(
+                        &committee,
                         self.account_id.clone(),
                         CommunicateAction::SubmitRequestForValidation(order.clone()),
                     )
@@ -1082,6 +1097,7 @@ where
                     .expect("a certificate");
                 assert_eq!(certificate.value.validated_request(), Some(&order.request));
                 self.communicate_account_updates(
+                    &committee,
                     self.account_id.clone(),
                     CommunicateAction::FinalizeRequest(certificate),
                 )
@@ -1090,6 +1106,7 @@ where
             } else {
                 // Only one round-trip is needed
                 self.communicate_account_updates(
+                    &committee,
                     self.account_id.clone(),
                     CommunicateAction::SubmitRequestForConfirmation(order.clone()),
                 )
@@ -1107,10 +1124,23 @@ where
         // Communicate the new certificate now if needed.
         if with_confirmation {
             self.communicate_account_updates(
+                &committee,
                 self.account_id.clone(),
                 CommunicateAction::AdvanceToNextSequenceNumber(self.next_sequence_number),
             )
             .await?;
+            if let Ok(new_committee) = self.committee().await {
+                if new_committee != committee {
+                    // If the configuration just changed, communicate to the new committee as well.
+                    // (This is actually more important that updating the previous committee.)
+                    self.communicate_account_updates(
+                        &new_committee,
+                        self.account_id.clone(),
+                        CommunicateAction::AdvanceToNextSequenceNumber(self.next_sequence_number),
+                    )
+                    .await?;
+                }
+            }
         }
         Ok(final_certificate)
     }
@@ -1123,6 +1153,7 @@ where
     S: StorageClient + Clone + 'static,
 {
     async fn query_safe_balance(&mut self) -> Result<Balance, Error> {
+        let committee = self.committee().await?;
         let query = AccountInfoQuery {
             account_id: self.account_id.clone(),
             /// This is necessary to make sure that the response is conservative.
@@ -1132,7 +1163,7 @@ where
             query_received_certificates_excluding_first_nth: None,
         };
         let infos = self.broadcast_account_info_query(query).await;
-        let value = self.committee.get_validity_lower_bound(
+        let value = committee.get_validity_lower_bound(
             infos
                 .into_iter()
                 .map(|(name, info)| (name, info.balance))
@@ -1205,8 +1236,11 @@ where
             .await?;
         // Process the received operation.
         self.process_certificate(certificate).await?;
-        // Make sure a quorum of authorities are up-to-date for data availability.
+        // Make sure a quorum of authorities (according to our committee) are up-to-date
+        // for data availability.
+        let committee = self.committee().await?;
         self.communicate_account_updates(
+            &committee,
             account_id.clone(),
             CommunicateAction::AdvanceToNextSequenceNumber(request.sequence_number.try_add_one()?),
         )

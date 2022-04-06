@@ -177,7 +177,6 @@ impl TestBuilder {
         AccountClientState::new(
             account_id,
             Some(key_pair),
-            self.committee.clone(),
             self.authority_clients.clone(),
             store,
             sequence_number,
@@ -341,7 +340,7 @@ async fn test_open_account_then_close_it() {
     let new_pubk = new_key_pair.public();
     let new_id = AccountId::new(vec![1, 0].into_iter().map(SequenceNumber::from).collect());
     // Open the new account.
-    sender.open_account(new_pubk).await.unwrap();
+    let certificate = sender.open_account(new_pubk).await.unwrap();
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
     assert!(sender.pending_request.is_none());
     assert!(sender.key_pair().is_ok());
@@ -349,6 +348,11 @@ async fn test_open_account_then_close_it() {
     let mut client = builder
         .make_client(new_id, new_key_pair, SequenceNumber::from(0))
         .await;
+    client.receive_certificate(certificate).await.unwrap();
+    assert_eq!(
+        client.synchronize_balance().await.unwrap(),
+        Balance::from(0)
+    );
     assert_eq!(client.query_safe_balance().await.unwrap(), Balance::from(0));
     client.close_account().await.unwrap();
 }
@@ -389,6 +393,7 @@ async fn test_open_account_after_transfer() {
     let mut client = builder
         .make_client(new_id, new_key_pair, SequenceNumber::from(0))
         .await;
+    client.receive_certificate(certificate).await.unwrap();
     assert_eq!(client.query_safe_balance().await.unwrap(), Balance::from(3));
     assert_eq!(
         client.synchronize_balance().await.unwrap(),
@@ -410,7 +415,7 @@ async fn test_open_account_before_transfer() {
     let new_pubk = new_key_pair.public();
     let new_id = AccountId::new(vec![1, 0].into_iter().map(SequenceNumber::from).collect());
     // Open the new account.
-    sender.open_account(new_pubk).await.unwrap();
+    let certificate = sender.open_account(new_pubk).await.unwrap();
     // Transfer after creating the account.
     sender
         .transfer_to_account(Amount::from(3), new_id.clone(), UserData::default())
@@ -423,6 +428,8 @@ async fn test_open_account_before_transfer() {
     let mut client = builder
         .make_client(new_id, new_key_pair, SequenceNumber::from(0))
         .await;
+    // Must process the creation certificate before using the new account.
+    client.receive_certificate(certificate).await.unwrap();
     assert_eq!(client.query_safe_balance().await.unwrap(), Balance::from(3));
     assert_eq!(
         client.synchronize_balance().await.unwrap(),
@@ -620,6 +627,7 @@ async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
         .unwrap();
     client1
         .communicate_account_updates(
+            &builder.committee,
             client1.account_id.clone(),
             CommunicateAction::AdvanceToNextSequenceNumber(client1.next_sequence_number),
         )
