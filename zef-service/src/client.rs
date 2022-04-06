@@ -123,12 +123,10 @@ impl ClientContext {
         account_id: AccountId,
     ) -> AccountClientState<network::Client, Storage> {
         let account = self.wallet_state.get(&account_id).expect("Unknown account");
-        let committee = self.committee_config.clone().into_committee();
         let authority_clients = self.make_authority_clients();
         AccountClientState::new(
             account_id,
             account.key_pair.as_ref().map(|kp| kp.copy()),
-            committee,
             authority_clients,
             self.storage_client.clone(),
             account.next_sequence_number,
@@ -146,13 +144,11 @@ impl ClientContext {
             Value::Confirmed { request } => request.operation.recipient().unwrap().clone(),
             _ => failure::bail!("unexpected value in certificate"),
         };
-        let committee = self.committee_config.clone().into_committee();
         let authority_clients = self.make_authority_clients();
         let account = self.wallet_state.get_or_insert(recipient.clone());
         let mut client = AccountClientState::new(
             recipient,
             account.key_pair.as_ref().map(|kp| kp.copy()).or(key_pair),
-            committee,
             authority_clients,
             self.storage_client.clone(),
             account.next_sequence_number,
