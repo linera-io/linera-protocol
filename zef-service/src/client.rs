@@ -57,9 +57,13 @@ impl ClientContext {
                         GenesisConfig::read(path).expect("Fail to read initial account config")
                     })
                     .unwrap_or_default();
-                zef_service::storage::make_storage(options.storage_path.as_ref(), &genesis_config)
-                    .await
-                    .unwrap()
+                zef_service::storage::make_storage(
+                    options.storage_path.as_ref(),
+                    committee_config.clone().into_committee(),
+                    &genesis_config,
+                )
+                .await
+                .unwrap()
             }
         };
         let send_timeout = Duration::from_micros(options.send_timeout_us);

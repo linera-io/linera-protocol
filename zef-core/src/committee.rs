@@ -3,9 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::base_types::*;
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-#[derive(Eq, PartialEq, Clone, Debug, Default)]
+#[derive(Eq, PartialEq, Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Committee {
     pub voting_rights: BTreeMap<AuthorityName, usize>,
     pub total_votes: usize,

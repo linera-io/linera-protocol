@@ -148,6 +148,7 @@ pub struct AccountInfoResponse {
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub enum CrossShardRequest {
     UpdateRecipient {
+        committee: Committee,
         certificate: Certificate,
     },
     ConfirmUpdatedRecipient {
@@ -161,7 +162,7 @@ impl CrossShardRequest {
     pub fn target_account_id(&self) -> &AccountId {
         use CrossShardRequest::*;
         match self {
-            UpdateRecipient { certificate } => certificate
+            UpdateRecipient { certificate, .. } => certificate
                 .value
                 .confirmed_request()
                 .unwrap()

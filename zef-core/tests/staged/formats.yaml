@@ -72,11 +72,21 @@ Certificate:
           TUPLE:
             - TYPENAME: PublicKeyBytes
             - TYPENAME: Signature
+Committee:
+  STRUCT:
+    - voting_rights:
+        MAP:
+          KEY:
+            TYPENAME: PublicKeyBytes
+          VALUE: U64
+    - total_votes: U64
 CrossShardRequest:
   ENUM:
     0:
       UpdateRecipient:
         STRUCT:
+          - committee:
+              TYPENAME: Committee
           - certificate:
               TYPENAME: Certificate
     1:

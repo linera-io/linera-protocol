@@ -137,8 +137,14 @@ impl TestBuilder {
     ) -> AccountClientState<LocalAuthorityClient, InMemoryStoreClient> {
         let key_pair = KeyPair::generate();
         let owner = key_pair.public();
-        let account = AccountState::create(account_id.clone(), owner, balance);
-        let account_bad = AccountState::create(account_id.clone(), owner, Balance::from(0));
+        let account =
+            AccountState::create(self.committee.clone(), account_id.clone(), owner, balance);
+        let account_bad = AccountState::create(
+            self.committee.clone(),
+            account_id.clone(),
+            owner,
+            Balance::from(0),
+        );
         // Create genesis account in all the existing stores.
         self.genesis_store
             .write_account(account.clone())

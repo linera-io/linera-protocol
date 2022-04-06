@@ -14,9 +14,11 @@ use futures::{future, lock::Mutex};
 use std::{collections::HashMap, ops::DerefMut, sync::Arc};
 
 #[cfg(test)]
-use crate::account::AccountManager;
-#[cfg(test)]
-use crate::base_types::{dbg_account, dbg_addr};
+use crate::{
+    account::AccountManager,
+    base_types::{dbg_account, dbg_addr},
+    committee::Committee,
+};
 
 /// How to communicate with a persistent storage.
 /// * Writes should be blocking until they are completed.
@@ -26,7 +28,7 @@ pub trait StorageClient: DynClone + Send + Sync {
     async fn read_active_account(&mut self, id: &AccountId) -> Result<AccountState, Error> {
         let account = self.read_account_or_default(id).await?;
         ensure!(
-            account.manager.is_active(),
+            account.manager.is_active() && account.committee.is_some(),
             Error::InactiveAccount(id.clone())
         );
         Ok(account)
@@ -158,6 +160,7 @@ async fn test_read_write() {
         .read_account_or_default(&dbg_account(1))
         .await
         .unwrap();
+    account.committee = Some(Committee::make_simple(Vec::new()));
     account.manager = AccountManager::single(dbg_addr(2));
     store.write_account(account).await.unwrap();
     store
