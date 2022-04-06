@@ -173,7 +173,7 @@ impl<A, S> AccountClientState<A, S> {
                 Some(id)
             }
         };
-        let state = WorkerState::new(committee.clone(), None, storage_client);
+        let state = WorkerState::new(None, storage_client);
         Self {
             account_id,
             identity,
