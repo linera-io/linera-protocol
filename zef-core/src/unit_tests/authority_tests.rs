@@ -14,16 +14,12 @@ use std::collections::BTreeMap;
 
 #[tokio::test]
 async fn test_handle_request_order_bad_signature() {
-    let committee = Committee::make_simple(Vec::new());
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(dbg_account(2));
-    let mut state = init_state_with_accounts(
-        &committee,
-        vec![
-            (dbg_account(1), sender_key_pair.public(), Balance::from(5)),
-            (dbg_account(2), dbg_addr(2), Balance::from(0)),
-        ],
-    )
+    let (_, mut state) = init_state_with_accounts(vec![
+        (dbg_account(1), sender_key_pair.public(), Balance::from(5)),
+        (dbg_account(2), dbg_addr(2), Balance::from(0)),
+    ])
     .await;
     let request_order =
         make_transfer_request_order(dbg_account(1), &sender_key_pair, recipient, Amount::from(5));
@@ -47,16 +43,12 @@ async fn test_handle_request_order_bad_signature() {
 
 #[tokio::test]
 async fn test_handle_request_order_zero_amount() {
-    let committee = Committee::make_simple(Vec::new());
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(dbg_account(2));
-    let mut state = init_state_with_accounts(
-        &committee,
-        vec![
-            (dbg_account(1), sender_key_pair.public(), Balance::from(5)),
-            (dbg_account(2), dbg_addr(2), Balance::from(0)),
-        ],
-    )
+    let (_, mut state) = init_state_with_accounts(vec![
+        (dbg_account(1), sender_key_pair.public(), Balance::from(5)),
+        (dbg_account(2), dbg_addr(2), Balance::from(0)),
+    ])
     .await;
     // test request non-positive amount
     let zero_amount_request_order =
@@ -77,16 +69,12 @@ async fn test_handle_request_order_zero_amount() {
 
 #[tokio::test]
 async fn test_handle_request_order_unknown_sender() {
-    let committee = Committee::make_simple(Vec::new());
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(dbg_account(2));
-    let mut state = init_state_with_accounts(
-        &committee,
-        vec![
-            (dbg_account(1), sender_key_pair.public(), Balance::from(5)),
-            (dbg_account(2), dbg_addr(2), Balance::from(0)),
-        ],
-    )
+    let (_, mut state) = init_state_with_accounts(vec![
+        (dbg_account(1), sender_key_pair.public(), Balance::from(5)),
+        (dbg_account(2), dbg_addr(2), Balance::from(0)),
+    ])
     .await;
     let request_order =
         make_transfer_request_order(dbg_account(1), &sender_key_pair, recipient, Amount::from(5));
@@ -109,16 +97,12 @@ async fn test_handle_request_order_unknown_sender() {
 
 #[tokio::test]
 async fn test_handle_request_order_bad_sequence_number() {
-    let committee = Committee::make_simple(Vec::new());
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(dbg_account(2));
-    let mut state = init_state_with_accounts(
-        &committee,
-        vec![
-            (dbg_account(1), sender_key_pair.public(), Balance::from(5)),
-            (dbg_account(2), dbg_addr(2), Balance::from(0)),
-        ],
-    )
+    let (_, mut state) = init_state_with_accounts(vec![
+        (dbg_account(1), sender_key_pair.public(), Balance::from(5)),
+        (dbg_account(2), dbg_addr(2), Balance::from(0)),
+    ])
     .await;
     let request_order =
         make_transfer_request_order(dbg_account(1), &sender_key_pair, recipient, Amount::from(5));
@@ -146,16 +130,12 @@ async fn test_handle_request_order_bad_sequence_number() {
 
 #[tokio::test]
 async fn test_handle_request_order_exceed_balance() {
-    let committee = Committee::make_simple(Vec::new());
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(dbg_account(2));
-    let mut state = init_state_with_accounts(
-        &committee,
-        vec![
-            (dbg_account(1), sender_key_pair.public(), Balance::from(5)),
-            (dbg_account(2), dbg_addr(2), Balance::from(0)),
-        ],
-    )
+    let (_, mut state) = init_state_with_accounts(vec![
+        (dbg_account(1), sender_key_pair.public(), Balance::from(5)),
+        (dbg_account(2), dbg_addr(2), Balance::from(0)),
+    ])
     .await;
     let request_order = make_transfer_request_order(
         dbg_account(1),
@@ -176,13 +156,13 @@ async fn test_handle_request_order_exceed_balance() {
 
 #[tokio::test]
 async fn test_handle_request_order() {
-    let committee = Committee::make_simple(Vec::new());
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(dbg_account(2));
-    let mut state = init_state_with_accounts(
-        &committee,
-        vec![(dbg_account(1), sender_key_pair.public(), Balance::from(5))],
-    )
+    let (_, mut state) = init_state_with_accounts(vec![(
+        dbg_account(1),
+        sender_key_pair.public(),
+        Balance::from(5),
+    )])
     .await;
     let request_order =
         make_transfer_request_order(dbg_account(1), &sender_key_pair, recipient, Amount::from(5));
@@ -208,16 +188,12 @@ async fn test_handle_request_order() {
 
 #[tokio::test]
 async fn test_handle_request_order_replay() {
-    let committee = Committee::make_simple(Vec::new());
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(dbg_account(2));
-    let mut state = init_state_with_accounts(
-        &committee,
-        vec![
-            (dbg_account(1), sender_key_pair.public(), Balance::from(5)),
-            (dbg_account(2), dbg_addr(2), Balance::from(0)),
-        ],
-    )
+    let (_, mut state) = init_state_with_accounts(vec![
+        (dbg_account(1), sender_key_pair.public(), Balance::from(5)),
+        (dbg_account(2), dbg_addr(2), Balance::from(0)),
+    ])
     .await;
     let request_order =
         make_transfer_request_order(dbg_account(1), &sender_key_pair, recipient, Amount::from(5));
@@ -235,18 +211,15 @@ async fn test_handle_request_order_replay() {
 
 #[tokio::test]
 async fn test_handle_certificate_unknown_sender() {
-    let committee = Committee::make_simple(Vec::new());
     let sender_key_pair = KeyPair::generate();
-    let mut state = init_state_with_accounts(
-        &committee,
-        vec![(dbg_account(2), dbg_addr(2), Balance::from(0))],
-    )
-    .await;
+    let (committee, mut state) =
+        init_state_with_accounts(vec![(dbg_account(2), dbg_addr(2), Balance::from(0))]).await;
     let certificate = make_transfer_certificate(
         dbg_account(1),
         &sender_key_pair,
         Address::Account(dbg_account(2)),
         Amount::from(5),
+        &committee,
         &state,
     );
     assert!(fully_handle_certificate(&mut state, certificate)
@@ -256,21 +229,18 @@ async fn test_handle_certificate_unknown_sender() {
 
 #[tokio::test]
 async fn test_handle_certificate_bad_sequence_number() {
-    let committee = Committee::make_simple(Vec::new());
     let sender_key_pair = KeyPair::generate();
-    let mut state = init_state_with_accounts(
-        &committee,
-        vec![
-            (dbg_account(1), sender_key_pair.public(), Balance::from(5)),
-            (dbg_account(2), dbg_addr(2), Balance::from(0)),
-        ],
-    )
+    let (committee, mut state) = init_state_with_accounts(vec![
+        (dbg_account(1), sender_key_pair.public(), Balance::from(5)),
+        (dbg_account(2), dbg_addr(2), Balance::from(0)),
+    ])
     .await;
     let certificate = make_transfer_certificate(
         dbg_account(1),
         &sender_key_pair,
         Address::Account(dbg_account(2)),
         Amount::from(5),
+        &committee,
         &state,
     );
     // Replays are ignored.
@@ -285,15 +255,11 @@ async fn test_handle_certificate_bad_sequence_number() {
 
 #[tokio::test]
 async fn test_handle_certificate_exceed_balance() {
-    let committee = Committee::make_simple(Vec::new());
     let sender_key_pair = KeyPair::generate();
-    let mut state = init_state_with_accounts(
-        &committee,
-        vec![
-            (dbg_account(1), sender_key_pair.public(), Balance::from(5)),
-            (dbg_account(2), dbg_addr(2), Balance::from(0)),
-        ],
-    )
+    let (committee, mut state) = init_state_with_accounts(vec![
+        (dbg_account(1), sender_key_pair.public(), Balance::from(5)),
+        (dbg_account(2), dbg_addr(2), Balance::from(0)),
+    ])
     .await;
 
     let certificate = make_transfer_certificate(
@@ -301,6 +267,7 @@ async fn test_handle_certificate_exceed_balance() {
         &sender_key_pair,
         Address::Account(dbg_account(2)),
         Amount::from(1000),
+        &committee,
         &state,
     );
     assert!(fully_handle_certificate(&mut state, certificate)
@@ -323,15 +290,11 @@ async fn test_handle_certificate_exceed_balance() {
 
 #[tokio::test]
 async fn test_handle_certificate_receiver_balance_overflow() {
-    let committee = Committee::make_simple(Vec::new());
     let sender_key_pair = KeyPair::generate();
-    let mut state = init_state_with_accounts(
-        &committee,
-        vec![
-            (dbg_account(1), sender_key_pair.public(), Balance::from(1)),
-            (dbg_account(2), dbg_addr(2), Balance::max()),
-        ],
-    )
+    let (committee, mut state) = init_state_with_accounts(vec![
+        (dbg_account(1), sender_key_pair.public(), Balance::from(1)),
+        (dbg_account(2), dbg_addr(2), Balance::max()),
+    ])
     .await;
 
     let certificate = make_transfer_certificate(
@@ -339,6 +302,7 @@ async fn test_handle_certificate_receiver_balance_overflow() {
         &sender_key_pair,
         Address::Account(dbg_account(2)),
         Amount::from(1),
+        &committee,
         &state,
     );
     assert!(fully_handle_certificate(&mut state, certificate)
@@ -365,17 +329,17 @@ async fn test_handle_certificate_receiver_balance_overflow() {
 
 #[tokio::test]
 async fn test_handle_certificate_receiver_equal_sender() {
-    let committee = Committee::make_simple(Vec::new());
     let key_pair = KeyPair::generate();
     let name = key_pair.public();
-    let mut state =
-        init_state_with_account(&committee, dbg_account(1), name, Balance::from(1)).await;
+    let (committee, mut state) =
+        init_state_with_account(dbg_account(1), name, Balance::from(1)).await;
 
     let certificate = make_transfer_certificate(
         dbg_account(1),
         &key_pair,
         Address::Account(dbg_account(1)),
         Amount::from(10),
+        &committee,
         &state,
     );
     assert!(fully_handle_certificate(&mut state, certificate)
@@ -393,18 +357,15 @@ async fn test_handle_certificate_receiver_equal_sender() {
 
 #[tokio::test]
 async fn test_update_recipient_account() {
-    let committee = Committee::make_simple(Vec::new());
     let sender_key_pair = KeyPair::generate();
-    let mut state = init_state_with_accounts(
-        &committee,
-        vec![(dbg_account(2), dbg_addr(2), Balance::from(1))],
-    )
-    .await;
+    let (committee, mut state) =
+        init_state_with_accounts(vec![(dbg_account(2), dbg_addr(2), Balance::from(1))]).await;
     let certificate = make_transfer_certificate(
         dbg_account(1),
         &sender_key_pair,
         Address::Account(dbg_account(2)),
         Amount::from(10),
+        &committee,
         &state,
     );
     let operation = certificate
@@ -430,21 +391,18 @@ async fn test_update_recipient_account() {
 
 #[tokio::test]
 async fn test_handle_certificate_to_active_recipient() {
-    let committee = Committee::make_simple(Vec::new());
     let sender_key_pair = KeyPair::generate();
-    let mut state = init_state_with_accounts(
-        &committee,
-        vec![
-            (dbg_account(1), sender_key_pair.public(), Balance::from(5)),
-            (dbg_account(2), dbg_addr(2), Balance::from(0)),
-        ],
-    )
+    let (committee, mut state) = init_state_with_accounts(vec![
+        (dbg_account(1), sender_key_pair.public(), Balance::from(5)),
+        (dbg_account(2), dbg_addr(2), Balance::from(0)),
+    ])
     .await;
     let certificate = make_transfer_certificate(
         dbg_account(1),
         &sender_key_pair,
         Address::Account(dbg_account(2)),
         Amount::from(5),
+        &committee,
         &state,
     );
 
@@ -497,18 +455,19 @@ async fn test_handle_certificate_to_active_recipient() {
 
 #[tokio::test]
 async fn test_handle_certificate_to_inactive_recipient() {
-    let committee = Committee::make_simple(Vec::new());
     let sender_key_pair = KeyPair::generate();
-    let mut state = init_state_with_accounts(
-        &committee,
-        vec![(dbg_account(1), sender_key_pair.public(), Balance::from(5))],
-    )
+    let (committee, mut state) = init_state_with_accounts(vec![(
+        dbg_account(1),
+        sender_key_pair.public(),
+        Balance::from(5),
+    )])
     .await;
     let certificate = make_transfer_certificate(
         dbg_account(1),
         &sender_key_pair,
         Address::Account(dbg_account(2)), // the recipient account does not exist
         Amount::from(5),
+        &committee,
         &state,
     );
 
@@ -533,20 +492,18 @@ async fn test_handle_certificate_to_inactive_recipient() {
 
 #[tokio::test]
 async fn test_read_account_state() {
-    let committee = Committee::make_simple(Vec::new());
     let sender = dbg_account(1);
-    let mut state =
-        init_state_with_account(&committee, sender.clone(), dbg_addr(1), Balance::from(5)).await;
+    let (_, mut state) =
+        init_state_with_account(sender.clone(), dbg_addr(1), Balance::from(5)).await;
     state.storage.read_active_account(&sender).await.unwrap();
 }
 
 #[tokio::test]
 async fn test_read_account_state_unknown_account() {
-    let committee = Committee::make_simple(Vec::new());
     let sender = dbg_account(1);
     let unknown_account_id = dbg_account(99);
-    let mut state =
-        init_state_with_account(&committee, sender, dbg_addr(1), Balance::from(5)).await;
+    let (committee, mut state) =
+        init_state_with_account(sender, dbg_addr(1), Balance::from(5)).await;
     assert!(state
         .storage
         .read_active_account(&unknown_account_id)
@@ -569,34 +526,33 @@ async fn test_read_account_state_unknown_account() {
 
 // helpers
 
-fn init_state() -> WorkerState<InMemoryStoreClient> {
+fn init_state() -> (Committee, WorkerState<InMemoryStoreClient>) {
     let key_pair = KeyPair::generate();
     let mut authorities = BTreeMap::new();
     authorities.insert(key_pair.public(), /* voting right */ 1);
     let committee = Committee::new(authorities);
     let client = InMemoryStoreClient::default();
-    WorkerState::new(committee, Some(key_pair), client)
+    let state = WorkerState::new(Some(key_pair), client);
+    (committee, state)
 }
 
 async fn init_state_with_accounts<I: IntoIterator<Item = (AccountId, AccountOwner, Balance)>>(
-    committee: &Committee,
     balances: I,
-) -> WorkerState<InMemoryStoreClient> {
-    let mut state = init_state();
+) -> (Committee, WorkerState<InMemoryStoreClient>) {
+    let (committee, mut state) = init_state();
     for (id, owner, balance) in balances {
         let account = AccountState::create(committee.clone(), id, owner, balance);
         state.storage.write_account(account).await.unwrap();
     }
-    state
+    (committee, state)
 }
 
 async fn init_state_with_account(
-    committee: &Committee,
     id: AccountId,
     owner: AccountOwner,
     balance: Balance,
-) -> WorkerState<InMemoryStoreClient> {
-    init_state_with_accounts(committee, std::iter::once((id, owner, balance))).await
+) -> (Committee, WorkerState<InMemoryStoreClient>) {
+    init_state_with_accounts(std::iter::once((id, owner, balance))).await
 }
 
 fn make_transfer_request_order(
@@ -618,9 +574,13 @@ fn make_transfer_request_order(
     RequestOrder::new(request, secret)
 }
 
-fn make_certificate(state: &WorkerState<InMemoryStoreClient>, value: Value) -> Certificate {
+fn make_certificate(
+    committee: &Committee,
+    state: &WorkerState<InMemoryStoreClient>,
+    value: Value,
+) -> Certificate {
     let vote = Vote::new(value.clone(), state.key_pair.as_ref().unwrap());
-    let mut builder = SignatureAggregator::new(value, &state.committee);
+    let mut builder = SignatureAggregator::new(value, committee);
     builder
         .append(vote.authority, vote.signature)
         .unwrap()
@@ -632,9 +592,10 @@ fn make_transfer_certificate(
     key_pair: &KeyPair,
     recipient: Address,
     amount: Amount,
+    committee: &Committee,
     state: &WorkerState<InMemoryStoreClient>,
 ) -> Certificate {
     let request = make_transfer_request_order(account_id, key_pair, recipient, amount).request;
     let value = Value::Confirmed { request };
-    make_certificate(state, value)
+    make_certificate(committee, state, value)
 }

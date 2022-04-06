@@ -23,7 +23,6 @@ use zef_service::{
 async fn make_shard_server(
     local_ip_addr: &str,
     server_config: &AuthorityServerConfig,
-    committee_config: &CommitteeConfig,
     buffer_size: usize,
     cross_shard_config: network::CrossShardConfig,
     shard: u32,
@@ -31,10 +30,8 @@ async fn make_shard_server(
 ) -> network::Server<Storage> {
     // NOTE: This log entry is used to compute performance.
     info!("Shard booted on {}", server_config.authority.host);
-
-    let committee = committee_config.clone().into_committee();
     let num_shards = server_config.authority.num_shards;
-    let state = WorkerState::new(committee, Some(server_config.key.copy()), storage);
+    let state = WorkerState::new(Some(server_config.key.copy()), storage);
     network::Server::new(
         server_config.authority.network_protocol,
         local_ip_addr.to_string(),
@@ -67,7 +64,6 @@ async fn make_servers(
         let server = make_shard_server(
             local_ip_addr,
             server_config,
-            committee_config,
             buffer_size,
             cross_shard_config.clone(),
             shard,
@@ -252,7 +248,6 @@ async fn main() {
                     let server = make_shard_server(
                         "0.0.0.0", // Allow local IP address to be different from the public one.
                         &server_config,
-                        &committee_config,
                         buffer_size,
                         cross_shard_config,
                         shard,
