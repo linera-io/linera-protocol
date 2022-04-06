@@ -213,12 +213,17 @@ impl GenesisConfig {
         Ok(())
     }
 
-    pub async fn initialize_store<S>(&self, store: &mut S) -> Result<(), failure::Error>
+    pub async fn initialize_store<S>(
+        &self,
+        committee: Committee,
+        store: &mut S,
+    ) -> Result<(), failure::Error>
     where
         S: StorageClient + Clone + 'static,
     {
         for (account_id, owner, balance) in &self.accounts {
-            let account = AccountState::create(account_id.clone(), *owner, *balance);
+            let account =
+                AccountState::create(committee.clone(), account_id.clone(), *owner, *balance);
             store.write_account(account.clone()).await?;
         }
         Ok(())

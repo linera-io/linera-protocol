@@ -22,24 +22,19 @@ use zef_service::{
 #[allow(clippy::too_many_arguments)]
 async fn make_shard_server(
     local_ip_addr: &str,
-    server_config_path: &Path,
-    committee_config_path: &Path,
+    server_config: &AuthorityServerConfig,
+    committee_config: &CommitteeConfig,
     buffer_size: usize,
     cross_shard_config: network::CrossShardConfig,
     shard: u32,
     storage: Storage,
 ) -> network::Server<Storage> {
-    let server_config =
-        AuthorityServerConfig::read(server_config_path).expect("Fail to read server config");
-    let committee_config =
-        CommitteeConfig::read(committee_config_path).expect("Fail to read committee config");
-
     // NOTE: This log entry is used to compute performance.
     info!("Shard booted on {}", server_config.authority.host);
 
-    let committee = committee_config.into_committee();
+    let committee = committee_config.clone().into_committee();
     let num_shards = server_config.authority.num_shards;
-    let state = WorkerState::new(committee, Some(server_config.key), storage);
+    let state = WorkerState::new(committee, Some(server_config.key.copy()), storage);
     network::Server::new(
         server_config.authority.network_protocol,
         local_ip_addr.to_string(),
@@ -54,25 +49,25 @@ async fn make_shard_server(
 
 async fn make_servers(
     local_ip_addr: &str,
-    server_config_path: &Path,
-    committee_config_path: &Path,
+    server_config: &AuthorityServerConfig,
+    committee_config: &CommitteeConfig,
     genesis_config: &GenesisConfig,
     buffer_size: usize,
     cross_shard_config: network::CrossShardConfig,
     storage: Option<&PathBuf>,
 ) -> Vec<network::Server<Storage>> {
-    let server_config =
-        AuthorityServerConfig::read(server_config_path).expect("Fail to read server config");
+    let committee = committee_config.clone().into_committee();
     let num_shards = server_config.authority.num_shards;
-
     let mut servers = Vec::new();
     // TODO: create servers in parallel
     for shard in 0..num_shards {
-        let storage = make_storage(storage, genesis_config).await.unwrap();
+        let storage = make_storage(storage, committee.clone(), genesis_config)
+            .await
+            .unwrap();
         let server = make_shard_server(
             local_ip_addr,
-            server_config_path,
-            committee_config_path,
+            server_config,
+            committee_config,
             buffer_size,
             cross_shard_config.clone(),
             shard,
@@ -238,18 +233,26 @@ async fn main() {
                     GenesisConfig::read(path.as_ref()).expect("Fail to read initial account config")
                 })
                 .unwrap_or_default();
+            let server_config = AuthorityServerConfig::read(&server_config_path)
+                .expect("Fail to read server config");
+            let committee_config = CommitteeConfig::read(&committee_config_path)
+                .expect("Fail to read committee config");
 
             // Run the server
             let servers = match shard {
                 Some(shard) => {
                     info!("Running shard number {}", shard);
-                    let storage = make_storage(storage_path.as_ref(), &genesis_config)
-                        .await
-                        .unwrap();
+                    let storage = make_storage(
+                        storage_path.as_ref(),
+                        committee_config.clone().into_committee(),
+                        &genesis_config,
+                    )
+                    .await
+                    .unwrap();
                     let server = make_shard_server(
                         "0.0.0.0", // Allow local IP address to be different from the public one.
-                        &server_config_path,
-                        &committee_config_path,
+                        &server_config,
+                        &committee_config,
                         buffer_size,
                         cross_shard_config,
                         shard,
@@ -262,8 +265,8 @@ async fn main() {
                     info!("Running all shards");
                     make_servers(
                         "0.0.0.0", // Allow local IP address to be different from the public one.
-                        &server_config_path,
-                        &committee_config_path,
+                        &server_config,
+                        &committee_config,
                         &genesis_config,
                         buffer_size,
                         cross_shard_config,

@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{base_types::*, ensure, error::Error, messages::*};
+use crate::{base_types::*, committee::Committee, ensure, error::Error, messages::*};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
@@ -12,6 +12,8 @@ use std::collections::{HashMap, HashSet};
 pub struct AccountState {
     /// The UID of the account.
     pub id: AccountId,
+    /// Current committee, if any.
+    pub committee: Option<Committee>,
     /// Manager of the account.
     pub manager: AccountManager,
     /// Balance of the account.
@@ -338,6 +340,7 @@ impl AccountState {
     pub fn new(id: AccountId) -> Self {
         Self {
             id,
+            committee: None,
             manager: AccountManager::None,
             balance: Balance::default(),
             next_sequence_number: SequenceNumber::new(),
@@ -349,8 +352,14 @@ impl AccountState {
         }
     }
 
-    pub fn create(id: AccountId, owner: AccountOwner, balance: Balance) -> Self {
+    pub fn create(
+        committee: Committee,
+        id: AccountId,
+        owner: AccountOwner,
+        balance: Balance,
+    ) -> Self {
         let mut account = Self::new(id);
+        account.committee = Some(committee);
         account.manager = AccountManager::single(owner);
         account.balance = balance;
         account
@@ -429,6 +438,7 @@ impl AccountState {
     pub(crate) fn apply_operation_as_recipient(
         &mut self,
         operation: &Operation,
+        committee: Committee,
         // The rest is for logging purposes.
         key: HashValue,
         sender_id: AccountId,
@@ -447,6 +457,8 @@ impl AccountState {
             }
             Operation::OpenAccount { new_owner, .. } => {
                 assert!(!self.manager.is_active()); // guaranteed under BFT assumptions.
+                assert!(self.committee.is_none());
+                self.committee = Some(committee);
                 self.manager = AccountManager::single(*new_owner);
             }
             _ => unreachable!("Not an operation with recipients"),

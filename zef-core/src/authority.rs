@@ -89,7 +89,14 @@ where
             .read_certificates(account.keep_sending.iter().cloned())
             .await?
             .into_iter()
-            .map(|certificate| CrossShardRequest::UpdateRecipient { certificate })
+            .map(|certificate| CrossShardRequest::UpdateRecipient {
+                committee: account
+                    .committee
+                    .as_ref()
+                    .expect("Account is active")
+                    .clone(),
+                certificate,
+            })
             .collect();
         if account.next_sequence_number > request.sequence_number {
             // Request was already confirmed.
@@ -110,7 +117,14 @@ where
         if operation.recipient().is_some() {
             // Schedule a new cross-shard request to update recipient.
             account.keep_sending.insert(certificate.hash);
-            continuation.push(CrossShardRequest::UpdateRecipient { certificate });
+            continuation.push(CrossShardRequest::UpdateRecipient {
+                committee: account
+                    .committee
+                    .as_ref()
+                    .expect("account is active")
+                    .clone(),
+                certificate,
+            });
         }
         // Persist account.
         self.storage.write_account(account.clone()).await?;
@@ -150,6 +164,7 @@ where
     async fn update_recipient_account(
         &mut self,
         operation: Operation,
+        committee: Committee,
         certificate: Certificate,
     ) -> Result<(), Error> {
         if let Some(recipient) = operation.recipient() {
@@ -159,6 +174,7 @@ where
             let mut account = self.storage.read_account_or_default(recipient).await?;
             let need_update = account.apply_operation_as_recipient(
                 &operation,
+                committee,
                 certificate.hash,
                 request.account_id.clone(),
                 request.sequence_number,
@@ -275,14 +291,17 @@ where
         request: CrossShardRequest,
     ) -> Result<Vec<CrossShardRequest>, Error> {
         match request {
-            CrossShardRequest::UpdateRecipient { certificate } => {
+            CrossShardRequest::UpdateRecipient {
+                committee,
+                certificate,
+            } => {
                 let request = certificate
                     .value
                     .confirmed_request()
                     .ok_or(Error::InvalidCrossShardRequest)?;
                 let sender = request.account_id.clone();
                 let hash = certificate.hash;
-                self.update_recipient_account(request.operation.clone(), certificate)
+                self.update_recipient_account(request.operation.clone(), committee, certificate)
                     .await?;
                 // Reply with a cross-shard request.
                 let cont = vec![CrossShardRequest::ConfirmUpdatedRecipient {
