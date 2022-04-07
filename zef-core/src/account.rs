@@ -329,6 +329,7 @@ impl AccountState {
             account_id: self.id.clone(),
             manager: self.manager.clone(),
             balance: self.balance,
+            queried_committee: None,
             next_sequence_number: self.next_sequence_number,
             queried_sent_certificates: Vec::new(),
             count_received_certificates: self.received_log.len(),

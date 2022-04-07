@@ -110,6 +110,8 @@ pub struct AccountInfoQuery {
     pub account_id: AccountId,
     /// Optionally request that the sequence number is the one expected.
     pub check_next_sequence_number: Option<SequenceNumber>,
+    /// Query the current committee.
+    pub query_committee: bool,
     /// Query a range of certificates sent from the account.
     pub query_sent_certificates_in_range: Option<SequenceNumberRange>,
     /// Query new certificates received from the account.
@@ -127,6 +129,8 @@ pub struct AccountInfo {
     pub balance: Balance,
     /// The current sequence number
     pub next_sequence_number: SequenceNumber,
+    /// The current committee (if requested)
+    pub queried_committee: Option<Committee>,
     /// The response to `query_sent_certificates_in_range`
     pub queried_sent_certificates: Vec<Certificate>,
     /// The current number of received certificates (useful for `query_received_certificates_excluding_first_nth`)
