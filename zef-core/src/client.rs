@@ -224,6 +224,7 @@ where
         let query = AccountInfoQuery {
             account_id,
             check_next_sequence_number: None,
+            query_committee: false,
             query_sent_certificates_in_range: None,
             query_received_certificates_excluding_first_nth: None,
         };
@@ -235,6 +236,7 @@ where
         let query = AccountInfoQuery {
             account_id: self.account_id.clone(),
             check_next_sequence_number: None,
+            query_committee: false,
             query_sent_certificates_in_range: None,
             query_received_certificates_excluding_first_nth: None,
         };
@@ -262,6 +264,7 @@ where
         let query = AccountInfoQuery {
             account_id: self.account_id.clone(),
             check_next_sequence_number: None,
+            query_committee: false,
             query_sent_certificates_in_range: None,
             query_received_certificates_excluding_first_nth: Some(0),
         };
@@ -294,6 +297,7 @@ where
         let query = AccountInfoQuery {
             account_id: account_id.clone(),
             check_next_sequence_number: None,
+            query_committee: false,
             query_sent_certificates_in_range: Some(SequenceNumberRange {
                 start: sequence_number,
                 limit: Some(1),
@@ -383,6 +387,7 @@ where
         let query = AccountInfoQuery {
             account_id: self.account_id.clone(),
             check_next_sequence_number: None,
+            query_committee: false,
             query_sent_certificates_in_range: Some(range),
             query_received_certificates_excluding_first_nth: None,
         };
@@ -573,11 +578,12 @@ where
             let query = AccountInfoQuery {
                 account_id: account_id.clone(),
                 check_next_sequence_number: None,
+                query_committee: false,
                 query_sent_certificates_in_range: None,
                 query_received_certificates_excluding_first_nth: None,
             };
             match authority_client.handle_account_info_query(query).await {
-                Ok(response) => {
+                Ok(response) if response.info.manager.is_active() => {
                     response.check(authority_name)?;
                     jobs.push((
                         account_id,
@@ -587,19 +593,22 @@ where
                     ));
                     break;
                 }
-                Err(Error::InactiveAccount(id)) if id == account_id => match account_id.split() {
-                    None => return Err(Error::InactiveAccount(id)),
-                    Some((parent_id, number)) => {
-                        jobs.push((
-                            account_id,
-                            SequenceNumber::from(0),
-                            target_sequence_number,
-                            cross_shard_retries,
-                        ));
-                        account_id = parent_id;
-                        target_sequence_number = number.try_add_one()?;
+                Ok(response) => {
+                    response.check(authority_name)?;
+                    match account_id.split() {
+                        None => return Err(Error::InactiveAccount(account_id)),
+                        Some((parent_id, number)) => {
+                            jobs.push((
+                                account_id,
+                                SequenceNumber::from(0),
+                                target_sequence_number,
+                                cross_shard_retries,
+                            ));
+                            account_id = parent_id;
+                            target_sequence_number = number.try_add_one()?;
+                        }
                     }
-                },
+                }
                 Err(e) => return Err(e),
             }
         }
@@ -908,6 +917,7 @@ where
                     let query = AccountInfoQuery {
                         account_id: account_id.clone(),
                         check_next_sequence_number: None,
+                        query_committee: false,
                         query_sent_certificates_in_range: None,
                         query_received_certificates_excluding_first_nth: Some(tracker),
                     };
@@ -1117,6 +1127,7 @@ where
             account_id: self.account_id.clone(),
             /// This is necessary to make sure that the response is conservative.
             check_next_sequence_number: Some(self.next_sequence_number),
+            query_committee: false,
             query_sent_certificates_in_range: None,
             query_received_certificates_excluding_first_nth: None,
         };

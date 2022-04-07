@@ -254,8 +254,14 @@ where
         &mut self,
         query: AccountInfoQuery,
     ) -> Result<AccountInfoResponse, Error> {
-        let account = self.storage.read_active_account(&query.account_id).await?;
+        let account = self
+            .storage
+            .read_account_or_default(&query.account_id)
+            .await?;
         let mut info = account.make_account_info(None).info;
+        if query.query_committee {
+            info.queried_committee = account.committee;
+        }
         if let Some(next_sequence_number) = query.check_next_sequence_number {
             ensure!(
                 account.next_sequence_number == next_sequence_number,

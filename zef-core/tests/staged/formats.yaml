@@ -13,6 +13,9 @@ AccountInfo:
         TYPENAME: Balance
     - next_sequence_number:
         TYPENAME: SequenceNumber
+    - queried_committee:
+        OPTION:
+          TYPENAME: Committee
     - queried_sent_certificates:
         SEQ:
           TYPENAME: Certificate
@@ -27,6 +30,7 @@ AccountInfoQuery:
     - check_next_sequence_number:
         OPTION:
           TYPENAME: SequenceNumber
+    - query_committee: BOOL
     - query_sent_certificates_in_range:
         OPTION:
           TYPENAME: SequenceNumberRange
