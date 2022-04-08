@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    account::{AccountManager, AccountState},
+    account::AccountManager,
     authority::{Authority, Worker, WorkerState},
     base_types::*,
     committee::Committee,
@@ -11,6 +11,7 @@ use crate::{
     error::Error,
     messages::*,
     storage::StorageClient,
+    synchronization::*,
 };
 use async_trait::async_trait;
 use failure::{bail, ensure};
@@ -284,16 +285,6 @@ where
     }
 }
 
-/// Used for `communicate_account_updates`
-#[allow(clippy::large_enum_variant)]
-#[derive(Clone)]
-enum CommunicateAction {
-    SubmitRequestForConfirmation(RequestOrder),
-    SubmitRequestForValidation(RequestOrder),
-    FinalizeRequest(Certificate),
-    AdvanceToNextSequenceNumber(SequenceNumber),
-}
-
 impl<A, S> AccountClientState<A, S>
 where
     A: AuthorityClient + Send + Sync + 'static + Clone,
@@ -516,277 +507,6 @@ where
         Err(None)
     }
 
-    async fn send_certificate(
-        name: AuthorityName,
-        client: &mut A,
-        delay: Duration,
-        retries: usize,
-        certificate: Certificate,
-    ) -> Result<AccountInfo, Error> {
-        let mut count = 0;
-        loop {
-            match client.handle_certificate(certificate.clone()).await {
-                Ok(response) => {
-                    response.check(name)?;
-                    // Succeed
-                    return Ok(response.info);
-                }
-                Err(Error::InactiveAccount(_)) if count < retries => {
-                    // Retry
-                    tokio::time::sleep(delay).await;
-                    count += 1;
-                    continue;
-                }
-                Err(e) => {
-                    // Fail
-                    return Err(e);
-                }
-            }
-        }
-    }
-
-    async fn send_request_order(
-        name: AuthorityName,
-        client: &mut A,
-        delay: Duration,
-        retries: usize,
-        order: RequestOrder,
-    ) -> Result<AccountInfo, Error> {
-        let mut count = 0;
-        loop {
-            match client.handle_request_order(order.clone()).await {
-                Ok(response) => {
-                    response.check(name)?;
-                    // Succeed
-                    return Ok(response.info);
-                }
-                Err(Error::InactiveAccount(_)) if count < retries => {
-                    // Retry
-                    tokio::time::sleep(delay).await;
-                    count += 1;
-                    continue;
-                }
-                Err(e) => {
-                    // Fail
-                    return Err(e);
-                }
-            }
-        }
-    }
-
-    async fn send_account_information(
-        storage_client: &mut S,
-        authority_name: AuthorityName,
-        authority_client: &mut A,
-        mut account_id: AccountId,
-        mut target_sequence_number: SequenceNumber,
-        cross_shard_delay: Duration,
-        cross_shard_retries: usize,
-    ) -> Result<(), Error> {
-        let mut jobs = Vec::new();
-        loop {
-            // Figure out which certificates this authority is missing.
-            let query = AccountInfoQuery {
-                account_id: account_id.clone(),
-                check_next_sequence_number: None,
-                query_committee: false,
-                query_sent_certificates_in_range: None,
-                query_received_certificates_excluding_first_nth: None,
-            };
-            match authority_client.handle_account_info_query(query).await {
-                Ok(response) if response.info.manager.is_active() => {
-                    response.check(authority_name)?;
-                    jobs.push((
-                        account_id,
-                        response.info.next_sequence_number,
-                        target_sequence_number,
-                        0,
-                    ));
-                    break;
-                }
-                Ok(response) => {
-                    response.check(authority_name)?;
-                    match account_id.split() {
-                        None => return Err(Error::InactiveAccount(account_id)),
-                        Some((parent_id, number)) => {
-                            jobs.push((
-                                account_id,
-                                SequenceNumber::from(0),
-                                target_sequence_number,
-                                cross_shard_retries,
-                            ));
-                            account_id = parent_id;
-                            target_sequence_number = number.try_add_one()?;
-                        }
-                    }
-                }
-                Err(e) => return Err(e),
-            }
-        }
-        for (account_id, initial_sequence_number, target_sequence_number, retries) in
-            jobs.into_iter().rev()
-        {
-            // Obtain account state.
-            let account = storage_client.read_account_or_default(&account_id).await?;
-            // Send the requested certificates in order.
-            for number in usize::from(initial_sequence_number)..usize::from(target_sequence_number)
-            {
-                let key = account
-                    .confirmed_log
-                    .get(number)
-                    .expect("certificate should be known locally");
-                let cert = storage_client.read_certificate(*key).await?;
-                Self::send_certificate(
-                    authority_name,
-                    authority_client,
-                    cross_shard_delay,
-                    retries,
-                    cert,
-                )
-                .await?;
-            }
-        }
-        Ok(())
-    }
-
-    async fn send_account_information_as_a_receiver(
-        storage_client: &mut S,
-        authority_name: AuthorityName,
-        authority_client: &mut A,
-        account_id: AccountId,
-        cross_shard_delay: Duration,
-        cross_shard_retries: usize,
-    ) -> Result<(), Error> {
-        // Obtain account state.
-        let account = storage_client.read_account_or_default(&account_id).await?;
-        for (sender_id, sequence_number) in account.received_index.iter() {
-            Self::send_account_information(
-                storage_client,
-                authority_name,
-                authority_client,
-                sender_id.clone(),
-                sequence_number.try_add_one()?,
-                cross_shard_delay,
-                cross_shard_retries,
-            )
-            .await?;
-        }
-        Ok(())
-    }
-
-    async fn send_account_update(
-        mut storage_client: S,
-        account_id: AccountId,
-        action: CommunicateAction,
-        authority_name: AuthorityName,
-        authority_client: &mut A,
-        cross_shard_delay: Duration,
-        cross_shard_retries: usize,
-    ) -> Result<Option<Vote>, Error> {
-        let target_sequence_number = match &action {
-            CommunicateAction::SubmitRequestForValidation(order)
-            | CommunicateAction::SubmitRequestForConfirmation(order) => {
-                order.request.sequence_number
-            }
-            CommunicateAction::FinalizeRequest(certificate) => {
-                certificate
-                    .value
-                    .validated_request()
-                    .unwrap()
-                    .sequence_number
-            }
-            CommunicateAction::AdvanceToNextSequenceNumber(seq) => *seq,
-        };
-        // Update the authority with missing information, if needed.
-        Self::send_account_information(
-            &mut storage_client,
-            authority_name,
-            authority_client,
-            account_id.clone(),
-            target_sequence_number,
-            cross_shard_delay,
-            cross_shard_retries,
-        )
-        .await?;
-        // Send the request order (if any) and return a vote.
-        match action {
-            CommunicateAction::SubmitRequestForValidation(order)
-            | CommunicateAction::SubmitRequestForConfirmation(order) => {
-                let result = Self::send_request_order(
-                    authority_name,
-                    authority_client,
-                    cross_shard_delay,
-                    cross_shard_retries,
-                    order.clone(),
-                )
-                .await;
-                let info = match result {
-                    Ok(info) => info,
-                    Err(e) if AccountState::is_retriable_validation_error(&order.request, &e) => {
-                        // Some received certificates may be missing for this authority
-                        // (e.g. to make the balance sufficient) so we are going to
-                        // synchronize them now.
-                        Self::send_account_information_as_a_receiver(
-                            &mut storage_client,
-                            authority_name,
-                            authority_client,
-                            account_id,
-                            cross_shard_delay,
-                            cross_shard_retries,
-                        )
-                        .await?;
-                        // Now retry the request.
-                        Self::send_request_order(
-                            authority_name,
-                            authority_client,
-                            cross_shard_delay,
-                            cross_shard_retries,
-                            order,
-                        )
-                        .await?
-                    }
-                    Err(e) => {
-                        return Err(e);
-                    }
-                };
-                match info.manager.pending() {
-                    Some(vote) => {
-                        vote.check(authority_name)?;
-                        return Ok(Some(vote.clone()));
-                    }
-                    None => return Err(Error::ClientErrorWhileProcessingRequestOrder),
-                }
-            }
-            CommunicateAction::FinalizeRequest(certificate) => {
-                // The only cause for a retry is that the first certificate of a newly opened account.
-                let cross_shard_retries = {
-                    if target_sequence_number == SequenceNumber::default() {
-                        cross_shard_retries
-                    } else {
-                        0
-                    }
-                };
-                let info = Self::send_certificate(
-                    authority_name,
-                    authority_client,
-                    cross_shard_delay,
-                    cross_shard_retries,
-                    certificate,
-                )
-                .await?;
-                match info.manager.pending() {
-                    Some(vote) => {
-                        vote.check(authority_name)?;
-                        return Ok(Some(vote.clone()));
-                    }
-                    None => return Err(Error::ClientErrorWhileProcessingRequestOrder),
-                }
-            }
-            CommunicateAction::AdvanceToNextSequenceNumber(_) => (),
-        }
-        Ok(None)
-    }
-
     /// Broadcast confirmation orders and optionally one more request order.
     /// The corresponding sequence numbers should be consecutive and increasing.
     async fn communicate_account_updates(
@@ -799,22 +519,17 @@ where
         let cross_shard_delay = self.cross_shard_delay;
         let cross_shard_retries = self.cross_shard_retries;
         let result = self
-            .communicate_with_quorum(committee, |name, authority_client| {
+            .communicate_with_quorum(committee, |name, client| {
+                let mut updater = AuthorityUpdater {
+                    name,
+                    client,
+                    store: storage_client.clone(),
+                    delay: cross_shard_delay,
+                    retries: cross_shard_retries,
+                };
                 let action = action.clone();
-                let storage_client = storage_client.clone();
                 let account_id = account_id.clone();
-                Box::pin(async move {
-                    Self::send_account_update(
-                        storage_client,
-                        account_id,
-                        action,
-                        name,
-                        authority_client,
-                        cross_shard_delay,
-                        cross_shard_retries,
-                    )
-                    .await
-                })
+                Box::pin(async move { updater.send_account_update(account_id, action).await })
             })
             .await;
         let votes = match result {
