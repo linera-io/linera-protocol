@@ -128,8 +128,6 @@ pub trait AccountClient {
 pub struct AccountClientState<AuthorityClient, StorageClient> {
     /// The off-chain account id.
     account_id: AccountId,
-    /// Current identity as an owner.
-    identity: Option<AccountOwner>,
     /// How to talk to this committee.
     authority_clients: Vec<(AuthorityName, AuthorityClient)>,
     /// Expected sequence number for the next certified request.
@@ -155,26 +153,20 @@ impl<A, S> AccountClientState<A, S> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         account_id: AccountId,
-        key_pair: Option<KeyPair>,
+        known_key_pairs: Vec<KeyPair>,
         authority_clients: Vec<(AuthorityName, A)>,
         storage_client: S,
         next_sequence_number: SequenceNumber,
         cross_shard_delay: Duration,
         cross_shard_retries: usize,
     ) -> Self {
-        let mut known_key_pairs = BTreeMap::new();
-        let identity = match key_pair {
-            None => None,
-            Some(kp) => {
-                let id = kp.public();
-                known_key_pairs.insert(kp.public(), kp);
-                Some(id)
-            }
-        };
+        let known_key_pairs = known_key_pairs
+            .into_iter()
+            .map(|kp| (kp.public(), kp))
+            .collect();
         let state = WorkerState::new(None, storage_client);
         Self {
             account_id,
-            identity,
             authority_clients,
             next_sequence_number,
             pending_request: None,
@@ -188,19 +180,6 @@ impl<A, S> AccountClientState<A, S> {
 
     pub fn account_id(&self) -> &AccountId {
         &self.account_id
-    }
-
-    pub fn identity(&self) -> Option<AccountOwner> {
-        self.identity
-    }
-
-    pub fn key_pair(&self) -> Result<&KeyPair, failure::Error> {
-        let id = self
-            .identity
-            .ok_or_else(|| failure::format_err!("No identity was setup"))?;
-        self.known_key_pairs.get(&id).ok_or_else(|| {
-            failure::format_err!("Cannot make request for an account that we don't own")
-        })
     }
 
     pub fn next_sequence_number(&self) -> SequenceNumber {
@@ -261,9 +240,52 @@ where
         matches!(manager, AccountManager::Multi(_))
     }
 
+    async fn identity(&mut self) -> Result<AccountOwner, failure::Error> {
+        match self.manager().await {
+            AccountManager::Single(m) => {
+                if !self.known_key_pairs.contains_key(&m.owner) {
+                    bail!(
+                        "No key available to interact with single-owner account {}",
+                        self.account_id
+                    );
+                }
+                Ok(m.owner)
+            }
+            AccountManager::Multi(m) => {
+                let mut identities = Vec::new();
+                for owner in &m.owners {
+                    if self.known_key_pairs.contains_key(owner) {
+                        identities.push(owner.clone());
+                    }
+                }
+                if identities.is_empty() {
+                    bail!(
+                        "Cannot find suitable identity to interact with multi-owner account {}",
+                        self.account_id
+                    );
+                }
+                if identities.len() >= 2 {
+                    bail!(
+                        "Found several possible identities to interact with multi-owner account {}",
+                        self.account_id
+                    );
+                }
+                Ok(identities.pop().unwrap())
+            }
+            AccountManager::None => Err(Error::InactiveAccount(self.account_id.clone()).into()),
+        }
+    }
+
+    pub async fn key_pair(&mut self) -> Result<&KeyPair, failure::Error> {
+        let id = self.identity().await?;
+        Ok(self
+            .known_key_pairs
+            .get(&id)
+            .expect("key should be known at this point"))
+    }
+
     async fn next_round(&mut self) -> RoundNumber {
-        let manager = self.manager().await;
-        match manager {
+        match self.manager().await {
             AccountManager::Multi(m) => {
                 let round = m.round();
                 round.try_add_one().unwrap_or(round)
@@ -743,31 +765,6 @@ where
             if request.account_id == self.account_id {
                 self.next_sequence_number = request.sequence_number.try_add_one()?;
             }
-            // Manage our identity
-            match &request.operation {
-                Operation::ChangeOwner { new_owner } => {
-                    self.identity = Some(*new_owner);
-                }
-                Operation::ChangeMultipleOwners { new_owners } => {
-                    if self.identity.is_none()
-                        || !new_owners.contains(self.identity.as_ref().unwrap())
-                    {
-                        self.identity = None;
-                        // Search for a new identity that works. TODO: We probably
-                        // shouldn't just pick the first identity that works.
-                        for owner in new_owners {
-                            if let Some(value) = self.known_key_pairs.get(owner) {
-                                self.identity = Some(value.public());
-                                break;
-                            }
-                        }
-                    }
-                }
-                Operation::CloseAccount => {
-                    self.identity = None;
-                }
-                _ => (),
-            }
         }
         // Finally, handle the relevant cross-shard requests.
         while let Some(request) = requests.pop() {
@@ -795,7 +792,7 @@ where
         // Remember what we are trying to do
         self.pending_request = Some(request.clone());
         // Build the initial query.
-        let key_pair = self.key_pair()?;
+        let key_pair = self.key_pair().await?;
         let order = RequestOrder::new(request, key_pair);
         // Send the query.
         let committee = self.committee().await?;
@@ -1001,9 +998,7 @@ where
         new_owner: AccountOwner,
     ) -> Result<Certificate, failure::Error> {
         self.synchronize_sent_certificates().await?;
-        let owner = self.identity.ok_or_else(|| {
-            failure::format_err!("Cannot share ownership for an account that we don't own")
-        })?;
+        let owner = self.identity().await?;
         let request = Request {
             account_id: self.account_id.clone(),
             operation: Operation::ChangeMultipleOwners {
