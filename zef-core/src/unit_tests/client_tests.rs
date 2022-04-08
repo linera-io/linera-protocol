@@ -4,7 +4,7 @@
 use super::AuthorityClient;
 use crate::{
     account::AccountState,
-    authority::{fully_handle_certificate, Authority, WorkerState},
+    authority::{Authority, WorkerState},
     base_types::*,
     client::{AccountClient, AccountClientState, CommunicateAction},
     committee::Committee,
@@ -16,7 +16,6 @@ use async_trait::async_trait;
 use futures::lock::Mutex;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
-    ops::DerefMut,
     sync::Arc,
 };
 
@@ -49,12 +48,9 @@ impl AuthorityClient for LocalAuthorityClient {
         &mut self,
         certificate: Certificate,
     ) -> Result<AccountInfoResponse, Error> {
-        let info = fully_handle_certificate(
-            &mut self.0.clone().lock().await.deref_mut().state,
-            certificate,
-        )
-        .await?;
-        Ok(info)
+        let authority = self.0.clone();
+        let mut authority = authority.lock().await;
+        authority.state.fully_handle_certificate(certificate).await
     }
 
     async fn handle_account_info_query(
@@ -193,6 +189,50 @@ impl TestBuilder {
         let mut builder = TestBuilder::new(count, with_faulty_authorities);
         builder.add_initial_account(dbg_account(1), balance).await
     }
+
+    /// Try to find a (confirmation) certificate for the given account_id and sequence number.
+    async fn check_that_authorities_have_certificate(
+        &self,
+        account_id: AccountId,
+        sequence_number: SequenceNumber,
+        target_count: usize,
+    ) -> Option<Certificate> {
+        let query = AccountInfoQuery {
+            account_id: account_id.clone(),
+            check_next_sequence_number: None,
+            query_committee: false,
+            query_sent_certificates_in_range: Some(SequenceNumberRange {
+                start: sequence_number,
+                limit: Some(1),
+            }),
+            query_received_certificates_excluding_first_nth: None,
+        };
+        let mut count = 0;
+        let mut certificate = None;
+        for (name, mut client) in self.authority_clients.clone() {
+            if let Ok(response) = client.handle_account_info_query(query.clone()).await {
+                if response.check(name).is_ok() {
+                    let AccountInfo {
+                        mut queried_sent_certificates,
+                        ..
+                    } = response.info;
+                    if let Some(cert) = queried_sent_certificates.pop() {
+                        if let Value::Confirmed { request } = &cert.value {
+                            if request.account_id == account_id
+                                && request.sequence_number == sequence_number
+                            {
+                                cert.check(&self.committee).unwrap();
+                                count += 1;
+                                certificate = Some(cert);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        assert_eq!(count, target_count);
+        certificate
+    }
 }
 
 #[tokio::test]
@@ -209,7 +249,10 @@ async fn test_query_balance() {
 
 #[tokio::test]
 async fn test_initiating_valid_transfer() {
-    let mut sender = TestBuilder::single_account(4, 1, Balance::from(4)).await;
+    let mut builder = TestBuilder::new(4, 1);
+    let mut sender = builder
+        .add_initial_account(dbg_account(1), Balance::from(4))
+        .await;
     let certificate = sender
         .transfer_to_account(
             Amount::from(3),
@@ -222,8 +265,12 @@ async fn test_initiating_valid_transfer() {
     assert!(sender.pending_request.is_none());
     assert_eq!(sender.query_safe_balance().await.unwrap(), Balance::from(1));
     assert_eq!(
-        sender
-            .fetch_and_process_certificate(sender.account_id.clone(), SequenceNumber::from(0))
+        builder
+            .check_that_authorities_have_certificate(
+                sender.account_id.clone(),
+                SequenceNumber::from(0),
+                3
+            )
             .await
             .unwrap(),
         certificate
@@ -232,7 +279,10 @@ async fn test_initiating_valid_transfer() {
 
 #[tokio::test]
 async fn test_rotate_key_pair() {
-    let mut sender = TestBuilder::single_account(4, 1, Balance::from(4)).await;
+    let mut builder = TestBuilder::new(4, 1);
+    let mut sender = builder
+        .add_initial_account(dbg_account(1), Balance::from(4))
+        .await;
     let new_key_pair = KeyPair::generate();
     let new_pubk = new_key_pair.public();
     let certificate = sender.rotate_key_pair(new_key_pair).await.unwrap();
@@ -240,8 +290,12 @@ async fn test_rotate_key_pair() {
     assert!(sender.pending_request.is_none());
     assert_eq!(sender.identity().await.unwrap(), new_pubk);
     assert_eq!(
-        sender
-            .fetch_and_process_certificate(sender.account_id.clone(), SequenceNumber::from(0))
+        builder
+            .check_that_authorities_have_certificate(
+                sender.account_id.clone(),
+                SequenceNumber::from(0),
+                3
+            )
             .await
             .unwrap(),
         certificate
@@ -260,7 +314,11 @@ async fn test_rotate_key_pair() {
 
 #[tokio::test]
 async fn test_transfer_ownership() {
-    let mut sender = TestBuilder::single_account(4, 1, Balance::from(4)).await;
+    let mut builder = TestBuilder::new(4, 1);
+    let mut sender = builder
+        .add_initial_account(dbg_account(1), Balance::from(4))
+        .await;
+
     let new_key_pair = KeyPair::generate();
     let new_pubk = new_key_pair.public();
     let certificate = sender.transfer_ownership(new_pubk).await.unwrap();
@@ -268,8 +326,12 @@ async fn test_transfer_ownership() {
     assert!(sender.pending_request.is_none());
     assert!(sender.key_pair().await.is_err());
     assert_eq!(
-        sender
-            .fetch_and_process_certificate(sender.account_id.clone(), SequenceNumber::from(0))
+        builder
+            .check_that_authorities_have_certificate(
+                sender.account_id.clone(),
+                SequenceNumber::from(0),
+                3
+            )
             .await
             .unwrap(),
         certificate
@@ -299,8 +361,12 @@ async fn test_share_ownership() {
     assert!(sender.pending_request.is_none());
     assert!(sender.key_pair().await.is_ok());
     assert_eq!(
-        sender
-            .fetch_and_process_certificate(sender.account_id.clone(), SequenceNumber::from(0))
+        builder
+            .check_that_authorities_have_certificate(
+                sender.account_id.clone(),
+                SequenceNumber::from(0),
+                3
+            )
             .await
             .unwrap(),
         certificate
@@ -377,8 +443,12 @@ async fn test_open_account_after_transfer() {
     assert!(sender.pending_request.is_none());
     assert!(sender.key_pair().await.is_ok());
     assert_eq!(
-        sender
-            .fetch_and_process_certificate(sender.account_id.clone(), SequenceNumber::from(1))
+        builder
+            .check_that_authorities_have_certificate(
+                sender.account_id.clone(),
+                SequenceNumber::from(1),
+                3
+            )
             .await
             .unwrap(),
         certificate
@@ -443,7 +513,10 @@ async fn test_open_account_before_transfer() {
 
 #[tokio::test]
 async fn test_close_account() {
-    let mut sender = TestBuilder::single_account(4, 1, Balance::from(4)).await;
+    let mut builder = TestBuilder::new(4, 1);
+    let mut sender = builder
+        .add_initial_account(dbg_account(1), Balance::from(4))
+        .await;
     let certificate = sender.close_account().await.unwrap();
     assert!(matches!(
         &certificate.value,
@@ -457,11 +530,16 @@ async fn test_close_account() {
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
     assert!(sender.pending_request.is_none());
     assert!(sender.key_pair().await.is_err());
-    // Cannot query the certificate.
-    assert!(sender
-        .fetch_and_process_certificate(sender.account_id.clone(), SequenceNumber::from(0))
-        .await
-        .is_err());
+    assert_eq!(
+        builder
+            .check_that_authorities_have_certificate(
+                sender.account_id.clone(),
+                SequenceNumber::from(0),
+                3
+            )
+            .await,
+        Some(certificate)
+    );
     // Cannot use the account any more.
     assert!(sender
         .transfer_to_account(Amount::from(3), dbg_account(2), UserData::default())
@@ -518,8 +596,12 @@ async fn test_bidirectional_transfer() {
     );
 
     assert_eq!(
-        client1
-            .fetch_and_process_certificate(client1.account_id.clone(), SequenceNumber::from(0))
+        builder
+            .check_that_authorities_have_certificate(
+                client1.account_id.clone(),
+                SequenceNumber::from(0),
+                3
+            )
             .await
             .unwrap(),
         certificate

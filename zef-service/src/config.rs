@@ -11,11 +11,8 @@ use std::{
     path::Path,
 };
 use zef_core::{
-    account::AccountState,
-    base_types::*,
-    client::{AccountClientState, AuthorityClient},
-    committee::Committee,
-    storage::StorageClient,
+    account::AccountState, base_types::*, client::AccountClientState, committee::Committee,
+    node::AuthorityClient, storage::StorageClient,
 };
 
 pub trait Import: DeserializeOwned {

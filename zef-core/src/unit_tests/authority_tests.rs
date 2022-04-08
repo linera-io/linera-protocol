@@ -4,7 +4,7 @@
 
 use crate::{
     account::{AccountManager, AccountState},
-    authority::{fully_handle_certificate, Authority, WorkerState},
+    authority::{Authority, WorkerState},
     base_types::*,
     committee::Committee,
     messages::*,
@@ -222,9 +222,7 @@ async fn test_handle_certificate_unknown_sender() {
         &committee,
         &state,
     );
-    assert!(fully_handle_certificate(&mut state, certificate)
-        .await
-        .is_err());
+    assert!(state.fully_handle_certificate(certificate).await.is_err());
 }
 
 #[tokio::test]
@@ -244,12 +242,11 @@ async fn test_handle_certificate_bad_sequence_number() {
         &state,
     );
     // Replays are ignored.
-    assert!(fully_handle_certificate(&mut state, certificate.clone())
+    assert!(state
+        .fully_handle_certificate(certificate.clone())
         .await
         .is_ok());
-    assert!(fully_handle_certificate(&mut state, certificate)
-        .await
-        .is_ok());
+    assert!(state.fully_handle_certificate(certificate).await.is_ok());
     // TODO: test the case of a sequence number in the future (aka lagging authority)
 }
 
@@ -270,9 +267,7 @@ async fn test_handle_certificate_exceed_balance() {
         &committee,
         &state,
     );
-    assert!(fully_handle_certificate(&mut state, certificate)
-        .await
-        .is_ok());
+    assert!(state.fully_handle_certificate(certificate).await.is_ok());
     let sender_account = state
         .storage
         .read_active_account(&dbg_account(1))
@@ -305,9 +300,7 @@ async fn test_handle_certificate_receiver_balance_overflow() {
         &committee,
         &state,
     );
-    assert!(fully_handle_certificate(&mut state, certificate)
-        .await
-        .is_ok());
+    assert!(state.fully_handle_certificate(certificate).await.is_ok());
     let new_sender_account = state
         .storage
         .read_active_account(&dbg_account(1))
@@ -342,9 +335,7 @@ async fn test_handle_certificate_receiver_equal_sender() {
         &committee,
         &state,
     );
-    assert!(fully_handle_certificate(&mut state, certificate)
-        .await
-        .is_ok());
+    assert!(state.fully_handle_certificate(certificate).await.is_ok());
     let account = state
         .storage
         .read_active_account(&dbg_account(1))
@@ -406,7 +397,8 @@ async fn test_handle_certificate_to_active_recipient() {
         &state,
     );
 
-    let info = fully_handle_certificate(&mut state, certificate.clone())
+    let info = state
+        .fully_handle_certificate(certificate.clone())
         .await
         .unwrap()
         .info;
@@ -472,7 +464,8 @@ async fn test_handle_certificate_to_inactive_recipient() {
         &state,
     );
 
-    let info = fully_handle_certificate(&mut state, certificate.clone())
+    let info = state
+        .fully_handle_certificate(certificate.clone())
         .await
         .unwrap()
         .info;

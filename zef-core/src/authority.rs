@@ -58,8 +58,16 @@ impl<Client> WorkerState<Client>
 where
     Client: StorageClient + Clone + 'static,
 {
-    pub(crate) fn storage_client(&self) -> &Client {
-        &self.storage
+    // NOTE: This only works for non-sharded workers!
+    pub(crate) async fn fully_handle_certificate(
+        &mut self,
+        certificate: Certificate,
+    ) -> Result<AccountInfoResponse, crate::error::Error> {
+        let (response, mut requests) = self.handle_certificate(certificate).await?;
+        while let Some(request) = requests.pop() {
+            requests.extend(self.handle_cross_shard_request(request).await?);
+        }
+        Ok(response)
     }
 
     /// (Trusted) Process a confirmed request issued from an account.
@@ -333,19 +341,8 @@ impl<Client> WorkerState<Client> {
     pub fn new(key_pair: Option<KeyPair>, storage: Client) -> Self {
         WorkerState { key_pair, storage }
     }
-}
 
-#[cfg(test)]
-pub async fn fully_handle_certificate<Client>(
-    state: &mut WorkerState<Client>,
-    certificate: Certificate,
-) -> Result<AccountInfoResponse, crate::error::Error>
-where
-    Client: StorageClient + Clone + 'static,
-{
-    let (response, mut requests) = state.handle_certificate(certificate).await?;
-    while let Some(request) = requests.pop() {
-        requests.extend(state.handle_cross_shard_request(request).await?);
+    pub(crate) fn storage_client(&self) -> &Client {
+        &self.storage
     }
-    Ok(response)
 }
