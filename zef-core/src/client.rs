@@ -762,7 +762,9 @@ where
         let (_, mut requests) = self.state.handle_certificate(certificate.clone()).await?;
         // If the certificate is from us, update the client-specific state as well.
         if let Some(request) = certificate.value.confirmed_request() {
-            if request.account_id == self.account_id {
+            if request.account_id == self.account_id
+                && request.sequence_number >= self.next_sequence_number
+            {
                 self.next_sequence_number = request.sequence_number.try_add_one()?;
             }
         }
