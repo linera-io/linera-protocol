@@ -156,6 +156,16 @@ impl AccountManager {
         }
     }
 
+    pub fn next_round(&self) -> RoundNumber {
+        match self {
+            AccountManager::Multi(m) => {
+                let round = m.round();
+                round.try_add_one().unwrap_or(round)
+            }
+            _ => RoundNumber::default(),
+        }
+    }
+
     pub fn pending(&self) -> Option<&Vote> {
         match self {
             AccountManager::Single(manager) => manager.pending.as_ref(),
