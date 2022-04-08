@@ -126,7 +126,12 @@ impl ClientContext {
         let authority_clients = self.make_authority_clients();
         AccountClientState::new(
             account_id,
-            account.key_pair.as_ref().map(|kp| kp.copy()),
+            account
+                .key_pair
+                .as_ref()
+                .map(|kp| kp.copy())
+                .into_iter()
+                .collect(),
             authority_clients,
             self.storage_client.clone(),
             account.next_sequence_number,
@@ -148,7 +153,13 @@ impl ClientContext {
         let account = self.wallet_state.get_or_insert(recipient.clone());
         let mut client = AccountClientState::new(
             recipient,
-            account.key_pair.as_ref().map(|kp| kp.copy()).or(key_pair),
+            account
+                .key_pair
+                .as_ref()
+                .map(|kp| kp.copy())
+                .or(key_pair)
+                .into_iter()
+                .collect(),
             authority_clients,
             self.storage_client.clone(),
             account.next_sequence_number,

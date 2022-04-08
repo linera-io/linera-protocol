@@ -176,7 +176,7 @@ impl TestBuilder {
         self.account_client_stores.push(store.clone());
         AccountClientState::new(
             account_id,
-            Some(key_pair),
+            vec![key_pair],
             self.authority_clients.clone(),
             store,
             sequence_number,
@@ -238,7 +238,7 @@ async fn test_rotate_key_pair() {
     let certificate = sender.rotate_key_pair(new_key_pair).await.unwrap();
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
     assert!(sender.pending_request.is_none());
-    assert_eq!(sender.identity().unwrap(), new_pubk);
+    assert_eq!(sender.identity().await.unwrap(), new_pubk);
     assert_eq!(
         sender
             .fetch_and_process_certificate(sender.account_id.clone(), SequenceNumber::from(0))
@@ -266,7 +266,7 @@ async fn test_transfer_ownership() {
     let certificate = sender.transfer_ownership(new_pubk).await.unwrap();
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
     assert!(sender.pending_request.is_none());
-    assert!(sender.key_pair().is_err());
+    assert!(sender.key_pair().await.is_err());
     assert_eq!(
         sender
             .fetch_and_process_certificate(sender.account_id.clone(), SequenceNumber::from(0))
@@ -297,7 +297,7 @@ async fn test_share_ownership() {
     let certificate = sender.share_ownership(new_pubk).await.unwrap();
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
     assert!(sender.pending_request.is_none());
-    assert!(sender.key_pair().is_ok());
+    assert!(sender.key_pair().await.is_ok());
     assert_eq!(
         sender
             .fetch_and_process_certificate(sender.account_id.clone(), SequenceNumber::from(0))
@@ -343,7 +343,7 @@ async fn test_open_account_then_close_it() {
     let certificate = sender.open_account(new_pubk).await.unwrap();
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
     assert!(sender.pending_request.is_none());
-    assert!(sender.key_pair().is_ok());
+    assert!(sender.key_pair().await.is_ok());
     // Make a client to try the new account.
     let mut client = builder
         .make_client(new_id, new_key_pair, SequenceNumber::from(0))
@@ -375,7 +375,7 @@ async fn test_open_account_after_transfer() {
     let certificate = sender.open_account(new_pubk).await.unwrap();
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(2));
     assert!(sender.pending_request.is_none());
-    assert!(sender.key_pair().is_ok());
+    assert!(sender.key_pair().await.is_ok());
     assert_eq!(
         sender
             .fetch_and_process_certificate(sender.account_id.clone(), SequenceNumber::from(1))
@@ -423,7 +423,7 @@ async fn test_open_account_before_transfer() {
         .unwrap();
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(2));
     assert!(sender.pending_request.is_none());
-    assert!(sender.key_pair().is_ok());
+    assert!(sender.key_pair().await.is_ok());
     // Make a client to try the new account.
     let mut client = builder
         .make_client(new_id, new_key_pair, SequenceNumber::from(0))
@@ -456,7 +456,7 @@ async fn test_close_account() {
     ));
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
     assert!(sender.pending_request.is_none());
-    assert!(sender.key_pair().is_err());
+    assert!(sender.key_pair().await.is_err());
     // Cannot query the certificate.
     assert!(sender
         .fetch_and_process_certificate(sender.account_id.clone(), SequenceNumber::from(0))
