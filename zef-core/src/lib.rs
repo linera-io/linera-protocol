@@ -11,3 +11,4 @@ pub mod error;
 pub mod messages;
 pub mod serialize;
 pub mod storage;
+pub(crate) mod synchronization;
