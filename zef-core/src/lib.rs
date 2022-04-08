@@ -9,6 +9,7 @@ pub mod client;
 pub mod committee;
 pub mod error;
 pub mod messages;
+pub mod node;
 pub mod serialize;
 pub mod storage;
 pub(crate) mod synchronization;

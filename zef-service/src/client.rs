@@ -9,6 +9,7 @@ use zef_core::{
     client::*,
     committee::Committee,
     messages::*,
+    node::AuthorityClient,
     serialize::*,
     storage::{InMemoryStoreClient, StorageClient},
 };

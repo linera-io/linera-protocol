@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    account::AccountState, base_types::*, client::AuthorityClient, error::Error, messages::*,
+    account::AccountState, base_types::*, error::Error, messages::*, node::AuthorityClient,
     storage::StorageClient,
 };
 use std::time::Duration;
@@ -210,7 +210,7 @@ where
             }
             CommunicateAction::FinalizeRequest(certificate) => {
                 // The only cause for a retry is that the first certificate of a newly opened account.
-                let retryable = target_sequence_number == SequenceNumber::default();
+                let retryable = target_sequence_number == SequenceNumber::from(0);
                 let info = self.send_certificate(certificate, retryable).await?;
                 match info.manager.pending() {
                     Some(vote) => {

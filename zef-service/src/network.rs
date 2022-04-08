@@ -4,7 +4,9 @@
 
 use crate::transport::*;
 use async_trait::async_trait;
-use zef_core::{authority::*, base_types::*, client::*, error::*, messages::*, serialize::*};
+use zef_core::{
+    authority::*, base_types::*, error::*, messages::*, node::AuthorityClient, serialize::*,
+};
 
 #[cfg(feature = "benchmark")]
 use crate::network_server::BenchmarkServer;
