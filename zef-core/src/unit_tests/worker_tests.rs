@@ -4,11 +4,11 @@
 
 use crate::{
     account::{AccountManager, AccountState},
-    authority::{Authority, WorkerState},
     base_types::*,
     committee::Committee,
     messages::*,
     storage::{InMemoryStoreClient, StorageClient},
+    worker::{AuthorityWorker, WorkerState},
 };
 use std::collections::BTreeMap;
 

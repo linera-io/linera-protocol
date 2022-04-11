@@ -4,7 +4,6 @@
 
 use crate::{
     account::AccountManager,
-    authority::WorkerState,
     base_types::*,
     committee::Committee,
     ensure as my_ensure,
@@ -13,6 +12,7 @@ use crate::{
     node::{AuthorityClient, LocalNodeClient},
     storage::StorageClient,
     synchronization::*,
+    worker::WorkerState,
 };
 use async_trait::async_trait;
 use failure::{bail, ensure};

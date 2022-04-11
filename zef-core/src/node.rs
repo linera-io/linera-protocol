@@ -4,11 +4,11 @@
 
 use crate::{
     account::AccountManager,
-    authority::{Authority, WorkerState},
     base_types::*,
     error::Error,
     messages::*,
     storage::StorageClient,
+    worker::{AuthorityWorker, WorkerState},
 };
 use async_trait::async_trait;
 use futures::{lock::Mutex, StreamExt};

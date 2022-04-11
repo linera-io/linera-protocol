@@ -1,16 +1,16 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use super::AuthorityClient;
 use crate::{
     account::AccountState,
-    authority::{Authority, WorkerState},
     base_types::*,
     client::{AccountClient, AccountClientState, CommunicateAction},
     committee::Committee,
     error::Error,
     messages::*,
+    node::AuthorityClient,
     storage::{InMemoryStoreClient, StorageClient},
+    worker::{AuthorityWorker, WorkerState},
 };
 use async_trait::async_trait;
 use futures::lock::Mutex;
