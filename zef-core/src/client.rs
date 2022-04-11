@@ -16,7 +16,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use failure::{bail, ensure};
-use futures::{future, StreamExt};
+use futures::StreamExt;
 use std::{
     collections::{BTreeMap, HashMap},
     time::Duration,
@@ -326,60 +326,6 @@ where
         Ok(())
     }
 
-    /// Execute a sequence of actions in parallel for all authorities.
-    /// Try to stop early when a quorum is reached.
-    async fn communicate_with_quorum<'a, V, F>(
-        &'a mut self,
-        committee: &Committee,
-        execute: F,
-    ) -> Result<Vec<V>, Option<Error>>
-    where
-        F: Fn(AuthorityName, &'a mut A) -> future::BoxFuture<'a, Result<V, Error>> + Clone,
-    {
-        let authority_clients = &mut self.authority_clients;
-        let mut responses: futures::stream::FuturesUnordered<_> = authority_clients
-            .iter_mut()
-            .filter_map(|(name, client)| {
-                let execute = execute.clone();
-                if committee.weight(name) > 0 {
-                    Some(async move { (*name, execute(*name, client).await) })
-                } else {
-                    // This should not happen but better prevent it because certificates
-                    // are not allowed to include votes with weight 0.
-                    None
-                }
-            })
-            .collect();
-
-        let mut values = Vec::new();
-        let mut value_score = 0;
-        let mut error_scores = HashMap::new();
-        while let Some((name, result)) = responses.next().await {
-            match result {
-                Ok(value) => {
-                    values.push(value);
-                    value_score += committee.weight(&name);
-                    if value_score >= committee.quorum_threshold() {
-                        // Success!
-                        return Ok(values);
-                    }
-                }
-                Err(err) => {
-                    let entry = error_scores.entry(err.clone()).or_insert(0);
-                    *entry += committee.weight(&name);
-                    if *entry >= committee.validity_threshold() {
-                        // At least one honest node returned this error.
-                        // No quorum can be reached, so return early.
-                        return Err(Some(err));
-                    }
-                }
-            }
-        }
-
-        // No specific error is available to report reliably.
-        Err(None)
-    }
-
     /// Broadcast confirmation orders and optionally one more request order.
     /// The corresponding sequence numbers should be consecutive and increasing.
     async fn communicate_account_updates(
@@ -391,20 +337,19 @@ where
         let storage_client = self.node_client.storage_client().await;
         let cross_shard_delay = self.cross_shard_delay;
         let cross_shard_retries = self.cross_shard_retries;
-        let result = self
-            .communicate_with_quorum(committee, |name, client| {
-                let mut updater = AuthorityUpdater {
-                    name,
-                    client,
-                    store: storage_client.clone(),
-                    delay: cross_shard_delay,
-                    retries: cross_shard_retries,
-                };
-                let action = action.clone();
-                let account_id = account_id.clone();
-                Box::pin(async move { updater.send_account_update(account_id, action).await })
-            })
-            .await;
+        let result = communicate_with_quorum(&self.authority_clients, committee, |name, client| {
+            let mut updater = AuthorityUpdater {
+                name,
+                client,
+                store: storage_client.clone(),
+                delay: cross_shard_delay,
+                retries: cross_shard_retries,
+            };
+            let action = action.clone();
+            let account_id = account_id.clone();
+            Box::pin(async move { updater.send_account_update(account_id, action).await })
+        })
+        .await;
         let votes = match result {
             Ok(votes) => votes,
             Err(Some(Error::InactiveAccount(id)))
@@ -474,8 +419,8 @@ where
         let account_id = self.account_id.clone();
         let committee = self.committee().await?;
         let trackers = self.received_certificate_trackers.clone();
-        let result = self
-            .communicate_with_quorum(&committee, |name, client| {
+        let result =
+            communicate_with_quorum(&self.authority_clients, &committee, |name, mut client| {
                 let account_id = &account_id;
                 let tracker = *trackers.get(&name).unwrap_or(&0);
                 Box::pin(async move {
