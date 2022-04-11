@@ -11,7 +11,7 @@ use std::{
     str::FromStr,
 };
 use structopt::StructOpt;
-use zef_core::{authority::*, base_types::*};
+use zef_core::{base_types::*, worker::*};
 use zef_service::{
     config::*,
     network,

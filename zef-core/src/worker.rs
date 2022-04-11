@@ -9,23 +9,16 @@ use crate::{
 use async_trait::async_trait;
 
 #[cfg(test)]
-#[path = "unit_tests/authority_tests.rs"]
-mod authority_tests;
+#[path = "unit_tests/worker_tests.rs"]
+mod worker_tests;
 
-/// State of a worker in an authority or a client.
-pub struct WorkerState<StorageClient> {
-    /// The signature key pair of the authority. The key may be missing for replicas
-    /// without voting rights (possibly with a partial view of accounts).
-    key_pair: Option<KeyPair>,
-    /// Access to local persistent storage.
-    storage: StorageClient,
-}
-
-/// Interface provided by each (shard of an) authority.
-/// All commands return either the current account info or an error.
-/// Repeating commands produces no changes and returns no error.
+/// Interface provided by each physical shard (aka "worker") of an authority or a local node.
+/// * All commands return either the current account info or an error.
+/// * Repeating commands produces no changes and returns no error.
+/// * Some handlers may return cross-shard requests, that is, messages
+///   to be communicated to other workers of the same authority.
 #[async_trait]
-pub trait Authority {
+pub trait AuthorityWorker {
     /// Initiate a new request.
     async fn handle_request_order(
         &mut self,
@@ -43,15 +36,31 @@ pub trait Authority {
         &mut self,
         query: AccountInfoQuery,
     ) -> Result<AccountInfoResponse, Error>;
-}
 
-#[async_trait]
-pub trait Worker {
     /// Handle (trusted!) cross shard request.
     async fn handle_cross_shard_request(
         &mut self,
         request: CrossShardRequest,
     ) -> Result<Vec<CrossShardRequest>, Error>;
+}
+
+impl<Client> WorkerState<Client> {
+    pub fn new(key_pair: Option<KeyPair>, storage: Client) -> Self {
+        WorkerState { key_pair, storage }
+    }
+
+    pub(crate) fn storage_client(&self) -> &Client {
+        &self.storage
+    }
+}
+
+/// State of a worker in an authority or a local node.
+pub struct WorkerState<StorageClient> {
+    /// The signature key pair of the authority. The key may be missing for replicas
+    /// without voting rights (possibly with a partial view of accounts).
+    key_pair: Option<KeyPair>,
+    /// Access to local persistent storage.
+    storage: StorageClient,
 }
 
 impl<Client> WorkerState<Client>
@@ -204,7 +213,7 @@ where
 }
 
 #[async_trait]
-impl<Client> Authority for WorkerState<Client>
+impl<Client> AuthorityWorker for WorkerState<Client>
 where
     Client: StorageClient + Clone + 'static,
 {
@@ -295,13 +304,7 @@ where
         let response = AccountInfoResponse::new(info, self.key_pair.as_ref());
         Ok(response)
     }
-}
 
-#[async_trait]
-impl<Client> Worker for WorkerState<Client>
-where
-    Client: StorageClient + Clone + 'static,
-{
     async fn handle_cross_shard_request(
         &mut self,
         request: CrossShardRequest,
@@ -334,15 +337,5 @@ where
                 Ok(Vec::new())
             }
         }
-    }
-}
-
-impl<Client> WorkerState<Client> {
-    pub fn new(key_pair: Option<KeyPair>, storage: Client) -> Self {
-        WorkerState { key_pair, storage }
-    }
-
-    pub(crate) fn storage_client(&self) -> &Client {
-        &self.storage
     }
 }
