@@ -2,8 +2,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
+use zef_base::{
     account::Outcome, base_types::*, committee::Committee, ensure, error::Error, messages::*,
+};
+use crate::{
     storage::StorageClient,
 };
 use async_trait::async_trait;
@@ -71,7 +73,7 @@ where
     pub(crate) async fn fully_handle_certificate(
         &mut self,
         certificate: Certificate,
-    ) -> Result<AccountInfoResponse, crate::error::Error> {
+    ) -> Result<AccountInfoResponse, zef_base::error::Error> {
         let (response, mut requests) = self.handle_certificate(certificate).await?;
         while let Some(request) = requests.pop() {
             requests.extend(self.handle_cross_shard_request(request).await?);

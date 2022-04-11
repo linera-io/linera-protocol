@@ -4,8 +4,11 @@
 
 use crate::transport::*;
 use async_trait::async_trait;
+use zef_base::{
+    base_types::*, error::*, messages::*, serialize::*,
+};
 use zef_core::{
-    base_types::*, error::*, messages::*, node::AuthorityClient, serialize::*, worker::*,
+    node::AuthorityClient, worker::*,
 };
 
 #[cfg(feature = "benchmark")]

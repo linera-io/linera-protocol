@@ -258,18 +258,6 @@ impl Value {
     }
 }
 
-/// Non-testing code should make the pattern matching explicit so that
-/// we know where to add protocols in the future.
-#[cfg(test)]
-impl Request {
-    pub(crate) fn amount(&self) -> Option<Amount> {
-        match &self.operation {
-            Operation::Transfer { amount, .. } => Some(*amount),
-            _ => None,
-        }
-    }
-}
-
 impl RequestOrder {
     pub fn new(request: Request, secret: &KeyPair) -> Self {
         let signature = Signature::new(&request, secret);

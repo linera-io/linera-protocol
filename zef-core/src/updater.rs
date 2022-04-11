@@ -2,8 +2,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
+use zef_base::{
     account::AccountState, base_types::*, committee::Committee, error::Error, messages::*,
+};
+use crate::{
     node::AuthorityClient, storage::StorageClient,
 };
 use futures::{future, StreamExt};

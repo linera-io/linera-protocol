@@ -65,12 +65,12 @@ pub type AuthorityName = PublicKeyBytes;
 /// Alias for the authentication method of an account.
 pub type AccountOwner = PublicKeyBytes;
 
-#[cfg(test)]
+// For testing only
 pub fn dbg_account(name: u8) -> AccountId {
     AccountId(vec![SequenceNumber(name.into())])
 }
 
-#[cfg(test)]
+// For testing only
 pub fn dbg_addr(name: u8) -> PublicKeyBytes {
     let addr = [name; dalek::PUBLIC_KEY_LENGTH];
     PublicKeyBytes(addr)

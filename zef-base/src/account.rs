@@ -334,7 +334,7 @@ impl AccountManager {
 }
 
 impl AccountState {
-    pub(crate) fn make_account_info(&self, key_pair: Option<&KeyPair>) -> AccountInfoResponse {
+    pub fn make_account_info(&self, key_pair: Option<&KeyPair>) -> AccountInfoResponse {
         let info = AccountInfo {
             account_id: self.id.clone(),
             manager: self.manager.clone(),
@@ -377,7 +377,7 @@ impl AccountState {
     }
 
     /// Verify that the operation is valid and return the value to certify.
-    pub(crate) fn validate_operation(&self, request: &Request) -> Result<(), Error> {
+    pub fn validate_operation(&self, request: &Request) -> Result<(), Error> {
         match &request.operation {
             Operation::Transfer { amount, .. } => {
                 ensure!(*amount > Amount::zero(), Error::IncorrectTransferAmount);
@@ -405,7 +405,7 @@ impl AccountState {
     }
 
     /// Whether an invalid operation for this request can become valid later.
-    pub(crate) fn is_retriable_validation_error(request: &Request, error: &Error) -> bool {
+    pub fn is_retriable_validation_error(request: &Request, error: &Error) -> bool {
         match (&request.operation, error) {
             (Operation::Transfer { .. }, Error::InsufficientFunding { .. }) => true,
             (Operation::Transfer { .. }, _) => false,
@@ -420,7 +420,7 @@ impl AccountState {
     }
 
     /// Execute the sender's side of the operation.
-    pub(crate) fn apply_operation_as_sender(
+    pub fn apply_operation_as_sender(
         &mut self,
         operation: &Operation,
         key: HashValue,
@@ -446,7 +446,7 @@ impl AccountState {
 
     /// Execute the recipient's side of an operation.
     /// Returns true if the operation changed the account state.
-    pub(crate) fn apply_operation_as_recipient(
+    pub fn apply_operation_as_recipient(
         &mut self,
         operation: &Operation,
         committee: Committee,

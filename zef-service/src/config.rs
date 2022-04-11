@@ -10,8 +10,11 @@ use std::{
     io::{BufReader, BufWriter, Write},
     path::Path,
 };
+use zef_base::{
+    account::AccountState, base_types::*, committee::Committee,
+};
 use zef_core::{
-    account::AccountState, base_types::*, client::AccountClientState, committee::Committee,
+    client::AccountClientState,
     node::AuthorityClient, storage::StorageClient,
 };
 
