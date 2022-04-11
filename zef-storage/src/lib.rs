@@ -8,6 +8,7 @@ mod memory_storage;
 use async_trait::async_trait;
 use dyn_clone::DynClone;
 use futures::future;
+use std::ops::DerefMut;
 use zef_base::{
     account::AccountState,
     base_types::{AccountId, HashValue},
@@ -70,3 +71,26 @@ pub trait Storage: DynClone + Send + Sync {
 }
 
 dyn_clone::clone_trait_object!(Storage);
+
+#[async_trait]
+impl Storage for Box<dyn Storage> {
+    async fn read_account_or_default(&mut self, id: &AccountId) -> Result<AccountState, Error> {
+        self.deref_mut().read_account_or_default(id).await
+    }
+
+    async fn write_account(&mut self, value: AccountState) -> Result<(), Error> {
+        self.deref_mut().write_account(value).await
+    }
+
+    async fn remove_account(&mut self, id: &AccountId) -> Result<(), Error> {
+        self.deref_mut().remove_account(id).await
+    }
+
+    async fn read_certificate(&mut self, hash: HashValue) -> Result<Certificate, Error> {
+        self.deref_mut().read_certificate(hash).await
+    }
+
+    async fn write_certificate(&mut self, value: Certificate) -> Result<(), Error> {
+        self.deref_mut().write_certificate(value).await
+    }
+}
