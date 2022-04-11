@@ -5,7 +5,6 @@
 #![deny(warnings)]
 
 pub mod config;
-pub mod file_storage;
 pub mod network;
 pub mod storage;
 pub mod transport;

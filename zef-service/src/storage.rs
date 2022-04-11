@@ -1,9 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{config::GenesisConfig, file_storage::FileStoreClient};
+use crate::config::GenesisConfig;
 use std::path::PathBuf;
-use zef_core::storage::{InMemoryStoreClient, StorageClient};
+use zef_storage::{FileStoreClient, InMemoryStoreClient, StorageClient};
 
 pub type Storage = Box<dyn StorageClient>;
 

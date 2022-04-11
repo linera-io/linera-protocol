@@ -1,6 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::StorageClient;
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use sha2::Digest;
@@ -11,9 +12,6 @@ use zef_base::{
     base_types::{AccountId, HashValue},
     error::Error,
     messages::Certificate,
-};
-use zef_core::{
-    storage::StorageClient,
 };
 
 #[cfg(test)]

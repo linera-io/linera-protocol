@@ -4,18 +4,10 @@
 
 #![deny(warnings)]
 
-use zef_base::{
-    base_types::*,
-    committee::Committee,
-    messages::*,
-    serialize::*,
-};
-use zef_core::{
-    client::*,
-    node::AuthorityClient,
-    storage::{InMemoryStoreClient, StorageClient},
-};
+use zef_base::{base_types::*, committee::Committee, messages::*, serialize::*};
+use zef_core::{client::*, node::AuthorityClient};
 use zef_service::{config::*, network, storage::Storage, transport};
+use zef_storage::{InMemoryStoreClient, StorageClient};
 
 use bytes::Bytes;
 use futures::stream::StreamExt;
