@@ -16,7 +16,7 @@ use zef_core::worker::*;
 use zef_service::{
     config::*,
     network,
-    storage::{make_storage, Storage},
+    storage::{make_storage, MixedStorage},
     transport,
 };
 
@@ -27,8 +27,8 @@ async fn make_shard_server(
     buffer_size: usize,
     cross_shard_config: network::CrossShardConfig,
     shard: u32,
-    storage: Storage,
-) -> network::Server<Storage> {
+    storage: MixedStorage,
+) -> network::Server<MixedStorage> {
     // NOTE: This log entry is used to compute performance.
     info!("Shard booted on {}", server_config.authority.host);
     let num_shards = server_config.authority.num_shards;
@@ -52,7 +52,7 @@ async fn make_servers(
     buffer_size: usize,
     cross_shard_config: network::CrossShardConfig,
     storage: Option<&PathBuf>,
-) -> Vec<network::Server<Storage>> {
+) -> Vec<network::Server<MixedStorage>> {
     let num_shards = server_config.authority.num_shards;
     let mut servers = Vec::new();
     // TODO: create servers in parallel

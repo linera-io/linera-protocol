@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::StorageClient;
+use crate::Storage;
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use sha2::Digest;
@@ -135,7 +135,7 @@ impl FileStoreClient {
 }
 
 #[async_trait]
-impl StorageClient for FileStoreClient {
+impl Storage for FileStoreClient {
     async fn read_account_or_default(&mut self, id: &AccountId) -> Result<AccountState, Error> {
         let store = self.0.lock().await;
         Ok(store

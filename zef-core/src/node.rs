@@ -8,7 +8,7 @@ use futures::{lock::Mutex, StreamExt};
 use rand::prelude::SliceRandom;
 use std::sync::Arc;
 use zef_base::{account::AccountManager, base_types::*, error::Error, messages::*};
-use zef_storage::StorageClient;
+use zef_storage::Storage;
 
 /// How to communicate with an authority or a local node.
 #[async_trait]
@@ -43,7 +43,7 @@ pub struct LocalNodeClient<S>(Arc<Mutex<LocalNode<S>>>);
 #[async_trait]
 impl<S> AuthorityClient for LocalNodeClient<S>
 where
-    S: StorageClient + Clone + 'static,
+    S: Storage + Clone + 'static,
 {
     async fn handle_request_order(
         &mut self,
@@ -97,7 +97,7 @@ where
 
 impl<S> LocalNodeClient<S>
 where
-    S: StorageClient + Clone + 'static,
+    S: Storage + Clone + 'static,
 {
     async fn try_process_certificates(
         &mut self,

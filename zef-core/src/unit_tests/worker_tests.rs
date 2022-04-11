@@ -10,7 +10,7 @@ use zef_base::{
     committee::Committee,
     messages::*,
 };
-use zef_storage::{InMemoryStoreClient, StorageClient};
+use zef_storage::{InMemoryStoreClient, Storage};
 
 #[tokio::test]
 async fn test_handle_request_order_bad_signature() {
