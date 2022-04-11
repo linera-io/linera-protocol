@@ -3,6 +3,7 @@ members = [
         "aws-test",
         "zef-core",
         "zef-service",
+        "zef-base",
 ]
 
 [profile.release]

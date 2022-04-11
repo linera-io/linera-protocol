@@ -4,13 +4,15 @@
 
 #![deny(warnings)]
 
-use zef_core::{
+use zef_base::{
     base_types::*,
-    client::*,
     committee::Committee,
     messages::*,
-    node::AuthorityClient,
     serialize::*,
+};
+use zef_core::{
+    client::*,
+    node::AuthorityClient,
     storage::{InMemoryStoreClient, StorageClient},
 };
 use zef_service::{config::*, network, storage::Storage, transport};

@@ -1,5 +1,5 @@
 [package]
-name = "zef-core"
+name = "zef-base"
 version = "0.1.0"
 authors = ["Zefchain <devops@zefchain.com>"]
 edition = "2021"
@@ -25,9 +25,12 @@ sha2 = "0.9.8"
 structopt = "0.3.23"
 log = "0.4.14"
 
-zef-base = { path = "../zef-base" }
-
 [dev-dependencies]
 similar-asserts = "1.1.0"
 serde-reflection = "0.3.5"
 serde_yaml = "0.8.21"
+
+[[example]]
+name = "generate-format"
+path = "src/generate_format.rs"
+test = false

@@ -2,11 +2,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
+use zef_base::{
     account::{AccountManager, AccountState},
     base_types::*,
     committee::Committee,
     messages::*,
+};
+use crate::{
     storage::{InMemoryStoreClient, StorageClient},
     worker::{AuthorityWorker, WorkerState},
 };
@@ -181,8 +183,8 @@ async fn test_handle_request_order() {
         .cloned()
         .unwrap();
     assert_eq!(
-        account_info_response.info.manager.pending().unwrap(),
-        &pending
+        account_info_response.info.manager.pending().unwrap().value,
+        pending.value
     );
 }
 
@@ -198,15 +200,16 @@ async fn test_handle_request_order_replay() {
     let request_order =
         make_transfer_request_order(dbg_account(1), &sender_key_pair, recipient, Amount::from(5));
 
-    let vote = state
+    let response = state
         .handle_request_order(request_order.clone())
         .await
         .unwrap();
-    vote.check(state.key_pair.as_ref().unwrap().public())
+    response.check(state.key_pair.as_ref().unwrap().public())
         .as_ref()
         .unwrap();
-    let replay_vote = state.handle_request_order(request_order).await.unwrap();
-    assert_eq!(vote, replay_vote);
+    let replay_response = state.handle_request_order(request_order).await.unwrap();
+    // Workaround lack of equality.
+    assert_eq!(HashValue::new(&response.info), HashValue::new(&replay_response.info));
 }
 
 #[tokio::test]
@@ -405,7 +408,7 @@ async fn test_handle_certificate_to_active_recipient() {
     assert_eq!(dbg_account(1), info.account_id);
     assert_eq!(Balance::from(0), info.balance);
     assert_eq!(SequenceNumber::from(1), info.next_sequence_number);
-    assert_eq!(None, info.manager.pending());
+    assert!(info.manager.pending().is_none());
     assert_eq!(
         state
             .storage
@@ -435,14 +438,12 @@ async fn test_handle_certificate_to_active_recipient() {
     };
     let response = state.handle_account_info_query(info_query).await.unwrap();
     assert_eq!(response.info.queried_received_certificates.len(), 1);
-    assert_eq!(
-        response.info.queried_received_certificates[0]
+    assert!(
+        matches!(response.info.queried_received_certificates[0]
             .value
             .confirmed_request()
             .unwrap()
-            .amount()
-            .unwrap(),
-        Amount::from(5)
+            .operation, Operation::Transfer { amount, .. } if amount == Amount::from(5))
     );
 }
 
@@ -472,7 +473,7 @@ async fn test_handle_certificate_to_inactive_recipient() {
     assert_eq!(dbg_account(1), info.account_id);
     assert_eq!(Balance::from(0), info.balance);
     assert_eq!(SequenceNumber::from(1), info.next_sequence_number);
-    assert_eq!(None, info.manager.pending());
+    assert!(info.manager.pending().is_none());
     assert_eq!(
         state
             .storage

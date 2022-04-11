@@ -2,11 +2,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
+use zef_base::{
     account::AccountManager,
     base_types::*,
     error::Error,
     messages::*,
+};
+use crate::{
     storage::StorageClient,
     worker::{AuthorityWorker, WorkerState},
 };

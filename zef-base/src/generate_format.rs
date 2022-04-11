@@ -5,7 +5,7 @@
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use std::{fs::File, io::Write};
 use structopt::{clap::arg_enum, StructOpt};
-use zef_core::{account, error, messages, serialize};
+use zef_base::{account, error, messages, serialize};
 
 fn get_registry() -> Result<Registry> {
     let mut tracer = Tracer::new(
@@ -23,6 +23,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<messages::CrossShardRequest>(&samples)?;
     tracer.trace_type::<error::Error>(&samples)?;
     tracer.trace_type::<serialize::SerializedMessage>(&samples)?;
+    tracer.trace_type::<account::AccountState>(&samples)?;
     tracer.registry()
 }
 
@@ -45,7 +46,7 @@ struct Options {
     action: Action,
 }
 
-const FILE_PATH: &str = "zef-core/tests/staged/formats.yaml";
+const FILE_PATH: &str = "zef-base/tests/staged/formats.yaml";
 
 fn main() {
     let options = Options::from_args();
