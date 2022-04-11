@@ -12,7 +12,7 @@ use zef_storage::Storage;
 
 /// How to communicate with an authority or a local node.
 #[async_trait]
-pub trait AuthorityClient {
+pub trait AuthorityNode {
     /// Initiate a new transfer.
     async fn handle_request_order(
         &mut self,
@@ -41,7 +41,7 @@ pub struct LocalNode<S> {
 pub struct LocalNodeClient<S>(Arc<Mutex<LocalNode<S>>>);
 
 #[async_trait]
-impl<S> AuthorityClient for LocalNodeClient<S>
+impl<S> AuthorityNode for LocalNodeClient<S>
 where
     S: Storage + Clone + 'static,
 {
@@ -157,7 +157,7 @@ where
         target_next_sequence_number: SequenceNumber,
     ) -> Result<SequenceNumber, Error>
     where
-        A: AuthorityClient + Send + Sync + 'static + Clone,
+        A: AuthorityNode + Send + Sync + 'static + Clone,
     {
         // Sequentially try each authority in random order.
         // TODO: We could also try a few of them in parallel.
@@ -196,7 +196,7 @@ where
         stop: SequenceNumber,
     ) -> Result<(), Error>
     where
-        A: AuthorityClient + Send + Sync + 'static + Clone,
+        A: AuthorityNode + Send + Sync + 'static + Clone,
     {
         let range = SequenceNumberRange {
             start,
@@ -228,7 +228,7 @@ where
         account_id: AccountId,
     ) -> Result<(SequenceNumber, RoundNumber), Error>
     where
-        A: AuthorityClient + Send + Sync + 'static + Clone,
+        A: AuthorityNode + Send + Sync + 'static + Clone,
     {
         let infos: futures::stream::FuturesUnordered<_> = authorities
             .into_iter()
@@ -257,7 +257,7 @@ where
         account_id: AccountId,
     ) -> Result<(SequenceNumber, RoundNumber), Error>
     where
-        A: AuthorityClient + Send + Sync + 'static + Clone,
+        A: AuthorityNode + Send + Sync + 'static + Clone,
     {
         let start = self
             .current_next_sequence_number(account_id.clone())

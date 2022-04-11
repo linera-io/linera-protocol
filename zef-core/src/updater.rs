@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::node::AuthorityClient;
+use crate::node::AuthorityNode;
 use futures::{future, StreamExt};
 use std::{collections::HashMap, time::Duration};
 use zef_base::{
@@ -36,7 +36,7 @@ pub async fn communicate_with_quorum<'a, A, V, F>(
     execute: F,
 ) -> Result<Vec<V>, Option<Error>>
 where
-    A: AuthorityClient + Send + Sync + 'static + Clone,
+    A: AuthorityNode + Send + Sync + 'static + Clone,
     F: Fn(AuthorityName, A) -> future::BoxFuture<'a, Result<V, Error>> + Clone,
 {
     let mut responses: futures::stream::FuturesUnordered<_> = authority_clients
@@ -85,7 +85,7 @@ where
 
 impl<A, S> AuthorityUpdater<A, S>
 where
-    A: AuthorityClient + Send + Sync + 'static + Clone,
+    A: AuthorityNode + Send + Sync + 'static + Clone,
     S: Storage + Clone + 'static,
 {
     pub async fn send_certificate(
