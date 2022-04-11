@@ -6,8 +6,8 @@ use crate::transport::NetworkProtocol;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
-    fs::{self, File, OpenOptions},
-    io::{BufRead, BufReader, BufWriter, Write},
+    fs::{self, OpenOptions},
+    io::{BufReader, BufWriter, Write},
     path::Path,
 };
 use zef_core::{
@@ -177,39 +177,15 @@ impl WalletState {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize)]
 pub struct GenesisConfig {
     pub accounts: Vec<(AccountId, AccountOwner, Balance)>,
 }
 
+impl Import for GenesisConfig {}
+impl Export for GenesisConfig {}
+
 impl GenesisConfig {
-    pub fn read(path: &Path) -> Result<Self, failure::Error> {
-        let file = File::open(path)?;
-        let reader = BufReader::new(file);
-        let mut accounts = Vec::new();
-        for line in reader.lines() {
-            let line = line?;
-            let elements = line.split(':').collect::<Vec<_>>();
-            if elements.len() != 3 {
-                failure::bail!("expecting three columns separated with ':'")
-            }
-            let id = elements[0].parse()?;
-            let pubkey = elements[1].parse()?;
-            let balance = elements[2].parse()?;
-            accounts.push((id, pubkey, balance));
-        }
-        Ok(Self { accounts })
-    }
-
-    pub fn write(&self, path: &Path) -> Result<(), std::io::Error> {
-        let file = OpenOptions::new().create(true).write(true).open(path)?;
-        let mut writer = BufWriter::new(file);
-        for (id, pubkey, balance) in &self.accounts {
-            writeln!(writer, "{}:{}:{}", id, pubkey, balance)?;
-        }
-        Ok(())
-    }
-
     pub async fn initialize_store<S>(
         &self,
         committee: Committee,

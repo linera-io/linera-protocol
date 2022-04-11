@@ -33,48 +33,48 @@ trap 'kill $(jobs -p)' EXIT
 
 # Create configuration files for 1000 user accounts.
 # * Private account states are stored in one local wallet `wallet.json`.
-# * `genesis.txt` is used to mint the corresponding initial balances at startup on the server side.
-./client --committee committee.json --wallet wallet.json --genesis genesis.txt create_genesis_config 1000 --initial-funding 100
+# * `genesis.json` is used to mint the corresponding initial balances at startup on the server side.
+./client --committee committee.json --wallet wallet.json --genesis genesis.json create_genesis_config 1000 --initial-funding 100
 
 # Start servers and create initial accounts in DB
 for I in 1 2 3 4
 do
     for J in $(seq 0 3)
     do
-        ./server run --server server_"$I".json --shard "$J" --genesis genesis.txt --committee committee.json &
+        ./server run --server server_"$I".json --shard "$J" --genesis genesis.json --committee committee.json &
     done
  done
 
 LAST_PID="$!"
 
 # Query balance for first and last user account
-ACCOUNT1="`head -n 1 genesis.txt | awk -F: '{ print $1 }'`"
-ACCOUNT2="`tail -n -1 genesis.txt | awk -F: '{ print $1 }'`"
-./client --committee committee.json --wallet wallet.json --genesis genesis.txt query_balance "$ACCOUNT1"
-./client --committee committee.json --wallet wallet.json --genesis genesis.txt query_balance "$ACCOUNT2"
+ACCOUNT1="[0]"
+ACCOUNT2="[999]"
+./client --committee committee.json --wallet wallet.json --genesis genesis.json query_balance "$ACCOUNT1"
+./client --committee committee.json --wallet wallet.json --genesis genesis.json query_balance "$ACCOUNT2"
 
 # Transfer 10 units
-./client --committee committee.json --wallet wallet.json --genesis genesis.txt transfer 10 --from "$ACCOUNT1" --to "$ACCOUNT2"
+./client --committee committee.json --wallet wallet.json --genesis genesis.json transfer 10 --from "$ACCOUNT1" --to "$ACCOUNT2"
 
 # Restart last server
 kill "$LAST_PID"
-./server run --server server_"$I".json --shard "$J" --genesis genesis.txt --committee committee.json &
+./server run --server server_"$I".json --shard "$J" --genesis genesis.json --committee committee.json &
 
 # Query balances again
-./client --committee committee.json --wallet wallet.json --genesis genesis.txt query_balance "$ACCOUNT1"
-./client --committee committee.json --wallet wallet.json --genesis genesis.txt query_balance "$ACCOUNT2"
+./client --committee committee.json --wallet wallet.json --genesis genesis.json query_balance "$ACCOUNT1"
+./client --committee committee.json --wallet wallet.json --genesis genesis.json query_balance "$ACCOUNT2"
 
 # Launch local benchmark using all user accounts
-./client --committee committee.json --wallet wallet.json --genesis genesis.txt benchmark
+./client --committee committee.json --wallet wallet.json --genesis genesis.json benchmark
 
 # Create derived account
-ACCOUNT3="`./client --committee committee.json --wallet wallet.json --genesis genesis.txt open_account --from "$ACCOUNT1"`"
+ACCOUNT3="`./client --committee committee.json --wallet wallet.json --genesis genesis.json open_account --from "$ACCOUNT1"`"
 
 # Inspect state of derived account
 fgrep '"account_id"':"$ACCOUNT3" wallet.json
 
 # Query the balance of the first account
-./client --committee committee.json --wallet wallet.json --genesis genesis.txt query_balance "$ACCOUNT1"
+./client --committee committee.json --wallet wallet.json --genesis genesis.json query_balance "$ACCOUNT1"
 
 cd ../..
 ```
