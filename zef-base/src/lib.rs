@@ -8,4 +8,3 @@ pub mod committee;
 pub mod error;
 pub mod messages;
 pub mod serialize;
-

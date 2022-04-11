@@ -4,12 +4,8 @@
 
 use crate::transport::*;
 use async_trait::async_trait;
-use zef_base::{
-    base_types::*, error::*, messages::*, serialize::*,
-};
-use zef_core::{
-    node::AuthorityClient, worker::*,
-};
+use zef_base::{base_types::*, error::*, messages::*, serialize::*};
+use zef_core::{node::AuthorityClient, worker::*};
 
 #[cfg(feature = "benchmark")]
 use crate::network_server::BenchmarkServer;
@@ -98,7 +94,7 @@ impl<StorageClient> Server<StorageClient> {
 
 impl<StorageClient> Server<StorageClient>
 where
-    StorageClient: zef_core::storage::StorageClient + Clone + 'static,
+    StorageClient: zef_storage::StorageClient + Clone + 'static,
 {
     async fn forward_cross_shard_queries(
         network_protocol: NetworkProtocol,
@@ -203,7 +199,7 @@ struct RunningServerState<StorageClient> {
 
 impl<StorageClient> MessageHandler for RunningServerState<StorageClient>
 where
-    StorageClient: zef_core::storage::StorageClient + Clone + 'static,
+    StorageClient: zef_storage::StorageClient + Clone + 'static,
 {
     fn handle_message<'a>(
         &'a mut self,

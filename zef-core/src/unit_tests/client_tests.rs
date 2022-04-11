@@ -1,17 +1,9 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use zef_base::{
-    account::AccountState,
-    base_types::*,
-    committee::Committee,
-    error::Error,
-    messages::*,
-};
 use crate::{
     client::{AccountClient, AccountClientState, CommunicateAction},
     node::AuthorityClient,
-    storage::{InMemoryStoreClient, StorageClient},
     worker::{AuthorityWorker, WorkerState},
 };
 use async_trait::async_trait;
@@ -20,6 +12,10 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     sync::Arc,
 };
+use zef_base::{
+    account::AccountState, base_types::*, committee::Committee, error::Error, messages::*,
+};
+use zef_storage::{InMemoryStoreClient, StorageClient};
 
 /// An authority used for testing. "Faulty" authorities ignore request orders (but not
 /// certificates or info queries) and have the wrong initial balance for all accounts.
@@ -274,7 +270,8 @@ async fn test_initiating_valid_transfer() {
                 3
             )
             .await
-            .unwrap().value,
+            .unwrap()
+            .value,
         certificate.value
     );
 }
@@ -299,7 +296,8 @@ async fn test_rotate_key_pair() {
                 3
             )
             .await
-            .unwrap().value,
+            .unwrap()
+            .value,
         certificate.value
     );
     assert_eq!(sender.query_safe_balance().await.unwrap(), Balance::from(4));
@@ -335,7 +333,8 @@ async fn test_transfer_ownership() {
                 3
             )
             .await
-            .unwrap().value,
+            .unwrap()
+            .value,
         certificate.value
     );
     assert_eq!(sender.query_safe_balance().await.unwrap(), Balance::from(4));
@@ -370,7 +369,8 @@ async fn test_share_ownership() {
                 3
             )
             .await
-            .unwrap().value,
+            .unwrap()
+            .value,
         certificate.value
     );
     assert_eq!(sender.query_safe_balance().await.unwrap(), Balance::from(4));
@@ -452,7 +452,8 @@ async fn test_open_account_after_transfer() {
                 3
             )
             .await
-            .unwrap().value,
+            .unwrap()
+            .value,
         certificate.value
     );
     assert!(matches!(&certificate.value, Value::Confirmed{
@@ -539,7 +540,9 @@ async fn test_close_account() {
                 SequenceNumber::from(0),
                 3
             )
-            .await.unwrap().value,
+            .await
+            .unwrap()
+            .value,
         certificate.value
     );
     // Cannot use the account any more.
@@ -605,7 +608,8 @@ async fn test_bidirectional_transfer() {
                 3
             )
             .await
-            .unwrap().value,
+            .unwrap()
+            .value,
         certificate.value
     );
     // Our sender already confirmed.
