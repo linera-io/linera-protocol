@@ -11,7 +11,7 @@ use std::{
     path::Path,
 };
 use zef_base::{account::AccountState, base_types::*, committee::Committee};
-use zef_core::{client::AccountClientState, node::AuthorityClient};
+use zef_core::{client::AccountClientState, node::AuthorityNode};
 use zef_storage::Storage;
 
 pub trait Import: DeserializeOwned {
@@ -138,7 +138,7 @@ impl WalletState {
 
     pub async fn update_from_state<A, S>(&mut self, state: &mut AccountClientState<A, S>)
     where
-        A: AuthorityClient + Send + Sync + 'static + Clone,
+        A: AuthorityNode + Send + Sync + 'static + Clone,
         S: Storage + Clone + 'static,
     {
         let account = self

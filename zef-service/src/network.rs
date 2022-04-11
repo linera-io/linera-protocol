@@ -5,7 +5,7 @@
 use crate::transport::*;
 use async_trait::async_trait;
 use zef_base::{base_types::*, error::*, messages::*, serialize::*};
-use zef_core::{node::AuthorityClient, worker::*};
+use zef_core::{node::AuthorityNode, worker::*};
 
 #[cfg(feature = "benchmark")]
 use crate::network_server::BenchmarkServer;
@@ -387,7 +387,7 @@ impl Client {
 }
 
 #[async_trait]
-impl AuthorityClient for Client {
+impl AuthorityNode for Client {
     /// Initiate a new request.
     async fn handle_request_order(
         &mut self,

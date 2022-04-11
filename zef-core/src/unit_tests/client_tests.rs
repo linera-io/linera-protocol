@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     client::{AccountClient, AccountClientState, CommunicateAction},
-    node::AuthorityClient,
+    node::AuthorityNode,
     worker::{AuthorityWorker, WorkerState},
 };
 use async_trait::async_trait;
@@ -28,7 +28,7 @@ struct LocalAuthority {
 struct LocalAuthorityClient(Arc<Mutex<LocalAuthority>>);
 
 #[async_trait]
-impl AuthorityClient for LocalAuthorityClient {
+impl AuthorityNode for LocalAuthorityClient {
     async fn handle_request_order(
         &mut self,
         order: RequestOrder,

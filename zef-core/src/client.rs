@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    node::{AuthorityClient, LocalNodeClient},
+    node::{AuthorityNode, LocalNodeClient},
     updater::{communicate_with_quorum, AuthorityUpdater, CommunicateAction},
     worker::WorkerState,
 };
@@ -99,13 +99,13 @@ pub trait AccountClient {
 }
 
 /// Reference implementation of the `AccountClient` trait using many instances of some
-/// `AuthorityClient` implementation for communication, and a client to some (local)
+/// `AuthorityNode` implementation for communication, and a client to some (local)
 /// storage.
-pub struct AccountClientState<AuthorityClient, StorageClient> {
+pub struct AccountClientState<AuthorityNode, StorageClient> {
     /// The off-chain account id.
     account_id: AccountId,
     /// How to talk to this committee.
-    authority_clients: Vec<(AuthorityName, AuthorityClient)>,
+    authority_clients: Vec<(AuthorityName, AuthorityNode)>,
     /// Sequence number that we plan to use for the next request.
     /// We track this value outside local storage mainly for security reasons.
     next_sequence_number: SequenceNumber,
@@ -173,7 +173,7 @@ impl<A, S> AccountClientState<A, S> {
 
 impl<A, S> AccountClientState<A, S>
 where
-    A: AuthorityClient + Send + Sync + 'static + Clone,
+    A: AuthorityNode + Send + Sync + 'static + Clone,
     S: Storage + Clone + 'static,
 {
     async fn account_info(&mut self) -> AccountInfo {
@@ -267,7 +267,7 @@ where
 
 impl<A, S> AccountClientState<A, S>
 where
-    A: AuthorityClient + Send + Sync + 'static + Clone,
+    A: AuthorityNode + Send + Sync + 'static + Clone,
     S: Storage + Clone + 'static,
 {
     async fn broadcast_account_info_query(
@@ -616,7 +616,7 @@ where
 #[async_trait]
 impl<A, S> AccountClient for AccountClientState<A, S>
 where
-    A: AuthorityClient + Send + Sync + Clone + 'static,
+    A: AuthorityNode + Send + Sync + Clone + 'static,
     S: Storage + Clone + 'static,
 {
     async fn query_safe_balance(&mut self) -> Result<Balance, Error> {

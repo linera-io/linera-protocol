@@ -5,7 +5,7 @@
 #![deny(warnings)]
 
 use zef_base::{base_types::*, committee::Committee, messages::*, serialize::*};
-use zef_core::{client::*, node::AuthorityClient};
+use zef_core::{client::*, node::AuthorityNode};
 use zef_service::{config::*, network, storage::MixedStorage, transport};
 use zef_storage::{InMemoryStoreClient, Storage};
 
@@ -326,7 +326,7 @@ impl ClientContext {
 
     async fn update_account_from_state<A, S>(&mut self, state: &mut AccountClientState<A, S>)
     where
-        A: AuthorityClient + Send + Sync + 'static + Clone,
+        A: AuthorityNode + Send + Sync + 'static + Clone,
         S: Storage + Clone + 'static,
     {
         self.wallet_state.update_from_state(state).await
