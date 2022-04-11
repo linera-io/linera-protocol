@@ -5,7 +5,7 @@
 use crate::transport::*;
 use async_trait::async_trait;
 use zef_core::{
-    authority::*, base_types::*, error::*, messages::*, node::AuthorityClient, serialize::*,
+    base_types::*, error::*, messages::*, node::AuthorityClient, serialize::*, worker::*,
 };
 
 #[cfg(feature = "benchmark")]
