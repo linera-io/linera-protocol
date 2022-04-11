@@ -11,7 +11,7 @@ use crate::{
     messages::*,
     node::{AuthorityClient, LocalNodeClient},
     storage::StorageClient,
-    synchronization::*,
+    updater::{communicate_with_quorum, AuthorityUpdater, CommunicateAction},
     worker::WorkerState,
 };
 use async_trait::async_trait;
