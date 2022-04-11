@@ -1,13 +1,15 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{
+use zef_base::{
     account::AccountState,
     base_types::*,
-    client::{AccountClient, AccountClientState, CommunicateAction},
     committee::Committee,
     error::Error,
     messages::*,
+};
+use crate::{
+    client::{AccountClient, AccountClientState, CommunicateAction},
     node::AuthorityClient,
     storage::{InMemoryStoreClient, StorageClient},
     worker::{AuthorityWorker, WorkerState},
@@ -272,8 +274,8 @@ async fn test_initiating_valid_transfer() {
                 3
             )
             .await
-            .unwrap(),
-        certificate
+            .unwrap().value,
+        certificate.value
     );
 }
 
@@ -297,8 +299,8 @@ async fn test_rotate_key_pair() {
                 3
             )
             .await
-            .unwrap(),
-        certificate
+            .unwrap().value,
+        certificate.value
     );
     assert_eq!(sender.query_safe_balance().await.unwrap(), Balance::from(4));
     assert_eq!(
@@ -333,8 +335,8 @@ async fn test_transfer_ownership() {
                 3
             )
             .await
-            .unwrap(),
-        certificate
+            .unwrap().value,
+        certificate.value
     );
     assert_eq!(sender.query_safe_balance().await.unwrap(), Balance::from(4));
     assert_eq!(
@@ -368,8 +370,8 @@ async fn test_share_ownership() {
                 3
             )
             .await
-            .unwrap(),
-        certificate
+            .unwrap().value,
+        certificate.value
     );
     assert_eq!(sender.query_safe_balance().await.unwrap(), Balance::from(4));
     assert_eq!(
@@ -450,8 +452,8 @@ async fn test_open_account_after_transfer() {
                 3
             )
             .await
-            .unwrap(),
-        certificate
+            .unwrap().value,
+        certificate.value
     );
     assert!(matches!(&certificate.value, Value::Confirmed{
         request: Request {
@@ -537,8 +539,8 @@ async fn test_close_account() {
                 SequenceNumber::from(0),
                 3
             )
-            .await,
-        Some(certificate)
+            .await.unwrap().value,
+        certificate.value
     );
     // Cannot use the account any more.
     assert!(sender
@@ -603,8 +605,8 @@ async fn test_bidirectional_transfer() {
                 3
             )
             .await
-            .unwrap(),
-        certificate
+            .unwrap().value,
+        certificate.value
     );
     // Our sender already confirmed.
     assert_eq!(

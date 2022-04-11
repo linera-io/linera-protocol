@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use zef_core::{base_types::*, messages::*};
+use zef_base::{base_types::*, messages::*};
 
 #[tokio::test]
 async fn test_file_storage_for_accounts() {

@@ -6,11 +6,13 @@ use futures::lock::Mutex;
 use sha2::Digest;
 use std::{path::PathBuf, sync::Arc};
 use tokio::fs;
-use zef_core::{
+use zef_base::{
     account::AccountState,
     base_types::{AccountId, HashValue},
     error::Error,
     messages::Certificate,
+};
+use zef_core::{
     storage::StorageClient,
 };
 

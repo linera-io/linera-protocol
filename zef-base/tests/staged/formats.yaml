@@ -55,6 +55,37 @@ AccountManager:
       Multi:
         NEWTYPE:
           TYPENAME: MultiOwnerManager
+AccountState:
+  STRUCT:
+    - id:
+        TYPENAME: AccountId
+    - committee:
+        OPTION:
+          TYPENAME: Committee
+    - manager:
+        TYPENAME: AccountManager
+    - balance:
+        TYPENAME: Balance
+    - next_sequence_number:
+        TYPENAME: SequenceNumber
+    - confirmed_log:
+        SEQ:
+          TYPENAME: HashValue
+    - received_log:
+        SEQ:
+          TYPENAME: HashValue
+    - received_index:
+        MAP:
+          KEY:
+            TYPENAME: AccountId
+          VALUE:
+            TYPENAME: SequenceNumber
+    - keep_sending:
+        SEQ:
+          TYPENAME: HashValue
+    - received_keys:
+        SEQ:
+          TYPENAME: HashValue
 Address:
   ENUM:
     0:

@@ -2,13 +2,15 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
+use zef_base::{
     account::AccountManager,
     base_types::*,
     committee::Committee,
     ensure as my_ensure,
     error::Error,
     messages::*,
+};
+use crate::{
     node::{AuthorityClient, LocalNodeClient},
     storage::StorageClient,
     updater::{communicate_with_quorum, AuthorityUpdater, CommunicateAction},
