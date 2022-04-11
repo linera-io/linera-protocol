@@ -3,10 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    account::AccountState, base_types::*, error::Error, messages::*, node::AuthorityClient,
-    storage::StorageClient,
+    account::AccountState, base_types::*, committee::Committee, error::Error, messages::*,
+    node::AuthorityClient, storage::StorageClient,
 };
-use std::time::Duration;
+use futures::{future, StreamExt};
+use std::{collections::HashMap, time::Duration};
 
 /// Used for `communicate_account_updates`
 #[allow(clippy::large_enum_variant)]
@@ -18,15 +19,70 @@ pub enum CommunicateAction {
     AdvanceToNextSequenceNumber(SequenceNumber),
 }
 
-pub struct AuthorityUpdater<'a, A, S> {
+pub struct AuthorityUpdater<A, S> {
     pub name: AuthorityName,
-    pub client: &'a mut A,
+    pub client: A,
     pub store: S,
     pub delay: Duration,
     pub retries: usize,
 }
 
-impl<'a, A, S> AuthorityUpdater<'a, A, S>
+/// Execute a sequence of actions in parallel for all authorities.
+/// Try to stop early when a quorum is reached.
+pub async fn communicate_with_quorum<'a, A, V, F>(
+    authority_clients: &'a [(AuthorityName, A)],
+    committee: &Committee,
+    execute: F,
+) -> Result<Vec<V>, Option<Error>>
+where
+    A: AuthorityClient + Send + Sync + 'static + Clone,
+    F: Fn(AuthorityName, A) -> future::BoxFuture<'a, Result<V, Error>> + Clone,
+{
+    let mut responses: futures::stream::FuturesUnordered<_> = authority_clients
+        .iter()
+        .filter_map(|(name, client)| {
+            let client = client.clone();
+            let execute = execute.clone();
+            if committee.weight(name) > 0 {
+                Some(async move { (*name, execute(*name, client).await) })
+            } else {
+                // This should not happen but better prevent it because certificates
+                // are not allowed to include votes with weight 0.
+                None
+            }
+        })
+        .collect();
+
+    let mut values = Vec::new();
+    let mut value_score = 0;
+    let mut error_scores = HashMap::new();
+    while let Some((name, result)) = responses.next().await {
+        match result {
+            Ok(value) => {
+                values.push(value);
+                value_score += committee.weight(&name);
+                if value_score >= committee.quorum_threshold() {
+                    // Success!
+                    return Ok(values);
+                }
+            }
+            Err(err) => {
+                let entry = error_scores.entry(err.clone()).or_insert(0);
+                *entry += committee.weight(&name);
+                if *entry >= committee.validity_threshold() {
+                    // At least one honest node returned this error.
+                    // No quorum can be reached, so return early.
+                    return Err(Some(err));
+                }
+            }
+        }
+    }
+
+    // No specific error is available to report reliably.
+    Err(None)
+}
+
+impl<A, S> AuthorityUpdater<A, S>
 where
     A: AuthorityClient + Send + Sync + 'static + Clone,
     S: StorageClient + Clone + 'static,
