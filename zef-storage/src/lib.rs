@@ -1,9 +1,11 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 mod file_storage;
 mod memory_storage;
+
+pub use file_storage::*;
+pub use memory_storage::*;
 
 use async_trait::async_trait;
 use dyn_clone::DynClone;
@@ -16,9 +18,6 @@ use zef_base::{
     error::Error,
     messages::Certificate,
 };
-
-pub use file_storage::*;
-pub use memory_storage::*;
 
 /// How to communicate with a persistent storage.
 /// * Writes should be blocking until they are completed.
