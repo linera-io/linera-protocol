@@ -177,8 +177,9 @@ impl WalletState {
     }
 }
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct GenesisConfig {
+    pub committee: CommitteeConfig,
     pub accounts: Vec<(AccountId, AccountOwner, Balance)>,
 }
 
@@ -186,17 +187,24 @@ impl Import for GenesisConfig {}
 impl Export for GenesisConfig {}
 
 impl GenesisConfig {
-    pub async fn initialize_store<S>(
-        &self,
-        committee: Committee,
-        store: &mut S,
-    ) -> Result<(), failure::Error>
+    pub fn new(committee: CommitteeConfig) -> Self {
+        Self {
+            committee,
+            accounts: Vec::new(),
+        }
+    }
+
+    pub async fn initialize_store<S>(&self, store: &mut S) -> Result<(), failure::Error>
     where
         S: StorageClient + Clone + 'static,
     {
         for (account_id, owner, balance) in &self.accounts {
-            let account =
-                AccountState::create(committee.clone(), account_id.clone(), *owner, *balance);
+            let account = AccountState::create(
+                self.committee.clone().into_committee(),
+                account_id.clone(),
+                *owner,
+                *balance,
+            );
             store.write_account(account.clone()).await?;
         }
         Ok(())

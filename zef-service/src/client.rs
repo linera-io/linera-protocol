@@ -39,32 +39,30 @@ struct ClientContext {
 
 impl ClientContext {
     async fn from_options(options: &ClientOptions) -> Self {
-        let committee_config = CommitteeConfig::read(&options.committee_config_path)
-            .expect("Unable to read committee config file");
         let wallet_state_path = options.wallet_state_path.clone();
         let wallet_state =
             WalletState::read_or_create(&wallet_state_path).expect("Unable to read user accounts");
-        let storage_client: Storage = match options.cmd {
+        let (storage_client, committee_config): (Storage, CommitteeConfig) = match options.cmd {
             ClientCommands::CreateGenesisConfig { .. } => {
                 // This is a placeholder to avoid create a DB on disk at this point.
-                Box::new(InMemoryStoreClient::default())
+                (
+                    Box::new(InMemoryStoreClient::default()),
+                    CommitteeConfig {
+                        authorities: Vec::new(),
+                    },
+                )
             }
             _ => {
                 // Every other command uses the real account storage.
-                let genesis_config = options
-                    .genesis_config_path
-                    .as_ref()
-                    .map(|path| {
-                        GenesisConfig::read(path).expect("Fail to read initial account config")
-                    })
-                    .unwrap_or_default();
-                zef_service::storage::make_storage(
+                let genesis_config = GenesisConfig::read(&options.genesis_config_path)
+                    .expect("Fail to read initial account config");
+                let storage = zef_service::storage::make_storage(
                     options.storage_path.as_ref(),
-                    committee_config.clone().into_committee(),
                     &genesis_config,
                 )
                 .await
-                .unwrap()
+                .unwrap();
+                (storage, genesis_config.committee)
             }
         };
         let send_timeout = Duration::from_micros(options.send_timeout_us);
@@ -377,11 +375,7 @@ struct ClientOptions {
 
     /// Optional path to the file describing the initial user accounts (aka genesis state)
     #[structopt(long = "genesis")]
-    genesis_config_path: Option<PathBuf>,
-
-    /// Sets the file describing the public configurations of all authorities
-    #[structopt(long = "committee")]
-    committee_config_path: PathBuf,
+    genesis_config_path: PathBuf,
 
     /// Timeout for sending queries (us)
     #[structopt(long, default_value = "4000000")]
@@ -479,6 +473,10 @@ enum ClientCommands {
     /// Create initial user accounts and print information to be used for initialization of authority setup.
     #[structopt(name = "create_genesis_config")]
     CreateGenesisConfig {
+        /// Sets the file describing the public configurations of all authorities
+        #[structopt(long = "committee")]
+        committee_config_path: PathBuf,
+
         /// Known initial balance of the account
         #[structopt(long, default_value = "0")]
         initial_funding: Balance,
@@ -646,10 +644,13 @@ async fn main() {
         }
 
         ClientCommands::CreateGenesisConfig {
+            committee_config_path,
             initial_funding,
             num,
         } => {
-            let mut genesis_config = GenesisConfig::default();
+            let committee_config = CommitteeConfig::read(&committee_config_path)
+                .expect("Unable to read committee config file");
+            let mut genesis_config = GenesisConfig::new(committee_config);
             for i in 0..num {
                 // Create keys.
                 let account =
@@ -664,11 +665,7 @@ async fn main() {
                 context.wallet_state.insert(account);
             }
             context.save_accounts();
-            let path = options
-                .genesis_config_path
-                .as_ref()
-                .expect("--genesis should be set");
-            genesis_config.write(path).unwrap();
+            genesis_config.write(&options.genesis_config_path).unwrap();
         }
     }
 }
