@@ -11,8 +11,8 @@ use std::{
     str::FromStr,
 };
 use structopt::StructOpt;
-use zef_base::{base_types::*};
-use zef_core::{worker::*};
+use zef_base::base_types::*;
+use zef_core::worker::*;
 use zef_service::{
     config::*,
     network,

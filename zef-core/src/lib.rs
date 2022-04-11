@@ -4,7 +4,6 @@
 
 pub mod client;
 pub mod node;
-pub mod storage;
 pub mod worker;
 
 pub(crate) mod updater;

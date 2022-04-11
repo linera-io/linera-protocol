@@ -2,14 +2,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::node::AuthorityClient;
+use futures::{future, StreamExt};
+use std::{collections::HashMap, time::Duration};
 use zef_base::{
     account::AccountState, base_types::*, committee::Committee, error::Error, messages::*,
 };
-use crate::{
-    node::AuthorityClient, storage::StorageClient,
-};
-use futures::{future, StreamExt};
-use std::{collections::HashMap, time::Duration};
+use zef_storage::StorageClient;
 
 /// Used for `communicate_account_updates`
 #[allow(clippy::large_enum_variant)]

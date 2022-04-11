@@ -2,17 +2,15 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::worker::{AuthorityWorker, WorkerState};
+use std::collections::BTreeMap;
 use zef_base::{
     account::{AccountManager, AccountState},
     base_types::*,
     committee::Committee,
     messages::*,
 };
-use crate::{
-    storage::{InMemoryStoreClient, StorageClient},
-    worker::{AuthorityWorker, WorkerState},
-};
-use std::collections::BTreeMap;
+use zef_storage::{InMemoryStoreClient, StorageClient};
 
 #[tokio::test]
 async fn test_handle_request_order_bad_signature() {
@@ -204,12 +202,16 @@ async fn test_handle_request_order_replay() {
         .handle_request_order(request_order.clone())
         .await
         .unwrap();
-    response.check(state.key_pair.as_ref().unwrap().public())
+    response
+        .check(state.key_pair.as_ref().unwrap().public())
         .as_ref()
         .unwrap();
     let replay_response = state.handle_request_order(request_order).await.unwrap();
     // Workaround lack of equality.
-    assert_eq!(HashValue::new(&response.info), HashValue::new(&replay_response.info));
+    assert_eq!(
+        HashValue::new(&response.info),
+        HashValue::new(&replay_response.info)
+    );
 }
 
 #[tokio::test]
@@ -438,13 +440,11 @@ async fn test_handle_certificate_to_active_recipient() {
     };
     let response = state.handle_account_info_query(info_query).await.unwrap();
     assert_eq!(response.info.queried_received_certificates.len(), 1);
-    assert!(
-        matches!(response.info.queried_received_certificates[0]
+    assert!(matches!(response.info.queried_received_certificates[0]
             .value
             .confirmed_request()
             .unwrap()
-            .operation, Operation::Transfer { amount, .. } if amount == Amount::from(5))
-    );
+            .operation, Operation::Transfer { amount, .. } if amount == Amount::from(5)));
 }
 
 #[tokio::test]

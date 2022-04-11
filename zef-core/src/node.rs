@@ -2,20 +2,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use zef_base::{
-    account::AccountManager,
-    base_types::*,
-    error::Error,
-    messages::*,
-};
-use crate::{
-    storage::StorageClient,
-    worker::{AuthorityWorker, WorkerState},
-};
+use crate::worker::{AuthorityWorker, WorkerState};
 use async_trait::async_trait;
 use futures::{lock::Mutex, StreamExt};
 use rand::prelude::SliceRandom;
 use std::sync::Arc;
+use zef_base::{account::AccountManager, base_types::*, error::Error, messages::*};
+use zef_storage::StorageClient;
 
 /// How to communicate with an authority or a local node.
 #[async_trait]

@@ -2,13 +2,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use async_trait::async_trait;
 use zef_base::{
     account::Outcome, base_types::*, committee::Committee, ensure, error::Error, messages::*,
 };
-use crate::{
-    storage::StorageClient,
-};
-use async_trait::async_trait;
+use zef_storage::StorageClient;
 
 #[cfg(test)]
 #[path = "unit_tests/worker_tests.rs"]
