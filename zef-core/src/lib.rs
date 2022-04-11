@@ -11,5 +11,6 @@ pub mod messages;
 pub mod node;
 pub mod serialize;
 pub mod storage;
-pub(crate) mod synchronization;
 pub mod worker;
+
+pub(crate) mod updater;
