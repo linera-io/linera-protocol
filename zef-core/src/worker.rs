@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use zef_base::{
     account::Outcome, base_types::*, committee::Committee, ensure, error::Error, messages::*,
 };
-use zef_storage::StorageClient;
+use zef_storage::Storage;
 
 #[cfg(test)]
 #[path = "unit_tests/worker_tests.rs"]
@@ -65,7 +65,7 @@ pub struct WorkerState<StorageClient> {
 
 impl<Client> WorkerState<Client>
 where
-    Client: StorageClient + Clone + 'static,
+    Client: Storage + Clone + 'static,
 {
     // NOTE: This only works for non-sharded workers!
     pub(crate) async fn fully_handle_certificate(
@@ -215,7 +215,7 @@ where
 #[async_trait]
 impl<Client> AuthorityWorker for WorkerState<Client>
 where
-    Client: StorageClient + Clone + 'static,
+    Client: Storage + Clone + 'static,
 {
     async fn handle_request_order(
         &mut self,

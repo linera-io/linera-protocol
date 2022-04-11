@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::StorageClient;
+use crate::Storage;
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use std::{collections::HashMap, ops::DerefMut, sync::Arc};
@@ -39,7 +39,7 @@ impl InMemoryStoreClient {
 }
 
 #[async_trait]
-impl StorageClient for InMemoryStoreClient {
+impl Storage for InMemoryStoreClient {
     async fn read_account_or_default(&mut self, id: &AccountId) -> Result<AccountState, Error> {
         let store = self.0.clone();
         let account = store
@@ -78,7 +78,7 @@ impl StorageClient for InMemoryStoreClient {
 }
 
 #[async_trait]
-impl StorageClient for Box<dyn StorageClient> {
+impl Storage for Box<dyn Storage> {
     async fn read_account_or_default(&mut self, id: &AccountId) -> Result<AccountState, Error> {
         self.deref_mut().read_account_or_default(id).await
     }

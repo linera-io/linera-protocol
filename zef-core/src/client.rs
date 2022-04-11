@@ -18,7 +18,7 @@ use zef_base::{
     account::AccountManager, base_types::*, committee::Committee, ensure as my_ensure,
     error::Error, messages::*,
 };
-use zef_storage::StorageClient;
+use zef_storage::Storage;
 
 #[cfg(test)]
 #[path = "unit_tests/client_tests.rs"]
@@ -174,7 +174,7 @@ impl<A, S> AccountClientState<A, S> {
 impl<A, S> AccountClientState<A, S>
 where
     A: AuthorityClient + Send + Sync + 'static + Clone,
-    S: StorageClient + Clone + 'static,
+    S: Storage + Clone + 'static,
 {
     async fn account_info(&mut self) -> AccountInfo {
         let query = AccountInfoQuery {
@@ -268,7 +268,7 @@ where
 impl<A, S> AccountClientState<A, S>
 where
     A: AuthorityClient + Send + Sync + 'static + Clone,
-    S: StorageClient + Clone + 'static,
+    S: Storage + Clone + 'static,
 {
     async fn broadcast_account_info_query(
         &mut self,
@@ -617,7 +617,7 @@ where
 impl<A, S> AccountClient for AccountClientState<A, S>
 where
     A: AuthorityClient + Send + Sync + Clone + 'static,
-    S: StorageClient + Clone + 'static,
+    S: Storage + Clone + 'static,
 {
     async fn query_safe_balance(&mut self) -> Result<Balance, Error> {
         let committee = self.committee().await?;

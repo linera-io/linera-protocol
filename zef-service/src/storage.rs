@@ -3,15 +3,15 @@
 
 use crate::config::GenesisConfig;
 use std::path::PathBuf;
-use zef_storage::{FileStoreClient, InMemoryStoreClient, StorageClient};
+use zef_storage::{FileStoreClient, InMemoryStoreClient, Storage};
 
-pub type Storage = Box<dyn StorageClient>;
+pub type MixedStorage = Box<dyn Storage>;
 
 pub async fn make_storage(
     db_path: Option<&PathBuf>,
     config: &GenesisConfig,
-) -> Result<Storage, failure::Error> {
-    let client: Storage = match db_path {
+) -> Result<MixedStorage, failure::Error> {
+    let client: MixedStorage = match db_path {
         None => {
             let mut client = InMemoryStoreClient::default();
             config.initialize_store(&mut client).await?;

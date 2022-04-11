@@ -6,8 +6,8 @@
 
 use zef_base::{base_types::*, committee::Committee, messages::*, serialize::*};
 use zef_core::{client::*, node::AuthorityClient};
-use zef_service::{config::*, network, storage::Storage, transport};
-use zef_storage::{InMemoryStoreClient, StorageClient};
+use zef_service::{config::*, network, storage::MixedStorage, transport};
+use zef_storage::{InMemoryStoreClient, Storage};
 
 use bytes::Bytes;
 use futures::stream::StreamExt;
@@ -23,7 +23,7 @@ struct ClientContext {
     committee_config: CommitteeConfig,
     wallet_state_path: PathBuf,
     wallet_state: WalletState,
-    storage_client: Storage,
+    storage_client: MixedStorage,
     buffer_size: usize,
     send_timeout: Duration,
     recv_timeout: Duration,
@@ -36,7 +36,8 @@ impl ClientContext {
         let wallet_state_path = options.wallet_state_path.clone();
         let wallet_state =
             WalletState::read_or_create(&wallet_state_path).expect("Unable to read user accounts");
-        let (storage_client, committee_config): (Storage, CommitteeConfig) = match options.cmd {
+        let (storage_client, committee_config): (MixedStorage, CommitteeConfig) = match options.cmd
+        {
             ClientCommands::CreateGenesisConfig { .. } => {
                 // This is a placeholder to avoid create a DB on disk at this point.
                 (
@@ -114,7 +115,7 @@ impl ClientContext {
     fn make_account_client(
         &self,
         account_id: AccountId,
-    ) -> AccountClientState<network::Client, Storage> {
+    ) -> AccountClientState<network::Client, MixedStorage> {
         let account = self.wallet_state.get(&account_id).expect("Unknown account");
         let authority_clients = self.make_authority_clients();
         AccountClientState::new(
@@ -326,7 +327,7 @@ impl ClientContext {
     async fn update_account_from_state<A, S>(&mut self, state: &mut AccountClientState<A, S>)
     where
         A: AuthorityClient + Send + Sync + 'static + Clone,
-        S: StorageClient + Clone + 'static,
+        S: Storage + Clone + 'static,
     {
         self.wallet_state.update_from_state(state).await
     }

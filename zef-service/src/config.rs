@@ -12,7 +12,7 @@ use std::{
 };
 use zef_base::{account::AccountState, base_types::*, committee::Committee};
 use zef_core::{client::AccountClientState, node::AuthorityClient};
-use zef_storage::StorageClient;
+use zef_storage::Storage;
 
 pub trait Import: DeserializeOwned {
     fn read(path: &Path) -> Result<Self, std::io::Error> {
@@ -139,7 +139,7 @@ impl WalletState {
     pub async fn update_from_state<A, S>(&mut self, state: &mut AccountClientState<A, S>)
     where
         A: AuthorityClient + Send + Sync + 'static + Clone,
-        S: StorageClient + Clone + 'static,
+        S: Storage + Clone + 'static,
     {
         let account = self
             .accounts
@@ -195,7 +195,7 @@ impl GenesisConfig {
 
     pub async fn initialize_store<S>(&self, store: &mut S) -> Result<(), failure::Error>
     where
-        S: StorageClient + Clone + 'static,
+        S: Storage + Clone + 'static,
     {
         for (account_id, owner, balance) in &self.accounts {
             let account = AccountState::create(
