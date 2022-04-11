@@ -47,20 +47,16 @@ async fn make_shard_server(
 async fn make_servers(
     local_ip_addr: &str,
     server_config: &AuthorityServerConfig,
-    committee_config: &CommitteeConfig,
     genesis_config: &GenesisConfig,
     buffer_size: usize,
     cross_shard_config: network::CrossShardConfig,
     storage: Option<&PathBuf>,
 ) -> Vec<network::Server<Storage>> {
-    let committee = committee_config.clone().into_committee();
     let num_shards = server_config.authority.num_shards;
     let mut servers = Vec::new();
     // TODO: create servers in parallel
     for shard in 0..num_shards {
-        let storage = make_storage(storage, committee.clone(), genesis_config)
-            .await
-            .unwrap();
+        let storage = make_storage(storage, genesis_config).await.unwrap();
         let server = make_shard_server(
             local_ip_addr,
             server_config,
@@ -171,13 +167,9 @@ enum ServerCommands {
         #[structopt(flatten)]
         cross_shard_config: network::CrossShardConfig,
 
-        /// Path to the file containing the public description of all authorities in this Zef committee
-        #[structopt(long = "committee")]
-        committee_config_path: PathBuf,
-
-        /// Optional path to the file describing the initial user accounts (aka genesis state)
+        /// Path to the file describing the initial user accounts (aka genesis state)
         #[structopt(long = "genesis")]
-        genesis_config_path: Option<PathBuf>,
+        genesis_config_path: PathBuf,
 
         /// Runs a specific shard (from 0 to shards-1)
         #[structopt(long)]
@@ -217,34 +209,24 @@ async fn main() {
             storage_path,
             buffer_size,
             cross_shard_config,
-            committee_config_path,
             genesis_config_path,
             shard,
         } => {
             #[cfg(feature = "benchmark")]
             warn!("The server is running in benchmark mode: Do not use it in production");
 
-            let genesis_config = genesis_config_path
-                .map(|path| {
-                    GenesisConfig::read(path.as_ref()).expect("Fail to read initial account config")
-                })
-                .unwrap_or_default();
+            let genesis_config = GenesisConfig::read(&genesis_config_path)
+                .expect("Fail to read initial account config");
             let server_config = AuthorityServerConfig::read(&server_config_path)
                 .expect("Fail to read server config");
-            let committee_config = CommitteeConfig::read(&committee_config_path)
-                .expect("Fail to read committee config");
 
             // Run the server
             let servers = match shard {
                 Some(shard) => {
                     info!("Running shard number {}", shard);
-                    let storage = make_storage(
-                        storage_path.as_ref(),
-                        committee_config.clone().into_committee(),
-                        &genesis_config,
-                    )
-                    .await
-                    .unwrap();
+                    let storage = make_storage(storage_path.as_ref(), &genesis_config)
+                        .await
+                        .unwrap();
                     let server = make_shard_server(
                         "0.0.0.0", // Allow local IP address to be different from the public one.
                         &server_config,
@@ -261,7 +243,6 @@ async fn main() {
                     make_servers(
                         "0.0.0.0", // Allow local IP address to be different from the public one.
                         &server_config,
-                        &committee_config,
                         &genesis_config,
                         buffer_size,
                         cross_shard_config,
