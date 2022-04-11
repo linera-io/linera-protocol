@@ -39,11 +39,11 @@ pub struct CrossShardConfig {
 
 pub type ShardId = u32;
 
-pub struct Server<StorageClient> {
+pub struct Server<Storage> {
     network_protocol: NetworkProtocol,
     base_address: String,
     base_port: u32,
-    state: WorkerState<StorageClient>,
+    state: WorkerState<Storage>,
     shard_id: ShardId,
     num_shards: u32,
     buffer_size: usize,
@@ -53,13 +53,13 @@ pub struct Server<StorageClient> {
     user_errors: u64,
 }
 
-impl<StorageClient> Server<StorageClient> {
+impl<Storage> Server<Storage> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         network_protocol: NetworkProtocol,
         base_address: String,
         base_port: u32,
-        state: WorkerState<StorageClient>,
+        state: WorkerState<Storage>,
         shard_id: ShardId,
         num_shards: u32,
         buffer_size: usize,
@@ -92,9 +92,9 @@ impl<StorageClient> Server<StorageClient> {
     }
 }
 
-impl<StorageClient> Server<StorageClient>
+impl<Storage> Server<Storage>
 where
-    StorageClient: zef_storage::StorageClient + Clone + 'static,
+    Storage: zef_storage::Storage + Clone + 'static,
 {
     async fn forward_cross_shard_queries(
         network_protocol: NetworkProtocol,
@@ -192,14 +192,14 @@ where
     }
 }
 
-struct RunningServerState<StorageClient> {
-    server: Server<StorageClient>,
+struct RunningServerState<Storage> {
+    server: Server<Storage>,
     cross_shard_sender: mpsc::Sender<(Vec<u8>, ShardId)>,
 }
 
-impl<StorageClient> MessageHandler for RunningServerState<StorageClient>
+impl<Storage> MessageHandler for RunningServerState<Storage>
 where
-    StorageClient: zef_storage::StorageClient + Clone + 'static,
+    Storage: zef_storage::Storage + Clone + 'static,
 {
     fn handle_message<'a>(
         &'a mut self,
@@ -290,9 +290,9 @@ where
     }
 }
 
-impl<StorageClient> RunningServerState<StorageClient>
+impl<Storage> RunningServerState<Storage>
 where
-    StorageClient: Send,
+    Storage: Send,
 {
     fn handle_continuation(
         &mut self,

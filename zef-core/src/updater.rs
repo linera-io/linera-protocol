@@ -8,7 +8,7 @@ use std::{collections::HashMap, time::Duration};
 use zef_base::{
     account::AccountState, base_types::*, committee::Committee, error::Error, messages::*,
 };
-use zef_storage::StorageClient;
+use zef_storage::Storage;
 
 /// Used for `communicate_account_updates`
 #[allow(clippy::large_enum_variant)]
@@ -86,7 +86,7 @@ where
 impl<A, S> AuthorityUpdater<A, S>
 where
     A: AuthorityClient + Send + Sync + 'static + Clone,
-    S: StorageClient + Clone + 'static,
+    S: Storage + Clone + 'static,
 {
     pub async fn send_certificate(
         &mut self,

@@ -15,7 +15,7 @@ use std::{
 use zef_base::{
     account::AccountState, base_types::*, committee::Committee, error::Error, messages::*,
 };
-use zef_storage::{InMemoryStoreClient, StorageClient};
+use zef_storage::{InMemoryStoreClient, Storage};
 
 /// An authority used for testing. "Faulty" authorities ignore request orders (but not
 /// certificates or info queries) and have the wrong initial balance for all accounts.

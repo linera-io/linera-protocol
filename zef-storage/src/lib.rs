@@ -23,7 +23,7 @@ pub use memory_storage::*;
 /// * Writes should be blocking until they are completed.
 /// * Reads should be optimized to hit a local cache.
 #[async_trait]
-pub trait StorageClient: DynClone + Send + Sync {
+pub trait Storage: DynClone + Send + Sync {
     async fn read_active_account(&mut self, id: &AccountId) -> Result<AccountState, Error> {
         let account = self.read_account_or_default(id).await?;
         ensure!(
@@ -69,4 +69,4 @@ pub trait StorageClient: DynClone + Send + Sync {
     async fn write_certificate(&mut self, certificate: Certificate) -> Result<(), Error>;
 }
 
-dyn_clone::clone_trait_object!(StorageClient);
+dyn_clone::clone_trait_object!(Storage);
