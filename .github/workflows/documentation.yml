@@ -3,8 +3,13 @@ name: Documentation
 on:
   push:
     branches: [ main ]
+    # Always run on commits
+
   pull_request:
     branches: [ main ]
+    paths:
+        - 'roadmap/**'
+        - '.github/workflows/documentation.yml'
 
 env:
   CARGO_TERM_COLOR: always
