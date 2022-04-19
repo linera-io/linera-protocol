@@ -18,7 +18,7 @@ pub enum SerializedMessage {
     Vote(Box<Vote>),
     AccountInfoResponse(Box<AccountInfoResponse>),
     Error(Box<Error>),
-    // Internal to an authority
+    // Internal to an validator
     CrossShardRequest(Box<CrossShardRequest>),
 }
 

@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::worker::{AuthorityWorker, WorkerState};
+use crate::worker::{ValidatorWorker, WorkerState};
 use std::collections::BTreeMap;
 use zef_base::{
     account::{AccountManager, AccountState},
@@ -252,7 +252,7 @@ async fn test_handle_certificate_bad_sequence_number() {
         .await
         .is_ok());
     assert!(state.fully_handle_certificate(certificate).await.is_ok());
-    // TODO: test the case of a sequence number in the future (aka lagging authority)
+    // TODO: test the case of a sequence number in the future (aka lagging validator)
 }
 
 #[tokio::test]
@@ -523,9 +523,9 @@ async fn test_read_account_state_unknown_account() {
 
 fn init_state() -> (Committee, WorkerState<InMemoryStoreClient>) {
     let key_pair = KeyPair::generate();
-    let mut authorities = BTreeMap::new();
-    authorities.insert(key_pair.public(), /* voting right */ 1);
-    let committee = Committee::new(authorities);
+    let mut validators = BTreeMap::new();
+    validators.insert(key_pair.public(), /* voting right */ 1);
+    let committee = Committee::new(validators);
     let client = InMemoryStoreClient::default();
     let state = WorkerState::new(Some(key_pair), client);
     (committee, state)
@@ -577,7 +577,7 @@ fn make_certificate(
     let vote = Vote::new(value.clone(), state.key_pair.as_ref().unwrap());
     let mut builder = SignatureAggregator::new(value, committee);
     builder
-        .append(vote.authority, vote.signature)
+        .append(vote.validator, vote.signature)
         .unwrap()
         .unwrap()
 }

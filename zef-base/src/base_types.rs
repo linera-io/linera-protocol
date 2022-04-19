@@ -59,8 +59,8 @@ pub struct AccountId(pub Vec<SequenceNumber>);
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash, Serialize, Deserialize)]
 pub struct HashValue(generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Digest>::OutputSize>);
 
-/// Alias for the identity of an authority.
-pub type AuthorityName = PublicKeyBytes;
+/// Alias for the identity of an validator.
+pub type ValidatorName = PublicKeyBytes;
 
 /// Alias for the authentication method of an account.
 pub type AccountOwner = PublicKeyBytes;

@@ -11,7 +11,7 @@ use std::{
     path::Path,
 };
 use zef_base::{account::AccountState, base_types::*, committee::Committee};
-use zef_core::{client::AccountClientState, node::AuthorityNode};
+use zef_core::{client::AccountClientState, node::ValidatorNode};
 use zef_storage::Storage;
 
 pub trait Import: DeserializeOwned {
@@ -33,15 +33,15 @@ pub trait Export: Serialize {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AuthorityConfig {
+pub struct ValidatorConfig {
     pub network_protocol: NetworkProtocol,
-    pub name: AuthorityName,
+    pub name: ValidatorName,
     pub host: String,
     pub base_port: u32,
     pub num_shards: u32,
 }
 
-impl AuthorityConfig {
+impl ValidatorConfig {
     pub fn print(&self) {
         let data = serde_json::to_string(self).unwrap();
         println!("{}", data);
@@ -49,17 +49,17 @@ impl AuthorityConfig {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct AuthorityServerConfig {
-    pub authority: AuthorityConfig,
+pub struct ValidatorServerConfig {
+    pub validator: ValidatorConfig,
     pub key: KeyPair,
 }
 
-impl Import for AuthorityServerConfig {}
-impl Export for AuthorityServerConfig {}
+impl Import for ValidatorServerConfig {}
+impl Export for ValidatorServerConfig {}
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CommitteeConfig {
-    pub authorities: Vec<AuthorityConfig>,
+    pub validators: Vec<ValidatorConfig>,
 }
 
 impl Import for CommitteeConfig {}
@@ -70,10 +70,10 @@ impl CommitteeConfig {
         Committee::new(self.voting_rights())
     }
 
-    fn voting_rights(&self) -> BTreeMap<AuthorityName, usize> {
+    fn voting_rights(&self) -> BTreeMap<ValidatorName, usize> {
         let mut map = BTreeMap::new();
-        for authority in &self.authorities {
-            map.insert(authority.name, 1);
+        for validator in &self.validators {
+            map.insert(validator.name, 1);
         }
         map
     }
@@ -138,7 +138,7 @@ impl WalletState {
 
     pub async fn update_from_state<A, S>(&mut self, state: &mut AccountClientState<A, S>)
     where
-        A: AuthorityNode + Send + Sync + 'static + Clone,
+        A: ValidatorNode + Send + Sync + 'static + Clone,
         S: Storage + Clone + 'static,
     {
         let account = self

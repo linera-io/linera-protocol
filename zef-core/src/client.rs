@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    node::{AuthorityNode, LocalNodeClient},
-    updater::{communicate_with_quorum, AuthorityUpdater, CommunicateAction},
+    node::{LocalNodeClient, ValidatorNode},
+    updater::{communicate_with_quorum, CommunicateAction, ValidatorUpdater},
     worker::WorkerState,
 };
 use async_trait::async_trait;
@@ -24,7 +24,7 @@ use zef_storage::Storage;
 #[path = "unit_tests/client_tests.rs"]
 mod client_tests;
 
-/// How to communicate with an account across all the authorities. As a rule,
+/// How to communicate with an account across all the validators. As a rule,
 /// operations are considered successful (and communication may stop) when they succeeded
 /// in gathering a quorum of responses.
 #[async_trait]
@@ -83,7 +83,7 @@ pub trait AccountClient {
     ) -> Result<Certificate, failure::Error>;
 
     /// Compute a safe (i.e. pessimistic) balance by synchronizing our "sent" certificates
-    /// with authorities, and otherwise using local data on received transfers (i.e.
+    /// with validators, and otherwise using local data on received transfers (i.e.
     /// certificates that were locally processed by `receive_from_account`).
     async fn synchronize_balance(&mut self) -> Result<Balance, failure::Error>;
 
@@ -94,18 +94,18 @@ pub trait AccountClient {
     async fn clear_pending_request(&mut self);
 
     /// Find the highest balance that is provably backed by at least one honest
-    /// (sufficiently up-to-date) authority. This is a conservative approximation.
+    /// (sufficiently up-to-date) validator. This is a conservative approximation.
     async fn query_safe_balance(&mut self) -> Result<Balance, Error>;
 }
 
 /// Reference implementation of the `AccountClient` trait using many instances of some
-/// `AuthorityNode` implementation for communication, and a client to some (local)
+/// `ValidatorNode` implementation for communication, and a client to some (local)
 /// storage.
-pub struct AccountClientState<AuthorityNode, StorageClient> {
+pub struct AccountClientState<ValidatorNode, StorageClient> {
     /// The off-chain account id.
     account_id: AccountId,
     /// How to talk to this committee.
-    authority_clients: Vec<(AuthorityName, AuthorityNode)>,
+    validator_clients: Vec<(ValidatorName, ValidatorNode)>,
     /// Sequence number that we plan to use for the next request.
     /// We track this value outside local storage mainly for security reasons.
     next_sequence_number: SequenceNumber,
@@ -117,7 +117,7 @@ pub struct AccountClientState<AuthorityNode, StorageClient> {
     known_key_pairs: BTreeMap<AccountOwner, KeyPair>,
 
     /// Support synchronization of received certificates.
-    received_certificate_trackers: HashMap<AuthorityName, usize>,
+    received_certificate_trackers: HashMap<ValidatorName, usize>,
     /// How much time to wait between attempts when we wait for a cross-shard update.
     cross_shard_delay: Duration,
     /// How many times we are willing to retry a request that depends on cross-shard updates.
@@ -132,7 +132,7 @@ impl<A, S> AccountClientState<A, S> {
     pub fn new(
         account_id: AccountId,
         known_key_pairs: Vec<KeyPair>,
-        authority_clients: Vec<(AuthorityName, A)>,
+        validator_clients: Vec<(ValidatorName, A)>,
         storage_client: S,
         next_sequence_number: SequenceNumber,
         cross_shard_delay: Duration,
@@ -146,7 +146,7 @@ impl<A, S> AccountClientState<A, S> {
         let node_client = LocalNodeClient::new(state);
         Self {
             account_id,
-            authority_clients,
+            validator_clients,
             next_sequence_number,
             next_round: RoundNumber::default(),
             pending_request: None,
@@ -173,7 +173,7 @@ impl<A, S> AccountClientState<A, S> {
 
 impl<A, S> AccountClientState<A, S>
 where
-    A: AuthorityNode + Send + Sync + 'static + Clone,
+    A: ValidatorNode + Send + Sync + 'static + Clone,
     S: Storage + Clone + 'static,
 {
     async fn account_info(&mut self) -> AccountInfo {
@@ -267,15 +267,15 @@ where
 
 impl<A, S> AccountClientState<A, S>
 where
-    A: AuthorityNode + Send + Sync + 'static + Clone,
+    A: ValidatorNode + Send + Sync + 'static + Clone,
     S: Storage + Clone + 'static,
 {
     async fn broadcast_account_info_query(
         &mut self,
         query: AccountInfoQuery,
-    ) -> Vec<(AuthorityName, AccountInfo)> {
+    ) -> Vec<(ValidatorName, AccountInfo)> {
         let infos: futures::stream::FuturesUnordered<_> = self
-            .authority_clients
+            .validator_clients
             .iter_mut()
             .map(|(name, client)| {
                 let query = query.clone();
@@ -307,7 +307,7 @@ where
         self.next_sequence_number = self
             .node_client
             .download_certificates(
-                self.authority_clients.clone(),
+                self.validator_clients.clone(),
                 self.account_id.clone(),
                 self.next_sequence_number,
             )
@@ -316,7 +316,7 @@ where
             // We could be missing recent certificates created by other owners.
             let (next_sequence_number, next_round) = self
                 .node_client
-                .synchronize_account_state(self.authority_clients.clone(), self.account_id.clone())
+                .synchronize_account_state(self.validator_clients.clone(), self.account_id.clone())
                 .await?;
             self.next_sequence_number = next_sequence_number;
             self.next_round = next_round;
@@ -335,8 +335,8 @@ where
         let storage_client = self.node_client.storage_client().await;
         let cross_shard_delay = self.cross_shard_delay;
         let cross_shard_retries = self.cross_shard_retries;
-        let result = communicate_with_quorum(&self.authority_clients, committee, |name, client| {
-            let mut updater = AuthorityUpdater {
+        let result = communicate_with_quorum(&self.validator_clients, committee, |name, client| {
+            let mut updater = ValidatorUpdater {
                 name,
                 client,
                 store: storage_client.clone(),
@@ -358,18 +358,15 @@ where
                 // to synchronize sequence numbers.
                 return Ok(None);
             }
-            Err(Some(err)) => bail!(
-                "Failed to communicate with a quorum of authorities: {}",
-                err
-            ),
+            Err(Some(err)) => bail!("Failed to communicate with a quorum of validators: {}", err),
             Err(None) => {
-                bail!("Failed to communicate with a quorum of authorities (multiple errors)")
+                bail!("Failed to communicate with a quorum of validators (multiple errors)")
             }
         };
         let signatures: Vec<_> = votes
             .into_iter()
             .filter_map(|vote| match vote {
-                Some(vote) => Some((vote.authority, vote.signature)),
+                Some(vote) => Some((vote.validator, vote.signature)),
                 None => None,
             })
             .collect();
@@ -381,8 +378,8 @@ where
                 let certificate = Certificate::new(value, signatures);
                 // Certificate is valid because
                 // * `communicate_with_quorum` ensured a sufficient "weight" of
-                // (non-error) answers were returned by authorities.
-                // * each answer is a vote signed by the expected authority.
+                // (non-error) answers were returned by validators.
+                // * each answer is a vote signed by the expected validator.
                 Ok(Some(certificate))
             }
             CommunicateAction::SubmitRequestForValidation(order) => {
@@ -408,7 +405,7 @@ where
     /// Attempt to download new received certificates.
     ///
     /// This is a best effort: it will only find certificates that have been confirmed
-    /// amongst sufficiently many authorities of the current committee of the target
+    /// amongst sufficiently many validators of the current committee of the target
     /// account.
     ///
     /// However, this should be the case whenever a sender's account is still in use and
@@ -418,11 +415,11 @@ where
         let committee = self.committee().await?;
         let trackers = self.received_certificate_trackers.clone();
         let result =
-            communicate_with_quorum(&self.authority_clients, &committee, |name, mut client| {
+            communicate_with_quorum(&self.validator_clients, &committee, |name, mut client| {
                 let account_id = &account_id;
                 let tracker = *trackers.get(&name).unwrap_or(&0);
                 Box::pin(async move {
-                    // Retrieve new received certificates from this authority.
+                    // Retrieve new received certificates from this validator.
                     let query = AccountInfoQuery {
                         account_id: account_id.clone(),
                         check_next_sequence_number: None,
@@ -433,7 +430,7 @@ where
                     let response = client.handle_account_info_query(query).await?;
                     // TODO: These quick verifications are not enough to discard (1) all
                     // invalid certificates or (2) spammy received certificates. (1): a
-                    // dishonest authority could try to make us work by producing
+                    // dishonest validator could try to make us work by producing
                     // good-looking certificates with high sequence numbers. (2): Other
                     // users could send us a lot of uninteresting transactions.
                     response.check(name)?;
@@ -462,20 +459,17 @@ where
                 // to synchronize received certificates.
                 return Ok(());
             }
-            Err(Some(err)) => bail!(
-                "Failed to communicate with a quorum of authorities: {}",
-                err
-            ),
+            Err(Some(err)) => bail!("Failed to communicate with a quorum of validators: {}", err),
             Err(None) => {
-                bail!("Failed to communicate with a quorum of authorities (multiple errors)")
+                bail!("Failed to communicate with a quorum of validators (multiple errors)")
             }
         };
         'outer: for (name, response) in responses {
             // Process received certificates.
             for certificate in response.queried_received_certificates {
                 if self.receive_certificate(certificate).await.is_err() {
-                    // Do not update the authority's tracker in case of error.
-                    // Move on to the next authority.
+                    // Do not update the validator's tracker in case of error.
+                    // Move on to the next validator.
                     continue 'outer;
                 }
             }
@@ -616,7 +610,7 @@ where
 #[async_trait]
 impl<A, S> AccountClient for AccountClientState<A, S>
 where
-    A: AuthorityNode + Send + Sync + Clone + 'static,
+    A: ValidatorNode + Send + Sync + Clone + 'static,
     S: Storage + Clone + 'static,
 {
     async fn query_safe_balance(&mut self) -> Result<Balance, Error> {
@@ -700,14 +694,14 @@ where
         // Recover history from the network.
         self.node_client
             .download_certificates(
-                self.authority_clients.clone(),
+                self.validator_clients.clone(),
                 request.account_id.clone(),
                 request.sequence_number,
             )
             .await?;
         // Process the received operation.
         self.process_certificate(certificate).await?;
-        // Make sure a quorum of authorities (according to our committee) are up-to-date
+        // Make sure a quorum of validators (according to our committee) are up-to-date
         // for data availability.
         let committee = self.committee().await?;
         self.communicate_account_updates(

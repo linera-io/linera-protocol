@@ -64,8 +64,8 @@ pub enum Error {
     InvalidSigner,
     #[fail(display = "Signatures in a certificate must form a quorum")]
     CertificateRequiresQuorum,
-    #[fail(display = "Signatures in a certificate must be from different authorities.")]
-    CertificateAuthorityReuse,
+    #[fail(display = "Signatures in a certificate must be from different validators.")]
+    CertificateValidatorReuse,
     #[fail(display = "The given certificate is invalid.")]
     InvalidCertificate,
     #[fail(display = "The given account info response is invalid.")]

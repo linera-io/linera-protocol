@@ -12,13 +12,13 @@ use zef_storage::Storage;
 #[path = "unit_tests/worker_tests.rs"]
 mod worker_tests;
 
-/// Interface provided by each physical shard (aka "worker") of an authority or a local node.
+/// Interface provided by each physical shard (aka "worker") of an validator or a local node.
 /// * All commands return either the current account info or an error.
 /// * Repeating commands produces no changes and returns no error.
 /// * Some handlers may return cross-shard requests, that is, messages
-///   to be communicated to other workers of the same authority.
+///   to be communicated to other workers of the same validator.
 #[async_trait]
-pub trait AuthorityWorker {
+pub trait ValidatorWorker {
     /// Initiate a new request.
     async fn handle_request_order(
         &mut self,
@@ -54,9 +54,9 @@ impl<Client> WorkerState<Client> {
     }
 }
 
-/// State of a worker in an authority or a local node.
+/// State of a worker in an validator or a local node.
 pub struct WorkerState<StorageClient> {
-    /// The signature key pair of the authority. The key may be missing for replicas
+    /// The signature key pair of the validator. The key may be missing for replicas
     /// without voting rights (possibly with a partial view of accounts).
     key_pair: Option<KeyPair>,
     /// Access to local persistent storage.
@@ -213,7 +213,7 @@ where
 }
 
 #[async_trait]
-impl<Client> AuthorityWorker for WorkerState<Client>
+impl<Client> ValidatorWorker for WorkerState<Client>
 where
     Client: Storage + Clone + 'static,
 {

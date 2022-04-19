@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::node::AuthorityNode;
+use crate::node::ValidatorNode;
 use futures::{future, StreamExt};
 use std::{collections::HashMap, time::Duration};
 use zef_base::{
@@ -20,26 +20,26 @@ pub enum CommunicateAction {
     AdvanceToNextSequenceNumber(SequenceNumber),
 }
 
-pub struct AuthorityUpdater<A, S> {
-    pub name: AuthorityName,
+pub struct ValidatorUpdater<A, S> {
+    pub name: ValidatorName,
     pub client: A,
     pub store: S,
     pub delay: Duration,
     pub retries: usize,
 }
 
-/// Execute a sequence of actions in parallel for all authorities.
+/// Execute a sequence of actions in parallel for all validators.
 /// Try to stop early when a quorum is reached.
 pub async fn communicate_with_quorum<'a, A, V, F>(
-    authority_clients: &'a [(AuthorityName, A)],
+    validator_clients: &'a [(ValidatorName, A)],
     committee: &Committee,
     execute: F,
 ) -> Result<Vec<V>, Option<Error>>
 where
-    A: AuthorityNode + Send + Sync + 'static + Clone,
-    F: Fn(AuthorityName, A) -> future::BoxFuture<'a, Result<V, Error>> + Clone,
+    A: ValidatorNode + Send + Sync + 'static + Clone,
+    F: Fn(ValidatorName, A) -> future::BoxFuture<'a, Result<V, Error>> + Clone,
 {
-    let mut responses: futures::stream::FuturesUnordered<_> = authority_clients
+    let mut responses: futures::stream::FuturesUnordered<_> = validator_clients
         .iter()
         .filter_map(|(name, client)| {
             let client = client.clone();
@@ -83,9 +83,9 @@ where
     Err(None)
 }
 
-impl<A, S> AuthorityUpdater<A, S>
+impl<A, S> ValidatorUpdater<A, S>
 where
-    A: AuthorityNode + Send + Sync + 'static + Clone,
+    A: ValidatorNode + Send + Sync + 'static + Clone,
     S: Storage + Clone + 'static,
 {
     pub async fn send_certificate(
@@ -145,7 +145,7 @@ where
     ) -> Result<(), Error> {
         let mut jobs = Vec::new();
         loop {
-            // Figure out which certificates this authority is missing.
+            // Figure out which certificates this validator is missing.
             let query = AccountInfoQuery {
                 account_id: account_id.clone(),
                 check_next_sequence_number: None,
@@ -234,7 +234,7 @@ where
             }
             CommunicateAction::AdvanceToNextSequenceNumber(seq) => *seq,
         };
-        // Update the authority with missing information, if needed.
+        // Update the validator with missing information, if needed.
         self.send_account_information(account_id.clone(), target_sequence_number)
             .await?;
         // Send the request order (if any) and return a vote.
@@ -245,7 +245,7 @@ where
                 let info = match result {
                     Ok(info) => info,
                     Err(e) if AccountState::is_retriable_validation_error(&order.request, &e) => {
-                        // Some received certificates may be missing for this authority
+                        // Some received certificates may be missing for this validator
                         // (e.g. to make the balance sufficient) so we are going to
                         // synchronize them now.
                         self.send_account_information_as_a_receiver(account_id)
