@@ -23,20 +23,20 @@ use zef_service::{
 #[allow(clippy::too_many_arguments)]
 async fn make_shard_server(
     local_ip_addr: &str,
-    server_config: &AuthorityServerConfig,
+    server_config: &ValidatorServerConfig,
     buffer_size: usize,
     cross_shard_config: network::CrossShardConfig,
     shard: u32,
     storage: MixedStorage,
 ) -> network::Server<MixedStorage> {
     // NOTE: This log entry is used to compute performance.
-    info!("Shard booted on {}", server_config.authority.host);
-    let num_shards = server_config.authority.num_shards;
+    info!("Shard booted on {}", server_config.validator.host);
+    let num_shards = server_config.validator.num_shards;
     let state = WorkerState::new(Some(server_config.key.copy()), storage);
     network::Server::new(
-        server_config.authority.network_protocol,
+        server_config.validator.network_protocol,
         local_ip_addr.to_string(),
-        server_config.authority.base_port,
+        server_config.validator.base_port,
         state,
         shard,
         num_shards,
@@ -47,13 +47,13 @@ async fn make_shard_server(
 
 async fn make_servers(
     local_ip_addr: &str,
-    server_config: &AuthorityServerConfig,
+    server_config: &ValidatorServerConfig,
     genesis_config: &GenesisConfig,
     buffer_size: usize,
     cross_shard_config: network::CrossShardConfig,
     storage: Option<&PathBuf>,
 ) -> Vec<network::Server<MixedStorage>> {
-    let num_shards = server_config.authority.num_shards;
+    let num_shards = server_config.validator.num_shards;
     let mut servers = Vec::new();
     // TODO: create servers in parallel
     for shard in 0..num_shards {
@@ -84,8 +84,8 @@ struct ServerOptions {
 }
 
 #[derive(StructOpt, Debug, PartialEq, Eq)]
-struct AuthorityOptions {
-    /// Path to the file containing the server configuration of this Zef authority (including its secret key)
+struct ValidatorOptions {
+    /// Path to the file containing the server configuration of this Zef validator (including its secret key)
     #[structopt(long = "server")]
     server_config_path: PathBuf,
 
@@ -101,12 +101,12 @@ struct AuthorityOptions {
     #[structopt(long)]
     port: u32,
 
-    /// Number of shards for this authority
+    /// Number of shards for this validator
     #[structopt(long)]
     shards: u32,
 }
 
-impl FromStr for AuthorityOptions {
+impl FromStr for ValidatorOptions {
     type Err = failure::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -134,25 +134,25 @@ impl FromStr for AuthorityOptions {
     }
 }
 
-fn make_server_config(options: AuthorityOptions) -> AuthorityServerConfig {
+fn make_server_config(options: ValidatorOptions) -> ValidatorServerConfig {
     let key = KeyPair::generate();
     let name = key.public();
-    let authority = AuthorityConfig {
+    let validator = ValidatorConfig {
         network_protocol: options.protocol,
         name,
         host: options.host,
         base_port: options.port,
         num_shards: options.shards,
     };
-    AuthorityServerConfig { authority, key }
+    ValidatorServerConfig { validator, key }
 }
 
 #[derive(StructOpt)]
 enum ServerCommands {
-    /// Runs a service for each shard of the Zef authority")
+    /// Runs a service for each shard of the Zef validator")
     #[structopt(name = "run")]
     Run {
-        /// Path to the file containing the server configuration of this Zef authority (including its secret key)
+        /// Path to the file containing the server configuration of this Zef validator (including its secret key)
         #[structopt(long = "server")]
         server_config_path: PathBuf,
 
@@ -181,15 +181,15 @@ enum ServerCommands {
     #[structopt(name = "generate")]
     Generate {
         #[structopt(flatten)]
-        options: AuthorityOptions,
+        options: ValidatorOptions,
     },
 
     /// Act as a trusted third-party and generate all server configurations
     #[structopt(name = "generate-all")]
     GenerateAll {
-        /// Configuration of each authority in the committee encoded as `(Udp|Tcp):host:port:num-shards`
+        /// Configuration of each validator in the committee encoded as `(Udp|Tcp):host:port:num-shards`
         #[structopt(long)]
-        authorities: Vec<AuthorityOptions>,
+        validators: Vec<ValidatorOptions>,
 
         /// Path where to write the description of the Zef committee
         #[structopt(long)]
@@ -218,7 +218,7 @@ async fn main() {
 
             let genesis_config = GenesisConfig::read(&genesis_config_path)
                 .expect("Fail to read initial account config");
-            let server_config = AuthorityServerConfig::read(&server_config_path)
+            let server_config = ValidatorServerConfig::read(&server_config_path)
                 .expect("Fail to read server config");
 
             // Run the server
@@ -278,15 +278,15 @@ async fn main() {
                 .write(&path)
                 .expect("Unable to write server config file");
             info!("Wrote server config file");
-            server.authority.print();
+            server.validator.print();
         }
 
         ServerCommands::GenerateAll {
-            authorities,
+            validators,
             committee,
         } => {
-            let mut config_authorities = Vec::new();
-            for options in authorities {
+            let mut config_validators = Vec::new();
+            for options in validators {
                 let path = options.server_config_path.clone();
                 let server = make_server_config(options);
                 server
@@ -294,10 +294,10 @@ async fn main() {
                     .expect("Unable to write server config file");
                 #[cfg(not(feature = "benchmark"))]
                 info!("Wrote server config {}", path.to_str().unwrap());
-                config_authorities.push(server.authority);
+                config_validators.push(server.validator);
             }
             let config = CommitteeConfig {
-                authorities: config_authorities,
+                validators: config_validators,
             };
             config
                 .write(&committee)
@@ -313,11 +313,11 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_authority_options() {
-        let options = AuthorityOptions::from_str("server.json:udp:localhost:9001:2").unwrap();
+    fn test_validator_options() {
+        let options = ValidatorOptions::from_str("server.json:udp:localhost:9001:2").unwrap();
         assert_eq!(
             options,
-            AuthorityOptions {
+            ValidatorOptions {
                 server_config_path: "server.json".into(),
                 protocol: transport::NetworkProtocol::Udp,
                 host: "localhost".into(),

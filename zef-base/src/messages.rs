@@ -61,7 +61,7 @@ pub struct RequestOrder {
     pub signature: Signature,
 }
 
-/// A statement to be certified by the authorities.
+/// A statement to be certified by the validators.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Value {
     /// The request was validated but confirmation will require additional steps.
@@ -70,12 +70,12 @@ pub enum Value {
     Confirmed { request: Request },
 }
 
-/// A vote on a statement from an authority.
+/// A vote on a statement from an validator.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct Vote {
     pub value: Value,
-    pub authority: AuthorityName,
+    pub validator: ValidatorName,
     pub signature: Signature,
 }
 
@@ -89,7 +89,7 @@ pub struct Certificate {
     #[serde(skip_serializing)]
     pub hash: HashValue,
     /// Signatures on the value.
-    pub signatures: Vec<(AuthorityName, Signature)>,
+    pub signatures: Vec<(ValidatorName, Signature)>,
 }
 
 /// A range of sequence numbers as used in AccountInfoQuery.
@@ -147,7 +147,7 @@ pub struct AccountInfoResponse {
     pub signature: Option<Signature>,
 }
 
-/// A (trusted) cross-shard request with an authority.
+/// A (trusted) cross-shard request with an validator.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub enum CrossShardRequest {
@@ -285,13 +285,13 @@ impl Vote {
         let signature = Signature::new(&value, key_pair);
         Self {
             value,
-            authority: key_pair.public(),
+            validator: key_pair.public(),
             signature,
         }
     }
 
     /// Verify the signature in the vote.
-    pub fn check(&self, name: AuthorityName) -> Result<(), Error> {
+    pub fn check(&self, name: ValidatorName) -> Result<(), Error> {
         self.signature.check(&self.value, name)
     }
 }
@@ -302,7 +302,7 @@ impl AccountInfoResponse {
         Self { info, signature }
     }
 
-    pub fn check(&self, name: AuthorityName) -> Result<(), Error> {
+    pub fn check(&self, name: ValidatorName) -> Result<(), Error> {
         match self.signature {
             Some(sig) => sig.check(&self.info, name),
             None => Err(Error::InvalidAccountInfoResponse),
@@ -313,7 +313,7 @@ impl AccountInfoResponse {
 pub struct SignatureAggregator<'a> {
     committee: &'a Committee,
     weight: usize,
-    used_authorities: HashSet<AuthorityName>,
+    used_validators: HashSet<ValidatorName>,
     partial: Certificate,
 }
 
@@ -324,7 +324,7 @@ impl<'a> SignatureAggregator<'a> {
         Self {
             committee,
             weight: 0,
-            used_authorities: HashSet::new(),
+            used_validators: HashSet::new(),
             partial: Certificate {
                 hash,
                 value,
@@ -338,22 +338,22 @@ impl<'a> SignatureAggregator<'a> {
     /// Returns an error if the signed value cannot be aggregated.
     pub fn append(
         &mut self,
-        authority: AuthorityName,
+        validator: ValidatorName,
         signature: Signature,
     ) -> Result<Option<Certificate>, Error> {
-        signature.check(&self.partial.value, authority)?;
-        // Check that each authority only appears once.
+        signature.check(&self.partial.value, validator)?;
+        // Check that each validator only appears once.
         ensure!(
-            !self.used_authorities.contains(&authority),
-            Error::CertificateAuthorityReuse
+            !self.used_validators.contains(&validator),
+            Error::CertificateValidatorReuse
         );
-        self.used_authorities.insert(authority);
+        self.used_validators.insert(validator);
         // Update weight.
-        let voting_rights = self.committee.weight(&authority);
+        let voting_rights = self.committee.weight(&validator);
         ensure!(voting_rights > 0, Error::InvalidSigner);
         self.weight += voting_rights;
         // Update certificate.
-        self.partial.signatures.push((authority, signature));
+        self.partial.signatures.push((validator, signature));
 
         if self.weight >= self.committee.quorum_threshold() {
             self.weight = 0; // Prevent from creating the certificate twice.
@@ -373,7 +373,7 @@ impl<'a> Deserialize<'a> for Certificate {
         #[serde(rename = "Certificate")]
         struct NetworkCertificate {
             value: Value,
-            signatures: Vec<(AuthorityName, Signature)>,
+            signatures: Vec<(ValidatorName, Signature)>,
         }
 
         let cert = NetworkCertificate::deserialize(deserializer)?;
@@ -382,7 +382,7 @@ impl<'a> Deserialize<'a> for Certificate {
 }
 
 impl Certificate {
-    pub fn new(value: Value, signatures: Vec<(AuthorityName, Signature)>) -> Self {
+    pub fn new(value: Value, signatures: Vec<(ValidatorName, Signature)>) -> Self {
         let hash = HashValue::new(&value);
         Self {
             value,
@@ -395,16 +395,16 @@ impl Certificate {
     pub fn check<'a>(&'a self, committee: &Committee) -> Result<&'a Value, Error> {
         // Check the quorum.
         let mut weight = 0;
-        let mut used_authorities = HashSet::new();
-        for (authority, _) in self.signatures.iter() {
-            // Check that each authority only appears once.
+        let mut used_validators = HashSet::new();
+        for (validator, _) in self.signatures.iter() {
+            // Check that each validator only appears once.
             ensure!(
-                !used_authorities.contains(authority),
-                Error::CertificateAuthorityReuse
+                !used_validators.contains(validator),
+                Error::CertificateValidatorReuse
             );
-            used_authorities.insert(*authority);
+            used_validators.insert(*validator);
             // Update weight.
-            let voting_rights = committee.weight(authority);
+            let voting_rights = committee.weight(validator);
             ensure!(voting_rights > 0, Error::InvalidSigner);
             weight += voting_rights;
         }

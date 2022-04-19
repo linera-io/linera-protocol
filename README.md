@@ -29,10 +29,10 @@ rm -f *.json *.txt
 # Make sure to clean up child processes on exit.
 trap 'kill $(jobs -p)' EXIT
 
-# Create configuration files for 4 authorities with 4 shards each.
+# Create configuration files for 4 validators with 4 shards each.
 # * Private server states are stored in `server*.json`.
 # * `committee.json` is the public description of the FastPay committee.
-./server generate-all --authorities \
+./server generate-all --validators \
    server_1.json:udp:127.0.0.1:9100:4 \
    server_2.json:udp:127.0.0.1:9200:4 \
    server_3.json:udp:127.0.0.1:9300:4 \

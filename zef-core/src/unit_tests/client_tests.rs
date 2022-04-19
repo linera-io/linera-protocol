@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     client::{AccountClient, AccountClientState, CommunicateAction},
-    node::AuthorityNode,
-    worker::{AuthorityWorker, WorkerState},
+    node::ValidatorNode,
+    worker::{ValidatorWorker, WorkerState},
 };
 use async_trait::async_trait;
 use futures::lock::Mutex;
@@ -17,28 +17,28 @@ use zef_base::{
 };
 use zef_storage::{InMemoryStoreClient, Storage};
 
-/// An authority used for testing. "Faulty" authorities ignore request orders (but not
+/// An validator used for testing. "Faulty" validators ignore request orders (but not
 /// certificates or info queries) and have the wrong initial balance for all accounts.
-struct LocalAuthority {
+struct LocalValidator {
     is_faulty: bool,
     state: WorkerState<InMemoryStoreClient>,
 }
 
 #[derive(Clone)]
-struct LocalAuthorityClient(Arc<Mutex<LocalAuthority>>);
+struct LocalValidatorClient(Arc<Mutex<LocalValidator>>);
 
 #[async_trait]
-impl AuthorityNode for LocalAuthorityClient {
+impl ValidatorNode for LocalValidatorClient {
     async fn handle_request_order(
         &mut self,
         order: RequestOrder,
     ) -> Result<AccountInfoResponse, Error> {
-        let authority = self.0.clone();
-        let mut authority = authority.lock().await;
-        if authority.is_faulty {
+        let validator = self.0.clone();
+        let mut validator = validator.lock().await;
+        if validator.is_faulty {
             Err(Error::SequenceOverflow)
         } else {
-            authority.state.handle_request_order(order).await
+            validator.state.handle_request_order(order).await
         }
     }
 
@@ -46,9 +46,9 @@ impl AuthorityNode for LocalAuthorityClient {
         &mut self,
         certificate: Certificate,
     ) -> Result<AccountInfoResponse, Error> {
-        let authority = self.0.clone();
-        let mut authority = authority.lock().await;
-        authority.state.fully_handle_certificate(certificate).await
+        let validator = self.0.clone();
+        let mut validator = validator.lock().await;
+        validator.state.fully_handle_certificate(certificate).await
     }
 
     async fn handle_account_info_query(
@@ -65,30 +65,30 @@ impl AuthorityNode for LocalAuthorityClient {
     }
 }
 
-impl LocalAuthorityClient {
+impl LocalValidatorClient {
     fn new(is_faulty: bool, state: WorkerState<InMemoryStoreClient>) -> Self {
-        let authority = LocalAuthority { is_faulty, state };
-        Self(Arc::new(Mutex::new(authority)))
+        let validator = LocalValidator { is_faulty, state };
+        Self(Arc::new(Mutex::new(validator)))
     }
 }
 
 // NOTE:
-// * To communicate with a quorum of authorities, account clients iterate over a copy of
-// `authority_clients` to spawn I/O tasks.
-// * When using `LocalAuthorityClient`, clients communicate with an exact quorum then stops.
-// * Most tests have 1 faulty authority out 4 so that there is exactly only 1 quorum to
+// * To communicate with a quorum of validators, account clients iterate over a copy of
+// `validator_clients` to spawn I/O tasks.
+// * When using `LocalValidatorClient`, clients communicate with an exact quorum then stops.
+// * Most tests have 1 faulty validator out 4 so that there is exactly only 1 quorum to
 // communicate with.
 struct TestBuilder {
     committee: Committee,
     genesis_store: InMemoryStoreClient,
-    faulty_authorities: HashSet<AuthorityName>,
-    authority_clients: Vec<(AuthorityName, LocalAuthorityClient)>,
-    authority_stores: HashMap<AuthorityName, InMemoryStoreClient>,
+    faulty_validators: HashSet<ValidatorName>,
+    validator_clients: Vec<(ValidatorName, LocalValidatorClient)>,
+    validator_stores: HashMap<ValidatorName, InMemoryStoreClient>,
     account_client_stores: Vec<InMemoryStoreClient>,
 }
 
 impl TestBuilder {
-    fn new(count: usize, with_faulty_authorities: usize) -> Self {
+    fn new(count: usize, with_faulty_validators: usize) -> Self {
         let mut key_pairs = Vec::new();
         let mut voting_rights = BTreeMap::new();
         for _ in 0..count {
@@ -97,29 +97,29 @@ impl TestBuilder {
             key_pairs.push(key_pair);
         }
         let committee = Committee::new(voting_rights);
-        let mut authority_clients = Vec::new();
-        let mut authority_stores = HashMap::new();
-        let mut faulty_authorities = HashSet::new();
+        let mut validator_clients = Vec::new();
+        let mut validator_stores = HashMap::new();
+        let mut faulty_validators = HashSet::new();
         for (i, key_pair) in key_pairs.into_iter().enumerate() {
             let name = key_pair.public();
             let store = InMemoryStoreClient::default();
             let state = WorkerState::new(Some(key_pair), store.clone());
-            let authority = if i < with_faulty_authorities {
-                faulty_authorities.insert(name);
-                LocalAuthorityClient::new(true, state)
+            let validator = if i < with_faulty_validators {
+                faulty_validators.insert(name);
+                LocalValidatorClient::new(true, state)
             } else {
-                LocalAuthorityClient::new(false, state)
+                LocalValidatorClient::new(false, state)
             };
-            authority_clients.push((name, authority));
-            authority_stores.insert(name, store);
+            validator_clients.push((name, validator));
+            validator_stores.insert(name, store);
         }
-        eprintln!("faulty authorities: {:?}", faulty_authorities);
+        eprintln!("faulty validators: {:?}", faulty_validators);
         Self {
             committee,
             genesis_store: InMemoryStoreClient::default(),
-            faulty_authorities,
-            authority_clients,
-            authority_stores,
+            faulty_validators,
+            validator_clients,
+            validator_stores,
             account_client_stores: Vec::new(),
         }
     }
@@ -128,7 +128,7 @@ impl TestBuilder {
         &mut self,
         account_id: AccountId,
         balance: Balance,
-    ) -> AccountClientState<LocalAuthorityClient, InMemoryStoreClient> {
+    ) -> AccountClientState<LocalValidatorClient, InMemoryStoreClient> {
         let key_pair = KeyPair::generate();
         let owner = key_pair.public();
         let account =
@@ -144,8 +144,8 @@ impl TestBuilder {
             .write_account(account.clone())
             .await
             .unwrap();
-        for (name, store) in self.authority_stores.iter_mut() {
-            if self.faulty_authorities.contains(name) {
+        for (name, store) in self.validator_stores.iter_mut() {
+            if self.faulty_validators.contains(name) {
                 store.write_account(account_bad.clone()).await.unwrap();
             } else {
                 store.write_account(account.clone()).await.unwrap();
@@ -163,15 +163,15 @@ impl TestBuilder {
         account_id: AccountId,
         key_pair: KeyPair,
         sequence_number: SequenceNumber,
-    ) -> AccountClientState<LocalAuthorityClient, InMemoryStoreClient> {
+    ) -> AccountClientState<LocalValidatorClient, InMemoryStoreClient> {
         // Note that new clients are only given the genesis store: they must figure out
-        // the rest by asking authorities.
+        // the rest by asking validators.
         let store = self.genesis_store.copy().await;
         self.account_client_stores.push(store.clone());
         AccountClientState::new(
             account_id,
             vec![key_pair],
-            self.authority_clients.clone(),
+            self.validator_clients.clone(),
             store,
             sequence_number,
             std::time::Duration::from_millis(500),
@@ -181,15 +181,15 @@ impl TestBuilder {
 
     async fn single_account(
         count: usize,
-        with_faulty_authorities: usize,
+        with_faulty_validators: usize,
         balance: Balance,
-    ) -> AccountClientState<LocalAuthorityClient, InMemoryStoreClient> {
-        let mut builder = TestBuilder::new(count, with_faulty_authorities);
+    ) -> AccountClientState<LocalValidatorClient, InMemoryStoreClient> {
+        let mut builder = TestBuilder::new(count, with_faulty_validators);
         builder.add_initial_account(dbg_account(1), balance).await
     }
 
     /// Try to find a (confirmation) certificate for the given account_id and sequence number.
-    async fn check_that_authorities_have_certificate(
+    async fn check_that_validators_have_certificate(
         &self,
         account_id: AccountId,
         sequence_number: SequenceNumber,
@@ -207,7 +207,7 @@ impl TestBuilder {
         };
         let mut count = 0;
         let mut certificate = None;
-        for (name, mut client) in self.authority_clients.clone() {
+        for (name, mut client) in self.validator_clients.clone() {
             if let Ok(response) = client.handle_account_info_query(query.clone()).await {
                 if response.check(name).is_ok() {
                     let AccountInfo {
@@ -264,7 +264,7 @@ async fn test_initiating_valid_transfer() {
     assert_eq!(sender.query_safe_balance().await.unwrap(), Balance::from(1));
     assert_eq!(
         builder
-            .check_that_authorities_have_certificate(
+            .check_that_validators_have_certificate(
                 sender.account_id.clone(),
                 SequenceNumber::from(0),
                 3
@@ -290,7 +290,7 @@ async fn test_rotate_key_pair() {
     assert_eq!(sender.identity().await.unwrap(), new_pubk);
     assert_eq!(
         builder
-            .check_that_authorities_have_certificate(
+            .check_that_validators_have_certificate(
                 sender.account_id.clone(),
                 SequenceNumber::from(0),
                 3
@@ -327,7 +327,7 @@ async fn test_transfer_ownership() {
     assert!(sender.key_pair().await.is_err());
     assert_eq!(
         builder
-            .check_that_authorities_have_certificate(
+            .check_that_validators_have_certificate(
                 sender.account_id.clone(),
                 SequenceNumber::from(0),
                 3
@@ -363,7 +363,7 @@ async fn test_share_ownership() {
     assert!(sender.key_pair().await.is_ok());
     assert_eq!(
         builder
-            .check_that_authorities_have_certificate(
+            .check_that_validators_have_certificate(
                 sender.account_id.clone(),
                 SequenceNumber::from(0),
                 3
@@ -446,7 +446,7 @@ async fn test_open_account_after_transfer() {
     assert!(sender.key_pair().await.is_ok());
     assert_eq!(
         builder
-            .check_that_authorities_have_certificate(
+            .check_that_validators_have_certificate(
                 sender.account_id.clone(),
                 SequenceNumber::from(1),
                 3
@@ -535,7 +535,7 @@ async fn test_close_account() {
     assert!(sender.key_pair().await.is_err());
     assert_eq!(
         builder
-            .check_that_authorities_have_certificate(
+            .check_that_validators_have_certificate(
                 sender.account_id.clone(),
                 SequenceNumber::from(0),
                 3
@@ -602,7 +602,7 @@ async fn test_bidirectional_transfer() {
 
     assert_eq!(
         builder
-            .check_that_authorities_have_certificate(
+            .check_that_validators_have_certificate(
                 client1.account_id.clone(),
                 SequenceNumber::from(0),
                 3
@@ -722,7 +722,7 @@ async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
         .await
         .unwrap();
     // Sending an unchecked transfer request from client2 to client3 fails because one
-    // honest authority is lagging and client2 doesn't know about the missing received
+    // honest validator is lagging and client2 doesn't know about the missing received
     // certificate.
     assert!(client2
         .transfer_to_account_unsafe_unconfirmed(

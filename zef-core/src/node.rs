@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::worker::{AuthorityWorker, WorkerState};
+use crate::worker::{ValidatorWorker, WorkerState};
 use async_trait::async_trait;
 use futures::{lock::Mutex, StreamExt};
 use rand::prelude::SliceRandom;
@@ -10,9 +10,9 @@ use std::sync::Arc;
 use zef_base::{account::AccountManager, base_types::*, error::Error, messages::*};
 use zef_storage::Storage;
 
-/// How to communicate with an authority or a local node.
+/// How to communicate with an validator or a local node.
 #[async_trait]
-pub trait AuthorityNode {
+pub trait ValidatorNode {
     /// Initiate a new transfer.
     async fn handle_request_order(
         &mut self,
@@ -41,7 +41,7 @@ pub struct LocalNode<S> {
 pub struct LocalNodeClient<S>(Arc<Mutex<LocalNode<S>>>);
 
 #[async_trait]
-impl<S> AuthorityNode for LocalNodeClient<S>
+impl<S> ValidatorNode for LocalNodeClient<S>
 where
     S: Storage + Clone + 'static,
 {
@@ -152,17 +152,17 @@ where
 
     pub async fn download_certificates<A>(
         &mut self,
-        mut authorities: Vec<(AuthorityName, A)>,
+        mut validators: Vec<(ValidatorName, A)>,
         account_id: AccountId,
         target_next_sequence_number: SequenceNumber,
     ) -> Result<SequenceNumber, Error>
     where
-        A: AuthorityNode + Send + Sync + 'static + Clone,
+        A: ValidatorNode + Send + Sync + 'static + Clone,
     {
-        // Sequentially try each authority in random order.
+        // Sequentially try each validator in random order.
         // TODO: We could also try a few of them in parallel.
-        authorities.shuffle(&mut rand::thread_rng());
-        for (name, client) in authorities {
+        validators.shuffle(&mut rand::thread_rng());
+        for (name, client) in validators {
             let current = self
                 .current_next_sequence_number(account_id.clone())
                 .await?;
@@ -177,7 +177,7 @@ where
                 target_next_sequence_number,
             )
             .await?;
-            // TODO: We could continue with the same authority if sufficient progress was made.
+            // TODO: We could continue with the same validator if sufficient progress was made.
         }
         let current = self.current_next_sequence_number(account_id).await?;
         if target_next_sequence_number <= current {
@@ -189,14 +189,14 @@ where
 
     pub async fn try_download_certificates_from<A>(
         &mut self,
-        name: AuthorityName,
+        name: ValidatorName,
         mut client: A,
         account_id: AccountId,
         start: SequenceNumber,
         stop: SequenceNumber,
     ) -> Result<(), Error>
     where
-        A: AuthorityNode + Send + Sync + 'static + Clone,
+        A: ValidatorNode + Send + Sync + 'static + Clone,
     {
         let range = SequenceNumberRange {
             start,
@@ -224,13 +224,13 @@ where
 
     pub async fn synchronize_account_state<A>(
         &mut self,
-        authorities: Vec<(AuthorityName, A)>,
+        validators: Vec<(ValidatorName, A)>,
         account_id: AccountId,
     ) -> Result<(SequenceNumber, RoundNumber), Error>
     where
-        A: AuthorityNode + Send + Sync + 'static + Clone,
+        A: ValidatorNode + Send + Sync + 'static + Clone,
     {
-        let infos: futures::stream::FuturesUnordered<_> = authorities
+        let infos: futures::stream::FuturesUnordered<_> = validators
             .into_iter()
             .map(|(name, client)| {
                 let mut node = self.clone();
@@ -252,12 +252,12 @@ where
 
     pub async fn try_synchronize_account_state_from<A>(
         &mut self,
-        name: AuthorityName,
+        name: ValidatorName,
         mut client: A,
         account_id: AccountId,
     ) -> Result<(SequenceNumber, RoundNumber), Error>
     where
-        A: AuthorityNode + Send + Sync + 'static + Clone,
+        A: ValidatorNode + Send + Sync + 'static + Clone,
     {
         let start = self
             .current_next_sequence_number(account_id.clone())
@@ -273,7 +273,7 @@ where
         let info = match client.handle_account_info_query(query).await {
             Ok(response) if response.check(name).is_ok() => response.info,
             _ => {
-                // Give up on this authority.
+                // Give up on this validator.
                 return Ok((start, RoundNumber::default()));
             }
         };
