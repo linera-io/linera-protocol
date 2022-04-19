@@ -172,7 +172,7 @@ Error:
     14:
       CertificateRequiresQuorum: UNIT
     15:
-      CertificateAuthorityReuse: UNIT
+      CertificateValidatorReuse: UNIT
     16:
       InvalidCertificate: UNIT
     17:
@@ -376,7 +376,7 @@ Vote:
   STRUCT:
     - value:
         TYPENAME: Value
-    - authority:
+    - validator:
         TYPENAME: PublicKeyBytes
     - signature:
         TYPENAME: Signature

@@ -38,10 +38,10 @@ fn test_certificates() {
     let name1 = key1.public();
     let name2 = key2.public();
 
-    let mut authorities = BTreeMap::new();
-    authorities.insert(name1, /* voting right */ 1);
-    authorities.insert(name2, /* voting right */ 1);
-    let committee = Committee::new(authorities);
+    let mut validators = BTreeMap::new();
+    validators.insert(name1, /* voting right */ 1);
+    validators.insert(name2, /* voting right */ 1);
+    let committee = Committee::new(validators);
 
     let request = Request {
         account_id: dbg_account(1),
@@ -61,18 +61,18 @@ fn test_certificates() {
 
     let mut builder = SignatureAggregator::new(value.clone(), &committee);
     assert!(builder
-        .append(v1.authority, v1.signature)
+        .append(v1.validator, v1.signature)
         .unwrap()
         .is_none());
-    let mut c = builder.append(v2.authority, v2.signature).unwrap().unwrap();
+    let mut c = builder.append(v2.validator, v2.signature).unwrap().unwrap();
     assert!(c.check(&committee).is_ok());
     c.signatures.pop();
     assert!(c.check(&committee).is_err());
 
     let mut builder = SignatureAggregator::new(value, &committee);
     assert!(builder
-        .append(v1.authority, v1.signature)
+        .append(v1.validator, v1.signature)
         .unwrap()
         .is_none());
-    assert!(builder.append(v3.authority, v3.signature).is_err());
+    assert!(builder.append(v3.validator, v3.signature).is_err());
 }

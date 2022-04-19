@@ -5,7 +5,7 @@
 #![deny(warnings)]
 
 use zef_base::{base_types::*, committee::Committee, messages::*, serialize::*};
-use zef_core::{client::*, node::AuthorityNode};
+use zef_core::{client::*, node::ValidatorNode};
 use zef_service::{config::*, network, storage::MixedStorage, transport};
 use zef_storage::{InMemoryStoreClient, Storage};
 
@@ -43,7 +43,7 @@ impl ClientContext {
                 (
                     Box::new(InMemoryStoreClient::default()),
                     CommitteeConfig {
-                        authorities: Vec::new(),
+                        validators: Vec::new(),
                     },
                 )
             }
@@ -77,9 +77,9 @@ impl ClientContext {
         }
     }
 
-    fn make_authority_clients(&self) -> Vec<(AuthorityName, network::Client)> {
-        let mut authority_clients = Vec::new();
-        for config in &self.committee_config.authorities {
+    fn make_validator_clients(&self) -> Vec<(ValidatorName, network::Client)> {
+        let mut validator_clients = Vec::new();
+        for config in &self.committee_config.validators {
             let config = config.clone();
             let client = network::Client::new(
                 config.network_protocol,
@@ -90,14 +90,14 @@ impl ClientContext {
                 self.send_timeout,
                 self.recv_timeout,
             );
-            authority_clients.push((config.name, client));
+            validator_clients.push((config.name, client));
         }
-        authority_clients
+        validator_clients
     }
 
-    fn make_authority_mass_clients(&self, max_in_flight: u64) -> Vec<(u32, network::MassClient)> {
-        let mut authority_clients = Vec::new();
-        for config in &self.committee_config.authorities {
+    fn make_validator_mass_clients(&self, max_in_flight: u64) -> Vec<(u32, network::MassClient)> {
+        let mut validator_clients = Vec::new();
+        for config in &self.committee_config.validators {
             let client = network::MassClient::new(
                 config.network_protocol,
                 config.host.clone(),
@@ -107,9 +107,9 @@ impl ClientContext {
                 self.recv_timeout,
                 max_in_flight / config.num_shards as u64, // Distribute window to diff shards
             );
-            authority_clients.push((config.num_shards, client));
+            validator_clients.push((config.num_shards, client));
         }
-        authority_clients
+        validator_clients
     }
 
     fn make_account_client(
@@ -117,7 +117,7 @@ impl ClientContext {
         account_id: AccountId,
     ) -> AccountClientState<network::Client, MixedStorage> {
         let account = self.wallet_state.get(&account_id).expect("Unknown account");
-        let authority_clients = self.make_authority_clients();
+        let validator_clients = self.make_validator_clients();
         AccountClientState::new(
             account_id,
             account
@@ -126,7 +126,7 @@ impl ClientContext {
                 .map(|kp| kp.copy())
                 .into_iter()
                 .collect(),
-            authority_clients,
+            validator_clients,
             self.storage_client.clone(),
             account.next_sequence_number,
             self.cross_shard_delay,
@@ -143,7 +143,7 @@ impl ClientContext {
             Value::Confirmed { request } => request.operation.recipient().unwrap().clone(),
             _ => failure::bail!("unexpected value in certificate"),
         };
-        let authority_clients = self.make_authority_clients();
+        let validator_clients = self.make_validator_clients();
         let account = self.wallet_state.get_or_insert(recipient.clone());
         let mut client = AccountClientState::new(
             recipient,
@@ -154,7 +154,7 @@ impl ClientContext {
                 .or(key_pair)
                 .into_iter()
                 .collect(),
-            authority_clients,
+            validator_clients,
             self.storage_client.clone(),
             account.next_sequence_number,
             Duration::default(),
@@ -212,8 +212,8 @@ impl ClientContext {
         let mut keys = Vec::new();
         for file in server_config {
             let server_config =
-                AuthorityServerConfig::read(file).expect("Fail to read server config");
-            keys.push((server_config.authority.name, server_config.key));
+                ValidatorServerConfig::read(file).expect("Fail to read server config");
+            keys.push((server_config.validator.name, server_config.key));
         }
         let committee = Committee::make_simple(keys.iter().map(|(n, _)| *n).collect());
         assert!(
@@ -254,13 +254,13 @@ impl ClientContext {
             }
             debug!(
                 "Processing vote on {:?}'s request by {:?}",
-                account_id, vote.authority,
+                account_id, vote.validator,
             );
             let value = vote.value;
             let aggregator = aggregators
                 .entry(account_id.clone())
                 .or_insert_with(|| SignatureAggregator::new(value, &committee));
-            match aggregator.append(vote.authority, vote.signature) {
+            match aggregator.append(vote.validator, vote.signature) {
                 Ok(Some(certificate)) => {
                     debug!("Found certificate: {:?}", certificate);
                     let buf =
@@ -279,7 +279,7 @@ impl ClientContext {
         certificates
     }
 
-    /// Broadcast a bulk of requests to each authority.
+    /// Broadcast a bulk of requests to each validator.
     async fn mass_broadcast_orders(
         &self,
         phase: &'static str,
@@ -288,10 +288,10 @@ impl ClientContext {
     ) -> Vec<Bytes> {
         let time_start = Instant::now();
         info!("Broadcasting {} {} orders", orders.len(), phase);
-        let authority_clients = self.make_authority_mass_clients(max_in_flight);
+        let validator_clients = self.make_validator_mass_clients(max_in_flight);
         let mut streams = Vec::new();
-        for (num_shards, client) in authority_clients {
-            // Re-index orders by shard for this particular authority client.
+        for (num_shards, client) in validator_clients {
+            // Re-index orders by shard for this particular validator client.
             let mut sharded_requests = HashMap::new();
             for (account_id, buf) in &orders {
                 let shard = network::get_shard(num_shards, account_id);
@@ -326,7 +326,7 @@ impl ClientContext {
 
     async fn update_account_from_state<A, S>(&mut self, state: &mut AccountClientState<A, S>)
     where
-        A: AuthorityNode + Send + Sync + 'static + Clone,
+        A: ValidatorNode + Send + Sync + 'static + Clone,
         S: Storage + Clone + 'static,
     {
         self.wallet_state.update_from_state(state).await
@@ -434,7 +434,7 @@ enum ClientCommands {
         sender: AccountId,
     },
 
-    /// Obtain the balance of the account directly from a quorum of authorities.
+    /// Obtain the balance of the account directly from a quorum of validators.
     #[structopt(name = "query_balance")]
     QueryBalance {
         /// Account id
@@ -442,7 +442,7 @@ enum ClientCommands {
     },
 
     /// Synchronize the local state of the account (including a conservative estimation of the
-    /// available balance) with a quorum authorities.
+    /// available balance) with a quorum validators.
     #[structopt(name = "sync_balance")]
     SynchronizeBalance {
         /// Account id
@@ -465,10 +465,10 @@ enum ClientCommands {
         server_configs: Option<Vec<String>>,
     },
 
-    /// Create initial user accounts and print information to be used for initialization of authority setup.
+    /// Create initial user accounts and print information to be used for initialization of validator setup.
     #[structopt(name = "create_genesis_config")]
     CreateGenesisConfig {
-        /// Sets the file describing the public configurations of all authorities
+        /// Sets the file describing the public configurations of all validators
         #[structopt(long = "committee")]
         committee_config_path: PathBuf,
 
@@ -561,7 +561,7 @@ async fn main() {
 
         ClientCommands::QueryBalance { account_id } => {
             let mut client_state = context.make_account_client(account_id);
-            info!("Starting query authorities for the account balance");
+            info!("Starting query validators for the account balance");
             let time_start = Instant::now();
             let balance = client_state.query_safe_balance().await.unwrap();
             let time_total = time_start.elapsed().as_micros();

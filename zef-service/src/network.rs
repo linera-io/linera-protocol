@@ -5,7 +5,7 @@
 use crate::transport::*;
 use async_trait::async_trait;
 use zef_base::{base_types::*, error::*, messages::*, serialize::*};
-use zef_core::{node::AuthorityNode, worker::*};
+use zef_core::{node::ValidatorNode, worker::*};
 
 #[cfg(feature = "benchmark")]
 use crate::network_server::BenchmarkServer;
@@ -387,7 +387,7 @@ impl Client {
 }
 
 #[async_trait]
-impl AuthorityNode for Client {
+impl ValidatorNode for Client {
     /// Initiate a new request.
     async fn handle_request_order(
         &mut self,
@@ -514,7 +514,7 @@ impl MassClient {
         }
     }
 
-    /// Spin off one task for each shard based on this authority client.
+    /// Spin off one task for each shard based on this validator client.
     pub fn run<I>(&self, sharded_requests: I) -> impl futures::stream::Stream<Item = Vec<Bytes>>
     where
         I: IntoIterator<Item = (ShardId, Vec<Bytes>)>,

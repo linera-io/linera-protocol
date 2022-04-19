@@ -8,12 +8,12 @@ use std::collections::BTreeMap;
 
 #[derive(Eq, PartialEq, Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Committee {
-    pub voting_rights: BTreeMap<AuthorityName, usize>,
+    pub voting_rights: BTreeMap<ValidatorName, usize>,
     pub total_votes: usize,
 }
 
 impl Committee {
-    pub fn new(voting_rights: BTreeMap<AuthorityName, usize>) -> Self {
+    pub fn new(voting_rights: BTreeMap<ValidatorName, usize>) -> Self {
         let total_votes = voting_rights.iter().fold(0, |sum, (_, votes)| sum + *votes);
         Committee {
             voting_rights,
@@ -21,7 +21,7 @@ impl Committee {
         }
     }
 
-    pub fn make_simple(keys: Vec<AuthorityName>) -> Self {
+    pub fn make_simple(keys: Vec<ValidatorName>) -> Self {
         let total_votes = keys.len();
         Committee {
             voting_rights: keys.into_iter().map(|k| (k, 1)).collect(),
@@ -29,7 +29,7 @@ impl Committee {
         }
     }
 
-    pub fn weight(&self, author: &AuthorityName) -> usize {
+    pub fn weight(&self, author: &ValidatorName) -> usize {
         *self.voting_rights.get(author).unwrap_or(&0)
     }
 
@@ -45,8 +45,8 @@ impl Committee {
         (self.total_votes + 2) / 3
     }
 
-    /// Find the highest value than is supported by a certain subset of authorities.
-    pub fn get_lower_bound<V>(&self, threshold: usize, mut values: Vec<(AuthorityName, V)>) -> V
+    /// Find the highest value than is supported by a certain subset of validators.
+    pub fn get_lower_bound<V>(&self, threshold: usize, mut values: Vec<(ValidatorName, V)>) -> V
     where
         V: Default + std::cmp::Ord,
     {
@@ -62,16 +62,16 @@ impl Committee {
         V::default()
     }
 
-    /// Find the highest value than is supported by a quorum of authorities.
-    pub fn get_strong_majority_lower_bound<V>(&self, values: Vec<(AuthorityName, V)>) -> V
+    /// Find the highest value than is supported by a quorum of validators.
+    pub fn get_strong_majority_lower_bound<V>(&self, values: Vec<(ValidatorName, V)>) -> V
     where
         V: Default + std::cmp::Ord,
     {
         self.get_lower_bound(self.quorum_threshold(), values)
     }
 
-    /// Find the highest value than is guaranteed to be supported by at least one honest authority.
-    pub fn get_validity_lower_bound<V>(&self, values: Vec<(AuthorityName, V)>) -> V
+    /// Find the highest value than is guaranteed to be supported by at least one honest validator.
+    pub fn get_validity_lower_bound<V>(&self, values: Vec<(ValidatorName, V)>) -> V
     where
         V: Default + std::cmp::Ord,
     {
