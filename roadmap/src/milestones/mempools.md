@@ -8,6 +8,8 @@ However, it requires a full BFT protocol and a mempool (which could be the same 
 
 ## Requirements
 
-* Make it possible for validators to communicate directly and synchronize a DAG
+* Make it possible for validators to communicate directly and synchronize a DAG => This should be easy by having each validator also run a "client".
 
 * Choose and implement a DAG BFT protocol such as [BullShark](https://arxiv.org/abs/2201.05677)).
+
+    - Alternatively, we could use the code for multi-owner accounts, add VDF-based mining(?) as a basic leader election between validators, and re-use the existing infrastructure of user accounts + cross-shard requests as a mempool.

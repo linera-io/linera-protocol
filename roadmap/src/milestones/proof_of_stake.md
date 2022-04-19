@@ -10,4 +10,4 @@ Stakes will eventually affect the redistribution of user fees (aka *yield*).
 
 * Stakes may come from user delegation.
 
-* Eventually, the proof-of-Stake layer should allowing full *open membership*, i.e. the fact that validators can join or leave without human intervention.
+* Eventually, the proof-of-Stake layer should allow full *open membership*, i.e. the fact that validators can join or leave without human intervention.

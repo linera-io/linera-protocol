@@ -1,6 +1,7 @@
-# Decentralized Trading
+# Decentralized Finance
 
-This is the main application targeted in the MVP.
+Decentralized trading is the main application targeted in the MVP.
+Other DeFi applications may also be considered.
 
 ## Automated Market Making
 

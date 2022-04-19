@@ -8,7 +8,7 @@
 
     - [Elasticity](./milestones/elasticity.md)
 
-    - [Auditability](./milestones/auditability.md)
+    - [Programmablity](./milestones/programmability.md)
 
     - [Multi-Owner Accounts](./milestones/multi_owner.md)
 
@@ -16,10 +16,10 @@
 
     - [Reconfiguration](./milestones/reconfiguration.md)
 
-    - [Extensibility](./milestones/extensibility.md)
+    - [Auditing and resilience](./milestones/decentralization.md)
 
     - [Proof of Stake](./milestones/proof_of_stake.md)
 
     - [User Fees](./milestones/fees.md)
 
-    - [Decentralized Trading](./milestones/order_book.md)
+    - [Decentralized Finance](./milestones/order_book.md)
