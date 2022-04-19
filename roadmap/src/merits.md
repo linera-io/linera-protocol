@@ -1,5 +1,7 @@
 # Merits of the Zefchain Protocol
 
+**NOTE: This discussion is somewhat outdated.**
+
 ## Expected Key Benefits
 
 * Linear scalability
