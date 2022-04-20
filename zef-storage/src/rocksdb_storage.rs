@@ -3,7 +3,11 @@
 use crate::Storage;
 use async_trait::async_trait;
 use futures::lock::Mutex;
-use std::{path::PathBuf, path::Path, sync::Arc, collections::HashMap};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 use zef_base::{
     account::AccountState,
     base_types::{AccountId, HashValue},
@@ -22,10 +26,9 @@ pub struct RocksdbStore {
     path: PathBuf,
     /// db map indexed by kind
     dbs: HashMap<String, rocksdb::DB>,
-
 }
 
-fn open_db(path: &Path, kind: &str) -> rocksdb::DB{
+fn open_db(path: &Path, kind: &str) -> rocksdb::DB {
     let cf_opts = rocksdb::Options::default();
     let cf = rocksdb::ColumnFamilyDescriptor::new(kind, cf_opts);
 
@@ -38,24 +41,38 @@ fn open_db(path: &Path, kind: &str) -> rocksdb::DB{
 impl RocksdbStore {
     pub fn new(path: PathBuf) -> Self {
         assert!(path.is_dir());
-        Self { path, dbs: HashMap::new() }
+        Self {
+            path,
+            dbs: HashMap::new(),
+        }
     }
 
-    fn get_db(&mut self, kind: &str) -> &mut rocksdb::DB{
-        self.dbs.entry(String::from(kind)).or_insert_with(|| open_db(&self.path, kind))
+    fn get_db(&mut self, kind: &str) -> &mut rocksdb::DB {
+        self.dbs
+            .entry(String::from(kind))
+            .or_insert_with(|| open_db(&self.path, kind))
     }
 
-    async fn read_value(&mut self, kind: &str, key: &[u8]) -> Result<std::option::Option<Vec<u8>>, rocksdb::Error> {
+    async fn read_value(
+        &mut self,
+        kind: &str,
+        key: &[u8],
+    ) -> Result<std::option::Option<Vec<u8>>, rocksdb::Error> {
         let db = self.get_db(kind);
 
         match db.get(key) {
             Ok(Some(value)) => Ok(Some(value)),
             Ok(None) => Ok(None),
-            Err(e) => Err(e)
+            Err(e) => Err(e),
         }
     }
 
-    async fn write_value(&mut self, kind: &str, key: &[u8], value: &[u8]) -> Result<(), rocksdb::Error> {
+    async fn write_value(
+        &mut self,
+        kind: &str,
+        key: &[u8],
+        value: &[u8],
+    ) -> Result<(), rocksdb::Error> {
         let db = self.get_db(kind);
         db.put(key, value)?;
         Ok(())
