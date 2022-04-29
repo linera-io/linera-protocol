@@ -65,7 +65,7 @@ kill "$LAST_PID"
 ./client --wallet wallet.json --genesis genesis.json query_balance "$ACCOUNT2"
 
 # Launch local benchmark using all user accounts
-./client --wallet wallet.json --genesis genesis.json benchmark
+./client --wallet wallet.json --genesis genesis.json benchmark --max-in-flight 50
 
 # Create derived account
 ACCOUNT3="`./client --wallet wallet.json --genesis genesis.json open_account --from "$ACCOUNT1"`"
