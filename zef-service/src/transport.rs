@@ -3,10 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::arg_enum;
-use futures::future;
+use futures::{future, FutureExt};
 use log::*;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, convert::TryInto, io, sync::Arc};
+use std::{collections::HashMap, convert::TryInto, future::Future, io, sync::Arc};
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     net::{TcpListener, TcpStream, UdpSocket},
@@ -54,11 +54,24 @@ pub trait MessageHandler {
 
 /// The result of spawning a server is oneshot channel to kill it and a handle to track completion.
 pub struct SpawnedServer {
-    pub complete: futures::channel::oneshot::Sender<()>,
+    pub complete: future::AbortHandle,
     pub handle: tokio::task::JoinHandle<Result<(), std::io::Error>>,
 }
 
 impl SpawnedServer {
+    pub fn new(server: impl Future<Output = Result<(), io::Error>> + Send + 'static) -> Self {
+        let (abortable_server, complete) = future::abortable(server);
+
+        let task = abortable_server.map(|result| match result {
+            Ok(server_result) => server_result,
+            Err(future::Aborted) => Ok(()),
+        });
+
+        let handle = tokio::spawn(task);
+
+        SpawnedServer { complete, handle }
+    }
+
     pub async fn join(self) -> Result<(), std::io::Error> {
         // Note that dropping `self.complete` would terminate the server.
         self.handle.await??;
@@ -66,7 +79,7 @@ impl SpawnedServer {
     }
 
     pub async fn kill(self) -> Result<(), std::io::Error> {
-        self.complete.send(()).unwrap();
+        self.complete.abort();
         self.handle.await??;
         Ok(())
     }
@@ -107,18 +120,24 @@ impl NetworkProtocol {
     where
         S: MessageHandler + Send + 'static,
     {
-        let (complete, receiver) = futures::channel::oneshot::channel();
-        let handle = match self {
+        match self {
             Self::Udp => {
                 let socket = UdpSocket::bind(&address).await?;
-                tokio::spawn(Self::run_udp_server(socket, state, receiver, buffer_size))
+                Ok(SpawnedServer::new(Self::run_udp_server(
+                    socket,
+                    state,
+                    buffer_size,
+                )))
             }
             Self::Tcp => {
                 let listener = TcpListener::bind(address).await?;
-                tokio::spawn(Self::run_tcp_server(listener, state, receiver, buffer_size))
+                Ok(SpawnedServer::new(Self::run_tcp_server(
+                    listener,
+                    state,
+                    buffer_size,
+                )))
             }
-        };
-        Ok(SpawnedServer { complete, handle })
+        }
     }
 }
 
@@ -190,7 +209,6 @@ impl NetworkProtocol {
     async fn run_udp_server<S>(
         socket: UdpSocket,
         mut state: S,
-        mut exit_future: futures::channel::oneshot::Receiver<()>,
         buffer_size: usize,
     ) -> Result<(), std::io::Error>
     where
@@ -198,14 +216,7 @@ impl NetworkProtocol {
     {
         let mut buffer = vec![0; buffer_size];
         loop {
-            let (size, peer) =
-                match future::select(exit_future, Box::pin(socket.recv_from(&mut buffer))).await {
-                    future::Either::Left(_) => break,
-                    future::Either::Right((value, new_exit_future)) => {
-                        exit_future = new_exit_future;
-                        value?
-                    }
-                };
+            let (size, peer) = socket.recv_from(&mut buffer).await?;
             if let Some(reply) = state.handle_message(&buffer[..size]).await {
                 let status = socket.send_to(&reply[..], &peer).await;
                 if let Err(error) = status {
@@ -213,7 +224,6 @@ impl NetworkProtocol {
                 }
             }
         }
-        Ok(())
     }
 }
 
@@ -328,7 +338,6 @@ impl NetworkProtocol {
     async fn run_tcp_server<S>(
         listener: TcpListener,
         state: S,
-        mut exit_future: futures::channel::oneshot::Receiver<()>,
         buffer_size: usize,
     ) -> Result<(), std::io::Error>
     where
@@ -336,14 +345,7 @@ impl NetworkProtocol {
     {
         let guarded_state = Arc::new(futures::lock::Mutex::new(state));
         loop {
-            let (mut socket, _) =
-                match future::select(exit_future, Box::pin(listener.accept())).await {
-                    future::Either::Left(_) => break,
-                    future::Either::Right((value, new_exit_future)) => {
-                        exit_future = new_exit_future;
-                        value?
-                    }
-                };
+            let (mut socket, _) = listener.accept().await?;
             let guarded_state = guarded_state.clone();
             tokio::spawn(async move {
                 loop {
@@ -372,6 +374,5 @@ impl NetworkProtocol {
                 }
             });
         }
-        Ok(())
     }
 }
