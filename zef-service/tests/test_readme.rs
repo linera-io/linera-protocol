@@ -6,7 +6,6 @@ use std::{io::Write, process::Command};
 use tempfile::tempdir;
 
 #[test]
-#[ignore]
 fn test_examples_in_readme() -> std::io::Result<()> {
     let dir = tempdir().unwrap();
     let file = std::io::BufReader::new(std::fs::File::open("../README.md")?);
