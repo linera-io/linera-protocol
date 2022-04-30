@@ -25,7 +25,7 @@ async fn make_shard_server(
     local_ip_addr: &str,
     server_config: &ValidatorServerConfig,
     buffer_size: usize,
-    cross_shard_config: network::CrossShardConfig,
+    cross_chain_config: network::CrossChainConfig,
     shard: u32,
     storage: MixedStorage,
 ) -> network::Server<MixedStorage> {
@@ -41,7 +41,7 @@ async fn make_shard_server(
         shard,
         num_shards,
         buffer_size,
-        cross_shard_config,
+        cross_chain_config,
     )
 }
 
@@ -50,7 +50,7 @@ async fn make_servers(
     server_config: &ValidatorServerConfig,
     genesis_config: &GenesisConfig,
     buffer_size: usize,
-    cross_shard_config: network::CrossShardConfig,
+    cross_chain_config: network::CrossChainConfig,
     storage: Option<&PathBuf>,
 ) -> Vec<network::Server<MixedStorage>> {
     let num_shards = server_config.validator.num_shards;
@@ -62,7 +62,7 @@ async fn make_servers(
             local_ip_addr,
             server_config,
             buffer_size,
-            cross_shard_config.clone(),
+            cross_chain_config.clone(),
             shard,
             storage,
         )
@@ -164,9 +164,9 @@ enum ServerCommands {
         #[structopt(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE)]
         buffer_size: usize,
 
-        /// Configuration for cross shard requests
+        /// Configuration for cross chain requests
         #[structopt(flatten)]
-        cross_shard_config: network::CrossShardConfig,
+        cross_chain_config: network::CrossChainConfig,
 
         /// Path to the file describing the initial user chains (aka genesis state)
         #[structopt(long = "genesis")]
@@ -209,7 +209,7 @@ async fn main() {
             server_config_path,
             storage_path,
             buffer_size,
-            cross_shard_config,
+            cross_chain_config,
             genesis_config_path,
             shard,
         } => {
@@ -232,7 +232,7 @@ async fn main() {
                         "0.0.0.0", // Allow local IP address to be different from the public one.
                         &server_config,
                         buffer_size,
-                        cross_shard_config,
+                        cross_chain_config,
                         shard,
                         storage,
                     )
@@ -246,7 +246,7 @@ async fn main() {
                         &server_config,
                         &genesis_config,
                         buffer_size,
-                        cross_shard_config,
+                        cross_chain_config,
                         storage_path.as_ref(),
                     )
                     .await

@@ -27,8 +27,8 @@ struct ClientContext {
     buffer_size: usize,
     send_timeout: Duration,
     recv_timeout: Duration,
-    cross_shard_delay: Duration,
-    cross_shard_retries: usize,
+    cross_chain_delay: Duration,
+    cross_chain_retries: usize,
 }
 
 impl ClientContext {
@@ -62,7 +62,7 @@ impl ClientContext {
         };
         let send_timeout = Duration::from_micros(options.send_timeout_us);
         let recv_timeout = Duration::from_micros(options.recv_timeout_us);
-        let cross_shard_delay = Duration::from_micros(options.cross_shard_delay_ms);
+        let cross_chain_delay = Duration::from_micros(options.cross_chain_delay_ms);
 
         ClientContext {
             committee_config,
@@ -72,8 +72,8 @@ impl ClientContext {
             buffer_size: options.buffer_size,
             send_timeout,
             recv_timeout,
-            cross_shard_delay,
-            cross_shard_retries: options.cross_shard_retries,
+            cross_chain_delay,
+            cross_chain_retries: options.cross_chain_retries,
         }
     }
 
@@ -129,8 +129,8 @@ impl ClientContext {
             validator_clients,
             self.storage_client.clone(),
             chain.next_sequence_number,
-            self.cross_shard_delay,
-            self.cross_shard_retries,
+            self.cross_chain_delay,
+            self.cross_chain_retries,
         )
     }
 
@@ -385,12 +385,12 @@ struct ClientOptions {
     #[structopt(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE)]
     buffer_size: usize,
 
-    /// Time between attempts while waiting on cross-shard updates (ms)
+    /// Time between attempts while waiting on cross-chain updates (ms)
     #[structopt(long, default_value = "4000")]
-    cross_shard_delay_ms: u64,
+    cross_chain_delay_ms: u64,
 
     #[structopt(long, default_value = "10")]
-    cross_shard_retries: usize,
+    cross_chain_retries: usize,
 
     /// Subcommands.
     #[structopt(subcommand)]

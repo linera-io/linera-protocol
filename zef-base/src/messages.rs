@@ -144,10 +144,10 @@ pub struct ChainInfoResponse {
     pub signature: Option<Signature>,
 }
 
-/// A (trusted) cross-shard request with an validator.
+/// A (trusted) cross-chain request with an validator.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
-pub enum CrossShardRequest {
+pub enum CrossChainRequest {
     UpdateRecipient {
         committee: Committee,
         certificate: Certificate,
@@ -158,10 +158,10 @@ pub enum CrossShardRequest {
     },
 }
 
-impl CrossShardRequest {
-    /// Where to send the cross-shard request.
+impl CrossChainRequest {
+    /// Where to send the cross-chain request.
     pub fn target_chain_id(&self) -> &ChainId {
-        use CrossShardRequest::*;
+        use CrossChainRequest::*;
         match self {
             UpdateRecipient { certificate, .. } => certificate
                 .value

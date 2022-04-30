@@ -12,4 +12,4 @@ However, it requires a full BFT protocol and a mempool (which could be the same 
 
 * Choose and implement a DAG BFT protocol such as [BullShark](https://arxiv.org/abs/2201.05677)).
 
-    - Alternatively, we could use the code for multi-owner chains, add VDF-based mining(?) as a basic leader election between validators, and re-use the existing infrastructure of user chains + cross-shard requests as a mempool.
+    - Alternatively, we could use the code for multi-owner chains, add VDF-based mining(?) as a basic leader election between validators, and re-use the existing infrastructure of user chains + cross-chain requests as a mempool.

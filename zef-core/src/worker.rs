@@ -15,7 +15,7 @@ mod worker_tests;
 /// Interface provided by each physical shard (aka "worker") of an validator or a local node.
 /// * All commands return either the current chain info or an error.
 /// * Repeating commands produces no changes and returns no error.
-/// * Some handlers may return cross-shard requests, that is, messages
+/// * Some handlers may return cross-chain requests, that is, messages
 ///   to be communicated to other workers of the same validator.
 #[async_trait]
 pub trait ValidatorWorker {
@@ -29,7 +29,7 @@ pub trait ValidatorWorker {
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-    ) -> Result<(ChainInfoResponse, Vec<CrossShardRequest>), Error>;
+    ) -> Result<(ChainInfoResponse, Vec<CrossChainRequest>), Error>;
 
     /// Handle information queries for this chain.
     async fn handle_chain_info_query(
@@ -37,11 +37,11 @@ pub trait ValidatorWorker {
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, Error>;
 
-    /// Handle (trusted!) cross shard request.
-    async fn handle_cross_shard_request(
+    /// Handle (trusted!) cross chain request.
+    async fn handle_cross_chain_request(
         &mut self,
-        request: CrossShardRequest,
-    ) -> Result<Vec<CrossShardRequest>, Error>;
+        request: CrossChainRequest,
+    ) -> Result<Vec<CrossChainRequest>, Error>;
 }
 
 impl<Client> WorkerState<Client> {
@@ -74,7 +74,7 @@ where
     ) -> Result<ChainInfoResponse, zef_base::error::Error> {
         let (response, mut requests) = self.handle_certificate(certificate).await?;
         while let Some(request) = requests.pop() {
-            requests.extend(self.handle_cross_shard_request(request).await?);
+            requests.extend(self.handle_cross_chain_request(request).await?);
         }
         Ok(response)
     }
@@ -84,7 +84,7 @@ where
         &mut self,
         request: Request,
         certificate: Certificate, // For logging purpose
-    ) -> Result<(ChainInfoResponse, Vec<CrossShardRequest>), Error> {
+    ) -> Result<(ChainInfoResponse, Vec<CrossChainRequest>), Error> {
         assert_eq!(
             &certificate.value.confirmed_request().unwrap().operation,
             &request.operation
@@ -102,13 +102,13 @@ where
         certificate
             .check(chain.state.committee.as_ref().expect("chain is active"))
             .map_err(|_| Error::InvalidCertificate)?;
-        // Load pending cross-shard requests.
+        // Load pending cross-chain requests.
         let mut continuation = self
             .storage
             .read_certificates(chain.keep_sending.iter().cloned())
             .await?
             .into_iter()
-            .map(|certificate| CrossShardRequest::UpdateRecipient {
+            .map(|certificate| CrossChainRequest::UpdateRecipient {
                 committee: chain
                     .state
                     .committee
@@ -132,12 +132,12 @@ where
         chain.state.manager.reset();
         // Final touch on the sender's chain.
         let info = chain.make_chain_info(self.key_pair.as_ref());
-        // Schedule cross-shard request if any.
+        // Schedule cross-chain request if any.
         let operation = &certificate.value.confirmed_request().unwrap().operation;
         if operation.recipient().is_some() {
-            // Schedule a new cross-shard request to update recipient.
+            // Schedule a new cross-chain request to update recipient.
             chain.keep_sending.insert(certificate.hash);
-            continuation.push(CrossShardRequest::UpdateRecipient {
+            continuation.push(CrossChainRequest::UpdateRecipient {
                 committee: chain
                     .state
                     .committee
@@ -254,7 +254,7 @@ where
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-    ) -> Result<(ChainInfoResponse, Vec<CrossShardRequest>), Error> {
+    ) -> Result<(ChainInfoResponse, Vec<CrossChainRequest>), Error> {
         // Process the proposal.
         match &certificate.value {
             Value::Validated { request } => {
@@ -307,31 +307,31 @@ where
         Ok(response)
     }
 
-    async fn handle_cross_shard_request(
+    async fn handle_cross_chain_request(
         &mut self,
-        request: CrossShardRequest,
-    ) -> Result<Vec<CrossShardRequest>, Error> {
+        request: CrossChainRequest,
+    ) -> Result<Vec<CrossChainRequest>, Error> {
         match request {
-            CrossShardRequest::UpdateRecipient {
+            CrossChainRequest::UpdateRecipient {
                 committee,
                 certificate,
             } => {
                 let request = certificate
                     .value
                     .confirmed_request()
-                    .ok_or(Error::InvalidCrossShardRequest)?;
+                    .ok_or(Error::InvalidCrossChainRequest)?;
                 let sender = request.chain_id.clone();
                 let hash = certificate.hash;
                 self.update_recipient_chain(request.operation.clone(), committee, certificate)
                     .await?;
-                // Reply with a cross-shard request.
-                let cont = vec![CrossShardRequest::ConfirmUpdatedRecipient {
+                // Reply with a cross-chain request.
+                let cont = vec![CrossChainRequest::ConfirmUpdatedRecipient {
                     chain_id: sender,
                     hash,
                 }];
                 Ok(cont)
             }
-            CrossShardRequest::ConfirmUpdatedRecipient { chain_id, hash } => {
+            CrossChainRequest::ConfirmUpdatedRecipient { chain_id, hash } => {
                 let mut chain = self.storage.read_active_chain(&chain_id).await?;
                 if chain.keep_sending.remove(&hash) {
                     self.storage.write_chain(chain).await?;

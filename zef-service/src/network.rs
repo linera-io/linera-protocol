@@ -25,15 +25,15 @@ pub fn get_shard(num_shards: u32, chain_id: &ChainId) -> u32 {
 }
 
 #[derive(Clone, Debug, StructOpt)]
-pub struct CrossShardConfig {
-    /// Number of cross shards messages allowed before blocking the main server loop
-    #[structopt(long = "cross_shard_queue_size", default_value = "1")]
+pub struct CrossChainConfig {
+    /// Number of cross chains messages allowed before blocking the main server loop
+    #[structopt(long = "cross_chain_queue_size", default_value = "1")]
     queue_size: usize,
-    /// Maximum number of retries for a cross shard message.
-    #[structopt(long = "cross_shard_max_retries", default_value = "10")]
+    /// Maximum number of retries for a cross chain message.
+    #[structopt(long = "cross_chain_max_retries", default_value = "10")]
     max_retries: usize,
-    /// Delay before retrying of cross-shard message.
-    #[structopt(long = "cross_shard_retry_delay_ms", default_value = "2000")]
+    /// Delay before retrying of cross-chain message.
+    #[structopt(long = "cross_chain_retry_delay_ms", default_value = "2000")]
     retry_delay_ms: u64,
 }
 
@@ -47,7 +47,7 @@ pub struct Server<Storage> {
     shard_id: ShardId,
     num_shards: u32,
     buffer_size: usize,
-    cross_shard_config: CrossShardConfig,
+    cross_chain_config: CrossChainConfig,
     // Stats
     packets_processed: u64,
     user_errors: u64,
@@ -63,7 +63,7 @@ impl<Storage> Server<Storage> {
         shard_id: ShardId,
         num_shards: u32,
         buffer_size: usize,
-        cross_shard_config: CrossShardConfig,
+        cross_chain_config: CrossChainConfig,
     ) -> Self {
         Self {
             network_protocol,
@@ -73,7 +73,7 @@ impl<Storage> Server<Storage> {
             shard_id,
             num_shards,
             buffer_size,
-            cross_shard_config,
+            cross_chain_config,
             packets_processed: 0,
             user_errors: 0,
         }
@@ -96,12 +96,12 @@ impl<Storage> Server<Storage>
 where
     Storage: zef_storage::Storage + Clone + 'static,
 {
-    async fn forward_cross_shard_queries(
+    async fn forward_cross_chain_queries(
         network_protocol: NetworkProtocol,
         base_address: String,
         base_port: u32,
-        cross_shard_max_retries: usize,
-        cross_shard_retry_delay: Duration,
+        cross_chain_max_retries: usize,
+        cross_chain_retry_delay: Duration,
         this_shard: ShardId,
         mut receiver: mpsc::Receiver<(Vec<u8>, ShardId)>,
     ) {
@@ -112,27 +112,27 @@ where
 
         let mut queries_sent = 0u64;
         while let Some((buf, shard)) = receiver.next().await {
-            // Send cross-shard query.
+            // Send cross-chain query.
             let remote_address = format!("{}:{}", base_address, base_port + shard);
-            for i in 0..cross_shard_max_retries {
+            for i in 0..cross_chain_max_retries {
                 let status = pool.send_data_to(&buf, &remote_address).await;
                 match status {
                     Err(error) => {
-                        if i < cross_shard_max_retries {
+                        if i < cross_chain_max_retries {
                             error!(
-                                "Failed to send cross-shard query ({}-th retry): {}",
+                                "Failed to send cross-chain query ({}-th retry): {}",
                                 i, error
                             );
-                            tokio::time::sleep(cross_shard_retry_delay).await;
+                            tokio::time::sleep(cross_chain_retry_delay).await;
                         } else {
                             error!(
-                                "Failed to send cross-shard query (giving up after {} retries): {}",
+                                "Failed to send cross-chain query (giving up after {} retries): {}",
                                 i, error
                             );
                         }
                     }
                     _ => {
-                        debug!("Sent cross shard query: {} -> {}", this_shard, shard);
+                        debug!("Sent cross chain query: {} -> {}", this_shard, shard);
                         queries_sent += 1;
                         break;
                     }
@@ -140,7 +140,7 @@ where
             }
             if queries_sent % 2000 == 0 {
                 debug!(
-                    "{}:{} (shard {}) has sent {} cross-shard queries",
+                    "{}:{} (shard {}) has sent {} cross-chain queries",
                     base_address,
                     base_port + this_shard,
                     this_shard,
@@ -159,23 +159,23 @@ where
         );
         let address = format!("{}:{}", self.base_address, self.base_port + self.shard_id);
 
-        let (cross_shard_sender, cross_shard_receiver) =
-            mpsc::channel(self.cross_shard_config.queue_size);
-        tokio::spawn(Self::forward_cross_shard_queries(
+        let (cross_chain_sender, cross_chain_receiver) =
+            mpsc::channel(self.cross_chain_config.queue_size);
+        tokio::spawn(Self::forward_cross_chain_queries(
             self.network_protocol,
             self.base_address.clone(),
             self.base_port,
-            self.cross_shard_config.max_retries,
-            Duration::from_millis(self.cross_shard_config.retry_delay_ms),
+            self.cross_chain_config.max_retries,
+            Duration::from_millis(self.cross_chain_config.retry_delay_ms),
             self.shard_id,
-            cross_shard_receiver,
+            cross_chain_receiver,
         ));
 
         let buffer_size = self.buffer_size;
         let protocol = self.network_protocol;
         let state = RunningServerState {
             server: self,
-            cross_shard_sender,
+            cross_chain_sender,
         };
         // Launch server for the appropriate protocol.
         #[cfg(feature = "benchmark")]
@@ -194,7 +194,7 @@ where
 
 struct RunningServerState<Storage> {
     server: Server<Storage>,
-    cross_shard_sender: mpsc::Sender<(Vec<u8>, ShardId)>,
+    cross_chain_sender: mpsc::Sender<(Vec<u8>, ShardId)>,
 }
 
 impl<Storage> MessageHandler for RunningServerState<Storage>
@@ -244,13 +244,13 @@ where
                                     Box::new(info),
                                 )))
                             }),
-                        SerializedMessage::CrossShardRequest(request) => {
-                            match self.server.state.handle_cross_shard_request(*request).await {
+                        SerializedMessage::CrossChainRequest(request) => {
+                            match self.server.state.handle_cross_chain_request(*request).await {
                                 Ok(continuation) => {
                                     self.handle_continuation(continuation).await;
                                 }
                                 Err(error) => {
-                                    error!("Failed to handle cross-shard request: {}", error);
+                                    error!("Failed to handle cross-chain request: {}", error);
                                 }
                             }
                             // No user to respond to.
@@ -294,18 +294,18 @@ where
 {
     fn handle_continuation(
         &mut self,
-        requests: Vec<CrossShardRequest>,
+        requests: Vec<CrossChainRequest>,
     ) -> futures::future::BoxFuture<()> {
         Box::pin(async move {
             for request in requests {
                 let shard_id = self.server.which_shard(request.target_chain_id());
                 let buffer =
-                    serialize_message(&SerializedMessage::CrossShardRequest(Box::new(request)));
+                    serialize_message(&SerializedMessage::CrossChainRequest(Box::new(request)));
                 debug!(
-                    "Scheduling cross shard query: {} -> {}",
+                    "Scheduling cross chain query: {} -> {}",
                     self.server.shard_id, shard_id
                 );
-                self.cross_shard_sender
+                self.cross_chain_sender
                     .send((buffer, shard_id))
                     .await
                     .expect("internal channel should not fail");
