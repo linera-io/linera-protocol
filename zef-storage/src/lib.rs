@@ -29,7 +29,7 @@ pub trait Storage: DynClone + Send + Sync {
     async fn read_active_account(&mut self, id: &AccountId) -> Result<AccountState, Error> {
         let account = self.read_account_or_default(id).await?;
         ensure!(
-            account.manager.is_active() && account.committee.is_some(),
+            account.state.manager.is_active() && account.state.committee.is_some(),
             Error::InactiveAccount(id.clone())
         );
         Ok(account)

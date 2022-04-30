@@ -12,12 +12,8 @@ use std::collections::{HashMap, HashSet};
 pub struct AccountState {
     /// The UID of the account.
     pub id: AccountId,
-    /// Current committee, if any.
-    pub committee: Option<Committee>,
-    /// Manager of the account.
-    pub manager: AccountManager,
-    /// Balance of the account.
-    pub balance: Balance,
+    /// Execution state.
+    pub state: ExecutionState,
     /// Sequence number tracking requests.
     pub next_sequence_number: SequenceNumber,
     /// Hashes of all confirmed certificates for this sender.
@@ -32,6 +28,18 @@ pub struct AccountState {
     pub keep_sending: HashSet<HashValue>,
     /// Same as received_log but used for deduplication.
     pub received_keys: HashSet<HashValue>,
+}
+
+/// Execution state of an account.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
+pub struct ExecutionState {
+    /// Current committee, if any.
+    pub committee: Option<Committee>,
+    /// Manager of the account.
+    pub manager: AccountManager,
+    /// Balance of the account.
+    pub balance: Balance,
 }
 
 /// How to produce new commands.
@@ -337,8 +345,8 @@ impl AccountState {
     pub fn make_account_info(&self, key_pair: Option<&KeyPair>) -> AccountInfoResponse {
         let info = AccountInfo {
             account_id: self.id.clone(),
-            manager: self.manager.clone(),
-            balance: self.balance,
+            manager: self.state.manager.clone(),
+            balance: self.state.balance,
             queried_committee: None,
             next_sequence_number: self.next_sequence_number,
             queried_sent_certificates: Vec::new(),
@@ -349,11 +357,14 @@ impl AccountState {
     }
 
     pub fn new(id: AccountId) -> Self {
-        Self {
-            id,
+        let state = ExecutionState {
             committee: None,
             manager: AccountManager::None,
             balance: Balance::default(),
+        };
+        Self {
+            id,
+            state,
             next_sequence_number: SequenceNumber::new(),
             confirmed_log: Vec::new(),
             received_log: Vec::new(),
@@ -370,9 +381,9 @@ impl AccountState {
         balance: Balance,
     ) -> Self {
         let mut account = Self::new(id);
-        account.committee = Some(committee);
-        account.manager = AccountManager::single(owner);
-        account.balance = balance;
+        account.state.committee = Some(committee);
+        account.state.manager = AccountManager::single(owner);
+        account.state.balance = balance;
         account
     }
 
@@ -382,9 +393,9 @@ impl AccountState {
             Operation::Transfer { amount, .. } => {
                 ensure!(*amount > Amount::zero(), Error::IncorrectTransferAmount);
                 ensure!(
-                    self.balance >= (*amount).into(),
+                    self.state.balance >= (*amount).into(),
                     Error::InsufficientFunding {
-                        current_balance: self.balance
+                        current_balance: self.state.balance
                     }
                 );
             }
@@ -428,16 +439,16 @@ impl AccountState {
         match operation {
             Operation::OpenAccount { .. } => (),
             Operation::ChangeOwner { new_owner } => {
-                self.manager = AccountManager::single(*new_owner);
+                self.state.manager = AccountManager::single(*new_owner);
             }
             Operation::ChangeMultipleOwners { new_owners } => {
-                self.manager = AccountManager::multiple(new_owners.iter().cloned().collect());
+                self.state.manager = AccountManager::multiple(new_owners.iter().cloned().collect());
             }
             Operation::CloseAccount => {
-                self.manager = AccountManager::default();
+                self.state.manager = AccountManager::default();
             }
             Operation::Transfer { amount, .. } => {
-                self.balance.try_sub_assign((*amount).into())?;
+                self.state.balance.try_sub_assign((*amount).into())?;
             }
         };
         self.confirmed_log.push(key);
@@ -461,16 +472,17 @@ impl AccountState {
         }
         match operation {
             Operation::Transfer { amount, .. } => {
-                self.balance = self
+                self.state.balance = self
+                    .state
                     .balance
                     .try_add((*amount).into())
                     .unwrap_or_else(|_| Balance::max());
             }
             Operation::OpenAccount { new_owner, .. } => {
-                assert!(!self.manager.is_active()); // guaranteed under BFT assumptions.
-                assert!(self.committee.is_none());
-                self.committee = Some(committee);
-                self.manager = AccountManager::single(*new_owner);
+                assert!(!self.state.manager.is_active()); // guaranteed under BFT assumptions.
+                assert!(self.state.committee.is_none());
+                self.state.committee = Some(committee);
+                self.state.manager = AccountManager::single(*new_owner);
             }
             _ => unreachable!("Not an operation with recipients"),
         }

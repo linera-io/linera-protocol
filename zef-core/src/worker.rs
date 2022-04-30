@@ -100,7 +100,7 @@ where
         }
         // Verify the certificate. Returns a catch-all error to make client code more robust.
         certificate
-            .check(account.committee.as_ref().expect("account is active"))
+            .check(account.state.committee.as_ref().expect("account is active"))
             .map_err(|_| Error::InvalidCertificate)?;
         // Load pending cross-shard requests.
         let mut continuation = self
@@ -110,6 +110,7 @@ where
             .into_iter()
             .map(|certificate| CrossShardRequest::UpdateRecipient {
                 committee: account
+                    .state
                     .committee
                     .as_ref()
                     .expect("Account is active")
@@ -128,7 +129,7 @@ where
         account.apply_operation_as_sender(&request.operation, certificate.hash)?;
         // Advance to next sequence number.
         account.next_sequence_number.try_add_assign_one()?;
-        account.manager.reset();
+        account.state.manager.reset();
         // Final touch on the sender's account.
         let info = account.make_account_info(self.key_pair.as_ref());
         // Schedule cross-shard request if any.
@@ -138,6 +139,7 @@ where
             account.keep_sending.insert(certificate.hash);
             continuation.push(CrossShardRequest::UpdateRecipient {
                 committee: account
+                    .state
                     .committee
                     .as_ref()
                     .expect("account is active")
@@ -164,9 +166,10 @@ where
             .await?;
         // Verify the certificate. Returns a catch-all error to make client code more robust.
         certificate
-            .check(account.committee.as_ref().expect("account is active"))
+            .check(account.state.committee.as_ref().expect("account is active"))
             .map_err(|_| Error::InvalidCertificate)?;
         if account
+            .state
             .manager
             .check_validated_request(account.next_sequence_number, &request)?
             == Outcome::Skip
@@ -176,6 +179,7 @@ where
             return Ok(account.make_account_info(self.key_pair.as_ref()));
         }
         account
+            .state
             .manager
             .create_final_vote(request, certificate, self.key_pair.as_ref());
         let info = account.make_account_info(self.key_pair.as_ref());
@@ -225,9 +229,10 @@ where
         let sender = order.request.account_id.clone();
         let mut account = self.storage.read_active_account(&sender).await?;
         // Check authentication of the request.
-        order.check(&account.manager)?;
+        order.check(&account.state.manager)?;
         // Check if the account ready and if the request is well-formed.
         if account
+            .state
             .manager
             .check_request(account.next_sequence_number, &order.request)?
             == Outcome::Skip
@@ -239,7 +244,10 @@ where
         // Verify that the request is valid.
         account.validate_operation(&order.request)?;
         // Create the vote and store it in the account.
-        account.manager.create_vote(order, self.key_pair.as_ref());
+        account
+            .state
+            .manager
+            .create_vote(order, self.key_pair.as_ref());
         let info = account.make_account_info(self.key_pair.as_ref());
         self.storage.write_account(account).await?;
         Ok(info)
@@ -277,7 +285,7 @@ where
             .await?;
         let mut info = account.make_account_info(None).info;
         if query.query_committee {
-            info.queried_committee = account.committee;
+            info.queried_committee = account.state.committee;
         }
         if let Some(next_sequence_number) = query.check_next_sequence_number {
             ensure!(
