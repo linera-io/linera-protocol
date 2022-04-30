@@ -15,14 +15,14 @@ pub struct ChainState {
     /// Execution state.
     pub state: ExecutionState,
     /// Sequence number tracking blocks.
-    pub next_sequence_number: SequenceNumber,
+    pub next_block_height: BlockHeight,
     /// Hashes of all confirmed certificates for this sender.
     pub confirmed_log: Vec<HashValue>,
     /// Hashes of all confirmed certificates as a receiver.
     pub received_log: Vec<HashValue>,
-    /// Maximum sequence number of all received updates indexed by sender.
+    /// Maximum block height of all received updates indexed by sender.
     /// This is needed for clients.
-    pub received_index: HashMap<ChainId, SequenceNumber>,
+    pub received_index: HashMap<ChainId, BlockHeight>,
 
     /// Keep sending these confirmed certificates until they are confirmed by receivers.
     pub keep_sending: HashSet<HashValue>,
@@ -185,16 +185,16 @@ impl ChainManager {
     /// Verify the safety of the block w.r.t. voting rules.
     pub fn check_block(
         &self,
-        next_sequence_number: SequenceNumber,
+        next_block_height: BlockHeight,
         new_block: &Block,
     ) -> Result<Outcome, Error> {
         ensure!(
-            new_block.sequence_number <= SequenceNumber::max(),
-            Error::InvalidSequenceNumber
+            new_block.block_height <= BlockHeight::max(),
+            Error::InvalidBlockHeight
         );
         ensure!(
-            new_block.sequence_number == next_sequence_number,
-            Error::UnexpectedSequenceNumber
+            new_block.block_height == next_block_height,
+            Error::UnexpectedBlockHeight
         );
         match self {
             ChainManager::Single(manager) => {
@@ -246,15 +246,15 @@ impl ChainManager {
 
     pub fn check_validated_block(
         &self,
-        next_sequence_number: SequenceNumber,
+        next_block_height: BlockHeight,
         new_block: &Block,
     ) -> Result<Outcome, Error> {
-        if next_sequence_number < new_block.sequence_number {
+        if next_block_height < new_block.block_height {
             return Err(Error::MissingEarlierConfirmations {
-                current_sequence_number: next_sequence_number,
+                current_block_height: next_block_height,
             });
         }
-        if next_sequence_number > new_block.sequence_number {
+        if next_block_height > new_block.block_height {
             // Block was already confirmed.
             return Ok(Outcome::Skip);
         }
@@ -346,7 +346,7 @@ impl ChainState {
             manager: self.state.manager.clone(),
             balance: self.state.balance,
             queried_committee: None,
-            next_sequence_number: self.next_sequence_number,
+            next_block_height: self.next_block_height,
             queried_sent_certificates: Vec::new(),
             count_received_certificates: self.received_log.len(),
             queried_received_certificates: Vec::new(),
@@ -363,7 +363,7 @@ impl ChainState {
         Self {
             id,
             state,
-            next_sequence_number: SequenceNumber::new(),
+            next_block_height: BlockHeight::new(),
             confirmed_log: Vec::new(),
             received_log: Vec::new(),
             received_index: HashMap::new(),
@@ -393,7 +393,7 @@ impl ChainState {
                 );
             }
             Operation::OpenChain { new_id, .. } => {
-                let expected_id = block.chain_id.make_child(block.sequence_number);
+                let expected_id = block.chain_id.make_child(block.block_height);
                 ensure!(
                     new_id == &expected_id,
                     Error::InvalidNewChainId(new_id.clone())
@@ -457,7 +457,7 @@ impl ChainState {
         // The rest is for logging purposes.
         key: HashValue,
         sender_id: ChainId,
-        sequence_number: SequenceNumber,
+        block_height: BlockHeight,
     ) -> Result<bool, Error> {
         if self.received_keys.contains(&key) {
             // Confirmation already happened.
@@ -484,9 +484,9 @@ impl ChainState {
         let current = self
             .received_index
             .entry(sender_id)
-            .or_insert(sequence_number);
-        if sequence_number > *current {
-            *current = sequence_number;
+            .or_insert(block_height);
+        if block_height > *current {
+            *current = block_height;
         }
         Ok(true)
     }

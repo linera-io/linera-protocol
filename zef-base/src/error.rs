@@ -26,21 +26,21 @@ pub enum Error {
 
     // Chain sequencing
     #[fail(
-        display = "The sequence number in a block should match the next expected sequence number of the chain"
+        display = "The block height in a block should match the next expected block height of the chain"
     )]
-    UnexpectedSequenceNumber,
+    UnexpectedBlockHeight,
     #[fail(display = "Sequence numbers above the maximal value are not usable for blocks.")]
-    InvalidSequenceNumber,
+    InvalidBlockHeight,
     #[fail(
         display = "Cannot initiate a new block while the previous one is still pending confirmation"
     )]
     PreviousBlockMustBeConfirmedFirst,
     #[fail(
         display = "Cannot confirm a block before its predecessors: {:?}",
-        current_sequence_number
+        current_block_height
     )]
     MissingEarlierConfirmations {
-        current_sequence_number: SequenceNumber,
+        current_block_height: BlockHeight,
     },
 
     // Algorithmic operations
@@ -84,13 +84,13 @@ pub enum Error {
     #[fail(display = "Round number should be greater than {:?}", 0)]
     InsufficientRound(RoundNumber),
     #[fail(
-        display = "A different operation was already locked for this chain and sequence number: {:?}",
+        display = "A different operation was already locked for this chain and block height: {:?}",
         0
     )]
     HasLockedOperation(Operation),
 
     // Other server-side errors
-    #[fail(display = "No certificate for this chain and sequence number")]
+    #[fail(display = "No certificate for this chain and block height")]
     CertificateNotFound,
     #[fail(display = "Invalid cross chain block.")]
     InvalidCrossChainRequest,

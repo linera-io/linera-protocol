@@ -17,10 +17,18 @@ Block:
         TYPENAME: ChainId
     - operation:
         TYPENAME: Operation
-    - sequence_number:
-        TYPENAME: SequenceNumber
+    - block_height:
+        TYPENAME: BlockHeight
     - round:
         TYPENAME: RoundNumber
+BlockHeight:
+  NEWTYPESTRUCT: U64
+BlockHeightRange:
+  STRUCT:
+    - start:
+        TYPENAME: BlockHeight
+    - limit:
+        OPTION: U64
 BlockProposal:
   STRUCT:
     - block:
@@ -41,7 +49,7 @@ Certificate:
 ChainId:
   NEWTYPESTRUCT:
     SEQ:
-      TYPENAME: SequenceNumber
+      TYPENAME: BlockHeight
 ChainInfo:
   STRUCT:
     - chain_id:
@@ -50,8 +58,8 @@ ChainInfo:
         TYPENAME: ChainManager
     - balance:
         TYPENAME: Balance
-    - next_sequence_number:
-        TYPENAME: SequenceNumber
+    - next_block_height:
+        TYPENAME: BlockHeight
     - queried_committee:
         OPTION:
           TYPENAME: Committee
@@ -66,13 +74,13 @@ ChainInfoQuery:
   STRUCT:
     - chain_id:
         TYPENAME: ChainId
-    - check_next_sequence_number:
+    - check_next_block_height:
         OPTION:
-          TYPENAME: SequenceNumber
+          TYPENAME: BlockHeight
     - query_committee: BOOL
     - query_sent_certificates_in_range:
         OPTION:
-          TYPENAME: SequenceNumberRange
+          TYPENAME: BlockHeightRange
     - query_received_certificates_excluding_first_nth:
         OPTION: U64
 ChainInfoResponse:
@@ -100,8 +108,8 @@ ChainState:
         TYPENAME: ChainId
     - state:
         TYPENAME: ExecutionState
-    - next_sequence_number:
-        TYPENAME: SequenceNumber
+    - next_block_height:
+        TYPENAME: BlockHeight
     - confirmed_log:
         SEQ:
           TYPENAME: HashValue
@@ -113,7 +121,7 @@ ChainState:
           KEY:
             TYPENAME: ChainId
           VALUE:
-            TYPENAME: SequenceNumber
+            TYPENAME: BlockHeight
     - keep_sending:
         SEQ:
           TYPENAME: HashValue
@@ -153,16 +161,16 @@ Error:
     1:
       InvalidOwner: UNIT
     2:
-      UnexpectedSequenceNumber: UNIT
+      UnexpectedBlockHeight: UNIT
     3:
-      InvalidSequenceNumber: UNIT
+      InvalidBlockHeight: UNIT
     4:
       PreviousBlockMustBeConfirmedFirst: UNIT
     5:
       MissingEarlierConfirmations:
         STRUCT:
-          - current_sequence_number:
-              TYPENAME: SequenceNumber
+          - current_block_height:
+              TYPENAME: BlockHeight
     6:
       SequenceOverflow: UNIT
     7:
@@ -308,14 +316,6 @@ PublicKeyBytes:
       SIZE: 32
 RoundNumber:
   NEWTYPESTRUCT: U64
-SequenceNumber:
-  NEWTYPESTRUCT: U64
-SequenceNumberRange:
-  STRUCT:
-    - start:
-        TYPENAME: SequenceNumber
-    - limit:
-        OPTION: U64
 SerializedMessage:
   ENUM:
     0:

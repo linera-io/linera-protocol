@@ -103,14 +103,14 @@ where
         &mut self,
         chain_id: &ChainId,
         certificates: Vec<Certificate>,
-    ) -> Result<Option<SequenceNumber>, Error> {
-        let mut next_sequence_number = None;
+    ) -> Result<Option<BlockHeight>, Error> {
+        let mut next_block_height = None;
         for certificate in certificates {
             if let Value::Confirmed { block } = &certificate.value {
                 if &block.chain_id == chain_id {
                     match self.handle_certificate(certificate).await {
                         Ok(response) => {
-                            next_sequence_number = Some(response.info.next_sequence_number);
+                            next_block_height = Some(response.info.next_block_height);
                             // Continue with the next certificate.
                             continue;
                         }
@@ -118,44 +118,44 @@ where
                             Error::InvalidCertificate | Error::MissingEarlierConfirmations { .. },
                         ) => {
                             // The certificate is not as expected. Give up.
-                            return Ok(next_sequence_number);
+                            return Ok(next_block_height);
                         }
                         Err(e) => {
                             // Something is wrong: a valid certificate with the
-                            // right sequence number should not fail to execute.
+                            // right block height should not fail to execute.
                             return Err(e);
                         }
                     }
                 }
             }
             // The certificate is not as expected. Give up.
-            return Ok(next_sequence_number);
+            return Ok(next_block_height);
         }
         // Done with all certificates.
-        Ok(next_sequence_number)
+        Ok(next_block_height)
     }
 
-    async fn current_next_sequence_number(
+    async fn current_next_block_height(
         &mut self,
         chain_id: ChainId,
-    ) -> Result<SequenceNumber, Error> {
+    ) -> Result<BlockHeight, Error> {
         let query = ChainInfoQuery {
             chain_id,
-            check_next_sequence_number: None,
+            check_next_block_height: None,
             query_committee: false,
             query_sent_certificates_in_range: None,
             query_received_certificates_excluding_first_nth: None,
         };
         let response = self.handle_chain_info_query(query).await?;
-        Ok(response.info.next_sequence_number)
+        Ok(response.info.next_block_height)
     }
 
     pub async fn download_certificates<A>(
         &mut self,
         mut validators: Vec<(ValidatorName, A)>,
         chain_id: ChainId,
-        target_next_sequence_number: SequenceNumber,
-    ) -> Result<SequenceNumber, Error>
+        target_next_block_height: BlockHeight,
+    ) -> Result<BlockHeight, Error>
     where
         A: ValidatorNode + Send + Sync + 'static + Clone,
     {
@@ -163,8 +163,8 @@ where
         // TODO: We could also try a few of them in parallel.
         validators.shuffle(&mut rand::thread_rng());
         for (name, client) in validators {
-            let current = self.current_next_sequence_number(chain_id.clone()).await?;
-            if target_next_sequence_number <= current {
+            let current = self.current_next_block_height(chain_id.clone()).await?;
+            if target_next_block_height <= current {
                 return Ok(current);
             }
             self.try_download_certificates_from(
@@ -172,13 +172,13 @@ where
                 client,
                 chain_id.clone(),
                 current,
-                target_next_sequence_number,
+                target_next_block_height,
             )
             .await?;
             // TODO: We could continue with the same validator if sufficient progress was made.
         }
-        let current = self.current_next_sequence_number(chain_id).await?;
-        if target_next_sequence_number <= current {
+        let current = self.current_next_block_height(chain_id).await?;
+        if target_next_block_height <= current {
             Ok(current)
         } else {
             Err(Error::ClientErrorWhileQueryingCertificate)
@@ -190,19 +190,19 @@ where
         name: ValidatorName,
         mut client: A,
         chain_id: ChainId,
-        start: SequenceNumber,
-        stop: SequenceNumber,
+        start: BlockHeight,
+        stop: BlockHeight,
     ) -> Result<(), Error>
     where
         A: ValidatorNode + Send + Sync + 'static + Clone,
     {
-        let range = SequenceNumberRange {
+        let range = BlockHeightRange {
             start,
             limit: Some(usize::from(stop) - usize::from(start)),
         };
         let query = ChainInfoQuery {
             chain_id: chain_id.clone(),
-            check_next_sequence_number: None,
+            check_next_block_height: None,
             query_committee: false,
             query_sent_certificates_in_range: Some(range),
             query_received_certificates_excluding_first_nth: None,
@@ -224,7 +224,7 @@ where
         &mut self,
         validators: Vec<(ValidatorName, A)>,
         chain_id: ChainId,
-    ) -> Result<(SequenceNumber, RoundNumber), Error>
+    ) -> Result<(BlockHeight, RoundNumber), Error>
     where
         A: ValidatorNode + Send + Sync + 'static + Clone,
     {
@@ -253,15 +253,15 @@ where
         name: ValidatorName,
         mut client: A,
         chain_id: ChainId,
-    ) -> Result<(SequenceNumber, RoundNumber), Error>
+    ) -> Result<(BlockHeight, RoundNumber), Error>
     where
         A: ValidatorNode + Send + Sync + 'static + Clone,
     {
-        let start = self.current_next_sequence_number(chain_id.clone()).await?;
-        let range = SequenceNumberRange { start, limit: None };
+        let start = self.current_next_block_height(chain_id.clone()).await?;
+        let range = BlockHeightRange { start, limit: None };
         let query = ChainInfoQuery {
             chain_id: chain_id.clone(),
-            check_next_sequence_number: None,
+            check_next_block_height: None,
             query_committee: false,
             query_sent_certificates_in_range: Some(range),
             query_received_certificates_excluding_first_nth: None,
@@ -273,7 +273,7 @@ where
                 return Ok((start, RoundNumber::default()));
             }
         };
-        let next_sequence_number = match self
+        let next_block_height = match self
             .try_process_certificates(&chain_id, info.queried_sent_certificates)
             .await?
         {
@@ -284,24 +284,24 @@ where
             }
         };
         let mut next_round = RoundNumber::default();
-        if info.next_sequence_number != next_sequence_number {
+        if info.next_block_height != next_block_height {
             // Give up
-            return Ok((next_sequence_number, next_round));
+            return Ok((next_block_height, next_round));
         }
         let manager = match info.manager {
             ChainManager::Multi(manager) => *manager,
             _ => {
                 // Nothing to do.
-                return Ok((next_sequence_number, next_round));
+                return Ok((next_block_height, next_round));
             }
         };
         if let Some(proposal) = manager.proposal {
-            // Check the sequence number.
+            // Check the block height.
             if proposal.block.chain_id != chain_id
-                || proposal.block.sequence_number != next_sequence_number
+                || proposal.block.block_height != next_block_height
             {
                 // Give up
-                return Ok((next_sequence_number, next_round));
+                return Ok((next_block_height, next_round));
             }
             match self.handle_block_proposal(proposal).await {
                 Ok(response) => {
@@ -314,10 +314,10 @@ where
         }
         if let Some(cert) = manager.locked {
             if let Value::Validated { block } = &cert.value {
-                // Check the sequence number.
-                if block.chain_id != chain_id || block.sequence_number != next_sequence_number {
+                // Check the block height.
+                if block.chain_id != chain_id || block.block_height != next_block_height {
                     // Give up
-                    return Ok((next_sequence_number, next_round));
+                    return Ok((next_block_height, next_round));
                 }
                 match self.handle_certificate(cert).await {
                     Ok(response) => {
@@ -329,6 +329,6 @@ where
                 }
             }
         }
-        Ok((next_sequence_number, next_round))
+        Ok((next_block_height, next_round))
     }
 }

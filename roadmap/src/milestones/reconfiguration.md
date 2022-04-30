@@ -10,7 +10,7 @@ This goal of this milestone is to support changes in the set of Zefchain validat
 
 * An chain is migrated to a new set of validator using a specific *migration command*.
 
-    - **Rational:** For a given chain and sequence number, there should be no ambiguity on the notion of quorum for a valid certificate
+    - **Rational:** For a given chain and block height, there should be no ambiguity on the notion of quorum for a valid certificate
 
     - Migration must re-certify previous certificates sent by the chain (TODO: and received?)
 

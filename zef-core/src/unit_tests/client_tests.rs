@@ -148,7 +148,7 @@ impl TestBuilder {
         for store in self.chain_client_stores.iter_mut() {
             store.write_chain(chain.clone()).await.unwrap();
         }
-        self.make_client(chain_id, key_pair, SequenceNumber::from(0))
+        self.make_client(chain_id, key_pair, BlockHeight::from(0))
             .await
     }
 
@@ -156,7 +156,7 @@ impl TestBuilder {
         &mut self,
         chain_id: ChainId,
         key_pair: KeyPair,
-        sequence_number: SequenceNumber,
+        block_height: BlockHeight,
     ) -> ChainClientState<LocalValidatorClient, InMemoryStoreClient> {
         // Note that new clients are only given the genesis store: they must figure out
         // the rest by asking validators.
@@ -167,7 +167,7 @@ impl TestBuilder {
             vec![key_pair],
             self.validator_clients.clone(),
             store,
-            sequence_number,
+            block_height,
             std::time::Duration::from_millis(500),
             10,
         )
@@ -182,19 +182,19 @@ impl TestBuilder {
         builder.add_initial_chain(dbg_chain(1), balance).await
     }
 
-    /// Try to find a (confirmation) certificate for the given chain_id and sequence number.
+    /// Try to find a (confirmation) certificate for the given chain_id and block height.
     async fn check_that_validators_have_certificate(
         &self,
         chain_id: ChainId,
-        sequence_number: SequenceNumber,
+        block_height: BlockHeight,
         target_count: usize,
     ) -> Option<Certificate> {
         let query = ChainInfoQuery {
             chain_id: chain_id.clone(),
-            check_next_sequence_number: None,
+            check_next_block_height: None,
             query_committee: false,
-            query_sent_certificates_in_range: Some(SequenceNumberRange {
-                start: sequence_number,
+            query_sent_certificates_in_range: Some(BlockHeightRange {
+                start: block_height,
                 limit: Some(1),
             }),
             query_received_certificates_excluding_first_nth: None,
@@ -211,7 +211,7 @@ impl TestBuilder {
                     if let Some(cert) = queried_sent_certificates.pop() {
                         if let Value::Confirmed { block } = &cert.value {
                             if block.chain_id == chain_id
-                                && block.sequence_number == sequence_number
+                                && block.block_height == block_height
                             {
                                 cert.check(&self.committee).unwrap();
                                 count += 1;
@@ -253,14 +253,14 @@ async fn test_initiating_valid_transfer() {
         )
         .await
         .unwrap();
-    assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
+    assert_eq!(sender.next_block_height, BlockHeight::from(1));
     assert!(sender.pending_block.is_none());
     assert_eq!(sender.query_safe_balance().await.unwrap(), Balance::from(1));
     assert_eq!(
         builder
             .check_that_validators_have_certificate(
                 sender.chain_id.clone(),
-                SequenceNumber::from(0),
+                BlockHeight::from(0),
                 3
             )
             .await
@@ -279,14 +279,14 @@ async fn test_rotate_key_pair() {
     let new_key_pair = KeyPair::generate();
     let new_pubk = new_key_pair.public();
     let certificate = sender.rotate_key_pair(new_key_pair).await.unwrap();
-    assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
+    assert_eq!(sender.next_block_height, BlockHeight::from(1));
     assert!(sender.pending_block.is_none());
     assert_eq!(sender.identity().await.unwrap(), new_pubk);
     assert_eq!(
         builder
             .check_that_validators_have_certificate(
                 sender.chain_id.clone(),
-                SequenceNumber::from(0),
+                BlockHeight::from(0),
                 3
             )
             .await
@@ -316,14 +316,14 @@ async fn test_transfer_ownership() {
     let new_key_pair = KeyPair::generate();
     let new_pubk = new_key_pair.public();
     let certificate = sender.transfer_ownership(new_pubk).await.unwrap();
-    assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
+    assert_eq!(sender.next_block_height, BlockHeight::from(1));
     assert!(sender.pending_block.is_none());
     assert!(sender.key_pair().await.is_err());
     assert_eq!(
         builder
             .check_that_validators_have_certificate(
                 sender.chain_id.clone(),
-                SequenceNumber::from(0),
+                BlockHeight::from(0),
                 3
             )
             .await
@@ -352,14 +352,14 @@ async fn test_share_ownership() {
     let new_key_pair = KeyPair::generate();
     let new_pubk = new_key_pair.public();
     let certificate = sender.share_ownership(new_pubk).await.unwrap();
-    assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
+    assert_eq!(sender.next_block_height, BlockHeight::from(1));
     assert!(sender.pending_block.is_none());
     assert!(sender.key_pair().await.is_ok());
     assert_eq!(
         builder
             .check_that_validators_have_certificate(
                 sender.chain_id.clone(),
-                SequenceNumber::from(0),
+                BlockHeight::from(0),
                 3
             )
             .await
@@ -379,7 +379,7 @@ async fn test_share_ownership() {
         .unwrap();
     // Make a client to try the new key.
     let mut client = builder
-        .make_client(sender.chain_id, new_key_pair, SequenceNumber::from(2))
+        .make_client(sender.chain_id, new_key_pair, BlockHeight::from(2))
         .await;
     assert_eq!(client.query_safe_balance().await.unwrap(), Balance::from(1));
     assert_eq!(
@@ -400,15 +400,15 @@ async fn test_open_chain_then_close_it() {
         .await;
     let new_key_pair = KeyPair::generate();
     let new_pubk = new_key_pair.public();
-    let new_id = ChainId::new(vec![1, 0].into_iter().map(SequenceNumber::from).collect());
+    let new_id = ChainId::new(vec![1, 0].into_iter().map(BlockHeight::from).collect());
     // Open the new chain.
     let certificate = sender.open_chain(new_pubk).await.unwrap();
-    assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
+    assert_eq!(sender.next_block_height, BlockHeight::from(1));
     assert!(sender.pending_block.is_none());
     assert!(sender.key_pair().await.is_ok());
     // Make a client to try the new chain.
     let mut client = builder
-        .make_client(new_id, new_key_pair, SequenceNumber::from(0))
+        .make_client(new_id, new_key_pair, BlockHeight::from(0))
         .await;
     client.receive_certificate(certificate).await.unwrap();
     assert_eq!(
@@ -427,7 +427,7 @@ async fn test_open_chain_after_transfer() {
         .await;
     let new_key_pair = KeyPair::generate();
     let new_pubk = new_key_pair.public();
-    let new_id = ChainId::new(vec![1, 1].into_iter().map(SequenceNumber::from).collect());
+    let new_id = ChainId::new(vec![1, 1].into_iter().map(BlockHeight::from).collect());
     // Transfer before creating the chain.
     sender
         .transfer_to_chain(Amount::from(3), new_id.clone(), UserData::default())
@@ -435,14 +435,14 @@ async fn test_open_chain_after_transfer() {
         .unwrap();
     // Open the new chain.
     let certificate = sender.open_chain(new_pubk).await.unwrap();
-    assert_eq!(sender.next_sequence_number, SequenceNumber::from(2));
+    assert_eq!(sender.next_block_height, BlockHeight::from(2));
     assert!(sender.pending_block.is_none());
     assert!(sender.key_pair().await.is_ok());
     assert_eq!(
         builder
             .check_that_validators_have_certificate(
                 sender.chain_id.clone(),
-                SequenceNumber::from(1),
+                BlockHeight::from(1),
                 3
             )
             .await
@@ -458,7 +458,7 @@ async fn test_open_chain_after_transfer() {
     ));
     // Make a client to try the new chain.
     let mut client = builder
-        .make_client(new_id, new_key_pair, SequenceNumber::from(0))
+        .make_client(new_id, new_key_pair, BlockHeight::from(0))
         .await;
     client.receive_certificate(certificate).await.unwrap();
     assert_eq!(client.query_safe_balance().await.unwrap(), Balance::from(3));
@@ -480,7 +480,7 @@ async fn test_open_chain_before_transfer() {
         .await;
     let new_key_pair = KeyPair::generate();
     let new_pubk = new_key_pair.public();
-    let new_id = ChainId::new(vec![1, 0].into_iter().map(SequenceNumber::from).collect());
+    let new_id = ChainId::new(vec![1, 0].into_iter().map(BlockHeight::from).collect());
     // Open the new chain.
     let certificate = sender.open_chain(new_pubk).await.unwrap();
     // Transfer after creating the chain.
@@ -488,12 +488,12 @@ async fn test_open_chain_before_transfer() {
         .transfer_to_chain(Amount::from(3), new_id.clone(), UserData::default())
         .await
         .unwrap();
-    assert_eq!(sender.next_sequence_number, SequenceNumber::from(2));
+    assert_eq!(sender.next_block_height, BlockHeight::from(2));
     assert!(sender.pending_block.is_none());
     assert!(sender.key_pair().await.is_ok());
     // Make a client to try the new chain.
     let mut client = builder
-        .make_client(new_id, new_key_pair, SequenceNumber::from(0))
+        .make_client(new_id, new_key_pair, BlockHeight::from(0))
         .await;
     // Must process the creation certificate before using the new chain.
     client.receive_certificate(certificate).await.unwrap();
@@ -524,14 +524,14 @@ async fn test_close_chain() {
             }
         }
     ));
-    assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
+    assert_eq!(sender.next_block_height, BlockHeight::from(1));
     assert!(sender.pending_block.is_none());
     assert!(sender.key_pair().await.is_err());
     assert_eq!(
         builder
             .check_that_validators_have_certificate(
                 sender.chain_id.clone(),
-                SequenceNumber::from(0),
+                BlockHeight::from(0),
                 3
             )
             .await
@@ -557,7 +557,7 @@ async fn test_initiating_valid_transfer_too_many_faults() {
         )
         .await
         .is_err());
-    assert_eq!(sender.next_sequence_number, SequenceNumber::from(0));
+    assert_eq!(sender.next_block_height, BlockHeight::from(0));
     assert!(sender.pending_block.is_some());
     assert_eq!(sender.query_safe_balance().await.unwrap(), Balance::from(4));
 }
@@ -586,7 +586,7 @@ async fn test_bidirectional_transfer() {
         .await
         .unwrap();
 
-    assert_eq!(client1.next_sequence_number, SequenceNumber::from(1));
+    assert_eq!(client1.next_block_height, BlockHeight::from(1));
     assert!(client1.pending_block.is_none());
     assert_eq!(client1.balance().await, Balance::from(0));
     assert_eq!(
@@ -598,7 +598,7 @@ async fn test_bidirectional_transfer() {
         builder
             .check_that_validators_have_certificate(
                 client1.chain_id.clone(),
-                SequenceNumber::from(0),
+                BlockHeight::from(0),
                 3
             )
             .await
@@ -621,7 +621,7 @@ async fn test_bidirectional_transfer() {
     assert_eq!(client2.balance().await, Balance::from(3));
 
     // Send back some money.
-    assert_eq!(client2.next_sequence_number, SequenceNumber::from(0));
+    assert_eq!(client2.next_block_height, BlockHeight::from(0));
     client2
         .transfer_to_chain(
             Amount::from(1),
@@ -630,7 +630,7 @@ async fn test_bidirectional_transfer() {
         )
         .await
         .unwrap();
-    assert_eq!(client2.next_sequence_number, SequenceNumber::from(1));
+    assert_eq!(client2.next_block_height, BlockHeight::from(1));
     assert!(client2.pending_block.is_none());
     assert_eq!(
         client2.query_safe_balance().await.unwrap(),
@@ -661,7 +661,7 @@ async fn test_receiving_unconfirmed_transfer() {
         .unwrap();
     // Transfer was executed locally.
     assert_eq!(client1.balance().await, Balance::from(1));
-    assert_eq!(client1.next_sequence_number, SequenceNumber::from(1));
+    assert_eq!(client1.next_block_height, BlockHeight::from(1));
     assert!(client1.pending_block.is_none());
     // ..but not confirmed remotely, hence a conservative result.
     assert_eq!(
@@ -711,7 +711,7 @@ async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
         .communicate_chain_updates(
             &builder.committee,
             client1.chain_id.clone(),
-            CommunicateAction::AdvanceToNextSequenceNumber(client1.next_sequence_number),
+            CommunicateAction::AdvanceToNextBlockHeight(client1.next_block_height),
         )
         .await
         .unwrap();
@@ -731,10 +731,10 @@ async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
     let certificate = client2.retry_pending_block().await.unwrap().unwrap();
     // Blocks were executed locally.
     assert_eq!(client1.balance().await, Balance::from(1));
-    assert_eq!(client1.next_sequence_number, SequenceNumber::from(2));
+    assert_eq!(client1.next_block_height, BlockHeight::from(2));
     assert!(client1.pending_block.is_none());
     assert_eq!(client2.balance().await, Balance::from(0));
-    assert_eq!(client2.next_sequence_number, SequenceNumber::from(1));
+    assert_eq!(client2.next_block_height, BlockHeight::from(1));
     assert!(client2.pending_block.is_none());
     // Last one was not confirmed remotely, hence a conservative balance.
     assert_eq!(
