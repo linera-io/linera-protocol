@@ -13,7 +13,7 @@ use zef_base::{
 use zef_storage::{InMemoryStoreClient, Storage};
 
 #[tokio::test]
-async fn test_handle_request_order_bad_signature() {
+async fn test_handle_block_proposal_bad_signature() {
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(dbg_chain(2));
     let (_, mut state) = init_state_with_chains(vec![
@@ -21,14 +21,14 @@ async fn test_handle_request_order_bad_signature() {
         (dbg_chain(2), dbg_addr(2), Balance::from(0)),
     ])
     .await;
-    let request_order =
-        make_transfer_request_order(dbg_chain(1), &sender_key_pair, recipient, Amount::from(5));
+    let block_proposal =
+        make_transfer_block_proposal(dbg_chain(1), &sender_key_pair, recipient, Amount::from(5));
     let unknown_key_pair = KeyPair::generate();
-    let mut bad_signature_request_order = request_order.clone();
-    bad_signature_request_order.signature =
-        Signature::new(&request_order.request, &unknown_key_pair);
+    let mut bad_signature_block_proposal = block_proposal.clone();
+    bad_signature_block_proposal.signature =
+        Signature::new(&block_proposal.request, &unknown_key_pair);
     assert!(state
-        .handle_request_order(bad_signature_request_order)
+        .handle_block_proposal(bad_signature_block_proposal)
         .await
         .is_err());
     assert!(state
@@ -43,7 +43,7 @@ async fn test_handle_request_order_bad_signature() {
 }
 
 #[tokio::test]
-async fn test_handle_request_order_zero_amount() {
+async fn test_handle_block_proposal_zero_amount() {
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(dbg_chain(2));
     let (_, mut state) = init_state_with_chains(vec![
@@ -52,10 +52,10 @@ async fn test_handle_request_order_zero_amount() {
     ])
     .await;
     // test request non-positive amount
-    let zero_amount_request_order =
-        make_transfer_request_order(dbg_chain(1), &sender_key_pair, recipient, Amount::zero());
+    let zero_amount_block_proposal =
+        make_transfer_block_proposal(dbg_chain(1), &sender_key_pair, recipient, Amount::zero());
     assert!(state
-        .handle_request_order(zero_amount_request_order)
+        .handle_block_proposal(zero_amount_block_proposal)
         .await
         .is_err());
     assert!(state
@@ -70,7 +70,7 @@ async fn test_handle_request_order_zero_amount() {
 }
 
 #[tokio::test]
-async fn test_handle_request_order_unknown_sender() {
+async fn test_handle_block_proposal_unknown_sender() {
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(dbg_chain(2));
     let (_, mut state) = init_state_with_chains(vec![
@@ -78,13 +78,13 @@ async fn test_handle_request_order_unknown_sender() {
         (dbg_chain(2), dbg_addr(2), Balance::from(0)),
     ])
     .await;
-    let request_order =
-        make_transfer_request_order(dbg_chain(1), &sender_key_pair, recipient, Amount::from(5));
+    let block_proposal =
+        make_transfer_block_proposal(dbg_chain(1), &sender_key_pair, recipient, Amount::from(5));
     let unknown_key = KeyPair::generate();
 
-    let unknown_sender_request_order = RequestOrder::new(request_order.request, &unknown_key);
+    let unknown_sender_block_proposal = BlockProposal::new(block_proposal.request, &unknown_key);
     assert!(state
-        .handle_request_order(unknown_sender_request_order)
+        .handle_block_proposal(unknown_sender_block_proposal)
         .await
         .is_err());
     assert!(state
@@ -99,7 +99,7 @@ async fn test_handle_request_order_unknown_sender() {
 }
 
 #[tokio::test]
-async fn test_handle_request_order_bad_sequence_number() {
+async fn test_handle_block_proposal_bad_sequence_number() {
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(dbg_chain(2));
     let (_, mut state) = init_state_with_chains(vec![
@@ -107,8 +107,8 @@ async fn test_handle_request_order_bad_sequence_number() {
         (dbg_chain(2), dbg_addr(2), Balance::from(0)),
     ])
     .await;
-    let request_order =
-        make_transfer_request_order(dbg_chain(1), &sender_key_pair, recipient, Amount::from(5));
+    let block_proposal =
+        make_transfer_block_proposal(dbg_chain(1), &sender_key_pair, recipient, Amount::from(5));
 
     let mut sender_chain = state
         .storage
@@ -120,7 +120,7 @@ async fn test_handle_request_order_bad_sequence_number() {
         .try_add_assign_one()
         .unwrap();
     state.storage.write_chain(sender_chain).await.unwrap();
-    assert!(state.handle_request_order(request_order).await.is_err());
+    assert!(state.handle_block_proposal(block_proposal).await.is_err());
     assert!(state
         .storage
         .read_active_chain(&dbg_chain(1))
@@ -133,7 +133,7 @@ async fn test_handle_request_order_bad_sequence_number() {
 }
 
 #[tokio::test]
-async fn test_handle_request_order_exceed_balance() {
+async fn test_handle_block_proposal_exceed_balance() {
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(dbg_chain(2));
     let (_, mut state) = init_state_with_chains(vec![
@@ -141,13 +141,13 @@ async fn test_handle_request_order_exceed_balance() {
         (dbg_chain(2), dbg_addr(2), Balance::from(0)),
     ])
     .await;
-    let request_order = make_transfer_request_order(
+    let block_proposal = make_transfer_block_proposal(
         dbg_chain(1),
         &sender_key_pair,
         recipient,
         Amount::from(1000),
     );
-    assert!(state.handle_request_order(request_order).await.is_err());
+    assert!(state.handle_block_proposal(block_proposal).await.is_err());
     assert!(state
         .storage
         .read_active_chain(&dbg_chain(1))
@@ -160,7 +160,7 @@ async fn test_handle_request_order_exceed_balance() {
 }
 
 #[tokio::test]
-async fn test_handle_request_order() {
+async fn test_handle_block_proposal() {
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(dbg_chain(2));
     let (_, mut state) = init_state_with_chains(vec![(
@@ -169,10 +169,10 @@ async fn test_handle_request_order() {
         Balance::from(5),
     )])
     .await;
-    let request_order =
-        make_transfer_request_order(dbg_chain(1), &sender_key_pair, recipient, Amount::from(5));
+    let block_proposal =
+        make_transfer_block_proposal(dbg_chain(1), &sender_key_pair, recipient, Amount::from(5));
 
-    let chain_info_response = state.handle_request_order(request_order).await.unwrap();
+    let chain_info_response = state.handle_block_proposal(block_proposal).await.unwrap();
     chain_info_response
         .check(state.key_pair.unwrap().public())
         .unwrap();
@@ -193,7 +193,7 @@ async fn test_handle_request_order() {
 }
 
 #[tokio::test]
-async fn test_handle_request_order_replay() {
+async fn test_handle_block_proposal_replay() {
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(dbg_chain(2));
     let (_, mut state) = init_state_with_chains(vec![
@@ -201,18 +201,18 @@ async fn test_handle_request_order_replay() {
         (dbg_chain(2), dbg_addr(2), Balance::from(0)),
     ])
     .await;
-    let request_order =
-        make_transfer_request_order(dbg_chain(1), &sender_key_pair, recipient, Amount::from(5));
+    let block_proposal =
+        make_transfer_block_proposal(dbg_chain(1), &sender_key_pair, recipient, Amount::from(5));
 
     let response = state
-        .handle_request_order(request_order.clone())
+        .handle_block_proposal(block_proposal.clone())
         .await
         .unwrap();
     response
         .check(state.key_pair.as_ref().unwrap().public())
         .as_ref()
         .unwrap();
-    let replay_response = state.handle_request_order(request_order).await.unwrap();
+    let replay_response = state.handle_block_proposal(block_proposal).await.unwrap();
     // Workaround lack of equality.
     assert_eq!(
         HashValue::new(&response.info),
@@ -549,12 +549,12 @@ async fn init_state_with_chain(
     init_state_with_chains(std::iter::once((id, owner, balance))).await
 }
 
-fn make_transfer_request_order(
+fn make_transfer_block_proposal(
     chain_id: ChainId,
     secret: &KeyPair,
     recipient: Address,
     amount: Amount,
-) -> RequestOrder {
+) -> BlockProposal {
     let request = Request {
         chain_id,
         operation: Operation::Transfer {
@@ -565,7 +565,7 @@ fn make_transfer_request_order(
         sequence_number: SequenceNumber::new(),
         round: RoundNumber::default(),
     };
-    RequestOrder::new(request, secret)
+    BlockProposal::new(request, secret)
 }
 
 fn make_certificate(
@@ -589,7 +589,7 @@ fn make_transfer_certificate(
     committee: &Committee,
     state: &WorkerState<InMemoryStoreClient>,
 ) -> Certificate {
-    let request = make_transfer_request_order(chain_id, key_pair, recipient, amount).request;
+    let request = make_transfer_block_proposal(chain_id, key_pair, recipient, amount).request;
     let value = Value::Confirmed { request };
     make_certificate(committee, state, value)
 }

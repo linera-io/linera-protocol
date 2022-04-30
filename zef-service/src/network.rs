@@ -211,10 +211,10 @@ where
                 Err(_) => Err(Error::InvalidDecoding),
                 Ok(result) => {
                     match result {
-                        SerializedMessage::RequestOrder(message) => self
+                        SerializedMessage::BlockProposal(message) => self
                             .server
                             .state
-                            .handle_request_order(*message)
+                            .handle_block_proposal(*message)
                             .await
                             .map(|info| {
                                 Some(serialize_message(&SerializedMessage::ChainInfoResponse(
@@ -387,14 +387,14 @@ impl Client {
 #[async_trait]
 impl ValidatorNode for Client {
     /// Initiate a new request.
-    async fn handle_request_order(
+    async fn handle_block_proposal(
         &mut self,
-        order: RequestOrder,
+        proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, Error> {
-        let shard = get_shard(self.num_shards, &order.request.chain_id);
+        let shard = get_shard(self.num_shards, &proposal.request.chain_id);
         self.send_recv_info_bytes(
             shard,
-            serialize_message(&SerializedMessage::RequestOrder(Box::new(order))),
+            serialize_message(&SerializedMessage::BlockProposal(Box::new(proposal))),
         )
         .await
     }

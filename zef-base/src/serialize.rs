@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Debug)]
 pub enum SerializedMessage {
     // Inbound
-    RequestOrder(Box<RequestOrder>),
+    BlockProposal(Box<BlockProposal>),
     Certificate(Box<Certificate>),
     ChainInfoQuery(Box<ChainInfoQuery>),
     // Outbound

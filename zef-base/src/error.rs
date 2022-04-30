@@ -94,12 +94,12 @@ pub enum Error {
     CertificateNotFound,
     #[fail(display = "Invalid cross shard request.")]
     InvalidCrossShardRequest,
-    #[fail(display = "Invalid request order.")]
-    InvalidRequestOrder,
+    #[fail(display = "Invalid block proposal.")]
+    InvalidBlockProposal,
 
     // Client errors
-    #[fail(display = "Client failed to obtain a valid response to the request order")]
-    ClientErrorWhileProcessingRequestOrder,
+    #[fail(display = "Client failed to obtain a valid response to the block proposal")]
+    ClientErrorWhileProcessingBlockProposal,
     #[fail(display = "Client failed to obtain a valid response to the certificate request")]
     ClientErrorWhileRequestingCertificate,
 
