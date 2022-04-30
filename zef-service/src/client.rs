@@ -140,7 +140,7 @@ impl ClientContext {
         key_pair: Option<KeyPair>,
     ) -> Result<(), failure::Error> {
         let recipient = match &certificate.value {
-            Value::Confirmed { request } => request.operation.recipient().unwrap().clone(),
+            Value::Confirmed { block } => block.operation.recipient().unwrap().clone(),
             _ => failure::bail!("unexpected value in certificate"),
         };
         let validator_clients = self.make_validator_clients();
@@ -165,7 +165,7 @@ impl ClientContext {
         Ok(())
     }
 
-    /// Make one block proposal per chain, up to `max_proposals` requests.
+    /// Make one block proposal per chain, up to `max_proposals` blocks.
     fn make_benchmark_block_proposals(
         &mut self,
         max_proposals: usize,
@@ -178,7 +178,7 @@ impl ClientContext {
                 Some(kp) => kp,
                 None => continue,
             };
-            let request = Request {
+            let block = Block {
                 chain_id: chain.chain_id.clone(),
                 operation: Operation::Transfer {
                     recipient: Address::Account(next_recipient),
@@ -188,9 +188,9 @@ impl ClientContext {
                 sequence_number: chain.next_sequence_number,
                 round: RoundNumber::default(),
             };
-            debug!("Preparing block proposal: {:?}", request);
+            debug!("Preparing block proposal: {:?}", block);
             chain.next_sequence_number.try_add_assign_one().unwrap();
-            let proposal = BlockProposal::new(request.clone(), key_pair);
+            let proposal = BlockProposal::new(block.clone(), key_pair);
             proposals.push(proposal.clone());
             let serialized_proposal =
                 serialize_message(&SerializedMessage::BlockProposal(Box::new(proposal)));
@@ -224,7 +224,7 @@ impl ClientContext {
         for proposal in proposals {
             let mut certificate = Certificate::new(
                 Value::Confirmed {
-                    request: proposal.request.clone(),
+                    block: proposal.block.clone(),
                 },
                 Vec::new(),
             );
@@ -235,8 +235,7 @@ impl ClientContext {
             }
             let serialized_certificate =
                 serialize_message(&SerializedMessage::Certificate(Box::new(certificate)));
-            serialized_certificates
-                .push((proposal.request.chain_id, serialized_certificate.into()));
+            serialized_certificates.push((proposal.block.chain_id, serialized_certificate.into()));
         }
         serialized_certificates
     }
@@ -254,7 +253,7 @@ impl ClientContext {
                 continue;
             }
             debug!(
-                "Processing vote on {:?}'s request by {:?}",
+                "Processing vote on {:?}'s block by {:?}",
                 chain_id, vote.validator,
             );
             let value = vote.value;
@@ -280,7 +279,7 @@ impl ClientContext {
         certificates
     }
 
-    /// Broadcast a bulk of requests to each validator.
+    /// Broadcast a bulk of blocks to each validator.
     async fn mass_broadcast(
         &self,
         phase: &'static str,
@@ -293,15 +292,15 @@ impl ClientContext {
         let mut streams = Vec::new();
         for (num_shards, client) in validator_clients {
             // Re-index proposals by shard for this particular validator client.
-            let mut sharded_requests = HashMap::new();
+            let mut sharded_blocks = HashMap::new();
             for (chain_id, buf) in &proposals {
                 let shard = network::get_shard(num_shards, chain_id);
-                sharded_requests
+                sharded_blocks
                     .entry(shard)
                     .or_insert_with(Vec::new)
                     .push(buf.clone());
             }
-            streams.push(client.run(sharded_requests));
+            streams.push(client.run(sharded_blocks));
         }
         let responses = futures::stream::select_all(streams).concat().await;
         let time_elapsed = time_start.elapsed();
@@ -453,7 +452,7 @@ enum ClientCommands {
     /// Send one transfer per chain in bulk mode
     #[structopt(name = "benchmark")]
     Benchmark {
-        /// Maximum number of requests in flight
+        /// Maximum number of blocks in flight
         #[structopt(long, default_value = "200")]
         max_in_flight: u64,
 
@@ -532,7 +531,7 @@ async fn main() {
                 "{}",
                 certificate
                     .value
-                    .confirmed_request()
+                    .confirmed_block()
                     .unwrap()
                     .operation
                     .recipient()

@@ -15,17 +15,17 @@ mod worker_tests;
 /// Interface provided by each physical shard (aka "worker") of an validator or a local node.
 /// * All commands return either the current chain info or an error.
 /// * Repeating commands produces no changes and returns no error.
-/// * Some handlers may return cross-chain requests, that is, messages
+/// * Some handlers may return cross-chain blocks, that is, messages
 ///   to be communicated to other workers of the same validator.
 #[async_trait]
 pub trait ValidatorWorker {
-    /// Initiate a new request.
+    /// Initiate a new block.
     async fn handle_block_proposal(
         &mut self,
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, Error>;
 
-    /// Process a certificate, for instance to execute a confirmed request.
+    /// Process a certificate, for instance to execute a confirmed block.
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
@@ -37,10 +37,10 @@ pub trait ValidatorWorker {
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, Error>;
 
-    /// Handle (trusted!) cross chain request.
+    /// Handle (trusted!) cross chain block.
     async fn handle_cross_chain_request(
         &mut self,
-        request: CrossChainRequest,
+        block: CrossChainRequest,
     ) -> Result<Vec<CrossChainRequest>, Error>;
 }
 
@@ -72,28 +72,28 @@ where
         &mut self,
         certificate: Certificate,
     ) -> Result<ChainInfoResponse, zef_base::error::Error> {
-        let (response, mut requests) = self.handle_certificate(certificate).await?;
-        while let Some(request) = requests.pop() {
-            requests.extend(self.handle_cross_chain_request(request).await?);
+        let (response, mut blocks) = self.handle_certificate(certificate).await?;
+        while let Some(block) = blocks.pop() {
+            blocks.extend(self.handle_cross_chain_request(block).await?);
         }
         Ok(response)
     }
 
-    /// (Trusted) Process a confirmed request issued from a chain.
-    async fn process_confirmed_request(
+    /// (Trusted) Process a confirmed block issued from a chain.
+    async fn process_confirmed_block(
         &mut self,
-        request: Request,
+        block: Block,
         certificate: Certificate, // For logging purpose
     ) -> Result<(ChainInfoResponse, Vec<CrossChainRequest>), Error> {
         assert_eq!(
-            &certificate.value.confirmed_request().unwrap().operation,
-            &request.operation
+            &certificate.value.confirmed_block().unwrap().operation,
+            &block.operation
         );
         // Obtain the sender's chain.
-        let sender = request.chain_id.clone();
+        let sender = block.chain_id.clone();
         // Check that the chain is active and ready for this confirmation.
         let mut chain = self.storage.read_active_chain(&sender).await?;
-        if chain.next_sequence_number < request.sequence_number {
+        if chain.next_sequence_number < block.sequence_number {
             return Err(Error::MissingEarlierConfirmations {
                 current_sequence_number: chain.next_sequence_number,
             });
@@ -102,7 +102,7 @@ where
         certificate
             .check(chain.state.committee.as_ref().expect("chain is active"))
             .map_err(|_| Error::InvalidCertificate)?;
-        // Load pending cross-chain requests.
+        // Load pending cross-chain blocks.
         let mut continuation = self
             .storage
             .read_certificates(chain.keep_sending.iter().cloned())
@@ -118,24 +118,24 @@ where
                 certificate,
             })
             .collect();
-        if chain.next_sequence_number > request.sequence_number {
-            // Request was already confirmed.
+        if chain.next_sequence_number > block.sequence_number {
+            // Block was already confirmed.
             let info = chain.make_chain_info(self.key_pair.as_ref());
             return Ok((info, continuation));
         }
         // Persist certificate.
         self.storage.write_certificate(certificate.clone()).await?;
         // Execute the sender's side of the operation.
-        chain.apply_operation_as_sender(&request.operation, certificate.hash)?;
+        chain.apply_operation_as_sender(&block.operation, certificate.hash)?;
         // Advance to next sequence number.
         chain.next_sequence_number.try_add_assign_one()?;
         chain.state.manager.reset();
         // Final touch on the sender's chain.
         let info = chain.make_chain_info(self.key_pair.as_ref());
-        // Schedule cross-chain request if any.
-        let operation = &certificate.value.confirmed_request().unwrap().operation;
+        // Schedule cross-chain block if any.
+        let operation = &certificate.value.confirmed_block().unwrap().operation;
         if operation.recipient().is_some() {
-            // Schedule a new cross-chain request to update recipient.
+            // Schedule a new cross-chain block to update recipient.
             chain.keep_sending.insert(certificate.hash);
             continuation.push(CrossChainRequest::UpdateRecipient {
                 committee: chain
@@ -152,15 +152,15 @@ where
         Ok((info, continuation))
     }
 
-    /// (Trusted) Process a validated request issued from a multi-owner chain.
-    async fn process_validated_request(
+    /// (Trusted) Process a validated block issued from a multi-owner chain.
+    async fn process_validated_block(
         &mut self,
-        request: Request,
+        block: Block,
         certificate: Certificate,
     ) -> Result<ChainInfoResponse, Error> {
-        assert_eq!(certificate.value.validated_request().unwrap(), &request);
+        assert_eq!(certificate.value.validated_block().unwrap(), &block);
         // Check that the chain is active and ready for this confirmation.
-        let mut chain = self.storage.read_active_chain(&request.chain_id).await?;
+        let mut chain = self.storage.read_active_chain(&block.chain_id).await?;
         // Verify the certificate. Returns a catch-all error to make client code more robust.
         certificate
             .check(chain.state.committee.as_ref().expect("chain is active"))
@@ -168,23 +168,23 @@ where
         if chain
             .state
             .manager
-            .check_validated_request(chain.next_sequence_number, &request)?
+            .check_validated_block(chain.next_sequence_number, &block)?
             == Outcome::Skip
         {
-            // If we just processed the same pending request, return the chain info
+            // If we just processed the same pending block, return the chain info
             // unchanged.
             return Ok(chain.make_chain_info(self.key_pair.as_ref()));
         }
         chain
             .state
             .manager
-            .create_final_vote(request, certificate, self.key_pair.as_ref());
+            .create_final_vote(block, certificate, self.key_pair.as_ref());
         let info = chain.make_chain_info(self.key_pair.as_ref());
         self.storage.write_chain(chain).await?;
         Ok(info)
     }
 
-    /// (Trusted) Try to update the recipient chain in a confirmed request.
+    /// (Trusted) Try to update the recipient chain in a confirmed block.
     async fn update_recipient_chain(
         &mut self,
         operation: Operation,
@@ -192,16 +192,16 @@ where
         certificate: Certificate,
     ) -> Result<(), Error> {
         if let Some(recipient) = operation.recipient() {
-            let request = certificate.value.confirmed_request().unwrap();
-            assert_eq!(&request.operation, &operation);
+            let block = certificate.value.confirmed_block().unwrap();
+            assert_eq!(&block.operation, &operation);
             // Execute the recipient's side of the operation.
             let mut chain = self.storage.read_chain_or_default(recipient).await?;
             let need_update = chain.apply_operation_as_recipient(
                 &operation,
                 committee,
                 certificate.hash,
-                request.chain_id.clone(),
-                request.sequence_number,
+                block.chain_id.clone(),
+                block.sequence_number,
             )?;
             if need_update {
                 self.storage.write_certificate(certificate).await?;
@@ -223,23 +223,23 @@ where
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, Error> {
         // Obtain the sender's chain.
-        let sender = proposal.request.chain_id.clone();
+        let sender = proposal.block.chain_id.clone();
         let mut chain = self.storage.read_active_chain(&sender).await?;
-        // Check authentication of the request.
+        // Check authentication of the block.
         proposal.check(&chain.state.manager)?;
-        // Check if the chain ready and if the request is well-formed.
+        // Check if the chain ready and if the block is well-formed.
         if chain
             .state
             .manager
-            .check_request(chain.next_sequence_number, &proposal.request)?
+            .check_block(chain.next_sequence_number, &proposal.block)?
             == Outcome::Skip
         {
-            // If we just processed the same pending request, return the chain info
+            // If we just processed the same pending block, return the chain info
             // unchanged.
             return Ok(chain.make_chain_info(self.key_pair.as_ref()));
         }
-        // Verify that the request is valid.
-        chain.validate_operation(&proposal.request)?;
+        // Verify that the block is valid.
+        chain.validate_operation(&proposal.block)?;
         // Create the vote and store it in the chain.
         chain
             .state
@@ -257,16 +257,16 @@ where
     ) -> Result<(ChainInfoResponse, Vec<CrossChainRequest>), Error> {
         // Process the proposal.
         match &certificate.value {
-            Value::Validated { request } => {
-                // Confirm the validated request.
+            Value::Validated { block } => {
+                // Confirm the validated block.
                 let info = self
-                    .process_validated_request(request.clone(), certificate)
+                    .process_validated_block(block.clone(), certificate)
                     .await?;
                 Ok((info, Vec::new()))
             }
-            Value::Confirmed { request } => {
-                // Execute the confirmed request.
-                self.process_confirmed_request(request.clone(), certificate)
+            Value::Confirmed { block } => {
+                // Execute the confirmed block.
+                self.process_confirmed_block(block.clone(), certificate)
                     .await
             }
         }
@@ -309,22 +309,22 @@ where
 
     async fn handle_cross_chain_request(
         &mut self,
-        request: CrossChainRequest,
+        block: CrossChainRequest,
     ) -> Result<Vec<CrossChainRequest>, Error> {
-        match request {
+        match block {
             CrossChainRequest::UpdateRecipient {
                 committee,
                 certificate,
             } => {
-                let request = certificate
+                let block = certificate
                     .value
-                    .confirmed_request()
+                    .confirmed_block()
                     .ok_or(Error::InvalidCrossChainRequest)?;
-                let sender = request.chain_id.clone();
+                let sender = block.chain_id.clone();
                 let hash = certificate.hash;
-                self.update_recipient_chain(request.operation.clone(), committee, certificate)
+                self.update_recipient_chain(block.operation.clone(), committee, certificate)
                     .await?;
-                // Reply with a cross-chain request.
+                // Reply with a cross-chain block.
                 let cont = vec![CrossChainRequest::ConfirmUpdatedRecipient {
                     chain_id: sender,
                     hash,

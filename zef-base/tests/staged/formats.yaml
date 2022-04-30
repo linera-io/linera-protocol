@@ -11,10 +11,20 @@ Amount:
   NEWTYPESTRUCT: U64
 Balance:
   NEWTYPESTRUCT: I128
+Block:
+  STRUCT:
+    - chain_id:
+        TYPENAME: ChainId
+    - operation:
+        TYPENAME: Operation
+    - sequence_number:
+        TYPENAME: SequenceNumber
+    - round:
+        TYPENAME: RoundNumber
 BlockProposal:
   STRUCT:
-    - request:
-        TYPENAME: Request
+    - block:
+        TYPENAME: Block
     - owner:
         TYPENAME: PublicKeyBytes
     - signature:
@@ -147,7 +157,7 @@ Error:
     3:
       InvalidSequenceNumber: UNIT
     4:
-      PreviousRequestMustBeConfirmedFirst: UNIT
+      PreviousBlockMustBeConfirmedFirst: UNIT
     5:
       MissingEarlierConfirmations:
         STRUCT:
@@ -208,7 +218,7 @@ Error:
     26:
       ClientErrorWhileProcessingBlockProposal: UNIT
     27:
-      ClientErrorWhileRequestingCertificate: UNIT
+      ClientErrorWhileQueryingCertificate: UNIT
     28:
       WrongShard: UNIT
     29:
@@ -296,16 +306,6 @@ PublicKeyBytes:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 32
-Request:
-  STRUCT:
-    - chain_id:
-        TYPENAME: ChainId
-    - operation:
-        TYPENAME: Operation
-    - sequence_number:
-        TYPENAME: SequenceNumber
-    - round:
-        TYPENAME: RoundNumber
 RoundNumber:
   NEWTYPESTRUCT: U64
 SequenceNumber:
@@ -369,13 +369,13 @@ Value:
     0:
       Validated:
         STRUCT:
-          - request:
-              TYPENAME: Request
+          - block:
+              TYPENAME: Block
     1:
       Confirmed:
         STRUCT:
-          - request:
-              TYPENAME: Request
+          - block:
+              TYPENAME: Block
 Vote:
   STRUCT:
     - value:

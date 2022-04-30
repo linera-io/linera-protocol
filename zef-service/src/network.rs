@@ -224,7 +224,7 @@ where
                         SerializedMessage::Certificate(message) => {
                             match self.server.state.handle_certificate(*message).await {
                                 Ok((info, continuation)) => {
-                                    // Cross-shard request
+                                    // Cross-shard block
                                     self.handle_continuation(continuation).await;
                                     // Response
                                     Ok(Some(serialize_message(
@@ -244,13 +244,13 @@ where
                                     Box::new(info),
                                 )))
                             }),
-                        SerializedMessage::CrossChainRequest(request) => {
-                            match self.server.state.handle_cross_chain_request(*request).await {
+                        SerializedMessage::CrossChainRequest(block) => {
+                            match self.server.state.handle_cross_chain_request(*block).await {
                                 Ok(continuation) => {
                                     self.handle_continuation(continuation).await;
                                 }
                                 Err(error) => {
-                                    error!("Failed to handle cross-chain request: {}", error);
+                                    error!("Failed to handle cross-chain block: {}", error);
                                 }
                             }
                             // No user to respond to.
@@ -294,13 +294,13 @@ where
 {
     fn handle_continuation(
         &mut self,
-        requests: Vec<CrossChainRequest>,
+        blocks: Vec<CrossChainRequest>,
     ) -> futures::future::BoxFuture<()> {
         Box::pin(async move {
-            for request in requests {
-                let shard_id = self.server.which_shard(request.target_chain_id());
+            for block in blocks {
+                let shard_id = self.server.which_shard(block.target_chain_id());
                 let buffer =
-                    serialize_message(&SerializedMessage::CrossChainRequest(Box::new(request)));
+                    serialize_message(&SerializedMessage::CrossChainRequest(Box::new(block)));
                 debug!(
                     "Scheduling cross chain query: {} -> {}",
                     self.server.shard_id, shard_id
@@ -386,12 +386,12 @@ impl Client {
 
 #[async_trait]
 impl ValidatorNode for Client {
-    /// Initiate a new request.
+    /// Initiate a new block.
     async fn handle_block_proposal(
         &mut self,
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, Error> {
-        let shard = get_shard(self.num_shards, &proposal.request.chain_id);
+        let shard = get_shard(self.num_shards, &proposal.block.chain_id);
         self.send_recv_info_bytes(
             shard,
             serialize_message(&SerializedMessage::BlockProposal(Box::new(proposal))),
@@ -415,12 +415,12 @@ impl ValidatorNode for Client {
     /// Handle information queries for this chain.
     async fn handle_chain_info_query(
         &mut self,
-        request: ChainInfoQuery,
+        block: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, Error> {
-        let shard = get_shard(self.num_shards, &request.chain_id);
+        let shard = get_shard(self.num_shards, &block.chain_id);
         self.send_recv_info_bytes(
             shard,
-            serialize_message(&SerializedMessage::ChainInfoQuery(Box::new(request))),
+            serialize_message(&SerializedMessage::ChainInfoQuery(Box::new(block))),
         )
         .await
     }
@@ -458,19 +458,19 @@ impl MassClient {
         }
     }
 
-    async fn run_shard(&self, shard: u32, requests: Vec<Bytes>) -> Result<Vec<Bytes>, io::Error> {
+    async fn run_shard(&self, shard: u32, blocks: Vec<Bytes>) -> Result<Vec<Bytes>, io::Error> {
         let address = format!("{}:{}", self.base_address, self.base_port + shard);
         let mut stream = self
             .network_protocol
             .connect(address, self.buffer_size)
             .await?;
-        let mut requests = requests.iter();
+        let mut blocks = blocks.iter();
         let mut in_flight: u64 = 0;
         let mut responses = Vec::new();
 
         loop {
             while in_flight < self.max_in_flight {
-                let request = match requests.next() {
+                let block = match blocks.next() {
                     None => {
                         if in_flight == 0 {
                             return Ok(responses);
@@ -478,17 +478,17 @@ impl MassClient {
                         // No more entries to send.
                         break;
                     }
-                    Some(request) => request,
+                    Some(block) => block,
                 };
-                let status = time::timeout(self.send_timeout, stream.write_data(request)).await;
+                let status = time::timeout(self.send_timeout, stream.write_data(block)).await;
                 if let Err(error) = status {
-                    error!("Failed to send request: {}", error);
+                    error!("Failed to send block: {}", error);
                     continue;
                 }
                 in_flight += 1;
             }
-            if requests.len() % 5000 == 0 && requests.len() > 0 {
-                info!("In flight {} Remaining {}", in_flight, requests.len());
+            if blocks.len() % 5000 == 0 && blocks.len() > 0 {
+                info!("In flight {} Remaining {}", in_flight, blocks.len());
             }
             match time::timeout(self.recv_timeout, stream.read_data()).await {
                 Ok(Ok(buffer)) => {
@@ -513,28 +513,28 @@ impl MassClient {
     }
 
     /// Spin off one task for each shard based on this validator client.
-    pub fn run<I>(&self, sharded_requests: I) -> impl futures::stream::Stream<Item = Vec<Bytes>>
+    pub fn run<I>(&self, sharded_blocks: I) -> impl futures::stream::Stream<Item = Vec<Bytes>>
     where
         I: IntoIterator<Item = (ShardId, Vec<Bytes>)>,
     {
         let handles = futures::stream::FuturesUnordered::new();
-        for (shard, requests) in sharded_requests {
+        for (shard, blocks) in sharded_blocks {
             let client = self.clone();
             handles.push(
                 tokio::spawn(async move {
                     info!(
-                        "Sending {} requests to {}:{} (shard {})",
+                        "Sending {} blocks to {}:{} (shard {})",
                         client.network_protocol,
                         client.base_address,
                         client.base_port + shard,
                         shard
                     );
                     let responses = client
-                        .run_shard(shard, requests)
+                        .run_shard(shard, blocks)
                         .await
                         .unwrap_or_else(|_| Vec::new());
                     info!(
-                        "Done sending {} requests to {}:{} (shard {})",
+                        "Done sending {} blocks to {}:{} (shard {})",
                         client.network_protocol,
                         client.base_address,
                         client.base_port + shard,

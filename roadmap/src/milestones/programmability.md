@@ -92,10 +92,9 @@ Current state:
 * New blocks may be picked by a single owner (original design of FastPay/Zef) or decided
   by more complex protocols (see multi-owner chains and mempool-driven chains).
 
-    - In FastPay/Zef, a block consists of both a single transaction and a single user
-      request, in the sense that a single user request is validated or rejected by the
-      committee before it can be executed. Requests certified as valid are final. (That
-      is, execution never fails later.)
+    - In FastPay/Zef, a block proposal consists of a single transaction signed by the
+      owner of the account. Certified blocks as valid are final. (That is, execution never
+      fails later.)
 
     - In traditional blockchains, a block is made of many transactions (often picked from a
       shared mempool). There is no early/final validation. During the final execution,
@@ -112,7 +111,7 @@ Current state:
 
 Proposal:
 
-* Several requests to the same chain could be "bundled" in the same (all or nothing) transaction.
+* Several operations to the same chain could be "bundled" in the same (all or nothing) transaction.
 
 * Allowing many transactions per block could be useful for mempool-driven chains.
 

@@ -42,7 +42,7 @@ impl BenchmarkServer {
     where
         H: MessageHandler + Send + 'static,
     {
-        let (tx_request, mut rx_request) = channel(1_000);
+        let (tx_block, mut rx_block) = channel(1_000);
         let listener = TcpListener::bind(&self.address)
             .await
             .expect("Failed to bind TCP port");
@@ -57,13 +57,13 @@ impl BenchmarkServer {
                         self.handles.insert(peer, tx_reply);
 
                         // TODO: cleanup the hashmap self.handles when this task ends.
-                        Self::spawn_connection(socket, peer, tx_request.clone(), rx_reply);
+                        Self::spawn_connection(socket, peer, tx_block.clone(), rx_reply);
                     },
                     Err(e) => {
-                        warn!("Failed to listen to client request: {}", e);
+                        warn!("Failed to listen to client block: {}", e);
                     }
                 },
-                Some((peer, bytes)) = rx_request.recv() => {
+                Some((peer, bytes)) = rx_block.recv() => {
                     if let Some(sender) = self.handles.get(&peer) {
                         if let Some(reply) = handler.handle_message(&bytes).await {
                             if let Err(e) = sender
@@ -85,7 +85,7 @@ impl BenchmarkServer {
     fn spawn_connection(
         socket: TcpStream,
         peer: SocketAddr,
-        tx_request: Sender<(SocketAddr, Bytes)>,
+        tx_block: Sender<(SocketAddr, Bytes)>,
         mut rx_reply: Receiver<Bytes>,
     ) {
         tokio::spawn(async move {
@@ -95,7 +95,7 @@ impl BenchmarkServer {
                 tokio::select! {
                     Some(frame) = reader.next() => match frame {
                         Ok(message) => {
-                            if let Err(e) = tx_request
+                            if let Err(e) = tx_block
                             .send((peer, message.freeze()))
                             .await {
                                 warn!("Failed to send message to main network task: {}", e);
