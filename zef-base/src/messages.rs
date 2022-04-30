@@ -27,16 +27,13 @@ pub enum Operation {
         user_data: UserData,
     },
     /// Create (or activate) a new chain by installing the given authentication key.
-    OpenChain {
-        new_id: ChainId,
-        new_owner: ChainOwner,
-    },
+    OpenChain { new_id: ChainId, new_owner: Owner },
     /// Close the chain.
     CloseChain,
     /// Change the authentication key of the chain.
-    ChangeOwner { new_owner: ChainOwner },
+    ChangeOwner { new_owner: Owner },
     /// Change the authentication key of the chain.
-    ChangeMultipleOwners { new_owners: Vec<ChainOwner> },
+    ChangeMultipleOwners { new_owners: Vec<Owner> },
 }
 
 /// A request containing a chain operation.
@@ -57,7 +54,7 @@ pub struct Request {
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct RequestOrder {
     pub request: Request,
-    pub owner: ChainOwner,
+    pub owner: Owner,
     pub signature: Signature,
 }
 
@@ -85,7 +82,7 @@ pub struct Vote {
 pub struct Certificate {
     /// The certified value.
     pub value: Value,
-    /// Hash of the vertified value (used as key for storage).
+    /// Hash of the certified value (used as key for storage).
     #[serde(skip_serializing)]
     pub hash: HashValue,
     /// Signatures on the value.
