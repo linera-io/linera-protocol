@@ -14,8 +14,12 @@ the client and CLI code is missing).
 The following script can be run with `cargo test -- --ignored`.
 
 ```bash
-cargo build --release
-cd target/release
+# For debug builds:
+cargo build && cd target/debug
+# For release builds:
+# cargo build --release && cd target/release
+
+# Clean up data files
 rm -f *.json *.txt
 
 # Make sure to clean up child processes on exit.
