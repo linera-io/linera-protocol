@@ -19,6 +19,9 @@ Block:
         TYPENAME: Operation
     - block_height:
         TYPENAME: BlockHeight
+    - previous_block_hash:
+        OPTION:
+          TYPENAME: HashValue
     - round:
         TYPENAME: RoundNumber
 BlockHeight:
@@ -58,6 +61,9 @@ ChainInfo:
         TYPENAME: ChainManager
     - balance:
         TYPENAME: Balance
+    - block_hash:
+        OPTION:
+          TYPENAME: HashValue
     - next_block_height:
         TYPENAME: BlockHeight
     - queried_committee:
@@ -108,6 +114,9 @@ ChainState:
         TYPENAME: ChainId
     - state:
         TYPENAME: ExecutionState
+    - block_hash:
+        OPTION:
+          TYPENAME: HashValue
     - next_block_height:
         TYPENAME: BlockHeight
     - confirmed_log:
@@ -161,91 +170,93 @@ Error:
     1:
       InvalidOwner: UNIT
     2:
-      UnexpectedBlockHeight: UNIT
+      UnexpectedPreviousBlockHash: UNIT
     3:
-      InvalidBlockHeight: UNIT
+      UnexpectedBlockHeight: UNIT
     4:
-      PreviousBlockMustBeConfirmedFirst: UNIT
+      InvalidBlockHeight: UNIT
     5:
+      PreviousBlockMustBeConfirmedFirst: UNIT
+    6:
       MissingEarlierConfirmations:
         STRUCT:
           - current_block_height:
               TYPENAME: BlockHeight
-    6:
-      SequenceOverflow: UNIT
     7:
-      SequenceUnderflow: UNIT
+      SequenceOverflow: UNIT
     8:
-      AmountOverflow: UNIT
+      SequenceUnderflow: UNIT
     9:
-      AmountUnderflow: UNIT
+      AmountOverflow: UNIT
     10:
-      BalanceOverflow: UNIT
+      AmountUnderflow: UNIT
     11:
-      BalanceUnderflow: UNIT
+      BalanceOverflow: UNIT
     12:
+      BalanceUnderflow: UNIT
+    13:
       InvalidSignature:
         STRUCT:
           - error: STR
           - type_name: STR
-    13:
-      InvalidSigner: UNIT
     14:
-      CertificateRequiresQuorum: UNIT
+      InvalidSigner: UNIT
     15:
-      CertificateValidatorReuse: UNIT
+      CertificateRequiresQuorum: UNIT
     16:
-      InvalidCertificate: UNIT
+      CertificateValidatorReuse: UNIT
     17:
-      InvalidChainInfoResponse: UNIT
+      InvalidCertificate: UNIT
     18:
-      IncorrectTransferAmount: UNIT
+      InvalidChainInfoResponse: UNIT
     19:
+      IncorrectTransferAmount: UNIT
+    20:
       InsufficientFunding:
         STRUCT:
           - current_balance:
               TYPENAME: Balance
-    20:
+    21:
       InvalidNewChainId:
         NEWTYPE:
           TYPENAME: ChainId
-    21:
+    22:
       InsufficientRound:
         NEWTYPE:
           TYPENAME: RoundNumber
-    22:
+    23:
       HasLockedOperation:
         NEWTYPE:
           TYPENAME: Operation
-    23:
-      CertificateNotFound: UNIT
     24:
-      InvalidCrossChainRequest: UNIT
+      CertificateNotFound: UNIT
     25:
-      InvalidBlockProposal: UNIT
+      InvalidCrossChainRequest: UNIT
     26:
-      ClientErrorWhileProcessingBlockProposal: UNIT
+      InvalidBlockProposal: UNIT
     27:
-      ClientErrorWhileQueryingCertificate: UNIT
+      ClientErrorWhileProcessingBlockProposal: UNIT
     28:
-      WrongShard: UNIT
+      ClientErrorWhileQueryingCertificate: UNIT
     29:
-      InvalidDecoding: UNIT
+      WrongShard: UNIT
     30:
-      UnexpectedMessage: UNIT
+      InvalidDecoding: UNIT
     31:
+      UnexpectedMessage: UNIT
+    32:
       ClientIoError:
         STRUCT:
           - error: STR
-    32:
+    33:
       StorageIoError:
         STRUCT:
           - error: STR
-    33:
+    34:
       StorageBcsError:
         STRUCT:
           - error: STR
-    34:
+    35:
       MissingCertificate:
         STRUCT:
           - hash:

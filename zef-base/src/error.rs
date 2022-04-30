@@ -24,9 +24,13 @@ pub enum Error {
     #[fail(display = "Block was not signed by an authorized owner")]
     InvalidOwner,
 
-    // Chain sequencing
+    // Chaining
     #[fail(
-        display = "The block height in a block should match the next expected block height of the chain"
+        display = "The previous block hash of a new block should match the last block of the chain"
+    )]
+    UnexpectedPreviousBlockHash,
+    #[fail(
+        display = "The height of a new block should increase the last block height of the chain by one"
     )]
     UnexpectedBlockHeight,
     #[fail(display = "Sequence numbers above the maximal value are not usable for blocks.")]

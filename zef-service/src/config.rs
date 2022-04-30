@@ -83,6 +83,7 @@ impl CommitteeConfig {
 pub struct UserChain {
     pub chain_id: ChainId,
     pub key_pair: Option<KeyPair>,
+    pub block_hash: Option<HashValue>,
     pub next_block_height: BlockHeight,
 }
 
@@ -91,6 +92,7 @@ impl UserChain {
         Self {
             chain_id,
             key_pair: None,
+            block_hash: None,
             next_block_height: BlockHeight::new(),
         }
     }
@@ -100,6 +102,7 @@ impl UserChain {
         Self {
             chain_id,
             key_pair: Some(key_pair),
+            block_hash: None,
             next_block_height: BlockHeight::new(),
         }
     }
@@ -146,6 +149,7 @@ impl WalletState {
             .entry(state.chain_id().clone())
             .or_insert_with(|| UserChain::new(state.chain_id().clone()));
         chain.key_pair = state.key_pair().await.map(|k| k.copy()).ok();
+        chain.block_hash = state.block_hash();
         chain.next_block_height = state.next_block_height();
     }
 

@@ -14,6 +14,8 @@ pub struct ChainState {
     pub id: ChainId,
     /// Execution state.
     pub state: ExecutionState,
+    /// Hash of the latest certified block in this chain, if any.
+    pub block_hash: Option<HashValue>,
     /// Sequence number tracking blocks.
     pub next_block_height: BlockHeight,
     /// Hashes of all confirmed certificates for this sender.
@@ -185,12 +187,17 @@ impl ChainManager {
     /// Verify the safety of the block w.r.t. voting rules.
     pub fn check_block(
         &self,
+        block_hash: Option<HashValue>,
         next_block_height: BlockHeight,
         new_block: &Block,
     ) -> Result<Outcome, Error> {
         ensure!(
             new_block.block_height <= BlockHeight::max(),
             Error::InvalidBlockHeight
+        );
+        ensure!(
+            new_block.previous_block_hash == block_hash,
+            Error::UnexpectedPreviousBlockHash
         );
         ensure!(
             new_block.block_height == next_block_height,
@@ -346,6 +353,7 @@ impl ChainState {
             manager: self.state.manager.clone(),
             balance: self.state.balance,
             queried_committee: None,
+            block_hash: self.block_hash,
             next_block_height: self.next_block_height,
             queried_sent_certificates: Vec::new(),
             count_received_certificates: self.received_log.len(),
@@ -363,6 +371,7 @@ impl ChainState {
         Self {
             id,
             state,
+            block_hash: None,
             next_block_height: BlockHeight::new(),
             confirmed_log: Vec::new(),
             received_log: Vec::new(),

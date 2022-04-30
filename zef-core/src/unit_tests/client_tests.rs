@@ -148,7 +148,7 @@ impl TestBuilder {
         for store in self.chain_client_stores.iter_mut() {
             store.write_chain(chain.clone()).await.unwrap();
         }
-        self.make_client(chain_id, key_pair, BlockHeight::from(0))
+        self.make_client(chain_id, key_pair, None, BlockHeight::from(0))
             .await
     }
 
@@ -156,6 +156,7 @@ impl TestBuilder {
         &mut self,
         chain_id: ChainId,
         key_pair: KeyPair,
+        block_hash: Option<HashValue>,
         block_height: BlockHeight,
     ) -> ChainClientState<LocalValidatorClient, InMemoryStoreClient> {
         // Note that new clients are only given the genesis store: they must figure out
@@ -167,6 +168,7 @@ impl TestBuilder {
             vec![key_pair],
             self.validator_clients.clone(),
             store,
+            block_hash,
             block_height,
             std::time::Duration::from_millis(500),
             10,
@@ -375,9 +377,15 @@ async fn test_share_ownership() {
         .transfer_to_chain(Amount::from(3), dbg_chain(2), UserData::default())
         .await
         .unwrap();
+    assert_eq!(sender.next_block_height, BlockHeight::from(2));
     // Make a client to try the new key.
     let mut client = builder
-        .make_client(sender.chain_id, new_key_pair, BlockHeight::from(2))
+        .make_client(
+            sender.chain_id,
+            new_key_pair,
+            sender.block_hash,
+            BlockHeight::from(2),
+        )
         .await;
     assert_eq!(client.query_safe_balance().await.unwrap(), Balance::from(1));
     assert_eq!(
@@ -406,7 +414,7 @@ async fn test_open_chain_then_close_it() {
     assert!(sender.key_pair().await.is_ok());
     // Make a client to try the new chain.
     let mut client = builder
-        .make_client(new_id, new_key_pair, BlockHeight::from(0))
+        .make_client(new_id, new_key_pair, None, BlockHeight::from(0))
         .await;
     client.receive_certificate(certificate).await.unwrap();
     assert_eq!(
@@ -456,7 +464,7 @@ async fn test_open_chain_after_transfer() {
     ));
     // Make a client to try the new chain.
     let mut client = builder
-        .make_client(new_id, new_key_pair, BlockHeight::from(0))
+        .make_client(new_id, new_key_pair, None, BlockHeight::from(0))
         .await;
     client.receive_certificate(certificate).await.unwrap();
     assert_eq!(client.query_safe_balance().await.unwrap(), Balance::from(3));
@@ -491,7 +499,7 @@ async fn test_open_chain_before_transfer() {
     assert!(sender.key_pair().await.is_ok());
     // Make a client to try the new chain.
     let mut client = builder
-        .make_client(new_id, new_key_pair, BlockHeight::from(0))
+        .make_client(new_id, new_key_pair, None, BlockHeight::from(0))
         .await;
     // Must process the creation certificate before using the new chain.
     client.receive_certificate(certificate).await.unwrap();

@@ -556,6 +556,7 @@ fn make_transfer_block_proposal(
             amount,
             user_data: UserData::default(),
         },
+        previous_block_hash: None,
         block_height: BlockHeight::new(),
         round: RoundNumber::default(),
     };

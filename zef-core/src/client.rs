@@ -98,6 +98,8 @@ pub struct ChainClientState<ValidatorNode, StorageClient> {
     chain_id: ChainId,
     /// How to talk to this committee.
     validator_clients: Vec<(ValidatorName, ValidatorNode)>,
+    /// Latest block hash, if any.
+    block_hash: Option<HashValue>,
     /// Sequence number that we plan to use for the next block.
     /// We track this value outside local storage mainly for security reasons.
     next_block_height: BlockHeight,
@@ -126,6 +128,7 @@ impl<A, S> ChainClientState<A, S> {
         known_key_pairs: Vec<KeyPair>,
         validator_clients: Vec<(ValidatorName, A)>,
         storage_client: S,
+        block_hash: Option<HashValue>,
         next_block_height: BlockHeight,
         cross_chain_delay: Duration,
         cross_chain_retries: usize,
@@ -139,6 +142,7 @@ impl<A, S> ChainClientState<A, S> {
         Self {
             chain_id,
             validator_clients,
+            block_hash,
             next_block_height,
             next_round: RoundNumber::default(),
             pending_block: None,
@@ -152,6 +156,10 @@ impl<A, S> ChainClientState<A, S> {
 
     pub fn chain_id(&self) -> &ChainId {
         &self.chain_id
+    }
+
+    pub fn block_hash(&self) -> Option<HashValue> {
+        self.block_hash
     }
 
     pub fn next_block_height(&self) -> BlockHeight {
@@ -289,14 +297,11 @@ where
     }
 
     /// Prepare the chain for the next operation.
-    /// * Verify that our local storage contains enough history compared to the
-    ///   expected block height. Otherwise, download the missing history from the
-    ///   network.
-    /// * For multi-owner chains, further synchronize the block height and the round
-    ///   from the network.
-    /// * Update `self.next_block_height` and `self.next_round`.
     async fn prepare_chain(&mut self) -> Result<(), Error> {
-        self.next_block_height = self
+        // Verify that our local storage contains enough history compared to the
+        // expected block height. Otherwise, download the missing history from the
+        // network.
+        let mut info = self
             .node_client
             .download_certificates(
                 self.validator_clients.clone(),
@@ -304,14 +309,26 @@ where
                 self.next_block_height,
             )
             .await?;
+        if info.next_block_height == self.next_block_height {
+            // Check that our local node has the expected block hash.
+            assert_eq!(self.block_hash, info.block_hash);
+        }
         if self.has_multi_owners().await {
-            // We could be missing recent certificates created by other owners.
-            let (next_block_height, next_round) = self
+            // For multi-owner chains, we could be missing recent certificates created by
+            // other owners. Further synchronize blocks from the network. This is a
+            // best-effort that depends on network conditions.
+            info = self
                 .node_client
                 .synchronize_chain_state(self.validator_clients.clone(), self.chain_id.clone())
                 .await?;
-            self.next_block_height = next_block_height;
-            self.next_round = next_round;
+        }
+        // Update chain information tracked by the client.
+        if (info.next_block_height, info.manager.next_round())
+            > (self.next_block_height, self.next_round)
+        {
+            self.next_block_height = info.next_block_height;
+            self.next_round = info.manager.next_round();
+            self.block_hash = info.block_hash;
         }
         Ok(())
     }
@@ -494,6 +511,7 @@ where
                 user_data,
             },
             block_height: self.next_block_height,
+            previous_block_hash: self.block_hash,
             round: self.next_round,
         };
         let certificate = self
@@ -508,6 +526,7 @@ where
             && (info.next_block_height, info.manager.next_round())
                 > (self.next_block_height, self.next_round)
         {
+            self.block_hash = info.block_hash;
             self.next_block_height = info.next_block_height;
             self.next_round = info.manager.next_round();
         }
@@ -529,6 +548,10 @@ where
         ensure!(
             block.block_height == self.next_block_height,
             "Unexpected block height"
+        );
+        ensure!(
+            block.previous_block_hash == self.block_hash,
+            "Unexpected previous block hash"
         );
         // Remember what we are trying to do
         self.pending_block = Some(block.clone());
@@ -711,6 +734,7 @@ where
         let block = Block {
             chain_id: self.chain_id.clone(),
             operation: Operation::ChangeOwner { new_owner },
+            previous_block_hash: self.block_hash,
             block_height: self.next_block_height,
             round: self.next_round,
         };
@@ -729,6 +753,7 @@ where
         let block = Block {
             chain_id: self.chain_id.clone(),
             operation: Operation::ChangeOwner { new_owner },
+            previous_block_hash: self.block_hash,
             block_height: self.next_block_height,
             round: self.next_round,
         };
@@ -746,6 +771,7 @@ where
             operation: Operation::ChangeMultipleOwners {
                 new_owners: vec![owner, new_owner],
             },
+            previous_block_hash: self.block_hash,
             block_height: self.next_block_height,
             round: self.next_round,
         };
@@ -761,6 +787,7 @@ where
         let block = Block {
             chain_id: self.chain_id.clone(),
             operation: Operation::OpenChain { new_id, new_owner },
+            previous_block_hash: self.block_hash,
             block_height: self.next_block_height,
             round: self.next_round,
         };
@@ -775,6 +802,7 @@ where
         let block = Block {
             chain_id: self.chain_id.clone(),
             operation: Operation::CloseChain,
+            previous_block_hash: self.block_hash,
             block_height: self.next_block_height,
             round: self.next_round,
         };
@@ -798,6 +826,7 @@ where
                 amount,
                 user_data,
             },
+            previous_block_hash: self.block_hash,
             block_height: self.next_block_height,
             round: self.next_round,
         };
