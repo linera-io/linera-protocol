@@ -12,9 +12,9 @@ use zef_storage::Storage;
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone)]
 pub enum CommunicateAction {
-    SubmitRequestForConfirmation(BlockProposal),
-    SubmitRequestForValidation(BlockProposal),
-    FinalizeRequest(Certificate),
+    SubmitBlockForConfirmation(BlockProposal),
+    SubmitBlockForValidation(BlockProposal),
+    FinalizeBlock(Certificate),
     AdvanceToNextSequenceNumber(SequenceNumber),
 }
 
@@ -222,16 +222,12 @@ where
         action: CommunicateAction,
     ) -> Result<Option<Vote>, Error> {
         let target_sequence_number = match &action {
-            CommunicateAction::SubmitRequestForValidation(proposal)
-            | CommunicateAction::SubmitRequestForConfirmation(proposal) => {
-                proposal.request.sequence_number
+            CommunicateAction::SubmitBlockForValidation(proposal)
+            | CommunicateAction::SubmitBlockForConfirmation(proposal) => {
+                proposal.block.sequence_number
             }
-            CommunicateAction::FinalizeRequest(certificate) => {
-                certificate
-                    .value
-                    .validated_request()
-                    .unwrap()
-                    .sequence_number
+            CommunicateAction::FinalizeBlock(certificate) => {
+                certificate.value.validated_block().unwrap().sequence_number
             }
             CommunicateAction::AdvanceToNextSequenceNumber(seq) => *seq,
         };
@@ -240,17 +236,17 @@ where
             .await?;
         // Send the block proposal (if any) and return a vote.
         match action {
-            CommunicateAction::SubmitRequestForValidation(proposal)
-            | CommunicateAction::SubmitRequestForConfirmation(proposal) => {
+            CommunicateAction::SubmitBlockForValidation(proposal)
+            | CommunicateAction::SubmitBlockForConfirmation(proposal) => {
                 let result = self.send_block_proposal(proposal.clone()).await;
                 let info = match result {
                     Ok(info) => info,
-                    Err(e) if ChainState::is_retriable_validation_error(&proposal.request, &e) => {
+                    Err(e) if ChainState::is_retriable_validation_error(&proposal.block, &e) => {
                         // Some received certificates may be missing for this validator
                         // (e.g. to make the balance sufficient) so we are going to
                         // synchronize them now.
                         self.send_chain_information_as_a_receiver(chain_id).await?;
-                        // Now retry the request.
+                        // Now retry the block.
                         self.send_block_proposal(proposal).await?
                     }
                     Err(e) => {
@@ -265,7 +261,7 @@ where
                     None => return Err(Error::ClientErrorWhileProcessingBlockProposal),
                 }
             }
-            CommunicateAction::FinalizeRequest(certificate) => {
+            CommunicateAction::FinalizeBlock(certificate) => {
                 // The only cause for a retry is that the first certificate of a newly opened chain.
                 let retryable = target_sequence_number == SequenceNumber::from(0);
                 let info = self.send_certificate(certificate, retryable).await?;

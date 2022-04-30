@@ -164,7 +164,7 @@ enum ServerCommands {
         #[structopt(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE)]
         buffer_size: usize,
 
-        /// Configuration for cross chain requests
+        /// Configuration for cross chain blocks
         #[structopt(flatten)]
         cross_chain_config: network::CrossChainConfig,
 

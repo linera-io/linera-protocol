@@ -25,13 +25,13 @@ async fn test_file_storage_for_chains() {
 async fn test_file_storage_for_certificates() {
     let dir = tempfile::TempDir::new().unwrap();
     let mut client = FileStoreClient::new(dir.path().to_path_buf());
-    let request = Request {
+    let block = Block {
         chain_id: ChainId::default(),
         operation: Operation::CloseChain,
         sequence_number: SequenceNumber::default(),
         round: RoundNumber::default(),
     };
-    let value = Value::Confirmed { request };
+    let value = Value::Confirmed { block };
     let certificate = Certificate::new(value, vec![]);
     client.write_certificate(certificate.clone()).await.unwrap();
     let read_certificate = client.read_certificate(certificate.hash).await.unwrap();

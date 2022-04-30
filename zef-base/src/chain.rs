@@ -14,7 +14,7 @@ pub struct ChainState {
     pub id: ChainId,
     /// Execution state.
     pub state: ExecutionState,
-    /// Sequence number tracking requests.
+    /// Sequence number tracking blocks.
     pub next_sequence_number: SequenceNumber,
     /// Hashes of all confirmed certificates for this sender.
     pub confirmed_log: Vec<HashValue>,
@@ -70,7 +70,7 @@ pub struct SingleOwnerManager {
 pub struct MultiOwnerManager {
     /// The co-owners of the chain.
     pub owners: HashSet<Owner>,
-    /// Latest authenticated request that we have received.
+    /// Latest authenticated block that we have received.
     pub proposal: Option<BlockProposal>,
     /// Latest proposal that we have voted on (either to validate or to confirm it).
     pub pending: Option<Vote>,
@@ -113,16 +113,16 @@ impl MultiOwnerManager {
     pub fn round(&self) -> RoundNumber {
         let mut round = RoundNumber::default();
         if let Some(vote) = &self.pending {
-            if let Value::Validated { request } = &vote.value {
-                if round < request.round {
-                    round = request.round;
+            if let Value::Validated { block } = &vote.value {
+                if round < block.round {
+                    round = block.round;
                 }
             }
         }
         if let Some(cert) = &self.locked {
-            if let Value::Validated { request } = &cert.value {
-                if round < request.round {
-                    round = request.round;
+            if let Value::Validated { block } = &cert.value {
+                if round < block.round {
+                    round = block.round;
                 }
             }
         }
@@ -182,30 +182,30 @@ impl ChainManager {
         }
     }
 
-    /// Verify the safety of the request w.r.t. voting rules.
-    pub fn check_request(
+    /// Verify the safety of the block w.r.t. voting rules.
+    pub fn check_block(
         &self,
         next_sequence_number: SequenceNumber,
-        new_request: &Request,
+        new_block: &Block,
     ) -> Result<Outcome, Error> {
         ensure!(
-            new_request.sequence_number <= SequenceNumber::max(),
+            new_block.sequence_number <= SequenceNumber::max(),
             Error::InvalidSequenceNumber
         );
         ensure!(
-            new_request.sequence_number == next_sequence_number,
+            new_block.sequence_number == next_sequence_number,
             Error::UnexpectedSequenceNumber
         );
         match self {
             ChainManager::Single(manager) => {
                 ensure!(
-                    new_request.round == RoundNumber::default(),
+                    new_block.round == RoundNumber::default(),
                     Error::InvalidBlockProposal
                 );
                 if let Some(vote) = &manager.pending {
                     match &vote.value {
-                        Value::Confirmed { request } if request != new_request => {
-                            return Err(Error::PreviousRequestMustBeConfirmedFirst);
+                        Value::Confirmed { block } if block != new_block => {
+                            return Err(Error::PreviousBlockMustBeConfirmedFirst);
                         }
                         Value::Validated { .. } => {
                             return Err(Error::InvalidBlockProposal);
@@ -218,24 +218,22 @@ impl ChainManager {
             ChainManager::Multi(manager) => {
                 if let Some(vote) = &manager.pending {
                     match &vote.value {
-                        Value::Validated { request } if request == new_request => {
+                        Value::Validated { block } if block == new_block => {
                             return Ok(Outcome::Skip);
                         }
-                        Value::Validated { request } if new_request.round <= request.round => {
-                            return Err(Error::InsufficientRound(request.round));
+                        Value::Validated { block } if new_block.round <= block.round => {
+                            return Err(Error::InsufficientRound(block.round));
                         }
                         _ => (),
                     }
                 }
                 if let Some(cert) = &manager.locked {
                     match &cert.value {
-                        Value::Validated { request } if new_request.round <= request.round => {
-                            return Err(Error::InsufficientRound(request.round));
+                        Value::Validated { block } if new_block.round <= block.round => {
+                            return Err(Error::InsufficientRound(block.round));
                         }
-                        Value::Validated { request }
-                            if new_request.operation != request.operation =>
-                        {
-                            return Err(Error::HasLockedOperation(request.operation.clone()));
+                        Value::Validated { block } if new_block.operation != block.operation => {
+                            return Err(Error::HasLockedOperation(block.operation.clone()));
                         }
                         _ => (),
                     }
@@ -246,30 +244,30 @@ impl ChainManager {
         }
     }
 
-    pub fn check_validated_request(
+    pub fn check_validated_block(
         &self,
         next_sequence_number: SequenceNumber,
-        new_request: &Request,
+        new_block: &Block,
     ) -> Result<Outcome, Error> {
-        if next_sequence_number < new_request.sequence_number {
+        if next_sequence_number < new_block.sequence_number {
             return Err(Error::MissingEarlierConfirmations {
                 current_sequence_number: next_sequence_number,
             });
         }
-        if next_sequence_number > new_request.sequence_number {
-            // Request was already confirmed.
+        if next_sequence_number > new_block.sequence_number {
+            // Block was already confirmed.
             return Ok(Outcome::Skip);
         }
         match self {
             ChainManager::Multi(manager) => {
                 if let Some(vote) = &manager.pending {
                     match &vote.value {
-                        Value::Confirmed { request } if request == new_request => {
+                        Value::Confirmed { block } if block == new_block => {
                             return Ok(Outcome::Skip);
                         }
-                        Value::Validated { request } if new_request.round < request.round => {
+                        Value::Validated { block } if new_block.round < block.round => {
                             return Err(Error::InsufficientRound(
-                                request.round.try_sub_one().unwrap(),
+                                block.round.try_sub_one().unwrap(),
                             ));
                         }
                         _ => (),
@@ -277,9 +275,9 @@ impl ChainManager {
                 }
                 if let Some(cert) = &manager.locked {
                     match &cert.value {
-                        Value::Validated { request } if new_request.round < request.round => {
+                        Value::Validated { block } if new_block.round < block.round => {
                             return Err(Error::InsufficientRound(
-                                request.round.try_sub_one().unwrap(),
+                                block.round.try_sub_one().unwrap(),
                             ));
                         }
                         _ => (),
@@ -296,19 +294,19 @@ impl ChainManager {
             ChainManager::Single(manager) => {
                 if let Some(key_pair) = key_pair {
                     // Vote to confirm
-                    let request = proposal.request;
-                    let value = Value::Confirmed { request };
+                    let block = proposal.block;
+                    let value = Value::Confirmed { block };
                     let vote = Vote::new(value, key_pair);
                     manager.pending = Some(vote);
                 }
             }
             ChainManager::Multi(manager) => {
-                // Record the user's authenticated request
+                // Record the user's authenticated block
                 manager.proposal = Some(proposal.clone());
                 if let Some(key_pair) = key_pair {
                     // Vote to validate
-                    let request = proposal.request;
-                    let value = Value::Validated { request };
+                    let block = proposal.block;
+                    let value = Value::Validated { block };
                     let vote = Vote::new(value, key_pair);
                     manager.pending = Some(vote);
                 }
@@ -319,7 +317,7 @@ impl ChainManager {
 
     pub fn create_final_vote(
         &mut self,
-        request: Request,
+        block: Block,
         certificate: Certificate,
         key_pair: Option<&KeyPair>,
     ) {
@@ -329,7 +327,7 @@ impl ChainManager {
                 manager.locked = Some(certificate);
                 if let Some(key_pair) = key_pair {
                     // Vote to confirm
-                    let value = Value::Confirmed { request };
+                    let value = Value::Confirmed { block };
                     let vote = Vote::new(value, key_pair);
                     // Ok to overwrite validation votes with confirmation votes at equal or
                     // higher round.
@@ -383,8 +381,8 @@ impl ChainState {
     }
 
     /// Verify that the operation is valid and return the value to certify.
-    pub fn validate_operation(&self, request: &Request) -> Result<(), Error> {
-        match &request.operation {
+    pub fn validate_operation(&self, block: &Block) -> Result<(), Error> {
+        match &block.operation {
             Operation::Transfer { amount, .. } => {
                 ensure!(*amount > Amount::zero(), Error::IncorrectTransferAmount);
                 ensure!(
@@ -395,7 +393,7 @@ impl ChainState {
                 );
             }
             Operation::OpenChain { new_id, .. } => {
-                let expected_id = request.chain_id.make_child(request.sequence_number);
+                let expected_id = block.chain_id.make_child(block.sequence_number);
                 ensure!(
                     new_id == &expected_id,
                     Error::InvalidNewChainId(new_id.clone())
@@ -410,9 +408,9 @@ impl ChainState {
         Ok(())
     }
 
-    /// Whether an invalid operation for this request can become valid later.
-    pub fn is_retriable_validation_error(request: &Request, error: &Error) -> bool {
-        match (&request.operation, error) {
+    /// Whether an invalid operation for this block can become valid later.
+    pub fn is_retriable_validation_error(block: &Block, error: &Error) -> bool {
+        match (&block.operation, error) {
             (Operation::Transfer { .. }, Error::InsufficientFunding { .. }) => true,
             (Operation::Transfer { .. }, _) => false,
             (

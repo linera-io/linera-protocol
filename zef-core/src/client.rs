@@ -79,11 +79,11 @@ pub trait ChainClient {
     /// certificates that were locally processed by `receive_from_chain`).
     async fn synchronize_balance(&mut self) -> Result<Balance, failure::Error>;
 
-    /// Retry the last pending request
-    async fn retry_pending_request(&mut self) -> Result<Option<Certificate>, failure::Error>;
+    /// Retry the last pending block
+    async fn retry_pending_block(&mut self) -> Result<Option<Certificate>, failure::Error>;
 
     /// Clear the information on any operation that previously failed.
-    async fn clear_pending_request(&mut self);
+    async fn clear_pending_block(&mut self);
 
     /// Find the highest balance that is provably backed by at least one honest
     /// (sufficiently up-to-date) validator. This is a conservative approximation.
@@ -98,13 +98,13 @@ pub struct ChainClientState<ValidatorNode, StorageClient> {
     chain_id: ChainId,
     /// How to talk to this committee.
     validator_clients: Vec<(ValidatorName, ValidatorNode)>,
-    /// Sequence number that we plan to use for the next request.
+    /// Sequence number that we plan to use for the next block.
     /// We track this value outside local storage mainly for security reasons.
     next_sequence_number: SequenceNumber,
-    /// Round number that we plan to use for the next request.
+    /// Round number that we plan to use for the next block.
     next_round: RoundNumber,
-    /// Pending request.
-    pending_request: Option<Request>,
+    /// Pending block.
+    pending_block: Option<Block>,
     /// Known key pairs from present and past identities.
     known_key_pairs: BTreeMap<Owner, KeyPair>,
 
@@ -112,7 +112,7 @@ pub struct ChainClientState<ValidatorNode, StorageClient> {
     received_certificate_trackers: HashMap<ValidatorName, usize>,
     /// How much time to wait between attempts when we wait for a cross-chain update.
     cross_chain_delay: Duration,
-    /// How many times we are willing to retry a request that depends on cross-chain updates.
+    /// How many times we are willing to retry a block that depends on cross-chain updates.
     cross_chain_retries: usize,
     /// Local node to manage the execution state and the local storage of the chains that we are
     /// tracking.
@@ -141,7 +141,7 @@ impl<A, S> ChainClientState<A, S> {
             validator_clients,
             next_sequence_number,
             next_round: RoundNumber::default(),
-            pending_request: None,
+            pending_block: None,
             known_key_pairs,
             received_certificate_trackers: HashMap::new(),
             cross_chain_delay,
@@ -158,8 +158,8 @@ impl<A, S> ChainClientState<A, S> {
         self.next_sequence_number
     }
 
-    pub fn pending_request(&self) -> &Option<Request> {
-        &self.pending_request
+    pub fn pending_block(&self) -> &Option<Block> {
+        &self.pending_block
     }
 }
 
@@ -363,9 +363,9 @@ where
             })
             .collect();
         match action {
-            CommunicateAction::SubmitRequestForConfirmation(proposal) => {
+            CommunicateAction::SubmitBlockForConfirmation(proposal) => {
                 let value = Value::Confirmed {
-                    request: proposal.request,
+                    block: proposal.block,
                 };
                 let certificate = Certificate::new(value, signatures);
                 // Certificate is valid because
@@ -374,20 +374,20 @@ where
                 // * each answer is a vote signed by the expected validator.
                 Ok(Some(certificate))
             }
-            CommunicateAction::SubmitRequestForValidation(proposal) => {
+            CommunicateAction::SubmitBlockForValidation(proposal) => {
                 let value = Value::Validated {
-                    request: proposal.request,
+                    block: proposal.block,
                 };
                 let certificate = Certificate::new(value, signatures);
                 Ok(Some(certificate))
             }
-            CommunicateAction::FinalizeRequest(validity_certificate) => {
-                let request = validity_certificate
+            CommunicateAction::FinalizeBlock(validity_certificate) => {
+                let block = validity_certificate
                     .value
-                    .validated_request()
+                    .validated_block()
                     .unwrap()
                     .clone();
-                let certificate = Certificate::new(Value::Confirmed { request }, signatures);
+                let certificate = Certificate::new(Value::Confirmed { block }, signatures);
                 Ok(Some(certificate))
             }
             CommunicateAction::AdvanceToNextSequenceNumber(_) => Ok(None),
@@ -427,17 +427,17 @@ where
                     // users could send us a lot of uninteresting transactions.
                     response.check(name)?;
                     for certificate in &response.info.queried_received_certificates {
-                        let request = certificate
+                        let block = certificate
                             .value
-                            .confirmed_request()
-                            .ok_or(Error::ClientErrorWhileRequestingCertificate)?;
-                        let recipient = request
+                            .confirmed_block()
+                            .ok_or(Error::ClientErrorWhileQueryingCertificate)?;
+                        let recipient = block
                             .operation
                             .recipient()
-                            .ok_or(Error::ClientErrorWhileRequestingCertificate)?;
+                            .ok_or(Error::ClientErrorWhileQueryingCertificate)?;
                         my_ensure!(
                             recipient == chain_id,
-                            Error::ClientErrorWhileRequestingCertificate
+                            Error::ClientErrorWhileQueryingCertificate
                         );
                     }
                     Ok((name, response.info))
@@ -482,11 +482,11 @@ where
         let balance = self.synchronize_balance().await?;
         ensure!(
             Balance::from(amount) <= balance,
-            "Requested amount ({}) is not backed by sufficient funds ({})",
+            "Blocked amount ({}) is not backed by sufficient funds ({})",
             amount,
             balance
         );
-        let request = Request {
+        let block = Block {
             chain_id: self.chain_id.clone(),
             operation: Operation::Transfer {
                 recipient,
@@ -497,7 +497,7 @@ where
             round: self.next_round,
         };
         let certificate = self
-            .execute_request(request, /* with_confirmation */ true)
+            .propose_block(block, /* with_confirmation */ true)
             .await?;
         Ok(certificate)
     }
@@ -515,26 +515,26 @@ where
     }
 
     /// Execute (or retry) a regular block proposal. Update local balance.
-    /// If `with_confirmation` is false, we stop short of executing the finalized request.
-    async fn execute_request(
+    /// If `with_confirmation` is false, we stop short of executing the finalized block.
+    async fn propose_block(
         &mut self,
-        request: Request,
+        block: Block,
         with_confirmation: bool,
     ) -> Result<Certificate, failure::Error> {
         ensure!(
-            matches!(&self.pending_request, None)
-                || matches!(&self.pending_request, Some(r) if *r == request),
-            "Client state has a different pending request",
+            matches!(&self.pending_block, None)
+                || matches!(&self.pending_block, Some(r) if *r == block),
+            "Client state has a different pending block",
         );
         ensure!(
-            request.sequence_number == self.next_sequence_number,
+            block.sequence_number == self.next_sequence_number,
             "Unexpected sequence number"
         );
         // Remember what we are trying to do
-        self.pending_request = Some(request.clone());
+        self.pending_block = Some(block.clone());
         // Build the initial query.
         let key_pair = self.key_pair().await?;
-        let proposal = BlockProposal::new(request, key_pair);
+        let proposal = BlockProposal::new(block, key_pair);
         // Send the query.
         let committee = self.committee().await?;
         let final_certificate = {
@@ -544,18 +544,15 @@ where
                     .communicate_chain_updates(
                         &committee,
                         self.chain_id.clone(),
-                        CommunicateAction::SubmitRequestForValidation(proposal.clone()),
+                        CommunicateAction::SubmitBlockForValidation(proposal.clone()),
                     )
                     .await?
                     .expect("a certificate");
-                assert_eq!(
-                    certificate.value.validated_request(),
-                    Some(&proposal.request)
-                );
+                assert_eq!(certificate.value.validated_block(), Some(&proposal.block));
                 self.communicate_chain_updates(
                     &committee,
                     self.chain_id.clone(),
-                    CommunicateAction::FinalizeRequest(certificate),
+                    CommunicateAction::FinalizeBlock(certificate),
                 )
                 .await?
                 .expect("a certificate")
@@ -564,19 +561,19 @@ where
                 self.communicate_chain_updates(
                     &committee,
                     self.chain_id.clone(),
-                    CommunicateAction::SubmitRequestForConfirmation(proposal.clone()),
+                    CommunicateAction::SubmitBlockForConfirmation(proposal.clone()),
                 )
                 .await?
                 .expect("a certificate")
             }
         };
-        // By now the request should be final.
+        // By now the block should be final.
         ensure!(
-            final_certificate.value.confirmed_request() == Some(&proposal.request),
+            final_certificate.value.confirmed_block() == Some(&proposal.block),
             "A different operation was executed in parallel (consider retrying the operation)"
         );
         self.process_certificate(final_certificate.clone()).await?;
-        self.pending_request = None;
+        self.pending_block = None;
         // Communicate the new certificate now if needed.
         if with_confirmation {
             self.communicate_chain_updates(
@@ -652,16 +649,16 @@ where
         Ok(self.balance().await)
     }
 
-    async fn retry_pending_request(&mut self) -> Result<Option<Certificate>, failure::Error> {
+    async fn retry_pending_block(&mut self) -> Result<Option<Certificate>, failure::Error> {
         self.find_received_certificates().await?;
         self.prepare_chain().await?;
-        match &self.pending_request {
-            Some(request) => {
-                // Finish executing the previous request.
-                let mut request = request.clone();
-                request.round = self.next_round;
+        match &self.pending_block {
+            Some(block) => {
+                // Finish executing the previous block.
+                let mut block = block.clone();
+                block.round = self.next_round;
                 let certificate = self
-                    .execute_request(request, /* with_confirmation */ true)
+                    .propose_block(block, /* with_confirmation */ true)
                     .await?;
                 Ok(Some(certificate))
             }
@@ -669,29 +666,29 @@ where
         }
     }
 
-    async fn clear_pending_request(&mut self) {
-        self.pending_request = None;
+    async fn clear_pending_block(&mut self) {
+        self.pending_block = None;
     }
 
     async fn receive_certificate(
         &mut self,
         certificate: Certificate,
     ) -> Result<(), failure::Error> {
-        let request = certificate
+        let block = certificate
             .value
-            .confirmed_request()
+            .confirmed_block()
             .ok_or_else(|| failure::format_err!("Was expecting a confirmed chain operation"))?
             .clone();
         ensure!(
-            request.operation.recipient() == Some(&self.chain_id),
-            "Request should be received by us."
+            block.operation.recipient() == Some(&self.chain_id),
+            "Block should be received by us."
         );
         // Recover history from the network.
         self.node_client
             .download_certificates(
                 self.validator_clients.clone(),
-                request.chain_id.clone(),
-                request.sequence_number,
+                block.chain_id.clone(),
+                block.sequence_number,
             )
             .await?;
         // Process the received operation.
@@ -701,8 +698,8 @@ where
         let committee = self.committee().await?;
         self.communicate_chain_updates(
             &committee,
-            request.chain_id.clone(),
-            CommunicateAction::AdvanceToNextSequenceNumber(request.sequence_number.try_add_one()?),
+            block.chain_id.clone(),
+            CommunicateAction::AdvanceToNextSequenceNumber(block.sequence_number.try_add_one()?),
         )
         .await?;
         Ok(())
@@ -711,7 +708,7 @@ where
     async fn rotate_key_pair(&mut self, key_pair: KeyPair) -> Result<Certificate, failure::Error> {
         self.prepare_chain().await?;
         let new_owner = key_pair.public();
-        let request = Request {
+        let block = Block {
             chain_id: self.chain_id.clone(),
             operation: Operation::ChangeOwner { new_owner },
             sequence_number: self.next_sequence_number,
@@ -719,7 +716,7 @@ where
         };
         self.known_key_pairs.insert(key_pair.public(), key_pair);
         let certificate = self
-            .execute_request(request, /* with_confirmation */ true)
+            .propose_block(block, /* with_confirmation */ true)
             .await?;
         Ok(certificate)
     }
@@ -729,14 +726,14 @@ where
         new_owner: Owner,
     ) -> Result<Certificate, failure::Error> {
         self.prepare_chain().await?;
-        let request = Request {
+        let block = Block {
             chain_id: self.chain_id.clone(),
             operation: Operation::ChangeOwner { new_owner },
             sequence_number: self.next_sequence_number,
             round: self.next_round,
         };
         let certificate = self
-            .execute_request(request, /* with_confirmation */ true)
+            .propose_block(block, /* with_confirmation */ true)
             .await?;
         Ok(certificate)
     }
@@ -744,7 +741,7 @@ where
     async fn share_ownership(&mut self, new_owner: Owner) -> Result<Certificate, failure::Error> {
         self.prepare_chain().await?;
         let owner = self.identity().await?;
-        let request = Request {
+        let block = Block {
             chain_id: self.chain_id.clone(),
             operation: Operation::ChangeMultipleOwners {
                 new_owners: vec![owner, new_owner],
@@ -753,7 +750,7 @@ where
             round: self.next_round,
         };
         let certificate = self
-            .execute_request(request, /* with_confirmation */ true)
+            .propose_block(block, /* with_confirmation */ true)
             .await?;
         Ok(certificate)
     }
@@ -761,28 +758,28 @@ where
     async fn open_chain(&mut self, new_owner: Owner) -> Result<Certificate, failure::Error> {
         self.prepare_chain().await?;
         let new_id = self.chain_id.make_child(self.next_sequence_number);
-        let request = Request {
+        let block = Block {
             chain_id: self.chain_id.clone(),
             operation: Operation::OpenChain { new_id, new_owner },
             sequence_number: self.next_sequence_number,
             round: self.next_round,
         };
         let certificate = self
-            .execute_request(request, /* with_confirmation */ true)
+            .propose_block(block, /* with_confirmation */ true)
             .await?;
         Ok(certificate)
     }
 
     async fn close_chain(&mut self) -> Result<Certificate, failure::Error> {
         self.prepare_chain().await?;
-        let request = Request {
+        let block = Block {
             chain_id: self.chain_id.clone(),
             operation: Operation::CloseChain,
             sequence_number: self.next_sequence_number,
             round: self.next_round,
         };
         let certificate = self
-            .execute_request(request, /* with_confirmation */ true)
+            .propose_block(block, /* with_confirmation */ true)
             .await?;
         Ok(certificate)
     }
@@ -794,7 +791,7 @@ where
         user_data: UserData,
     ) -> Result<Certificate, failure::Error> {
         self.prepare_chain().await?;
-        let request = Request {
+        let block = Block {
             chain_id: self.chain_id.clone(),
             operation: Operation::Transfer {
                 recipient: Address::Account(recipient),
@@ -805,7 +802,7 @@ where
             round: self.next_round,
         };
         let new_certificate = self
-            .execute_request(request, /* with_confirmation */ false)
+            .propose_block(block, /* with_confirmation */ false)
             .await?;
         Ok(new_certificate)
     }
