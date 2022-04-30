@@ -110,10 +110,10 @@ pub struct ChainClientState<ValidatorNode, StorageClient> {
 
     /// Support synchronization of received certificates.
     received_certificate_trackers: HashMap<ValidatorName, usize>,
-    /// How much time to wait between attempts when we wait for a cross-shard update.
-    cross_shard_delay: Duration,
-    /// How many times we are willing to retry a request that depends on cross-shard updates.
-    cross_shard_retries: usize,
+    /// How much time to wait between attempts when we wait for a cross-chain update.
+    cross_chain_delay: Duration,
+    /// How many times we are willing to retry a request that depends on cross-chain updates.
+    cross_chain_retries: usize,
     /// Local node to manage the execution state and the local storage of the chains that we are
     /// tracking.
     node_client: LocalNodeClient<StorageClient>,
@@ -127,8 +127,8 @@ impl<A, S> ChainClientState<A, S> {
         validator_clients: Vec<(ValidatorName, A)>,
         storage_client: S,
         next_sequence_number: SequenceNumber,
-        cross_shard_delay: Duration,
-        cross_shard_retries: usize,
+        cross_chain_delay: Duration,
+        cross_chain_retries: usize,
     ) -> Self {
         let known_key_pairs = known_key_pairs
             .into_iter()
@@ -144,8 +144,8 @@ impl<A, S> ChainClientState<A, S> {
             pending_request: None,
             known_key_pairs,
             received_certificate_trackers: HashMap::new(),
-            cross_shard_delay,
-            cross_shard_retries,
+            cross_chain_delay,
+            cross_chain_retries,
             node_client,
         }
     }
@@ -325,15 +325,15 @@ where
         action: CommunicateAction,
     ) -> Result<Option<Certificate>, failure::Error> {
         let storage_client = self.node_client.storage_client().await;
-        let cross_shard_delay = self.cross_shard_delay;
-        let cross_shard_retries = self.cross_shard_retries;
+        let cross_chain_delay = self.cross_chain_delay;
+        let cross_chain_retries = self.cross_chain_retries;
         let result = communicate_with_quorum(&self.validator_clients, committee, |name, client| {
             let mut updater = ValidatorUpdater {
                 name,
                 client,
                 store: storage_client.clone(),
-                delay: cross_shard_delay,
-                retries: cross_shard_retries,
+                delay: cross_chain_delay,
+                retries: cross_chain_retries,
             };
             let action = action.clone();
             let chain_id = chain_id.clone();

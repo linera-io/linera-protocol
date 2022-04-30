@@ -118,7 +118,7 @@ Committee:
             TYPENAME: PublicKeyBytes
           VALUE: U64
     - total_votes: U64
-CrossShardRequest:
+CrossChainRequest:
   ENUM:
     0:
       UpdateRecipient:
@@ -202,7 +202,7 @@ Error:
     23:
       CertificateNotFound: UNIT
     24:
-      InvalidCrossShardRequest: UNIT
+      InvalidCrossChainRequest: UNIT
     25:
       InvalidBlockProposal: UNIT
     26:
@@ -343,9 +343,9 @@ SerializedMessage:
         NEWTYPE:
           TYPENAME: Error
     6:
-      CrossShardRequest:
+      CrossChainRequest:
         NEWTYPE:
-          TYPENAME: CrossShardRequest
+          TYPENAME: CrossChainRequest
 Signature:
   NEWTYPESTRUCT:
     TUPLEARRAY:
