@@ -5,19 +5,19 @@ use super::*;
 use zef_base::{base_types::*, messages::*};
 
 #[tokio::test]
-async fn test_file_storage_for_accounts() {
+async fn test_file_storage_for_chains() {
     let dir = tempfile::TempDir::new().unwrap();
     let mut client = FileStoreClient::new(dir.path().to_path_buf());
-    let id = AccountId(vec![SequenceNumber(1)]);
+    let id = ChainId(vec![SequenceNumber(1)]);
     {
-        let mut account = client.read_account_or_default(&id).await.unwrap();
-        assert_eq!(account.next_sequence_number, SequenceNumber(0));
-        account.next_sequence_number = SequenceNumber(3);
-        client.write_account(account).await.unwrap();
+        let mut chain = client.read_chain_or_default(&id).await.unwrap();
+        assert_eq!(chain.next_sequence_number, SequenceNumber(0));
+        chain.next_sequence_number = SequenceNumber(3);
+        client.write_chain(chain).await.unwrap();
     }
     {
-        let account = client.read_account_or_default(&id).await.unwrap();
-        assert_eq!(account.next_sequence_number, SequenceNumber(3));
+        let chain = client.read_chain_or_default(&id).await.unwrap();
+        assert_eq!(chain.next_sequence_number, SequenceNumber(3));
     }
 }
 
@@ -26,8 +26,8 @@ async fn test_file_storage_for_certificates() {
     let dir = tempfile::TempDir::new().unwrap();
     let mut client = FileStoreClient::new(dir.path().to_path_buf());
     let request = Request {
-        account_id: AccountId::default(),
-        operation: Operation::CloseAccount,
+        chain_id: ChainId::default(),
+        operation: Operation::CloseChain,
         sequence_number: SequenceNumber::default(),
         round: RoundNumber::default(),
     };

@@ -10,8 +10,8 @@ use std::{
     io::{BufReader, BufWriter, Write},
     path::Path,
 };
-use zef_base::{account::AccountState, base_types::*, committee::Committee};
-use zef_core::{client::AccountClientState, node::ValidatorNode};
+use zef_base::{base_types::*, chain::ChainState, committee::Committee};
+use zef_core::{client::ChainClientState, node::ValidatorNode};
 use zef_storage::Storage;
 
 pub trait Import: DeserializeOwned {
@@ -80,25 +80,25 @@ impl CommitteeConfig {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct UserAccount {
-    pub account_id: AccountId,
+pub struct UserChain {
+    pub chain_id: ChainId,
     pub key_pair: Option<KeyPair>,
     pub next_sequence_number: SequenceNumber,
 }
 
-impl UserAccount {
-    pub fn new(account_id: AccountId) -> Self {
+impl UserChain {
+    pub fn new(chain_id: ChainId) -> Self {
         Self {
-            account_id,
+            chain_id,
             key_pair: None,
             next_sequence_number: SequenceNumber::new(),
         }
     }
 
-    pub fn make_initial(account_id: AccountId) -> Self {
+    pub fn make_initial(chain_id: ChainId) -> Self {
         let key_pair = KeyPair::generate();
         Self {
-            account_id,
+            chain_id,
             key_pair: Some(key_pair),
             next_sequence_number: SequenceNumber::new(),
         }
@@ -106,47 +106,47 @@ impl UserAccount {
 }
 
 pub struct WalletState {
-    accounts: BTreeMap<AccountId, UserAccount>,
+    chains: BTreeMap<ChainId, UserChain>,
 }
 
 impl WalletState {
-    pub fn get(&self, account_id: &AccountId) -> Option<&UserAccount> {
-        self.accounts.get(account_id)
+    pub fn get(&self, chain_id: &ChainId) -> Option<&UserChain> {
+        self.chains.get(chain_id)
     }
 
-    pub fn get_or_insert(&mut self, account_id: AccountId) -> &UserAccount {
-        self.accounts
-            .entry(account_id.clone())
-            .or_insert_with(|| UserAccount::new(account_id))
+    pub fn get_or_insert(&mut self, chain_id: ChainId) -> &UserChain {
+        self.chains
+            .entry(chain_id.clone())
+            .or_insert_with(|| UserChain::new(chain_id))
     }
 
-    pub fn insert(&mut self, account: UserAccount) {
-        self.accounts.insert(account.account_id.clone(), account);
+    pub fn insert(&mut self, chain: UserChain) {
+        self.chains.insert(chain.chain_id.clone(), chain);
     }
 
-    pub fn num_accounts(&self) -> usize {
-        self.accounts.len()
+    pub fn num_chains(&self) -> usize {
+        self.chains.len()
     }
 
-    pub fn last_account(&mut self) -> Option<&UserAccount> {
-        self.accounts.values().last()
+    pub fn last_chain(&mut self) -> Option<&UserChain> {
+        self.chains.values().last()
     }
 
-    pub fn accounts_mut(&mut self) -> impl Iterator<Item = &mut UserAccount> {
-        self.accounts.values_mut()
+    pub fn chains_mut(&mut self) -> impl Iterator<Item = &mut UserChain> {
+        self.chains.values_mut()
     }
 
-    pub async fn update_from_state<A, S>(&mut self, state: &mut AccountClientState<A, S>)
+    pub async fn update_from_state<A, S>(&mut self, state: &mut ChainClientState<A, S>)
     where
         A: ValidatorNode + Send + Sync + 'static + Clone,
         S: Storage + Clone + 'static,
     {
-        let account = self
-            .accounts
-            .entry(state.account_id().clone())
-            .or_insert_with(|| UserAccount::new(state.account_id().clone()));
-        account.key_pair = state.key_pair().await.map(|k| k.copy()).ok();
-        account.next_sequence_number = state.next_sequence_number();
+        let chain = self
+            .chains
+            .entry(state.chain_id().clone())
+            .or_insert_with(|| UserChain::new(state.chain_id().clone()));
+        chain.key_pair = state.key_pair().await.map(|k| k.copy()).ok();
+        chain.next_sequence_number = state.next_sequence_number();
     }
 
     pub fn read_or_create(path: &Path) -> Result<Self, std::io::Error> {
@@ -158,9 +158,9 @@ impl WalletState {
         let reader = BufReader::new(file);
         let stream = serde_json::Deserializer::from_reader(reader).into_iter();
         Ok(Self {
-            accounts: stream
+            chains: stream
                 .filter_map(Result::ok)
-                .map(|account: UserAccount| (account.account_id.clone(), account))
+                .map(|chain: UserChain| (chain.chain_id.clone(), chain))
                 .collect(),
         })
     }
@@ -168,8 +168,8 @@ impl WalletState {
     pub fn write(&self, path: &Path) -> Result<(), std::io::Error> {
         let file = OpenOptions::new().write(true).open(path)?;
         let mut writer = BufWriter::new(file);
-        for account in self.accounts.values() {
-            serde_json::to_writer(&mut writer, account)?;
+        for chain in self.chains.values() {
+            serde_json::to_writer(&mut writer, chain)?;
             writer.write_all(b"\n")?;
         }
         Ok(())
@@ -179,7 +179,7 @@ impl WalletState {
 #[derive(Serialize, Deserialize)]
 pub struct GenesisConfig {
     pub committee: CommitteeConfig,
-    pub accounts: Vec<(AccountId, AccountOwner, Balance)>,
+    pub chains: Vec<(ChainId, ChainOwner, Balance)>,
 }
 
 impl Import for GenesisConfig {}
@@ -189,7 +189,7 @@ impl GenesisConfig {
     pub fn new(committee: CommitteeConfig) -> Self {
         Self {
             committee,
-            accounts: Vec::new(),
+            chains: Vec::new(),
         }
     }
 
@@ -197,14 +197,14 @@ impl GenesisConfig {
     where
         S: Storage + Clone + 'static,
     {
-        for (account_id, owner, balance) in &self.accounts {
-            let account = AccountState::create(
+        for (chain_id, owner, balance) in &self.chains {
+            let chain = ChainState::create(
                 self.committee.clone().into_committee(),
-                account_id.clone(),
+                chain_id.clone(),
                 *owner,
                 *balance,
             );
-            store.write_account(account.clone()).await?;
+            store.write_chain(chain.clone()).await?;
         }
         Ok(())
     }

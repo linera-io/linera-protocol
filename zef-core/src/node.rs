@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use futures::{lock::Mutex, StreamExt};
 use rand::prelude::SliceRandom;
 use std::sync::Arc;
-use zef_base::{account::AccountManager, base_types::*, error::Error, messages::*};
+use zef_base::{base_types::*, chain::ChainManager, error::Error, messages::*};
 use zef_storage::Storage;
 
 /// How to communicate with an validator or a local node.
@@ -17,19 +17,19 @@ pub trait ValidatorNode {
     async fn handle_request_order(
         &mut self,
         order: RequestOrder,
-    ) -> Result<AccountInfoResponse, Error>;
+    ) -> Result<ChainInfoResponse, Error>;
 
     /// Process a certificate.
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-    ) -> Result<AccountInfoResponse, Error>;
+    ) -> Result<ChainInfoResponse, Error>;
 
-    /// Handle information queries for this account.
-    async fn handle_account_info_query(
+    /// Handle information queries for this chain.
+    async fn handle_chain_info_query(
         &mut self,
-        query: AccountInfoQuery,
-    ) -> Result<AccountInfoResponse, Error>;
+        query: ChainInfoQuery,
+    ) -> Result<ChainInfoResponse, Error>;
 }
 
 /// A local replica, typically used by clients.
@@ -48,7 +48,7 @@ where
     async fn handle_request_order(
         &mut self,
         order: RequestOrder,
-    ) -> Result<AccountInfoResponse, Error> {
+    ) -> Result<ChainInfoResponse, Error> {
         let node = self.0.clone();
         let mut node = node.lock().await;
         node.state.handle_request_order(order).await
@@ -57,22 +57,22 @@ where
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-    ) -> Result<AccountInfoResponse, Error> {
+    ) -> Result<ChainInfoResponse, Error> {
         let node = self.0.clone();
         let mut node = node.lock().await;
         node.state.fully_handle_certificate(certificate).await
     }
 
-    async fn handle_account_info_query(
+    async fn handle_chain_info_query(
         &mut self,
-        query: AccountInfoQuery,
-    ) -> Result<AccountInfoResponse, Error> {
+        query: ChainInfoQuery,
+    ) -> Result<ChainInfoResponse, Error> {
         self.0
             .clone()
             .lock()
             .await
             .state
-            .handle_account_info_query(query)
+            .handle_chain_info_query(query)
             .await
     }
 }
@@ -101,13 +101,13 @@ where
 {
     async fn try_process_certificates(
         &mut self,
-        account_id: &AccountId,
+        chain_id: &ChainId,
         certificates: Vec<Certificate>,
     ) -> Result<Option<SequenceNumber>, Error> {
         let mut next_sequence_number = None;
         for certificate in certificates {
             if let Value::Confirmed { request } = &certificate.value {
-                if &request.account_id == account_id {
+                if &request.chain_id == chain_id {
                     match self.handle_certificate(certificate).await {
                         Ok(response) => {
                             next_sequence_number = Some(response.info.next_sequence_number);
@@ -137,23 +137,23 @@ where
 
     async fn current_next_sequence_number(
         &mut self,
-        account_id: AccountId,
+        chain_id: ChainId,
     ) -> Result<SequenceNumber, Error> {
-        let query = AccountInfoQuery {
-            account_id,
+        let query = ChainInfoQuery {
+            chain_id,
             check_next_sequence_number: None,
             query_committee: false,
             query_sent_certificates_in_range: None,
             query_received_certificates_excluding_first_nth: None,
         };
-        let response = self.handle_account_info_query(query).await?;
+        let response = self.handle_chain_info_query(query).await?;
         Ok(response.info.next_sequence_number)
     }
 
     pub async fn download_certificates<A>(
         &mut self,
         mut validators: Vec<(ValidatorName, A)>,
-        account_id: AccountId,
+        chain_id: ChainId,
         target_next_sequence_number: SequenceNumber,
     ) -> Result<SequenceNumber, Error>
     where
@@ -163,23 +163,21 @@ where
         // TODO: We could also try a few of them in parallel.
         validators.shuffle(&mut rand::thread_rng());
         for (name, client) in validators {
-            let current = self
-                .current_next_sequence_number(account_id.clone())
-                .await?;
+            let current = self.current_next_sequence_number(chain_id.clone()).await?;
             if target_next_sequence_number <= current {
                 return Ok(current);
             }
             self.try_download_certificates_from(
                 name,
                 client,
-                account_id.clone(),
+                chain_id.clone(),
                 current,
                 target_next_sequence_number,
             )
             .await?;
             // TODO: We could continue with the same validator if sufficient progress was made.
         }
-        let current = self.current_next_sequence_number(account_id).await?;
+        let current = self.current_next_sequence_number(chain_id).await?;
         if target_next_sequence_number <= current {
             Ok(current)
         } else {
@@ -191,7 +189,7 @@ where
         &mut self,
         name: ValidatorName,
         mut client: A,
-        account_id: AccountId,
+        chain_id: ChainId,
         start: SequenceNumber,
         stop: SequenceNumber,
     ) -> Result<(), Error>
@@ -202,30 +200,30 @@ where
             start,
             limit: Some(usize::from(stop) - usize::from(start)),
         };
-        let query = AccountInfoQuery {
-            account_id: account_id.clone(),
+        let query = ChainInfoQuery {
+            chain_id: chain_id.clone(),
             check_next_sequence_number: None,
             query_committee: false,
             query_sent_certificates_in_range: Some(range),
             query_received_certificates_excluding_first_nth: None,
         };
-        if let Ok(response) = client.handle_account_info_query(query).await {
+        if let Ok(response) = client.handle_chain_info_query(query).await {
             if response.check(name).is_ok() {
-                let AccountInfo {
+                let ChainInfo {
                     queried_sent_certificates,
                     ..
                 } = response.info;
-                self.try_process_certificates(&account_id, queried_sent_certificates)
+                self.try_process_certificates(&chain_id, queried_sent_certificates)
                     .await?;
             }
         }
         Ok(())
     }
 
-    pub async fn synchronize_account_state<A>(
+    pub async fn synchronize_chain_state<A>(
         &mut self,
         validators: Vec<(ValidatorName, A)>,
-        account_id: AccountId,
+        chain_id: ChainId,
     ) -> Result<(SequenceNumber, RoundNumber), Error>
     where
         A: ValidatorNode + Send + Sync + 'static + Clone,
@@ -234,9 +232,9 @@ where
             .into_iter()
             .map(|(name, client)| {
                 let mut node = self.clone();
-                let id = account_id.clone();
+                let id = chain_id.clone();
                 async move {
-                    node.try_synchronize_account_state_from(name, client, id)
+                    node.try_synchronize_chain_state_from(name, client, id)
                         .await
                 }
             })
@@ -250,27 +248,25 @@ where
         Ok(maximum)
     }
 
-    pub async fn try_synchronize_account_state_from<A>(
+    pub async fn try_synchronize_chain_state_from<A>(
         &mut self,
         name: ValidatorName,
         mut client: A,
-        account_id: AccountId,
+        chain_id: ChainId,
     ) -> Result<(SequenceNumber, RoundNumber), Error>
     where
         A: ValidatorNode + Send + Sync + 'static + Clone,
     {
-        let start = self
-            .current_next_sequence_number(account_id.clone())
-            .await?;
+        let start = self.current_next_sequence_number(chain_id.clone()).await?;
         let range = SequenceNumberRange { start, limit: None };
-        let query = AccountInfoQuery {
-            account_id: account_id.clone(),
+        let query = ChainInfoQuery {
+            chain_id: chain_id.clone(),
             check_next_sequence_number: None,
             query_committee: false,
             query_sent_certificates_in_range: Some(range),
             query_received_certificates_excluding_first_nth: None,
         };
-        let info = match client.handle_account_info_query(query).await {
+        let info = match client.handle_chain_info_query(query).await {
             Ok(response) if response.check(name).is_ok() => response.info,
             _ => {
                 // Give up on this validator.
@@ -278,7 +274,7 @@ where
             }
         };
         let next_sequence_number = match self
-            .try_process_certificates(&account_id, info.queried_sent_certificates)
+            .try_process_certificates(&chain_id, info.queried_sent_certificates)
             .await?
         {
             Some(number) => number,
@@ -293,7 +289,7 @@ where
             return Ok((next_sequence_number, next_round));
         }
         let manager = match info.manager {
-            AccountManager::Multi(manager) => *manager,
+            ChainManager::Multi(manager) => *manager,
             _ => {
                 // Nothing to do.
                 return Ok((next_sequence_number, next_round));
@@ -301,7 +297,7 @@ where
         };
         if let Some(order) = manager.order {
             // Check the sequence number.
-            if order.request.account_id != account_id
+            if order.request.chain_id != chain_id
                 || order.request.sequence_number != next_sequence_number
             {
                 // Give up
@@ -319,9 +315,7 @@ where
         if let Some(cert) = manager.locked {
             if let Value::Validated { request } = &cert.value {
                 // Check the sequence number.
-                if request.account_id != account_id
-                    || request.sequence_number != next_sequence_number
-                {
+                if request.chain_id != chain_id || request.sequence_number != next_sequence_number {
                     // Give up
                     return Ok((next_sequence_number, next_round));
                 }

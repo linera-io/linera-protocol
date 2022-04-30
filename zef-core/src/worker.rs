@@ -4,7 +4,7 @@
 
 use async_trait::async_trait;
 use zef_base::{
-    account::Outcome, base_types::*, committee::Committee, ensure, error::Error, messages::*,
+    base_types::*, chain::Outcome, committee::Committee, ensure, error::Error, messages::*,
 };
 use zef_storage::Storage;
 
@@ -13,7 +13,7 @@ use zef_storage::Storage;
 mod worker_tests;
 
 /// Interface provided by each physical shard (aka "worker") of an validator or a local node.
-/// * All commands return either the current account info or an error.
+/// * All commands return either the current chain info or an error.
 /// * Repeating commands produces no changes and returns no error.
 /// * Some handlers may return cross-shard requests, that is, messages
 ///   to be communicated to other workers of the same validator.
@@ -23,19 +23,19 @@ pub trait ValidatorWorker {
     async fn handle_request_order(
         &mut self,
         order: RequestOrder,
-    ) -> Result<AccountInfoResponse, Error>;
+    ) -> Result<ChainInfoResponse, Error>;
 
     /// Process a certificate, for instance to execute a confirmed request.
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-    ) -> Result<(AccountInfoResponse, Vec<CrossShardRequest>), Error>;
+    ) -> Result<(ChainInfoResponse, Vec<CrossShardRequest>), Error>;
 
-    /// Handle information queries for this account.
-    async fn handle_account_info_query(
+    /// Handle information queries for this chain.
+    async fn handle_chain_info_query(
         &mut self,
-        query: AccountInfoQuery,
-    ) -> Result<AccountInfoResponse, Error>;
+        query: ChainInfoQuery,
+    ) -> Result<ChainInfoResponse, Error>;
 
     /// Handle (trusted!) cross shard request.
     async fn handle_cross_shard_request(
@@ -57,7 +57,7 @@ impl<Client> WorkerState<Client> {
 /// State of a worker in an validator or a local node.
 pub struct WorkerState<StorageClient> {
     /// The signature key pair of the validator. The key may be missing for replicas
-    /// without voting rights (possibly with a partial view of accounts).
+    /// without voting rights (possibly with a partial view of chains).
     key_pair: Option<KeyPair>,
     /// Access to local persistent storage.
     storage: StorageClient,
@@ -71,7 +71,7 @@ where
     pub(crate) async fn fully_handle_certificate(
         &mut self,
         certificate: Certificate,
-    ) -> Result<AccountInfoResponse, zef_base::error::Error> {
+    ) -> Result<ChainInfoResponse, zef_base::error::Error> {
         let (response, mut requests) = self.handle_certificate(certificate).await?;
         while let Some(request) = requests.pop() {
             requests.extend(self.handle_cross_shard_request(request).await?);
@@ -79,116 +79,113 @@ where
         Ok(response)
     }
 
-    /// (Trusted) Process a confirmed request issued from an account.
+    /// (Trusted) Process a confirmed request issued from a chain.
     async fn process_confirmed_request(
         &mut self,
         request: Request,
         certificate: Certificate, // For logging purpose
-    ) -> Result<(AccountInfoResponse, Vec<CrossShardRequest>), Error> {
+    ) -> Result<(ChainInfoResponse, Vec<CrossShardRequest>), Error> {
         assert_eq!(
             &certificate.value.confirmed_request().unwrap().operation,
             &request.operation
         );
-        // Obtain the sender's account.
-        let sender = request.account_id.clone();
-        // Check that the account is active and ready for this confirmation.
-        let mut account = self.storage.read_active_account(&sender).await?;
-        if account.next_sequence_number < request.sequence_number {
+        // Obtain the sender's chain.
+        let sender = request.chain_id.clone();
+        // Check that the chain is active and ready for this confirmation.
+        let mut chain = self.storage.read_active_chain(&sender).await?;
+        if chain.next_sequence_number < request.sequence_number {
             return Err(Error::MissingEarlierConfirmations {
-                current_sequence_number: account.next_sequence_number,
+                current_sequence_number: chain.next_sequence_number,
             });
         }
         // Verify the certificate. Returns a catch-all error to make client code more robust.
         certificate
-            .check(account.state.committee.as_ref().expect("account is active"))
+            .check(chain.state.committee.as_ref().expect("chain is active"))
             .map_err(|_| Error::InvalidCertificate)?;
         // Load pending cross-shard requests.
         let mut continuation = self
             .storage
-            .read_certificates(account.keep_sending.iter().cloned())
+            .read_certificates(chain.keep_sending.iter().cloned())
             .await?
             .into_iter()
             .map(|certificate| CrossShardRequest::UpdateRecipient {
-                committee: account
+                committee: chain
                     .state
                     .committee
                     .as_ref()
-                    .expect("Account is active")
+                    .expect("Chain is active")
                     .clone(),
                 certificate,
             })
             .collect();
-        if account.next_sequence_number > request.sequence_number {
+        if chain.next_sequence_number > request.sequence_number {
             // Request was already confirmed.
-            let info = account.make_account_info(self.key_pair.as_ref());
+            let info = chain.make_chain_info(self.key_pair.as_ref());
             return Ok((info, continuation));
         }
         // Persist certificate.
         self.storage.write_certificate(certificate.clone()).await?;
         // Execute the sender's side of the operation.
-        account.apply_operation_as_sender(&request.operation, certificate.hash)?;
+        chain.apply_operation_as_sender(&request.operation, certificate.hash)?;
         // Advance to next sequence number.
-        account.next_sequence_number.try_add_assign_one()?;
-        account.state.manager.reset();
-        // Final touch on the sender's account.
-        let info = account.make_account_info(self.key_pair.as_ref());
+        chain.next_sequence_number.try_add_assign_one()?;
+        chain.state.manager.reset();
+        // Final touch on the sender's chain.
+        let info = chain.make_chain_info(self.key_pair.as_ref());
         // Schedule cross-shard request if any.
         let operation = &certificate.value.confirmed_request().unwrap().operation;
         if operation.recipient().is_some() {
             // Schedule a new cross-shard request to update recipient.
-            account.keep_sending.insert(certificate.hash);
+            chain.keep_sending.insert(certificate.hash);
             continuation.push(CrossShardRequest::UpdateRecipient {
-                committee: account
+                committee: chain
                     .state
                     .committee
                     .as_ref()
-                    .expect("account is active")
+                    .expect("chain is active")
                     .clone(),
                 certificate,
             });
         }
-        // Persist account.
-        self.storage.write_account(account.clone()).await?;
+        // Persist chain.
+        self.storage.write_chain(chain.clone()).await?;
         Ok((info, continuation))
     }
 
-    /// (Trusted) Process a validated request issued from a multi-owner account.
+    /// (Trusted) Process a validated request issued from a multi-owner chain.
     async fn process_validated_request(
         &mut self,
         request: Request,
         certificate: Certificate,
-    ) -> Result<AccountInfoResponse, Error> {
+    ) -> Result<ChainInfoResponse, Error> {
         assert_eq!(certificate.value.validated_request().unwrap(), &request);
-        // Check that the account is active and ready for this confirmation.
-        let mut account = self
-            .storage
-            .read_active_account(&request.account_id)
-            .await?;
+        // Check that the chain is active and ready for this confirmation.
+        let mut chain = self.storage.read_active_chain(&request.chain_id).await?;
         // Verify the certificate. Returns a catch-all error to make client code more robust.
         certificate
-            .check(account.state.committee.as_ref().expect("account is active"))
+            .check(chain.state.committee.as_ref().expect("chain is active"))
             .map_err(|_| Error::InvalidCertificate)?;
-        if account
+        if chain
             .state
             .manager
-            .check_validated_request(account.next_sequence_number, &request)?
+            .check_validated_request(chain.next_sequence_number, &request)?
             == Outcome::Skip
         {
-            // If we just processed the same pending request, return the account info
+            // If we just processed the same pending request, return the chain info
             // unchanged.
-            return Ok(account.make_account_info(self.key_pair.as_ref()));
+            return Ok(chain.make_chain_info(self.key_pair.as_ref()));
         }
-        account
+        chain
             .state
             .manager
             .create_final_vote(request, certificate, self.key_pair.as_ref());
-        let info = account.make_account_info(self.key_pair.as_ref());
-        self.storage.write_account(account).await?;
+        let info = chain.make_chain_info(self.key_pair.as_ref());
+        self.storage.write_chain(chain).await?;
         Ok(info)
     }
 
-    /// (Trusted) Try to update the recipient account in a confirmed request.
-    async fn update_recipient_account(
+    /// (Trusted) Try to update the recipient chain in a confirmed request.
+    async fn update_recipient_chain(
         &mut self,
         operation: Operation,
         committee: Committee,
@@ -198,17 +195,17 @@ where
             let request = certificate.value.confirmed_request().unwrap();
             assert_eq!(&request.operation, &operation);
             // Execute the recipient's side of the operation.
-            let mut account = self.storage.read_account_or_default(recipient).await?;
-            let need_update = account.apply_operation_as_recipient(
+            let mut chain = self.storage.read_chain_or_default(recipient).await?;
+            let need_update = chain.apply_operation_as_recipient(
                 &operation,
                 committee,
                 certificate.hash,
-                request.account_id.clone(),
+                request.chain_id.clone(),
                 request.sequence_number,
             )?;
             if need_update {
                 self.storage.write_certificate(certificate).await?;
-                self.storage.write_account(account).await?;
+                self.storage.write_chain(chain).await?;
             }
         }
         // This concludes the confirmation of `certificate`.
@@ -224,32 +221,32 @@ where
     async fn handle_request_order(
         &mut self,
         order: RequestOrder,
-    ) -> Result<AccountInfoResponse, Error> {
-        // Obtain the sender's account.
-        let sender = order.request.account_id.clone();
-        let mut account = self.storage.read_active_account(&sender).await?;
+    ) -> Result<ChainInfoResponse, Error> {
+        // Obtain the sender's chain.
+        let sender = order.request.chain_id.clone();
+        let mut chain = self.storage.read_active_chain(&sender).await?;
         // Check authentication of the request.
-        order.check(&account.state.manager)?;
-        // Check if the account ready and if the request is well-formed.
-        if account
+        order.check(&chain.state.manager)?;
+        // Check if the chain ready and if the request is well-formed.
+        if chain
             .state
             .manager
-            .check_request(account.next_sequence_number, &order.request)?
+            .check_request(chain.next_sequence_number, &order.request)?
             == Outcome::Skip
         {
-            // If we just processed the same pending request, return the account info
+            // If we just processed the same pending request, return the chain info
             // unchanged.
-            return Ok(account.make_account_info(self.key_pair.as_ref()));
+            return Ok(chain.make_chain_info(self.key_pair.as_ref()));
         }
         // Verify that the request is valid.
-        account.validate_operation(&order.request)?;
-        // Create the vote and store it in the account.
-        account
+        chain.validate_operation(&order.request)?;
+        // Create the vote and store it in the chain.
+        chain
             .state
             .manager
             .create_vote(order, self.key_pair.as_ref());
-        let info = account.make_account_info(self.key_pair.as_ref());
-        self.storage.write_account(account).await?;
+        let info = chain.make_chain_info(self.key_pair.as_ref());
+        self.storage.write_chain(chain).await?;
         Ok(info)
     }
 
@@ -257,7 +254,7 @@ where
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-    ) -> Result<(AccountInfoResponse, Vec<CrossShardRequest>), Error> {
+    ) -> Result<(ChainInfoResponse, Vec<CrossShardRequest>), Error> {
         // Process the order.
         match &certificate.value {
             Value::Validated { request } => {
@@ -275,26 +272,23 @@ where
         }
     }
 
-    async fn handle_account_info_query(
+    async fn handle_chain_info_query(
         &mut self,
-        query: AccountInfoQuery,
-    ) -> Result<AccountInfoResponse, Error> {
-        let account = self
-            .storage
-            .read_account_or_default(&query.account_id)
-            .await?;
-        let mut info = account.make_account_info(None).info;
+        query: ChainInfoQuery,
+    ) -> Result<ChainInfoResponse, Error> {
+        let chain = self.storage.read_chain_or_default(&query.chain_id).await?;
+        let mut info = chain.make_chain_info(None).info;
         if query.query_committee {
-            info.queried_committee = account.state.committee;
+            info.queried_committee = chain.state.committee;
         }
         if let Some(next_sequence_number) = query.check_next_sequence_number {
             ensure!(
-                account.next_sequence_number == next_sequence_number,
+                chain.next_sequence_number == next_sequence_number,
                 Error::UnexpectedSequenceNumber
             );
         }
         if let Some(range) = query.query_sent_certificates_in_range {
-            let keys = account.confirmed_log[..]
+            let keys = chain.confirmed_log[..]
                 .iter()
                 .skip(range.start.into())
                 .cloned();
@@ -305,11 +299,11 @@ where
             info.queried_sent_certificates = certs;
         }
         if let Some(idx) = query.query_received_certificates_excluding_first_nth {
-            let keys = account.received_log[..].iter().skip(idx).cloned();
+            let keys = chain.received_log[..].iter().skip(idx).cloned();
             let certs = self.storage.read_certificates(keys).await?;
             info.queried_received_certificates = certs;
         }
-        let response = AccountInfoResponse::new(info, self.key_pair.as_ref());
+        let response = ChainInfoResponse::new(info, self.key_pair.as_ref());
         Ok(response)
     }
 
@@ -326,21 +320,21 @@ where
                     .value
                     .confirmed_request()
                     .ok_or(Error::InvalidCrossShardRequest)?;
-                let sender = request.account_id.clone();
+                let sender = request.chain_id.clone();
                 let hash = certificate.hash;
-                self.update_recipient_account(request.operation.clone(), committee, certificate)
+                self.update_recipient_chain(request.operation.clone(), committee, certificate)
                     .await?;
                 // Reply with a cross-shard request.
                 let cont = vec![CrossShardRequest::ConfirmUpdatedRecipient {
-                    account_id: sender,
+                    chain_id: sender,
                     hash,
                 }];
                 Ok(cont)
             }
-            CrossShardRequest::ConfirmUpdatedRecipient { account_id, hash } => {
-                let mut account = self.storage.read_active_account(&account_id).await?;
-                if account.keep_sending.remove(&hash) {
-                    self.storage.write_account(account).await?;
+            CrossShardRequest::ConfirmUpdatedRecipient { chain_id, hash } => {
+                let mut chain = self.storage.read_active_chain(&chain_id).await?;
+                if chain.keep_sending.remove(&hash) {
+                    self.storage.write_chain(chain).await?;
                 }
                 Ok(Vec::new())
             }

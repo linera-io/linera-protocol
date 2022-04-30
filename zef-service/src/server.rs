@@ -168,7 +168,7 @@ enum ServerCommands {
         #[structopt(flatten)]
         cross_shard_config: network::CrossShardConfig,
 
-        /// Path to the file describing the initial user accounts (aka genesis state)
+        /// Path to the file describing the initial user chains (aka genesis state)
         #[structopt(long = "genesis")]
         genesis_config_path: PathBuf,
 
@@ -217,7 +217,7 @@ async fn main() {
             warn!("The server is running in benchmark mode: Do not use it in production");
 
             let genesis_config = GenesisConfig::read(&genesis_config_path)
-                .expect("Fail to read initial account config");
+                .expect("Fail to read initial chain config");
             let server_config = ValidatorServerConfig::read(&server_config_path)
                 .expect("Fail to read server config");
 

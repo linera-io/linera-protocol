@@ -12,8 +12,8 @@ use std::{
     sync::Arc,
 };
 use zef_base::{
-    account::AccountState,
-    base_types::{AccountId, HashValue},
+    base_types::{ChainId, HashValue},
+    chain::ChainState,
     error::Error,
     messages::Certificate,
 };
@@ -158,22 +158,22 @@ impl RocksdbStoreClient {
 
 #[async_trait]
 impl Storage for RocksdbStoreClient {
-    async fn read_account_or_default(&mut self, id: &AccountId) -> Result<AccountState, Error> {
+    async fn read_chain_or_default(&mut self, id: &ChainId) -> Result<ChainState, Error> {
         let mut store = self.0.lock().await;
         Ok(store
             .read(&id)
             .await?
-            .unwrap_or_else(|| AccountState::new(id.clone())))
+            .unwrap_or_else(|| ChainState::new(id.clone())))
     }
 
-    async fn write_account(&mut self, state: AccountState) -> Result<(), Error> {
+    async fn write_chain(&mut self, state: ChainState) -> Result<(), Error> {
         let mut store = self.0.lock().await;
         store.write(&state.id, &state).await
     }
 
-    async fn remove_account(&mut self, id: &AccountId) -> Result<(), Error> {
+    async fn remove_chain(&mut self, id: &ChainId) -> Result<(), Error> {
         let mut store = self.0.lock().await;
-        store.remove::<_, AccountState>(&id).await
+        store.remove::<_, ChainState>(&id).await
     }
 
     async fn read_certificate(&mut self, hash: HashValue) -> Result<Certificate, Error> {

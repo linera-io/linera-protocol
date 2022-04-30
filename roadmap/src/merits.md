@@ -59,7 +59,7 @@ NOTE: Some protocols (e.g. tradition order book based on sequential execution) m
 
     - We are intentionally not following the single-threaded execution model of smart contracts.
 
-    - We can still host arbitrary computation during execution (just with a visibility limited to the current account/subchain)
+    - We can still host arbitrary computation during execution (just with a visibility limited to the current chain)
 
     - User<->validator interations do not need to run deterministic code (e.g. user-defined oracles possible).
 

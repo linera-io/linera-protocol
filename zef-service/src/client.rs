@@ -35,7 +35,7 @@ impl ClientContext {
     async fn from_options(options: &ClientOptions) -> Self {
         let wallet_state_path = options.wallet_state_path.clone();
         let wallet_state =
-            WalletState::read_or_create(&wallet_state_path).expect("Unable to read user accounts");
+            WalletState::read_or_create(&wallet_state_path).expect("Unable to read user chains");
         let (storage_client, committee_config): (MixedStorage, CommitteeConfig) = match options.cmd
         {
             ClientCommands::CreateGenesisConfig { .. } => {
@@ -48,9 +48,9 @@ impl ClientContext {
                 )
             }
             _ => {
-                // Every other command uses the real account storage.
+                // Every other command uses the real chain storage.
                 let genesis_config = GenesisConfig::read(&options.genesis_config_path)
-                    .expect("Fail to read initial account config");
+                    .expect("Fail to read initial chain config");
                 let storage = zef_service::storage::make_storage(
                     options.storage_path.as_ref(),
                     &genesis_config,
@@ -112,15 +112,15 @@ impl ClientContext {
         validator_clients
     }
 
-    fn make_account_client(
+    fn make_chain_client(
         &self,
-        account_id: AccountId,
-    ) -> AccountClientState<network::Client, MixedStorage> {
-        let account = self.wallet_state.get(&account_id).expect("Unknown account");
+        chain_id: ChainId,
+    ) -> ChainClientState<network::Client, MixedStorage> {
+        let chain = self.wallet_state.get(&chain_id).expect("Unknown chain");
         let validator_clients = self.make_validator_clients();
-        AccountClientState::new(
-            account_id,
-            account
+        ChainClientState::new(
+            chain_id,
+            chain
                 .key_pair
                 .as_ref()
                 .map(|kp| kp.copy())
@@ -128,13 +128,13 @@ impl ClientContext {
                 .collect(),
             validator_clients,
             self.storage_client.clone(),
-            account.next_sequence_number,
+            chain.next_sequence_number,
             self.cross_shard_delay,
             self.cross_shard_retries,
         )
     }
 
-    async fn update_recipient_account(
+    async fn update_recipient_chain(
         &mut self,
         certificate: Certificate,
         key_pair: Option<KeyPair>,
@@ -144,10 +144,10 @@ impl ClientContext {
             _ => failure::bail!("unexpected value in certificate"),
         };
         let validator_clients = self.make_validator_clients();
-        let account = self.wallet_state.get_or_insert(recipient.clone());
-        let mut client = AccountClientState::new(
+        let chain = self.wallet_state.get_or_insert(recipient.clone());
+        let mut client = ChainClientState::new(
             recipient,
-            account
+            chain
                 .key_pair
                 .as_ref()
                 .map(|kp| kp.copy())
@@ -156,50 +156,50 @@ impl ClientContext {
                 .collect(),
             validator_clients,
             self.storage_client.clone(),
-            account.next_sequence_number,
+            chain.next_sequence_number,
             Duration::default(),
             0,
         );
         client.receive_certificate(certificate).await?;
-        self.update_account_from_state(&mut client).await;
+        self.update_chain_from_state(&mut client).await;
         Ok(())
     }
 
-    /// Make one request order per account, up to `max_orders` requests.
+    /// Make one request order per chain, up to `max_orders` requests.
     fn make_benchmark_request_orders(
         &mut self,
         max_orders: usize,
-    ) -> (Vec<RequestOrder>, Vec<(AccountId, Bytes)>) {
+    ) -> (Vec<RequestOrder>, Vec<(ChainId, Bytes)>) {
         let mut orders = Vec::new();
         let mut serialized_orders = Vec::new();
-        let mut next_recipient = self.wallet_state.last_account().unwrap().account_id.clone();
-        for account in self.wallet_state.accounts_mut() {
-            let key_pair = match &account.key_pair {
+        let mut next_recipient = self.wallet_state.last_chain().unwrap().chain_id.clone();
+        for chain in self.wallet_state.chains_mut() {
+            let key_pair = match &chain.key_pair {
                 Some(kp) => kp,
                 None => continue,
             };
             let request = Request {
-                account_id: account.account_id.clone(),
+                chain_id: chain.chain_id.clone(),
                 operation: Operation::Transfer {
                     recipient: Address::Account(next_recipient),
                     amount: Amount::from(1),
                     user_data: UserData::default(),
                 },
-                sequence_number: account.next_sequence_number,
+                sequence_number: chain.next_sequence_number,
                 round: RoundNumber::default(),
             };
             debug!("Preparing request order: {:?}", request);
-            account.next_sequence_number.try_add_assign_one().unwrap();
+            chain.next_sequence_number.try_add_assign_one().unwrap();
             let order = RequestOrder::new(request.clone(), key_pair);
             orders.push(order.clone());
             let serialized_order =
                 serialize_message(&SerializedMessage::RequestOrder(Box::new(order)));
-            serialized_orders.push((account.account_id.clone(), serialized_order.into()));
+            serialized_orders.push((chain.chain_id.clone(), serialized_order.into()));
             if serialized_orders.len() >= max_orders {
                 break;
             }
 
-            next_recipient = account.account_id.clone();
+            next_recipient = chain.chain_id.clone();
         }
         (orders, serialized_orders)
     }
@@ -208,7 +208,7 @@ impl ClientContext {
     fn make_benchmark_certificates_from_orders_and_server_configs(
         orders: Vec<RequestOrder>,
         server_config: Vec<&std::path::Path>,
-    ) -> Vec<(AccountId, Bytes)> {
+    ) -> Vec<(ChainId, Bytes)> {
         let mut keys = Vec::new();
         for file in server_config {
             let server_config =
@@ -235,38 +235,38 @@ impl ClientContext {
             }
             let serialized_certificate =
                 serialize_message(&SerializedMessage::Certificate(Box::new(certificate)));
-            serialized_certificates.push((order.request.account_id, serialized_certificate.into()));
+            serialized_certificates.push((order.request.chain_id, serialized_certificate.into()));
         }
         serialized_certificates
     }
 
     /// Try to aggregate votes into certificates.
-    fn make_benchmark_certificates_from_votes(&self, votes: Vec<Vote>) -> Vec<(AccountId, Bytes)> {
+    fn make_benchmark_certificates_from_votes(&self, votes: Vec<Vote>) -> Vec<(ChainId, Bytes)> {
         let committee = self.committee_config.clone().into_committee();
         let mut aggregators = HashMap::new();
         let mut certificates = Vec::new();
         let mut done_senders = HashSet::new();
         for vote in votes {
             // We aggregate votes indexed by sender.
-            let account_id = vote.value.account_id().clone();
-            if done_senders.contains(&account_id) {
+            let chain_id = vote.value.chain_id().clone();
+            if done_senders.contains(&chain_id) {
                 continue;
             }
             debug!(
                 "Processing vote on {:?}'s request by {:?}",
-                account_id, vote.validator,
+                chain_id, vote.validator,
             );
             let value = vote.value;
             let aggregator = aggregators
-                .entry(account_id.clone())
+                .entry(chain_id.clone())
                 .or_insert_with(|| SignatureAggregator::new(value, &committee));
             match aggregator.append(vote.validator, vote.signature) {
                 Ok(Some(certificate)) => {
                     debug!("Found certificate: {:?}", certificate);
                     let buf =
                         serialize_message(&SerializedMessage::Certificate(Box::new(certificate)));
-                    certificates.push((account_id.clone(), buf.into()));
-                    done_senders.insert(account_id);
+                    certificates.push((chain_id.clone(), buf.into()));
+                    done_senders.insert(chain_id);
                 }
                 Ok(None) => {
                     debug!("Added one vote");
@@ -284,7 +284,7 @@ impl ClientContext {
         &self,
         phase: &'static str,
         max_in_flight: u64,
-        orders: Vec<(AccountId, Bytes)>,
+        orders: Vec<(ChainId, Bytes)>,
     ) -> Vec<Bytes> {
         let time_start = Instant::now();
         info!("Broadcasting {} {} orders", orders.len(), phase);
@@ -293,8 +293,8 @@ impl ClientContext {
         for (num_shards, client) in validator_clients {
             // Re-index orders by shard for this particular validator client.
             let mut sharded_requests = HashMap::new();
-            for (account_id, buf) in &orders {
-                let shard = network::get_shard(num_shards, account_id);
+            for (chain_id, buf) in &orders {
+                let shard = network::get_shard(num_shards, chain_id);
                 sharded_requests
                     .entry(shard)
                     .or_insert_with(Vec::new)
@@ -317,14 +317,14 @@ impl ClientContext {
         responses
     }
 
-    fn save_accounts(&self) {
+    fn save_chains(&self) {
         self.wallet_state
             .write(&self.wallet_state_path)
-            .expect("Unable to write user accounts");
-        info!("Saved user account states");
+            .expect("Unable to write user chains");
+        info!("Saved user chain states");
     }
 
-    async fn update_account_from_state<A, S>(&mut self, state: &mut AccountClientState<A, S>)
+    async fn update_chain_from_state<A, S>(&mut self, state: &mut ChainClientState<A, S>)
     where
         A: ValidatorNode + Send + Sync + 'static + Clone,
         S: Storage + Clone + 'static,
@@ -333,9 +333,9 @@ impl ClientContext {
     }
 }
 
-fn deserialize_response(response: &[u8]) -> Option<AccountInfoResponse> {
+fn deserialize_response(response: &[u8]) -> Option<ChainInfoResponse> {
     match deserialize_message(response) {
-        Ok(SerializedMessage::AccountInfoResponse(info)) => Some(*info),
+        Ok(SerializedMessage::ChainInfoResponse(info)) => Some(*info),
         Ok(SerializedMessage::Error(error)) => {
             error!("Received error value: {}", error);
             None
@@ -360,15 +360,15 @@ fn deserialize_response(response: &[u8]) -> Option<AccountInfoResponse> {
     about = "A Byzantine-fault tolerant sidechain with low-latency finality and high throughput"
 )]
 struct ClientOptions {
-    /// Sets the file storing the private state of user accounts (an empty one will be created if missing)
+    /// Sets the file storing the private state of user chains (an empty one will be created if missing)
     #[structopt(long = "wallet")]
     wallet_state_path: PathBuf,
 
-    /// Optional directory for the file storage of account public states.
+    /// Optional directory for the file storage of chain public states.
     #[structopt(long = "storage")]
     storage_path: Option<PathBuf>,
 
-    /// Optional path to the file describing the initial user accounts (aka genesis state)
+    /// Optional path to the file describing the initial user chains (aka genesis state)
     #[structopt(long = "genesis")]
     genesis_config_path: PathBuf,
 
@@ -401,62 +401,62 @@ enum ClientCommands {
     /// Transfer funds
     #[structopt(name = "transfer")]
     Transfer {
-        /// Sending account id (must be one of our accounts)
+        /// Sending chain id (must be one of our chains)
         #[structopt(long = "from")]
-        sender: AccountId,
+        sender: ChainId,
 
-        /// Recipient account id
+        /// Recipient chain id
         #[structopt(long = "to")]
-        recipient: AccountId,
+        recipient: ChainId,
 
         /// Amount to transfer
         amount: Amount,
     },
 
-    /// Open (i.e. activate) a new account deriving the UID from an existing one.
-    #[structopt(name = "open_account")]
-    OpenAccount {
-        /// Sending account id (must be one of our accounts)
+    /// Open (i.e. activate) a new chain deriving the UID from an existing one.
+    #[structopt(name = "open_chain")]
+    OpenChain {
+        /// Sending chain id (must be one of our chains)
         #[structopt(long = "from")]
-        sender: AccountId,
+        sender: ChainId,
 
         /// Public key of the new owner (otherwise create a key pair and remember it)
         #[structopt(long = "to-owner")]
-        owner: Option<AccountOwner>,
+        owner: Option<ChainOwner>,
     },
 
-    /// Close (i.e. deactivate) an existing account. (Consider `spend_and_transfer`
+    /// Close (i.e. deactivate) an existing chain. (Consider `spend_and_transfer`
     /// instead for real-life use cases.)
-    #[structopt(name = "close_account")]
-    CloseAccount {
-        /// Sending account id (must be one of our accounts)
+    #[structopt(name = "close_chain")]
+    CloseChain {
+        /// Sending chain id (must be one of our chains)
         #[structopt(long = "from")]
-        sender: AccountId,
+        sender: ChainId,
     },
 
-    /// Obtain the balance of the account directly from a quorum of validators.
+    /// Obtain the balance of the chain directly from a quorum of validators.
     #[structopt(name = "query_balance")]
     QueryBalance {
-        /// Account id
-        account_id: AccountId,
+        /// Chain id
+        chain_id: ChainId,
     },
 
-    /// Synchronize the local state of the account (including a conservative estimation of the
+    /// Synchronize the local state of the chain (including a conservative estimation of the
     /// available balance) with a quorum validators.
     #[structopt(name = "sync_balance")]
     SynchronizeBalance {
-        /// Account id
-        account_id: AccountId,
+        /// Chain id
+        chain_id: ChainId,
     },
 
-    /// Send one transfer per account in bulk mode
+    /// Send one transfer per chain in bulk mode
     #[structopt(name = "benchmark")]
     Benchmark {
         /// Maximum number of requests in flight
         #[structopt(long, default_value = "200")]
         max_in_flight: u64,
 
-        /// Use a subset of the accounts to generate N transfers
+        /// Use a subset of the chains to generate N transfers
         #[structopt(long)]
         max_orders: Option<usize>,
 
@@ -465,18 +465,18 @@ enum ClientCommands {
         server_configs: Option<Vec<String>>,
     },
 
-    /// Create initial user accounts and print information to be used for initialization of validator setup.
+    /// Create initial user chains and print information to be used for initialization of validator setup.
     #[structopt(name = "create_genesis_config")]
     CreateGenesisConfig {
         /// Sets the file describing the public configurations of all validators
         #[structopt(long = "committee")]
         committee_config_path: PathBuf,
 
-        /// Known initial balance of the account
+        /// Known initial balance of the chain
         #[structopt(long, default_value = "0")]
         initial_funding: Balance,
 
-        /// Number of additional accounts to create
+        /// Number of additional chains to create
         num: u32,
     },
 }
@@ -492,28 +492,28 @@ async fn main() {
             recipient,
             amount,
         } => {
-            let mut client_state = context.make_account_client(sender);
+            let mut client_state = context.make_chain_client(sender);
             info!("Starting transfer");
             let time_start = Instant::now();
             let certificate = client_state
-                .transfer_to_account(amount, recipient.clone(), UserData::default())
+                .transfer_to_chain(amount, recipient.clone(), UserData::default())
                 .await
                 .unwrap();
             let time_total = time_start.elapsed().as_micros();
             info!("Operation confirmed after {} us", time_total);
             info!("{:?}", certificate);
-            context.update_account_from_state(&mut client_state).await;
+            context.update_chain_from_state(&mut client_state).await;
 
-            info!("Updating recipient's local account");
+            info!("Updating recipient's local chain");
             context
-                .update_recipient_account(certificate, None)
+                .update_recipient_chain(certificate, None)
                 .await
                 .unwrap();
-            context.save_accounts();
+            context.save_chains();
         }
 
-        ClientCommands::OpenAccount { sender, owner } => {
-            let mut client_state = context.make_account_client(sender);
+        ClientCommands::OpenChain { sender, owner } => {
+            let mut client_state = context.make_chain_client(sender);
             let (new_owner, key_pair) = match owner {
                 Some(key) => (key, None),
                 None => {
@@ -521,9 +521,9 @@ async fn main() {
                     (key_pair.public(), Some(key_pair))
                 }
             };
-            info!("Starting operation to open a new account");
+            info!("Starting operation to open a new chain");
             let time_start = Instant::now();
-            let certificate = client_state.open_account(new_owner).await.unwrap();
+            let certificate = client_state.open_chain(new_owner).await.unwrap();
             let time_total = time_start.elapsed().as_micros();
             info!("Operation confirmed after {} us", time_total);
             info!("{:?}", certificate);
@@ -537,50 +537,50 @@ async fn main() {
                     .recipient()
                     .unwrap()
             );
-            context.update_account_from_state(&mut client_state).await;
+            context.update_chain_from_state(&mut client_state).await;
 
-            info!("Updating recipient's local account");
+            info!("Updating recipient's local chain");
             context
-                .update_recipient_account(certificate, key_pair)
+                .update_recipient_chain(certificate, key_pair)
                 .await
                 .unwrap();
-            context.save_accounts();
+            context.save_chains();
         }
 
-        ClientCommands::CloseAccount { sender } => {
-            let mut client_state = context.make_account_client(sender);
-            info!("Starting operation to close the account");
+        ClientCommands::CloseChain { sender } => {
+            let mut client_state = context.make_chain_client(sender);
+            info!("Starting operation to close the chain");
             let time_start = Instant::now();
-            let certificate = client_state.close_account().await.unwrap();
+            let certificate = client_state.close_chain().await.unwrap();
             let time_total = time_start.elapsed().as_micros();
             info!("Operation confirmed after {} us", time_total);
             info!("{:?}", certificate);
-            context.update_account_from_state(&mut client_state).await;
-            context.save_accounts();
+            context.update_chain_from_state(&mut client_state).await;
+            context.save_chains();
         }
 
-        ClientCommands::QueryBalance { account_id } => {
-            let mut client_state = context.make_account_client(account_id);
-            info!("Starting query validators for the account balance");
+        ClientCommands::QueryBalance { chain_id } => {
+            let mut client_state = context.make_chain_client(chain_id);
+            info!("Starting query validators for the chain balance");
             let time_start = Instant::now();
             let balance = client_state.query_safe_balance().await.unwrap();
             let time_total = time_start.elapsed().as_micros();
             info!("Balance confirmed after {} us", time_total);
             println!("{}", balance);
-            context.update_account_from_state(&mut client_state).await;
-            context.save_accounts();
+            context.update_chain_from_state(&mut client_state).await;
+            context.save_chains();
         }
 
-        ClientCommands::SynchronizeBalance { account_id } => {
-            let mut client_state = context.make_account_client(account_id);
-            info!("Synchronize account information");
+        ClientCommands::SynchronizeBalance { chain_id } => {
+            let mut client_state = context.make_chain_client(chain_id);
+            info!("Synchronize chain information");
             let time_start = Instant::now();
             let balance = client_state.synchronize_balance().await.unwrap();
             let time_total = time_start.elapsed().as_micros();
-            info!("Account balance synchronized after {} us", time_total);
+            info!("Chain balance synchronized after {} us", time_total);
             println!("{}", balance);
-            context.update_account_from_state(&mut client_state).await;
-            context.save_accounts();
+            context.update_chain_from_state(&mut client_state).await;
+            context.save_chains();
         }
 
         ClientCommands::Benchmark {
@@ -588,7 +588,7 @@ async fn main() {
             max_orders,
             server_configs,
         } => {
-            let max_orders = max_orders.unwrap_or_else(|| context.wallet_state.num_accounts());
+            let max_orders = max_orders.unwrap_or_else(|| context.wallet_state.num_chains());
             warn!("Starting benchmark phase 1 (request orders)");
             let (orders, serialize_orders) = context.make_benchmark_request_orders(max_orders);
             let responses = context
@@ -623,7 +623,7 @@ async fn main() {
                     .iter()
                     .fold(0, |acc, buf| match deserialize_response(&buf[..]) {
                         Some(response) => {
-                            confirmed.insert(response.info.account_id);
+                            confirmed.insert(response.info.chain_id);
                             acc + 1
                         }
                         None => acc,
@@ -634,8 +634,8 @@ async fn main() {
                 confirmed.len()
             );
 
-            warn!("Updating local state of user accounts");
-            context.save_accounts();
+            warn!("Updating local state of user chains");
+            context.save_chains();
         }
 
         ClientCommands::CreateGenesisConfig {
@@ -648,18 +648,18 @@ async fn main() {
             let mut genesis_config = GenesisConfig::new(committee_config);
             for i in 0..num {
                 // Create keys.
-                let account =
-                    UserAccount::make_initial(AccountId::new(vec![SequenceNumber::from(i as u64)]));
+                let chain =
+                    UserChain::make_initial(ChainId::new(vec![SequenceNumber::from(i as u64)]));
                 // Public "genesis" state.
-                genesis_config.accounts.push((
-                    account.account_id.clone(),
-                    account.key_pair.as_ref().unwrap().public(),
+                genesis_config.chains.push((
+                    chain.chain_id.clone(),
+                    chain.key_pair.as_ref().unwrap().public(),
                     initial_funding,
                 ));
                 // Private keys.
-                context.wallet_state.insert(account);
+                context.wallet_state.insert(chain);
             }
-            context.save_accounts();
+            context.save_chains();
             genesis_config.write(&options.genesis_config_path).unwrap();
         }
     }

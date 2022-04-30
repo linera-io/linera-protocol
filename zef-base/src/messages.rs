@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{account::AccountManager, base_types::*, committee::Committee, ensure, error::Error};
+use super::{base_types::*, chain::ChainManager, committee::Committee, ensure, error::Error};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
@@ -13,11 +13,11 @@ mod messages_tests;
 /// A recipient's address.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Address {
-    Burn, // for demo purposes
-    Account(AccountId),
+    Burn,             // for demo purposes
+    Account(ChainId), // TODO: support several accounts per chain
 }
 
-/// An account operation.
+/// An chain operation.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Operation {
     /// Transfer `amount` units of value to the recipient.
@@ -26,29 +26,29 @@ pub enum Operation {
         amount: Amount,
         user_data: UserData,
     },
-    /// Create (or activate) a new account by installing the given authentication key.
-    OpenAccount {
-        new_id: AccountId,
-        new_owner: AccountOwner,
+    /// Create (or activate) a new chain by installing the given authentication key.
+    OpenChain {
+        new_id: ChainId,
+        new_owner: ChainOwner,
     },
-    /// Close the account.
-    CloseAccount,
-    /// Change the authentication key of the account.
-    ChangeOwner { new_owner: AccountOwner },
-    /// Change the authentication key of the account.
-    ChangeMultipleOwners { new_owners: Vec<AccountOwner> },
+    /// Close the chain.
+    CloseChain,
+    /// Change the authentication key of the chain.
+    ChangeOwner { new_owner: ChainOwner },
+    /// Change the authentication key of the chain.
+    ChangeMultipleOwners { new_owners: Vec<ChainOwner> },
 }
 
-/// A request containing an account operation.
+/// A request containing a chain operation.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct Request {
-    /// The account that is subject of the operation.
-    pub account_id: AccountId,
+    /// The chain that is subject of the operation.
+    pub chain_id: ChainId,
     /// The operation to execute.
     pub operation: Operation,
     /// The sequence number.
     pub sequence_number: SequenceNumber,
-    /// Round number (used for multi-owner accounts, otherwise zero).
+    /// Round number (used for multi-owner chains, otherwise zero).
     pub round: RoundNumber,
 }
 
@@ -57,7 +57,7 @@ pub struct Request {
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct RequestOrder {
     pub request: Request,
-    pub owner: AccountOwner,
+    pub owner: ChainOwner,
     pub signature: Signature,
 }
 
@@ -92,7 +92,7 @@ pub struct Certificate {
     pub signatures: Vec<(ValidatorName, Signature)>,
 }
 
-/// A range of sequence numbers as used in AccountInfoQuery.
+/// A range of sequence numbers as used in ChainInfoQuery.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct SequenceNumberRange {
@@ -102,29 +102,29 @@ pub struct SequenceNumberRange {
     pub limit: Option<usize>,
 }
 
-/// Message to obtain information on an account.
+/// Message to obtain information on a chain.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
-pub struct AccountInfoQuery {
-    /// The account id
-    pub account_id: AccountId,
+pub struct ChainInfoQuery {
+    /// The chain id
+    pub chain_id: ChainId,
     /// Optionally request that the sequence number is the one expected.
     pub check_next_sequence_number: Option<SequenceNumber>,
     /// Query the current committee.
     pub query_committee: bool,
-    /// Query a range of certificates sent from the account.
+    /// Query a range of certificates sent from the chain.
     pub query_sent_certificates_in_range: Option<SequenceNumberRange>,
-    /// Query new certificates received from the account.
+    /// Query new certificates received from the chain.
     pub query_received_certificates_excluding_first_nth: Option<usize>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
-pub struct AccountInfo {
-    /// The account id
-    pub account_id: AccountId,
-    /// The state of the account authentication.
-    pub manager: AccountManager,
+pub struct ChainInfo {
+    /// The chain id
+    pub chain_id: ChainId,
+    /// The state of the chain authentication.
+    pub manager: ChainManager,
     /// The current balance.
     pub balance: Balance,
     /// The current sequence number
@@ -139,11 +139,11 @@ pub struct AccountInfo {
     pub queried_received_certificates: Vec<Certificate>,
 }
 
-/// The response to an `AccountInfoQuery`
+/// The response to an `ChainInfoQuery`
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
-pub struct AccountInfoResponse {
-    pub info: AccountInfo,
+pub struct ChainInfoResponse {
+    pub info: ChainInfo,
     pub signature: Option<Signature>,
 }
 
@@ -156,14 +156,14 @@ pub enum CrossShardRequest {
         certificate: Certificate,
     },
     ConfirmUpdatedRecipient {
-        account_id: AccountId,
+        chain_id: ChainId,
         hash: HashValue,
     },
 }
 
 impl CrossShardRequest {
     /// Where to send the cross-shard request.
-    pub fn target_account_id(&self) -> &AccountId {
+    pub fn target_chain_id(&self) -> &ChainId {
         use CrossShardRequest::*;
         match self {
             UpdateRecipient { certificate, .. } => certificate
@@ -173,23 +173,20 @@ impl CrossShardRequest {
                 .operation
                 .recipient()
                 .unwrap(),
-            ConfirmUpdatedRecipient {
-                account_id,
-                hash: _,
-            } => account_id,
+            ConfirmUpdatedRecipient { chain_id, hash: _ } => chain_id,
         }
     }
 }
 
 impl Operation {
-    pub fn recipient(&self) -> Option<&AccountId> {
+    pub fn recipient(&self) -> Option<&ChainId> {
         use Operation::*;
         match self {
             Transfer {
                 recipient: Address::Account(id),
                 ..
             }
-            | OpenAccount { new_id: id, .. } => Some(id),
+            | OpenChain { new_id: id, .. } => Some(id),
             _ => None,
         }
     }
@@ -204,10 +201,10 @@ impl Operation {
 }
 
 impl Value {
-    pub fn account_id(&self) -> &AccountId {
+    pub fn chain_id(&self) -> &ChainId {
         match self {
-            Value::Confirmed { request } => &request.account_id,
-            Value::Validated { request, .. } => &request.account_id,
+            Value::Confirmed { request } => &request.chain_id,
+            Value::Validated { request, .. } => &request.chain_id,
         }
     }
 
@@ -248,10 +245,10 @@ impl Value {
         }
     }
 
-    pub fn confirmed_key(&self) -> Option<(AccountId, SequenceNumber)> {
+    pub fn confirmed_key(&self) -> Option<(ChainId, SequenceNumber)> {
         match self {
             Value::Confirmed { request } => {
-                Some((request.account_id.clone(), request.sequence_number))
+                Some((request.chain_id.clone(), request.sequence_number))
             }
             _ => None,
         }
@@ -269,10 +266,10 @@ impl RequestOrder {
     }
 
     // TODO: this API is not great
-    pub fn check(&self, manager: &AccountManager) -> Result<(), Error> {
+    pub fn check(&self, manager: &ChainManager) -> Result<(), Error> {
         ensure!(
             manager.is_active(),
-            Error::InactiveAccount(self.request.account_id.clone())
+            Error::InactiveChain(self.request.chain_id.clone())
         );
         ensure!(manager.has_owner(&self.owner), Error::InvalidOwner);
         self.signature.check(&self.request, self.owner)
@@ -296,8 +293,8 @@ impl Vote {
     }
 }
 
-impl AccountInfoResponse {
-    pub fn new(info: AccountInfo, key_pair: Option<&KeyPair>) -> Self {
+impl ChainInfoResponse {
+    pub fn new(info: ChainInfo, key_pair: Option<&KeyPair>) -> Self {
         let signature = key_pair.map(|kp| Signature::new(&info, kp));
         Self { info, signature }
     }
@@ -305,7 +302,7 @@ impl AccountInfoResponse {
     pub fn check(&self, name: ValidatorName) -> Result<(), Error> {
         match self.signature {
             Some(sig) => sig.check(&self.info, name),
-            None => Err(Error::InvalidAccountInfoResponse),
+            None => Err(Error::InvalidChainInfoResponse),
         }
     }
 }
@@ -418,6 +415,6 @@ impl Certificate {
     }
 }
 
-impl BcsSignable for AccountInfo {}
+impl BcsSignable for ChainInfo {}
 impl BcsSignable for Request {}
 impl BcsSignable for Value {}

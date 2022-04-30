@@ -15,8 +15,8 @@ use std::{
     time::Duration,
 };
 use zef_base::{
-    account::AccountManager, base_types::*, committee::Committee, ensure as my_ensure,
-    error::Error, messages::*,
+    base_types::*, chain::ChainManager, committee::Committee, ensure as my_ensure, error::Error,
+    messages::*,
 };
 use zef_storage::Storage;
 
@@ -24,16 +24,16 @@ use zef_storage::Storage;
 #[path = "unit_tests/client_tests.rs"]
 mod client_tests;
 
-/// How to communicate with an account across all the validators. As a rule,
+/// How to communicate with a chain across all the validators. As a rule,
 /// operations are considered successful (and communication may stop) when they succeeded
 /// in gathering a quorum of responses.
 #[async_trait]
-pub trait AccountClient {
-    /// Send money to an account.
-    async fn transfer_to_account(
+pub trait ChainClient {
+    /// Send money to a chain.
+    async fn transfer_to_chain(
         &mut self,
         amount: Amount,
-        recipient: AccountId,
+        recipient: ChainId,
         user_data: UserData,
     ) -> Result<Certificate, failure::Error>;
 
@@ -44,47 +44,44 @@ pub trait AccountClient {
         user_data: UserData,
     ) -> Result<Certificate, failure::Error>;
 
-    /// Process confirmed operation for which this account is a recipient.
+    /// Process confirmed operation for which this chain is a recipient.
     async fn receive_certificate(&mut self, certificate: Certificate)
         -> Result<(), failure::Error>;
 
-    /// Rotate the key of the account.
+    /// Rotate the key of the chain.
     async fn rotate_key_pair(&mut self, key_pair: KeyPair) -> Result<Certificate, failure::Error>;
 
-    /// Transfer ownership of the account.
+    /// Transfer ownership of the chain.
     async fn transfer_ownership(
         &mut self,
-        new_owner: AccountOwner,
+        new_owner: ChainOwner,
     ) -> Result<Certificate, failure::Error>;
 
-    /// Add another owner to the account.
+    /// Add another owner to the chain.
     async fn share_ownership(
         &mut self,
-        new_owner: AccountOwner,
+        new_owner: ChainOwner,
     ) -> Result<Certificate, failure::Error>;
 
-    /// Open a new account with a derived UID.
-    async fn open_account(
-        &mut self,
-        new_owner: AccountOwner,
-    ) -> Result<Certificate, failure::Error>;
+    /// Open a new chain with a derived UID.
+    async fn open_chain(&mut self, new_owner: ChainOwner) -> Result<Certificate, failure::Error>;
 
-    /// Close the account (and lose everything in it!!)
-    async fn close_account(&mut self) -> Result<Certificate, failure::Error>;
+    /// Close the chain (and lose everything in it!!)
+    async fn close_chain(&mut self) -> Result<Certificate, failure::Error>;
 
-    /// Send money to an account.
+    /// Send money to a chain.
     /// Do not check balance. (This may block the client)
     /// Do not confirm the transaction.
-    async fn transfer_to_account_unsafe_unconfirmed(
+    async fn transfer_to_chain_unsafe_unconfirmed(
         &mut self,
         amount: Amount,
-        recipient: AccountId,
+        recipient: ChainId,
         user_data: UserData,
     ) -> Result<Certificate, failure::Error>;
 
     /// Compute a safe (i.e. pessimistic) balance by synchronizing our "sent" certificates
     /// with validators, and otherwise using local data on received transfers (i.e.
-    /// certificates that were locally processed by `receive_from_account`).
+    /// certificates that were locally processed by `receive_from_chain`).
     async fn synchronize_balance(&mut self) -> Result<Balance, failure::Error>;
 
     /// Retry the last pending request
@@ -98,12 +95,12 @@ pub trait AccountClient {
     async fn query_safe_balance(&mut self) -> Result<Balance, Error>;
 }
 
-/// Reference implementation of the `AccountClient` trait using many instances of some
+/// Reference implementation of the `ChainClient` trait using many instances of some
 /// `ValidatorNode` implementation for communication, and a client to some (local)
 /// storage.
-pub struct AccountClientState<ValidatorNode, StorageClient> {
-    /// The off-chain account id.
-    account_id: AccountId,
+pub struct ChainClientState<ValidatorNode, StorageClient> {
+    /// The off-chain chain id.
+    chain_id: ChainId,
     /// How to talk to this committee.
     validator_clients: Vec<(ValidatorName, ValidatorNode)>,
     /// Sequence number that we plan to use for the next request.
@@ -114,7 +111,7 @@ pub struct AccountClientState<ValidatorNode, StorageClient> {
     /// Pending request.
     pending_request: Option<Request>,
     /// Known key pairs from present and past identities.
-    known_key_pairs: BTreeMap<AccountOwner, KeyPair>,
+    known_key_pairs: BTreeMap<ChainOwner, KeyPair>,
 
     /// Support synchronization of received certificates.
     received_certificate_trackers: HashMap<ValidatorName, usize>,
@@ -122,15 +119,15 @@ pub struct AccountClientState<ValidatorNode, StorageClient> {
     cross_shard_delay: Duration,
     /// How many times we are willing to retry a request that depends on cross-shard updates.
     cross_shard_retries: usize,
-    /// Local node to manage the execution state and the local storage of the accounts that we are
+    /// Local node to manage the execution state and the local storage of the chains that we are
     /// tracking.
     node_client: LocalNodeClient<StorageClient>,
 }
 
-impl<A, S> AccountClientState<A, S> {
+impl<A, S> ChainClientState<A, S> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        account_id: AccountId,
+        chain_id: ChainId,
         known_key_pairs: Vec<KeyPair>,
         validator_clients: Vec<(ValidatorName, A)>,
         storage_client: S,
@@ -145,7 +142,7 @@ impl<A, S> AccountClientState<A, S> {
         let state = WorkerState::new(None, storage_client);
         let node_client = LocalNodeClient::new(state);
         Self {
-            account_id,
+            chain_id,
             validator_clients,
             next_sequence_number,
             next_round: RoundNumber::default(),
@@ -158,8 +155,8 @@ impl<A, S> AccountClientState<A, S> {
         }
     }
 
-    pub fn account_id(&self) -> &AccountId {
-        &self.account_id
+    pub fn chain_id(&self) -> &ChainId {
+        &self.chain_id
     }
 
     pub fn next_sequence_number(&self) -> SequenceNumber {
@@ -171,14 +168,14 @@ impl<A, S> AccountClientState<A, S> {
     }
 }
 
-impl<A, S> AccountClientState<A, S>
+impl<A, S> ChainClientState<A, S>
 where
     A: ValidatorNode + Send + Sync + 'static + Clone,
     S: Storage + Clone + 'static,
 {
-    async fn account_info(&mut self) -> AccountInfo {
-        let query = AccountInfoQuery {
-            account_id: self.account_id.clone(),
+    async fn chain_info(&mut self) -> ChainInfo {
+        let query = ChainInfoQuery {
+            chain_id: self.chain_id.clone(),
             check_next_sequence_number: None,
             query_committee: false,
             query_sent_certificates_in_range: None,
@@ -186,24 +183,24 @@ where
         };
         let response = self
             .node_client
-            .handle_account_info_query(query)
+            .handle_chain_info_query(query)
             .await
             .unwrap();
         response.info
     }
 
     async fn balance(&mut self) -> Balance {
-        self.account_info().await.balance
+        self.chain_info().await.balance
     }
 
     async fn has_multi_owners(&mut self) -> bool {
-        let manager = self.account_info().await.manager;
-        matches!(manager, AccountManager::Multi(_))
+        let manager = self.chain_info().await.manager;
+        matches!(manager, ChainManager::Multi(_))
     }
 
     async fn committee(&mut self) -> Result<Committee, Error> {
-        let query = AccountInfoQuery {
-            account_id: self.account_id.clone(),
+        let query = ChainInfoQuery {
+            chain_id: self.chain_id.clone(),
             check_next_sequence_number: None,
             query_committee: true,
             query_sent_certificates_in_range: None,
@@ -211,27 +208,27 @@ where
         };
         let response = self
             .node_client
-            .handle_account_info_query(query)
+            .handle_chain_info_query(query)
             .await
             .unwrap();
         response
             .info
             .queried_committee
-            .ok_or_else(|| Error::InactiveAccount(self.account_id.clone()))
+            .ok_or_else(|| Error::InactiveChain(self.chain_id.clone()))
     }
 
-    async fn identity(&mut self) -> Result<AccountOwner, failure::Error> {
-        match self.account_info().await.manager {
-            AccountManager::Single(m) => {
+    async fn identity(&mut self) -> Result<ChainOwner, failure::Error> {
+        match self.chain_info().await.manager {
+            ChainManager::Single(m) => {
                 if !self.known_key_pairs.contains_key(&m.owner) {
                     bail!(
-                        "No key available to interact with single-owner account {}",
-                        self.account_id
+                        "No key available to interact with single-owner chain {}",
+                        self.chain_id
                     );
                 }
                 Ok(m.owner)
             }
-            AccountManager::Multi(m) => {
+            ChainManager::Multi(m) => {
                 let mut identities = Vec::new();
                 for owner in &m.owners {
                     if self.known_key_pairs.contains_key(owner) {
@@ -240,19 +237,19 @@ where
                 }
                 if identities.is_empty() {
                     bail!(
-                        "Cannot find suitable identity to interact with multi-owner account {}",
-                        self.account_id
+                        "Cannot find suitable identity to interact with multi-owner chain {}",
+                        self.chain_id
                     );
                 }
                 if identities.len() >= 2 {
                     bail!(
-                        "Found several possible identities to interact with multi-owner account {}",
-                        self.account_id
+                        "Found several possible identities to interact with multi-owner chain {}",
+                        self.chain_id
                     );
                 }
                 Ok(identities.pop().unwrap())
             }
-            AccountManager::None => Err(Error::InactiveAccount(self.account_id.clone()).into()),
+            ChainManager::None => Err(Error::InactiveChain(self.chain_id.clone()).into()),
         }
     }
 
@@ -265,22 +262,22 @@ where
     }
 }
 
-impl<A, S> AccountClientState<A, S>
+impl<A, S> ChainClientState<A, S>
 where
     A: ValidatorNode + Send + Sync + 'static + Clone,
     S: Storage + Clone + 'static,
 {
-    async fn broadcast_account_info_query(
+    async fn broadcast_chain_info_query(
         &mut self,
-        query: AccountInfoQuery,
-    ) -> Vec<(ValidatorName, AccountInfo)> {
+        query: ChainInfoQuery,
+    ) -> Vec<(ValidatorName, ChainInfo)> {
         let infos: futures::stream::FuturesUnordered<_> = self
             .validator_clients
             .iter_mut()
             .map(|(name, client)| {
                 let query = query.clone();
                 async move {
-                    match client.handle_account_info_query(query).await {
+                    match client.handle_chain_info_query(query).await {
                         Ok(response) => {
                             if response.check(*name).is_ok() {
                                 Some((*name, response.info))
@@ -296,19 +293,19 @@ where
         infos.filter_map(|x| async move { x }).collect().await
     }
 
-    /// Prepare the account for the next operation.
+    /// Prepare the chain for the next operation.
     /// * Verify that our local storage contains enough history compared to the
     ///   expected sequence number. Otherwise, download the missing history from the
     ///   network.
-    /// * For multi-owner accounts, further synchronize the sequence number and the round
+    /// * For multi-owner chains, further synchronize the sequence number and the round
     ///   from the network.
     /// * Update `self.next_sequence_number` and `self.next_round`.
-    async fn prepare_account(&mut self) -> Result<(), Error> {
+    async fn prepare_chain(&mut self) -> Result<(), Error> {
         self.next_sequence_number = self
             .node_client
             .download_certificates(
                 self.validator_clients.clone(),
-                self.account_id.clone(),
+                self.chain_id.clone(),
                 self.next_sequence_number,
             )
             .await?;
@@ -316,7 +313,7 @@ where
             // We could be missing recent certificates created by other owners.
             let (next_sequence_number, next_round) = self
                 .node_client
-                .synchronize_account_state(self.validator_clients.clone(), self.account_id.clone())
+                .synchronize_chain_state(self.validator_clients.clone(), self.chain_id.clone())
                 .await?;
             self.next_sequence_number = next_sequence_number;
             self.next_round = next_round;
@@ -326,10 +323,10 @@ where
 
     /// Broadcast confirmation orders and optionally one more request order.
     /// The corresponding sequence numbers should be consecutive and increasing.
-    async fn communicate_account_updates(
+    async fn communicate_chain_updates(
         &mut self,
         committee: &Committee,
-        account_id: AccountId,
+        chain_id: ChainId,
         action: CommunicateAction,
     ) -> Result<Option<Certificate>, failure::Error> {
         let storage_client = self.node_client.storage_client().await;
@@ -344,17 +341,17 @@ where
                 retries: cross_shard_retries,
             };
             let action = action.clone();
-            let account_id = account_id.clone();
-            Box::pin(async move { updater.send_account_update(account_id, action).await })
+            let chain_id = chain_id.clone();
+            Box::pin(async move { updater.send_chain_update(chain_id, action).await })
         })
         .await;
         let votes = match result {
             Ok(votes) => votes,
-            Err(Some(Error::InactiveAccount(id)))
-                if id == account_id
+            Err(Some(Error::InactiveChain(id)))
+                if id == chain_id
                     && matches!(action, CommunicateAction::AdvanceToNextSequenceNumber(_)) =>
             {
-                // The account is visibly not active (yet or any more) so there is no need
+                // The chain is visibly not active (yet or any more) so there is no need
                 // to synchronize sequence numbers.
                 return Ok(None);
             }
@@ -406,28 +403,28 @@ where
     ///
     /// This is a best effort: it will only find certificates that have been confirmed
     /// amongst sufficiently many validators of the current committee of the target
-    /// account.
+    /// chain.
     ///
-    /// However, this should be the case whenever a sender's account is still in use and
+    /// However, this should be the case whenever a sender's chain is still in use and
     /// is regularly upgraded to new committees.
     async fn find_received_certificates(&mut self) -> Result<(), failure::Error> {
-        let account_id = self.account_id.clone();
+        let chain_id = self.chain_id.clone();
         let committee = self.committee().await?;
         let trackers = self.received_certificate_trackers.clone();
         let result =
             communicate_with_quorum(&self.validator_clients, &committee, |name, mut client| {
-                let account_id = &account_id;
+                let chain_id = &chain_id;
                 let tracker = *trackers.get(&name).unwrap_or(&0);
                 Box::pin(async move {
                     // Retrieve new received certificates from this validator.
-                    let query = AccountInfoQuery {
-                        account_id: account_id.clone(),
+                    let query = ChainInfoQuery {
+                        chain_id: chain_id.clone(),
                         check_next_sequence_number: None,
                         query_committee: false,
                         query_sent_certificates_in_range: None,
                         query_received_certificates_excluding_first_nth: Some(tracker),
                     };
-                    let response = client.handle_account_info_query(query).await?;
+                    let response = client.handle_chain_info_query(query).await?;
                     // TODO: These quick verifications are not enough to discard (1) all
                     // invalid certificates or (2) spammy received certificates. (1): a
                     // dishonest validator could try to make us work by producing
@@ -444,7 +441,7 @@ where
                             .recipient()
                             .ok_or(Error::ClientErrorWhileRequestingCertificate)?;
                         my_ensure!(
-                            recipient == account_id,
+                            recipient == chain_id,
                             Error::ClientErrorWhileRequestingCertificate
                         );
                     }
@@ -454,8 +451,8 @@ where
             .await;
         let responses = match result {
             Ok(responses) => responses,
-            Err(Some(Error::InactiveAccount(id))) if id == account_id => {
-                // The account is visibly not active (yet or any more) so there is no need
+            Err(Some(Error::InactiveChain(id))) if id == chain_id => {
+                // The chain is visibly not active (yet or any more) so there is no need
                 // to synchronize received certificates.
                 return Ok(());
             }
@@ -495,7 +492,7 @@ where
             balance
         );
         let request = Request {
-            account_id: self.account_id.clone(),
+            chain_id: self.chain_id.clone(),
             operation: Operation::Transfer {
                 recipient,
                 amount,
@@ -512,7 +509,7 @@ where
 
     async fn process_certificate(&mut self, certificate: Certificate) -> Result<(), Error> {
         let info = self.node_client.handle_certificate(certificate).await?.info;
-        if info.account_id == self.account_id
+        if info.chain_id == self.chain_id
             && (info.next_sequence_number, info.manager.next_round())
                 > (self.next_sequence_number, self.next_round)
         {
@@ -549,26 +546,26 @@ where
             if self.has_multi_owners().await {
                 // Need two-round trips.
                 let certificate = self
-                    .communicate_account_updates(
+                    .communicate_chain_updates(
                         &committee,
-                        self.account_id.clone(),
+                        self.chain_id.clone(),
                         CommunicateAction::SubmitRequestForValidation(order.clone()),
                     )
                     .await?
                     .expect("a certificate");
                 assert_eq!(certificate.value.validated_request(), Some(&order.request));
-                self.communicate_account_updates(
+                self.communicate_chain_updates(
                     &committee,
-                    self.account_id.clone(),
+                    self.chain_id.clone(),
                     CommunicateAction::FinalizeRequest(certificate),
                 )
                 .await?
                 .expect("a certificate")
             } else {
                 // Only one round-trip is needed
-                self.communicate_account_updates(
+                self.communicate_chain_updates(
                     &committee,
-                    self.account_id.clone(),
+                    self.chain_id.clone(),
                     CommunicateAction::SubmitRequestForConfirmation(order.clone()),
                 )
                 .await?
@@ -584,9 +581,9 @@ where
         self.pending_request = None;
         // Communicate the new certificate now if needed.
         if with_confirmation {
-            self.communicate_account_updates(
+            self.communicate_chain_updates(
                 &committee,
-                self.account_id.clone(),
+                self.chain_id.clone(),
                 CommunicateAction::AdvanceToNextSequenceNumber(self.next_sequence_number),
             )
             .await?;
@@ -594,9 +591,9 @@ where
                 if new_committee != committee {
                     // If the configuration just changed, communicate to the new committee as well.
                     // (This is actually more important that updating the previous committee.)
-                    self.communicate_account_updates(
+                    self.communicate_chain_updates(
                         &new_committee,
-                        self.account_id.clone(),
+                        self.chain_id.clone(),
                         CommunicateAction::AdvanceToNextSequenceNumber(self.next_sequence_number),
                     )
                     .await?;
@@ -608,22 +605,22 @@ where
 }
 
 #[async_trait]
-impl<A, S> AccountClient for AccountClientState<A, S>
+impl<A, S> ChainClient for ChainClientState<A, S>
 where
     A: ValidatorNode + Send + Sync + Clone + 'static,
     S: Storage + Clone + 'static,
 {
     async fn query_safe_balance(&mut self) -> Result<Balance, Error> {
         let committee = self.committee().await?;
-        let query = AccountInfoQuery {
-            account_id: self.account_id.clone(),
+        let query = ChainInfoQuery {
+            chain_id: self.chain_id.clone(),
             /// This is necessary to make sure that the response is conservative.
             check_next_sequence_number: Some(self.next_sequence_number),
             query_committee: false,
             query_sent_certificates_in_range: None,
             query_received_certificates_excluding_first_nth: None,
         };
-        let infos = self.broadcast_account_info_query(query).await;
+        let infos = self.broadcast_chain_info_query(query).await;
         let value = committee.get_validity_lower_bound(
             infos
                 .into_iter()
@@ -633,10 +630,10 @@ where
         Ok(value)
     }
 
-    async fn transfer_to_account(
+    async fn transfer_to_chain(
         &mut self,
         amount: Amount,
-        recipient: AccountId,
+        recipient: ChainId,
         user_data: UserData,
     ) -> Result<Certificate, failure::Error> {
         self.transfer(amount, Address::Account(recipient), user_data)
@@ -653,13 +650,13 @@ where
 
     async fn synchronize_balance(&mut self) -> Result<Balance, failure::Error> {
         self.find_received_certificates().await?;
-        self.prepare_account().await?;
+        self.prepare_chain().await?;
         Ok(self.balance().await)
     }
 
     async fn retry_pending_request(&mut self) -> Result<Option<Certificate>, failure::Error> {
         self.find_received_certificates().await?;
-        self.prepare_account().await?;
+        self.prepare_chain().await?;
         match &self.pending_request {
             Some(request) => {
                 // Finish executing the previous request.
@@ -685,17 +682,17 @@ where
         let request = certificate
             .value
             .confirmed_request()
-            .ok_or_else(|| failure::format_err!("Was expecting a confirmed account operation"))?
+            .ok_or_else(|| failure::format_err!("Was expecting a confirmed chain operation"))?
             .clone();
         ensure!(
-            request.operation.recipient() == Some(&self.account_id),
+            request.operation.recipient() == Some(&self.chain_id),
             "Request should be received by us."
         );
         // Recover history from the network.
         self.node_client
             .download_certificates(
                 self.validator_clients.clone(),
-                request.account_id.clone(),
+                request.chain_id.clone(),
                 request.sequence_number,
             )
             .await?;
@@ -704,9 +701,9 @@ where
         // Make sure a quorum of validators (according to our committee) are up-to-date
         // for data availability.
         let committee = self.committee().await?;
-        self.communicate_account_updates(
+        self.communicate_chain_updates(
             &committee,
-            request.account_id.clone(),
+            request.chain_id.clone(),
             CommunicateAction::AdvanceToNextSequenceNumber(request.sequence_number.try_add_one()?),
         )
         .await?;
@@ -714,10 +711,10 @@ where
     }
 
     async fn rotate_key_pair(&mut self, key_pair: KeyPair) -> Result<Certificate, failure::Error> {
-        self.prepare_account().await?;
+        self.prepare_chain().await?;
         let new_owner = key_pair.public();
         let request = Request {
-            account_id: self.account_id.clone(),
+            chain_id: self.chain_id.clone(),
             operation: Operation::ChangeOwner { new_owner },
             sequence_number: self.next_sequence_number,
             round: self.next_round,
@@ -731,11 +728,11 @@ where
 
     async fn transfer_ownership(
         &mut self,
-        new_owner: AccountOwner,
+        new_owner: ChainOwner,
     ) -> Result<Certificate, failure::Error> {
-        self.prepare_account().await?;
+        self.prepare_chain().await?;
         let request = Request {
-            account_id: self.account_id.clone(),
+            chain_id: self.chain_id.clone(),
             operation: Operation::ChangeOwner { new_owner },
             sequence_number: self.next_sequence_number,
             round: self.next_round,
@@ -748,12 +745,12 @@ where
 
     async fn share_ownership(
         &mut self,
-        new_owner: AccountOwner,
+        new_owner: ChainOwner,
     ) -> Result<Certificate, failure::Error> {
-        self.prepare_account().await?;
+        self.prepare_chain().await?;
         let owner = self.identity().await?;
         let request = Request {
-            account_id: self.account_id.clone(),
+            chain_id: self.chain_id.clone(),
             operation: Operation::ChangeMultipleOwners {
                 new_owners: vec![owner, new_owner],
             },
@@ -766,15 +763,12 @@ where
         Ok(certificate)
     }
 
-    async fn open_account(
-        &mut self,
-        new_owner: AccountOwner,
-    ) -> Result<Certificate, failure::Error> {
-        self.prepare_account().await?;
-        let new_id = self.account_id.make_child(self.next_sequence_number);
+    async fn open_chain(&mut self, new_owner: ChainOwner) -> Result<Certificate, failure::Error> {
+        self.prepare_chain().await?;
+        let new_id = self.chain_id.make_child(self.next_sequence_number);
         let request = Request {
-            account_id: self.account_id.clone(),
-            operation: Operation::OpenAccount { new_id, new_owner },
+            chain_id: self.chain_id.clone(),
+            operation: Operation::OpenChain { new_id, new_owner },
             sequence_number: self.next_sequence_number,
             round: self.next_round,
         };
@@ -784,11 +778,11 @@ where
         Ok(certificate)
     }
 
-    async fn close_account(&mut self) -> Result<Certificate, failure::Error> {
-        self.prepare_account().await?;
+    async fn close_chain(&mut self) -> Result<Certificate, failure::Error> {
+        self.prepare_chain().await?;
         let request = Request {
-            account_id: self.account_id.clone(),
-            operation: Operation::CloseAccount,
+            chain_id: self.chain_id.clone(),
+            operation: Operation::CloseChain,
             sequence_number: self.next_sequence_number,
             round: self.next_round,
         };
@@ -798,15 +792,15 @@ where
         Ok(certificate)
     }
 
-    async fn transfer_to_account_unsafe_unconfirmed(
+    async fn transfer_to_chain_unsafe_unconfirmed(
         &mut self,
         amount: Amount,
-        recipient: AccountId,
+        recipient: ChainId,
         user_data: UserData,
     ) -> Result<Certificate, failure::Error> {
-        self.prepare_account().await?;
+        self.prepare_chain().await?;
         let request = Request {
-            account_id: self.account_id.clone(),
+            chain_id: self.chain_id.clone(),
             operation: Operation::Transfer {
                 recipient: Address::Account(recipient),
                 amount,
