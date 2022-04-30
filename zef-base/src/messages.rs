@@ -49,10 +49,10 @@ pub struct Request {
     pub round: RoundNumber,
 }
 
-/// An authenticated request, aka an "order".
+/// An authenticated proposal for a new block.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
-pub struct RequestOrder {
+pub struct BlockProposal {
     pub request: Request,
     pub owner: Owner,
     pub signature: Signature,
@@ -252,7 +252,7 @@ impl Value {
     }
 }
 
-impl RequestOrder {
+impl BlockProposal {
     pub fn new(request: Request, secret: &KeyPair) -> Self {
         let signature = Signature::new(&request, secret);
         Self {

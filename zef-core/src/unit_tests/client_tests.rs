@@ -15,7 +15,7 @@ use std::{
 use zef_base::{base_types::*, chain::ChainState, committee::Committee, error::Error, messages::*};
 use zef_storage::{InMemoryStoreClient, Storage};
 
-/// An validator used for testing. "Faulty" validators ignore request orders (but not
+/// An validator used for testing. "Faulty" validators ignore block proposals (but not
 /// certificates or info queries) and have the wrong initial balance for all chains.
 struct LocalValidator {
     is_faulty: bool,
@@ -27,16 +27,16 @@ struct LocalValidatorClient(Arc<Mutex<LocalValidator>>);
 
 #[async_trait]
 impl ValidatorNode for LocalValidatorClient {
-    async fn handle_request_order(
+    async fn handle_block_proposal(
         &mut self,
-        order: RequestOrder,
+        proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, Error> {
         let validator = self.0.clone();
         let mut validator = validator.lock().await;
         if validator.is_faulty {
             Err(Error::SequenceOverflow)
         } else {
-            validator.state.handle_request_order(order).await
+            validator.state.handle_block_proposal(proposal).await
         }
     }
 

@@ -316,7 +316,7 @@ where
         Ok(())
     }
 
-    /// Broadcast confirmation orders and optionally one more request order.
+    /// Broadcast certified blocks and optionally one more block proposal.
     /// The corresponding sequence numbers should be consecutive and increasing.
     async fn communicate_chain_updates(
         &mut self,
@@ -363,9 +363,9 @@ where
             })
             .collect();
         match action {
-            CommunicateAction::SubmitRequestForConfirmation(order) => {
+            CommunicateAction::SubmitRequestForConfirmation(proposal) => {
                 let value = Value::Confirmed {
-                    request: order.request,
+                    request: proposal.request,
                 };
                 let certificate = Certificate::new(value, signatures);
                 // Certificate is valid because
@@ -374,9 +374,9 @@ where
                 // * each answer is a vote signed by the expected validator.
                 Ok(Some(certificate))
             }
-            CommunicateAction::SubmitRequestForValidation(order) => {
+            CommunicateAction::SubmitRequestForValidation(proposal) => {
                 let value = Value::Validated {
-                    request: order.request,
+                    request: proposal.request,
                 };
                 let certificate = Certificate::new(value, signatures);
                 Ok(Some(certificate))
@@ -514,7 +514,7 @@ where
         Ok(())
     }
 
-    /// Execute (or retry) a regular request order. Update local balance.
+    /// Execute (or retry) a regular block proposal. Update local balance.
     /// If `with_confirmation` is false, we stop short of executing the finalized request.
     async fn execute_request(
         &mut self,
@@ -534,7 +534,7 @@ where
         self.pending_request = Some(request.clone());
         // Build the initial query.
         let key_pair = self.key_pair().await?;
-        let order = RequestOrder::new(request, key_pair);
+        let proposal = BlockProposal::new(request, key_pair);
         // Send the query.
         let committee = self.committee().await?;
         let final_certificate = {
@@ -544,11 +544,14 @@ where
                     .communicate_chain_updates(
                         &committee,
                         self.chain_id.clone(),
-                        CommunicateAction::SubmitRequestForValidation(order.clone()),
+                        CommunicateAction::SubmitRequestForValidation(proposal.clone()),
                     )
                     .await?
                     .expect("a certificate");
-                assert_eq!(certificate.value.validated_request(), Some(&order.request));
+                assert_eq!(
+                    certificate.value.validated_request(),
+                    Some(&proposal.request)
+                );
                 self.communicate_chain_updates(
                     &committee,
                     self.chain_id.clone(),
@@ -561,7 +564,7 @@ where
                 self.communicate_chain_updates(
                     &committee,
                     self.chain_id.clone(),
-                    CommunicateAction::SubmitRequestForConfirmation(order.clone()),
+                    CommunicateAction::SubmitRequestForConfirmation(proposal.clone()),
                 )
                 .await?
                 .expect("a certificate")
@@ -569,7 +572,7 @@ where
         };
         // By now the request should be final.
         ensure!(
-            final_certificate.value.confirmed_request() == Some(&order.request),
+            final_certificate.value.confirmed_request() == Some(&proposal.request),
             "A different operation was executed in parallel (consider retrying the operation)"
         );
         self.process_certificate(final_certificate.clone()).await?;
