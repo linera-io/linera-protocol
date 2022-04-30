@@ -123,11 +123,14 @@ where
             let info = chain.make_chain_info(self.key_pair.as_ref());
             return Ok((info, continuation));
         }
+        // This should always be true for valid certificates.
+        assert_eq!(chain.block_hash, block.previous_block_hash);
         // Persist certificate.
         self.storage.write_certificate(certificate.clone()).await?;
         // Execute the sender's side of the operation.
         chain.apply_operation_as_sender(&block.operation, certificate.hash)?;
         // Advance to next block height.
+        chain.block_hash = Some(certificate.hash);
         chain.next_block_height.try_add_assign_one()?;
         chain.state.manager.reset();
         // Final touch on the sender's chain.
@@ -228,11 +231,11 @@ where
         // Check authentication of the block.
         proposal.check(&chain.state.manager)?;
         // Check if the chain ready and if the block is well-formed.
-        if chain
-            .state
-            .manager
-            .check_block(chain.next_block_height, &proposal.block)?
-            == Outcome::Skip
+        if chain.state.manager.check_block(
+            chain.block_hash,
+            chain.next_block_height,
+            &proposal.block,
+        )? == Outcome::Skip
         {
             // If we just processed the same pending block, return the chain info
             // unchanged.
