@@ -36,6 +36,7 @@ async fn test_handle_request_order_bad_signature() {
         .read_active_account(&dbg_account(1))
         .await
         .unwrap()
+        .state
         .manager
         .pending()
         .is_none());
@@ -62,6 +63,7 @@ async fn test_handle_request_order_zero_amount() {
         .read_active_account(&dbg_account(1))
         .await
         .unwrap()
+        .state
         .manager
         .pending()
         .is_none());
@@ -90,6 +92,7 @@ async fn test_handle_request_order_unknown_sender() {
         .read_active_account(&dbg_account(1))
         .await
         .unwrap()
+        .state
         .manager
         .pending()
         .is_none());
@@ -123,6 +126,7 @@ async fn test_handle_request_order_bad_sequence_number() {
         .read_active_account(&dbg_account(1))
         .await
         .unwrap()
+        .state
         .manager
         .pending()
         .is_none());
@@ -149,6 +153,7 @@ async fn test_handle_request_order_exceed_balance() {
         .read_active_account(&dbg_account(1))
         .await
         .unwrap()
+        .state
         .manager
         .pending()
         .is_none());
@@ -176,6 +181,7 @@ async fn test_handle_request_order() {
         .read_active_account(&dbg_account(1))
         .await
         .unwrap()
+        .state
         .manager
         .pending()
         .cloned()
@@ -278,7 +284,7 @@ async fn test_handle_certificate_exceed_balance() {
         .read_active_account(&dbg_account(1))
         .await
         .unwrap();
-    assert_eq!(Balance::from(-995), sender_account.balance);
+    assert_eq!(Balance::from(-995), sender_account.state.balance);
     assert_eq!(SequenceNumber::from(1), sender_account.next_sequence_number);
     assert_eq!(sender_account.confirmed_log.len(), 1);
     assert!(state
@@ -311,7 +317,7 @@ async fn test_handle_certificate_receiver_balance_overflow() {
         .read_active_account(&dbg_account(1))
         .await
         .unwrap();
-    assert_eq!(Balance::from(0), new_sender_account.balance);
+    assert_eq!(Balance::from(0), new_sender_account.state.balance);
     assert_eq!(
         SequenceNumber::from(1),
         new_sender_account.next_sequence_number
@@ -322,7 +328,7 @@ async fn test_handle_certificate_receiver_balance_overflow() {
         .read_active_account(&dbg_account(2))
         .await
         .unwrap();
-    assert_eq!(Balance::max(), new_recipient_account.balance);
+    assert_eq!(Balance::max(), new_recipient_account.state.balance);
 }
 
 #[tokio::test]
@@ -346,7 +352,7 @@ async fn test_handle_certificate_receiver_equal_sender() {
         .read_active_account(&dbg_account(1))
         .await
         .unwrap();
-    assert_eq!(Balance::from(1), account.balance);
+    assert_eq!(Balance::from(1), account.state.balance);
     assert_eq!(SequenceNumber::from(1), account.next_sequence_number);
     assert_eq!(account.confirmed_log.len(), 1);
 }
@@ -379,7 +385,7 @@ async fn test_update_recipient_account() {
         .read_active_account(&dbg_account(2))
         .await
         .unwrap();
-    assert_eq!(Balance::from(11), account.balance);
+    assert_eq!(Balance::from(11), account.state.balance);
     assert_eq!(SequenceNumber::from(0), account.next_sequence_number);
     assert_eq!(account.confirmed_log.len(), 0);
     assert_eq!(account.received_log.len(), 1);
@@ -426,8 +432,8 @@ async fn test_handle_certificate_to_active_recipient() {
         .read_active_account(&dbg_account(2))
         .await
         .unwrap();
-    assert_eq!(recipient_account.balance, Balance::from(5));
-    assert!(recipient_account.manager.has_owner(&dbg_addr(2)));
+    assert_eq!(recipient_account.state.balance, Balance::from(5));
+    assert!(recipient_account.state.manager.has_owner(&dbg_addr(2)));
     assert_eq!(recipient_account.confirmed_log.len(), 0);
     assert_eq!(recipient_account.received_log.len(), 1);
 
@@ -509,8 +515,8 @@ async fn test_read_account_state_unknown_account() {
         .read_account_or_default(&unknown_account_id)
         .await
         .unwrap();
-    account.committee = Some(committee);
-    account.manager = AccountManager::single(dbg_addr(4));
+    account.state.committee = Some(committee);
+    account.state.manager = AccountManager::single(dbg_addr(4));
     state.storage.write_account(account).await.unwrap();
     assert!(state
         .storage

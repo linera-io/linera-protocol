@@ -59,13 +59,8 @@ AccountState:
   STRUCT:
     - id:
         TYPENAME: AccountId
-    - committee:
-        OPTION:
-          TYPENAME: Committee
-    - manager:
-        TYPENAME: AccountManager
-    - balance:
-        TYPENAME: Balance
+    - state:
+        TYPENAME: ExecutionState
     - next_sequence_number:
         TYPENAME: SequenceNumber
     - confirmed_log:
@@ -229,6 +224,15 @@ Error:
         STRUCT:
           - hash:
               TYPENAME: HashValue
+ExecutionState:
+  STRUCT:
+    - committee:
+        OPTION:
+          TYPENAME: Committee
+    - manager:
+        TYPENAME: AccountManager
+    - balance:
+        TYPENAME: Balance
 HashValue:
   NEWTYPESTRUCT:
     TUPLEARRAY:

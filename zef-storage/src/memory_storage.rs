@@ -84,8 +84,8 @@ async fn test_read_write() {
         .read_account_or_default(&dbg_account(1))
         .await
         .unwrap();
-    account.committee = Some(Committee::make_simple(Vec::new()));
-    account.manager = AccountManager::single(dbg_addr(2));
+    account.state.committee = Some(Committee::make_simple(Vec::new()));
+    account.state.manager = AccountManager::single(dbg_addr(2));
     store.write_account(account).await.unwrap();
     store
         .clone()
