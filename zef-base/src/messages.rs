@@ -45,6 +45,9 @@ pub struct Block {
     pub operation: Operation,
     /// The block height.
     pub block_height: BlockHeight,
+    /// Certified hash (see `Certificate` below) of the previous block in the
+    /// chain, if any.
+    pub previous_block_hash: Option<HashValue>,
     /// Round number (used for multi-owner chains, otherwise zero).
     pub round: RoundNumber,
 }
@@ -124,6 +127,8 @@ pub struct ChainInfo {
     pub manager: ChainManager,
     /// The current balance.
     pub balance: Balance,
+    /// The last block hash, if any.
+    pub block_hash: Option<HashValue>,
     /// The current block height
     pub next_block_height: BlockHeight,
     /// The current committee (if requested)
@@ -147,9 +152,10 @@ pub struct ChainInfoResponse {
 /// A (trusted) cross-chain block with a validator.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
+#[allow(clippy::large_enum_variant)]
 pub enum CrossChainRequest {
     UpdateRecipient {
-        committee: Committee,
+        committee: Committee, // TODO: This should be an epoch number.
         certificate: Certificate,
     },
     ConfirmUpdatedRecipient {

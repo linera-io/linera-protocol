@@ -128,6 +128,7 @@ impl ClientContext {
                 .collect(),
             validator_clients,
             self.storage_client.clone(),
+            chain.block_hash,
             chain.next_block_height,
             self.cross_chain_delay,
             self.cross_chain_retries,
@@ -156,6 +157,7 @@ impl ClientContext {
                 .collect(),
             validator_clients,
             self.storage_client.clone(),
+            chain.block_hash,
             chain.next_block_height,
             Duration::default(),
             0,
@@ -185,11 +187,11 @@ impl ClientContext {
                     amount: Amount::from(1),
                     user_data: UserData::default(),
                 },
+                previous_block_hash: chain.block_hash,
                 block_height: chain.next_block_height,
                 round: RoundNumber::default(),
             };
             debug!("Preparing block proposal: {:?}", block);
-            chain.next_block_height.try_add_assign_one().unwrap();
             let proposal = BlockProposal::new(block.clone(), key_pair);
             proposals.push(proposal.clone());
             let serialized_proposal =
@@ -198,6 +200,10 @@ impl ClientContext {
             if serialized_proposals.len() >= max_proposals {
                 break;
             }
+            // Update the state of the wallet.
+            let value = Value::Confirmed { block };
+            chain.block_hash = Some(HashValue::new(&value));
+            chain.next_block_height.try_add_assign_one().unwrap();
 
             next_recipient = chain.chain_id.clone();
         }
