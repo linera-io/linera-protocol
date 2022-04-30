@@ -11,6 +11,14 @@ Amount:
   NEWTYPESTRUCT: U64
 Balance:
   NEWTYPESTRUCT: I128
+BlockProposal:
+  STRUCT:
+    - request:
+        TYPENAME: Request
+    - owner:
+        TYPENAME: PublicKeyBytes
+    - signature:
+        TYPENAME: Signature
 Certificate:
   STRUCT:
     - value:
@@ -196,9 +204,9 @@ Error:
     24:
       InvalidCrossShardRequest: UNIT
     25:
-      InvalidRequestOrder: UNIT
+      InvalidBlockProposal: UNIT
     26:
-      ClientErrorWhileProcessingRequestOrder: UNIT
+      ClientErrorWhileProcessingBlockProposal: UNIT
     27:
       ClientErrorWhileRequestingCertificate: UNIT
     28:
@@ -243,9 +251,9 @@ MultiOwnerManager:
     - owners:
         SEQ:
           TYPENAME: PublicKeyBytes
-    - order:
+    - proposal:
         OPTION:
-          TYPENAME: RequestOrder
+          TYPENAME: BlockProposal
     - pending:
         OPTION:
           TYPENAME: Vote
@@ -298,14 +306,6 @@ Request:
         TYPENAME: SequenceNumber
     - round:
         TYPENAME: RoundNumber
-RequestOrder:
-  STRUCT:
-    - request:
-        TYPENAME: Request
-    - owner:
-        TYPENAME: PublicKeyBytes
-    - signature:
-        TYPENAME: Signature
 RoundNumber:
   NEWTYPESTRUCT: U64
 SequenceNumber:
@@ -319,9 +319,9 @@ SequenceNumberRange:
 SerializedMessage:
   ENUM:
     0:
-      RequestOrder:
+      BlockProposal:
         NEWTYPE:
-          TYPENAME: RequestOrder
+          TYPENAME: BlockProposal
     1:
       Certificate:
         NEWTYPE:

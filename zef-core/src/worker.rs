@@ -20,9 +20,9 @@ mod worker_tests;
 #[async_trait]
 pub trait ValidatorWorker {
     /// Initiate a new request.
-    async fn handle_request_order(
+    async fn handle_block_proposal(
         &mut self,
-        order: RequestOrder,
+        proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, Error>;
 
     /// Process a certificate, for instance to execute a confirmed request.
@@ -218,20 +218,20 @@ impl<Client> ValidatorWorker for WorkerState<Client>
 where
     Client: Storage + Clone + 'static,
 {
-    async fn handle_request_order(
+    async fn handle_block_proposal(
         &mut self,
-        order: RequestOrder,
+        proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, Error> {
         // Obtain the sender's chain.
-        let sender = order.request.chain_id.clone();
+        let sender = proposal.request.chain_id.clone();
         let mut chain = self.storage.read_active_chain(&sender).await?;
         // Check authentication of the request.
-        order.check(&chain.state.manager)?;
+        proposal.check(&chain.state.manager)?;
         // Check if the chain ready and if the request is well-formed.
         if chain
             .state
             .manager
-            .check_request(chain.next_sequence_number, &order.request)?
+            .check_request(chain.next_sequence_number, &proposal.request)?
             == Outcome::Skip
         {
             // If we just processed the same pending request, return the chain info
@@ -239,12 +239,12 @@ where
             return Ok(chain.make_chain_info(self.key_pair.as_ref()));
         }
         // Verify that the request is valid.
-        chain.validate_operation(&order.request)?;
+        chain.validate_operation(&proposal.request)?;
         // Create the vote and store it in the chain.
         chain
             .state
             .manager
-            .create_vote(order, self.key_pair.as_ref());
+            .create_vote(proposal, self.key_pair.as_ref());
         let info = chain.make_chain_info(self.key_pair.as_ref());
         self.storage.write_chain(chain).await?;
         Ok(info)
@@ -255,7 +255,7 @@ where
         &mut self,
         certificate: Certificate,
     ) -> Result<(ChainInfoResponse, Vec<CrossShardRequest>), Error> {
-        // Process the order.
+        // Process the proposal.
         match &certificate.value {
             Value::Validated { request } => {
                 // Confirm the validated request.

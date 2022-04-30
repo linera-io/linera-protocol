@@ -12,8 +12,8 @@ use zef_storage::Storage;
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone)]
 pub enum CommunicateAction {
-    SubmitRequestForConfirmation(RequestOrder),
-    SubmitRequestForValidation(RequestOrder),
+    SubmitRequestForConfirmation(BlockProposal),
+    SubmitRequestForValidation(BlockProposal),
     FinalizeRequest(Certificate),
     AdvanceToNextSequenceNumber(SequenceNumber),
 }
@@ -113,10 +113,13 @@ where
         }
     }
 
-    pub async fn send_request_order(&mut self, order: RequestOrder) -> Result<ChainInfo, Error> {
+    pub async fn send_block_proposal(
+        &mut self,
+        proposal: BlockProposal,
+    ) -> Result<ChainInfo, Error> {
         let mut count = 0;
         loop {
-            match self.client.handle_request_order(order.clone()).await {
+            match self.client.handle_block_proposal(proposal.clone()).await {
                 Ok(response) => {
                     response.check(self.name)?;
                     // Succeed
@@ -219,9 +222,9 @@ where
         action: CommunicateAction,
     ) -> Result<Option<Vote>, Error> {
         let target_sequence_number = match &action {
-            CommunicateAction::SubmitRequestForValidation(order)
-            | CommunicateAction::SubmitRequestForConfirmation(order) => {
-                order.request.sequence_number
+            CommunicateAction::SubmitRequestForValidation(proposal)
+            | CommunicateAction::SubmitRequestForConfirmation(proposal) => {
+                proposal.request.sequence_number
             }
             CommunicateAction::FinalizeRequest(certificate) => {
                 certificate
@@ -235,20 +238,20 @@ where
         // Update the validator with missing information, if needed.
         self.send_chain_information(chain_id.clone(), target_sequence_number)
             .await?;
-        // Send the request order (if any) and return a vote.
+        // Send the block proposal (if any) and return a vote.
         match action {
-            CommunicateAction::SubmitRequestForValidation(order)
-            | CommunicateAction::SubmitRequestForConfirmation(order) => {
-                let result = self.send_request_order(order.clone()).await;
+            CommunicateAction::SubmitRequestForValidation(proposal)
+            | CommunicateAction::SubmitRequestForConfirmation(proposal) => {
+                let result = self.send_block_proposal(proposal.clone()).await;
                 let info = match result {
                     Ok(info) => info,
-                    Err(e) if ChainState::is_retriable_validation_error(&order.request, &e) => {
+                    Err(e) if ChainState::is_retriable_validation_error(&proposal.request, &e) => {
                         // Some received certificates may be missing for this validator
                         // (e.g. to make the balance sufficient) so we are going to
                         // synchronize them now.
                         self.send_chain_information_as_a_receiver(chain_id).await?;
                         // Now retry the request.
-                        self.send_request_order(order).await?
+                        self.send_block_proposal(proposal).await?
                     }
                     Err(e) => {
                         return Err(e);
@@ -259,7 +262,7 @@ where
                         vote.check(self.name)?;
                         return Ok(Some(vote.clone()));
                     }
-                    None => return Err(Error::ClientErrorWhileProcessingRequestOrder),
+                    None => return Err(Error::ClientErrorWhileProcessingBlockProposal),
                 }
             }
             CommunicateAction::FinalizeRequest(certificate) => {
@@ -271,7 +274,7 @@ where
                         vote.check(self.name)?;
                         return Ok(Some(vote.clone()));
                     }
-                    None => return Err(Error::ClientErrorWhileProcessingRequestOrder),
+                    None => return Err(Error::ClientErrorWhileProcessingBlockProposal),
                 }
             }
             CommunicateAction::AdvanceToNextSequenceNumber(_) => (),

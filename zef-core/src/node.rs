@@ -14,9 +14,9 @@ use zef_storage::Storage;
 #[async_trait]
 pub trait ValidatorNode {
     /// Initiate a new transfer.
-    async fn handle_request_order(
+    async fn handle_block_proposal(
         &mut self,
-        order: RequestOrder,
+        proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, Error>;
 
     /// Process a certificate.
@@ -45,13 +45,13 @@ impl<S> ValidatorNode for LocalNodeClient<S>
 where
     S: Storage + Clone + 'static,
 {
-    async fn handle_request_order(
+    async fn handle_block_proposal(
         &mut self,
-        order: RequestOrder,
+        proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, Error> {
         let node = self.0.clone();
         let mut node = node.lock().await;
-        node.state.handle_request_order(order).await
+        node.state.handle_block_proposal(proposal).await
     }
 
     async fn handle_certificate(
@@ -295,20 +295,20 @@ where
                 return Ok((next_sequence_number, next_round));
             }
         };
-        if let Some(order) = manager.order {
+        if let Some(proposal) = manager.proposal {
             // Check the sequence number.
-            if order.request.chain_id != chain_id
-                || order.request.sequence_number != next_sequence_number
+            if proposal.request.chain_id != chain_id
+                || proposal.request.sequence_number != next_sequence_number
             {
                 // Give up
                 return Ok((next_sequence_number, next_round));
             }
-            match self.handle_request_order(order).await {
+            match self.handle_block_proposal(proposal).await {
                 Ok(response) => {
                     next_round = response.info.manager.next_round();
                 }
                 Err(e) => {
-                    log::warn!("Invalid request order: {}", e);
+                    log::warn!("Invalid block proposal: {}", e);
                 }
             }
         }

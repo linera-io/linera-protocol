@@ -71,7 +71,7 @@ pub struct MultiOwnerManager {
     /// The co-owners of the chain.
     pub owners: HashSet<Owner>,
     /// Latest authenticated request that we have received.
-    pub order: Option<RequestOrder>,
+    pub proposal: Option<BlockProposal>,
     /// Latest proposal that we have voted on (either to validate or to confirm it).
     pub pending: Option<Vote>,
     /// Latest validated proposal that we have seen (and voted to confirm).
@@ -104,7 +104,7 @@ impl MultiOwnerManager {
     pub fn new(owners: HashSet<Owner>) -> Self {
         MultiOwnerManager {
             owners,
-            order: None,
+            proposal: None,
             pending: None,
             locked: None,
         }
@@ -200,7 +200,7 @@ impl ChainManager {
             ChainManager::Single(manager) => {
                 ensure!(
                     new_request.round == RoundNumber::default(),
-                    Error::InvalidRequestOrder
+                    Error::InvalidBlockProposal
                 );
                 if let Some(vote) = &manager.pending {
                     match &vote.value {
@@ -208,7 +208,7 @@ impl ChainManager {
                             return Err(Error::PreviousRequestMustBeConfirmedFirst);
                         }
                         Value::Validated { .. } => {
-                            return Err(Error::InvalidRequestOrder);
+                            return Err(Error::InvalidBlockProposal);
                         }
                         _ => (),
                     }
@@ -291,12 +291,12 @@ impl ChainManager {
         }
     }
 
-    pub fn create_vote(&mut self, order: RequestOrder, key_pair: Option<&KeyPair>) {
+    pub fn create_vote(&mut self, proposal: BlockProposal, key_pair: Option<&KeyPair>) {
         match self {
             ChainManager::Single(manager) => {
                 if let Some(key_pair) = key_pair {
                     // Vote to confirm
-                    let request = order.request;
+                    let request = proposal.request;
                     let value = Value::Confirmed { request };
                     let vote = Vote::new(value, key_pair);
                     manager.pending = Some(vote);
@@ -304,10 +304,10 @@ impl ChainManager {
             }
             ChainManager::Multi(manager) => {
                 // Record the user's authenticated request
-                manager.order = Some(order.clone());
+                manager.proposal = Some(proposal.clone());
                 if let Some(key_pair) = key_pair {
                     // Vote to validate
-                    let request = order.request;
+                    let request = proposal.request;
                     let value = Value::Validated { request };
                     let vote = Vote::new(value, key_pair);
                     manager.pending = Some(vote);
