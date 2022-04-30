@@ -179,7 +179,7 @@ impl WalletState {
 #[derive(Serialize, Deserialize)]
 pub struct GenesisConfig {
     pub committee: CommitteeConfig,
-    pub chains: Vec<(ChainId, ChainOwner, Balance)>,
+    pub chains: Vec<(ChainId, Owner, Balance)>,
 }
 
 impl Import for GenesisConfig {}

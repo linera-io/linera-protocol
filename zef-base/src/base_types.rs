@@ -63,7 +63,7 @@ pub struct HashValue(generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Dige
 pub type ValidatorName = PublicKeyBytes;
 
 /// Alias for the authentication method of a chain.
-pub type ChainOwner = PublicKeyBytes;
+pub type Owner = PublicKeyBytes;
 
 // For testing only
 pub fn dbg_chain(name: u8) -> ChainId {

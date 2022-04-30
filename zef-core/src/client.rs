@@ -52,19 +52,14 @@ pub trait ChainClient {
     async fn rotate_key_pair(&mut self, key_pair: KeyPair) -> Result<Certificate, failure::Error>;
 
     /// Transfer ownership of the chain.
-    async fn transfer_ownership(
-        &mut self,
-        new_owner: ChainOwner,
-    ) -> Result<Certificate, failure::Error>;
+    async fn transfer_ownership(&mut self, new_owner: Owner)
+        -> Result<Certificate, failure::Error>;
 
     /// Add another owner to the chain.
-    async fn share_ownership(
-        &mut self,
-        new_owner: ChainOwner,
-    ) -> Result<Certificate, failure::Error>;
+    async fn share_ownership(&mut self, new_owner: Owner) -> Result<Certificate, failure::Error>;
 
     /// Open a new chain with a derived UID.
-    async fn open_chain(&mut self, new_owner: ChainOwner) -> Result<Certificate, failure::Error>;
+    async fn open_chain(&mut self, new_owner: Owner) -> Result<Certificate, failure::Error>;
 
     /// Close the chain (and lose everything in it!!)
     async fn close_chain(&mut self) -> Result<Certificate, failure::Error>;
@@ -111,7 +106,7 @@ pub struct ChainClientState<ValidatorNode, StorageClient> {
     /// Pending request.
     pending_request: Option<Request>,
     /// Known key pairs from present and past identities.
-    known_key_pairs: BTreeMap<ChainOwner, KeyPair>,
+    known_key_pairs: BTreeMap<Owner, KeyPair>,
 
     /// Support synchronization of received certificates.
     received_certificate_trackers: HashMap<ValidatorName, usize>,
@@ -217,7 +212,7 @@ where
             .ok_or_else(|| Error::InactiveChain(self.chain_id.clone()))
     }
 
-    async fn identity(&mut self) -> Result<ChainOwner, failure::Error> {
+    async fn identity(&mut self) -> Result<Owner, failure::Error> {
         match self.chain_info().await.manager {
             ChainManager::Single(m) => {
                 if !self.known_key_pairs.contains_key(&m.owner) {
@@ -728,7 +723,7 @@ where
 
     async fn transfer_ownership(
         &mut self,
-        new_owner: ChainOwner,
+        new_owner: Owner,
     ) -> Result<Certificate, failure::Error> {
         self.prepare_chain().await?;
         let request = Request {
@@ -743,10 +738,7 @@ where
         Ok(certificate)
     }
 
-    async fn share_ownership(
-        &mut self,
-        new_owner: ChainOwner,
-    ) -> Result<Certificate, failure::Error> {
+    async fn share_ownership(&mut self, new_owner: Owner) -> Result<Certificate, failure::Error> {
         self.prepare_chain().await?;
         let owner = self.identity().await?;
         let request = Request {
@@ -763,7 +755,7 @@ where
         Ok(certificate)
     }
 
-    async fn open_chain(&mut self, new_owner: ChainOwner) -> Result<Certificate, failure::Error> {
+    async fn open_chain(&mut self, new_owner: Owner) -> Result<Certificate, failure::Error> {
         self.prepare_chain().await?;
         let new_id = self.chain_id.make_child(self.next_sequence_number);
         let request = Request {

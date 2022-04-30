@@ -59,7 +59,7 @@ pub enum ChainManager {
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct SingleOwnerManager {
     /// The owner of the chain.
-    pub owner: ChainOwner,
+    pub owner: Owner,
     /// Latest proposal that we have voted on last (both to validate and confirm it).
     pub pending: Option<Vote>,
 }
@@ -69,7 +69,7 @@ pub struct SingleOwnerManager {
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct MultiOwnerManager {
     /// The co-owners of the chain.
-    pub owners: HashSet<ChainOwner>,
+    pub owners: HashSet<Owner>,
     /// Latest authenticated request that we have received.
     pub order: Option<RequestOrder>,
     /// Latest proposal that we have voted on (either to validate or to confirm it).
@@ -92,7 +92,7 @@ impl Default for ChainManager {
 }
 
 impl SingleOwnerManager {
-    pub fn new(owner: ChainOwner) -> Self {
+    pub fn new(owner: Owner) -> Self {
         SingleOwnerManager {
             owner,
             pending: None,
@@ -101,7 +101,7 @@ impl SingleOwnerManager {
 }
 
 impl MultiOwnerManager {
-    pub fn new(owners: HashSet<ChainOwner>) -> Self {
+    pub fn new(owners: HashSet<Owner>) -> Self {
         MultiOwnerManager {
             owners,
             order: None,
@@ -131,11 +131,11 @@ impl MultiOwnerManager {
 }
 
 impl ChainManager {
-    pub fn single(owner: ChainOwner) -> Self {
+    pub fn single(owner: Owner) -> Self {
         ChainManager::Single(Box::new(SingleOwnerManager::new(owner)))
     }
 
-    pub fn multiple(owners: HashSet<ChainOwner>) -> Self {
+    pub fn multiple(owners: HashSet<Owner>) -> Self {
         ChainManager::Multi(Box::new(MultiOwnerManager::new(owners)))
     }
 
@@ -156,7 +156,7 @@ impl ChainManager {
         !matches!(self, ChainManager::None)
     }
 
-    pub fn has_owner(&self, owner: &ChainOwner) -> bool {
+    pub fn has_owner(&self, owner: &Owner) -> bool {
         match self {
             ChainManager::Single(manager) => manager.owner == *owner,
             ChainManager::Multi(manager) => manager.owners.contains(owner),
@@ -374,7 +374,7 @@ impl ChainState {
         }
     }
 
-    pub fn create(committee: Committee, id: ChainId, owner: ChainOwner, balance: Balance) -> Self {
+    pub fn create(committee: Committee, id: ChainId, owner: Owner, balance: Balance) -> Self {
         let mut chain = Self::new(id);
         chain.state.committee = Some(committee);
         chain.state.manager = ChainManager::single(owner);
