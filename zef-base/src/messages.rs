@@ -36,9 +36,9 @@ pub enum Operation {
     ChangeMultipleOwners { new_owners: Vec<Owner> },
 }
 
-/// A request containing a chain operation.
+/// A block containing a chain operation.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct Request {
+pub struct Block {
     /// The chain that is subject of the operation.
     pub chain_id: ChainId,
     /// The operation to execute.
@@ -53,7 +53,7 @@ pub struct Request {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct BlockProposal {
-    pub request: Request,
+    pub block: Block,
     pub owner: Owner,
     pub signature: Signature,
 }
@@ -61,10 +61,10 @@ pub struct BlockProposal {
 /// A statement to be certified by the validators.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Value {
-    /// The request was validated but confirmation will require additional steps.
-    Validated { request: Request },
-    /// The request is validated and final (i.e. ready to be executed).
-    Confirmed { request: Request },
+    /// The block was validated but confirmation will require additional steps.
+    Validated { block: Block },
+    /// The block is validated and final (i.e. ready to be executed).
+    Confirmed { block: Block },
 }
 
 /// A vote on a statement from an validator.
@@ -105,7 +105,7 @@ pub struct SequenceNumberRange {
 pub struct ChainInfoQuery {
     /// The chain id
     pub chain_id: ChainId,
-    /// Optionally request that the sequence number is the one expected.
+    /// Optionally block that the sequence number is the one expected.
     pub check_next_sequence_number: Option<SequenceNumber>,
     /// Query the current committee.
     pub query_committee: bool,
@@ -144,7 +144,7 @@ pub struct ChainInfoResponse {
     pub signature: Option<Signature>,
 }
 
-/// A (trusted) cross-chain request with an validator.
+/// A (trusted) cross-chain block with an validator.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub enum CrossChainRequest {
@@ -159,13 +159,13 @@ pub enum CrossChainRequest {
 }
 
 impl CrossChainRequest {
-    /// Where to send the cross-chain request.
+    /// Where to send the cross-chain block.
     pub fn target_chain_id(&self) -> &ChainId {
         use CrossChainRequest::*;
         match self {
             UpdateRecipient { certificate, .. } => certificate
                 .value
-                .confirmed_request()
+                .confirmed_block()
                 .unwrap()
                 .operation
                 .recipient()
@@ -200,63 +200,61 @@ impl Operation {
 impl Value {
     pub fn chain_id(&self) -> &ChainId {
         match self {
-            Value::Confirmed { request } => &request.chain_id,
-            Value::Validated { request, .. } => &request.chain_id,
+            Value::Confirmed { block } => &block.chain_id,
+            Value::Validated { block, .. } => &block.chain_id,
         }
     }
 
-    pub fn request(&self) -> &Request {
+    pub fn block(&self) -> &Block {
         match self {
-            Value::Confirmed { request } => request,
-            Value::Validated { request, .. } => request,
+            Value::Confirmed { block } => block,
+            Value::Validated { block, .. } => block,
         }
     }
 
     #[cfg(test)]
     pub fn confirmed_sequence_number(&self) -> Option<SequenceNumber> {
         match self {
-            Value::Confirmed { request } => Some(request.sequence_number),
+            Value::Confirmed { block } => Some(block.sequence_number),
             _ => None,
         }
     }
 
-    pub fn confirmed_request(&self) -> Option<&Request> {
+    pub fn confirmed_block(&self) -> Option<&Block> {
         match self {
-            Value::Confirmed { request } => Some(request),
+            Value::Confirmed { block } => Some(block),
             _ => None,
         }
     }
 
-    pub fn validated_request(&self) -> Option<&Request> {
+    pub fn validated_block(&self) -> Option<&Block> {
         match self {
-            Value::Validated { request, .. } => Some(request),
+            Value::Validated { block, .. } => Some(block),
             _ => None,
         }
     }
 
     #[cfg(test)]
-    pub fn confirmed_request_mut(&mut self) -> Option<&mut Request> {
+    pub fn confirmed_block_mut(&mut self) -> Option<&mut Block> {
         match self {
-            Value::Confirmed { request } => Some(request),
+            Value::Confirmed { block } => Some(block),
             _ => None,
         }
     }
 
     pub fn confirmed_key(&self) -> Option<(ChainId, SequenceNumber)> {
         match self {
-            Value::Confirmed { request } => {
-                Some((request.chain_id.clone(), request.sequence_number))
-            }
+            Value::Confirmed { block } => Some((block.chain_id.clone(), block.sequence_number)),
             _ => None,
         }
     }
 }
 
 impl BlockProposal {
-    pub fn new(request: Request, secret: &KeyPair) -> Self {
-        let signature = Signature::new(&request, secret);
+    pub fn new(block: Block, secret: &KeyPair) -> Self {
+        let signature = Signature::new(&block, secret);
         Self {
-            request,
+            block,
             owner: secret.public(),
             signature,
         }
@@ -266,10 +264,10 @@ impl BlockProposal {
     pub fn check(&self, manager: &ChainManager) -> Result<(), Error> {
         ensure!(
             manager.is_active(),
-            Error::InactiveChain(self.request.chain_id.clone())
+            Error::InactiveChain(self.block.chain_id.clone())
         );
         ensure!(manager.has_owner(&self.owner), Error::InvalidOwner);
-        self.signature.check(&self.request, self.owner)
+        self.signature.check(&self.block, self.owner)
     }
 }
 
@@ -413,5 +411,5 @@ impl Certificate {
 }
 
 impl BcsSignable for ChainInfo {}
-impl BcsSignable for Request {}
+impl BcsSignable for Block {}
 impl BcsSignable for Value {}

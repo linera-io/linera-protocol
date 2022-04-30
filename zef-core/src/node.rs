@@ -106,8 +106,8 @@ where
     ) -> Result<Option<SequenceNumber>, Error> {
         let mut next_sequence_number = None;
         for certificate in certificates {
-            if let Value::Confirmed { request } = &certificate.value {
-                if &request.chain_id == chain_id {
+            if let Value::Confirmed { block } = &certificate.value {
+                if &block.chain_id == chain_id {
                     match self.handle_certificate(certificate).await {
                         Ok(response) => {
                             next_sequence_number = Some(response.info.next_sequence_number);
@@ -181,7 +181,7 @@ where
         if target_next_sequence_number <= current {
             Ok(current)
         } else {
-            Err(Error::ClientErrorWhileRequestingCertificate)
+            Err(Error::ClientErrorWhileQueryingCertificate)
         }
     }
 
@@ -244,7 +244,7 @@ where
         let maximum = values
             .into_iter()
             .max()
-            .ok_or(Error::ClientErrorWhileRequestingCertificate)?;
+            .ok_or(Error::ClientErrorWhileQueryingCertificate)?;
         Ok(maximum)
     }
 
@@ -297,8 +297,8 @@ where
         };
         if let Some(proposal) = manager.proposal {
             // Check the sequence number.
-            if proposal.request.chain_id != chain_id
-                || proposal.request.sequence_number != next_sequence_number
+            if proposal.block.chain_id != chain_id
+                || proposal.block.sequence_number != next_sequence_number
             {
                 // Give up
                 return Ok((next_sequence_number, next_round));
@@ -313,9 +313,9 @@ where
             }
         }
         if let Some(cert) = manager.locked {
-            if let Value::Validated { request } = &cert.value {
+            if let Value::Validated { block } = &cert.value {
                 // Check the sequence number.
-                if request.chain_id != chain_id || request.sequence_number != next_sequence_number {
+                if block.chain_id != chain_id || block.sequence_number != next_sequence_number {
                     // Give up
                     return Ok((next_sequence_number, next_round));
                 }

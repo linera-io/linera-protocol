@@ -26,7 +26,7 @@ async fn test_handle_block_proposal_bad_signature() {
     let unknown_key_pair = KeyPair::generate();
     let mut bad_signature_block_proposal = block_proposal.clone();
     bad_signature_block_proposal.signature =
-        Signature::new(&block_proposal.request, &unknown_key_pair);
+        Signature::new(&block_proposal.block, &unknown_key_pair);
     assert!(state
         .handle_block_proposal(bad_signature_block_proposal)
         .await
@@ -51,7 +51,7 @@ async fn test_handle_block_proposal_zero_amount() {
         (dbg_chain(2), dbg_addr(2), Balance::from(0)),
     ])
     .await;
-    // test request non-positive amount
+    // test block non-positive amount
     let zero_amount_block_proposal =
         make_transfer_block_proposal(dbg_chain(1), &sender_key_pair, recipient, Amount::zero());
     assert!(state
@@ -82,7 +82,7 @@ async fn test_handle_block_proposal_unknown_sender() {
         make_transfer_block_proposal(dbg_chain(1), &sender_key_pair, recipient, Amount::from(5));
     let unknown_key = KeyPair::generate();
 
-    let unknown_sender_block_proposal = BlockProposal::new(block_proposal.request, &unknown_key);
+    let unknown_sender_block_proposal = BlockProposal::new(block_proposal.block, &unknown_key);
     assert!(state
         .handle_block_proposal(unknown_sender_block_proposal)
         .await
@@ -367,7 +367,7 @@ async fn test_update_recipient_chain() {
     );
     let operation = certificate
         .value
-        .confirmed_request()
+        .confirmed_block()
         .unwrap()
         .operation
         .clone();
@@ -443,7 +443,7 @@ async fn test_handle_certificate_to_active_recipient() {
     assert_eq!(response.info.queried_received_certificates.len(), 1);
     assert!(matches!(response.info.queried_received_certificates[0]
             .value
-            .confirmed_request()
+            .confirmed_block()
             .unwrap()
             .operation, Operation::Transfer { amount, .. } if amount == Amount::from(5)));
 }
@@ -555,7 +555,7 @@ fn make_transfer_block_proposal(
     recipient: Address,
     amount: Amount,
 ) -> BlockProposal {
-    let request = Request {
+    let block = Block {
         chain_id,
         operation: Operation::Transfer {
             recipient,
@@ -565,7 +565,7 @@ fn make_transfer_block_proposal(
         sequence_number: SequenceNumber::new(),
         round: RoundNumber::default(),
     };
-    BlockProposal::new(request, secret)
+    BlockProposal::new(block, secret)
 }
 
 fn make_certificate(
@@ -589,7 +589,7 @@ fn make_transfer_certificate(
     committee: &Committee,
     state: &WorkerState<InMemoryStoreClient>,
 ) -> Certificate {
-    let request = make_transfer_block_proposal(chain_id, key_pair, recipient, amount).request;
-    let value = Value::Confirmed { request };
+    let block = make_transfer_block_proposal(chain_id, key_pair, recipient, amount).block;
+    let value = Value::Confirmed { block };
     make_certificate(committee, state, value)
 }

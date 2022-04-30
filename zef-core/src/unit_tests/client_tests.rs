@@ -209,9 +209,9 @@ impl TestBuilder {
                         ..
                     } = response.info;
                     if let Some(cert) = queried_sent_certificates.pop() {
-                        if let Value::Confirmed { request } = &cert.value {
-                            if request.chain_id == chain_id
-                                && request.sequence_number == sequence_number
+                        if let Value::Confirmed { block } = &cert.value {
+                            if block.chain_id == chain_id
+                                && block.sequence_number == sequence_number
                             {
                                 cert.check(&self.committee).unwrap();
                                 count += 1;
@@ -254,7 +254,7 @@ async fn test_initiating_valid_transfer() {
         .await
         .unwrap();
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
-    assert!(sender.pending_request.is_none());
+    assert!(sender.pending_block.is_none());
     assert_eq!(sender.query_safe_balance().await.unwrap(), Balance::from(1));
     assert_eq!(
         builder
@@ -280,7 +280,7 @@ async fn test_rotate_key_pair() {
     let new_pubk = new_key_pair.public();
     let certificate = sender.rotate_key_pair(new_key_pair).await.unwrap();
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
-    assert!(sender.pending_request.is_none());
+    assert!(sender.pending_block.is_none());
     assert_eq!(sender.identity().await.unwrap(), new_pubk);
     assert_eq!(
         builder
@@ -317,7 +317,7 @@ async fn test_transfer_ownership() {
     let new_pubk = new_key_pair.public();
     let certificate = sender.transfer_ownership(new_pubk).await.unwrap();
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
-    assert!(sender.pending_request.is_none());
+    assert!(sender.pending_block.is_none());
     assert!(sender.key_pair().await.is_err());
     assert_eq!(
         builder
@@ -353,7 +353,7 @@ async fn test_share_ownership() {
     let new_pubk = new_key_pair.public();
     let certificate = sender.share_ownership(new_pubk).await.unwrap();
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
-    assert!(sender.pending_request.is_none());
+    assert!(sender.pending_block.is_none());
     assert!(sender.key_pair().await.is_ok());
     assert_eq!(
         builder
@@ -404,7 +404,7 @@ async fn test_open_chain_then_close_it() {
     // Open the new chain.
     let certificate = sender.open_chain(new_pubk).await.unwrap();
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
-    assert!(sender.pending_request.is_none());
+    assert!(sender.pending_block.is_none());
     assert!(sender.key_pair().await.is_ok());
     // Make a client to try the new chain.
     let mut client = builder
@@ -436,7 +436,7 @@ async fn test_open_chain_after_transfer() {
     // Open the new chain.
     let certificate = sender.open_chain(new_pubk).await.unwrap();
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(2));
-    assert!(sender.pending_request.is_none());
+    assert!(sender.pending_block.is_none());
     assert!(sender.key_pair().await.is_ok());
     assert_eq!(
         builder
@@ -451,7 +451,7 @@ async fn test_open_chain_after_transfer() {
         certificate.value
     );
     assert!(matches!(&certificate.value, Value::Confirmed{
-        request: Request {
+        block: Block {
             operation: Operation::OpenChain { new_id:id, .. },
             ..
         }} if &new_id == id
@@ -489,7 +489,7 @@ async fn test_open_chain_before_transfer() {
         .await
         .unwrap();
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(2));
-    assert!(sender.pending_request.is_none());
+    assert!(sender.pending_block.is_none());
     assert!(sender.key_pair().await.is_ok());
     // Make a client to try the new chain.
     let mut client = builder
@@ -518,14 +518,14 @@ async fn test_close_chain() {
     assert!(matches!(
         &certificate.value,
         Value::Confirmed {
-            request: Request {
+            block: Block {
                 operation: Operation::CloseChain,
                 ..
             }
         }
     ));
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
-    assert!(sender.pending_request.is_none());
+    assert!(sender.pending_block.is_none());
     assert!(sender.key_pair().await.is_err());
     assert_eq!(
         builder
@@ -558,7 +558,7 @@ async fn test_initiating_valid_transfer_too_many_faults() {
         .await
         .is_err());
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(0));
-    assert!(sender.pending_request.is_some());
+    assert!(sender.pending_block.is_some());
     assert_eq!(sender.query_safe_balance().await.unwrap(), Balance::from(4));
 }
 
@@ -587,7 +587,7 @@ async fn test_bidirectional_transfer() {
         .unwrap();
 
     assert_eq!(client1.next_sequence_number, SequenceNumber::from(1));
-    assert!(client1.pending_request.is_none());
+    assert!(client1.pending_block.is_none());
     assert_eq!(client1.balance().await, Balance::from(0));
     assert_eq!(
         client1.query_safe_balance().await.unwrap(),
@@ -631,7 +631,7 @@ async fn test_bidirectional_transfer() {
         .await
         .unwrap();
     assert_eq!(client2.next_sequence_number, SequenceNumber::from(1));
-    assert!(client2.pending_request.is_none());
+    assert!(client2.pending_block.is_none());
     assert_eq!(
         client2.query_safe_balance().await.unwrap(),
         Balance::from(2)
@@ -662,7 +662,7 @@ async fn test_receiving_unconfirmed_transfer() {
     // Transfer was executed locally.
     assert_eq!(client1.balance().await, Balance::from(1));
     assert_eq!(client1.next_sequence_number, SequenceNumber::from(1));
-    assert!(client1.pending_request.is_none());
+    assert!(client1.pending_block.is_none());
     // ..but not confirmed remotely, hence a conservative result.
     assert_eq!(
         client1.query_safe_balance().await.unwrap(),
@@ -715,7 +715,7 @@ async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
         )
         .await
         .unwrap();
-    // Sending an unchecked transfer request from client2 to client3 fails because one
+    // Sending an unchecked transfer block from client2 to client3 fails because one
     // honest validator is lagging and client2 doesn't know about the missing received
     // certificate.
     assert!(client2
@@ -728,14 +728,14 @@ async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
         .is_err());
     // Retrying works because it starts by investigating possible missing received
     // certificates.
-    let certificate = client2.retry_pending_request().await.unwrap().unwrap();
-    // Requests were executed locally.
+    let certificate = client2.retry_pending_block().await.unwrap().unwrap();
+    // Blocks were executed locally.
     assert_eq!(client1.balance().await, Balance::from(1));
     assert_eq!(client1.next_sequence_number, SequenceNumber::from(2));
-    assert!(client1.pending_request.is_none());
+    assert!(client1.pending_block.is_none());
     assert_eq!(client2.balance().await, Balance::from(0));
     assert_eq!(client2.next_sequence_number, SequenceNumber::from(1));
-    assert!(client2.pending_request.is_none());
+    assert!(client2.pending_block.is_none());
     // Last one was not confirmed remotely, hence a conservative balance.
     assert_eq!(
         client2.query_safe_balance().await.unwrap(),

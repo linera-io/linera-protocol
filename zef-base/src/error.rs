@@ -21,22 +21,22 @@ pub enum Error {
     // Chain access control
     #[fail(display = "The chain being queried is not active {:?}", 0)]
     InactiveChain(ChainId),
-    #[fail(display = "Request was not signed by an authorized owner")]
+    #[fail(display = "Block was not signed by an authorized owner")]
     InvalidOwner,
 
     // Chain sequencing
     #[fail(
-        display = "The sequence number in a request should match the next expected sequence number of the chain"
+        display = "The sequence number in a block should match the next expected sequence number of the chain"
     )]
     UnexpectedSequenceNumber,
-    #[fail(display = "Sequence numbers above the maximal value are not usable for requests.")]
+    #[fail(display = "Sequence numbers above the maximal value are not usable for blocks.")]
     InvalidSequenceNumber,
     #[fail(
-        display = "Cannot initiate a new request while the previous one is still pending confirmation"
+        display = "Cannot initiate a new block while the previous one is still pending confirmation"
     )]
-    PreviousRequestMustBeConfirmedFirst,
+    PreviousBlockMustBeConfirmedFirst,
     #[fail(
-        display = "Cannot confirm a request before its predecessors: {:?}",
+        display = "Cannot confirm a block before its predecessors: {:?}",
         current_sequence_number
     )]
     MissingEarlierConfirmations {
@@ -71,7 +71,7 @@ pub enum Error {
     #[fail(display = "The given chain info response is invalid.")]
     InvalidChainInfoResponse,
 
-    // Validation of operations and requests
+    // Validation of operations and blocks
     #[fail(display = "Transfers must have positive amount")]
     IncorrectTransferAmount,
     #[fail(
@@ -92,7 +92,7 @@ pub enum Error {
     // Other server-side errors
     #[fail(display = "No certificate for this chain and sequence number")]
     CertificateNotFound,
-    #[fail(display = "Invalid cross chain request.")]
+    #[fail(display = "Invalid cross chain block.")]
     InvalidCrossChainRequest,
     #[fail(display = "Invalid block proposal.")]
     InvalidBlockProposal,
@@ -101,7 +101,7 @@ pub enum Error {
     #[fail(display = "Client failed to obtain a valid response to the block proposal")]
     ClientErrorWhileProcessingBlockProposal,
     #[fail(display = "Client failed to obtain a valid response to the certificate request")]
-    ClientErrorWhileRequestingCertificate,
+    ClientErrorWhileQueryingCertificate,
 
     // Networking and sharding
     #[fail(display = "Wrong shard used.")]
