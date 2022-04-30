@@ -17,10 +17,10 @@ use structopt::StructOpt;
 use tokio::time;
 
 /// Static shard assignment
-pub fn get_shard(num_shards: u32, account_id: &AccountId) -> u32 {
+pub fn get_shard(num_shards: u32, chain_id: &ChainId) -> u32 {
     use std::hash::{Hash, Hasher};
     let mut s = std::collections::hash_map::DefaultHasher::new();
-    account_id.hash(&mut s);
+    chain_id.hash(&mut s);
     (s.finish() % num_shards as u64) as u32
 }
 
@@ -79,8 +79,8 @@ impl<Storage> Server<Storage> {
         }
     }
 
-    pub(crate) fn which_shard(&self, account_id: &AccountId) -> ShardId {
-        get_shard(self.num_shards, account_id)
+    pub(crate) fn which_shard(&self, chain_id: &ChainId) -> ShardId {
+        get_shard(self.num_shards, chain_id)
     }
 
     pub fn packets_processed(&self) -> u64 {
@@ -217,7 +217,7 @@ where
                             .handle_request_order(*message)
                             .await
                             .map(|info| {
-                                Some(serialize_message(&SerializedMessage::AccountInfoResponse(
+                                Some(serialize_message(&SerializedMessage::ChainInfoResponse(
                                     Box::new(info),
                                 )))
                             }),
@@ -228,19 +228,19 @@ where
                                     self.handle_continuation(continuation).await;
                                     // Response
                                     Ok(Some(serialize_message(
-                                        &SerializedMessage::AccountInfoResponse(Box::new(info)),
+                                        &SerializedMessage::ChainInfoResponse(Box::new(info)),
                                     )))
                                 }
                                 Err(error) => Err(error),
                             }
                         }
-                        SerializedMessage::AccountInfoQuery(message) => self
+                        SerializedMessage::ChainInfoQuery(message) => self
                             .server
                             .state
-                            .handle_account_info_query(*message)
+                            .handle_chain_info_query(*message)
                             .await
                             .map(|info| {
-                                Some(serialize_message(&SerializedMessage::AccountInfoResponse(
+                                Some(serialize_message(&SerializedMessage::ChainInfoResponse(
                                     Box::new(info),
                                 )))
                             }),
@@ -258,9 +258,7 @@ where
                         }
                         SerializedMessage::Vote(_)
                         | SerializedMessage::Error(_)
-                        | SerializedMessage::AccountInfoResponse(_) => {
-                            Err(Error::UnexpectedMessage)
-                        }
+                        | SerializedMessage::ChainInfoResponse(_) => Err(Error::UnexpectedMessage),
                     }
                 }
             };
@@ -300,7 +298,7 @@ where
     ) -> futures::future::BoxFuture<()> {
         Box::pin(async move {
             for request in requests {
-                let shard_id = self.server.which_shard(request.target_account_id());
+                let shard_id = self.server.which_shard(request.target_chain_id());
                 let buffer =
                     serialize_message(&SerializedMessage::CrossShardRequest(Box::new(request)));
                 debug!(
@@ -368,7 +366,7 @@ impl Client {
         &mut self,
         shard: ShardId,
         buf: Vec<u8>,
-    ) -> Result<AccountInfoResponse, Error> {
+    ) -> Result<ChainInfoResponse, Error> {
         match self.send_recv_bytes_internal(shard, buf).await {
             Err(error) => Err(Error::ClientIoError {
                 error: format!("{}", error),
@@ -376,7 +374,7 @@ impl Client {
             Ok(response) => {
                 // Parse reply
                 match deserialize_message(&response[..]) {
-                    Ok(SerializedMessage::AccountInfoResponse(resp)) => Ok(*resp),
+                    Ok(SerializedMessage::ChainInfoResponse(resp)) => Ok(*resp),
                     Ok(SerializedMessage::Error(error)) => Err(*error),
                     Err(_) => Err(Error::InvalidDecoding),
                     _ => Err(Error::UnexpectedMessage),
@@ -392,8 +390,8 @@ impl ValidatorNode for Client {
     async fn handle_request_order(
         &mut self,
         order: RequestOrder,
-    ) -> Result<AccountInfoResponse, Error> {
-        let shard = get_shard(self.num_shards, &order.request.account_id);
+    ) -> Result<ChainInfoResponse, Error> {
+        let shard = get_shard(self.num_shards, &order.request.chain_id);
         self.send_recv_info_bytes(
             shard,
             serialize_message(&SerializedMessage::RequestOrder(Box::new(order))),
@@ -405,8 +403,8 @@ impl ValidatorNode for Client {
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-    ) -> Result<AccountInfoResponse, Error> {
-        let shard = get_shard(self.num_shards, certificate.value.account_id());
+    ) -> Result<ChainInfoResponse, Error> {
+        let shard = get_shard(self.num_shards, certificate.value.chain_id());
         self.send_recv_info_bytes(
             shard,
             serialize_message(&SerializedMessage::Certificate(Box::new(certificate))),
@@ -414,15 +412,15 @@ impl ValidatorNode for Client {
         .await
     }
 
-    /// Handle information queries for this account.
-    async fn handle_account_info_query(
+    /// Handle information queries for this chain.
+    async fn handle_chain_info_query(
         &mut self,
-        request: AccountInfoQuery,
-    ) -> Result<AccountInfoResponse, Error> {
-        let shard = get_shard(self.num_shards, &request.account_id);
+        request: ChainInfoQuery,
+    ) -> Result<ChainInfoResponse, Error> {
+        let shard = get_shard(self.num_shards, &request.chain_id);
         self.send_recv_info_bytes(
             shard,
-            serialize_message(&SerializedMessage::AccountInfoQuery(Box::new(request))),
+            serialize_message(&SerializedMessage::ChainInfoQuery(Box::new(request))),
         )
         .await
     }
@@ -558,7 +556,7 @@ fn test_get_shards() {
     let mut left = num_shards;
     let mut i = 1;
     loop {
-        let shard = get_shard(num_shards, &AccountId(vec![i.into()])) as usize;
+        let shard = get_shard(num_shards, &ChainId(vec![i.into()])) as usize;
         println!("found {}", shard);
         if !found[shard] {
             found[shard] = true;

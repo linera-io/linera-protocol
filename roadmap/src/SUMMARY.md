@@ -10,9 +10,9 @@
 
     - [Programmablity](./milestones/programmability.md)
 
-    - [Multi-Owner Accounts](./milestones/multi_owner.md)
+    - [Multi-Owner Chains](./milestones/multi_owner.md)
 
-    - [Mempool-Driven Accounts](./milestones/mempools.md)
+    - [Mempool-Driven Chains](./milestones/mempools.md)
 
     - [Reconfiguration](./milestones/reconfiguration.md)
 

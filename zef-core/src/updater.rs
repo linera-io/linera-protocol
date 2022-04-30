@@ -5,12 +5,10 @@
 use crate::node::ValidatorNode;
 use futures::{future, StreamExt};
 use std::{collections::HashMap, time::Duration};
-use zef_base::{
-    account::AccountState, base_types::*, committee::Committee, error::Error, messages::*,
-};
+use zef_base::{base_types::*, chain::ChainState, committee::Committee, error::Error, messages::*};
 use zef_storage::Storage;
 
-/// Used for `communicate_account_updates`
+/// Used for `communicate_chain_updates`
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone)]
 pub enum CommunicateAction {
@@ -92,7 +90,7 @@ where
         &mut self,
         certificate: Certificate,
         retryable: bool,
-    ) -> Result<AccountInfo, Error> {
+    ) -> Result<ChainInfo, Error> {
         let mut count = 0;
         loop {
             match self.client.handle_certificate(certificate.clone()).await {
@@ -101,7 +99,7 @@ where
                     // Succeed
                     return Ok(response.info);
                 }
-                Err(Error::InactiveAccount(_)) if retryable && count < self.retries => {
+                Err(Error::InactiveChain(_)) if retryable && count < self.retries => {
                     // Retry
                     tokio::time::sleep(self.delay).await;
                     count += 1;
@@ -115,7 +113,7 @@ where
         }
     }
 
-    pub async fn send_request_order(&mut self, order: RequestOrder) -> Result<AccountInfo, Error> {
+    pub async fn send_request_order(&mut self, order: RequestOrder) -> Result<ChainInfo, Error> {
         let mut count = 0;
         loop {
             match self.client.handle_request_order(order.clone()).await {
@@ -124,7 +122,7 @@ where
                     // Succeed
                     return Ok(response.info);
                 }
-                Err(Error::InactiveAccount(_)) if count < self.retries => {
+                Err(Error::InactiveChain(_)) if count < self.retries => {
                     // Retry
                     tokio::time::sleep(self.delay).await;
                     count += 1;
@@ -138,26 +136,26 @@ where
         }
     }
 
-    pub async fn send_account_information(
+    pub async fn send_chain_information(
         &mut self,
-        mut account_id: AccountId,
+        mut chain_id: ChainId,
         mut target_sequence_number: SequenceNumber,
     ) -> Result<(), Error> {
         let mut jobs = Vec::new();
         loop {
             // Figure out which certificates this validator is missing.
-            let query = AccountInfoQuery {
-                account_id: account_id.clone(),
+            let query = ChainInfoQuery {
+                chain_id: chain_id.clone(),
                 check_next_sequence_number: None,
                 query_committee: false,
                 query_sent_certificates_in_range: None,
                 query_received_certificates_excluding_first_nth: None,
             };
-            match self.client.handle_account_info_query(query).await {
+            match self.client.handle_chain_info_query(query).await {
                 Ok(response) if response.info.manager.is_active() => {
                     response.check(self.name)?;
                     jobs.push((
-                        account_id,
+                        chain_id,
                         response.info.next_sequence_number,
                         target_sequence_number,
                         false,
@@ -166,16 +164,16 @@ where
                 }
                 Ok(response) => {
                     response.check(self.name)?;
-                    match account_id.split() {
-                        None => return Err(Error::InactiveAccount(account_id)),
+                    match chain_id.split() {
+                        None => return Err(Error::InactiveChain(chain_id)),
                         Some((parent_id, number)) => {
                             jobs.push((
-                                account_id,
+                                chain_id,
                                 SequenceNumber::from(0),
                                 target_sequence_number,
                                 true,
                             ));
-                            account_id = parent_id;
+                            chain_id = parent_id;
                             target_sequence_number = number.try_add_one()?;
                         }
                     }
@@ -183,15 +181,15 @@ where
                 Err(e) => return Err(e),
             }
         }
-        for (account_id, initial_sequence_number, target_sequence_number, retryable) in
+        for (chain_id, initial_sequence_number, target_sequence_number, retryable) in
             jobs.into_iter().rev()
         {
-            // Obtain account state.
-            let account = self.store.read_account_or_default(&account_id).await?;
+            // Obtain chain state.
+            let chain = self.store.read_chain_or_default(&chain_id).await?;
             // Send the requested certificates in order.
             for number in usize::from(initial_sequence_number)..usize::from(target_sequence_number)
             {
-                let key = account
+                let key = chain
                     .confirmed_log
                     .get(number)
                     .expect("certificate should be known locally");
@@ -202,22 +200,22 @@ where
         Ok(())
     }
 
-    pub async fn send_account_information_as_a_receiver(
+    pub async fn send_chain_information_as_a_receiver(
         &mut self,
-        account_id: AccountId,
+        chain_id: ChainId,
     ) -> Result<(), Error> {
-        // Obtain account state.
-        let account = self.store.read_account_or_default(&account_id).await?;
-        for (sender_id, sequence_number) in account.received_index.iter() {
-            self.send_account_information(sender_id.clone(), sequence_number.try_add_one()?)
+        // Obtain chain state.
+        let chain = self.store.read_chain_or_default(&chain_id).await?;
+        for (sender_id, sequence_number) in chain.received_index.iter() {
+            self.send_chain_information(sender_id.clone(), sequence_number.try_add_one()?)
                 .await?;
         }
         Ok(())
     }
 
-    pub async fn send_account_update(
+    pub async fn send_chain_update(
         &mut self,
-        account_id: AccountId,
+        chain_id: ChainId,
         action: CommunicateAction,
     ) -> Result<Option<Vote>, Error> {
         let target_sequence_number = match &action {
@@ -235,7 +233,7 @@ where
             CommunicateAction::AdvanceToNextSequenceNumber(seq) => *seq,
         };
         // Update the validator with missing information, if needed.
-        self.send_account_information(account_id.clone(), target_sequence_number)
+        self.send_chain_information(chain_id.clone(), target_sequence_number)
             .await?;
         // Send the request order (if any) and return a vote.
         match action {
@@ -244,12 +242,11 @@ where
                 let result = self.send_request_order(order.clone()).await;
                 let info = match result {
                     Ok(info) => info,
-                    Err(e) if AccountState::is_retriable_validation_error(&order.request, &e) => {
+                    Err(e) if ChainState::is_retriable_validation_error(&order.request, &e) => {
                         // Some received certificates may be missing for this validator
                         // (e.g. to make the balance sufficient) so we are going to
                         // synchronize them now.
-                        self.send_account_information_as_a_receiver(account_id)
-                            .await?;
+                        self.send_chain_information_as_a_receiver(chain_id).await?;
                         // Now retry the request.
                         self.send_request_order(order).await?
                     }
@@ -266,7 +263,7 @@ where
                 }
             }
             CommunicateAction::FinalizeRequest(certificate) => {
-                // The only cause for a retry is that the first certificate of a newly opened account.
+                // The only cause for a retry is that the first certificate of a newly opened chain.
                 let retryable = target_sequence_number == SequenceNumber::from(0);
                 let info = self.send_certificate(certificate, retryable).await?;
                 match info.manager.pending() {

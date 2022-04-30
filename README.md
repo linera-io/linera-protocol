@@ -43,12 +43,12 @@ trap 'kill $(jobs -p)' EXIT
    server_4.json:udp:127.0.0.1:9400:4 \
 --committee committee.json
 
-# Create configuration files for 1000 user accounts.
-# * Private account states are stored in one local wallet `wallet.json`.
-# * `genesis.json` will contain the initial balances of accounts as well as the initial committee.
+# Create configuration files for 1000 user chains.
+# * Private chain states are stored in one local wallet `wallet.json`.
+# * `genesis.json` will contain the initial balances of chains as well as the initial committee.
 ./client --wallet wallet.json --genesis genesis.json create_genesis_config 1000 --initial-funding 100 --committee committee.json
 
-# Start servers and create initial accounts in DB
+# Start servers and create initial chains in DB
 for I in 1 2 3 4
 do
     for J in $(seq 0 3)
@@ -59,34 +59,34 @@ do
 
 LAST_PID="$!"
 
-# Query balance for first and last user account
-ACCOUNT1="[0]"
-ACCOUNT2="[999]"
-./client --wallet wallet.json --genesis genesis.json query_balance "$ACCOUNT1"
-./client --wallet wallet.json --genesis genesis.json query_balance "$ACCOUNT2"
+# Query balance for first and last user chain
+CHAIN1="[0]"
+CHAIN2="[999]"
+./client --wallet wallet.json --genesis genesis.json query_balance "$CHAIN1"
+./client --wallet wallet.json --genesis genesis.json query_balance "$CHAIN2"
 
 # Transfer 10 units
-./client --wallet wallet.json --genesis genesis.json transfer 10 --from "$ACCOUNT1" --to "$ACCOUNT2"
+./client --wallet wallet.json --genesis genesis.json transfer 10 --from "$CHAIN1" --to "$CHAIN2"
 
 # Restart last server
 kill "$LAST_PID"
 ./server run --server server_"$I".json --shard "$J" --genesis genesis.json &
 
 # Query balances again
-./client --wallet wallet.json --genesis genesis.json query_balance "$ACCOUNT1"
-./client --wallet wallet.json --genesis genesis.json query_balance "$ACCOUNT2"
+./client --wallet wallet.json --genesis genesis.json query_balance "$CHAIN1"
+./client --wallet wallet.json --genesis genesis.json query_balance "$CHAIN2"
 
-# Launch local benchmark using all user accounts
+# Launch local benchmark using all user chains
 ./client --wallet wallet.json --genesis genesis.json benchmark --max-in-flight 50
 
-# Create derived account
-ACCOUNT3="`./client --wallet wallet.json --genesis genesis.json open_account --from "$ACCOUNT1"`"
+# Create derived chain
+CHAIN3="`./client --wallet wallet.json --genesis genesis.json open_chain --from "$CHAIN1"`"
 
-# Inspect state of derived account
-fgrep '"account_id"':"$ACCOUNT3" wallet.json
+# Inspect state of derived chain
+fgrep '"chain_id"':"$CHAIN3" wallet.json
 
-# Query the balance of the first account
-./client --wallet wallet.json --genesis genesis.json query_balance "$ACCOUNT1"
+# Query the balance of the first chain
+./client --wallet wallet.json --genesis genesis.json query_balance "$CHAIN1"
 
 cd ../..
 ```

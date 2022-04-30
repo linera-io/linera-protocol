@@ -6,7 +6,7 @@ Other DeFi applications may also be considered.
 ## Automated Market Making
 
 - The liquidity pool can be sharded (the sharding mechanism of the pool does
-  not have to match the sharding used on the zef account side).
+  not have to match the sharding used on the zef chain side).
 - "Real time" reporting of trades that can be used to update some price oracles
   and so provide "smart" rebalancing functionalities to the shards.
 

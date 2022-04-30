@@ -6,7 +6,7 @@ We also aim at fully supporting crashes and restarts of workers.
 
 ## Requirements
 
-* Workers load existing accounts from remote storage the first time, then keep updating storage.
+* Workers load existing chains from remote storage the first time, then keep updating storage.
   *Optionally*, local storage is also supported for tests and benchmarks.
 
 * Workers are crash-resistant:
@@ -15,15 +15,15 @@ We also aim at fully supporting crashes and restarts of workers.
     - However, crashes may cause unused data to temporarily persist in hot storage.
 
 * Clients do not send their queries directly to the shard but instead to a load balancer (i.e. the service entry-point).
-    - The load balancer can detect if a worker is off-line, then re-assign its logical shards (aka user accounts).
+    - The load balancer can detect if a worker is off-line, then re-assign its logical shards (aka user chains).
     - To avoid downtime (see lease below), the load balancer should signal to a worker that a shard is moved out.
     - Cross-shard requests need to be routed using the latest shard assignment.
     - However, this is a best effort and occasionally cross-shard requests will be lost (then re-tried) when
       the shard assignment changes.
 
-* To ensure sequential execution of transactions within each account (despite LB rebalancing or possible
-  bugs etc), every worker must takes a "lease" (i.e. a lock with a TTL) before it can read or modify an account.
-    - At all time, there can be no more than one worker in possession of the lease for a given account.
+* To ensure sequential execution of transactions within each chain (despite LB rebalancing or possible
+  bugs etc), every worker must takes a "lease" (i.e. a lock with a TTL) before it can read or modify a chain.
+    - At all time, there can be no more than one worker in possession of the lease for a given chain.
     - A lease terminates when its time expires before renewal (crashed worker) or when it is explicitly invalidated (shard re-assignment).
     - Active workers should renew their leases regularly and ahead of time to avoid downtime due to network latency.
     - The validity of a lease should be considered with a safety margin to allow for small discrepancies between clocks in the system.

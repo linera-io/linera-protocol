@@ -12,9 +12,9 @@ fn test_signed_values() {
     let name1 = key1.public();
 
     let request = Request {
-        account_id: dbg_account(1),
+        chain_id: dbg_chain(1),
         operation: Operation::Transfer {
-            recipient: Address::Account(dbg_account(2)),
+            recipient: Address::Account(dbg_chain(2)),
             amount: Amount::from(1),
             user_data: UserData::default(),
         },
@@ -44,9 +44,9 @@ fn test_certificates() {
     let committee = Committee::new(validators);
 
     let request = Request {
-        account_id: dbg_account(1),
+        chain_id: dbg_chain(1),
         operation: Operation::Transfer {
-            recipient: Address::Account(dbg_account(1)),
+            recipient: Address::Account(dbg_chain(1)),
             amount: Amount::from(1),
             user_data: UserData::default(),
         },
