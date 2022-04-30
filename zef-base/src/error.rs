@@ -92,8 +92,8 @@ pub enum Error {
     // Other server-side errors
     #[fail(display = "No certificate for this chain and sequence number")]
     CertificateNotFound,
-    #[fail(display = "Invalid cross shard request.")]
-    InvalidCrossShardRequest,
+    #[fail(display = "Invalid cross chain request.")]
+    InvalidCrossChainRequest,
     #[fail(display = "Invalid block proposal.")]
     InvalidBlockProposal,
 

@@ -19,7 +19,7 @@ pub enum SerializedMessage {
     ChainInfoResponse(Box<ChainInfoResponse>),
     Error(Box<Error>),
     // Internal to an validator
-    CrossShardRequest(Box<CrossShardRequest>),
+    CrossChainRequest(Box<CrossChainRequest>),
 }
 
 fn serialize<T>(msg: &T) -> Vec<u8>
