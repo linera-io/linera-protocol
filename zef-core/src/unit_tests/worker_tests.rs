@@ -530,7 +530,7 @@ fn init_state() -> (Committee, WorkerState<InMemoryStoreClient>) {
     (committee, state)
 }
 
-async fn init_state_with_chains<I: IntoIterator<Item = (ChainId, ChainOwner, Balance)>>(
+async fn init_state_with_chains<I: IntoIterator<Item = (ChainId, Owner, Balance)>>(
     balances: I,
 ) -> (Committee, WorkerState<InMemoryStoreClient>) {
     let (committee, mut state) = init_state();
@@ -543,7 +543,7 @@ async fn init_state_with_chains<I: IntoIterator<Item = (ChainId, ChainOwner, Bal
 
 async fn init_state_with_chain(
     id: ChainId,
-    owner: ChainOwner,
+    owner: Owner,
     balance: Balance,
 ) -> (Committee, WorkerState<InMemoryStoreClient>) {
     init_state_with_chains(std::iter::once((id, owner, balance))).await

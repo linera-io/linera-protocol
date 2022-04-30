@@ -422,7 +422,7 @@ enum ClientCommands {
 
         /// Public key of the new owner (otherwise create a key pair and remember it)
         #[structopt(long = "to-owner")]
-        owner: Option<ChainOwner>,
+        owner: Option<Owner>,
     },
 
     /// Close (i.e. deactivate) an existing chain. (Consider `spend_and_transfer`
