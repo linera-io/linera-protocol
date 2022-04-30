@@ -99,7 +99,7 @@ async fn test_handle_block_proposal_unknown_sender() {
 }
 
 #[tokio::test]
-async fn test_handle_block_proposal_bad_sequence_number() {
+async fn test_handle_block_proposal_bad_block_height() {
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(dbg_chain(2));
     let (_, mut state) = init_state_with_chains(vec![
@@ -116,7 +116,7 @@ async fn test_handle_block_proposal_bad_sequence_number() {
         .await
         .unwrap();
     sender_chain
-        .next_sequence_number
+        .next_block_height
         .try_add_assign_one()
         .unwrap();
     state.storage.write_chain(sender_chain).await.unwrap();
@@ -237,7 +237,7 @@ async fn test_handle_certificate_unknown_sender() {
 }
 
 #[tokio::test]
-async fn test_handle_certificate_bad_sequence_number() {
+async fn test_handle_certificate_bad_block_height() {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut state) = init_state_with_chains(vec![
         (dbg_chain(1), sender_key_pair.public(), Balance::from(5)),
@@ -258,7 +258,7 @@ async fn test_handle_certificate_bad_sequence_number() {
         .await
         .is_ok());
     assert!(state.fully_handle_certificate(certificate).await.is_ok());
-    // TODO: test the case of a sequence number in the future (aka lagging validator)
+    // TODO: test the case of a block height in the future (aka lagging validator)
 }
 
 #[tokio::test]
@@ -285,7 +285,7 @@ async fn test_handle_certificate_exceed_balance() {
         .await
         .unwrap();
     assert_eq!(Balance::from(-995), sender_chain.state.balance);
-    assert_eq!(SequenceNumber::from(1), sender_chain.next_sequence_number);
+    assert_eq!(BlockHeight::from(1), sender_chain.next_block_height);
     assert_eq!(sender_chain.confirmed_log.len(), 1);
     assert!(state.storage.read_active_chain(&dbg_chain(2)).await.is_ok());
 }
@@ -315,8 +315,8 @@ async fn test_handle_certificate_receiver_balance_overflow() {
         .unwrap();
     assert_eq!(Balance::from(0), new_sender_chain.state.balance);
     assert_eq!(
-        SequenceNumber::from(1),
-        new_sender_chain.next_sequence_number
+        BlockHeight::from(1),
+        new_sender_chain.next_block_height
     );
     assert_eq!(new_sender_chain.confirmed_log.len(), 1);
     let new_recipient_chain = state
@@ -348,7 +348,7 @@ async fn test_handle_certificate_receiver_equal_sender() {
         .await
         .unwrap();
     assert_eq!(Balance::from(1), chain.state.balance);
-    assert_eq!(SequenceNumber::from(1), chain.next_sequence_number);
+    assert_eq!(BlockHeight::from(1), chain.next_block_height);
     assert_eq!(chain.confirmed_log.len(), 1);
 }
 
@@ -381,7 +381,7 @@ async fn test_update_recipient_chain() {
         .await
         .unwrap();
     assert_eq!(Balance::from(11), chain.state.balance);
-    assert_eq!(SequenceNumber::from(0), chain.next_sequence_number);
+    assert_eq!(BlockHeight::from(0), chain.next_block_height);
     assert_eq!(chain.confirmed_log.len(), 0);
     assert_eq!(chain.received_log.len(), 1);
 }
@@ -410,7 +410,7 @@ async fn test_handle_certificate_to_active_recipient() {
         .info;
     assert_eq!(dbg_chain(1), info.chain_id);
     assert_eq!(Balance::from(0), info.balance);
-    assert_eq!(SequenceNumber::from(1), info.next_sequence_number);
+    assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert!(info.manager.pending().is_none());
     assert_eq!(
         state
@@ -434,7 +434,7 @@ async fn test_handle_certificate_to_active_recipient() {
 
     let info_query = ChainInfoQuery {
         chain_id: dbg_chain(2),
-        check_next_sequence_number: None,
+        check_next_block_height: None,
         query_committee: false,
         query_sent_certificates_in_range: None,
         query_received_certificates_excluding_first_nth: Some(0),
@@ -473,7 +473,7 @@ async fn test_handle_certificate_to_inactive_recipient() {
         .info;
     assert_eq!(dbg_chain(1), info.chain_id);
     assert_eq!(Balance::from(0), info.balance);
-    assert_eq!(SequenceNumber::from(1), info.next_sequence_number);
+    assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert!(info.manager.pending().is_none());
     assert_eq!(
         state
@@ -562,7 +562,7 @@ fn make_transfer_block_proposal(
             amount,
             user_data: UserData::default(),
         },
-        sequence_number: SequenceNumber::new(),
+        block_height: BlockHeight::new(),
         round: RoundNumber::default(),
     };
     BlockProposal::new(block, secret)

@@ -93,9 +93,9 @@ where
         let sender = block.chain_id.clone();
         // Check that the chain is active and ready for this confirmation.
         let mut chain = self.storage.read_active_chain(&sender).await?;
-        if chain.next_sequence_number < block.sequence_number {
+        if chain.next_block_height < block.block_height {
             return Err(Error::MissingEarlierConfirmations {
-                current_sequence_number: chain.next_sequence_number,
+                current_block_height: chain.next_block_height,
             });
         }
         // Verify the certificate. Returns a catch-all error to make client code more robust.
@@ -118,7 +118,7 @@ where
                 certificate,
             })
             .collect();
-        if chain.next_sequence_number > block.sequence_number {
+        if chain.next_block_height > block.block_height {
             // Block was already confirmed.
             let info = chain.make_chain_info(self.key_pair.as_ref());
             return Ok((info, continuation));
@@ -127,8 +127,8 @@ where
         self.storage.write_certificate(certificate.clone()).await?;
         // Execute the sender's side of the operation.
         chain.apply_operation_as_sender(&block.operation, certificate.hash)?;
-        // Advance to next sequence number.
-        chain.next_sequence_number.try_add_assign_one()?;
+        // Advance to next block height.
+        chain.next_block_height.try_add_assign_one()?;
         chain.state.manager.reset();
         // Final touch on the sender's chain.
         let info = chain.make_chain_info(self.key_pair.as_ref());
@@ -168,7 +168,7 @@ where
         if chain
             .state
             .manager
-            .check_validated_block(chain.next_sequence_number, &block)?
+            .check_validated_block(chain.next_block_height, &block)?
             == Outcome::Skip
         {
             // If we just processed the same pending block, return the chain info
@@ -201,7 +201,7 @@ where
                 committee,
                 certificate.hash,
                 block.chain_id.clone(),
-                block.sequence_number,
+                block.block_height,
             )?;
             if need_update {
                 self.storage.write_certificate(certificate).await?;
@@ -231,7 +231,7 @@ where
         if chain
             .state
             .manager
-            .check_block(chain.next_sequence_number, &proposal.block)?
+            .check_block(chain.next_block_height, &proposal.block)?
             == Outcome::Skip
         {
             // If we just processed the same pending block, return the chain info
@@ -281,10 +281,10 @@ where
         if query.query_committee {
             info.queried_committee = chain.state.committee;
         }
-        if let Some(next_sequence_number) = query.check_next_sequence_number {
+        if let Some(next_block_height) = query.check_next_block_height {
             ensure!(
-                chain.next_sequence_number == next_sequence_number,
-                Error::UnexpectedSequenceNumber
+                chain.next_block_height == next_block_height,
+                Error::UnexpectedBlockHeight
             );
         }
         if let Some(range) = query.query_sent_certificates_in_range {

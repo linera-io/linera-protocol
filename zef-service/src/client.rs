@@ -128,7 +128,7 @@ impl ClientContext {
                 .collect(),
             validator_clients,
             self.storage_client.clone(),
-            chain.next_sequence_number,
+            chain.next_block_height,
             self.cross_chain_delay,
             self.cross_chain_retries,
         )
@@ -156,7 +156,7 @@ impl ClientContext {
                 .collect(),
             validator_clients,
             self.storage_client.clone(),
-            chain.next_sequence_number,
+            chain.next_block_height,
             Duration::default(),
             0,
         );
@@ -185,11 +185,11 @@ impl ClientContext {
                     amount: Amount::from(1),
                     user_data: UserData::default(),
                 },
-                sequence_number: chain.next_sequence_number,
+                block_height: chain.next_block_height,
                 round: RoundNumber::default(),
             };
             debug!("Preparing block proposal: {:?}", block);
-            chain.next_sequence_number.try_add_assign_one().unwrap();
+            chain.next_block_height.try_add_assign_one().unwrap();
             let proposal = BlockProposal::new(block.clone(), key_pair);
             proposals.push(proposal.clone());
             let serialized_proposal =
@@ -650,7 +650,7 @@ async fn main() {
             for i in 0..num {
                 // Create keys.
                 let chain =
-                    UserChain::make_initial(ChainId::new(vec![SequenceNumber::from(i as u64)]));
+                    UserChain::make_initial(ChainId::new(vec![BlockHeight::from(i as u64)]));
                 // Public "genesis" state.
                 genesis_config.chains.push((
                     chain.chain_id.clone(),

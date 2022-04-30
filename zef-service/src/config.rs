@@ -83,7 +83,7 @@ impl CommitteeConfig {
 pub struct UserChain {
     pub chain_id: ChainId,
     pub key_pair: Option<KeyPair>,
-    pub next_sequence_number: SequenceNumber,
+    pub next_block_height: BlockHeight,
 }
 
 impl UserChain {
@@ -91,7 +91,7 @@ impl UserChain {
         Self {
             chain_id,
             key_pair: None,
-            next_sequence_number: SequenceNumber::new(),
+            next_block_height: BlockHeight::new(),
         }
     }
 
@@ -100,7 +100,7 @@ impl UserChain {
         Self {
             chain_id,
             key_pair: Some(key_pair),
-            next_sequence_number: SequenceNumber::new(),
+            next_block_height: BlockHeight::new(),
         }
     }
 }
@@ -146,7 +146,7 @@ impl WalletState {
             .entry(state.chain_id().clone())
             .or_insert_with(|| UserChain::new(state.chain_id().clone()));
         chain.key_pair = state.key_pair().await.map(|k| k.copy()).ok();
-        chain.next_sequence_number = state.next_sequence_number();
+        chain.next_block_height = state.next_block_height();
     }
 
     pub fn read_or_create(path: &Path) -> Result<Self, std::io::Error> {

@@ -28,11 +28,11 @@ pub struct Amount(u64);
 )]
 pub struct Balance(i128);
 
-/// A sequence number to identify commands issued by a chain.
+/// A block height to identify commands issued by a chain.
 #[derive(
     Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
 )]
-pub struct SequenceNumber(pub u64);
+pub struct BlockHeight(pub u64);
 
 /// A number to identify successive attempts to decide a value in a consensus protocol.
 #[derive(
@@ -53,7 +53,7 @@ pub struct PublicKeyBytes(pub [u8; dalek::PUBLIC_KEY_LENGTH]);
 
 /// The unique identifier (UID) of a chain.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Serialize, Deserialize, Default)]
-pub struct ChainId(pub Vec<SequenceNumber>);
+pub struct ChainId(pub Vec<BlockHeight>);
 
 /// A Sha512 value.
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash, Serialize, Deserialize)]
@@ -67,7 +67,7 @@ pub type Owner = PublicKeyBytes;
 
 // For testing only
 pub fn dbg_chain(name: u8) -> ChainId {
-    ChainId(vec![SequenceNumber(name.into())])
+    ChainId(vec![BlockHeight(name.into())])
 }
 
 // For testing only
@@ -257,12 +257,12 @@ impl std::fmt::Debug for ChainId {
 }
 
 impl ChainId {
-    pub fn new(numbers: Vec<SequenceNumber>) -> Self {
+    pub fn new(numbers: Vec<BlockHeight>) -> Self {
         assert!(!numbers.is_empty());
         Self(numbers)
     }
 
-    pub fn split(&self) -> Option<(ChainId, SequenceNumber)> {
+    pub fn split(&self) -> Option<(ChainId, BlockHeight)> {
         if self.0.len() <= 1 {
             return None;
         }
@@ -279,7 +279,7 @@ impl ChainId {
         ancestors
     }
 
-    pub fn make_child(&self, num: SequenceNumber) -> Self {
+    pub fn make_child(&self, num: BlockHeight) -> Self {
         let mut id = self.clone();
         id.0.push(num);
         id
@@ -359,7 +359,7 @@ impl std::fmt::Display for Balance {
     }
 }
 
-impl std::fmt::Display for SequenceNumber {
+impl std::fmt::Display for BlockHeight {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
@@ -407,25 +407,25 @@ impl TryFrom<Balance> for Amount {
     }
 }
 
-impl SequenceNumber {
+impl BlockHeight {
     #[inline]
     pub fn new() -> Self {
-        SequenceNumber(0)
+        BlockHeight(0)
     }
 
     #[inline]
     pub fn max() -> Self {
-        SequenceNumber(0x7fff_ffff_ffff_ffff)
+        BlockHeight(0x7fff_ffff_ffff_ffff)
     }
 
     #[inline]
-    pub fn try_add_one(self) -> Result<SequenceNumber, Error> {
+    pub fn try_add_one(self) -> Result<BlockHeight, Error> {
         let val = self.0.checked_add(1).ok_or(Error::SequenceOverflow)?;
         Ok(Self(val))
     }
 
     #[inline]
-    pub fn try_sub_one(self) -> Result<SequenceNumber, Error> {
+    pub fn try_sub_one(self) -> Result<BlockHeight, Error> {
         let val = self.0.checked_sub(1).ok_or(Error::SequenceUnderflow)?;
         Ok(Self(val))
     }
@@ -479,8 +479,8 @@ impl RoundNumber {
     }
 }
 
-impl From<SequenceNumber> for u64 {
-    fn from(val: SequenceNumber) -> Self {
+impl From<BlockHeight> for u64 {
+    fn from(val: BlockHeight) -> Self {
         val.0
     }
 }
@@ -497,14 +497,14 @@ impl From<i128> for Balance {
     }
 }
 
-impl From<u64> for SequenceNumber {
+impl From<u64> for BlockHeight {
     fn from(value: u64) -> Self {
-        SequenceNumber(value)
+        BlockHeight(value)
     }
 }
 
-impl From<SequenceNumber> for usize {
-    fn from(value: SequenceNumber) -> Self {
+impl From<BlockHeight> for usize {
+    fn from(value: BlockHeight) -> Self {
         value.0 as usize
     }
 }

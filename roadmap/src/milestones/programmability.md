@@ -78,7 +78,7 @@ This results in the following proposal:
 
     - May sample a particular public value of the chain state.
 
-    - For consistency reasons, a state query must include the sequence number (i.e. version number)
+    - For consistency reasons, a state query must include the block height (i.e. version number)
       of the chain state to be queried.
 
 

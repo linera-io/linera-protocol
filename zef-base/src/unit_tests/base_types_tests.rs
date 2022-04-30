@@ -35,30 +35,30 @@ fn test_signatures() {
 }
 
 #[test]
-fn test_max_sequence_number() {
-    let max = SequenceNumber::max();
+fn test_max_block_height() {
+    let max = BlockHeight::max();
     assert_eq!(max.0 * 2 + 1, std::u64::MAX);
 }
 
 fn chain(numbers: Vec<u64>) -> ChainId {
-    ChainId::new(numbers.into_iter().map(SequenceNumber::from).collect())
+    ChainId::new(numbers.into_iter().map(BlockHeight::from).collect())
 }
 
 #[test]
 fn test_chain_ids() {
     let id = chain(vec![1]);
-    assert_eq!(id.make_child(SequenceNumber::from(2)), chain(vec![1, 2]));
+    assert_eq!(id.make_child(BlockHeight::from(2)), chain(vec![1, 2]));
 
     let id = chain(vec![1]);
     assert_eq!(id.split(), None);
 
     let id = chain(vec![1, 2]);
-    assert_eq!(id.split(), Some((chain(vec![1]), SequenceNumber::from(2))));
+    assert_eq!(id.split(), Some((chain(vec![1]), BlockHeight::from(2))));
 
     let id = chain(vec![1, 2, 3]);
     assert_eq!(
         id.split(),
-        Some((chain(vec![1, 2]), SequenceNumber::from(3)))
+        Some((chain(vec![1, 2]), BlockHeight::from(3)))
     );
 
     let id = chain(vec![1, 2, 3]);
