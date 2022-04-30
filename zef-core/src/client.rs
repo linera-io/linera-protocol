@@ -100,7 +100,7 @@ pub struct ChainClientState<ValidatorNode, StorageClient> {
     validator_clients: Vec<(ValidatorName, ValidatorNode)>,
     /// Sequence number that we plan to use for the next block.
     /// We track this value outside local storage mainly for security reasons.
-    next_sequence_number: SequenceNumber,
+    next_block_height: BlockHeight,
     /// Round number that we plan to use for the next block.
     next_round: RoundNumber,
     /// Pending block.
@@ -126,7 +126,7 @@ impl<A, S> ChainClientState<A, S> {
         known_key_pairs: Vec<KeyPair>,
         validator_clients: Vec<(ValidatorName, A)>,
         storage_client: S,
-        next_sequence_number: SequenceNumber,
+        next_block_height: BlockHeight,
         cross_chain_delay: Duration,
         cross_chain_retries: usize,
     ) -> Self {
@@ -139,7 +139,7 @@ impl<A, S> ChainClientState<A, S> {
         Self {
             chain_id,
             validator_clients,
-            next_sequence_number,
+            next_block_height,
             next_round: RoundNumber::default(),
             pending_block: None,
             known_key_pairs,
@@ -154,8 +154,8 @@ impl<A, S> ChainClientState<A, S> {
         &self.chain_id
     }
 
-    pub fn next_sequence_number(&self) -> SequenceNumber {
-        self.next_sequence_number
+    pub fn next_block_height(&self) -> BlockHeight {
+        self.next_block_height
     }
 
     pub fn pending_block(&self) -> &Option<Block> {
@@ -171,7 +171,7 @@ where
     async fn chain_info(&mut self) -> ChainInfo {
         let query = ChainInfoQuery {
             chain_id: self.chain_id.clone(),
-            check_next_sequence_number: None,
+            check_next_block_height: None,
             query_committee: false,
             query_sent_certificates_in_range: None,
             query_received_certificates_excluding_first_nth: Some(0),
@@ -196,7 +196,7 @@ where
     async fn committee(&mut self) -> Result<Committee, Error> {
         let query = ChainInfoQuery {
             chain_id: self.chain_id.clone(),
-            check_next_sequence_number: None,
+            check_next_block_height: None,
             query_committee: true,
             query_sent_certificates_in_range: None,
             query_received_certificates_excluding_first_nth: None,
@@ -290,34 +290,34 @@ where
 
     /// Prepare the chain for the next operation.
     /// * Verify that our local storage contains enough history compared to the
-    ///   expected sequence number. Otherwise, download the missing history from the
+    ///   expected block height. Otherwise, download the missing history from the
     ///   network.
-    /// * For multi-owner chains, further synchronize the sequence number and the round
+    /// * For multi-owner chains, further synchronize the block height and the round
     ///   from the network.
-    /// * Update `self.next_sequence_number` and `self.next_round`.
+    /// * Update `self.next_block_height` and `self.next_round`.
     async fn prepare_chain(&mut self) -> Result<(), Error> {
-        self.next_sequence_number = self
+        self.next_block_height = self
             .node_client
             .download_certificates(
                 self.validator_clients.clone(),
                 self.chain_id.clone(),
-                self.next_sequence_number,
+                self.next_block_height,
             )
             .await?;
         if self.has_multi_owners().await {
             // We could be missing recent certificates created by other owners.
-            let (next_sequence_number, next_round) = self
+            let (next_block_height, next_round) = self
                 .node_client
                 .synchronize_chain_state(self.validator_clients.clone(), self.chain_id.clone())
                 .await?;
-            self.next_sequence_number = next_sequence_number;
+            self.next_block_height = next_block_height;
             self.next_round = next_round;
         }
         Ok(())
     }
 
     /// Broadcast certified blocks and optionally one more block proposal.
-    /// The corresponding sequence numbers should be consecutive and increasing.
+    /// The corresponding block heights should be consecutive and increasing.
     async fn communicate_chain_updates(
         &mut self,
         committee: &Committee,
@@ -344,10 +344,10 @@ where
             Ok(votes) => votes,
             Err(Some(Error::InactiveChain(id)))
                 if id == chain_id
-                    && matches!(action, CommunicateAction::AdvanceToNextSequenceNumber(_)) =>
+                    && matches!(action, CommunicateAction::AdvanceToNextBlockHeight(_)) =>
             {
                 // The chain is visibly not active (yet or any more) so there is no need
-                // to synchronize sequence numbers.
+                // to synchronize block heights.
                 return Ok(None);
             }
             Err(Some(err)) => bail!("Failed to communicate with a quorum of validators: {}", err),
@@ -390,7 +390,7 @@ where
                 let certificate = Certificate::new(Value::Confirmed { block }, signatures);
                 Ok(Some(certificate))
             }
-            CommunicateAction::AdvanceToNextSequenceNumber(_) => Ok(None),
+            CommunicateAction::AdvanceToNextBlockHeight(_) => Ok(None),
         }
     }
 
@@ -414,7 +414,7 @@ where
                     // Retrieve new received certificates from this validator.
                     let query = ChainInfoQuery {
                         chain_id: chain_id.clone(),
-                        check_next_sequence_number: None,
+                        check_next_block_height: None,
                         query_committee: false,
                         query_sent_certificates_in_range: None,
                         query_received_certificates_excluding_first_nth: Some(tracker),
@@ -423,7 +423,7 @@ where
                     // TODO: These quick verifications are not enough to discard (1) all
                     // invalid certificates or (2) spammy received certificates. (1): a
                     // dishonest validator could try to make us work by producing
-                    // good-looking certificates with high sequence numbers. (2): Other
+                    // good-looking certificates with high block heights. (2): Other
                     // users could send us a lot of uninteresting transactions.
                     response.check(name)?;
                     for certificate in &response.info.queried_received_certificates {
@@ -493,7 +493,7 @@ where
                 amount,
                 user_data,
             },
-            sequence_number: self.next_sequence_number,
+            block_height: self.next_block_height,
             round: self.next_round,
         };
         let certificate = self
@@ -505,10 +505,10 @@ where
     async fn process_certificate(&mut self, certificate: Certificate) -> Result<(), Error> {
         let info = self.node_client.handle_certificate(certificate).await?.info;
         if info.chain_id == self.chain_id
-            && (info.next_sequence_number, info.manager.next_round())
-                > (self.next_sequence_number, self.next_round)
+            && (info.next_block_height, info.manager.next_round())
+                > (self.next_block_height, self.next_round)
         {
-            self.next_sequence_number = info.next_sequence_number;
+            self.next_block_height = info.next_block_height;
             self.next_round = info.manager.next_round();
         }
         Ok(())
@@ -527,8 +527,8 @@ where
             "Client state has a different pending block",
         );
         ensure!(
-            block.sequence_number == self.next_sequence_number,
-            "Unexpected sequence number"
+            block.block_height == self.next_block_height,
+            "Unexpected block height"
         );
         // Remember what we are trying to do
         self.pending_block = Some(block.clone());
@@ -579,7 +579,7 @@ where
             self.communicate_chain_updates(
                 &committee,
                 self.chain_id.clone(),
-                CommunicateAction::AdvanceToNextSequenceNumber(self.next_sequence_number),
+                CommunicateAction::AdvanceToNextBlockHeight(self.next_block_height),
             )
             .await?;
             if let Ok(new_committee) = self.committee().await {
@@ -589,7 +589,7 @@ where
                     self.communicate_chain_updates(
                         &new_committee,
                         self.chain_id.clone(),
-                        CommunicateAction::AdvanceToNextSequenceNumber(self.next_sequence_number),
+                        CommunicateAction::AdvanceToNextBlockHeight(self.next_block_height),
                     )
                     .await?;
                 }
@@ -610,7 +610,7 @@ where
         let query = ChainInfoQuery {
             chain_id: self.chain_id.clone(),
             /// This is necessary to make sure that the response is conservative.
-            check_next_sequence_number: Some(self.next_sequence_number),
+            check_next_block_height: Some(self.next_block_height),
             query_committee: false,
             query_sent_certificates_in_range: None,
             query_received_certificates_excluding_first_nth: None,
@@ -688,7 +688,7 @@ where
             .download_certificates(
                 self.validator_clients.clone(),
                 block.chain_id.clone(),
-                block.sequence_number,
+                block.block_height,
             )
             .await?;
         // Process the received operation.
@@ -699,7 +699,7 @@ where
         self.communicate_chain_updates(
             &committee,
             block.chain_id.clone(),
-            CommunicateAction::AdvanceToNextSequenceNumber(block.sequence_number.try_add_one()?),
+            CommunicateAction::AdvanceToNextBlockHeight(block.block_height.try_add_one()?),
         )
         .await?;
         Ok(())
@@ -711,7 +711,7 @@ where
         let block = Block {
             chain_id: self.chain_id.clone(),
             operation: Operation::ChangeOwner { new_owner },
-            sequence_number: self.next_sequence_number,
+            block_height: self.next_block_height,
             round: self.next_round,
         };
         self.known_key_pairs.insert(key_pair.public(), key_pair);
@@ -729,7 +729,7 @@ where
         let block = Block {
             chain_id: self.chain_id.clone(),
             operation: Operation::ChangeOwner { new_owner },
-            sequence_number: self.next_sequence_number,
+            block_height: self.next_block_height,
             round: self.next_round,
         };
         let certificate = self
@@ -746,7 +746,7 @@ where
             operation: Operation::ChangeMultipleOwners {
                 new_owners: vec![owner, new_owner],
             },
-            sequence_number: self.next_sequence_number,
+            block_height: self.next_block_height,
             round: self.next_round,
         };
         let certificate = self
@@ -757,11 +757,11 @@ where
 
     async fn open_chain(&mut self, new_owner: Owner) -> Result<Certificate, failure::Error> {
         self.prepare_chain().await?;
-        let new_id = self.chain_id.make_child(self.next_sequence_number);
+        let new_id = self.chain_id.make_child(self.next_block_height);
         let block = Block {
             chain_id: self.chain_id.clone(),
             operation: Operation::OpenChain { new_id, new_owner },
-            sequence_number: self.next_sequence_number,
+            block_height: self.next_block_height,
             round: self.next_round,
         };
         let certificate = self
@@ -775,7 +775,7 @@ where
         let block = Block {
             chain_id: self.chain_id.clone(),
             operation: Operation::CloseChain,
-            sequence_number: self.next_sequence_number,
+            block_height: self.next_block_height,
             round: self.next_round,
         };
         let certificate = self
@@ -798,7 +798,7 @@ where
                 amount,
                 user_data,
             },
-            sequence_number: self.next_sequence_number,
+            block_height: self.next_block_height,
             round: self.next_round,
         };
         let new_certificate = self

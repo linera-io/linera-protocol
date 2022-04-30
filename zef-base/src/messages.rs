@@ -36,15 +36,15 @@ pub enum Operation {
     ChangeMultipleOwners { new_owners: Vec<Owner> },
 }
 
-/// A block containing a chain operation.
+/// A block containing a single operation for the given chain.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct Block {
-    /// The chain that is subject of the operation.
+    /// The subject of the operation.
     pub chain_id: ChainId,
     /// The operation to execute.
     pub operation: Operation,
-    /// The sequence number.
-    pub sequence_number: SequenceNumber,
+    /// The block height.
+    pub block_height: BlockHeight,
     /// Round number (used for multi-owner chains, otherwise zero).
     pub round: RoundNumber,
 }
@@ -89,12 +89,12 @@ pub struct Certificate {
     pub signatures: Vec<(ValidatorName, Signature)>,
 }
 
-/// A range of sequence numbers as used in ChainInfoQuery.
+/// A range of block heights as used in ChainInfoQuery.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
-pub struct SequenceNumberRange {
+pub struct BlockHeightRange {
     /// Starting point
-    pub start: SequenceNumber,
+    pub start: BlockHeight,
     /// Optional limit on the number of elements.
     pub limit: Option<usize>,
 }
@@ -105,12 +105,12 @@ pub struct SequenceNumberRange {
 pub struct ChainInfoQuery {
     /// The chain id
     pub chain_id: ChainId,
-    /// Optionally block that the sequence number is the one expected.
-    pub check_next_sequence_number: Option<SequenceNumber>,
+    /// Optionally block that the block height is the one expected.
+    pub check_next_block_height: Option<BlockHeight>,
     /// Query the current committee.
     pub query_committee: bool,
     /// Query a range of certificates sent from the chain.
-    pub query_sent_certificates_in_range: Option<SequenceNumberRange>,
+    pub query_sent_certificates_in_range: Option<BlockHeightRange>,
     /// Query new certificates received from the chain.
     pub query_received_certificates_excluding_first_nth: Option<usize>,
 }
@@ -124,8 +124,8 @@ pub struct ChainInfo {
     pub manager: ChainManager,
     /// The current balance.
     pub balance: Balance,
-    /// The current sequence number
-    pub next_sequence_number: SequenceNumber,
+    /// The current block height
+    pub next_block_height: BlockHeight,
     /// The current committee (if requested)
     pub queried_committee: Option<Committee>,
     /// The response to `query_sent_certificates_in_range`
@@ -213,9 +213,9 @@ impl Value {
     }
 
     #[cfg(test)]
-    pub fn confirmed_sequence_number(&self) -> Option<SequenceNumber> {
+    pub fn confirmed_block_height(&self) -> Option<BlockHeight> {
         match self {
-            Value::Confirmed { block } => Some(block.sequence_number),
+            Value::Confirmed { block } => Some(block.block_height),
             _ => None,
         }
     }
@@ -242,9 +242,9 @@ impl Value {
         }
     }
 
-    pub fn confirmed_key(&self) -> Option<(ChainId, SequenceNumber)> {
+    pub fn confirmed_key(&self) -> Option<(ChainId, BlockHeight)> {
         match self {
-            Value::Confirmed { block } => Some((block.chain_id.clone(), block.sequence_number)),
+            Value::Confirmed { block } => Some((block.chain_id.clone(), block.block_height)),
             _ => None,
         }
     }

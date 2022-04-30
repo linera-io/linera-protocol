@@ -15,7 +15,7 @@ pub enum CommunicateAction {
     SubmitBlockForConfirmation(BlockProposal),
     SubmitBlockForValidation(BlockProposal),
     FinalizeBlock(Certificate),
-    AdvanceToNextSequenceNumber(SequenceNumber),
+    AdvanceToNextBlockHeight(BlockHeight),
 }
 
 pub struct ValidatorUpdater<A, S> {
@@ -142,14 +142,14 @@ where
     pub async fn send_chain_information(
         &mut self,
         mut chain_id: ChainId,
-        mut target_sequence_number: SequenceNumber,
+        mut target_block_height: BlockHeight,
     ) -> Result<(), Error> {
         let mut jobs = Vec::new();
         loop {
             // Figure out which certificates this validator is missing.
             let query = ChainInfoQuery {
                 chain_id: chain_id.clone(),
-                check_next_sequence_number: None,
+                check_next_block_height: None,
                 query_committee: false,
                 query_sent_certificates_in_range: None,
                 query_received_certificates_excluding_first_nth: None,
@@ -159,8 +159,8 @@ where
                     response.check(self.name)?;
                     jobs.push((
                         chain_id,
-                        response.info.next_sequence_number,
-                        target_sequence_number,
+                        response.info.next_block_height,
+                        target_block_height,
                         false,
                     ));
                     break;
@@ -172,25 +172,25 @@ where
                         Some((parent_id, number)) => {
                             jobs.push((
                                 chain_id,
-                                SequenceNumber::from(0),
-                                target_sequence_number,
+                                BlockHeight::from(0),
+                                target_block_height,
                                 true,
                             ));
                             chain_id = parent_id;
-                            target_sequence_number = number.try_add_one()?;
+                            target_block_height = number.try_add_one()?;
                         }
                     }
                 }
                 Err(e) => return Err(e),
             }
         }
-        for (chain_id, initial_sequence_number, target_sequence_number, retryable) in
+        for (chain_id, initial_block_height, target_block_height, retryable) in
             jobs.into_iter().rev()
         {
             // Obtain chain state.
             let chain = self.store.read_chain_or_default(&chain_id).await?;
             // Send the requested certificates in order.
-            for number in usize::from(initial_sequence_number)..usize::from(target_sequence_number)
+            for number in usize::from(initial_block_height)..usize::from(target_block_height)
             {
                 let key = chain
                     .confirmed_log
@@ -209,8 +209,8 @@ where
     ) -> Result<(), Error> {
         // Obtain chain state.
         let chain = self.store.read_chain_or_default(&chain_id).await?;
-        for (sender_id, sequence_number) in chain.received_index.iter() {
-            self.send_chain_information(sender_id.clone(), sequence_number.try_add_one()?)
+        for (sender_id, block_height) in chain.received_index.iter() {
+            self.send_chain_information(sender_id.clone(), block_height.try_add_one()?)
                 .await?;
         }
         Ok(())
@@ -221,18 +221,18 @@ where
         chain_id: ChainId,
         action: CommunicateAction,
     ) -> Result<Option<Vote>, Error> {
-        let target_sequence_number = match &action {
+        let target_block_height = match &action {
             CommunicateAction::SubmitBlockForValidation(proposal)
             | CommunicateAction::SubmitBlockForConfirmation(proposal) => {
-                proposal.block.sequence_number
+                proposal.block.block_height
             }
             CommunicateAction::FinalizeBlock(certificate) => {
-                certificate.value.validated_block().unwrap().sequence_number
+                certificate.value.validated_block().unwrap().block_height
             }
-            CommunicateAction::AdvanceToNextSequenceNumber(seq) => *seq,
+            CommunicateAction::AdvanceToNextBlockHeight(seq) => *seq,
         };
         // Update the validator with missing information, if needed.
-        self.send_chain_information(chain_id.clone(), target_sequence_number)
+        self.send_chain_information(chain_id.clone(), target_block_height)
             .await?;
         // Send the block proposal (if any) and return a vote.
         match action {
@@ -263,7 +263,7 @@ where
             }
             CommunicateAction::FinalizeBlock(certificate) => {
                 // The only cause for a retry is that the first certificate of a newly opened chain.
-                let retryable = target_sequence_number == SequenceNumber::from(0);
+                let retryable = target_block_height == BlockHeight::from(0);
                 let info = self.send_certificate(certificate, retryable).await?;
                 match info.manager.pending() {
                     Some(vote) => {
@@ -273,7 +273,7 @@ where
                     None => return Err(Error::ClientErrorWhileProcessingBlockProposal),
                 }
             }
-            CommunicateAction::AdvanceToNextSequenceNumber(_) => (),
+            CommunicateAction::AdvanceToNextBlockHeight(_) => (),
         }
         Ok(None)
     }
