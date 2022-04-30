@@ -6,23 +6,23 @@ use async_trait::async_trait;
 use futures::lock::Mutex;
 use std::{collections::HashMap, sync::Arc};
 use zef_base::{
-    account::AccountState,
-    base_types::{AccountId, HashValue},
+    base_types::{ChainId, HashValue},
+    chain::ChainState,
     error::Error,
     messages::Certificate,
 };
 
 #[cfg(test)]
 use zef_base::{
-    account::AccountManager,
-    base_types::{dbg_account, dbg_addr},
+    base_types::{dbg_addr, dbg_chain},
+    chain::ChainManager,
     committee::Committee,
 };
 
 /// Vanilla in-memory key-value store.
 #[derive(Debug, Clone, Default)]
 pub struct InMemoryStore {
-    accounts: HashMap<AccountId, AccountState>,
+    chains: HashMap<ChainId, ChainState>,
     certificates: HashMap<HashValue, Certificate>,
 }
 
@@ -40,27 +40,27 @@ impl InMemoryStoreClient {
 
 #[async_trait]
 impl Storage for InMemoryStoreClient {
-    async fn read_account_or_default(&mut self, id: &AccountId) -> Result<AccountState, Error> {
+    async fn read_chain_or_default(&mut self, id: &ChainId) -> Result<ChainState, Error> {
         let store = self.0.clone();
-        let account = store
+        let chain = store
             .lock()
             .await
-            .accounts
+            .chains
             .get(id)
             .cloned()
-            .unwrap_or_else(|| AccountState::new(id.clone()));
-        Ok(account)
+            .unwrap_or_else(|| ChainState::new(id.clone()));
+        Ok(chain)
     }
 
-    async fn write_account(&mut self, value: AccountState) -> Result<(), Error> {
+    async fn write_chain(&mut self, value: ChainState) -> Result<(), Error> {
         let store = self.0.clone();
-        store.lock().await.accounts.insert(value.id.clone(), value);
+        store.lock().await.chains.insert(value.id.clone(), value);
         Ok(())
     }
 
-    async fn remove_account(&mut self, id: &AccountId) -> Result<(), Error> {
+    async fn remove_chain(&mut self, id: &ChainId) -> Result<(), Error> {
         let store = self.0.clone();
-        store.lock().await.accounts.remove(id);
+        store.lock().await.chains.remove(id);
         Ok(())
     }
 
@@ -80,16 +80,13 @@ impl Storage for InMemoryStoreClient {
 #[tokio::test]
 async fn test_read_write() {
     let mut store = InMemoryStoreClient::default();
-    let mut account = store
-        .read_account_or_default(&dbg_account(1))
-        .await
-        .unwrap();
-    account.state.committee = Some(Committee::make_simple(Vec::new()));
-    account.state.manager = AccountManager::single(dbg_addr(2));
-    store.write_account(account).await.unwrap();
+    let mut chain = store.read_chain_or_default(&dbg_chain(1)).await.unwrap();
+    chain.state.committee = Some(Committee::make_simple(Vec::new()));
+    chain.state.manager = ChainManager::single(dbg_addr(2));
+    store.write_chain(chain).await.unwrap();
     store
         .clone()
-        .read_active_account(&dbg_account(1))
+        .read_active_chain(&dbg_chain(1))
         .await
         .unwrap();
 }

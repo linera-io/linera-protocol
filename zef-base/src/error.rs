@@ -18,15 +18,15 @@ macro_rules! ensure {
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Fail, Hash)]
 /// Custom error type.
 pub enum Error {
-    // Account access control
-    #[fail(display = "The account being queried is not active {:?}", 0)]
-    InactiveAccount(AccountId),
+    // Chain access control
+    #[fail(display = "The chain being queried is not active {:?}", 0)]
+    InactiveChain(ChainId),
     #[fail(display = "Request was not signed by an authorized owner")]
     InvalidOwner,
 
-    // Account sequencing
+    // Chain sequencing
     #[fail(
-        display = "The sequence number in a request should match the next expected sequence number of the account"
+        display = "The sequence number in a request should match the next expected sequence number of the chain"
     )]
     UnexpectedSequenceNumber,
     #[fail(display = "Sequence numbers above the maximal value are not usable for requests.")]
@@ -52,9 +52,9 @@ pub enum Error {
     AmountOverflow,
     #[fail(display = "Amount underflow.")]
     AmountUnderflow,
-    #[fail(display = "Account balance overflow.")]
+    #[fail(display = "Chain balance overflow.")]
     BalanceOverflow,
-    #[fail(display = "Account balance underflow.")]
+    #[fail(display = "Chain balance underflow.")]
     BalanceUnderflow,
 
     // Signatures and certificates
@@ -68,29 +68,29 @@ pub enum Error {
     CertificateValidatorReuse,
     #[fail(display = "The given certificate is invalid.")]
     InvalidCertificate,
-    #[fail(display = "The given account info response is invalid.")]
-    InvalidAccountInfoResponse,
+    #[fail(display = "The given chain info response is invalid.")]
+    InvalidChainInfoResponse,
 
     // Validation of operations and requests
     #[fail(display = "Transfers must have positive amount")]
     IncorrectTransferAmount,
     #[fail(
-        display = "The transferred amount must be not exceed the current account balance: {:?}",
+        display = "The transferred amount must be not exceed the current chain balance: {:?}",
         current_balance
     )]
     InsufficientFunding { current_balance: Balance },
-    #[fail(display = "Invalid new account id: {}", 0)]
-    InvalidNewAccountId(AccountId),
+    #[fail(display = "Invalid new chain id: {}", 0)]
+    InvalidNewChainId(ChainId),
     #[fail(display = "Round number should be greater than {:?}", 0)]
     InsufficientRound(RoundNumber),
     #[fail(
-        display = "A different operation was already locked for this account and sequence number: {:?}",
+        display = "A different operation was already locked for this chain and sequence number: {:?}",
         0
     )]
     HasLockedOperation(Operation),
 
     // Other server-side errors
-    #[fail(display = "No certificate for this account and sequence number")]
+    #[fail(display = "No certificate for this chain and sequence number")]
     CertificateNotFound,
     #[fail(display = "Invalid cross shard request.")]
     InvalidCrossShardRequest,

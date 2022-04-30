@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    client::{AccountClient, AccountClientState, CommunicateAction},
+    client::{ChainClient, ChainClientState, CommunicateAction},
     node::ValidatorNode,
     worker::{ValidatorWorker, WorkerState},
 };
@@ -12,13 +12,11 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     sync::Arc,
 };
-use zef_base::{
-    account::AccountState, base_types::*, committee::Committee, error::Error, messages::*,
-};
+use zef_base::{base_types::*, chain::ChainState, committee::Committee, error::Error, messages::*};
 use zef_storage::{InMemoryStoreClient, Storage};
 
 /// An validator used for testing. "Faulty" validators ignore request orders (but not
-/// certificates or info queries) and have the wrong initial balance for all accounts.
+/// certificates or info queries) and have the wrong initial balance for all chains.
 struct LocalValidator {
     is_faulty: bool,
     state: WorkerState<InMemoryStoreClient>,
@@ -32,7 +30,7 @@ impl ValidatorNode for LocalValidatorClient {
     async fn handle_request_order(
         &mut self,
         order: RequestOrder,
-    ) -> Result<AccountInfoResponse, Error> {
+    ) -> Result<ChainInfoResponse, Error> {
         let validator = self.0.clone();
         let mut validator = validator.lock().await;
         if validator.is_faulty {
@@ -45,22 +43,22 @@ impl ValidatorNode for LocalValidatorClient {
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-    ) -> Result<AccountInfoResponse, Error> {
+    ) -> Result<ChainInfoResponse, Error> {
         let validator = self.0.clone();
         let mut validator = validator.lock().await;
         validator.state.fully_handle_certificate(certificate).await
     }
 
-    async fn handle_account_info_query(
+    async fn handle_chain_info_query(
         &mut self,
-        query: AccountInfoQuery,
-    ) -> Result<AccountInfoResponse, Error> {
+        query: ChainInfoQuery,
+    ) -> Result<ChainInfoResponse, Error> {
         self.0
             .clone()
             .lock()
             .await
             .state
-            .handle_account_info_query(query)
+            .handle_chain_info_query(query)
             .await
     }
 }
@@ -73,7 +71,7 @@ impl LocalValidatorClient {
 }
 
 // NOTE:
-// * To communicate with a quorum of validators, account clients iterate over a copy of
+// * To communicate with a quorum of validators, chain clients iterate over a copy of
 // `validator_clients` to spawn I/O tasks.
 // * When using `LocalValidatorClient`, clients communicate with an exact quorum then stops.
 // * Most tests have 1 faulty validator out 4 so that there is exactly only 1 quorum to
@@ -84,7 +82,7 @@ struct TestBuilder {
     faulty_validators: HashSet<ValidatorName>,
     validator_clients: Vec<(ValidatorName, LocalValidatorClient)>,
     validator_stores: HashMap<ValidatorName, InMemoryStoreClient>,
-    account_client_stores: Vec<InMemoryStoreClient>,
+    chain_client_stores: Vec<InMemoryStoreClient>,
 }
 
 impl TestBuilder {
@@ -120,56 +118,52 @@ impl TestBuilder {
             faulty_validators,
             validator_clients,
             validator_stores,
-            account_client_stores: Vec::new(),
+            chain_client_stores: Vec::new(),
         }
     }
 
-    async fn add_initial_account(
+    async fn add_initial_chain(
         &mut self,
-        account_id: AccountId,
+        chain_id: ChainId,
         balance: Balance,
-    ) -> AccountClientState<LocalValidatorClient, InMemoryStoreClient> {
+    ) -> ChainClientState<LocalValidatorClient, InMemoryStoreClient> {
         let key_pair = KeyPair::generate();
         let owner = key_pair.public();
-        let account =
-            AccountState::create(self.committee.clone(), account_id.clone(), owner, balance);
-        let account_bad = AccountState::create(
+        let chain = ChainState::create(self.committee.clone(), chain_id.clone(), owner, balance);
+        let chain_bad = ChainState::create(
             self.committee.clone(),
-            account_id.clone(),
+            chain_id.clone(),
             owner,
             Balance::from(0),
         );
-        // Create genesis account in all the existing stores.
-        self.genesis_store
-            .write_account(account.clone())
-            .await
-            .unwrap();
+        // Create genesis chain in all the existing stores.
+        self.genesis_store.write_chain(chain.clone()).await.unwrap();
         for (name, store) in self.validator_stores.iter_mut() {
             if self.faulty_validators.contains(name) {
-                store.write_account(account_bad.clone()).await.unwrap();
+                store.write_chain(chain_bad.clone()).await.unwrap();
             } else {
-                store.write_account(account.clone()).await.unwrap();
+                store.write_chain(chain.clone()).await.unwrap();
             }
         }
-        for store in self.account_client_stores.iter_mut() {
-            store.write_account(account.clone()).await.unwrap();
+        for store in self.chain_client_stores.iter_mut() {
+            store.write_chain(chain.clone()).await.unwrap();
         }
-        self.make_client(account_id, key_pair, SequenceNumber::from(0))
+        self.make_client(chain_id, key_pair, SequenceNumber::from(0))
             .await
     }
 
     async fn make_client(
         &mut self,
-        account_id: AccountId,
+        chain_id: ChainId,
         key_pair: KeyPair,
         sequence_number: SequenceNumber,
-    ) -> AccountClientState<LocalValidatorClient, InMemoryStoreClient> {
+    ) -> ChainClientState<LocalValidatorClient, InMemoryStoreClient> {
         // Note that new clients are only given the genesis store: they must figure out
         // the rest by asking validators.
         let store = self.genesis_store.copy().await;
-        self.account_client_stores.push(store.clone());
-        AccountClientState::new(
-            account_id,
+        self.chain_client_stores.push(store.clone());
+        ChainClientState::new(
+            chain_id,
             vec![key_pair],
             self.validator_clients.clone(),
             store,
@@ -179,24 +173,24 @@ impl TestBuilder {
         )
     }
 
-    async fn single_account(
+    async fn single_chain(
         count: usize,
         with_faulty_validators: usize,
         balance: Balance,
-    ) -> AccountClientState<LocalValidatorClient, InMemoryStoreClient> {
+    ) -> ChainClientState<LocalValidatorClient, InMemoryStoreClient> {
         let mut builder = TestBuilder::new(count, with_faulty_validators);
-        builder.add_initial_account(dbg_account(1), balance).await
+        builder.add_initial_chain(dbg_chain(1), balance).await
     }
 
-    /// Try to find a (confirmation) certificate for the given account_id and sequence number.
+    /// Try to find a (confirmation) certificate for the given chain_id and sequence number.
     async fn check_that_validators_have_certificate(
         &self,
-        account_id: AccountId,
+        chain_id: ChainId,
         sequence_number: SequenceNumber,
         target_count: usize,
     ) -> Option<Certificate> {
-        let query = AccountInfoQuery {
-            account_id: account_id.clone(),
+        let query = ChainInfoQuery {
+            chain_id: chain_id.clone(),
             check_next_sequence_number: None,
             query_committee: false,
             query_sent_certificates_in_range: Some(SequenceNumberRange {
@@ -208,15 +202,15 @@ impl TestBuilder {
         let mut count = 0;
         let mut certificate = None;
         for (name, mut client) in self.validator_clients.clone() {
-            if let Ok(response) = client.handle_account_info_query(query.clone()).await {
+            if let Ok(response) = client.handle_chain_info_query(query.clone()).await {
                 if response.check(name).is_ok() {
-                    let AccountInfo {
+                    let ChainInfo {
                         mut queried_sent_certificates,
                         ..
                     } = response.info;
                     if let Some(cert) = queried_sent_certificates.pop() {
                         if let Value::Confirmed { request } = &cert.value {
-                            if request.account_id == account_id
+                            if request.chain_id == chain_id
                                 && request.sequence_number == sequence_number
                             {
                                 cert.check(&self.committee).unwrap();
@@ -235,13 +229,13 @@ impl TestBuilder {
 
 #[tokio::test]
 async fn test_query_balance() {
-    let mut client = TestBuilder::single_account(4, 1, Balance::from(3)).await;
+    let mut client = TestBuilder::single_chain(4, 1, Balance::from(3)).await;
     assert_eq!(client.query_safe_balance().await.unwrap(), Balance::from(3));
 
-    let mut client = TestBuilder::single_account(4, 2, Balance::from(3)).await;
+    let mut client = TestBuilder::single_chain(4, 2, Balance::from(3)).await;
     assert_eq!(client.query_safe_balance().await.unwrap(), Balance::from(3));
 
-    let mut client = TestBuilder::single_account(4, 3, Balance::from(3)).await;
+    let mut client = TestBuilder::single_chain(4, 3, Balance::from(3)).await;
     assert_eq!(client.query_safe_balance().await.unwrap(), Balance::from(0));
 }
 
@@ -249,12 +243,12 @@ async fn test_query_balance() {
 async fn test_initiating_valid_transfer() {
     let mut builder = TestBuilder::new(4, 1);
     let mut sender = builder
-        .add_initial_account(dbg_account(1), Balance::from(4))
+        .add_initial_chain(dbg_chain(1), Balance::from(4))
         .await;
     let certificate = sender
-        .transfer_to_account(
+        .transfer_to_chain(
             Amount::from(3),
-            dbg_account(2),
+            dbg_chain(2),
             UserData(Some(*b"hello...........hello...........")),
         )
         .await
@@ -265,7 +259,7 @@ async fn test_initiating_valid_transfer() {
     assert_eq!(
         builder
             .check_that_validators_have_certificate(
-                sender.account_id.clone(),
+                sender.chain_id.clone(),
                 SequenceNumber::from(0),
                 3
             )
@@ -280,7 +274,7 @@ async fn test_initiating_valid_transfer() {
 async fn test_rotate_key_pair() {
     let mut builder = TestBuilder::new(4, 1);
     let mut sender = builder
-        .add_initial_account(dbg_account(1), Balance::from(4))
+        .add_initial_chain(dbg_chain(1), Balance::from(4))
         .await;
     let new_key_pair = KeyPair::generate();
     let new_pubk = new_key_pair.public();
@@ -291,7 +285,7 @@ async fn test_rotate_key_pair() {
     assert_eq!(
         builder
             .check_that_validators_have_certificate(
-                sender.account_id.clone(),
+                sender.chain_id.clone(),
                 SequenceNumber::from(0),
                 3
             )
@@ -305,9 +299,9 @@ async fn test_rotate_key_pair() {
         sender.synchronize_balance().await.unwrap(),
         Balance::from(4)
     );
-    // Can still use the account.
+    // Can still use the chain.
     sender
-        .transfer_to_account(Amount::from(3), dbg_account(2), UserData::default())
+        .transfer_to_chain(Amount::from(3), dbg_chain(2), UserData::default())
         .await
         .unwrap();
 }
@@ -316,7 +310,7 @@ async fn test_rotate_key_pair() {
 async fn test_transfer_ownership() {
     let mut builder = TestBuilder::new(4, 1);
     let mut sender = builder
-        .add_initial_account(dbg_account(1), Balance::from(4))
+        .add_initial_chain(dbg_chain(1), Balance::from(4))
         .await;
 
     let new_key_pair = KeyPair::generate();
@@ -328,7 +322,7 @@ async fn test_transfer_ownership() {
     assert_eq!(
         builder
             .check_that_validators_have_certificate(
-                sender.account_id.clone(),
+                sender.chain_id.clone(),
                 SequenceNumber::from(0),
                 3
             )
@@ -342,9 +336,9 @@ async fn test_transfer_ownership() {
         sender.synchronize_balance().await.unwrap(),
         Balance::from(4)
     );
-    // Cannot use the account any more.
+    // Cannot use the chain any more.
     assert!(sender
-        .transfer_to_account(Amount::from(3), dbg_account(2), UserData::default())
+        .transfer_to_chain(Amount::from(3), dbg_chain(2), UserData::default())
         .await
         .is_err());
 }
@@ -353,7 +347,7 @@ async fn test_transfer_ownership() {
 async fn test_share_ownership() {
     let mut builder = TestBuilder::new(4, 1);
     let mut sender = builder
-        .add_initial_account(dbg_account(1), Balance::from(4))
+        .add_initial_chain(dbg_chain(1), Balance::from(4))
         .await;
     let new_key_pair = KeyPair::generate();
     let new_pubk = new_key_pair.public();
@@ -364,7 +358,7 @@ async fn test_share_ownership() {
     assert_eq!(
         builder
             .check_that_validators_have_certificate(
-                sender.account_id.clone(),
+                sender.chain_id.clone(),
                 SequenceNumber::from(0),
                 3
             )
@@ -378,14 +372,14 @@ async fn test_share_ownership() {
         sender.synchronize_balance().await.unwrap(),
         Balance::from(4)
     );
-    // Can still use the account with the old client.
+    // Can still use the chain with the old client.
     sender
-        .transfer_to_account(Amount::from(3), dbg_account(2), UserData::default())
+        .transfer_to_chain(Amount::from(3), dbg_chain(2), UserData::default())
         .await
         .unwrap();
     // Make a client to try the new key.
     let mut client = builder
-        .make_client(sender.account_id, new_key_pair, SequenceNumber::from(2))
+        .make_client(sender.chain_id, new_key_pair, SequenceNumber::from(2))
         .await;
     assert_eq!(client.query_safe_balance().await.unwrap(), Balance::from(1));
     assert_eq!(
@@ -393,26 +387,26 @@ async fn test_share_ownership() {
         Balance::from(1)
     );
     client
-        .transfer_to_account(Amount::from(1), dbg_account(3), UserData::default())
+        .transfer_to_chain(Amount::from(1), dbg_chain(3), UserData::default())
         .await
         .unwrap();
 }
 
 #[tokio::test]
-async fn test_open_account_then_close_it() {
+async fn test_open_chain_then_close_it() {
     let mut builder = TestBuilder::new(4, 1);
     let mut sender = builder
-        .add_initial_account(dbg_account(1), Balance::from(4))
+        .add_initial_chain(dbg_chain(1), Balance::from(4))
         .await;
     let new_key_pair = KeyPair::generate();
     let new_pubk = new_key_pair.public();
-    let new_id = AccountId::new(vec![1, 0].into_iter().map(SequenceNumber::from).collect());
-    // Open the new account.
-    let certificate = sender.open_account(new_pubk).await.unwrap();
+    let new_id = ChainId::new(vec![1, 0].into_iter().map(SequenceNumber::from).collect());
+    // Open the new chain.
+    let certificate = sender.open_chain(new_pubk).await.unwrap();
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
     assert!(sender.pending_request.is_none());
     assert!(sender.key_pair().await.is_ok());
-    // Make a client to try the new account.
+    // Make a client to try the new chain.
     let mut client = builder
         .make_client(new_id, new_key_pair, SequenceNumber::from(0))
         .await;
@@ -422,32 +416,32 @@ async fn test_open_account_then_close_it() {
         Balance::from(0)
     );
     assert_eq!(client.query_safe_balance().await.unwrap(), Balance::from(0));
-    client.close_account().await.unwrap();
+    client.close_chain().await.unwrap();
 }
 
 #[tokio::test]
-async fn test_open_account_after_transfer() {
+async fn test_open_chain_after_transfer() {
     let mut builder = TestBuilder::new(4, 1);
     let mut sender = builder
-        .add_initial_account(dbg_account(1), Balance::from(4))
+        .add_initial_chain(dbg_chain(1), Balance::from(4))
         .await;
     let new_key_pair = KeyPair::generate();
     let new_pubk = new_key_pair.public();
-    let new_id = AccountId::new(vec![1, 1].into_iter().map(SequenceNumber::from).collect());
-    // Transfer before creating the account.
+    let new_id = ChainId::new(vec![1, 1].into_iter().map(SequenceNumber::from).collect());
+    // Transfer before creating the chain.
     sender
-        .transfer_to_account(Amount::from(3), new_id.clone(), UserData::default())
+        .transfer_to_chain(Amount::from(3), new_id.clone(), UserData::default())
         .await
         .unwrap();
-    // Open the new account.
-    let certificate = sender.open_account(new_pubk).await.unwrap();
+    // Open the new chain.
+    let certificate = sender.open_chain(new_pubk).await.unwrap();
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(2));
     assert!(sender.pending_request.is_none());
     assert!(sender.key_pair().await.is_ok());
     assert_eq!(
         builder
             .check_that_validators_have_certificate(
-                sender.account_id.clone(),
+                sender.chain_id.clone(),
                 SequenceNumber::from(1),
                 3
             )
@@ -458,11 +452,11 @@ async fn test_open_account_after_transfer() {
     );
     assert!(matches!(&certificate.value, Value::Confirmed{
         request: Request {
-            operation: Operation::OpenAccount { new_id:id, .. },
+            operation: Operation::OpenChain { new_id:id, .. },
             ..
         }} if &new_id == id
     ));
-    // Make a client to try the new account.
+    // Make a client to try the new chain.
     let mut client = builder
         .make_client(new_id, new_key_pair, SequenceNumber::from(0))
         .await;
@@ -473,35 +467,35 @@ async fn test_open_account_after_transfer() {
         Balance::from(3)
     );
     client
-        .transfer_to_account(Amount::from(3), dbg_account(3), UserData::default())
+        .transfer_to_chain(Amount::from(3), dbg_chain(3), UserData::default())
         .await
         .unwrap();
 }
 
 #[tokio::test]
-async fn test_open_account_before_transfer() {
+async fn test_open_chain_before_transfer() {
     let mut builder = TestBuilder::new(4, 1);
     let mut sender = builder
-        .add_initial_account(dbg_account(1), Balance::from(4))
+        .add_initial_chain(dbg_chain(1), Balance::from(4))
         .await;
     let new_key_pair = KeyPair::generate();
     let new_pubk = new_key_pair.public();
-    let new_id = AccountId::new(vec![1, 0].into_iter().map(SequenceNumber::from).collect());
-    // Open the new account.
-    let certificate = sender.open_account(new_pubk).await.unwrap();
-    // Transfer after creating the account.
+    let new_id = ChainId::new(vec![1, 0].into_iter().map(SequenceNumber::from).collect());
+    // Open the new chain.
+    let certificate = sender.open_chain(new_pubk).await.unwrap();
+    // Transfer after creating the chain.
     sender
-        .transfer_to_account(Amount::from(3), new_id.clone(), UserData::default())
+        .transfer_to_chain(Amount::from(3), new_id.clone(), UserData::default())
         .await
         .unwrap();
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(2));
     assert!(sender.pending_request.is_none());
     assert!(sender.key_pair().await.is_ok());
-    // Make a client to try the new account.
+    // Make a client to try the new chain.
     let mut client = builder
         .make_client(new_id, new_key_pair, SequenceNumber::from(0))
         .await;
-    // Must process the creation certificate before using the new account.
+    // Must process the creation certificate before using the new chain.
     client.receive_certificate(certificate).await.unwrap();
     assert_eq!(client.query_safe_balance().await.unwrap(), Balance::from(3));
     assert_eq!(
@@ -509,23 +503,23 @@ async fn test_open_account_before_transfer() {
         Balance::from(3)
     );
     client
-        .transfer_to_account(Amount::from(3), dbg_account(3), UserData::default())
+        .transfer_to_chain(Amount::from(3), dbg_chain(3), UserData::default())
         .await
         .unwrap();
 }
 
 #[tokio::test]
-async fn test_close_account() {
+async fn test_close_chain() {
     let mut builder = TestBuilder::new(4, 1);
     let mut sender = builder
-        .add_initial_account(dbg_account(1), Balance::from(4))
+        .add_initial_chain(dbg_chain(1), Balance::from(4))
         .await;
-    let certificate = sender.close_account().await.unwrap();
+    let certificate = sender.close_chain().await.unwrap();
     assert!(matches!(
         &certificate.value,
         Value::Confirmed {
             request: Request {
-                operation: Operation::CloseAccount,
+                operation: Operation::CloseChain,
                 ..
             }
         }
@@ -536,7 +530,7 @@ async fn test_close_account() {
     assert_eq!(
         builder
             .check_that_validators_have_certificate(
-                sender.account_id.clone(),
+                sender.chain_id.clone(),
                 SequenceNumber::from(0),
                 3
             )
@@ -545,20 +539,20 @@ async fn test_close_account() {
             .value,
         certificate.value
     );
-    // Cannot use the account any more.
+    // Cannot use the chain any more.
     assert!(sender
-        .transfer_to_account(Amount::from(3), dbg_account(2), UserData::default())
+        .transfer_to_chain(Amount::from(3), dbg_chain(2), UserData::default())
         .await
         .is_err());
 }
 
 #[tokio::test]
 async fn test_initiating_valid_transfer_too_many_faults() {
-    let mut sender = TestBuilder::single_account(4, 2, Balance::from(4)).await;
+    let mut sender = TestBuilder::single_chain(4, 2, Balance::from(4)).await;
     assert!(sender
-        .transfer_to_account_unsafe_unconfirmed(
+        .transfer_to_chain_unsafe_unconfirmed(
             Amount::from(3),
-            dbg_account(2),
+            dbg_chain(2),
             UserData(Some(*b"hello...........hello...........")),
         )
         .await
@@ -572,10 +566,10 @@ async fn test_initiating_valid_transfer_too_many_faults() {
 async fn test_bidirectional_transfer() {
     let mut builder = TestBuilder::new(4, 1);
     let mut client1 = builder
-        .add_initial_account(dbg_account(1), Balance::from(3))
+        .add_initial_chain(dbg_chain(1), Balance::from(3))
         .await;
     let mut client2 = builder
-        .add_initial_account(dbg_account(2), Balance::from(0))
+        .add_initial_chain(dbg_chain(2), Balance::from(0))
         .await;
     assert_eq!(
         client1.query_safe_balance().await.unwrap(),
@@ -584,9 +578,9 @@ async fn test_bidirectional_transfer() {
     assert_eq!(client1.balance().await, Balance::from(3));
 
     let certificate = client1
-        .transfer_to_account(
+        .transfer_to_chain(
             Amount::from(3),
-            client2.account_id.clone(),
+            client2.chain_id.clone(),
             UserData::default(),
         )
         .await
@@ -603,7 +597,7 @@ async fn test_bidirectional_transfer() {
     assert_eq!(
         builder
             .check_that_validators_have_certificate(
-                client1.account_id.clone(),
+                client1.chain_id.clone(),
                 SequenceNumber::from(0),
                 3
             )
@@ -629,9 +623,9 @@ async fn test_bidirectional_transfer() {
     // Send back some money.
     assert_eq!(client2.next_sequence_number, SequenceNumber::from(0));
     client2
-        .transfer_to_account(
+        .transfer_to_chain(
             Amount::from(1),
-            client1.account_id.clone(),
+            client1.chain_id.clone(),
             UserData::default(),
         )
         .await
@@ -652,15 +646,15 @@ async fn test_bidirectional_transfer() {
 async fn test_receiving_unconfirmed_transfer() {
     let mut builder = TestBuilder::new(4, 1);
     let mut client1 = builder
-        .add_initial_account(dbg_account(1), Balance::from(3))
+        .add_initial_chain(dbg_chain(1), Balance::from(3))
         .await;
     let mut client2 = builder
-        .add_initial_account(dbg_account(2), Balance::from(0))
+        .add_initial_chain(dbg_chain(2), Balance::from(0))
         .await;
     let certificate = client1
-        .transfer_to_account_unsafe_unconfirmed(
+        .transfer_to_chain_unsafe_unconfirmed(
             Amount::from(2),
-            client2.account_id.clone(),
+            client2.chain_id.clone(),
             UserData::default(),
         )
         .await
@@ -686,37 +680,37 @@ async fn test_receiving_unconfirmed_transfer() {
 async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
     let mut builder = TestBuilder::new(4, 1);
     let mut client1 = builder
-        .add_initial_account(dbg_account(1), Balance::from(3))
+        .add_initial_chain(dbg_chain(1), Balance::from(3))
         .await;
     let mut client2 = builder
-        .add_initial_account(dbg_account(2), Balance::from(0))
+        .add_initial_chain(dbg_chain(2), Balance::from(0))
         .await;
     let mut client3 = builder
-        .add_initial_account(dbg_account(3), Balance::from(0))
+        .add_initial_chain(dbg_chain(3), Balance::from(0))
         .await;
 
     // Transferring funds from client1 to client2.
     // Confirming to a quorum of nodes only at the end.
     client1
-        .transfer_to_account_unsafe_unconfirmed(
+        .transfer_to_chain_unsafe_unconfirmed(
             Amount::from(1),
-            client2.account_id.clone(),
+            client2.chain_id.clone(),
             UserData::default(),
         )
         .await
         .unwrap();
     client1
-        .transfer_to_account_unsafe_unconfirmed(
+        .transfer_to_chain_unsafe_unconfirmed(
             Amount::from(1),
-            client2.account_id.clone(),
+            client2.chain_id.clone(),
             UserData::default(),
         )
         .await
         .unwrap();
     client1
-        .communicate_account_updates(
+        .communicate_chain_updates(
             &builder.committee,
-            client1.account_id.clone(),
+            client1.chain_id.clone(),
             CommunicateAction::AdvanceToNextSequenceNumber(client1.next_sequence_number),
         )
         .await
@@ -725,9 +719,9 @@ async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
     // honest validator is lagging and client2 doesn't know about the missing received
     // certificate.
     assert!(client2
-        .transfer_to_account_unsafe_unconfirmed(
+        .transfer_to_chain_unsafe_unconfirmed(
             Amount::from(2),
-            client3.account_id.clone(),
+            client3.chain_id.clone(),
             UserData::default(),
         )
         .await

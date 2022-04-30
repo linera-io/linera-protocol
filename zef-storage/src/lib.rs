@@ -14,8 +14,8 @@ use dyn_clone::DynClone;
 use futures::future;
 use std::ops::DerefMut;
 use zef_base::{
-    account::AccountState,
-    base_types::{AccountId, HashValue},
+    base_types::{ChainId, HashValue},
+    chain::ChainState,
     ensure,
     error::Error,
     messages::Certificate,
@@ -26,23 +26,20 @@ use zef_base::{
 /// * Reads should be optimized to hit a local cache.
 #[async_trait]
 pub trait Storage: DynClone + Send + Sync {
-    async fn read_active_account(&mut self, id: &AccountId) -> Result<AccountState, Error> {
-        let account = self.read_account_or_default(id).await?;
+    async fn read_active_chain(&mut self, id: &ChainId) -> Result<ChainState, Error> {
+        let chain = self.read_chain_or_default(id).await?;
         ensure!(
-            account.state.manager.is_active() && account.state.committee.is_some(),
-            Error::InactiveAccount(id.clone())
+            chain.state.manager.is_active() && chain.state.committee.is_some(),
+            Error::InactiveChain(id.clone())
         );
-        Ok(account)
+        Ok(chain)
     }
 
-    async fn read_account_or_default(
-        &mut self,
-        account_id: &AccountId,
-    ) -> Result<AccountState, Error>;
+    async fn read_chain_or_default(&mut self, chain_id: &ChainId) -> Result<ChainState, Error>;
 
-    async fn write_account(&mut self, state: AccountState) -> Result<(), Error>;
+    async fn write_chain(&mut self, state: ChainState) -> Result<(), Error>;
 
-    async fn remove_account(&mut self, account_id: &AccountId) -> Result<(), Error>;
+    async fn remove_chain(&mut self, chain_id: &ChainId) -> Result<(), Error>;
 
     async fn read_certificate(&mut self, hash: HashValue) -> Result<Certificate, Error>;
 
@@ -75,16 +72,16 @@ dyn_clone::clone_trait_object!(Storage);
 
 #[async_trait]
 impl Storage for Box<dyn Storage> {
-    async fn read_account_or_default(&mut self, id: &AccountId) -> Result<AccountState, Error> {
-        self.deref_mut().read_account_or_default(id).await
+    async fn read_chain_or_default(&mut self, id: &ChainId) -> Result<ChainState, Error> {
+        self.deref_mut().read_chain_or_default(id).await
     }
 
-    async fn write_account(&mut self, value: AccountState) -> Result<(), Error> {
-        self.deref_mut().write_account(value).await
+    async fn write_chain(&mut self, value: ChainState) -> Result<(), Error> {
+        self.deref_mut().write_chain(value).await
     }
 
-    async fn remove_account(&mut self, id: &AccountId) -> Result<(), Error> {
-        self.deref_mut().remove_account(id).await
+    async fn remove_chain(&mut self, id: &ChainId) -> Result<(), Error> {
+        self.deref_mut().remove_chain(id).await
     }
 
     async fn read_certificate(&mut self, hash: HashValue) -> Result<Certificate, Error> {

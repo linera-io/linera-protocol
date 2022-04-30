@@ -40,37 +40,30 @@ fn test_max_sequence_number() {
     assert_eq!(max.0 * 2 + 1, std::u64::MAX);
 }
 
-fn account(numbers: Vec<u64>) -> AccountId {
-    AccountId::new(numbers.into_iter().map(SequenceNumber::from).collect())
+fn chain(numbers: Vec<u64>) -> ChainId {
+    ChainId::new(numbers.into_iter().map(SequenceNumber::from).collect())
 }
 
 #[test]
-fn test_account_ids() {
-    let id = account(vec![1]);
-    assert_eq!(id.make_child(SequenceNumber::from(2)), account(vec![1, 2]));
+fn test_chain_ids() {
+    let id = chain(vec![1]);
+    assert_eq!(id.make_child(SequenceNumber::from(2)), chain(vec![1, 2]));
 
-    let id = account(vec![1]);
+    let id = chain(vec![1]);
     assert_eq!(id.split(), None);
 
-    let id = account(vec![1, 2]);
+    let id = chain(vec![1, 2]);
+    assert_eq!(id.split(), Some((chain(vec![1]), SequenceNumber::from(2))));
+
+    let id = chain(vec![1, 2, 3]);
     assert_eq!(
         id.split(),
-        Some((account(vec![1]), SequenceNumber::from(2)))
+        Some((chain(vec![1, 2]), SequenceNumber::from(3)))
     );
 
-    let id = account(vec![1, 2, 3]);
-    assert_eq!(
-        id.split(),
-        Some((account(vec![1, 2]), SequenceNumber::from(3)))
-    );
-
-    let id = account(vec![1, 2, 3]);
+    let id = chain(vec![1, 2, 3]);
     assert_eq!(
         id.ancestors(),
-        vec![
-            account(vec![1]),
-            account(vec![1, 2]),
-            account(vec![1, 2, 3])
-        ]
+        vec![chain(vec![1]), chain(vec![1, 2]), chain(vec![1, 2, 3])]
     );
 }

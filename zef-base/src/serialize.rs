@@ -13,10 +13,10 @@ pub enum SerializedMessage {
     // Inbound
     RequestOrder(Box<RequestOrder>),
     Certificate(Box<Certificate>),
-    AccountInfoQuery(Box<AccountInfoQuery>),
+    ChainInfoQuery(Box<ChainInfoQuery>),
     // Outbound
     Vote(Box<Vote>),
-    AccountInfoResponse(Box<AccountInfoResponse>),
+    ChainInfoResponse(Box<ChainInfoResponse>),
     Error(Box<Error>),
     // Internal to an validator
     CrossShardRequest(Box<CrossShardRequest>),

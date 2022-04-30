@@ -22,13 +22,13 @@ mod base_types_tests;
 )]
 pub struct Amount(u64);
 
-/// The balance of an account (can go negative temporarily).
+/// The balance of a chain (can go negative temporarily).
 #[derive(
     Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
 )]
 pub struct Balance(i128);
 
-/// A sequence number to identify commands issued by an account.
+/// A sequence number to identify commands issued by a chain.
 #[derive(
     Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
 )]
@@ -51,9 +51,9 @@ pub struct KeyPair(dalek::Keypair);
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash)]
 pub struct PublicKeyBytes(pub [u8; dalek::PUBLIC_KEY_LENGTH]);
 
-/// The unique identifier (UID) of an account.
+/// The unique identifier (UID) of a chain.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Serialize, Deserialize, Default)]
-pub struct AccountId(pub Vec<SequenceNumber>);
+pub struct ChainId(pub Vec<SequenceNumber>);
 
 /// A Sha512 value.
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash, Serialize, Deserialize)]
@@ -62,12 +62,12 @@ pub struct HashValue(generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Dige
 /// Alias for the identity of an validator.
 pub type ValidatorName = PublicKeyBytes;
 
-/// Alias for the authentication method of an account.
-pub type AccountOwner = PublicKeyBytes;
+/// Alias for the authentication method of a chain.
+pub type ChainOwner = PublicKeyBytes;
 
 // For testing only
-pub fn dbg_account(name: u8) -> AccountId {
-    AccountId(vec![SequenceNumber(name.into())])
+pub fn dbg_chain(name: u8) -> ChainId {
+    ChainId(vec![SequenceNumber(name.into())])
 }
 
 // For testing only
@@ -217,17 +217,17 @@ impl FromStr for PublicKeyBytes {
     }
 }
 
-impl std::fmt::Display for AccountId {
+impl std::fmt::Display for ChainId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", serde_json::to_string(&self.0).unwrap())
     }
 }
 
-impl FromStr for AccountId {
+impl FromStr for ChainId {
     type Err = failure::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(AccountId(serde_json::from_str(s)?))
+        Ok(ChainId(serde_json::from_str(s)?))
     }
 }
 
@@ -250,19 +250,19 @@ impl std::fmt::Debug for PublicKeyBytes {
     }
 }
 
-impl std::fmt::Debug for AccountId {
+impl std::fmt::Debug for ChainId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         write!(f, "{}", self)
     }
 }
 
-impl AccountId {
+impl ChainId {
     pub fn new(numbers: Vec<SequenceNumber>) -> Self {
         assert!(!numbers.is_empty());
         Self(numbers)
     }
 
-    pub fn split(&self) -> Option<(AccountId, SequenceNumber)> {
+    pub fn split(&self) -> Option<(ChainId, SequenceNumber)> {
         if self.0.len() <= 1 {
             return None;
         }
@@ -271,7 +271,7 @@ impl AccountId {
         Some((parent, num))
     }
 
-    pub fn ancestors(&self) -> Vec<AccountId> {
+    pub fn ancestors(&self) -> Vec<ChainId> {
         let mut ancestors = Vec::new();
         for i in 1..=self.0.len() {
             ancestors.push(Self(self.0[0..i].to_vec()));

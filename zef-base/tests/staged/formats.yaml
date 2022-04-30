@@ -1,14 +1,35 @@
 ---
-AccountId:
+Address:
+  ENUM:
+    0:
+      Burn: UNIT
+    1:
+      Account:
+        NEWTYPE:
+          TYPENAME: ChainId
+Amount:
+  NEWTYPESTRUCT: U64
+Balance:
+  NEWTYPESTRUCT: I128
+Certificate:
+  STRUCT:
+    - value:
+        TYPENAME: Value
+    - signatures:
+        SEQ:
+          TUPLE:
+            - TYPENAME: PublicKeyBytes
+            - TYPENAME: Signature
+ChainId:
   NEWTYPESTRUCT:
     SEQ:
       TYPENAME: SequenceNumber
-AccountInfo:
+ChainInfo:
   STRUCT:
-    - account_id:
-        TYPENAME: AccountId
+    - chain_id:
+        TYPENAME: ChainId
     - manager:
-        TYPENAME: AccountManager
+        TYPENAME: ChainManager
     - balance:
         TYPENAME: Balance
     - next_sequence_number:
@@ -23,10 +44,10 @@ AccountInfo:
     - queried_received_certificates:
         SEQ:
           TYPENAME: Certificate
-AccountInfoQuery:
+ChainInfoQuery:
   STRUCT:
-    - account_id:
-        TYPENAME: AccountId
+    - chain_id:
+        TYPENAME: ChainId
     - check_next_sequence_number:
         OPTION:
           TYPENAME: SequenceNumber
@@ -36,14 +57,14 @@ AccountInfoQuery:
           TYPENAME: SequenceNumberRange
     - query_received_certificates_excluding_first_nth:
         OPTION: U64
-AccountInfoResponse:
+ChainInfoResponse:
   STRUCT:
     - info:
-        TYPENAME: AccountInfo
+        TYPENAME: ChainInfo
     - signature:
         OPTION:
           TYPENAME: Signature
-AccountManager:
+ChainManager:
   ENUM:
     0:
       None: UNIT
@@ -55,10 +76,10 @@ AccountManager:
       Multi:
         NEWTYPE:
           TYPENAME: MultiOwnerManager
-AccountState:
+ChainState:
   STRUCT:
     - id:
-        TYPENAME: AccountId
+        TYPENAME: ChainId
     - state:
         TYPENAME: ExecutionState
     - next_sequence_number:
@@ -72,7 +93,7 @@ AccountState:
     - received_index:
         MAP:
           KEY:
-            TYPENAME: AccountId
+            TYPENAME: ChainId
           VALUE:
             TYPENAME: SequenceNumber
     - keep_sending:
@@ -81,27 +102,6 @@ AccountState:
     - received_keys:
         SEQ:
           TYPENAME: HashValue
-Address:
-  ENUM:
-    0:
-      Burn: UNIT
-    1:
-      Account:
-        NEWTYPE:
-          TYPENAME: AccountId
-Amount:
-  NEWTYPESTRUCT: U64
-Balance:
-  NEWTYPESTRUCT: I128
-Certificate:
-  STRUCT:
-    - value:
-        TYPENAME: Value
-    - signatures:
-        SEQ:
-          TUPLE:
-            - TYPENAME: PublicKeyBytes
-            - TYPENAME: Signature
 Committee:
   STRUCT:
     - voting_rights:
@@ -122,16 +122,16 @@ CrossShardRequest:
     1:
       ConfirmUpdatedRecipient:
         STRUCT:
-          - account_id:
-              TYPENAME: AccountId
+          - chain_id:
+              TYPENAME: ChainId
           - hash:
               TYPENAME: HashValue
 Error:
   ENUM:
     0:
-      InactiveAccount:
+      InactiveChain:
         NEWTYPE:
-          TYPENAME: AccountId
+          TYPENAME: ChainId
     1:
       InvalidOwner: UNIT
     2:
@@ -171,7 +171,7 @@ Error:
     16:
       InvalidCertificate: UNIT
     17:
-      InvalidAccountInfoResponse: UNIT
+      InvalidChainInfoResponse: UNIT
     18:
       IncorrectTransferAmount: UNIT
     19:
@@ -180,9 +180,9 @@ Error:
           - current_balance:
               TYPENAME: Balance
     20:
-      InvalidNewAccountId:
+      InvalidNewChainId:
         NEWTYPE:
-          TYPENAME: AccountId
+          TYPENAME: ChainId
     21:
       InsufficientRound:
         NEWTYPE:
@@ -230,7 +230,7 @@ ExecutionState:
         OPTION:
           TYPENAME: Committee
     - manager:
-        TYPENAME: AccountManager
+        TYPENAME: ChainManager
     - balance:
         TYPENAME: Balance
 HashValue:
@@ -264,14 +264,14 @@ Operation:
           - user_data:
               TYPENAME: UserData
     1:
-      OpenAccount:
+      OpenChain:
         STRUCT:
           - new_id:
-              TYPENAME: AccountId
+              TYPENAME: ChainId
           - new_owner:
               TYPENAME: PublicKeyBytes
     2:
-      CloseAccount: UNIT
+      CloseChain: UNIT
     3:
       ChangeOwner:
         STRUCT:
@@ -290,8 +290,8 @@ PublicKeyBytes:
       SIZE: 32
 Request:
   STRUCT:
-    - account_id:
-        TYPENAME: AccountId
+    - chain_id:
+        TYPENAME: ChainId
     - operation:
         TYPENAME: Operation
     - sequence_number:
@@ -327,17 +327,17 @@ SerializedMessage:
         NEWTYPE:
           TYPENAME: Certificate
     2:
-      AccountInfoQuery:
+      ChainInfoQuery:
         NEWTYPE:
-          TYPENAME: AccountInfoQuery
+          TYPENAME: ChainInfoQuery
     3:
       Vote:
         NEWTYPE:
           TYPENAME: Vote
     4:
-      AccountInfoResponse:
+      ChainInfoResponse:
         NEWTYPE:
-          TYPENAME: AccountInfoResponse
+          TYPENAME: ChainInfoResponse
     5:
       Error:
         NEWTYPE:
