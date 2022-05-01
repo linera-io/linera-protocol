@@ -18,7 +18,7 @@ pub enum SerializedMessage {
     Vote(Box<Vote>),
     ChainInfoResponse(Box<ChainInfoResponse>),
     Error(Box<Error>),
-    // Internal to an validator
+    // Internal to a validator
     CrossChainRequest(Box<CrossChainRequest>),
 }
 
