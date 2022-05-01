@@ -67,7 +67,7 @@ pub enum Value {
     Confirmed { block: Block },
 }
 
-/// A vote on a statement from an validator.
+/// A vote on a statement from a validator.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct Vote {
@@ -144,7 +144,7 @@ pub struct ChainInfoResponse {
     pub signature: Option<Signature>,
 }
 
-/// A (trusted) cross-chain block with an validator.
+/// A (trusted) cross-chain block with a validator.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub enum CrossChainRequest {

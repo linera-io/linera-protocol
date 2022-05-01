@@ -59,7 +59,7 @@ pub struct ChainId(pub Vec<BlockHeight>);
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash, Serialize, Deserialize)]
 pub struct HashValue(generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Digest>::OutputSize>);
 
-/// Alias for the identity of an validator.
+/// Alias for the identity of a validator.
 pub type ValidatorName = PublicKeyBytes;
 
 /// Alias for the authentication method of a chain.

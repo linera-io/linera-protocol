@@ -115,10 +115,7 @@ async fn test_handle_block_proposal_bad_block_height() {
         .read_active_chain(&dbg_chain(1))
         .await
         .unwrap();
-    sender_chain
-        .next_block_height
-        .try_add_assign_one()
-        .unwrap();
+    sender_chain.next_block_height.try_add_assign_one().unwrap();
     state.storage.write_chain(sender_chain).await.unwrap();
     assert!(state.handle_block_proposal(block_proposal).await.is_err());
     assert!(state
@@ -314,10 +311,7 @@ async fn test_handle_certificate_receiver_balance_overflow() {
         .await
         .unwrap();
     assert_eq!(Balance::from(0), new_sender_chain.state.balance);
-    assert_eq!(
-        BlockHeight::from(1),
-        new_sender_chain.next_block_height
-    );
+    assert_eq!(BlockHeight::from(1), new_sender_chain.next_block_height);
     assert_eq!(new_sender_chain.confirmed_log.len(), 1);
     let new_recipient_chain = state
         .storage
