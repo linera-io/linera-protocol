@@ -481,10 +481,7 @@ impl ChainState {
         }
         self.received_keys.insert(key);
         self.received_log.push(key);
-        let current = self
-            .received_index
-            .entry(sender_id)
-            .or_insert(block_height);
+        let current = self.received_index.entry(sender_id).or_insert(block_height);
         if block_height > *current {
             *current = block_height;
         }

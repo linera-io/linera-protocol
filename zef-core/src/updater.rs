@@ -170,12 +170,7 @@ where
                     match chain_id.split() {
                         None => return Err(Error::InactiveChain(chain_id)),
                         Some((parent_id, number)) => {
-                            jobs.push((
-                                chain_id,
-                                BlockHeight::from(0),
-                                target_block_height,
-                                true,
-                            ));
+                            jobs.push((chain_id, BlockHeight::from(0), target_block_height, true));
                             chain_id = parent_id;
                             target_block_height = number.try_add_one()?;
                         }
@@ -190,8 +185,7 @@ where
             // Obtain chain state.
             let chain = self.store.read_chain_or_default(&chain_id).await?;
             // Send the requested certificates in order.
-            for number in usize::from(initial_block_height)..usize::from(target_block_height)
-            {
+            for number in usize::from(initial_block_height)..usize::from(target_block_height) {
                 let key = chain
                     .confirmed_log
                     .get(number)

@@ -12,7 +12,7 @@ use zef_storage::Storage;
 #[path = "unit_tests/worker_tests.rs"]
 mod worker_tests;
 
-/// Interface provided by each physical shard (aka "worker") of an validator or a local node.
+/// Interface provided by each physical shard (aka "worker") of a validator or a local node.
 /// * All commands return either the current chain info or an error.
 /// * Repeating commands produces no changes and returns no error.
 /// * Some handlers may return cross-chain blocks, that is, messages
@@ -54,7 +54,7 @@ impl<Client> WorkerState<Client> {
     }
 }
 
-/// State of a worker in an validator or a local node.
+/// State of a worker in a validator or a local node.
 pub struct WorkerState<StorageClient> {
     /// The signature key pair of the validator. The key may be missing for replicas
     /// without voting rights (possibly with a partial view of chains).

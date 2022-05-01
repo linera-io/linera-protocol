@@ -10,7 +10,7 @@ use std::sync::Arc;
 use zef_base::{base_types::*, chain::ChainManager, error::Error, messages::*};
 use zef_storage::Storage;
 
-/// How to communicate with an validator or a local node.
+/// How to communicate with a validator or a local node.
 #[async_trait]
 pub trait ValidatorNode {
     /// Initiate a new transfer.
@@ -135,10 +135,7 @@ where
         Ok(next_block_height)
     }
 
-    async fn current_next_block_height(
-        &mut self,
-        chain_id: ChainId,
-    ) -> Result<BlockHeight, Error> {
+    async fn current_next_block_height(&mut self, chain_id: ChainId) -> Result<BlockHeight, Error> {
         let query = ChainInfoQuery {
             chain_id,
             check_next_block_height: None,
