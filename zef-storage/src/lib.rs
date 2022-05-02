@@ -3,9 +3,11 @@
 
 mod file_storage;
 mod memory_storage;
+mod rocksdb_storage;
 
 pub use file_storage::*;
 pub use memory_storage::*;
+pub use rocksdb_storage::*;
 
 use async_trait::async_trait;
 use dyn_clone::DynClone;
