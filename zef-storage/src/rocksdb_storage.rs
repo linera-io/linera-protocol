@@ -4,7 +4,10 @@ use crate::Storage;
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use std::{
-    collections::HashMap,
+    collections::{
+        hash_map::Entry::{Occupied, Vacant},
+        HashMap,
+    },
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -24,18 +27,18 @@ mod rocksdb_storage_tests;
 pub struct RocksdbStore {
     /// Base path.
     path: PathBuf,
-    /// db map indexed by kind
+    /// Open DB connections indexed by kind.
     dbs: HashMap<String, rocksdb::DB>,
 }
 
-fn open_db(path: &Path, kind: &str) -> rocksdb::DB {
+fn open_db(path: &Path, kind: &str) -> Result<rocksdb::DB, rocksdb::Error> {
     let cf_opts = rocksdb::Options::default();
     let cf = rocksdb::ColumnFamilyDescriptor::new(kind, cf_opts);
 
     let mut db_opts = rocksdb::Options::default();
     db_opts.create_missing_column_families(true);
     db_opts.create_if_missing(true);
-    rocksdb::DB::open_cf_descriptors(&db_opts, path, vec![cf]).unwrap()
+    rocksdb::DB::open_cf_descriptors(&db_opts, path, vec![cf])
 }
 
 impl RocksdbStore {
@@ -47,10 +50,14 @@ impl RocksdbStore {
         }
     }
 
-    fn get_db(&mut self, kind: &str) -> &mut rocksdb::DB {
-        self.dbs
-            .entry(String::from(kind))
-            .or_insert_with(|| open_db(&self.path, kind))
+    fn get_db(&mut self, kind: &str) -> Result<&mut rocksdb::DB, rocksdb::Error> {
+        match self.dbs.entry(String::from(kind)) {
+            Vacant(entry) => {
+                let db = open_db(&self.path, kind)?;
+                Ok(entry.insert(db))
+            }
+            Occupied(entry) => Ok(entry.into_mut()),
+        }
     }
 
     async fn read_value(
@@ -58,7 +65,7 @@ impl RocksdbStore {
         kind: &str,
         key: &[u8],
     ) -> Result<std::option::Option<Vec<u8>>, rocksdb::Error> {
-        let db = self.get_db(kind);
+        let db = self.get_db(kind)?;
 
         match db.get(key) {
             Ok(Some(value)) => Ok(Some(value)),
@@ -73,14 +80,14 @@ impl RocksdbStore {
         key: &[u8],
         value: &[u8],
     ) -> Result<(), rocksdb::Error> {
-        let db = self.get_db(kind);
+        let db = self.get_db(kind)?;
         db.put(key, value)?;
         Ok(())
     }
 
     async fn remove_value(&mut self, kind: &str, key: &[u8]) -> Result<(), rocksdb::Error> {
-        let db = self.get_db(kind);
-        db.delete(key).unwrap();
+        let db = self.get_db(kind)?;
+        db.delete(key)?;
         Ok(())
     }
 
