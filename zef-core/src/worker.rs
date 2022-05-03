@@ -19,25 +19,25 @@ mod worker_tests;
 ///   to be communicated to other workers of the same validator.
 #[async_trait]
 pub trait ValidatorWorker {
-    /// Initiate a new block.
+    /// Propose a new block.
     async fn handle_block_proposal(
         &mut self,
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, Error>;
 
-    /// Process a certificate, for instance to execute a confirmed block.
+    /// Process a certificate, e.g. to extend a chain with a confirmed block.
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
     ) -> Result<(ChainInfoResponse, Vec<CrossChainRequest>), Error>;
 
-    /// Handle information queries for this chain.
+    /// Handle information queries on chains.
     async fn handle_chain_info_query(
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, Error>;
 
-    /// Handle (trusted!) cross chain block.
+    /// Handle a (trusted!) cross-chain request.
     async fn handle_cross_chain_request(
         &mut self,
         block: CrossChainRequest,
@@ -94,7 +94,7 @@ where
         // Check that the chain is active and ready for this confirmation.
         let mut chain = self.storage.read_active_chain(&sender).await?;
         if chain.next_block_height < block.block_height {
-            return Err(Error::MissingEarlierConfirmations {
+            return Err(Error::MissingEarlierBlocks {
                 current_block_height: chain.next_block_height,
             });
         }
@@ -258,7 +258,6 @@ where
         &mut self,
         certificate: Certificate,
     ) -> Result<(ChainInfoResponse, Vec<CrossChainRequest>), Error> {
-        // Process the proposal.
         match &certificate.value {
             Value::Validated { block } => {
                 // Confirm the validated block.

@@ -178,7 +178,7 @@ Error:
     5:
       PreviousBlockMustBeConfirmedFirst: UNIT
     6:
-      MissingEarlierConfirmations:
+      MissingEarlierBlocks:
         STRUCT:
           - current_block_height:
               TYPENAME: BlockHeight
