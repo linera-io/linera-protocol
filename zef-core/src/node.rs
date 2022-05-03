@@ -13,7 +13,7 @@ use zef_storage::Storage;
 /// How to communicate with a validator or a local node.
 #[async_trait]
 pub trait ValidatorNode {
-    /// Initiate a new transfer.
+    /// Propose a new block.
     async fn handle_block_proposal(
         &mut self,
         proposal: BlockProposal,
@@ -114,9 +114,7 @@ where
                             // Continue with the next certificate.
                             continue;
                         }
-                        Err(
-                            Error::InvalidCertificate | Error::MissingEarlierConfirmations { .. },
-                        ) => {
+                        Err(Error::InvalidCertificate | Error::MissingEarlierBlocks { .. }) => {
                             // The certificate is not as expected. Give up.
                             return Ok(info);
                         }

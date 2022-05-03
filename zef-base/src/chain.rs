@@ -257,7 +257,7 @@ impl ChainManager {
         new_block: &Block,
     ) -> Result<Outcome, Error> {
         if next_block_height < new_block.block_height {
-            return Err(Error::MissingEarlierConfirmations {
+            return Err(Error::MissingEarlierBlocks {
                 current_block_height: next_block_height,
             });
         }

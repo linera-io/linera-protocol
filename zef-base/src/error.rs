@@ -43,7 +43,7 @@ pub enum Error {
         display = "Cannot confirm a block before its predecessors: {:?}",
         current_block_height
     )]
-    MissingEarlierConfirmations { current_block_height: BlockHeight },
+    MissingEarlierBlocks { current_block_height: BlockHeight },
 
     // Algorithmic operations
     #[fail(display = "Sequence number overflow.")]
