@@ -23,12 +23,15 @@ mod file_storage_tests;
 pub struct FileStore {
     /// Base path.
     path: PathBuf,
+    /// Configuration for RON serialization.
+    ron_config: ron::ser::PrettyConfig,
 }
 
 impl FileStore {
     pub fn new(path: PathBuf) -> Self {
         assert!(path.is_dir());
-        Self { path }
+        let ron_config = ron::ser::PrettyConfig::default().depth_limit(8);
+        Self { path, ron_config }
     }
 
     fn get_path(&self, kind: &str, key: &[u8]) -> PathBuf {
@@ -38,7 +41,7 @@ impl FileStore {
         // Only encode the first 40 bytes to ensure that the resulting
         // filename is well below 128 bytes.
         let key = hex::encode(&hash[0..40]);
-        self.path.join(format!("{}_{}.json", kind, key))
+        self.path.join(format!("{}_{}.ron", kind, key))
     }
 
     async fn read_value(&self, kind: &str, key: &[u8]) -> std::io::Result<Option<Vec<u8>>> {
@@ -83,11 +86,9 @@ impl FileStore {
                 error: format!("{}: {}", kind, e),
             })?;
         let result = match value {
-            Some(v) => Some(
-                serde_json::from_slice(&v).map_err(|e| Error::StorageBcsError {
-                    error: format!("{}: {}", kind, e),
-                })?,
-            ),
+            Some(v) => Some(ron::de::from_bytes(&v).map_err(|e| Error::StorageBcsError {
+                error: format!("{}: {}", kind, e),
+            })?),
             None => None,
         };
         Ok(result)
@@ -100,8 +101,9 @@ impl FileStore {
     {
         let key = bcs::to_bytes(&key).expect("should not fail");
         let kind = serde_name::trace_name::<V>().expect("V must be a struct or an enum");
-        let value = serde_json::to_vec(&value).expect("should not fail");
-        self.write_value(kind, &key, &value)
+        let value =
+            ron::ser::to_string_pretty(&value, self.ron_config.clone()).expect("should not fail");
+        self.write_value(kind, &key, value.as_bytes())
             .await
             .map_err(|e| Error::StorageIoError {
                 error: format!("write {}", e),

@@ -66,7 +66,6 @@ impl RocksdbStore {
         key: &[u8],
     ) -> Result<std::option::Option<Vec<u8>>, rocksdb::Error> {
         let db = self.get_db(kind)?;
-
         match db.get(key) {
             Ok(Some(value)) => Ok(Some(value)),
             Ok(None) => Ok(None),
@@ -105,11 +104,9 @@ impl RocksdbStore {
                 error: format!("{}: {}", kind, e),
             })?;
         let result = match value {
-            Some(v) => Some(
-                serde_json::from_slice(&v).map_err(|e| Error::StorageBcsError {
-                    error: format!("{}: {}", kind, e),
-                })?,
-            ),
+            Some(v) => Some(ron::de::from_bytes(&v).map_err(|e| Error::StorageBcsError {
+                error: format!("{}: {}", kind, e),
+            })?),
             None => None,
         };
         Ok(result)
@@ -122,8 +119,8 @@ impl RocksdbStore {
     {
         let key = bcs::to_bytes(&key).expect("should not fail");
         let kind = serde_name::trace_name::<V>().expect("V must be a struct or an enum");
-        let value = serde_json::to_vec(&value).expect("should not fail");
-        self.write_value(kind, &key, &value)
+        let value = ron::to_string(&value).expect("should not fail");
+        self.write_value(kind, &key, value.as_bytes())
             .await
             .map_err(|e| Error::StorageIoError {
                 error: format!("write {}", e),
