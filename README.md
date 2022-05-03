@@ -11,7 +11,7 @@ The current code was imported from https://github.com/novifinancial/fastpay/pull
 cleaned up (e.g. removing coins and assets for now). Atomic swaps are still WIP (notably
 the client and CLI code is missing).
 
-The following script can be run with `cargo test -- --ignored`.
+The following script can be run with `cargo test`.
 
 ```bash
 # For debug builds:
@@ -20,7 +20,7 @@ cargo build && cd target/debug
 # cargo build --release && cd target/release
 
 # Clean up data files
-rm -f *.json *.txt
+rm -rf *.json *.txt *.db
 
 # Make sure to clean up child processes on exit.
 trap 'kill $(jobs -p)' EXIT
@@ -45,40 +45,43 @@ for I in 1 2 3 4
 do
     for J in $(seq 0 3)
     do
-        ./server run --server server_"$I".json --shard "$J" --genesis genesis.json &
+        ./server run --storage server_"$I"_"$J".db --server server_"$I".json --shard "$J" --genesis genesis.json &
     done
  done
 
 LAST_PID="$!"
 
+# Command line prefix for client calls
+CLIENT=(./client --storage client.db --wallet wallet.json --genesis genesis.json)
+
 # Query balance for first and last user chain
 CHAIN1="[0]"
 CHAIN2="[999]"
-./client --wallet wallet.json --genesis genesis.json query_balance "$CHAIN1"
-./client --wallet wallet.json --genesis genesis.json query_balance "$CHAIN2"
+${CLIENT[@]} query_balance "$CHAIN1"
+${CLIENT[@]} query_balance "$CHAIN2"
 
 # Transfer 10 units
-./client --wallet wallet.json --genesis genesis.json transfer 10 --from "$CHAIN1" --to "$CHAIN2"
+${CLIENT[@]} transfer 10 --from "$CHAIN1" --to "$CHAIN2"
 
 # Restart last server
 kill "$LAST_PID"
-./server run --server server_"$I".json --shard "$J" --genesis genesis.json &
+./server run --storage server_"$I"_"$J".db --server server_"$I".json --shard "$J" --genesis genesis.json &
 
 # Query balances again
-./client --wallet wallet.json --genesis genesis.json query_balance "$CHAIN1"
-./client --wallet wallet.json --genesis genesis.json query_balance "$CHAIN2"
+${CLIENT[@]} query_balance "$CHAIN1"
+${CLIENT[@]} query_balance "$CHAIN2"
 
 # Launch local benchmark using all user chains
-./client --wallet wallet.json --genesis genesis.json benchmark --max-in-flight 50
+${CLIENT[@]} benchmark --max-in-flight 50
 
 # Create derived chain
-CHAIN3="`./client --wallet wallet.json --genesis genesis.json open_chain --from "$CHAIN1"`"
+CHAIN3="`${CLIENT[@]} open_chain --from "$CHAIN1"`"
 
 # Inspect state of derived chain
 fgrep '"chain_id"':"$CHAIN3" wallet.json
 
 # Query the balance of the first chain
-./client --wallet wallet.json --genesis genesis.json query_balance "$CHAIN1"
+${CLIENT[@]} query_balance "$CHAIN1"
 
 cd ../..
 ```
