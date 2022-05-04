@@ -93,7 +93,7 @@ where
         let sender = block.chain_id.clone();
         // Check that the chain is active and ready for this confirmation.
         let mut chain = self.storage.read_active_chain(&sender).await?;
-        if chain.next_block_height < block.block_height {
+        if chain.next_block_height < block.height {
             return Err(Error::MissingEarlierBlocks {
                 current_block_height: chain.next_block_height,
             });
@@ -118,7 +118,7 @@ where
                 certificate,
             })
             .collect();
-        if chain.next_block_height > block.block_height {
+        if chain.next_block_height > block.height {
             // Block was already confirmed.
             let info = chain.make_chain_info(self.key_pair.as_ref());
             return Ok((info, continuation));
@@ -204,7 +204,7 @@ where
                 committee,
                 certificate.hash,
                 block.chain_id.clone(),
-                block.block_height,
+                block.height,
             )?;
             if need_update {
                 self.storage.write_certificate(certificate).await?;

@@ -217,11 +217,9 @@ where
     ) -> Result<Option<Vote>, Error> {
         let target_block_height = match &action {
             CommunicateAction::SubmitBlockForValidation(proposal)
-            | CommunicateAction::SubmitBlockForConfirmation(proposal) => {
-                proposal.block.block_height
-            }
+            | CommunicateAction::SubmitBlockForConfirmation(proposal) => proposal.block.height,
             CommunicateAction::FinalizeBlock(certificate) => {
-                certificate.value.validated_block().unwrap().block_height
+                certificate.value.validated_block().unwrap().height
             }
             CommunicateAction::AdvanceToNextBlockHeight(seq) => *seq,
         };

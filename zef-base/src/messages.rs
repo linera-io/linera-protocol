@@ -44,7 +44,7 @@ pub struct Block {
     /// The operation to execute.
     pub operation: Operation,
     /// The block height.
-    pub block_height: BlockHeight,
+    pub height: BlockHeight,
     /// Certified hash (see `Certificate` below) of the previous block in the
     /// chain, if any.
     pub previous_block_hash: Option<HashValue>,
@@ -221,7 +221,7 @@ impl Value {
     #[cfg(test)]
     pub fn confirmed_block_height(&self) -> Option<BlockHeight> {
         match self {
-            Value::Confirmed { block } => Some(block.block_height),
+            Value::Confirmed { block } => Some(block.height),
             _ => None,
         }
     }
@@ -250,7 +250,7 @@ impl Value {
 
     pub fn confirmed_key(&self) -> Option<(ChainId, BlockHeight)> {
         match self {
-            Value::Confirmed { block } => Some((block.chain_id.clone(), block.block_height)),
+            Value::Confirmed { block } => Some((block.chain_id.clone(), block.height)),
             _ => None,
         }
     }

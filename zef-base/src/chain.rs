@@ -192,7 +192,7 @@ impl ChainManager {
         new_block: &Block,
     ) -> Result<Outcome, Error> {
         ensure!(
-            new_block.block_height <= BlockHeight::max(),
+            new_block.height <= BlockHeight::max(),
             Error::InvalidBlockHeight
         );
         ensure!(
@@ -200,7 +200,7 @@ impl ChainManager {
             Error::UnexpectedPreviousBlockHash
         );
         ensure!(
-            new_block.block_height == next_block_height,
+            new_block.height == next_block_height,
             Error::UnexpectedBlockHeight
         );
         match self {
@@ -256,12 +256,12 @@ impl ChainManager {
         next_block_height: BlockHeight,
         new_block: &Block,
     ) -> Result<Outcome, Error> {
-        if next_block_height < new_block.block_height {
+        if next_block_height < new_block.height {
             return Err(Error::MissingEarlierBlocks {
                 current_block_height: next_block_height,
             });
         }
-        if next_block_height > new_block.block_height {
+        if next_block_height > new_block.height {
             // Block was already confirmed.
             return Ok(Outcome::Skip);
         }
@@ -402,7 +402,7 @@ impl ChainState {
                 );
             }
             Operation::OpenChain { new_id, .. } => {
-                let expected_id = block.chain_id.make_child(block.block_height);
+                let expected_id = block.chain_id.make_child(block.height);
                 ensure!(
                     new_id == &expected_id,
                     Error::InvalidNewChainId(new_id.clone())
