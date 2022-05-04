@@ -17,7 +17,7 @@ Block:
         TYPENAME: ChainId
     - operation:
         TYPENAME: Operation
-    - block_height:
+    - height:
         TYPENAME: BlockHeight
     - previous_block_hash:
         OPTION:

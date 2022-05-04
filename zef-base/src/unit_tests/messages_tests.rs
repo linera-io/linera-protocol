@@ -18,7 +18,7 @@ fn test_signed_values() {
             amount: Amount::from(1),
             user_data: UserData::default(),
         },
-        block_height: BlockHeight::new(),
+        height: BlockHeight::new(),
         previous_block_hash: None,
         round: RoundNumber::default(),
     };
@@ -52,7 +52,7 @@ fn test_certificates() {
             user_data: UserData::default(),
         },
         previous_block_hash: None,
-        block_height: BlockHeight::new(),
+        height: BlockHeight::new(),
         round: RoundNumber::default(),
     };
     let value = Value::Confirmed { block };

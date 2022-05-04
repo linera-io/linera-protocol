@@ -29,7 +29,7 @@ async fn test_rocksdb_storage_for_certificates() {
         chain_id: ChainId::default(),
         operation: Operation::CloseChain,
         previous_block_hash: None,
-        block_height: BlockHeight::default(),
+        height: BlockHeight::default(),
         round: RoundNumber::default(),
     };
     let value = Value::Confirmed { block };

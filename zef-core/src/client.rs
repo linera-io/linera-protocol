@@ -510,7 +510,7 @@ where
                 amount,
                 user_data,
             },
-            block_height: self.next_block_height,
+            height: self.next_block_height,
             previous_block_hash: self.block_hash,
             round: self.next_round,
         };
@@ -546,7 +546,7 @@ where
             "Client state has a different pending block",
         );
         ensure!(
-            block.block_height == self.next_block_height,
+            block.height == self.next_block_height,
             "Unexpected block height"
         );
         ensure!(
@@ -711,7 +711,7 @@ where
             .download_certificates(
                 self.validator_clients.clone(),
                 block.chain_id.clone(),
-                block.block_height,
+                block.height,
             )
             .await?;
         // Process the received operation.
@@ -722,7 +722,7 @@ where
         self.communicate_chain_updates(
             &committee,
             block.chain_id.clone(),
-            CommunicateAction::AdvanceToNextBlockHeight(block.block_height.try_add_one()?),
+            CommunicateAction::AdvanceToNextBlockHeight(block.height.try_add_one()?),
         )
         .await?;
         Ok(())
@@ -735,7 +735,7 @@ where
             chain_id: self.chain_id.clone(),
             operation: Operation::ChangeOwner { new_owner },
             previous_block_hash: self.block_hash,
-            block_height: self.next_block_height,
+            height: self.next_block_height,
             round: self.next_round,
         };
         self.known_key_pairs.insert(key_pair.public(), key_pair);
@@ -754,7 +754,7 @@ where
             chain_id: self.chain_id.clone(),
             operation: Operation::ChangeOwner { new_owner },
             previous_block_hash: self.block_hash,
-            block_height: self.next_block_height,
+            height: self.next_block_height,
             round: self.next_round,
         };
         let certificate = self
@@ -772,7 +772,7 @@ where
                 new_owners: vec![owner, new_owner],
             },
             previous_block_hash: self.block_hash,
-            block_height: self.next_block_height,
+            height: self.next_block_height,
             round: self.next_round,
         };
         let certificate = self
@@ -788,7 +788,7 @@ where
             chain_id: self.chain_id.clone(),
             operation: Operation::OpenChain { new_id, new_owner },
             previous_block_hash: self.block_hash,
-            block_height: self.next_block_height,
+            height: self.next_block_height,
             round: self.next_round,
         };
         let certificate = self
@@ -803,7 +803,7 @@ where
             chain_id: self.chain_id.clone(),
             operation: Operation::CloseChain,
             previous_block_hash: self.block_hash,
-            block_height: self.next_block_height,
+            height: self.next_block_height,
             round: self.next_round,
         };
         let certificate = self
@@ -827,7 +827,7 @@ where
                 user_data,
             },
             previous_block_hash: self.block_hash,
-            block_height: self.next_block_height,
+            height: self.next_block_height,
             round: self.next_round,
         };
         let new_certificate = self
