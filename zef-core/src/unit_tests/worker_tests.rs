@@ -275,7 +275,10 @@ async fn test_handle_certificate_exceed_balance() {
         &committee,
         &state,
     );
-    assert!(state.fully_handle_certificate(certificate).await.is_ok());
+    assert!(state
+        .fully_handle_certificate(certificate.clone())
+        .await
+        .is_ok());
     let sender_chain = state
         .storage
         .read_active_chain(&dbg_chain(1))
@@ -284,6 +287,7 @@ async fn test_handle_certificate_exceed_balance() {
     assert_eq!(Balance::from(-995), sender_chain.state.balance);
     assert_eq!(BlockHeight::from(1), sender_chain.next_block_height);
     assert_eq!(sender_chain.confirmed_log.len(), 1);
+    assert_eq!(Some(certificate.hash), sender_chain.block_hash);
     assert!(state.storage.read_active_chain(&dbg_chain(2)).await.is_ok());
 }
 
@@ -304,7 +308,10 @@ async fn test_handle_certificate_receiver_balance_overflow() {
         &committee,
         &state,
     );
-    assert!(state.fully_handle_certificate(certificate).await.is_ok());
+    assert!(state
+        .fully_handle_certificate(certificate.clone())
+        .await
+        .is_ok());
     let new_sender_chain = state
         .storage
         .read_active_chain(&dbg_chain(1))
@@ -313,6 +320,7 @@ async fn test_handle_certificate_receiver_balance_overflow() {
     assert_eq!(Balance::from(0), new_sender_chain.state.balance);
     assert_eq!(BlockHeight::from(1), new_sender_chain.next_block_height);
     assert_eq!(new_sender_chain.confirmed_log.len(), 1);
+    assert_eq!(Some(certificate.hash), new_sender_chain.block_hash);
     let new_recipient_chain = state
         .storage
         .read_active_chain(&dbg_chain(2))
@@ -335,7 +343,10 @@ async fn test_handle_certificate_receiver_equal_sender() {
         &committee,
         &state,
     );
-    assert!(state.fully_handle_certificate(certificate).await.is_ok());
+    assert!(state
+        .fully_handle_certificate(certificate.clone())
+        .await
+        .is_ok());
     let chain = state
         .storage
         .read_active_chain(&dbg_chain(1))
@@ -344,6 +355,7 @@ async fn test_handle_certificate_receiver_equal_sender() {
     assert_eq!(Balance::from(1), chain.state.balance);
     assert_eq!(BlockHeight::from(1), chain.next_block_height);
     assert_eq!(chain.confirmed_log.len(), 1);
+    assert_eq!(Some(certificate.hash), chain.block_hash);
 }
 
 #[tokio::test]
@@ -377,6 +389,7 @@ async fn test_update_recipient_chain() {
     assert_eq!(Balance::from(11), chain.state.balance);
     assert_eq!(BlockHeight::from(0), chain.next_block_height);
     assert_eq!(chain.confirmed_log.len(), 0);
+    assert_eq!(None, chain.block_hash);
     assert_eq!(chain.received_log.len(), 1);
 }
 
@@ -405,16 +418,8 @@ async fn test_handle_certificate_to_active_recipient() {
     assert_eq!(dbg_chain(1), info.chain_id);
     assert_eq!(Balance::from(0), info.balance);
     assert_eq!(BlockHeight::from(1), info.next_block_height);
+    assert_eq!(Some(certificate.hash), info.block_hash);
     assert!(info.manager.pending().is_none());
-    assert_eq!(
-        state
-            .storage
-            .read_active_chain(&dbg_chain(1))
-            .await
-            .unwrap()
-            .confirmed_log,
-        vec![certificate.hash]
-    );
 
     let recipient_chain = state
         .storage
@@ -424,6 +429,7 @@ async fn test_handle_certificate_to_active_recipient() {
     assert_eq!(recipient_chain.state.balance, Balance::from(5));
     assert!(recipient_chain.state.manager.has_owner(&dbg_addr(2)));
     assert_eq!(recipient_chain.confirmed_log.len(), 0);
+    assert_eq!(recipient_chain.block_hash, None);
     assert_eq!(recipient_chain.received_log.len(), 1);
 
     let info_query = ChainInfoQuery {
@@ -468,16 +474,8 @@ async fn test_handle_certificate_to_inactive_recipient() {
     assert_eq!(dbg_chain(1), info.chain_id);
     assert_eq!(Balance::from(0), info.balance);
     assert_eq!(BlockHeight::from(1), info.next_block_height);
+    assert_eq!(Some(certificate.hash), info.block_hash);
     assert!(info.manager.pending().is_none());
-    assert_eq!(
-        state
-            .storage
-            .read_active_chain(&dbg_chain(1))
-            .await
-            .unwrap()
-            .confirmed_log,
-        vec![certificate.hash]
-    );
 }
 
 #[tokio::test]
