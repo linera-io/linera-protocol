@@ -188,7 +188,7 @@ impl ClientContext {
                     user_data: UserData::default(),
                 },
                 previous_block_hash: chain.block_hash,
-                block_height: chain.next_block_height,
+                height: chain.next_block_height,
                 round: RoundNumber::default(),
             };
             debug!("Preparing block proposal: {:?}", block);

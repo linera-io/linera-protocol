@@ -28,7 +28,7 @@ async fn test_file_storage_for_certificates() {
     let block = Block {
         chain_id: ChainId::default(),
         operation: Operation::CloseChain,
-        block_height: BlockHeight::default(),
+        height: BlockHeight::default(),
         previous_block_hash: None,
         round: RoundNumber::default(),
     };

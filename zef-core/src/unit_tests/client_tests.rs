@@ -212,7 +212,7 @@ impl TestBuilder {
                     } = response.info;
                     if let Some(cert) = queried_sent_certificates.pop() {
                         if let Value::Confirmed { block } = &cert.value {
-                            if block.chain_id == chain_id && block.block_height == block_height {
+                            if block.chain_id == chain_id && block.height == block_height {
                                 cert.check(&self.committee).unwrap();
                                 count += 1;
                                 certificate = Some(cert);
