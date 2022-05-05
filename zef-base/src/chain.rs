@@ -73,11 +73,11 @@ pub struct MultiOwnerManager {
     /// The co-owners of the chain.
     pub owners: HashSet<Owner>,
     /// Latest authenticated block that we have received.
-    pub proposal: Option<BlockProposal>,
-    /// Latest proposal that we have voted on (either to validate or to confirm it).
-    pub pending: Option<Vote>,
+    pub proposed: Option<BlockProposal>,
     /// Latest validated proposal that we have seen (and voted to confirm).
     pub locked: Option<Certificate>,
+    /// Latest proposal that we have voted on (either to validate or to confirm it).
+    pub pending: Option<Vote>,
 }
 
 /// The result of verifying a (valid) query.
@@ -106,19 +106,17 @@ impl MultiOwnerManager {
     pub fn new(owners: HashSet<Owner>) -> Self {
         MultiOwnerManager {
             owners,
-            proposal: None,
-            pending: None,
+            proposed: None,
             locked: None,
+            pending: None,
         }
     }
 
     pub fn round(&self) -> RoundNumber {
         let mut current_round = RoundNumber::default();
-        if let Some(vote) = &self.pending {
-            if let Value::Validated { round, .. } = &vote.value {
-                if current_round < *round {
-                    current_round = *round;
-                }
+        if let Some(proposal) = &self.proposed {
+            if current_round < proposal.block_and_round.1 {
+                current_round = proposal.block_and_round.1;
             }
         }
         if let Some(cert) = &self.locked {
@@ -185,7 +183,7 @@ impl ChainManager {
     }
 
     /// Verify the safety of the block w.r.t. voting rules.
-    pub fn check_block(
+    pub fn check_proposed_block(
         &self,
         block_hash: Option<HashValue>,
         next_block_height: BlockHeight,
@@ -224,17 +222,14 @@ impl ChainManager {
                 Ok(Outcome::Accept)
             }
             ChainManager::Multi(manager) => {
-                if let Some(vote) = &manager.pending {
-                    match &vote.value {
-                        Value::Validated { block, round }
-                            if block == new_block && *round == new_round =>
-                        {
-                            return Ok(Outcome::Skip);
-                        }
-                        Value::Validated { round, .. } if new_round <= *round => {
-                            return Err(Error::InsufficientRound(*round));
-                        }
-                        _ => (),
+                if let Some(proposal) = &manager.proposed {
+                    if proposal.block_and_round.0 == *new_block
+                        && proposal.block_and_round.1 == new_round
+                    {
+                        return Ok(Outcome::Skip);
+                    }
+                    if new_round <= proposal.block_and_round.1 {
+                        return Err(Error::InsufficientRound(proposal.block_and_round.1));
                     }
                 }
                 if let Some(cert) = &manager.locked {
@@ -300,7 +295,7 @@ impl ChainManager {
         match self {
             ChainManager::Single(manager) => {
                 if let Some(key_pair) = key_pair {
-                    // Vote to confirm
+                    // Vote to confirm.
                     let BlockAndRound(block, _) = proposal.block_and_round;
                     let value = Value::Confirmed { block };
                     let vote = Vote::new(value, key_pair);
@@ -308,10 +303,11 @@ impl ChainManager {
                 }
             }
             ChainManager::Multi(manager) => {
-                // Record the user's authenticated block
-                manager.proposal = Some(proposal.clone());
+                // Record the proposed block. This is important to keep track of rounds
+                // for non-voting nodes.
+                manager.proposed = Some(proposal.clone());
                 if let Some(key_pair) = key_pair {
-                    // Vote to validate
+                    // Vote to validate.
                     let BlockAndRound(block, round) = proposal.block_and_round;
                     let value = Value::Validated { block, round };
                     let vote = Vote::new(value, key_pair);
@@ -330,10 +326,11 @@ impl ChainManager {
     ) {
         match self {
             ChainManager::Multi(manager) => {
-                // Record validity certificate.
+                // Record validity certificate. This is important to keep track of rounds
+                // for non-voting nodes.
                 manager.locked = Some(certificate);
                 if let Some(key_pair) = key_pair {
-                    // Vote to confirm
+                    // Vote to confirm.
                     let value = Value::Confirmed { block };
                     let vote = Vote::new(value, key_pair);
                     // Ok to overwrite validation votes with confirmation votes at equal or
