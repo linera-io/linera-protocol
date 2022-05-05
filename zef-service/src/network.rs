@@ -26,10 +26,10 @@ pub fn get_shard(num_shards: u32, chain_id: &ChainId) -> u32 {
 
 #[derive(Clone, Debug, StructOpt)]
 pub struct CrossChainConfig {
-    /// Number of cross chains messages allowed before blocking the main server loop
+    /// Number of cross-chains messages allowed before blocking the main server loop
     #[structopt(long = "cross_chain_queue_size", default_value = "1")]
     queue_size: usize,
-    /// Maximum number of retries for a cross chain message.
+    /// Maximum number of retries for a cross-chain message.
     #[structopt(long = "cross_chain_max_retries", default_value = "10")]
     max_retries: usize,
     /// Delay before retrying of cross-chain message.
@@ -132,7 +132,7 @@ where
                         }
                     }
                     _ => {
-                        debug!("Sent cross chain query: {} -> {}", this_shard, shard);
+                        debug!("Sent cross-chain query: {} -> {}", this_shard, shard);
                         queries_sent += 1;
                         break;
                     }
@@ -224,7 +224,7 @@ where
                         SerializedMessage::Certificate(message) => {
                             match self.server.state.handle_certificate(*message).await {
                                 Ok((info, continuation)) => {
-                                    // Cross-shard block
+                                    // Cross-shard requests
                                     self.handle_continuation(continuation).await;
                                     // Response
                                     Ok(Some(serialize_message(
@@ -244,13 +244,13 @@ where
                                     Box::new(info),
                                 )))
                             }),
-                        SerializedMessage::CrossChainRequest(block) => {
-                            match self.server.state.handle_cross_chain_request(*block).await {
+                        SerializedMessage::CrossChainRequest(request) => {
+                            match self.server.state.handle_cross_chain_request(*request).await {
                                 Ok(continuation) => {
                                     self.handle_continuation(continuation).await;
                                 }
                                 Err(error) => {
-                                    error!("Failed to handle cross-chain block: {}", error);
+                                    error!("Failed to handle cross-chain request: {}", error);
                                 }
                             }
                             // No user to respond to.
@@ -294,15 +294,15 @@ where
 {
     fn handle_continuation(
         &mut self,
-        blocks: Vec<CrossChainRequest>,
+        requests: Vec<CrossChainRequest>,
     ) -> futures::future::BoxFuture<()> {
         Box::pin(async move {
-            for block in blocks {
-                let shard_id = self.server.which_shard(block.target_chain_id());
+            for request in requests {
+                let shard_id = self.server.which_shard(request.target_chain_id());
                 let buffer =
-                    serialize_message(&SerializedMessage::CrossChainRequest(Box::new(block)));
+                    serialize_message(&SerializedMessage::CrossChainRequest(Box::new(request)));
                 debug!(
-                    "Scheduling cross chain query: {} -> {}",
+                    "Scheduling cross-chain query: {} -> {}",
                     self.server.shard_id, shard_id
                 );
                 self.cross_chain_sender
@@ -415,12 +415,12 @@ impl ValidatorNode for Client {
     /// Handle information queries for this chain.
     async fn handle_chain_info_query(
         &mut self,
-        block: ChainInfoQuery,
+        query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, Error> {
-        let shard = get_shard(self.num_shards, &block.chain_id);
+        let shard = get_shard(self.num_shards, &query.chain_id);
         self.send_recv_info_bytes(
             shard,
-            serialize_message(&SerializedMessage::ChainInfoQuery(Box::new(block))),
+            serialize_message(&SerializedMessage::ChainInfoQuery(Box::new(query))),
         )
         .await
     }
@@ -458,19 +458,19 @@ impl MassClient {
         }
     }
 
-    async fn run_shard(&self, shard: u32, blocks: Vec<Bytes>) -> Result<Vec<Bytes>, io::Error> {
+    async fn run_shard(&self, shard: u32, requests: Vec<Bytes>) -> Result<Vec<Bytes>, io::Error> {
         let address = format!("{}:{}", self.base_address, self.base_port + shard);
         let mut stream = self
             .network_protocol
             .connect(address, self.buffer_size)
             .await?;
-        let mut blocks = blocks.iter();
+        let mut requests = requests.iter();
         let mut in_flight: u64 = 0;
         let mut responses = Vec::new();
 
         loop {
             while in_flight < self.max_in_flight {
-                let block = match blocks.next() {
+                let request = match requests.next() {
                     None => {
                         if in_flight == 0 {
                             return Ok(responses);
@@ -478,17 +478,17 @@ impl MassClient {
                         // No more entries to send.
                         break;
                     }
-                    Some(block) => block,
+                    Some(request) => request,
                 };
-                let status = time::timeout(self.send_timeout, stream.write_data(block)).await;
+                let status = time::timeout(self.send_timeout, stream.write_data(request)).await;
                 if let Err(error) = status {
-                    error!("Failed to send block: {}", error);
+                    error!("Failed to send request: {}", error);
                     continue;
                 }
                 in_flight += 1;
             }
-            if blocks.len() % 5000 == 0 && blocks.len() > 0 {
-                info!("In flight {} Remaining {}", in_flight, blocks.len());
+            if requests.len() % 5000 == 0 && requests.len() > 0 {
+                info!("In flight {} Remaining {}", in_flight, requests.len());
             }
             match time::timeout(self.recv_timeout, stream.read_data()).await {
                 Ok(Ok(buffer)) => {
@@ -513,28 +513,28 @@ impl MassClient {
     }
 
     /// Spin off one task for each shard based on this validator client.
-    pub fn run<I>(&self, sharded_blocks: I) -> impl futures::stream::Stream<Item = Vec<Bytes>>
+    pub fn run<I>(&self, sharded_requests: I) -> impl futures::stream::Stream<Item = Vec<Bytes>>
     where
         I: IntoIterator<Item = (ShardId, Vec<Bytes>)>,
     {
         let handles = futures::stream::FuturesUnordered::new();
-        for (shard, blocks) in sharded_blocks {
+        for (shard, requests) in sharded_requests {
             let client = self.clone();
             handles.push(
                 tokio::spawn(async move {
                     info!(
-                        "Sending {} blocks to {}:{} (shard {})",
+                        "Sending {} requests to {}:{} (shard {})",
                         client.network_protocol,
                         client.base_address,
                         client.base_port + shard,
                         shard
                     );
                     let responses = client
-                        .run_shard(shard, blocks)
+                        .run_shard(shard, requests)
                         .await
                         .unwrap_or_else(|_| Vec::new());
                     info!(
-                        "Done sending {} blocks to {}:{} (shard {})",
+                        "Done sending {} requests to {}:{} (shard {})",
                         client.network_protocol,
                         client.base_address,
                         client.base_port + shard,

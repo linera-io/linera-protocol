@@ -15,7 +15,7 @@ mod worker_tests;
 /// Interface provided by each physical shard (aka "worker") of a validator or a local node.
 /// * All commands return either the current chain info or an error.
 /// * Repeating commands produces no changes and returns no error.
-/// * Some handlers may return cross-chain blocks, that is, messages
+/// * Some handlers may return cross-chain requests, that is, messages
 ///   to be communicated to other workers of the same validator.
 #[async_trait]
 pub trait ValidatorWorker {
@@ -40,7 +40,7 @@ pub trait ValidatorWorker {
     /// Handle a (trusted!) cross-chain request.
     async fn handle_cross_chain_request(
         &mut self,
-        block: CrossChainRequest,
+        request: CrossChainRequest,
     ) -> Result<Vec<CrossChainRequest>, Error>;
 }
 
@@ -72,9 +72,9 @@ where
         &mut self,
         certificate: Certificate,
     ) -> Result<ChainInfoResponse, zef_base::error::Error> {
-        let (response, mut blocks) = self.handle_certificate(certificate).await?;
-        while let Some(block) = blocks.pop() {
-            blocks.extend(self.handle_cross_chain_request(block).await?);
+        let (response, mut requests) = self.handle_certificate(certificate).await?;
+        while let Some(request) = requests.pop() {
+            requests.extend(self.handle_cross_chain_request(request).await?);
         }
         Ok(response)
     }
@@ -102,7 +102,7 @@ where
         certificate
             .check(chain.state.committee.as_ref().expect("chain is active"))
             .map_err(|_| Error::InvalidCertificate)?;
-        // Load pending cross-chain blocks.
+        // Load pending cross-chain requests.
         let mut continuation = self
             .storage
             .read_certificates(chain.keep_sending.iter().cloned())
@@ -135,10 +135,10 @@ where
         chain.state.manager.reset();
         // Final touch on the sender's chain.
         let info = chain.make_chain_info(self.key_pair.as_ref());
-        // Schedule cross-chain block if any.
+        // Schedule cross-chain request if any.
         let operation = &certificate.value.confirmed_block().unwrap().operation;
         if operation.recipient().is_some() {
-            // Schedule a new cross-chain block to update recipient.
+            // Schedule a new cross-chain request to update recipient.
             chain.keep_sending.insert(certificate.hash);
             continuation.push(CrossChainRequest::UpdateRecipient {
                 committee: chain
@@ -313,9 +313,9 @@ where
 
     async fn handle_cross_chain_request(
         &mut self,
-        block: CrossChainRequest,
+        request: CrossChainRequest,
     ) -> Result<Vec<CrossChainRequest>, Error> {
-        match block {
+        match request {
             CrossChainRequest::UpdateRecipient {
                 committee,
                 certificate,
@@ -328,7 +328,7 @@ where
                 let hash = certificate.hash;
                 self.update_recipient_chain(block.operation.clone(), committee, certificate)
                     .await?;
-                // Reply with a cross-chain block.
+                // Reply with a cross-chain request.
                 let cont = vec![CrossChainRequest::ConfirmUpdatedRecipient {
                     chain_id: sender,
                     hash,
