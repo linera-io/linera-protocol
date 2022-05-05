@@ -217,7 +217,9 @@ where
     ) -> Result<Option<Vote>, Error> {
         let target_block_height = match &action {
             CommunicateAction::SubmitBlockForValidation(proposal)
-            | CommunicateAction::SubmitBlockForConfirmation(proposal) => proposal.block.height,
+            | CommunicateAction::SubmitBlockForConfirmation(proposal) => {
+                proposal.block_and_round.0.height
+            }
             CommunicateAction::FinalizeBlock(certificate) => {
                 certificate.value.validated_block().unwrap().height
             }
@@ -233,7 +235,12 @@ where
                 let result = self.send_block_proposal(proposal.clone()).await;
                 let info = match result {
                     Ok(info) => info,
-                    Err(e) if ChainState::is_retriable_validation_error(&proposal.block, &e) => {
+                    Err(e)
+                        if ChainState::is_retriable_validation_error(
+                            &proposal.block_and_round.0,
+                            &e,
+                        ) =>
+                    {
                         // Some received certificates may be missing for this validator
                         // (e.g. to make the balance sufficient) so we are going to
                         // synchronize them now.
