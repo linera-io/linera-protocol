@@ -232,7 +232,7 @@ where
         // Check authentication of the block.
         proposal.check(&chain.state.manager)?;
         // Check if the chain ready and if the block is well-formed.
-        if chain.state.manager.check_block(
+        if chain.state.manager.check_proposed_block(
             chain.block_hash,
             chain.next_block_height,
             &proposal.block_and_round.0,
@@ -245,7 +245,7 @@ where
         }
         // Verify that the block is valid.
         chain.validate_operation(&proposal.block_and_round.0)?;
-        // Create the vote and store it in the chain.
+        // Create the vote and store it in the chain state.
         chain
             .state
             .manager
