@@ -283,15 +283,15 @@ MultiOwnerManager:
     - owners:
         SEQ:
           TYPENAME: PublicKeyBytes
-    - proposal:
+    - proposed:
         OPTION:
           TYPENAME: BlockProposal
-    - pending:
-        OPTION:
-          TYPENAME: Vote
     - locked:
         OPTION:
           TYPENAME: Certificate
+    - pending:
+        OPTION:
+          TYPENAME: Vote
 Operation:
   ENUM:
     0:

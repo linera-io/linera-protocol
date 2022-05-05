@@ -272,7 +272,7 @@ where
             return Ok(());
         };
         if let ChainManager::Multi(manager) = info.manager {
-            if let Some(proposal) = manager.proposal {
+            if let Some(proposal) = manager.proposed {
                 if proposal.block_and_round.0.chain_id == chain_id {
                     self.handle_block_proposal(proposal).await.ok();
                 }
