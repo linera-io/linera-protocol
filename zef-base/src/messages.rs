@@ -48,15 +48,17 @@ pub struct Block {
     /// Certified hash (see `Certificate` below) of the previous block in the
     /// chain, if any.
     pub previous_block_hash: Option<HashValue>,
-    /// Round number (used for multi-owner chains, otherwise zero).
-    pub round: RoundNumber,
 }
+
+/// A block with a round number.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct BlockAndRound(pub Block, pub RoundNumber);
 
 /// An authenticated proposal for a new block.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct BlockProposal {
-    pub block: Block,
+    pub block_and_round: BlockAndRound,
     pub owner: Owner,
     pub signature: Signature,
 }
@@ -65,7 +67,7 @@ pub struct BlockProposal {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Value {
     /// The block was validated but confirmation will require additional steps.
-    Validated { block: Block },
+    Validated { block: Block, round: RoundNumber },
     /// The block is validated and final (i.e. ready to be executed).
     Confirmed { block: Block },
 }
@@ -257,10 +259,10 @@ impl Value {
 }
 
 impl BlockProposal {
-    pub fn new(block: Block, secret: &KeyPair) -> Self {
-        let signature = Signature::new(&block, secret);
+    pub fn new(block_and_round: BlockAndRound, secret: &KeyPair) -> Self {
+        let signature = Signature::new(&block_and_round, secret);
         Self {
-            block,
+            block_and_round,
             owner: secret.public(),
             signature,
         }
@@ -270,10 +272,10 @@ impl BlockProposal {
     pub fn check(&self, manager: &ChainManager) -> Result<(), Error> {
         ensure!(
             manager.is_active(),
-            Error::InactiveChain(self.block.chain_id.clone())
+            Error::InactiveChain(self.block_and_round.0.chain_id.clone())
         );
         ensure!(manager.has_owner(&self.owner), Error::InvalidOwner);
-        self.signature.check(&self.block, self.owner)
+        self.signature.check(&self.block_and_round, self.owner)
     }
 }
 
@@ -417,5 +419,5 @@ impl Certificate {
 }
 
 impl BcsSignable for ChainInfo {}
-impl BcsSignable for Block {}
+impl BcsSignable for BlockAndRound {}
 impl BcsSignable for Value {}

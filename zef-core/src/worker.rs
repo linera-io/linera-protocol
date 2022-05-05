@@ -159,6 +159,7 @@ where
     async fn process_validated_block(
         &mut self,
         block: Block,
+        round: RoundNumber,
         certificate: Certificate,
     ) -> Result<ChainInfoResponse, Error> {
         assert_eq!(certificate.value.validated_block().unwrap(), &block);
@@ -171,7 +172,7 @@ where
         if chain
             .state
             .manager
-            .check_validated_block(chain.next_block_height, &block)?
+            .check_validated_block(chain.next_block_height, &block, round)?
             == Outcome::Skip
         {
             // If we just processed the same pending block, return the chain info
@@ -226,7 +227,7 @@ where
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, Error> {
         // Obtain the sender's chain.
-        let sender = proposal.block.chain_id.clone();
+        let sender = proposal.block_and_round.0.chain_id.clone();
         let mut chain = self.storage.read_active_chain(&sender).await?;
         // Check authentication of the block.
         proposal.check(&chain.state.manager)?;
@@ -234,7 +235,8 @@ where
         if chain.state.manager.check_block(
             chain.block_hash,
             chain.next_block_height,
-            &proposal.block,
+            &proposal.block_and_round.0,
+            proposal.block_and_round.1,
         )? == Outcome::Skip
         {
             // If we just processed the same pending block, return the chain info
@@ -242,7 +244,7 @@ where
             return Ok(chain.make_chain_info(self.key_pair.as_ref()));
         }
         // Verify that the block is valid.
-        chain.validate_operation(&proposal.block)?;
+        chain.validate_operation(&proposal.block_and_round.0)?;
         // Create the vote and store it in the chain.
         chain
             .state
@@ -259,10 +261,10 @@ where
         certificate: Certificate,
     ) -> Result<(ChainInfoResponse, Vec<CrossChainRequest>), Error> {
         match &certificate.value {
-            Value::Validated { block } => {
+            Value::Validated { block, round } => {
                 // Confirm the validated block.
                 let info = self
-                    .process_validated_block(block.clone(), certificate)
+                    .process_validated_block(block.clone(), *round, certificate)
                     .await?;
                 Ok((info, Vec::new()))
             }

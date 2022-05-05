@@ -20,7 +20,6 @@ fn test_signed_values() {
         },
         height: BlockHeight::new(),
         previous_block_hash: None,
-        round: RoundNumber::default(),
     };
     let value = Value::Confirmed { block };
 
@@ -53,7 +52,6 @@ fn test_certificates() {
         },
         previous_block_hash: None,
         height: BlockHeight::new(),
-        round: RoundNumber::default(),
     };
     let value = Value::Confirmed { block };
 

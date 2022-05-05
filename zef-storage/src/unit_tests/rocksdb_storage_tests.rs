@@ -30,7 +30,6 @@ async fn test_rocksdb_storage_for_certificates() {
         operation: Operation::CloseChain,
         previous_block_hash: None,
         height: BlockHeight::default(),
-        round: RoundNumber::default(),
     };
     let value = Value::Confirmed { block };
     let certificate = Certificate::new(value, vec![]);

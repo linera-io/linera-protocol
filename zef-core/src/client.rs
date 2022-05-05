@@ -382,7 +382,7 @@ where
         match action {
             CommunicateAction::SubmitBlockForConfirmation(proposal) => {
                 let value = Value::Confirmed {
-                    block: proposal.block,
+                    block: proposal.block_and_round.0,
                 };
                 let certificate = Certificate::new(value, signatures);
                 // Certificate is valid because
@@ -392,9 +392,8 @@ where
                 Ok(Some(certificate))
             }
             CommunicateAction::SubmitBlockForValidation(proposal) => {
-                let value = Value::Validated {
-                    block: proposal.block,
-                };
+                let BlockAndRound(block, round) = proposal.block_and_round;
+                let value = Value::Validated { block, round };
                 let certificate = Certificate::new(value, signatures);
                 Ok(Some(certificate))
             }
@@ -512,7 +511,6 @@ where
             },
             height: self.next_block_height,
             previous_block_hash: self.block_hash,
-            round: self.next_round,
         };
         let certificate = self
             .propose_block(block, /* with_confirmation */ true)
@@ -540,6 +538,7 @@ where
         block: Block,
         with_confirmation: bool,
     ) -> Result<Certificate, failure::Error> {
+        let next_round = self.next_round;
         ensure!(
             matches!(&self.pending_block, None)
                 || matches!(&self.pending_block, Some(r) if *r == block),
@@ -557,7 +556,7 @@ where
         self.pending_block = Some(block.clone());
         // Build the initial query.
         let key_pair = self.key_pair().await?;
-        let proposal = BlockProposal::new(block, key_pair);
+        let proposal = BlockProposal::new(BlockAndRound(block, next_round), key_pair);
         // Send the query.
         let committee = self.committee().await?;
         let final_certificate = {
@@ -571,7 +570,10 @@ where
                     )
                     .await?
                     .expect("a certificate");
-                assert_eq!(certificate.value.validated_block(), Some(&proposal.block));
+                assert_eq!(
+                    certificate.value.validated_block(),
+                    Some(&proposal.block_and_round.0)
+                );
                 self.communicate_chain_updates(
                     &committee,
                     self.chain_id.clone(),
@@ -592,7 +594,7 @@ where
         };
         // By now the block should be final.
         ensure!(
-            final_certificate.value.confirmed_block() == Some(&proposal.block),
+            final_certificate.value.confirmed_block() == Some(&proposal.block_and_round.0),
             "A different operation was executed in parallel (consider retrying the operation)"
         );
         self.process_certificate(final_certificate.clone()).await?;
@@ -678,8 +680,7 @@ where
         match &self.pending_block {
             Some(block) => {
                 // Finish executing the previous block.
-                let mut block = block.clone();
-                block.round = self.next_round;
+                let block = block.clone();
                 let certificate = self
                     .propose_block(block, /* with_confirmation */ true)
                     .await?;
@@ -736,7 +737,6 @@ where
             operation: Operation::ChangeOwner { new_owner },
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
-            round: self.next_round,
         };
         self.known_key_pairs.insert(key_pair.public(), key_pair);
         let certificate = self
@@ -755,7 +755,6 @@ where
             operation: Operation::ChangeOwner { new_owner },
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
-            round: self.next_round,
         };
         let certificate = self
             .propose_block(block, /* with_confirmation */ true)
@@ -773,7 +772,6 @@ where
             },
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
-            round: self.next_round,
         };
         let certificate = self
             .propose_block(block, /* with_confirmation */ true)
@@ -789,7 +787,6 @@ where
             operation: Operation::OpenChain { new_id, new_owner },
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
-            round: self.next_round,
         };
         let certificate = self
             .propose_block(block, /* with_confirmation */ true)
@@ -804,7 +801,6 @@ where
             operation: Operation::CloseChain,
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
-            round: self.next_round,
         };
         let certificate = self
             .propose_block(block, /* with_confirmation */ true)
@@ -828,7 +824,6 @@ where
             },
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
-            round: self.next_round,
         };
         let new_certificate = self
             .propose_block(block, /* with_confirmation */ false)
