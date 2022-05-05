@@ -30,7 +30,6 @@ async fn test_file_storage_for_certificates() {
         operation: Operation::CloseChain,
         height: BlockHeight::default(),
         previous_block_hash: None,
-        round: RoundNumber::default(),
     };
     let value = Value::Confirmed { block };
     let certificate = Certificate::new(value, vec![]);

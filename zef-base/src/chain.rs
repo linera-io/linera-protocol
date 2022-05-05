@@ -113,22 +113,22 @@ impl MultiOwnerManager {
     }
 
     pub fn round(&self) -> RoundNumber {
-        let mut round = RoundNumber::default();
+        let mut current_round = RoundNumber::default();
         if let Some(vote) = &self.pending {
-            if let Value::Validated { block } = &vote.value {
-                if round < block.round {
-                    round = block.round;
+            if let Value::Validated { round, .. } = &vote.value {
+                if current_round < *round {
+                    current_round = *round;
                 }
             }
         }
         if let Some(cert) = &self.locked {
-            if let Value::Validated { block } = &cert.value {
-                if round < block.round {
-                    round = block.round;
+            if let Value::Validated { round, .. } = &cert.value {
+                if current_round < *round {
+                    current_round = *round;
                 }
             }
         }
-        round
+        current_round
     }
 }
 
@@ -190,6 +190,7 @@ impl ChainManager {
         block_hash: Option<HashValue>,
         next_block_height: BlockHeight,
         new_block: &Block,
+        new_round: RoundNumber,
     ) -> Result<Outcome, Error> {
         ensure!(
             new_block.height <= BlockHeight::max(),
@@ -206,7 +207,7 @@ impl ChainManager {
         match self {
             ChainManager::Single(manager) => {
                 ensure!(
-                    new_block.round == RoundNumber::default(),
+                    new_round == RoundNumber::default(),
                     Error::InvalidBlockProposal
                 );
                 if let Some(vote) = &manager.pending {
@@ -225,22 +226,24 @@ impl ChainManager {
             ChainManager::Multi(manager) => {
                 if let Some(vote) = &manager.pending {
                     match &vote.value {
-                        Value::Validated { block } if block == new_block => {
+                        Value::Validated { block, round }
+                            if block == new_block && *round == new_round =>
+                        {
                             return Ok(Outcome::Skip);
                         }
-                        Value::Validated { block } if new_block.round <= block.round => {
-                            return Err(Error::InsufficientRound(block.round));
+                        Value::Validated { round, .. } if new_round <= *round => {
+                            return Err(Error::InsufficientRound(*round));
                         }
                         _ => (),
                     }
                 }
                 if let Some(cert) = &manager.locked {
                     match &cert.value {
-                        Value::Validated { block } if new_block.round <= block.round => {
-                            return Err(Error::InsufficientRound(block.round));
+                        Value::Validated { round, .. } if new_round <= *round => {
+                            return Err(Error::InsufficientRound(*round));
                         }
-                        Value::Validated { block } if new_block.operation != block.operation => {
-                            return Err(Error::HasLockedOperation(block.operation.clone()));
+                        Value::Validated { block, round } if new_block != block => {
+                            return Err(Error::HasLockedBlock(block.height, *round));
                         }
                         _ => (),
                     }
@@ -255,6 +258,7 @@ impl ChainManager {
         &self,
         next_block_height: BlockHeight,
         new_block: &Block,
+        new_round: RoundNumber,
     ) -> Result<Outcome, Error> {
         if next_block_height < new_block.height {
             return Err(Error::MissingEarlierBlocks {
@@ -272,20 +276,16 @@ impl ChainManager {
                         Value::Confirmed { block } if block == new_block => {
                             return Ok(Outcome::Skip);
                         }
-                        Value::Validated { block } if new_block.round < block.round => {
-                            return Err(Error::InsufficientRound(
-                                block.round.try_sub_one().unwrap(),
-                            ));
+                        Value::Validated { round, .. } if new_round < *round => {
+                            return Err(Error::InsufficientRound(round.try_sub_one().unwrap()));
                         }
                         _ => (),
                     }
                 }
                 if let Some(cert) = &manager.locked {
                     match &cert.value {
-                        Value::Validated { block } if new_block.round < block.round => {
-                            return Err(Error::InsufficientRound(
-                                block.round.try_sub_one().unwrap(),
-                            ));
+                        Value::Validated { round, .. } if new_round < *round => {
+                            return Err(Error::InsufficientRound(round.try_sub_one().unwrap()));
                         }
                         _ => (),
                     }
@@ -301,7 +301,7 @@ impl ChainManager {
             ChainManager::Single(manager) => {
                 if let Some(key_pair) = key_pair {
                     // Vote to confirm
-                    let block = proposal.block;
+                    let BlockAndRound(block, _) = proposal.block_and_round;
                     let value = Value::Confirmed { block };
                     let vote = Vote::new(value, key_pair);
                     manager.pending = Some(vote);
@@ -312,8 +312,8 @@ impl ChainManager {
                 manager.proposal = Some(proposal.clone());
                 if let Some(key_pair) = key_pair {
                     // Vote to validate
-                    let block = proposal.block;
-                    let value = Value::Validated { block };
+                    let BlockAndRound(block, round) = proposal.block_and_round;
+                    let value = Value::Validated { block, round };
                     let vote = Vote::new(value, key_pair);
                     manager.pending = Some(vote);
                 }

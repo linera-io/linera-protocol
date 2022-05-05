@@ -189,10 +189,12 @@ impl ClientContext {
                 },
                 previous_block_hash: chain.block_hash,
                 height: chain.next_block_height,
-                round: RoundNumber::default(),
             };
             debug!("Preparing block proposal: {:?}", block);
-            let proposal = BlockProposal::new(block.clone(), key_pair);
+            let proposal = BlockProposal::new(
+                BlockAndRound(block.clone(), RoundNumber::default()),
+                key_pair,
+            );
             proposals.push(proposal.clone());
             let serialized_proposal =
                 serialize_message(&SerializedMessage::BlockProposal(Box::new(proposal)));
@@ -230,7 +232,7 @@ impl ClientContext {
         for proposal in proposals {
             let mut certificate = Certificate::new(
                 Value::Confirmed {
-                    block: proposal.block.clone(),
+                    block: proposal.block_and_round.0.clone(),
                 },
                 Vec::new(),
             );
@@ -241,7 +243,10 @@ impl ClientContext {
             }
             let serialized_certificate =
                 serialize_message(&SerializedMessage::Certificate(Box::new(certificate)));
-            serialized_certificates.push((proposal.block.chain_id, serialized_certificate.into()));
+            serialized_certificates.push((
+                proposal.block_and_round.0.chain_id,
+                serialized_certificate.into(),
+            ));
         }
         serialized_certificates
     }

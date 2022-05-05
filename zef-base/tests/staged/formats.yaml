@@ -22,8 +22,10 @@ Block:
     - previous_block_hash:
         OPTION:
           TYPENAME: HashValue
-    - round:
-        TYPENAME: RoundNumber
+BlockAndRound:
+  TUPLESTRUCT:
+    - TYPENAME: Block
+    - TYPENAME: RoundNumber
 BlockHeight:
   NEWTYPESTRUCT: U64
 BlockHeightRange:
@@ -34,8 +36,8 @@ BlockHeightRange:
         OPTION: U64
 BlockProposal:
   STRUCT:
-    - block:
-        TYPENAME: Block
+    - block_and_round:
+        TYPENAME: BlockAndRound
     - owner:
         TYPENAME: PublicKeyBytes
     - signature:
@@ -225,9 +227,10 @@ Error:
         NEWTYPE:
           TYPENAME: RoundNumber
     23:
-      HasLockedOperation:
-        NEWTYPE:
-          TYPENAME: Operation
+      HasLockedBlock:
+        TUPLE:
+          - TYPENAME: BlockHeight
+          - TYPENAME: RoundNumber
     24:
       CertificateNotFound: UNIT
     25:
@@ -382,6 +385,8 @@ Value:
         STRUCT:
           - block:
               TYPENAME: Block
+          - round:
+              TYPENAME: RoundNumber
     1:
       Confirmed:
         STRUCT:

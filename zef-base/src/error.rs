@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{base_types::*, messages::Operation};
+use crate::base_types::*;
 use failure::Fail;
 use serde::{Deserialize, Serialize};
 
@@ -86,10 +86,10 @@ pub enum Error {
     #[fail(display = "Round number should be greater than {:?}", 0)]
     InsufficientRound(RoundNumber),
     #[fail(
-        display = "A different operation was already locked for this chain and block height: {:?}",
-        0
+        display = "A different block for height {:?} was already locked at round number {:?}",
+        0, 1
     )]
-    HasLockedOperation(Operation),
+    HasLockedBlock(BlockHeight, RoundNumber),
 
     // Other server-side errors
     #[fail(display = "No certificate for this chain and block height")]
