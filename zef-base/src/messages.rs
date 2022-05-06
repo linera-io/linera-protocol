@@ -167,11 +167,11 @@ pub enum CrossChainRequest {
         recipient: ChainId,
         certificates: Vec<Certificate>,
     },
-    /// Acknowledge a number of confirmed blocks communicated with `UpdateRecipient`.
+    /// Acknowledge the height of the highest confirmed block communicated with `UpdateRecipient`.
     ConfirmUpdatedRecipient {
         sender: ChainId,
         recipient: ChainId,
-        hashes: Vec<HashValue>,
+        height: BlockHeight,
     },
 }
 
