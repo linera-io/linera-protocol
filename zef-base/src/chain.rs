@@ -20,6 +20,7 @@ pub struct ChainState {
     pub next_block_height: BlockHeight,
     /// Hashes of all confirmed certificates for this sender.
     pub confirmed_log: Vec<HashValue>,
+
     /// Hashes of all confirmed certificates as a receiver.
     pub received_log: Vec<HashValue>,
     /// Maximum block height of all received updates indexed by sender.
@@ -29,8 +30,6 @@ pub struct ChainState {
     /// Keep sending these confirmed certificates until they are acknowledged by
     /// receivers.
     pub keep_sending: HashMap<ChainId, HashSet<HashValue>>,
-    /// Same as received_log but used for deduplication.
-    pub received_keys: HashSet<HashValue>,
 }
 
 /// Execution state of a chain.
@@ -375,7 +374,6 @@ impl ChainState {
             received_log: Vec::new(),
             received_index: HashMap::new(),
             keep_sending: HashMap::new(),
-            received_keys: HashSet::new(),
         }
     }
 
@@ -458,17 +456,19 @@ impl ChainState {
 
     /// Execute the recipient's side of an operation.
     /// Returns true if the operation changed the chain state.
+    /// Operations must be executed by order of heights in the sender's chain.
     pub fn apply_operation_as_recipient(
         &mut self,
         operation: &Operation,
-        // The rest is for logging purposes.
         key: HashValue,
         sender_id: ChainId,
         block_height: BlockHeight,
     ) -> Result<bool, Error> {
-        if self.received_keys.contains(&key) {
-            // Confirmation already happened.
-            return Ok(false);
+        if let Some(height) = self.received_index.get(&sender_id) {
+            if block_height <= *height {
+                // Confirmation already happened.
+                return Ok(false);
+            }
         }
         match operation {
             Operation::Transfer { amount, .. } => {
@@ -488,12 +488,8 @@ impl ChainState {
             }
             _ => unreachable!("Not an operation with recipients"),
         }
-        self.received_keys.insert(key);
         self.received_log.push(key);
-        let current = self.received_index.entry(sender_id).or_insert(block_height);
-        if block_height > *current {
-            *current = block_height;
-        }
+        self.received_index.insert(sender_id, block_height);
         Ok(true)
     }
 }
