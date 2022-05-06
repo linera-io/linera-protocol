@@ -140,9 +140,6 @@ ChainState:
           VALUE:
             SEQ:
               TYPENAME: HashValue
-    - received_keys:
-        SEQ:
-          TYPENAME: HashValue
 Committee:
   STRUCT:
     - voting_rights:
