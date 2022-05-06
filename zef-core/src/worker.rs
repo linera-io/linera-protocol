@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use std::collections::VecDeque;
 use zef_base::{
     base_types::*,
     chain::{ChainState, Outcome},
@@ -90,11 +89,11 @@ where
         chain: &ChainState,
     ) -> Result<Vec<CrossChainRequest>, Error> {
         let mut continuation = Vec::new();
-        for (id, hashes) in &chain.keep_sending {
+        for (id, outbox) in &chain.outboxes {
             let recipient = id.clone();
             let certificates = self
                 .storage
-                .read_certificates(hashes.iter().map(|(_, hash)| *hash))
+                .read_certificates(outbox.queue.iter().map(|(_, hash)| *hash))
                 .await?;
             continuation.push(CrossChainRequest::UpdateRecipient {
                 sender: chain.id.clone(),
@@ -151,9 +150,10 @@ where
         if let Some(id) = operation.recipient() {
             // Schedule a new cross-chain request to update recipient.
             chain
-                .keep_sending
+                .outboxes
                 .entry(id.clone())
-                .or_insert_with(VecDeque::new)
+                .or_default()
+                .queue
                 .push_back((block.height, certificate.hash));
         }
         let continuation = self.make_continuation(&chain).await?;
@@ -360,18 +360,18 @@ where
             } => {
                 let mut chain = self.storage.read_active_chain(&sender).await?;
                 if let std::collections::hash_map::Entry::Occupied(mut entry) =
-                    chain.keep_sending.entry(recipient)
+                    chain.outboxes.entry(recipient)
                 {
                     let mut updated = false;
-                    while let Some((h, _)) = entry.get().front() {
+                    while let Some((h, _)) = entry.get().queue.front() {
                         if *h > height {
                             break;
                         }
-                        entry.get_mut().pop_front().unwrap();
+                        entry.get_mut().queue.pop_front().unwrap();
                         updated = true;
                     }
                     if updated {
-                        if entry.get().is_empty() {
+                        if entry.get().queue.is_empty() {
                             entry.remove();
                         }
                         self.storage.write_chain(chain).await?;
