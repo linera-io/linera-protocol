@@ -379,7 +379,7 @@ async fn test_update_recipient_chain() {
         .operation
         .clone();
     assert!(state
-        .update_recipient_chain(operation, committee, certificate)
+        .update_recipient_chain(operation, certificate)
         .await
         .is_ok());
     let chain = state

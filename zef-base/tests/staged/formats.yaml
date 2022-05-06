@@ -152,8 +152,6 @@ CrossChainRequest:
     0:
       UpdateRecipient:
         STRUCT:
-          - committee:
-              TYPENAME: Committee
           - certificate:
               TYPENAME: Certificate
     1:
@@ -223,43 +221,45 @@ Error:
         NEWTYPE:
           TYPENAME: ChainId
     22:
+      InvalidCommittee: UNIT
+    23:
       InsufficientRound:
         NEWTYPE:
           TYPENAME: RoundNumber
-    23:
+    24:
       HasLockedBlock:
         TUPLE:
           - TYPENAME: BlockHeight
           - TYPENAME: RoundNumber
-    24:
-      CertificateNotFound: UNIT
     25:
-      InvalidCrossChainRequest: UNIT
+      CertificateNotFound: UNIT
     26:
-      InvalidBlockProposal: UNIT
+      InvalidCrossChainRequest: UNIT
     27:
-      ClientErrorWhileProcessingBlockProposal: UNIT
+      InvalidBlockProposal: UNIT
     28:
-      ClientErrorWhileQueryingCertificate: UNIT
+      ClientErrorWhileProcessingBlockProposal: UNIT
     29:
-      WrongShard: UNIT
+      ClientErrorWhileQueryingCertificate: UNIT
     30:
-      InvalidDecoding: UNIT
+      WrongShard: UNIT
     31:
-      UnexpectedMessage: UNIT
+      InvalidDecoding: UNIT
     32:
+      UnexpectedMessage: UNIT
+    33:
       ClientIoError:
         STRUCT:
           - error: STR
-    33:
+    34:
       StorageIoError:
         STRUCT:
           - error: STR
-    34:
+    35:
       StorageBcsError:
         STRUCT:
           - error: STR
-    35:
+    36:
       MissingCertificate:
         STRUCT:
           - hash:
@@ -306,10 +306,12 @@ Operation:
     1:
       OpenChain:
         STRUCT:
-          - new_id:
+          - id:
               TYPENAME: ChainId
-          - new_owner:
+          - owner:
               TYPENAME: PublicKeyBytes
+          - committee:
+              TYPENAME: Committee
     2:
       CloseChain: UNIT
     3:

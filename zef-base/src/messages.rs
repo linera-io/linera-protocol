@@ -27,7 +27,11 @@ pub enum Operation {
         user_data: UserData,
     },
     /// Create (or activate) a new chain by installing the given authentication key.
-    OpenChain { new_id: ChainId, new_owner: Owner },
+    OpenChain {
+        id: ChainId,
+        owner: Owner,
+        committee: Committee,
+    },
     /// Close the chain.
     CloseChain,
     /// Change the authentication key of the chain.
@@ -156,14 +160,8 @@ pub struct ChainInfoResponse {
 #[cfg_attr(test, derive(Eq, PartialEq))]
 #[allow(clippy::large_enum_variant)]
 pub enum CrossChainRequest {
-    UpdateRecipient {
-        committee: Committee, // TODO: This should be an epoch number.
-        certificate: Certificate,
-    },
-    ConfirmUpdatedRecipient {
-        chain_id: ChainId,
-        hash: HashValue,
-    },
+    UpdateRecipient { certificate: Certificate },
+    ConfirmUpdatedRecipient { chain_id: ChainId, hash: HashValue },
 }
 
 impl CrossChainRequest {
@@ -191,7 +189,7 @@ impl Operation {
                 recipient: Address::Account(id),
                 ..
             }
-            | OpenChain { new_id: id, .. } => Some(id),
+            | OpenChain { id, .. } => Some(id),
             _ => None,
         }
     }

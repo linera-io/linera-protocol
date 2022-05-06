@@ -458,7 +458,7 @@ async fn test_open_chain_after_transfer() {
     );
     assert!(matches!(&certificate.value, Value::Confirmed{
         block: Block {
-            operation: Operation::OpenChain { new_id:id, .. },
+            operation: Operation::OpenChain { id, .. },
             ..
         }} if &new_id == id
     ));
