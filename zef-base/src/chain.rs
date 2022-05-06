@@ -22,15 +22,33 @@ pub struct ChainState {
     /// Hashes of all certified blocks for this sender.
     /// This ends with `block_hash` and has length `usize::from(next_block_height)`.
     pub confirmed_log: Vec<HashValue>,
-
-    /// Hashes of all certified blocks as a receiver.
+    /// Hashes of all certified blocks known as a receiver (local ordering).
     pub received_log: Vec<HashValue>,
-    /// Maximum block height of all received updates indexed by sender.
-    pub received_index: HashMap<ChainId, BlockHeight>,
 
+    /// Mailboxes used to send messages, indexed by recipient.
+    pub outboxes: HashMap<ChainId, OutboxState>,
+    /// Mailboxes used to receive messages, indexed by sender.
+    pub inboxes: HashMap<ChainId, InboxState>,
+}
+
+/// An outbox used to send messages to another chain. NOTE: Messages are implied by the
+/// execution of blocks, so currently we just send the certified blocks over and let the
+/// receivers figure out what was the message for them.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
+pub struct OutboxState {
     /// Keep sending these certified blocks of ours until they are acknowledged by
     /// receivers. Keep the height around so that we can quickly dequeue.
-    pub keep_sending: HashMap<ChainId, VecDeque<(BlockHeight, HashValue)>>,
+    pub queue: VecDeque<(BlockHeight, HashValue)>,
+}
+
+/// Aninbox used to receive and execute messages from another chain.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
+pub struct InboxState {
+    /// We have already received the cross-chain requests and enqueued all the messages
+    /// below this height.
+    pub next_height_to_receive: BlockHeight,
 }
 
 /// Execution state of a chain.
@@ -373,8 +391,8 @@ impl ChainState {
             next_block_height: BlockHeight::new(),
             confirmed_log: Vec::new(),
             received_log: Vec::new(),
-            received_index: HashMap::new(),
-            keep_sending: HashMap::new(),
+            inboxes: HashMap::new(),
+            outboxes: HashMap::new(),
         }
     }
 
@@ -465,11 +483,10 @@ impl ChainState {
         sender_id: ChainId,
         block_height: BlockHeight,
     ) -> Result<bool, Error> {
-        if let Some(height) = self.received_index.get(&sender_id) {
-            if block_height <= *height {
-                // Confirmation already happened.
-                return Ok(false);
-            }
+        let inbox = self.inboxes.entry(sender_id).or_default();
+        if block_height < inbox.next_height_to_receive {
+            // Confirmation already happened.
+            return Ok(false);
         }
         match operation {
             Operation::Transfer { amount, .. } => {
@@ -490,7 +507,7 @@ impl ChainState {
             _ => unreachable!("Not an operation with recipients"),
         }
         self.received_log.push(key);
-        self.received_index.insert(sender_id, block_height);
+        inbox.next_height_to_receive = block_height.try_add_one()?;
         Ok(true)
     }
 }

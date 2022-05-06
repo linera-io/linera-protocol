@@ -203,8 +203,8 @@ where
     ) -> Result<(), Error> {
         // Obtain chain state.
         let chain = self.store.read_chain_or_default(&chain_id).await?;
-        for (sender_id, block_height) in chain.received_index.iter() {
-            self.send_chain_information(sender_id.clone(), block_height.try_add_one()?)
+        for (sender_id, inbox) in chain.inboxes.iter() {
+            self.send_chain_information(sender_id.clone(), inbox.next_height_to_receive)
                 .await?;
         }
         Ok(())
