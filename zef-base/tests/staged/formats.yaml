@@ -139,7 +139,9 @@ ChainState:
             TYPENAME: ChainId
           VALUE:
             SEQ:
-              TYPENAME: HashValue
+              TUPLE:
+                - TYPENAME: BlockHeight
+                - TYPENAME: HashValue
 Committee:
   STRUCT:
     - voting_rights:
@@ -167,9 +169,8 @@ CrossChainRequest:
               TYPENAME: ChainId
           - recipient:
               TYPENAME: ChainId
-          - hashes:
-              SEQ:
-                TYPENAME: HashValue
+          - height:
+              TYPENAME: BlockHeight
 Error:
   ENUM:
     0:

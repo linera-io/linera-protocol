@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use std::collections::HashSet;
+use std::collections::VecDeque;
 use zef_base::{
     base_types::*,
     chain::{ChainState, Outcome},
@@ -92,17 +92,10 @@ where
         let mut continuation = Vec::new();
         for (id, hashes) in &chain.keep_sending {
             let recipient = id.clone();
-            let mut certificates = self
+            let certificates = self
                 .storage
-                .read_certificates(hashes.iter().cloned())
+                .read_certificates(hashes.iter().map(|(_, hash)| *hash))
                 .await?;
-            // Re-order certificates by height.
-            certificates.sort_by_key(|cert| {
-                cert.value
-                    .confirmed_block()
-                    .expect("We only send confirmations")
-                    .height
-            });
             continuation.push(CrossChainRequest::UpdateRecipient {
                 sender: chain.id.clone(),
                 recipient,
@@ -160,8 +153,8 @@ where
             chain
                 .keep_sending
                 .entry(id.clone())
-                .or_insert_with(HashSet::new)
-                .insert(certificate.hash);
+                .or_insert_with(VecDeque::new)
+                .push_back((block.height, certificate.hash));
         }
         let continuation = self.make_continuation(&chain).await?;
         // Persist chain.
@@ -333,7 +326,7 @@ where
                 recipient,
                 certificates,
             } => {
-                let mut hashes = Vec::new();
+                let mut height = None;
                 for certificate in certificates {
                     let block = certificate
                         .value
@@ -344,32 +337,38 @@ where
                         Error::InvalidCrossChainRequest
                     );
                     ensure!(block.chain_id == sender, Error::InvalidCrossChainRequest);
-                    let hash = certificate.hash;
+                    ensure!(height < Some(block.height), Error::InvalidCrossChainRequest);
+                    height = Some(block.height);
                     self.update_recipient_chain(block.operation.clone(), certificate)
                         .await?;
-                    hashes.push(hash);
                 }
-                let request = CrossChainRequest::ConfirmUpdatedRecipient {
-                    sender,
-                    recipient,
-                    hashes,
-                };
-                Ok(vec![request])
+                if let Some(height) = height {
+                    let request = CrossChainRequest::ConfirmUpdatedRecipient {
+                        sender,
+                        recipient,
+                        height,
+                    };
+                    Ok(vec![request])
+                } else {
+                    Ok(Vec::new())
+                }
             }
             CrossChainRequest::ConfirmUpdatedRecipient {
                 sender,
                 recipient,
-                hashes,
+                height,
             } => {
                 let mut chain = self.storage.read_active_chain(&sender).await?;
                 if let std::collections::hash_map::Entry::Occupied(mut entry) =
                     chain.keep_sending.entry(recipient)
                 {
                     let mut updated = false;
-                    for hash in hashes {
-                        if entry.get_mut().remove(&hash) {
-                            updated = true;
+                    while let Some((h, _)) = entry.get().front() {
+                        if *h > height {
+                            break;
                         }
+                        entry.get_mut().pop_front().unwrap();
+                        updated = true;
                     }
                     if updated {
                         if entry.get().is_empty() {

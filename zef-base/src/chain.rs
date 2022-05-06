@@ -4,7 +4,7 @@
 
 use crate::{base_types::*, committee::Committee, ensure, error::Error, messages::*};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 /// State of a chain.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -18,18 +18,19 @@ pub struct ChainState {
     pub block_hash: Option<HashValue>,
     /// Sequence number tracking blocks.
     pub next_block_height: BlockHeight,
-    /// Hashes of all confirmed certificates for this sender.
+
+    /// Hashes of all certified blocks for this sender.
+    /// This ends with `block_hash` and has length `usize::from(next_block_height)`.
     pub confirmed_log: Vec<HashValue>,
 
-    /// Hashes of all confirmed certificates as a receiver.
+    /// Hashes of all certified blocks as a receiver.
     pub received_log: Vec<HashValue>,
     /// Maximum block height of all received updates indexed by sender.
-    /// This is needed for clients.
     pub received_index: HashMap<ChainId, BlockHeight>,
 
-    /// Keep sending these confirmed certificates until they are acknowledged by
-    /// receivers.
-    pub keep_sending: HashMap<ChainId, HashSet<HashValue>>,
+    /// Keep sending these certified blocks of ours until they are acknowledged by
+    /// receivers. Keep the height around so that we can quickly dequeue.
+    pub keep_sending: HashMap<ChainId, VecDeque<(BlockHeight, HashValue)>>,
 }
 
 /// Execution state of a chain.
