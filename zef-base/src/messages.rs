@@ -155,13 +155,24 @@ pub struct ChainInfoResponse {
     pub signature: Option<Signature>,
 }
 
-/// A (trusted) cross-chain request with a validator.
+/// An internal message between chains within a validator.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 #[allow(clippy::large_enum_variant)]
 pub enum CrossChainRequest {
-    UpdateRecipient { certificate: Certificate },
-    ConfirmUpdatedRecipient { chain_id: ChainId, hash: HashValue },
+    /// Communicate a number of confirmed blocks from the sender to the recipient.
+    /// Blocks must be given by increasing heights.
+    UpdateRecipient {
+        sender: ChainId,
+        recipient: ChainId,
+        certificates: Vec<Certificate>,
+    },
+    /// Acknowledge a number of confirmed blocks communicated with `UpdateRecipient`.
+    ConfirmUpdatedRecipient {
+        sender: ChainId,
+        recipient: ChainId,
+        hashes: Vec<HashValue>,
+    },
 }
 
 impl CrossChainRequest {
@@ -169,14 +180,8 @@ impl CrossChainRequest {
     pub fn target_chain_id(&self) -> &ChainId {
         use CrossChainRequest::*;
         match self {
-            UpdateRecipient { certificate, .. } => certificate
-                .value
-                .confirmed_block()
-                .unwrap()
-                .operation
-                .recipient()
-                .unwrap(),
-            ConfirmUpdatedRecipient { chain_id, hash: _ } => chain_id,
+            UpdateRecipient { recipient, .. } => recipient,
+            ConfirmUpdatedRecipient { sender, .. } => sender,
         }
     }
 }

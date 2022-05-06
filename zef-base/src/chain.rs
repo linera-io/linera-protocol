@@ -26,8 +26,9 @@ pub struct ChainState {
     /// This is needed for clients.
     pub received_index: HashMap<ChainId, BlockHeight>,
 
-    /// Keep sending these confirmed certificates until they are confirmed by receivers.
-    pub keep_sending: HashSet<HashValue>,
+    /// Keep sending these confirmed certificates until they are acknowledged by
+    /// receivers.
+    pub keep_sending: HashMap<ChainId, HashSet<HashValue>>,
     /// Same as received_log but used for deduplication.
     pub received_keys: HashSet<HashValue>,
 }
@@ -373,7 +374,7 @@ impl ChainState {
             confirmed_log: Vec::new(),
             received_log: Vec::new(),
             received_index: HashMap::new(),
-            keep_sending: HashSet::new(),
+            keep_sending: HashMap::new(),
             received_keys: HashSet::new(),
         }
     }
