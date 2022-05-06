@@ -779,12 +779,17 @@ where
         Ok(certificate)
     }
 
-    async fn open_chain(&mut self, new_owner: Owner) -> Result<Certificate, failure::Error> {
+    async fn open_chain(&mut self, owner: Owner) -> Result<Certificate, failure::Error> {
         self.prepare_chain().await?;
-        let new_id = self.chain_id.make_child(self.next_block_height);
+        let id = self.chain_id.make_child(self.next_block_height);
+        let committee = self.committee().await?;
         let block = Block {
             chain_id: self.chain_id.clone(),
-            operation: Operation::OpenChain { new_id, new_owner },
+            operation: Operation::OpenChain {
+                id,
+                owner,
+                committee,
+            },
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
         };

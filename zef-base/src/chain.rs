@@ -398,11 +398,12 @@ impl ChainState {
                     }
                 );
             }
-            Operation::OpenChain { new_id, .. } => {
+            Operation::OpenChain { id, committee, .. } => {
                 let expected_id = block.chain_id.make_child(block.height);
+                ensure!(id == &expected_id, Error::InvalidNewChainId(id.clone()));
                 ensure!(
-                    new_id == &expected_id,
-                    Error::InvalidNewChainId(new_id.clone())
+                    self.state.committee.as_ref() == Some(committee),
+                    Error::InvalidCommittee
                 );
             }
             Operation::CloseChain
@@ -459,7 +460,6 @@ impl ChainState {
     pub fn apply_operation_as_recipient(
         &mut self,
         operation: &Operation,
-        committee: Committee,
         // The rest is for logging purposes.
         key: HashValue,
         sender_id: ChainId,
@@ -477,11 +477,13 @@ impl ChainState {
                     .try_add((*amount).into())
                     .unwrap_or_else(|_| Balance::max());
             }
-            Operation::OpenChain { new_owner, .. } => {
+            Operation::OpenChain {
+                owner, committee, ..
+            } => {
                 assert!(!self.state.manager.is_active()); // guaranteed under BFT assumptions.
                 assert!(self.state.committee.is_none());
-                self.state.committee = Some(committee);
-                self.state.manager = ChainManager::single(*new_owner);
+                self.state.committee = Some(committee.clone());
+                self.state.manager = ChainManager::single(*owner);
             }
             _ => unreachable!("Not an operation with recipients"),
         }
