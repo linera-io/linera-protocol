@@ -127,21 +127,18 @@ ChainState:
     - received_log:
         SEQ:
           TYPENAME: HashValue
-    - received_index:
+    - outboxes:
         MAP:
           KEY:
             TYPENAME: ChainId
           VALUE:
-            TYPENAME: BlockHeight
-    - keep_sending:
+            TYPENAME: OutboxState
+    - inboxes:
         MAP:
           KEY:
             TYPENAME: ChainId
           VALUE:
-            SEQ:
-              TUPLE:
-                - TYPENAME: BlockHeight
-                - TYPENAME: HashValue
+            TYPENAME: InboxState
 Committee:
   STRUCT:
     - voting_rights:
@@ -288,6 +285,10 @@ HashValue:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 64
+InboxState:
+  STRUCT:
+    - next_height_to_receive:
+        TYPENAME: BlockHeight
 MultiOwnerManager:
   STRUCT:
     - owners:
@@ -335,6 +336,13 @@ Operation:
           - new_owners:
               SEQ:
                 TYPENAME: PublicKeyBytes
+OutboxState:
+  STRUCT:
+    - queue:
+        SEQ:
+          TUPLE:
+            - TYPENAME: BlockHeight
+            - TYPENAME: HashValue
 PublicKeyBytes:
   NEWTYPESTRUCT:
     TUPLEARRAY:
