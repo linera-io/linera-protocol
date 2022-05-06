@@ -3,9 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use zef_base::{
-    base_types::*, chain::Outcome, committee::Committee, ensure, error::Error, messages::*,
-};
+use zef_base::{base_types::*, chain::Outcome, ensure, error::Error, messages::*};
 use zef_storage::Storage;
 
 #[cfg(test)]
@@ -108,15 +106,7 @@ where
             .read_certificates(chain.keep_sending.iter().cloned())
             .await?
             .into_iter()
-            .map(|certificate| CrossChainRequest::UpdateRecipient {
-                committee: chain
-                    .state
-                    .committee
-                    .as_ref()
-                    .expect("Chain is active")
-                    .clone(),
-                certificate,
-            })
+            .map(|certificate| CrossChainRequest::UpdateRecipient { certificate })
             .collect();
         if chain.next_block_height > block.height {
             // Block was already confirmed.
@@ -140,15 +130,7 @@ where
         if operation.recipient().is_some() {
             // Schedule a new cross-chain request to update recipient.
             chain.keep_sending.insert(certificate.hash);
-            continuation.push(CrossChainRequest::UpdateRecipient {
-                committee: chain
-                    .state
-                    .committee
-                    .as_ref()
-                    .expect("chain is active")
-                    .clone(),
-                certificate,
-            });
+            continuation.push(CrossChainRequest::UpdateRecipient { certificate });
         }
         // Persist chain.
         self.storage.write_chain(chain.clone()).await?;
@@ -192,7 +174,6 @@ where
     async fn update_recipient_chain(
         &mut self,
         operation: Operation,
-        committee: Committee,
         certificate: Certificate,
     ) -> Result<(), Error> {
         if let Some(recipient) = operation.recipient() {
@@ -202,7 +183,6 @@ where
             let mut chain = self.storage.read_chain_or_default(recipient).await?;
             let need_update = chain.apply_operation_as_recipient(
                 &operation,
-                committee,
                 certificate.hash,
                 block.chain_id.clone(),
                 block.height,
@@ -316,17 +296,14 @@ where
         request: CrossChainRequest,
     ) -> Result<Vec<CrossChainRequest>, Error> {
         match request {
-            CrossChainRequest::UpdateRecipient {
-                committee,
-                certificate,
-            } => {
+            CrossChainRequest::UpdateRecipient { certificate } => {
                 let block = certificate
                     .value
                     .confirmed_block()
                     .ok_or(Error::InvalidCrossChainRequest)?;
                 let sender = block.chain_id.clone();
                 let hash = certificate.hash;
-                self.update_recipient_chain(block.operation.clone(), committee, certificate)
+                self.update_recipient_chain(block.operation.clone(), certificate)
                     .await?;
                 // Reply with a cross-chain request.
                 let cont = vec![CrossChainRequest::ConfirmUpdatedRecipient {
