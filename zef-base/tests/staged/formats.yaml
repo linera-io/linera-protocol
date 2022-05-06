@@ -134,8 +134,12 @@ ChainState:
           VALUE:
             TYPENAME: BlockHeight
     - keep_sending:
-        SEQ:
-          TYPENAME: HashValue
+        MAP:
+          KEY:
+            TYPENAME: ChainId
+          VALUE:
+            SEQ:
+              TYPENAME: HashValue
     - received_keys:
         SEQ:
           TYPENAME: HashValue
@@ -152,15 +156,23 @@ CrossChainRequest:
     0:
       UpdateRecipient:
         STRUCT:
-          - certificate:
-              TYPENAME: Certificate
+          - sender:
+              TYPENAME: ChainId
+          - recipient:
+              TYPENAME: ChainId
+          - certificates:
+              SEQ:
+                TYPENAME: Certificate
     1:
       ConfirmUpdatedRecipient:
         STRUCT:
-          - chain_id:
+          - sender:
               TYPENAME: ChainId
-          - hash:
-              TYPENAME: HashValue
+          - recipient:
+              TYPENAME: ChainId
+          - hashes:
+              SEQ:
+                TYPENAME: HashValue
 Error:
   ENUM:
     0:

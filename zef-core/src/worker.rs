@@ -3,7 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use zef_base::{base_types::*, chain::Outcome, ensure, error::Error, messages::*};
+use std::collections::HashSet;
+use zef_base::{
+    base_types::*,
+    chain::{ChainState, Outcome},
+    ensure,
+    error::Error,
+    messages::*,
+};
 use zef_storage::Storage;
 
 #[cfg(test)]
@@ -77,6 +84,34 @@ where
         Ok(response)
     }
 
+    /// Load pending cross-chain requests.
+    async fn make_continuation(
+        &mut self,
+        chain: &ChainState,
+    ) -> Result<Vec<CrossChainRequest>, Error> {
+        let mut continuation = Vec::new();
+        for (id, hashes) in &chain.keep_sending {
+            let recipient = id.clone();
+            let mut certificates = self
+                .storage
+                .read_certificates(hashes.iter().cloned())
+                .await?;
+            // Re-order certificates by height.
+            certificates.sort_by_key(|cert| {
+                cert.value
+                    .confirmed_block()
+                    .expect("We only send confirmations")
+                    .height
+            });
+            continuation.push(CrossChainRequest::UpdateRecipient {
+                sender: chain.id.clone(),
+                recipient,
+                certificates,
+            })
+        }
+        Ok(continuation)
+    }
+
     /// (Trusted) Process a confirmed block issued from a chain.
     async fn process_confirmed_block(
         &mut self,
@@ -100,17 +135,10 @@ where
         certificate
             .check(chain.state.committee.as_ref().expect("chain is active"))
             .map_err(|_| Error::InvalidCertificate)?;
-        // Load pending cross-chain requests.
-        let mut continuation = self
-            .storage
-            .read_certificates(chain.keep_sending.iter().cloned())
-            .await?
-            .into_iter()
-            .map(|certificate| CrossChainRequest::UpdateRecipient { certificate })
-            .collect();
         if chain.next_block_height > block.height {
             // Block was already confirmed.
             let info = chain.make_chain_info(self.key_pair.as_ref());
+            let continuation = self.make_continuation(&chain).await?;
             return Ok((info, continuation));
         }
         // This should always be true for valid certificates.
@@ -127,11 +155,15 @@ where
         let info = chain.make_chain_info(self.key_pair.as_ref());
         // Schedule cross-chain request if any.
         let operation = &certificate.value.confirmed_block().unwrap().operation;
-        if operation.recipient().is_some() {
+        if let Some(id) = operation.recipient() {
             // Schedule a new cross-chain request to update recipient.
-            chain.keep_sending.insert(certificate.hash);
-            continuation.push(CrossChainRequest::UpdateRecipient { certificate });
+            chain
+                .keep_sending
+                .entry(id.clone())
+                .or_insert_with(HashSet::new)
+                .insert(certificate.hash);
         }
+        let continuation = self.make_continuation(&chain).await?;
         // Persist chain.
         self.storage.write_chain(chain.clone()).await?;
         Ok((info, continuation))
@@ -296,26 +328,55 @@ where
         request: CrossChainRequest,
     ) -> Result<Vec<CrossChainRequest>, Error> {
         match request {
-            CrossChainRequest::UpdateRecipient { certificate } => {
-                let block = certificate
-                    .value
-                    .confirmed_block()
-                    .ok_or(Error::InvalidCrossChainRequest)?;
-                let sender = block.chain_id.clone();
-                let hash = certificate.hash;
-                self.update_recipient_chain(block.operation.clone(), certificate)
-                    .await?;
-                // Reply with a cross-chain request.
-                let cont = vec![CrossChainRequest::ConfirmUpdatedRecipient {
-                    chain_id: sender,
-                    hash,
-                }];
-                Ok(cont)
+            CrossChainRequest::UpdateRecipient {
+                sender,
+                recipient,
+                certificates,
+            } => {
+                let mut hashes = Vec::new();
+                for certificate in certificates {
+                    let block = certificate
+                        .value
+                        .confirmed_block()
+                        .ok_or(Error::InvalidCrossChainRequest)?;
+                    ensure!(
+                        block.operation.recipient() == Some(&recipient),
+                        Error::InvalidCrossChainRequest
+                    );
+                    ensure!(block.chain_id == sender, Error::InvalidCrossChainRequest);
+                    let hash = certificate.hash;
+                    self.update_recipient_chain(block.operation.clone(), certificate)
+                        .await?;
+                    hashes.push(hash);
+                }
+                let request = CrossChainRequest::ConfirmUpdatedRecipient {
+                    sender,
+                    recipient,
+                    hashes,
+                };
+                Ok(vec![request])
             }
-            CrossChainRequest::ConfirmUpdatedRecipient { chain_id, hash } => {
-                let mut chain = self.storage.read_active_chain(&chain_id).await?;
-                if chain.keep_sending.remove(&hash) {
-                    self.storage.write_chain(chain).await?;
+            CrossChainRequest::ConfirmUpdatedRecipient {
+                sender,
+                recipient,
+                hashes,
+            } => {
+                let mut chain = self.storage.read_active_chain(&sender).await?;
+                if let std::collections::hash_map::Entry::Occupied(mut entry) =
+                    chain.keep_sending.entry(recipient)
+                {
+                    let mut updated = false;
+                    for hash in hashes {
+                        if entry.get_mut().remove(&hash) {
+                            updated = true;
+                        }
+                    }
+                    if updated {
+                        if entry.get().is_empty() {
+                            entry.remove();
+                        }
+                        self.storage.write_chain(chain).await?;
+                    }
                 }
                 Ok(Vec::new())
             }
