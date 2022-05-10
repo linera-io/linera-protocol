@@ -4,11 +4,7 @@
 
 use async_trait::async_trait;
 use zef_base::{
-    base_types::*,
-    chain::{ChainState, Outcome},
-    ensure,
-    error::Error,
-    messages::*,
+    base_types::*, chain::ChainState, ensure, error::Error, manager::Outcome, messages::*,
 };
 use zef_storage::Storage;
 

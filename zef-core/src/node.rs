@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use futures::lock::Mutex;
 use rand::prelude::SliceRandom;
 use std::sync::Arc;
-use zef_base::{base_types::*, chain::ChainManager, error::Error, messages::*};
+use zef_base::{base_types::*, error::Error, manager::ChainManager, messages::*};
 use zef_storage::Storage;
 
 /// How to communicate with a validator or a local node.
