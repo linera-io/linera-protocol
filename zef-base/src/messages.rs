@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{base_types::*, chain::ChainManager, committee::Committee, ensure, error::Error};
+use super::{base_types::*, committee::Committee, ensure, error::Error, manager::ChainManager};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 

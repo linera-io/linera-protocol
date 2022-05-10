@@ -5,10 +5,7 @@
 use crate::worker::{ValidatorWorker, WorkerState};
 use std::collections::BTreeMap;
 use zef_base::{
-    base_types::*,
-    chain::{ChainManager, ChainState},
-    committee::Committee,
-    messages::*,
+    base_types::*, chain::ChainState, committee::Committee, manager::ChainManager, messages::*,
 };
 use zef_storage::{InMemoryStoreClient, Storage};
 
