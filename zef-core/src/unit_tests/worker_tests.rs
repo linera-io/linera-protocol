@@ -248,11 +248,11 @@ async fn test_handle_certificate_bad_block_height() {
         &state,
     );
     // Replays are ignored.
-    assert!(state
+    state
         .fully_handle_certificate(certificate.clone())
         .await
-        .is_ok());
-    assert!(state.fully_handle_certificate(certificate).await.is_ok());
+        .unwrap();
+    state.fully_handle_certificate(certificate).await.unwrap();
     // TODO: test the case of a block height in the future (aka lagging validator)
 }
 
@@ -273,10 +273,10 @@ async fn test_handle_certificate_exceed_balance() {
         &committee,
         &state,
     );
-    assert!(state
+    state
         .fully_handle_certificate(certificate.clone())
         .await
-        .is_ok());
+        .unwrap();
     let sender_chain = state
         .storage
         .read_active_chain(&dbg_chain(1))
@@ -286,7 +286,11 @@ async fn test_handle_certificate_exceed_balance() {
     assert_eq!(BlockHeight::from(1), sender_chain.next_block_height);
     assert_eq!(sender_chain.confirmed_log.len(), 1);
     assert_eq!(Some(certificate.hash), sender_chain.block_hash);
-    assert!(state.storage.read_active_chain(&dbg_chain(2)).await.is_ok());
+    state
+        .storage
+        .read_active_chain(&dbg_chain(2))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -306,10 +310,10 @@ async fn test_handle_certificate_receiver_balance_overflow() {
         &committee,
         &state,
     );
-    assert!(state
+    state
         .fully_handle_certificate(certificate.clone())
         .await
-        .is_ok());
+        .unwrap();
     let new_sender_chain = state
         .storage
         .read_active_chain(&dbg_chain(1))
@@ -337,14 +341,14 @@ async fn test_handle_certificate_receiver_equal_sender() {
         dbg_chain(1),
         &key_pair,
         Address::Account(dbg_chain(1)),
-        Amount::from(10),
+        Amount::from(1),
         &committee,
         &state,
     );
-    assert!(state
+    state
         .fully_handle_certificate(certificate.clone())
         .await
-        .is_ok());
+        .unwrap();
     let chain = state
         .storage
         .read_active_chain(&dbg_chain(1))
@@ -375,10 +379,10 @@ async fn test_update_recipient_chain() {
         .unwrap()
         .operation
         .clone();
-    assert!(state
+    state
         .update_recipient_chain(operation, certificate)
         .await
-        .is_ok());
+        .unwrap();
     let chain = state
         .storage
         .read_active_chain(&dbg_chain(2))
@@ -501,11 +505,11 @@ async fn test_read_chain_state_unknown_chain() {
     chain.state.committee = Some(committee);
     chain.state.manager = ChainManager::single(dbg_addr(4));
     state.storage.write_chain(chain).await.unwrap();
-    assert!(state
+    state
         .storage
         .read_active_chain(&unknown_chain_id)
         .await
-        .is_ok());
+        .unwrap();
 }
 
 // helpers
@@ -547,6 +551,7 @@ fn make_transfer_block_proposal(
 ) -> BlockProposal {
     let block = Block {
         chain_id,
+        incoming_messages: Vec::new(),
         operation: Operation::Transfer {
             recipient,
             amount,
