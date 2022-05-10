@@ -5,7 +5,7 @@
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use std::{fs::File, io::Write};
 use structopt::{clap::arg_enum, StructOpt};
-use zef_base::{chain, error, messages, serialize};
+use zef_base::{chain, error, manager, messages, serialize};
 
 fn get_registry() -> Result<Registry> {
     let mut tracer = Tracer::new(
@@ -19,7 +19,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<messages::Address>(&samples)?;
     tracer.trace_type::<messages::Operation>(&samples)?;
     tracer.trace_type::<messages::Value>(&samples)?;
-    tracer.trace_type::<chain::ChainManager>(&samples)?;
+    tracer.trace_type::<manager::ChainManager>(&samples)?;
     tracer.trace_type::<messages::CrossChainRequest>(&samples)?;
     tracer.trace_type::<error::Error>(&samples)?;
     tracer.trace_type::<serialize::SerializedMessage>(&samples)?;

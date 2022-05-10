@@ -6,5 +6,6 @@ pub mod base_types;
 pub mod chain;
 pub mod committee;
 pub mod error;
+pub mod manager;
 pub mod messages;
 pub mod serialize;

@@ -15,8 +15,8 @@ use zef_base::{
 #[cfg(test)]
 use zef_base::{
     base_types::{dbg_addr, dbg_chain},
-    chain::ChainManager,
     committee::Committee,
+    manager::ChainManager,
 };
 
 #[cfg(test)]

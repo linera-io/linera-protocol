@@ -15,7 +15,7 @@ use std::{
     time::Duration,
 };
 use zef_base::{
-    base_types::*, chain::ChainManager, committee::Committee, ensure as my_ensure, error::Error,
+    base_types::*, committee::Committee, ensure as my_ensure, error::Error, manager::ChainManager,
     messages::*,
 };
 use zef_storage::Storage;
