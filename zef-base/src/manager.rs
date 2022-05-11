@@ -177,7 +177,9 @@ impl ChainManager {
                         Value::Validated { .. } => {
                             return Err(Error::InvalidBlockProposal);
                         }
-                        _ => (),
+                        _ => {
+                            return Ok(Outcome::Skip);
+                        }
                     }
                 }
                 Ok(Outcome::Accept)
