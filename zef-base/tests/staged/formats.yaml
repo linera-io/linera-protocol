@@ -10,11 +10,14 @@ Address:
 Amount:
   NEWTYPESTRUCT: U64
 Balance:
-  NEWTYPESTRUCT: I128
+  NEWTYPESTRUCT: U128
 Block:
   STRUCT:
     - chain_id:
         TYPENAME: ChainId
+    - incoming_messages:
+        SEQ:
+          TYPENAME: Message
     - operation:
         TYPENAME: Operation
     - height:
@@ -71,6 +74,9 @@ ChainInfo:
     - queried_committee:
         OPTION:
           TYPENAME: Committee
+    - queried_pending_messages:
+        SEQ:
+          TYPENAME: Message
     - queried_sent_certificates:
         SEQ:
           TYPENAME: Certificate
@@ -86,6 +92,7 @@ ChainInfoQuery:
         OPTION:
           TYPENAME: BlockHeight
     - query_committee: BOOL
+    - query_pending_messages: BOOL
     - query_sent_certificates_in_range:
         OPTION:
           TYPENAME: BlockHeightRange
@@ -239,34 +246,48 @@ Error:
           - TYPENAME: BlockHeight
           - TYPENAME: RoundNumber
     25:
-      CertificateNotFound: UNIT
+      MissingCrossChainUpdate:
+        STRUCT:
+          - sender_id:
+              TYPENAME: ChainId
+          - height:
+              TYPENAME: BlockHeight
     26:
-      InvalidCrossChainRequest: UNIT
+      InvalidMessage:
+        STRUCT:
+          - sender_id:
+              TYPENAME: ChainId
+          - height:
+              TYPENAME: BlockHeight
     27:
-      InvalidBlockProposal: UNIT
+      CertificateNotFound: UNIT
     28:
-      ClientErrorWhileProcessingBlockProposal: UNIT
+      InvalidCrossChainRequest: UNIT
     29:
-      ClientErrorWhileQueryingCertificate: UNIT
+      InvalidBlockProposal: UNIT
     30:
-      WrongShard: UNIT
+      ClientErrorWhileProcessingBlockProposal: UNIT
     31:
-      InvalidDecoding: UNIT
+      ClientErrorWhileQueryingCertificate: UNIT
     32:
-      UnexpectedMessage: UNIT
+      WrongShard: UNIT
     33:
+      InvalidDecoding: UNIT
+    34:
+      UnexpectedMessage: UNIT
+    35:
       ClientIoError:
         STRUCT:
           - error: STR
-    34:
+    36:
       StorageIoError:
         STRUCT:
           - error: STR
-    35:
+    37:
       StorageBcsError:
         STRUCT:
           - error: STR
-    36:
+    38:
       MissingCertificate:
         STRUCT:
           - hash:
@@ -289,6 +310,24 @@ InboxState:
   STRUCT:
     - next_height_to_receive:
         TYPENAME: BlockHeight
+    - received:
+        SEQ:
+          TUPLE:
+            - TYPENAME: BlockHeight
+            - TYPENAME: Operation
+    - expected:
+        SEQ:
+          TUPLE:
+            - TYPENAME: BlockHeight
+            - TYPENAME: Operation
+Message:
+  STRUCT:
+    - sender_id:
+        TYPENAME: ChainId
+    - height:
+        TYPENAME: BlockHeight
+    - operation:
+        TYPENAME: Operation
 MultiOwnerManager:
   STRUCT:
     - owners:

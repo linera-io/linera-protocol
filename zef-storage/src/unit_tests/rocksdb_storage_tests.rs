@@ -27,6 +27,7 @@ async fn test_rocksdb_storage_for_certificates() {
     let mut client = RocksdbStoreClient::new(dir.path().to_path_buf());
     let block = Block {
         chain_id: ChainId::default(),
+        incoming_messages: Vec::new(),
         operation: Operation::CloseChain,
         previous_block_hash: None,
         height: BlockHeight::default(),

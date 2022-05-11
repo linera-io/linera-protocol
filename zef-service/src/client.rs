@@ -181,6 +181,7 @@ impl ClientContext {
             };
             let block = Block {
                 chain_id: chain.chain_id.clone(),
+                incoming_messages: Vec::new(),
                 operation: Operation::Transfer {
                     recipient: Address::Account(next_recipient),
                     amount: Amount::from(1),
