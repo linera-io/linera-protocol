@@ -195,6 +195,7 @@ impl TestBuilder {
             chain_id: chain_id.clone(),
             check_next_block_height: None,
             query_committee: false,
+            query_pending_messages: false,
             query_sent_certificates_in_range: Some(BlockHeightRange {
                 start: block_height,
                 limit: Some(1),
@@ -693,9 +694,9 @@ async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
         )
         .await
         .unwrap();
-    // Sending an unchecked transfer block from client2 to client3 fails because one
-    // honest validator is lagging and client2 doesn't know about the missing received
-    // certificate.
+    // Client2 does not know about the money yet.
+    assert_eq!(client2.local_balance().await.unwrap(), Balance::from(0));
+    // Sending money from client2 fails, as a consequence.
     assert!(client2
         .transfer_to_chain_unsafe_unconfirmed(
             Amount::from(2),
@@ -704,9 +705,22 @@ async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
         )
         .await
         .is_err());
-    // Retrying works because it starts by investigating possible missing received
-    // certificates.
-    let certificate = client2.retry_pending_block().await.unwrap().unwrap();
+    // Retrying the same block doesn't work.
+    assert!(client2.retry_pending_block().await.is_err());
+    client2.clear_pending_block().await;
+    // Retrying the whole command works after synchronization.
+    assert_eq!(
+        client2.synchronize_balance().await.unwrap(),
+        Balance::from(2)
+    );
+    let certificate = client2
+        .transfer_to_chain(
+            Amount::from(2),
+            client3.chain_id.clone(),
+            UserData::default(),
+        )
+        .await
+        .unwrap();
     // Blocks were executed locally.
     assert_eq!(client1.local_balance().await.unwrap(), Balance::from(1));
     assert_eq!(client1.next_block_height, BlockHeight::from(2));

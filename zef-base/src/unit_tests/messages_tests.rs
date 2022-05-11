@@ -13,6 +13,7 @@ fn test_signed_values() {
 
     let block = Block {
         chain_id: dbg_chain(1),
+        incoming_messages: Vec::new(),
         operation: Operation::Transfer {
             recipient: Address::Account(dbg_chain(2)),
             amount: Amount::from(1),
@@ -45,6 +46,7 @@ fn test_certificates() {
 
     let block = Block {
         chain_id: dbg_chain(1),
+        incoming_messages: Vec::new(),
         operation: Operation::Transfer {
             recipient: Address::Account(dbg_chain(1)),
             amount: Amount::from(1),

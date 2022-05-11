@@ -16,17 +16,17 @@ use std::{
 #[path = "unit_tests/base_types_tests.rs"]
 mod base_types_tests;
 
-/// A non-negative amount of money.
+/// A non-negative amount of money to be transferred.
 #[derive(
     Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
 )]
 pub struct Amount(u64);
 
-/// The balance of a chain (can go negative temporarily).
+/// The balance of a chain.
 #[derive(
     Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
 )]
-pub struct Balance(i128);
+pub struct Balance(u128);
 
 /// A block height to identify commands issued by a chain.
 #[derive(
@@ -325,7 +325,7 @@ impl Balance {
 
     #[inline]
     pub fn max() -> Self {
-        Balance(std::i128::MAX)
+        Balance(std::u128::MAX)
     }
 
     #[inline]
@@ -375,7 +375,7 @@ impl std::str::FromStr for Balance {
     type Err = std::num::ParseIntError;
 
     fn from_str(src: &str) -> Result<Self, Self::Err> {
-        Ok(Self(i128::from_str(src)?))
+        Ok(Self(u128::from_str(src)?))
     }
 }
 
@@ -395,7 +395,7 @@ impl From<Amount> for u64 {
 
 impl From<Amount> for Balance {
     fn from(val: Amount) -> Self {
-        Balance(val.0 as i128)
+        Balance(val.0 as u128)
     }
 }
 
@@ -491,8 +491,8 @@ impl From<u64> for Amount {
     }
 }
 
-impl From<i128> for Balance {
-    fn from(value: i128) -> Self {
+impl From<u128> for Balance {
+    fn from(value: u128) -> Self {
         Balance(value)
     }
 }
