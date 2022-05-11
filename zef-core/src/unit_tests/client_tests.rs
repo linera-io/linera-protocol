@@ -228,18 +228,6 @@ impl TestBuilder {
 }
 
 #[tokio::test]
-async fn test_query_balance() {
-    let mut client = TestBuilder::single_chain(4, 1, Balance::from(3)).await;
-    assert_eq!(client.query_safe_balance().await.unwrap(), Balance::from(3));
-
-    let mut client = TestBuilder::single_chain(4, 2, Balance::from(3)).await;
-    assert_eq!(client.query_safe_balance().await.unwrap(), Balance::from(3));
-
-    let mut client = TestBuilder::single_chain(4, 3, Balance::from(3)).await;
-    assert_eq!(client.query_safe_balance().await.unwrap(), Balance::from(0));
-}
-
-#[tokio::test]
 async fn test_initiating_valid_transfer() {
     let mut builder = TestBuilder::new(4, 1);
     let mut sender = builder
@@ -255,7 +243,7 @@ async fn test_initiating_valid_transfer() {
         .unwrap();
     assert_eq!(sender.next_block_height, BlockHeight::from(1));
     assert!(sender.pending_block.is_none());
-    assert_eq!(sender.query_safe_balance().await.unwrap(), Balance::from(1));
+    assert_eq!(sender.local_balance().await.unwrap(), Balance::from(1));
     assert_eq!(
         builder
             .check_that_validators_have_certificate(
@@ -294,7 +282,7 @@ async fn test_rotate_key_pair() {
             .value,
         certificate.value
     );
-    assert_eq!(sender.query_safe_balance().await.unwrap(), Balance::from(4));
+    assert_eq!(sender.local_balance().await.unwrap(), Balance::from(4));
     assert_eq!(
         sender.synchronize_balance().await.unwrap(),
         Balance::from(4)
@@ -331,7 +319,7 @@ async fn test_transfer_ownership() {
             .value,
         certificate.value
     );
-    assert_eq!(sender.query_safe_balance().await.unwrap(), Balance::from(4));
+    assert_eq!(sender.local_balance().await.unwrap(), Balance::from(4));
     assert_eq!(
         sender.synchronize_balance().await.unwrap(),
         Balance::from(4)
@@ -367,7 +355,7 @@ async fn test_share_ownership() {
             .value,
         certificate.value
     );
-    assert_eq!(sender.query_safe_balance().await.unwrap(), Balance::from(4));
+    assert_eq!(sender.local_balance().await.unwrap(), Balance::from(4));
     assert_eq!(
         sender.synchronize_balance().await.unwrap(),
         Balance::from(4)
@@ -387,11 +375,14 @@ async fn test_share_ownership() {
             BlockHeight::from(2),
         )
         .await;
-    assert_eq!(client.query_safe_balance().await.unwrap(), Balance::from(1));
+    // Local balance fails because the client has block height 2 but we haven't downloaded
+    // the blocks yet.
+    assert!(client.local_balance().await.is_err());
     assert_eq!(
         client.synchronize_balance().await.unwrap(),
         Balance::from(1)
     );
+    assert_eq!(client.local_balance().await.unwrap(), Balance::from(1));
     client
         .transfer_to_chain(Amount::from(1), dbg_chain(3), UserData::default())
         .await
@@ -421,7 +412,7 @@ async fn test_open_chain_then_close_it() {
         client.synchronize_balance().await.unwrap(),
         Balance::from(0)
     );
-    assert_eq!(client.query_safe_balance().await.unwrap(), Balance::from(0));
+    assert_eq!(client.local_balance().await.unwrap(), Balance::from(0));
     client.close_chain().await.unwrap();
 }
 
@@ -467,7 +458,7 @@ async fn test_open_chain_after_transfer() {
         .make_client(new_id, new_key_pair, None, BlockHeight::from(0))
         .await;
     client.receive_certificate(certificate).await.unwrap();
-    assert_eq!(client.query_safe_balance().await.unwrap(), Balance::from(3));
+    assert_eq!(client.local_balance().await.unwrap(), Balance::from(3));
     assert_eq!(
         client.synchronize_balance().await.unwrap(),
         Balance::from(3)
@@ -488,9 +479,9 @@ async fn test_open_chain_before_transfer() {
     let new_pubk = new_key_pair.public();
     let new_id = ChainId::new(vec![1, 0].into_iter().map(BlockHeight::from).collect());
     // Open the new chain.
-    let certificate = sender.open_chain(new_pubk).await.unwrap();
+    let creation_certificate = sender.open_chain(new_pubk).await.unwrap();
     // Transfer after creating the chain.
-    sender
+    let transfer_certificate = sender
         .transfer_to_chain(Amount::from(3), new_id.clone(), UserData::default())
         .await
         .unwrap();
@@ -502,16 +493,21 @@ async fn test_open_chain_before_transfer() {
         .make_client(new_id, new_key_pair, None, BlockHeight::from(0))
         .await;
     // Must process the creation certificate before using the new chain.
-    client.receive_certificate(certificate).await.unwrap();
-    assert_eq!(client.query_safe_balance().await.unwrap(), Balance::from(3));
-    assert_eq!(
-        client.synchronize_balance().await.unwrap(),
-        Balance::from(3)
-    );
+    client
+        .receive_certificate(creation_certificate)
+        .await
+        .unwrap();
+    assert_eq!(client.local_balance().await.unwrap(), Balance::from(0));
+    client
+        .receive_certificate(transfer_certificate)
+        .await
+        .unwrap();
+    assert_eq!(client.local_balance().await.unwrap(), Balance::from(3));
     client
         .transfer_to_chain(Amount::from(3), dbg_chain(3), UserData::default())
         .await
         .unwrap();
+    assert_eq!(client.local_balance().await.unwrap(), Balance::from(0));
 }
 
 #[tokio::test]
@@ -565,7 +561,7 @@ async fn test_initiating_valid_transfer_too_many_faults() {
         .is_err());
     assert_eq!(sender.next_block_height, BlockHeight::from(0));
     assert!(sender.pending_block.is_some());
-    assert_eq!(sender.query_safe_balance().await.unwrap(), Balance::from(4));
+    assert_eq!(sender.local_balance().await.unwrap(), Balance::from(4));
 }
 
 #[tokio::test]
@@ -577,11 +573,7 @@ async fn test_bidirectional_transfer() {
     let mut client2 = builder
         .add_initial_chain(dbg_chain(2), Balance::from(0))
         .await;
-    assert_eq!(
-        client1.query_safe_balance().await.unwrap(),
-        Balance::from(3)
-    );
-    assert_eq!(client1.balance().await, Balance::from(3));
+    assert_eq!(client1.local_balance().await.unwrap(), Balance::from(3));
 
     let certificate = client1
         .transfer_to_chain(
@@ -594,11 +586,7 @@ async fn test_bidirectional_transfer() {
 
     assert_eq!(client1.next_block_height, BlockHeight::from(1));
     assert!(client1.pending_block.is_none());
-    assert_eq!(client1.balance().await, Balance::from(0));
-    assert_eq!(
-        client1.query_safe_balance().await.unwrap(),
-        Balance::from(0)
-    );
+    assert_eq!(client1.local_balance().await.unwrap(), Balance::from(0));
 
     assert_eq!(
         builder
@@ -612,19 +600,14 @@ async fn test_bidirectional_transfer() {
             .value,
         certificate.value
     );
-    // Our sender already confirmed.
-    assert_eq!(
-        client2.query_safe_balance().await.unwrap(),
-        Balance::from(3)
-    );
-    // But local balance is lagging.
-    assert_eq!(client2.balance().await, Balance::from(0));
+    // Local balance is lagging.
+    assert_eq!(client2.local_balance().await.unwrap(), Balance::from(0));
     // Force synchronization of local balance.
     assert_eq!(
         client2.synchronize_balance().await.unwrap(),
         Balance::from(3)
     );
-    assert_eq!(client2.balance().await, Balance::from(3));
+    assert_eq!(client2.local_balance().await.unwrap(), Balance::from(3));
 
     // Send back some money.
     assert_eq!(client2.next_block_height, BlockHeight::from(0));
@@ -638,12 +621,9 @@ async fn test_bidirectional_transfer() {
         .unwrap();
     assert_eq!(client2.next_block_height, BlockHeight::from(1));
     assert!(client2.pending_block.is_none());
+    assert_eq!(client2.local_balance().await.unwrap(), Balance::from(2));
     assert_eq!(
-        client2.query_safe_balance().await.unwrap(),
-        Balance::from(2)
-    );
-    assert_eq!(
-        client1.query_safe_balance().await.unwrap(),
+        client1.synchronize_balance().await.unwrap(),
         Balance::from(1)
     );
 }
@@ -666,20 +646,12 @@ async fn test_receiving_unconfirmed_transfer() {
         .await
         .unwrap();
     // Transfer was executed locally.
-    assert_eq!(client1.balance().await, Balance::from(1));
+    assert_eq!(client1.local_balance().await.unwrap(), Balance::from(1));
     assert_eq!(client1.next_block_height, BlockHeight::from(1));
     assert!(client1.pending_block.is_none());
-    // ..but not confirmed remotely, hence a conservative result.
-    assert_eq!(
-        client1.query_safe_balance().await.unwrap(),
-        Balance::from(0)
-    );
     // Let the receiver confirm in last resort.
     client2.receive_certificate(certificate).await.unwrap();
-    assert_eq!(
-        client2.query_safe_balance().await.unwrap(),
-        Balance::from(2)
-    );
+    assert_eq!(client2.local_balance().await.unwrap(), Balance::from(2));
 }
 
 #[tokio::test]
@@ -736,21 +708,15 @@ async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
     // certificates.
     let certificate = client2.retry_pending_block().await.unwrap().unwrap();
     // Blocks were executed locally.
-    assert_eq!(client1.balance().await, Balance::from(1));
+    assert_eq!(client1.local_balance().await.unwrap(), Balance::from(1));
     assert_eq!(client1.next_block_height, BlockHeight::from(2));
     assert!(client1.pending_block.is_none());
-    assert_eq!(client2.balance().await, Balance::from(0));
+    assert_eq!(client2.local_balance().await.unwrap(), Balance::from(0));
     assert_eq!(client2.next_block_height, BlockHeight::from(1));
     assert!(client2.pending_block.is_none());
     // Last one was not confirmed remotely, hence a conservative balance.
-    assert_eq!(
-        client2.query_safe_balance().await.unwrap(),
-        Balance::from(0)
-    );
+    assert_eq!(client2.local_balance().await.unwrap(), Balance::from(0));
     // Let the receiver confirm in last resort.
     client3.receive_certificate(certificate).await.unwrap();
-    assert_eq!(
-        client3.query_safe_balance().await.unwrap(),
-        Balance::from(2)
-    );
+    assert_eq!(client3.local_balance().await.unwrap(), Balance::from(2));
 }

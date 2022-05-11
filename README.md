@@ -60,8 +60,9 @@ CHAIN2="[999]"
 ${CLIENT[@]} query_balance "$CHAIN1"
 ${CLIENT[@]} query_balance "$CHAIN2"
 
-# Transfer 10 units
+# Transfer 10 units then 5 back
 ${CLIENT[@]} transfer 10 --from "$CHAIN1" --to "$CHAIN2"
+${CLIENT[@]} transfer 5 --from "$CHAIN2" --to "$CHAIN1"
 
 # Restart last server
 kill "$LAST_PID"
