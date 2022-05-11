@@ -26,9 +26,11 @@ Block:
         OPTION:
           TYPENAME: HashValue
 BlockAndRound:
-  TUPLESTRUCT:
-    - TYPENAME: Block
-    - TYPENAME: RoundNumber
+  STRUCT:
+    - block:
+        TYPENAME: Block
+    - round:
+        TYPENAME: RoundNumber
 BlockHeight:
   NEWTYPESTRUCT: U64
 BlockHeightRange:
@@ -39,7 +41,7 @@ BlockHeightRange:
         OPTION: U64
 BlockProposal:
   STRUCT:
-    - block_and_round:
+    - content:
         TYPENAME: BlockAndRound
     - owner:
         TYPENAME: PublicKeyBytes

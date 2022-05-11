@@ -192,7 +192,10 @@ impl ClientContext {
             };
             debug!("Preparing block proposal: {:?}", block);
             let proposal = BlockProposal::new(
-                BlockAndRound(block.clone(), RoundNumber::default()),
+                BlockAndRound {
+                    block: block.clone(),
+                    round: RoundNumber::default(),
+                },
                 key_pair,
             );
             proposals.push(proposal.clone());
@@ -232,7 +235,7 @@ impl ClientContext {
         for proposal in proposals {
             let mut certificate = Certificate::new(
                 Value::Confirmed {
-                    block: proposal.block_and_round.0.clone(),
+                    block: proposal.content.block.clone(),
                 },
                 Vec::new(),
             );
@@ -244,7 +247,7 @@ impl ClientContext {
             let serialized_certificate =
                 serialize_message(&SerializedMessage::Certificate(Box::new(certificate)));
             serialized_certificates.push((
-                proposal.block_and_round.0.chain_id,
+                proposal.content.block.chain_id,
                 serialized_certificate.into(),
             ));
         }
