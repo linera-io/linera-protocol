@@ -551,7 +551,6 @@ fn make_transfer_block_proposal(
 ) -> BlockProposal {
     let block = Block {
         chain_id,
-        incoming_messages: Vec::new(),
         operation: Operation::Transfer {
             recipient,
             amount,
