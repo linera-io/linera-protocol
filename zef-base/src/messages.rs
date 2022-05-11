@@ -40,11 +40,19 @@ pub enum Operation {
     ChangeMultipleOwners { new_owners: Vec<Owner> },
 }
 
-/// A block containing a single operation for the given chain.
+/// A block containing a single operation for the given chain, as well as the
+/// acknowledgment of a number of incoming messages from other chains.
+/// * Incoming messages must be selected in the order they were
+///   produced by the sending chain, without skipping messages.
+/// * When a block is proposed to a validator, all cross-chain messages must have been
+///   received ahead of time in the inbox of the chain.
+/// * This constraint does not apply to the execution of confirmed blocks.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct Block {
     /// The subject of the operation.
     pub chain_id: ChainId,
+    /// A selection of incoming messages to be executed first.
+    pub incoming_messages: Vec<Message>,
     /// The operation to execute.
     pub operation: Operation,
     /// The block height.
@@ -57,6 +65,14 @@ pub struct Block {
 /// A block with a round number.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct BlockAndRound(pub Block, pub RoundNumber);
+
+/// A message received by a chain.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct Message {
+    pub sender_id: ChainId,
+    pub height: BlockHeight,
+    pub operation: Operation,
+}
 
 /// An authenticated proposal for a new block.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -118,6 +134,8 @@ pub struct ChainInfoQuery {
     pub check_next_block_height: Option<BlockHeight>,
     /// Query the current committee.
     pub query_committee: bool,
+    /// Query the received messages that are waiting be picked in the next block.
+    pub query_pending_messages: bool,
     /// Query a range of certificates sent from the chain.
     pub query_sent_certificates_in_range: Option<BlockHeightRange>,
     /// Query new certificates received from the chain.
@@ -139,6 +157,8 @@ pub struct ChainInfo {
     pub next_block_height: BlockHeight,
     /// The current committee (if requested)
     pub queried_committee: Option<Committee>,
+    /// The received messages that are waiting be picked in the next block (if requested).
+    pub queried_pending_messages: Vec<Message>,
     /// The response to `query_sent_certificates_in_range`
     pub queried_sent_certificates: Vec<Certificate>,
     /// The current number of received certificates (useful for `query_received_certificates_excluding_first_nth`)

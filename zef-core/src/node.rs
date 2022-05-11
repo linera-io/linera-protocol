@@ -99,6 +99,19 @@ impl<S> LocalNodeClient<S>
 where
     S: Storage + Clone + 'static,
 {
+    pub(crate) async fn stage_block_execution(
+        &self,
+        block: &Block,
+    ) -> Result<ChainInfoResponse, Error> {
+        self.0
+            .clone()
+            .lock()
+            .await
+            .state
+            .stage_block_execution(block)
+            .await
+    }
+
     async fn try_process_certificates(
         &mut self,
         chain_id: &ChainId,
@@ -138,6 +151,7 @@ where
             chain_id,
             check_next_block_height: None,
             query_committee: false,
+            query_pending_messages: false,
             query_sent_certificates_in_range: None,
             query_received_certificates_excluding_first_nth: None,
         };
@@ -196,6 +210,7 @@ where
             chain_id: chain_id.clone(),
             check_next_block_height: None,
             query_committee: false,
+            query_pending_messages: false,
             query_sent_certificates_in_range: Some(range),
             query_received_certificates_excluding_first_nth: None,
         };
@@ -254,6 +269,7 @@ where
             chain_id: chain_id.clone(),
             check_next_block_height: None,
             query_committee: false,
+            query_pending_messages: false,
             query_sent_certificates_in_range: Some(range),
             query_received_certificates_excluding_first_nth: None,
         };

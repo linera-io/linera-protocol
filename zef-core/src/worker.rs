@@ -80,6 +80,18 @@ where
         Ok(response)
     }
 
+    /// Try to execute a block proposal without any verification other than block execution.
+    pub(crate) async fn stage_block_execution(
+        &mut self,
+        block: &Block,
+    ) -> Result<ChainInfoResponse, Error> {
+        let mut chain = self.storage.read_active_chain(&block.chain_id).await?;
+        chain.execute_block(block)?;
+        let info = chain.make_chain_info(None);
+        // Do not save the new state.
+        Ok(info)
+    }
+
     /// Load pending cross-chain requests.
     async fn make_continuation(
         &mut self,
@@ -134,10 +146,11 @@ where
         assert_eq!(chain.block_hash, block.previous_block_hash);
         // Persist certificate.
         self.storage.write_certificate(certificate.clone()).await?;
-        // Execute the sender's side of the operation.
-        chain.apply_operation_as_sender(&block.operation, certificate.hash)?;
+        // Execute the block.
+        chain.execute_block(&block)?;
         // Advance to next block height.
         chain.block_hash = Some(certificate.hash);
+        chain.confirmed_log.push(certificate.hash);
         chain.next_block_height.try_add_assign_one()?;
         chain.state.manager.reset();
         // Final touch on the sender's chain.
@@ -203,11 +216,11 @@ where
             assert_eq!(&block.operation, &operation);
             // Execute the recipient's side of the operation.
             let mut chain = self.storage.read_chain_or_default(recipient).await?;
-            let need_update = chain.apply_operation_as_recipient(
-                &operation,
-                certificate.hash,
+            let need_update = chain.receive_message(
                 block.chain_id.clone(),
                 block.height,
+                block.operation.clone(),
+                certificate.hash,
             )?;
             if need_update {
                 self.storage.write_certificate(certificate).await?;
@@ -246,8 +259,14 @@ where
             // unchanged.
             return Ok(chain.make_chain_info(self.key_pair.as_ref()));
         }
-        // Verify that the block is valid.
-        chain.validate_operation(&proposal.block_and_round.0)?;
+        {
+            // Execute the block on a copy of the chain state for validation.
+            let mut staged = chain.clone();
+            staged.execute_block(&proposal.block_and_round.0)?;
+            // Verify that the resulting chain would have no unconfirmed incoming
+            // messages.
+            staged.validate_incoming_messages()?;
+        }
         // Create the vote and store it in the chain state.
         chain
             .state
@@ -293,6 +312,19 @@ where
                 chain.next_block_height == next_block_height,
                 Error::UnexpectedBlockHeight
             );
+        }
+        if query.query_pending_messages {
+            let mut messages = Vec::new();
+            for (sender_id, inbox) in &chain.inboxes {
+                for (height, operation) in &inbox.received {
+                    messages.push(Message {
+                        sender_id: sender_id.clone(),
+                        height: *height,
+                        operation: operation.clone(),
+                    });
+                }
+            }
+            info.queried_pending_messages = messages;
         }
         if let Some(range) = query.query_sent_certificates_in_range {
             let keys = chain.confirmed_log[..]

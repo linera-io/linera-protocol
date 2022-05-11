@@ -151,6 +151,7 @@ where
                 chain_id: chain_id.clone(),
                 check_next_block_height: None,
                 query_committee: false,
+                query_pending_messages: false,
                 query_sent_certificates_in_range: None,
                 query_received_certificates_excluding_first_nth: None,
             };
@@ -235,12 +236,7 @@ where
                 let result = self.send_block_proposal(proposal.clone()).await;
                 let info = match result {
                     Ok(info) => info,
-                    Err(e)
-                        if ChainState::is_retriable_validation_error(
-                            &proposal.block_and_round.0,
-                            &e,
-                        ) =>
-                    {
+                    Err(e) if ChainState::is_retriable_validation_error(&e) => {
                         // Some received certificates may be missing for this validator
                         // (e.g. to make the balance sufficient) so we are going to
                         // synchronize them now.

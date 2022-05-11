@@ -92,6 +92,22 @@ pub enum Error {
         0, 1
     )]
     HasLockedBlock(BlockHeight, RoundNumber),
+    #[fail(
+        display = "This replica has not processed any update from chain {:?} at height {:?} yet",
+        sender_id, height
+    )]
+    MissingCrossChainUpdate {
+        sender_id: ChainId,
+        height: BlockHeight,
+    },
+    #[fail(
+        display = "Invalid message from chain {:?} at height {:?}",
+        sender_id, height
+    )]
+    InvalidMessage {
+        sender_id: ChainId,
+        height: BlockHeight,
+    },
 
     // Other server-side errors
     #[fail(display = "No certificate for this chain and block height")]

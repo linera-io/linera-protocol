@@ -18,8 +18,13 @@ async fn test_handle_block_proposal_bad_signature() {
         (dbg_chain(2), dbg_addr(2), Balance::from(0)),
     ])
     .await;
-    let block_proposal =
-        make_transfer_block_proposal(dbg_chain(1), &sender_key_pair, recipient, Amount::from(5));
+    let block_proposal = make_transfer_block_proposal(
+        dbg_chain(1),
+        &sender_key_pair,
+        recipient,
+        Amount::from(5),
+        Vec::new(),
+    );
     let unknown_key_pair = KeyPair::generate();
     let mut bad_signature_block_proposal = block_proposal.clone();
     bad_signature_block_proposal.signature =
@@ -49,8 +54,13 @@ async fn test_handle_block_proposal_zero_amount() {
     ])
     .await;
     // test block non-positive amount
-    let zero_amount_block_proposal =
-        make_transfer_block_proposal(dbg_chain(1), &sender_key_pair, recipient, Amount::zero());
+    let zero_amount_block_proposal = make_transfer_block_proposal(
+        dbg_chain(1),
+        &sender_key_pair,
+        recipient,
+        Amount::zero(),
+        Vec::new(),
+    );
     assert!(state
         .handle_block_proposal(zero_amount_block_proposal)
         .await
@@ -75,8 +85,13 @@ async fn test_handle_block_proposal_unknown_sender() {
         (dbg_chain(2), dbg_addr(2), Balance::from(0)),
     ])
     .await;
-    let block_proposal =
-        make_transfer_block_proposal(dbg_chain(1), &sender_key_pair, recipient, Amount::from(5));
+    let block_proposal = make_transfer_block_proposal(
+        dbg_chain(1),
+        &sender_key_pair,
+        recipient,
+        Amount::from(5),
+        Vec::new(),
+    );
     let unknown_key = KeyPair::generate();
 
     let unknown_sender_block_proposal =
@@ -105,8 +120,13 @@ async fn test_handle_block_proposal_bad_block_height() {
         (dbg_chain(2), dbg_addr(2), Balance::from(0)),
     ])
     .await;
-    let block_proposal =
-        make_transfer_block_proposal(dbg_chain(1), &sender_key_pair, recipient, Amount::from(5));
+    let block_proposal = make_transfer_block_proposal(
+        dbg_chain(1),
+        &sender_key_pair,
+        recipient,
+        Amount::from(5),
+        Vec::new(),
+    );
 
     let mut sender_chain = state
         .storage
@@ -141,6 +161,7 @@ async fn test_handle_block_proposal_exceed_balance() {
         &sender_key_pair,
         recipient,
         Amount::from(1000),
+        Vec::new(),
     );
     assert!(state.handle_block_proposal(block_proposal).await.is_err());
     assert!(state
@@ -164,8 +185,13 @@ async fn test_handle_block_proposal() {
         Balance::from(5),
     )])
     .await;
-    let block_proposal =
-        make_transfer_block_proposal(dbg_chain(1), &sender_key_pair, recipient, Amount::from(5));
+    let block_proposal = make_transfer_block_proposal(
+        dbg_chain(1),
+        &sender_key_pair,
+        recipient,
+        Amount::from(5),
+        Vec::new(),
+    );
 
     let chain_info_response = state.handle_block_proposal(block_proposal).await.unwrap();
     chain_info_response
@@ -196,8 +222,13 @@ async fn test_handle_block_proposal_replay() {
         (dbg_chain(2), dbg_addr(2), Balance::from(0)),
     ])
     .await;
-    let block_proposal =
-        make_transfer_block_proposal(dbg_chain(1), &sender_key_pair, recipient, Amount::from(5));
+    let block_proposal = make_transfer_block_proposal(
+        dbg_chain(1),
+        &sender_key_pair,
+        recipient,
+        Amount::from(5),
+        Vec::new(),
+    );
 
     let response = state
         .handle_block_proposal(block_proposal.clone())
@@ -225,6 +256,7 @@ async fn test_handle_certificate_unknown_sender() {
         &sender_key_pair,
         Address::Account(dbg_chain(2)),
         Amount::from(5),
+        Vec::new(),
         &committee,
         &state,
     );
@@ -244,6 +276,7 @@ async fn test_handle_certificate_bad_block_height() {
         &sender_key_pair,
         Address::Account(dbg_chain(2)),
         Amount::from(5),
+        Vec::new(),
         &committee,
         &state,
     );
@@ -257,19 +290,28 @@ async fn test_handle_certificate_bad_block_height() {
 }
 
 #[tokio::test]
-async fn test_handle_certificate_exceed_balance() {
-    let sender_key_pair = KeyPair::generate();
+async fn test_handle_certificate_with_early_incoming_message() {
+    let key_pair = KeyPair::generate();
     let (committee, mut state) = init_state_with_chains(vec![
-        (dbg_chain(1), sender_key_pair.public(), Balance::from(5)),
+        (dbg_chain(1), key_pair.public(), Balance::from(5)),
         (dbg_chain(2), dbg_addr(2), Balance::from(0)),
     ])
     .await;
 
     let certificate = make_transfer_certificate(
         dbg_chain(1),
-        &sender_key_pair,
+        &key_pair,
         Address::Account(dbg_chain(2)),
         Amount::from(1000),
+        vec![Message {
+            sender_id: dbg_chain(3),
+            height: BlockHeight::from(0),
+            operation: Operation::Transfer {
+                recipient: Address::Account(dbg_chain(1)),
+                amount: Amount::from(995),
+                user_data: UserData::default(),
+            },
+        }],
         &committee,
         &state,
     );
@@ -277,15 +319,33 @@ async fn test_handle_certificate_exceed_balance() {
         .fully_handle_certificate(certificate.clone())
         .await
         .unwrap();
-    let sender_chain = state
+    let chain = state
         .storage
         .read_active_chain(&dbg_chain(1))
         .await
         .unwrap();
-    assert_eq!(Balance::from(-995), sender_chain.state.balance);
-    assert_eq!(BlockHeight::from(1), sender_chain.next_block_height);
-    assert_eq!(sender_chain.confirmed_log.len(), 1);
-    assert_eq!(Some(certificate.hash), sender_chain.block_hash);
+    assert_eq!(Balance::from(0), chain.state.balance);
+    assert_eq!(BlockHeight::from(1), chain.next_block_height);
+    assert_eq!(
+        BlockHeight::from(0),
+        chain
+            .inboxes
+            .get(&dbg_chain(3))
+            .unwrap()
+            .next_height_to_receive
+    );
+    assert!(chain
+        .inboxes
+        .get(&dbg_chain(3))
+        .unwrap()
+        .received
+        .is_empty(),);
+    assert!(matches!(
+        chain.inboxes.get(&dbg_chain(3)).unwrap().expected.front().unwrap(),
+        (height, Operation::Transfer { amount, .. }) if *height == BlockHeight::from(0) && *amount == Amount::from(995),
+    ));
+    assert_eq!(chain.confirmed_log.len(), 1);
+    assert_eq!(Some(certificate.hash), chain.block_hash);
     state
         .storage
         .read_active_chain(&dbg_chain(2))
@@ -307,6 +367,7 @@ async fn test_handle_certificate_receiver_balance_overflow() {
         &sender_key_pair,
         Address::Account(dbg_chain(2)),
         Amount::from(1),
+        Vec::new(),
         &committee,
         &state,
     );
@@ -342,6 +403,7 @@ async fn test_handle_certificate_receiver_equal_sender() {
         &key_pair,
         Address::Account(dbg_chain(1)),
         Amount::from(1),
+        Vec::new(),
         &committee,
         &state,
     );
@@ -354,7 +416,19 @@ async fn test_handle_certificate_receiver_equal_sender() {
         .read_active_chain(&dbg_chain(1))
         .await
         .unwrap();
-    assert_eq!(Balance::from(1), chain.state.balance);
+    assert_eq!(Balance::from(0), chain.state.balance);
+    assert_eq!(
+        BlockHeight::from(1),
+        chain
+            .inboxes
+            .get(&dbg_chain(1))
+            .unwrap()
+            .next_height_to_receive
+    );
+    assert!(matches!(
+        chain.inboxes.get(&dbg_chain(1)).unwrap().received.front().unwrap(),
+        (height, Operation::Transfer { amount, .. }) if *height == BlockHeight::from(0) && *amount == Amount::from(1),
+    ));
     assert_eq!(BlockHeight::from(1), chain.next_block_height);
     assert_eq!(chain.confirmed_log.len(), 1);
     assert_eq!(Some(certificate.hash), chain.block_hash);
@@ -370,6 +444,7 @@ async fn test_update_recipient_chain() {
         &sender_key_pair,
         Address::Account(dbg_chain(2)),
         Amount::from(10),
+        Vec::new(),
         &committee,
         &state,
     );
@@ -388,8 +463,20 @@ async fn test_update_recipient_chain() {
         .read_active_chain(&dbg_chain(2))
         .await
         .unwrap();
-    assert_eq!(Balance::from(11), chain.state.balance);
+    assert_eq!(Balance::from(1), chain.state.balance);
     assert_eq!(BlockHeight::from(0), chain.next_block_height);
+    assert_eq!(
+        BlockHeight::from(1),
+        chain
+            .inboxes
+            .get(&dbg_chain(1))
+            .unwrap()
+            .next_height_to_receive
+    );
+    assert!(matches!(
+        chain.inboxes.get(&dbg_chain(1)).unwrap().received.front().unwrap(),
+        (height, Operation::Transfer { amount, .. }) if *height == BlockHeight::from(0) && *amount == Amount::from(10),
+    ));
     assert_eq!(chain.confirmed_log.len(), 0);
     assert_eq!(None, chain.block_hash);
     assert_eq!(chain.received_log.len(), 1);
@@ -398,9 +485,10 @@ async fn test_update_recipient_chain() {
 #[tokio::test]
 async fn test_handle_certificate_to_active_recipient() {
     let sender_key_pair = KeyPair::generate();
+    let recipient_key_pair = KeyPair::generate();
     let (committee, mut state) = init_state_with_chains(vec![
         (dbg_chain(1), sender_key_pair.public(), Balance::from(5)),
-        (dbg_chain(2), dbg_addr(2), Balance::from(0)),
+        (dbg_chain(2), recipient_key_pair.public(), Balance::from(0)),
     ])
     .await;
     let certificate = make_transfer_certificate(
@@ -408,6 +496,7 @@ async fn test_handle_certificate_to_active_recipient() {
         &sender_key_pair,
         Address::Account(dbg_chain(2)),
         Amount::from(5),
+        Vec::new(),
         &committee,
         &state,
     );
@@ -423,21 +512,48 @@ async fn test_handle_certificate_to_active_recipient() {
     assert_eq!(Some(certificate.hash), info.block_hash);
     assert!(info.manager.pending().is_none());
 
+    // Try to use the money. This requires selecting the incoming message in a next block.
+    let certificate = make_transfer_certificate(
+        dbg_chain(2),
+        &recipient_key_pair,
+        Address::Account(dbg_chain(3)),
+        Amount::from(1),
+        vec![Message {
+            sender_id: dbg_chain(1),
+            height: BlockHeight::from(0),
+            operation: Operation::Transfer {
+                recipient: Address::Account(dbg_chain(2)),
+                amount: Amount::from(5),
+                user_data: UserData::default(),
+            },
+        }],
+        &committee,
+        &state,
+    );
+    state
+        .fully_handle_certificate(certificate.clone())
+        .await
+        .unwrap();
+
     let recipient_chain = state
         .storage
         .read_active_chain(&dbg_chain(2))
         .await
         .unwrap();
-    assert_eq!(recipient_chain.state.balance, Balance::from(5));
-    assert!(recipient_chain.state.manager.has_owner(&dbg_addr(2)));
-    assert_eq!(recipient_chain.confirmed_log.len(), 0);
-    assert_eq!(recipient_chain.block_hash, None);
+    assert_eq!(recipient_chain.state.balance, Balance::from(4));
+    assert!(recipient_chain
+        .state
+        .manager
+        .has_owner(&recipient_key_pair.public()));
+    assert_eq!(recipient_chain.confirmed_log.len(), 1);
+    assert_eq!(recipient_chain.block_hash, Some(certificate.hash));
     assert_eq!(recipient_chain.received_log.len(), 1);
 
     let info_query = ChainInfoQuery {
         chain_id: dbg_chain(2),
         check_next_block_height: None,
         query_committee: false,
+        query_pending_messages: false,
         query_sent_certificates_in_range: None,
         query_received_certificates_excluding_first_nth: Some(0),
     };
@@ -464,6 +580,7 @@ async fn test_handle_certificate_to_inactive_recipient() {
         &sender_key_pair,
         Address::Account(dbg_chain(2)), // the recipient chain does not exist
         Amount::from(5),
+        Vec::new(),
         &committee,
         &state,
     );
@@ -548,9 +665,11 @@ fn make_transfer_block_proposal(
     secret: &KeyPair,
     recipient: Address,
     amount: Amount,
+    incoming_messages: Vec<Message>,
 ) -> BlockProposal {
     let block = Block {
         chain_id,
+        incoming_messages,
         operation: Operation::Transfer {
             recipient,
             amount,
@@ -580,12 +699,14 @@ fn make_transfer_certificate(
     key_pair: &KeyPair,
     recipient: Address,
     amount: Amount,
+    incoming_messages: Vec<Message>,
     committee: &Committee,
     state: &WorkerState<InMemoryStoreClient>,
 ) -> Certificate {
-    let block = make_transfer_block_proposal(chain_id, key_pair, recipient, amount)
-        .block_and_round
-        .0;
+    let block =
+        make_transfer_block_proposal(chain_id, key_pair, recipient, amount, incoming_messages)
+            .block_and_round
+            .0;
     let value = Value::Confirmed { block };
     make_certificate(committee, state, value)
 }
