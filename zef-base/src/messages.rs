@@ -64,7 +64,10 @@ pub struct Block {
 
 /// A block with a round number.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct BlockAndRound(pub Block, pub RoundNumber);
+pub struct BlockAndRound {
+    pub block: Block,
+    pub round: RoundNumber,
+}
 
 /// A message received by a chain.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -78,7 +81,7 @@ pub struct Message {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct BlockProposal {
-    pub block_and_round: BlockAndRound,
+    pub content: BlockAndRound,
     pub owner: Owner,
     pub signature: Signature,
 }
@@ -282,10 +285,10 @@ impl Value {
 }
 
 impl BlockProposal {
-    pub fn new(block_and_round: BlockAndRound, secret: &KeyPair) -> Self {
-        let signature = Signature::new(&block_and_round, secret);
+    pub fn new(content: BlockAndRound, secret: &KeyPair) -> Self {
+        let signature = Signature::new(&content, secret);
         Self {
-            block_and_round,
+            content,
             owner: secret.public(),
             signature,
         }
@@ -295,10 +298,10 @@ impl BlockProposal {
     pub fn check(&self, manager: &ChainManager) -> Result<(), Error> {
         ensure!(
             manager.is_active(),
-            Error::InactiveChain(self.block_and_round.0.chain_id.clone())
+            Error::InactiveChain(self.content.block.chain_id.clone())
         );
         ensure!(manager.has_owner(&self.owner), Error::InvalidOwner);
-        self.signature.check(&self.block_and_round, self.owner)
+        self.signature.check(&self.content, self.owner)
     }
 }
 

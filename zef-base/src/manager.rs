@@ -76,8 +76,8 @@ impl MultiOwnerManager {
     pub fn round(&self) -> RoundNumber {
         let mut current_round = RoundNumber::default();
         if let Some(proposal) = &self.proposed {
-            if current_round < proposal.block_and_round.1 {
-                current_round = proposal.block_and_round.1;
+            if current_round < proposal.content.round {
+                current_round = proposal.content.round;
             }
         }
         if let Some(cert) = &self.locked {
@@ -186,13 +186,11 @@ impl ChainManager {
             }
             ChainManager::Multi(manager) => {
                 if let Some(proposal) = &manager.proposed {
-                    if proposal.block_and_round.0 == *new_block
-                        && proposal.block_and_round.1 == new_round
-                    {
+                    if proposal.content.block == *new_block && proposal.content.round == new_round {
                         return Ok(Outcome::Skip);
                     }
-                    if new_round <= proposal.block_and_round.1 {
-                        return Err(Error::InsufficientRound(proposal.block_and_round.1));
+                    if new_round <= proposal.content.round {
+                        return Err(Error::InsufficientRound(proposal.content.round));
                     }
                 }
                 if let Some(cert) = &manager.locked {
@@ -259,7 +257,7 @@ impl ChainManager {
             ChainManager::Single(manager) => {
                 if let Some(key_pair) = key_pair {
                     // Vote to confirm.
-                    let BlockAndRound(block, _) = proposal.block_and_round;
+                    let BlockAndRound { block, .. } = proposal.content;
                     let value = Value::Confirmed { block };
                     let vote = Vote::new(value, key_pair);
                     manager.pending = Some(vote);
@@ -271,7 +269,7 @@ impl ChainManager {
                 manager.proposed = Some(proposal.clone());
                 if let Some(key_pair) = key_pair {
                     // Vote to validate.
-                    let BlockAndRound(block, round) = proposal.block_and_round;
+                    let BlockAndRound { block, round } = proposal.content;
                     let value = Value::Validated { block, round };
                     let vote = Vote::new(value, key_pair);
                     manager.pending = Some(vote);

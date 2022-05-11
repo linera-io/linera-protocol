@@ -242,7 +242,7 @@ where
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, Error> {
         // Obtain the sender's chain.
-        let sender = proposal.block_and_round.0.chain_id.clone();
+        let sender = proposal.content.block.chain_id.clone();
         let mut chain = self.storage.read_active_chain(&sender).await?;
         // Check authentication of the block.
         proposal.check(&chain.state.manager)?;
@@ -251,8 +251,8 @@ where
         if chain.state.manager.check_proposed_block(
             chain.block_hash,
             chain.next_block_height,
-            &proposal.block_and_round.0,
-            proposal.block_and_round.1,
+            &proposal.content.block,
+            proposal.content.round,
         )? == Outcome::Skip
         {
             // If we just processed the same pending block, return the chain info
@@ -262,7 +262,7 @@ where
         {
             // Execute the block on a copy of the chain state for validation.
             let mut staged = chain.clone();
-            staged.execute_block(&proposal.block_and_round.0)?;
+            staged.execute_block(&proposal.content.block)?;
             // Verify that the resulting chain would have no unconfirmed incoming
             // messages.
             staged.validate_incoming_messages()?;

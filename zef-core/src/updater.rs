@@ -219,7 +219,7 @@ where
         let target_block_height = match &action {
             CommunicateAction::SubmitBlockForValidation(proposal)
             | CommunicateAction::SubmitBlockForConfirmation(proposal) => {
-                proposal.block_and_round.0.height
+                proposal.content.block.height
             }
             CommunicateAction::FinalizeBlock(certificate) => {
                 certificate.value.validated_block().unwrap().height
