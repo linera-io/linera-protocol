@@ -367,7 +367,7 @@ where
         match action {
             CommunicateAction::SubmitBlockForConfirmation(proposal) => {
                 let value = Value::Confirmed {
-                    block: proposal.block_and_round.0,
+                    block: proposal.content.block,
                 };
                 let certificate = Certificate::new(value, signatures);
                 // Certificate is valid because
@@ -377,7 +377,7 @@ where
                 Ok(Some(certificate))
             }
             CommunicateAction::SubmitBlockForValidation(proposal) => {
-                let BlockAndRound(block, round) = proposal.block_and_round;
+                let BlockAndRound { block, round } = proposal.content;
                 let value = Value::Validated { block, round };
                 let certificate = Certificate::new(value, signatures);
                 Ok(Some(certificate))
@@ -543,7 +543,13 @@ where
         self.pending_block = Some(block.clone());
         // Build the initial query.
         let key_pair = self.key_pair().await?;
-        let proposal = BlockProposal::new(BlockAndRound(block, next_round), key_pair);
+        let proposal = BlockProposal::new(
+            BlockAndRound {
+                block,
+                round: next_round,
+            },
+            key_pair,
+        );
         // Send the query.
         let committee = self.committee().await?;
         let final_certificate = {
@@ -559,7 +565,7 @@ where
                     .expect("a certificate");
                 assert_eq!(
                     certificate.value.validated_block(),
-                    Some(&proposal.block_and_round.0)
+                    Some(&proposal.content.block)
                 );
                 self.communicate_chain_updates(
                     &committee,
@@ -581,7 +587,7 @@ where
         };
         // By now the block should be final.
         ensure!(
-            final_certificate.value.confirmed_block() == Some(&proposal.block_and_round.0),
+            final_certificate.value.confirmed_block() == Some(&proposal.content.block),
             "A different operation was executed in parallel (consider retrying the operation)"
         );
         self.process_certificate(final_certificate.clone()).await?;

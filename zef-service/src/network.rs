@@ -391,7 +391,7 @@ impl ValidatorNode for Client {
         &mut self,
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, Error> {
-        let shard = get_shard(self.num_shards, &proposal.block_and_round.0.chain_id);
+        let shard = get_shard(self.num_shards, &proposal.content.block.chain_id);
         self.send_recv_info_bytes(
             shard,
             serialize_message(&SerializedMessage::BlockProposal(Box::new(proposal))),

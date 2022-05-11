@@ -28,7 +28,7 @@ async fn test_handle_block_proposal_bad_signature() {
     let unknown_key_pair = KeyPair::generate();
     let mut bad_signature_block_proposal = block_proposal.clone();
     bad_signature_block_proposal.signature =
-        Signature::new(&block_proposal.block_and_round, &unknown_key_pair);
+        Signature::new(&block_proposal.content, &unknown_key_pair);
     assert!(state
         .handle_block_proposal(bad_signature_block_proposal)
         .await
@@ -94,8 +94,7 @@ async fn test_handle_block_proposal_unknown_sender() {
     );
     let unknown_key = KeyPair::generate();
 
-    let unknown_sender_block_proposal =
-        BlockProposal::new(block_proposal.block_and_round, &unknown_key);
+    let unknown_sender_block_proposal = BlockProposal::new(block_proposal.content, &unknown_key);
     assert!(state
         .handle_block_proposal(unknown_sender_block_proposal)
         .await
@@ -678,7 +677,13 @@ fn make_transfer_block_proposal(
         previous_block_hash: None,
         height: BlockHeight::new(),
     };
-    BlockProposal::new(BlockAndRound(block, RoundNumber::default()), secret)
+    BlockProposal::new(
+        BlockAndRound {
+            block,
+            round: RoundNumber::default(),
+        },
+        secret,
+    )
 }
 
 fn make_certificate(
@@ -705,8 +710,8 @@ fn make_transfer_certificate(
 ) -> Certificate {
     let block =
         make_transfer_block_proposal(chain_id, key_pair, recipient, amount, incoming_messages)
-            .block_and_round
-            .0;
+            .content
+            .block;
     let value = Value::Confirmed { block };
     make_certificate(committee, state, value)
 }
