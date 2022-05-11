@@ -9,7 +9,6 @@ use crate::{
 };
 use async_trait::async_trait;
 use failure::{bail, ensure};
-use futures::StreamExt;
 use std::{
     collections::{BTreeMap, HashMap},
     time::Duration,
@@ -74,9 +73,7 @@ pub trait ChainClient {
         user_data: UserData,
     ) -> Result<Certificate, failure::Error>;
 
-    /// Compute a safe (i.e. pessimistic) balance by synchronizing our "sent" certificates
-    /// with validators, and otherwise using local data on received transfers (i.e.
-    /// certificates that were locally processed by `receive_from_chain`).
+    /// Attempt to synchronize with validators and re-compute our balance.
     async fn synchronize_balance(&mut self) -> Result<Balance, failure::Error>;
 
     /// Retry the last pending block
@@ -85,9 +82,8 @@ pub trait ChainClient {
     /// Clear the information on any operation that previously failed.
     async fn clear_pending_block(&mut self);
 
-    /// Find the highest balance that is provably backed by at least one honest
-    /// (sufficiently up-to-date) validator. This is a conservative approximation.
-    async fn query_safe_balance(&mut self) -> Result<Balance, Error>;
+    /// Return the current local balance.
+    async fn local_balance(&mut self) -> Result<Balance, failure::Error>;
 }
 
 /// Reference implementation of the `ChainClient` trait using many instances of some
@@ -192,10 +188,6 @@ where
         response.info
     }
 
-    async fn balance(&mut self) -> Balance {
-        self.chain_info().await.balance
-    }
-
     async fn has_multi_owners(&mut self) -> bool {
         let manager = self.chain_info().await.manager;
         matches!(manager, ChainManager::Multi(_))
@@ -270,32 +262,6 @@ where
     A: ValidatorNode + Send + Sync + 'static + Clone,
     S: Storage + Clone + 'static,
 {
-    async fn broadcast_chain_info_query(
-        &mut self,
-        query: ChainInfoQuery,
-    ) -> Vec<(ValidatorName, ChainInfo)> {
-        let infos: futures::stream::FuturesUnordered<_> = self
-            .validator_clients
-            .iter_mut()
-            .map(|(name, client)| {
-                let query = query.clone();
-                async move {
-                    match client.handle_chain_info_query(query).await {
-                        Ok(response) => {
-                            if response.check(*name).is_ok() {
-                                Some((*name, response.info))
-                            } else {
-                                None
-                            }
-                        }
-                        _ => None,
-                    }
-                }
-            })
-            .collect();
-        infos.filter_map(|x| async move { x }).collect().await
-    }
-
     /// Prepare the chain for the next operation.
     async fn prepare_chain(&mut self) -> Result<(), Error> {
         // Verify that our local storage contains enough history compared to the
@@ -498,7 +464,7 @@ where
         let balance = self.synchronize_balance().await?;
         ensure!(
             Balance::from(amount) <= balance,
-            "Blocked amount ({}) is not backed by sufficient funds ({})",
+            "Transferred amount ({}) is not backed by sufficient funds ({})",
             amount,
             balance
         );
@@ -630,24 +596,13 @@ where
     A: ValidatorNode + Send + Sync + Clone + 'static,
     S: Storage + Clone + 'static,
 {
-    async fn query_safe_balance(&mut self) -> Result<Balance, Error> {
-        let committee = self.committee().await?;
-        let query = ChainInfoQuery {
-            chain_id: self.chain_id.clone(),
-            /// This is necessary to make sure that the response is conservative.
-            check_next_block_height: Some(self.next_block_height),
-            query_committee: false,
-            query_sent_certificates_in_range: None,
-            query_received_certificates_excluding_first_nth: None,
-        };
-        let infos = self.broadcast_chain_info_query(query).await;
-        let value = committee.get_validity_lower_bound(
-            infos
-                .into_iter()
-                .map(|(name, info)| (name, info.balance))
-                .collect(),
+    async fn local_balance(&mut self) -> Result<Balance, failure::Error> {
+        let info = self.chain_info().await;
+        ensure!(
+            info.next_block_height == self.next_block_height,
+            "The local node is behind and needs synchronization"
         );
-        Ok(value)
+        Ok(info.balance)
     }
 
     async fn transfer_to_chain(
@@ -671,7 +626,7 @@ where
     async fn synchronize_balance(&mut self) -> Result<Balance, failure::Error> {
         self.find_received_certificates().await?;
         self.prepare_chain().await?;
-        Ok(self.balance().await)
+        self.local_balance().await
     }
 
     async fn retry_pending_block(&mut self) -> Result<Option<Certificate>, failure::Error> {

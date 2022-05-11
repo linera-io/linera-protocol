@@ -19,7 +19,8 @@ mod worker_tests;
 ///   to be communicated to other workers of the same validator.
 #[async_trait]
 pub trait ValidatorWorker {
-    /// Propose a new block.
+    /// Propose a new block. In case of success, the chain info contains a vote on the new
+    /// block.
     async fn handle_block_proposal(
         &mut self,
         proposal: BlockProposal,
@@ -100,7 +101,7 @@ where
         Ok(continuation)
     }
 
-    /// (Trusted) Process a confirmed block issued from a chain.
+    /// (Trusted) Process a confirmed block (aka a commit).
     async fn process_confirmed_block(
         &mut self,
         block: Block,
@@ -232,7 +233,8 @@ where
         let mut chain = self.storage.read_active_chain(&sender).await?;
         // Check authentication of the block.
         proposal.check(&chain.state.manager)?;
-        // Check if the chain ready and if the block is well-formed.
+        // Check if the chain is ready for this new block proposal.
+        // This should always pass for nodes without voting key.
         if chain.state.manager.check_proposed_block(
             chain.block_hash,
             chain.next_block_height,

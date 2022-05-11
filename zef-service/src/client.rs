@@ -4,11 +4,6 @@
 
 #![deny(warnings)]
 
-use zef_base::{base_types::*, committee::Committee, messages::*, serialize::*};
-use zef_core::{client::*, node::ValidatorNode};
-use zef_service::{config::*, network, storage::MixedStorage, transport};
-use zef_storage::{InMemoryStoreClient, Storage};
-
 use bytes::Bytes;
 use futures::stream::StreamExt;
 use log::*;
@@ -18,6 +13,10 @@ use std::{
     time::{Duration, Instant},
 };
 use structopt::StructOpt;
+use zef_base::{base_types::*, committee::Committee, messages::*, serialize::*};
+use zef_core::{client::*, node::ValidatorNode};
+use zef_service::{config::*, network, storage::MixedStorage, transport};
+use zef_storage::{InMemoryStoreClient, Storage};
 
 struct ClientContext {
     committee_config: CommitteeConfig,
@@ -572,11 +571,11 @@ async fn main() {
 
         ClientCommands::QueryBalance { chain_id } => {
             let mut client_state = context.make_chain_client(chain_id);
-            info!("Starting query validators for the chain balance");
+            info!("Starting query for the local balance");
             let time_start = Instant::now();
-            let balance = client_state.query_safe_balance().await.unwrap();
+            let balance = client_state.local_balance().await.unwrap();
             let time_total = time_start.elapsed().as_micros();
-            info!("Balance confirmed after {} us", time_total);
+            info!("Local balance obtained after {} us", time_total);
             println!("{}", balance);
             context.update_chain_from_state(&mut client_state).await;
             context.save_chains();
