@@ -12,18 +12,22 @@ use zef_storage::{InMemoryStoreClient, Storage};
 #[tokio::test]
 async fn test_handle_block_proposal_bad_signature() {
     let sender_key_pair = KeyPair::generate();
-    let recipient = Address::Account(ChainId::debug(2));
+    let recipient = Address::Account(ChainId::root(2));
     let (_, mut state) = init_state_with_chains(vec![
         (
-            ChainId::debug(1),
+            ChainDescription::Root(1),
             sender_key_pair.public(),
             Balance::from(5),
         ),
-        (ChainId::debug(2), PublicKey::debug(2), Balance::from(0)),
+        (
+            ChainDescription::Root(2),
+            PublicKey::debug(2),
+            Balance::from(0),
+        ),
     ])
     .await;
     let block_proposal = make_transfer_block_proposal(
-        ChainId::debug(1),
+        ChainId::root(1),
         &sender_key_pair,
         recipient,
         Amount::from(5),
@@ -39,7 +43,7 @@ async fn test_handle_block_proposal_bad_signature() {
         .is_err());
     assert!(state
         .storage
-        .read_active_chain(&ChainId::debug(1))
+        .read_active_chain(&ChainId::root(1))
         .await
         .unwrap()
         .state
@@ -51,19 +55,23 @@ async fn test_handle_block_proposal_bad_signature() {
 #[tokio::test]
 async fn test_handle_block_proposal_zero_amount() {
     let sender_key_pair = KeyPair::generate();
-    let recipient = Address::Account(ChainId::debug(2));
+    let recipient = Address::Account(ChainId::root(2));
     let (_, mut state) = init_state_with_chains(vec![
         (
-            ChainId::debug(1),
+            ChainDescription::Root(1),
             sender_key_pair.public(),
             Balance::from(5),
         ),
-        (ChainId::debug(2), PublicKey::debug(2), Balance::from(0)),
+        (
+            ChainDescription::Root(2),
+            PublicKey::debug(2),
+            Balance::from(0),
+        ),
     ])
     .await;
     // test block non-positive amount
     let zero_amount_block_proposal = make_transfer_block_proposal(
-        ChainId::debug(1),
+        ChainId::root(1),
         &sender_key_pair,
         recipient,
         Amount::zero(),
@@ -75,7 +83,7 @@ async fn test_handle_block_proposal_zero_amount() {
         .is_err());
     assert!(state
         .storage
-        .read_active_chain(&ChainId::debug(1))
+        .read_active_chain(&ChainId::root(1))
         .await
         .unwrap()
         .state
@@ -87,18 +95,22 @@ async fn test_handle_block_proposal_zero_amount() {
 #[tokio::test]
 async fn test_handle_block_proposal_unknown_sender() {
     let sender_key_pair = KeyPair::generate();
-    let recipient = Address::Account(ChainId::debug(2));
+    let recipient = Address::Account(ChainId::root(2));
     let (_, mut state) = init_state_with_chains(vec![
         (
-            ChainId::debug(1),
+            ChainDescription::Root(1),
             sender_key_pair.public(),
             Balance::from(5),
         ),
-        (ChainId::debug(2), PublicKey::debug(2), Balance::from(0)),
+        (
+            ChainDescription::Root(2),
+            PublicKey::debug(2),
+            Balance::from(0),
+        ),
     ])
     .await;
     let block_proposal = make_transfer_block_proposal(
-        ChainId::debug(1),
+        ChainId::root(1),
         &sender_key_pair,
         recipient,
         Amount::from(5),
@@ -113,7 +125,7 @@ async fn test_handle_block_proposal_unknown_sender() {
         .is_err());
     assert!(state
         .storage
-        .read_active_chain(&ChainId::debug(1))
+        .read_active_chain(&ChainId::root(1))
         .await
         .unwrap()
         .state
@@ -125,18 +137,22 @@ async fn test_handle_block_proposal_unknown_sender() {
 #[tokio::test]
 async fn test_handle_block_proposal_bad_block_height() {
     let sender_key_pair = KeyPair::generate();
-    let recipient = Address::Account(ChainId::debug(2));
+    let recipient = Address::Account(ChainId::root(2));
     let (_, mut state) = init_state_with_chains(vec![
         (
-            ChainId::debug(1),
+            ChainDescription::Root(1),
             sender_key_pair.public(),
             Balance::from(5),
         ),
-        (ChainId::debug(2), PublicKey::debug(2), Balance::from(0)),
+        (
+            ChainDescription::Root(2),
+            PublicKey::debug(2),
+            Balance::from(0),
+        ),
     ])
     .await;
     let block_proposal = make_transfer_block_proposal(
-        ChainId::debug(1),
+        ChainId::root(1),
         &sender_key_pair,
         recipient,
         Amount::from(5),
@@ -145,7 +161,7 @@ async fn test_handle_block_proposal_bad_block_height() {
 
     let mut sender_chain = state
         .storage
-        .read_active_chain(&ChainId::debug(1))
+        .read_active_chain(&ChainId::root(1))
         .await
         .unwrap();
     sender_chain.next_block_height.try_add_assign_one().unwrap();
@@ -153,7 +169,7 @@ async fn test_handle_block_proposal_bad_block_height() {
     assert!(state.handle_block_proposal(block_proposal).await.is_err());
     assert!(state
         .storage
-        .read_active_chain(&ChainId::debug(1))
+        .read_active_chain(&ChainId::root(1))
         .await
         .unwrap()
         .state
@@ -165,18 +181,22 @@ async fn test_handle_block_proposal_bad_block_height() {
 #[tokio::test]
 async fn test_handle_block_proposal_exceed_balance() {
     let sender_key_pair = KeyPair::generate();
-    let recipient = Address::Account(ChainId::debug(2));
+    let recipient = Address::Account(ChainId::root(2));
     let (_, mut state) = init_state_with_chains(vec![
         (
-            ChainId::debug(1),
+            ChainDescription::Root(1),
             sender_key_pair.public(),
             Balance::from(5),
         ),
-        (ChainId::debug(2), PublicKey::debug(2), Balance::from(0)),
+        (
+            ChainDescription::Root(2),
+            PublicKey::debug(2),
+            Balance::from(0),
+        ),
     ])
     .await;
     let block_proposal = make_transfer_block_proposal(
-        ChainId::debug(1),
+        ChainId::root(1),
         &sender_key_pair,
         recipient,
         Amount::from(1000),
@@ -185,7 +205,7 @@ async fn test_handle_block_proposal_exceed_balance() {
     assert!(state.handle_block_proposal(block_proposal).await.is_err());
     assert!(state
         .storage
-        .read_active_chain(&ChainId::debug(1))
+        .read_active_chain(&ChainId::root(1))
         .await
         .unwrap()
         .state
@@ -197,15 +217,15 @@ async fn test_handle_block_proposal_exceed_balance() {
 #[tokio::test]
 async fn test_handle_block_proposal() {
     let sender_key_pair = KeyPair::generate();
-    let recipient = Address::Account(ChainId::debug(2));
+    let recipient = Address::Account(ChainId::root(2));
     let (_, mut state) = init_state_with_chains(vec![(
-        ChainId::debug(1),
+        ChainDescription::Root(1),
         sender_key_pair.public(),
         Balance::from(5),
     )])
     .await;
     let block_proposal = make_transfer_block_proposal(
-        ChainId::debug(1),
+        ChainId::root(1),
         &sender_key_pair,
         recipient,
         Amount::from(5),
@@ -218,7 +238,7 @@ async fn test_handle_block_proposal() {
         .unwrap();
     let pending = state
         .storage
-        .read_active_chain(&ChainId::debug(1))
+        .read_active_chain(&ChainId::root(1))
         .await
         .unwrap()
         .state
@@ -235,18 +255,22 @@ async fn test_handle_block_proposal() {
 #[tokio::test]
 async fn test_handle_block_proposal_replay() {
     let sender_key_pair = KeyPair::generate();
-    let recipient = Address::Account(ChainId::debug(2));
+    let recipient = Address::Account(ChainId::root(2));
     let (_, mut state) = init_state_with_chains(vec![
         (
-            ChainId::debug(1),
+            ChainDescription::Root(1),
             sender_key_pair.public(),
             Balance::from(5),
         ),
-        (ChainId::debug(2), PublicKey::debug(2), Balance::from(0)),
+        (
+            ChainDescription::Root(2),
+            PublicKey::debug(2),
+            Balance::from(0),
+        ),
     ])
     .await;
     let block_proposal = make_transfer_block_proposal(
-        ChainId::debug(1),
+        ChainId::root(1),
         &sender_key_pair,
         recipient,
         Amount::from(5),
@@ -273,15 +297,15 @@ async fn test_handle_block_proposal_replay() {
 async fn test_handle_certificate_unknown_sender() {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut state) = init_state_with_chains(vec![(
-        ChainId::debug(2),
+        ChainDescription::Root(2),
         PublicKey::debug(2),
         Balance::from(0),
     )])
     .await;
     let certificate = make_transfer_certificate(
-        ChainId::debug(1),
+        ChainId::root(1),
         &sender_key_pair,
-        Address::Account(ChainId::debug(2)),
+        Address::Account(ChainId::root(2)),
         Amount::from(5),
         Vec::new(),
         &committee,
@@ -295,17 +319,21 @@ async fn test_handle_certificate_bad_block_height() {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut state) = init_state_with_chains(vec![
         (
-            ChainId::debug(1),
+            ChainDescription::Root(1),
             sender_key_pair.public(),
             Balance::from(5),
         ),
-        (ChainId::debug(2), PublicKey::debug(2), Balance::from(0)),
+        (
+            ChainDescription::Root(2),
+            PublicKey::debug(2),
+            Balance::from(0),
+        ),
     ])
     .await;
     let certificate = make_transfer_certificate(
-        ChainId::debug(1),
+        ChainId::root(1),
         &sender_key_pair,
-        Address::Account(ChainId::debug(2)),
+        Address::Account(ChainId::root(2)),
         Amount::from(5),
         Vec::new(),
         &committee,
@@ -324,21 +352,29 @@ async fn test_handle_certificate_bad_block_height() {
 async fn test_handle_certificate_with_early_incoming_message() {
     let key_pair = KeyPair::generate();
     let (committee, mut state) = init_state_with_chains(vec![
-        (ChainId::debug(1), key_pair.public(), Balance::from(5)),
-        (ChainId::debug(2), PublicKey::debug(2), Balance::from(0)),
+        (
+            ChainDescription::Root(1),
+            key_pair.public(),
+            Balance::from(5),
+        ),
+        (
+            ChainDescription::Root(2),
+            PublicKey::debug(2),
+            Balance::from(0),
+        ),
     ])
     .await;
 
     let certificate = make_transfer_certificate(
-        ChainId::debug(1),
+        ChainId::root(1),
         &key_pair,
-        Address::Account(ChainId::debug(2)),
+        Address::Account(ChainId::root(2)),
         Amount::from(1000),
         vec![Message {
-            sender_id: ChainId::debug(3),
+            sender_id: ChainId::root(3),
             height: BlockHeight::from(0),
             operation: Operation::Transfer {
-                recipient: Address::Account(ChainId::debug(1)),
+                recipient: Address::Account(ChainId::root(1)),
                 amount: Amount::from(995),
                 user_data: UserData::default(),
             },
@@ -352,7 +388,7 @@ async fn test_handle_certificate_with_early_incoming_message() {
         .unwrap();
     let chain = state
         .storage
-        .read_active_chain(&ChainId::debug(1))
+        .read_active_chain(&ChainId::root(1))
         .await
         .unwrap();
     assert_eq!(Balance::from(0), chain.state.balance);
@@ -361,25 +397,25 @@ async fn test_handle_certificate_with_early_incoming_message() {
         BlockHeight::from(0),
         chain
             .inboxes
-            .get(&ChainId::debug(3))
+            .get(&ChainId::root(3))
             .unwrap()
             .next_height_to_receive
     );
     assert!(chain
         .inboxes
-        .get(&ChainId::debug(3))
+        .get(&ChainId::root(3))
         .unwrap()
         .received
         .is_empty(),);
     assert!(matches!(
-        chain.inboxes.get(&ChainId::debug(3)).unwrap().expected.front().unwrap(),
+        chain.inboxes.get(&ChainId::root(3)).unwrap().expected.front().unwrap(),
         (height, Operation::Transfer { amount, .. }) if *height == BlockHeight::from(0) && *amount == Amount::from(995),
     ));
     assert_eq!(chain.confirmed_log.len(), 1);
     assert_eq!(Some(certificate.hash), chain.block_hash);
     state
         .storage
-        .read_active_chain(&ChainId::debug(2))
+        .read_active_chain(&ChainId::root(2))
         .await
         .unwrap();
 }
@@ -389,18 +425,22 @@ async fn test_handle_certificate_receiver_balance_overflow() {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut state) = init_state_with_chains(vec![
         (
-            ChainId::debug(1),
+            ChainDescription::Root(1),
             sender_key_pair.public(),
             Balance::from(1),
         ),
-        (ChainId::debug(2), PublicKey::debug(2), Balance::max()),
+        (
+            ChainDescription::Root(2),
+            PublicKey::debug(2),
+            Balance::max(),
+        ),
     ])
     .await;
 
     let certificate = make_transfer_certificate(
-        ChainId::debug(1),
+        ChainId::root(1),
         &sender_key_pair,
-        Address::Account(ChainId::debug(2)),
+        Address::Account(ChainId::root(2)),
         Amount::from(1),
         Vec::new(),
         &committee,
@@ -412,7 +452,7 @@ async fn test_handle_certificate_receiver_balance_overflow() {
         .unwrap();
     let new_sender_chain = state
         .storage
-        .read_active_chain(&ChainId::debug(1))
+        .read_active_chain(&ChainId::root(1))
         .await
         .unwrap();
     assert_eq!(Balance::from(0), new_sender_chain.state.balance);
@@ -421,7 +461,7 @@ async fn test_handle_certificate_receiver_balance_overflow() {
     assert_eq!(Some(certificate.hash), new_sender_chain.block_hash);
     let new_recipient_chain = state
         .storage
-        .read_active_chain(&ChainId::debug(2))
+        .read_active_chain(&ChainId::root(2))
         .await
         .unwrap();
     assert_eq!(Balance::max(), new_recipient_chain.state.balance);
@@ -432,12 +472,12 @@ async fn test_handle_certificate_receiver_equal_sender() {
     let key_pair = KeyPair::generate();
     let name = key_pair.public();
     let (committee, mut state) =
-        init_state_with_chain(ChainId::debug(1), name, Balance::from(1)).await;
+        init_state_with_chain(ChainDescription::Root(1), name, Balance::from(1)).await;
 
     let certificate = make_transfer_certificate(
-        ChainId::debug(1),
+        ChainId::root(1),
         &key_pair,
-        Address::Account(ChainId::debug(1)),
+        Address::Account(ChainId::root(1)),
         Amount::from(1),
         Vec::new(),
         &committee,
@@ -449,7 +489,7 @@ async fn test_handle_certificate_receiver_equal_sender() {
         .unwrap();
     let chain = state
         .storage
-        .read_active_chain(&ChainId::debug(1))
+        .read_active_chain(&ChainId::root(1))
         .await
         .unwrap();
     assert_eq!(Balance::from(0), chain.state.balance);
@@ -457,12 +497,12 @@ async fn test_handle_certificate_receiver_equal_sender() {
         BlockHeight::from(1),
         chain
             .inboxes
-            .get(&ChainId::debug(1))
+            .get(&ChainId::root(1))
             .unwrap()
             .next_height_to_receive
     );
     assert!(matches!(
-        chain.inboxes.get(&ChainId::debug(1)).unwrap().received.front().unwrap(),
+        chain.inboxes.get(&ChainId::root(1)).unwrap().received.front().unwrap(),
         (height, Operation::Transfer { amount, .. }) if *height == BlockHeight::from(0) && *amount == Amount::from(1),
     ));
     assert_eq!(BlockHeight::from(1), chain.next_block_height);
@@ -474,15 +514,15 @@ async fn test_handle_certificate_receiver_equal_sender() {
 async fn test_handle_cross_chain_request() {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut state) = init_state_with_chains(vec![(
-        ChainId::debug(2),
+        ChainDescription::Root(2),
         PublicKey::debug(2),
         Balance::from(1),
     )])
     .await;
     let certificate = make_transfer_certificate(
-        ChainId::debug(1),
+        ChainId::root(1),
         &sender_key_pair,
-        Address::Account(ChainId::debug(2)),
+        Address::Account(ChainId::root(2)),
         Amount::from(10),
         Vec::new(),
         &committee,
@@ -490,15 +530,15 @@ async fn test_handle_cross_chain_request() {
     );
     state
         .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
-            sender: ChainId::debug(1),
-            recipient: ChainId::debug(2),
+            sender: ChainId::root(1),
+            recipient: ChainId::root(2),
             certificates: vec![certificate],
         })
         .await
         .unwrap();
     let chain = state
         .storage
-        .read_active_chain(&ChainId::debug(2))
+        .read_active_chain(&ChainId::root(2))
         .await
         .unwrap();
     assert_eq!(Balance::from(1), chain.state.balance);
@@ -507,12 +547,12 @@ async fn test_handle_cross_chain_request() {
         BlockHeight::from(1),
         chain
             .inboxes
-            .get(&ChainId::debug(1))
+            .get(&ChainId::root(1))
             .unwrap()
             .next_height_to_receive
     );
     assert!(matches!(
-        chain.inboxes.get(&ChainId::debug(1)).unwrap().received.front().unwrap(),
+        chain.inboxes.get(&ChainId::root(1)).unwrap().received.front().unwrap(),
         (height, Operation::Transfer { amount, .. }) if *height == BlockHeight::from(0) && *amount == Amount::from(10),
     ));
     assert_eq!(chain.confirmed_log.len(), 0);
@@ -525,9 +565,9 @@ async fn test_handle_cross_chain_request_no_recipient_chain() {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut state) = init_state(/* allow_inactive_chains */ false);
     let certificate = make_transfer_certificate(
-        ChainId::debug(1),
+        ChainId::root(1),
         &sender_key_pair,
-        Address::Account(ChainId::debug(2)),
+        Address::Account(ChainId::root(2)),
         Amount::from(10),
         Vec::new(),
         &committee,
@@ -535,8 +575,8 @@ async fn test_handle_cross_chain_request_no_recipient_chain() {
     );
     assert!(state
         .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
-            sender: ChainId::debug(1),
-            recipient: ChainId::debug(2),
+            sender: ChainId::root(1),
+            recipient: ChainId::root(2),
             certificates: vec![certificate],
         })
         .await
@@ -544,7 +584,7 @@ async fn test_handle_cross_chain_request_no_recipient_chain() {
         .is_empty());
     let chain = state
         .storage
-        .read_chain_or_default(&ChainId::debug(2))
+        .read_chain_or_default(&ChainId::root(2))
         .await
         .unwrap();
     // The target chain did not receive the message
@@ -556,9 +596,9 @@ async fn test_handle_cross_chain_request_no_recipient_chain_with_inactive_chains
     let sender_key_pair = KeyPair::generate();
     let (committee, mut state) = init_state(/* allow_inactive_chains */ true);
     let certificate = make_transfer_certificate(
-        ChainId::debug(1),
+        ChainId::root(1),
         &sender_key_pair,
-        Address::Account(ChainId::debug(2)),
+        Address::Account(ChainId::root(2)),
         Amount::from(10),
         Vec::new(),
         &committee,
@@ -568,8 +608,8 @@ async fn test_handle_cross_chain_request_no_recipient_chain_with_inactive_chains
     assert!(matches!(
         state
             .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
-                sender: ChainId::debug(1),
-                recipient: ChainId::debug(2),
+                sender: ChainId::root(1),
+                recipient: ChainId::root(2),
                 certificates: vec![certificate],
             })
             .await
@@ -579,7 +619,7 @@ async fn test_handle_cross_chain_request_no_recipient_chain_with_inactive_chains
     ));
     let chain = state
         .storage
-        .read_chain_or_default(&ChainId::debug(2))
+        .read_chain_or_default(&ChainId::root(2))
         .await
         .unwrap();
     assert!(!chain.inboxes.is_empty());
@@ -591,21 +631,21 @@ async fn test_handle_certificate_to_active_recipient() {
     let recipient_key_pair = KeyPair::generate();
     let (committee, mut state) = init_state_with_chains(vec![
         (
-            ChainId::debug(1),
+            ChainDescription::Root(1),
             sender_key_pair.public(),
             Balance::from(5),
         ),
         (
-            ChainId::debug(2),
+            ChainDescription::Root(2),
             recipient_key_pair.public(),
             Balance::from(0),
         ),
     ])
     .await;
     let certificate = make_transfer_certificate(
-        ChainId::debug(1),
+        ChainId::root(1),
         &sender_key_pair,
-        Address::Account(ChainId::debug(2)),
+        Address::Account(ChainId::root(2)),
         Amount::from(5),
         Vec::new(),
         &committee,
@@ -617,7 +657,7 @@ async fn test_handle_certificate_to_active_recipient() {
         .await
         .unwrap()
         .info;
-    assert_eq!(ChainId::debug(1), info.chain_id);
+    assert_eq!(ChainId::root(1), info.chain_id);
     assert_eq!(Balance::from(0), info.balance);
     assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert_eq!(Some(certificate.hash), info.block_hash);
@@ -625,15 +665,15 @@ async fn test_handle_certificate_to_active_recipient() {
 
     // Try to use the money. This requires selecting the incoming message in a next block.
     let certificate = make_transfer_certificate(
-        ChainId::debug(2),
+        ChainId::root(2),
         &recipient_key_pair,
-        Address::Account(ChainId::debug(3)),
+        Address::Account(ChainId::root(3)),
         Amount::from(1),
         vec![Message {
-            sender_id: ChainId::debug(1),
+            sender_id: ChainId::root(1),
             height: BlockHeight::from(0),
             operation: Operation::Transfer {
-                recipient: Address::Account(ChainId::debug(2)),
+                recipient: Address::Account(ChainId::root(2)),
                 amount: Amount::from(5),
                 user_data: UserData::default(),
             },
@@ -648,7 +688,7 @@ async fn test_handle_certificate_to_active_recipient() {
 
     let recipient_chain = state
         .storage
-        .read_active_chain(&ChainId::debug(2))
+        .read_active_chain(&ChainId::root(2))
         .await
         .unwrap();
     assert_eq!(recipient_chain.state.balance, Balance::from(4));
@@ -661,7 +701,7 @@ async fn test_handle_certificate_to_active_recipient() {
     assert_eq!(recipient_chain.received_log.len(), 1);
 
     let info_query = ChainInfoQuery {
-        chain_id: ChainId::debug(2),
+        chain_id: ChainId::root(2),
         check_next_block_height: None,
         query_committee: false,
         query_pending_messages: false,
@@ -681,15 +721,15 @@ async fn test_handle_certificate_to_active_recipient() {
 async fn test_handle_certificate_to_inactive_recipient() {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut state) = init_state_with_chains(vec![(
-        ChainId::debug(1),
+        ChainDescription::Root(1),
         sender_key_pair.public(),
         Balance::from(5),
     )])
     .await;
     let certificate = make_transfer_certificate(
-        ChainId::debug(1),
+        ChainId::root(1),
         &sender_key_pair,
-        Address::Account(ChainId::debug(2)), // the recipient chain does not exist
+        Address::Account(ChainId::root(2)), // the recipient chain does not exist
         Amount::from(5),
         Vec::new(),
         &committee,
@@ -701,7 +741,7 @@ async fn test_handle_certificate_to_inactive_recipient() {
         .await
         .unwrap()
         .info;
-    assert_eq!(ChainId::debug(1), info.chain_id);
+    assert_eq!(ChainId::root(1), info.chain_id);
     assert_eq!(Balance::from(0), info.balance);
     assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert_eq!(Some(certificate.hash), info.block_hash);
@@ -710,16 +750,20 @@ async fn test_handle_certificate_to_inactive_recipient() {
 
 #[tokio::test]
 async fn test_read_chain_state() {
-    let sender = ChainId::debug(1);
+    let sender = ChainDescription::Root(1);
     let (_, mut state) =
         init_state_with_chain(sender.clone(), PublicKey::debug(1), Balance::from(5)).await;
-    state.storage.read_active_chain(&sender).await.unwrap();
+    state
+        .storage
+        .read_active_chain(&sender.into())
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
 async fn test_read_chain_state_unknown_chain() {
-    let sender = ChainId::debug(1);
-    let unknown_chain_id = ChainId::debug(99);
+    let sender = ChainDescription::Root(1);
+    let unknown_chain_id = ChainId::root(99);
     let (committee, mut state) =
         init_state_with_chain(sender, PublicKey::debug(1), Balance::from(5)).await;
     assert!(state
@@ -732,6 +776,7 @@ async fn test_read_chain_state_unknown_chain() {
         .read_chain_or_default(&unknown_chain_id)
         .await
         .unwrap();
+    chain.description = Some(ChainDescription::Root(99));
     chain.state.committee = Some(committee);
     chain.state.manager = ChainManager::single(PublicKey::debug(4));
     state.storage.write_chain(chain).await.unwrap();
@@ -754,23 +799,23 @@ fn init_state(allow_inactive_chains: bool) -> (Committee, WorkerState<InMemorySt
     (committee, state)
 }
 
-async fn init_state_with_chains<I: IntoIterator<Item = (ChainId, Owner, Balance)>>(
+async fn init_state_with_chains<I: IntoIterator<Item = (ChainDescription, Owner, Balance)>>(
     balances: I,
 ) -> (Committee, WorkerState<InMemoryStoreClient>) {
     let (committee, mut state) = init_state(false);
-    for (id, owner, balance) in balances {
-        let chain = ChainState::create(committee.clone(), id, owner, balance);
+    for (description, owner, balance) in balances {
+        let chain = ChainState::create(committee.clone(), description, owner, balance);
         state.storage.write_chain(chain).await.unwrap();
     }
     (committee, state)
 }
 
 async fn init_state_with_chain(
-    id: ChainId,
+    description: ChainDescription,
     owner: Owner,
     balance: Balance,
 ) -> (Committee, WorkerState<InMemoryStoreClient>) {
-    init_state_with_chains(std::iter::once((id, owner, balance))).await
+    init_state_with_chains(std::iter::once((description, owner, balance))).await
 }
 
 fn make_transfer_block_proposal(

@@ -762,7 +762,10 @@ where
 
     async fn open_chain(&mut self, owner: Owner) -> Result<Certificate, failure::Error> {
         self.prepare_chain().await?;
-        let id = self.chain_id.make_child(self.next_block_height);
+        let id = ChainId::child(OperationId {
+            chain_id: self.chain_id.clone(),
+            height: self.next_block_height,
+        });
         let committee = self.committee().await?;
         let block = Block {
             chain_id: self.chain_id.clone(),

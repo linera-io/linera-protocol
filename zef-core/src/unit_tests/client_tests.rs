@@ -128,15 +128,15 @@ impl TestBuilder {
 
     async fn add_initial_chain(
         &mut self,
-        chain_id: ChainId,
+        description: ChainDescription,
         balance: Balance,
     ) -> ChainClientState<LocalValidatorClient, InMemoryStoreClient> {
         let key_pair = KeyPair::generate();
         let owner = key_pair.public();
-        let chain = ChainState::create(self.committee.clone(), chain_id.clone(), owner, balance);
+        let chain = ChainState::create(self.committee.clone(), description.clone(), owner, balance);
         let chain_bad = ChainState::create(
             self.committee.clone(),
-            chain_id.clone(),
+            description.clone(),
             owner,
             Balance::from(0),
         );
@@ -152,7 +152,7 @@ impl TestBuilder {
         for store in self.chain_client_stores.iter_mut() {
             store.write_chain(chain.clone()).await.unwrap();
         }
-        self.make_client(chain_id, key_pair, None, BlockHeight::from(0))
+        self.make_client(description.into(), key_pair, None, BlockHeight::from(0))
             .await
     }
 
@@ -185,7 +185,9 @@ impl TestBuilder {
         balance: Balance,
     ) -> ChainClientState<LocalValidatorClient, InMemoryStoreClient> {
         let mut builder = TestBuilder::new(count, with_faulty_validators);
-        builder.add_initial_chain(ChainId::debug(1), balance).await
+        builder
+            .add_initial_chain(ChainDescription::Root(1), balance)
+            .await
     }
 
     /// Try to find a (confirmation) certificate for the given chain_id and block height.
@@ -236,12 +238,12 @@ impl TestBuilder {
 async fn test_initiating_valid_transfer() {
     let mut builder = TestBuilder::new(4, 1);
     let mut sender = builder
-        .add_initial_chain(ChainId::debug(1), Balance::from(4))
+        .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await;
     let certificate = sender
         .transfer_to_chain(
             Amount::from(3),
-            ChainId::debug(2),
+            ChainId::root(2),
             UserData(Some(*b"hello...........hello...........")),
         )
         .await
@@ -267,7 +269,7 @@ async fn test_initiating_valid_transfer() {
 async fn test_rotate_key_pair() {
     let mut builder = TestBuilder::new(4, 1);
     let mut sender = builder
-        .add_initial_chain(ChainId::debug(1), Balance::from(4))
+        .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await;
     let new_key_pair = KeyPair::generate();
     let new_pubk = new_key_pair.public();
@@ -294,7 +296,7 @@ async fn test_rotate_key_pair() {
     );
     // Can still use the chain.
     sender
-        .transfer_to_chain(Amount::from(3), ChainId::debug(2), UserData::default())
+        .transfer_to_chain(Amount::from(3), ChainId::root(2), UserData::default())
         .await
         .unwrap();
 }
@@ -303,7 +305,7 @@ async fn test_rotate_key_pair() {
 async fn test_transfer_ownership() {
     let mut builder = TestBuilder::new(4, 1);
     let mut sender = builder
-        .add_initial_chain(ChainId::debug(1), Balance::from(4))
+        .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await;
 
     let new_key_pair = KeyPair::generate();
@@ -331,7 +333,7 @@ async fn test_transfer_ownership() {
     );
     // Cannot use the chain any more.
     assert!(sender
-        .transfer_to_chain(Amount::from(3), ChainId::debug(2), UserData::default())
+        .transfer_to_chain(Amount::from(3), ChainId::root(2), UserData::default())
         .await
         .is_err());
 }
@@ -340,7 +342,7 @@ async fn test_transfer_ownership() {
 async fn test_share_ownership() {
     let mut builder = TestBuilder::new(4, 1);
     let mut sender = builder
-        .add_initial_chain(ChainId::debug(1), Balance::from(4))
+        .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await;
     let new_key_pair = KeyPair::generate();
     let new_pubk = new_key_pair.public();
@@ -367,7 +369,7 @@ async fn test_share_ownership() {
     );
     // Can still use the chain with the old client.
     sender
-        .transfer_to_chain(Amount::from(3), ChainId::debug(2), UserData::default())
+        .transfer_to_chain(Amount::from(3), ChainId::root(2), UserData::default())
         .await
         .unwrap();
     assert_eq!(sender.next_block_height, BlockHeight::from(2));
@@ -389,7 +391,7 @@ async fn test_share_ownership() {
     );
     assert_eq!(client.local_balance().await.unwrap(), Balance::from(1));
     client
-        .transfer_to_chain(Amount::from(1), ChainId::debug(3), UserData::default())
+        .transfer_to_chain(Amount::from(1), ChainId::root(3), UserData::default())
         .await
         .unwrap();
 }
@@ -398,11 +400,14 @@ async fn test_share_ownership() {
 async fn test_open_chain_then_close_it() {
     let mut builder = TestBuilder::new(4, 1);
     let mut sender = builder
-        .add_initial_chain(ChainId::debug(1), Balance::from(4))
+        .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await;
     let new_key_pair = KeyPair::generate();
     let new_pubk = new_key_pair.public();
-    let new_id = ChainId::new(vec![1, 0].into_iter().map(BlockHeight::from).collect());
+    let new_id = ChainId::child(OperationId {
+        chain_id: ChainId::root(1),
+        height: BlockHeight::from(0),
+    });
     // Open the new chain.
     let certificate = sender.open_chain(new_pubk).await.unwrap();
     assert_eq!(sender.next_block_height, BlockHeight::from(1));
@@ -425,11 +430,14 @@ async fn test_open_chain_then_close_it() {
 async fn test_transfer_then_open_chain() {
     let mut builder = TestBuilder::new(4, 1);
     let mut sender = builder
-        .add_initial_chain(ChainId::debug(1), Balance::from(4))
+        .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await;
     let new_key_pair = KeyPair::generate();
     let new_pubk = new_key_pair.public();
-    let new_id = ChainId::new(vec![1, 1].into_iter().map(BlockHeight::from).collect());
+    let new_id = ChainId::child(OperationId {
+        chain_id: ChainId::root(1),
+        height: BlockHeight::from(1),
+    });
     // Transfer before creating the chain.
     sender
         .transfer_to_chain(Amount::from(3), new_id.clone(), UserData::default())
@@ -465,7 +473,7 @@ async fn test_transfer_then_open_chain() {
     client.receive_certificate(certificate).await.unwrap();
     assert_eq!(client.local_balance().await.unwrap(), Balance::from(3));
     client
-        .transfer_to_chain(Amount::from(3), ChainId::debug(3), UserData::default())
+        .transfer_to_chain(Amount::from(3), ChainId::root(3), UserData::default())
         .await
         .unwrap();
 }
@@ -474,11 +482,14 @@ async fn test_transfer_then_open_chain() {
 async fn test_open_chain_then_transfer() {
     let mut builder = TestBuilder::new(4, 1);
     let mut sender = builder
-        .add_initial_chain(ChainId::debug(1), Balance::from(4))
+        .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await;
     let new_key_pair = KeyPair::generate();
     let new_pubk = new_key_pair.public();
-    let new_id = ChainId::new(vec![1, 0].into_iter().map(BlockHeight::from).collect());
+    let new_id = ChainId::child(OperationId {
+        chain_id: ChainId::root(1),
+        height: BlockHeight::from(0),
+    });
     // Open the new chain.
     let creation_certificate = sender.open_chain(new_pubk).await.unwrap();
     // Transfer after creating the chain.
@@ -505,7 +516,7 @@ async fn test_open_chain_then_transfer() {
         .unwrap();
     assert_eq!(client.local_balance().await.unwrap(), Balance::from(3));
     client
-        .transfer_to_chain(Amount::from(3), ChainId::debug(3), UserData::default())
+        .transfer_to_chain(Amount::from(3), ChainId::root(3), UserData::default())
         .await
         .unwrap();
     assert_eq!(client.local_balance().await.unwrap(), Balance::from(0));
@@ -515,7 +526,7 @@ async fn test_open_chain_then_transfer() {
 async fn test_close_chain() {
     let mut builder = TestBuilder::new(4, 1);
     let mut sender = builder
-        .add_initial_chain(ChainId::debug(1), Balance::from(4))
+        .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await;
     let certificate = sender.close_chain().await.unwrap();
     assert!(matches!(
@@ -544,7 +555,7 @@ async fn test_close_chain() {
     );
     // Cannot use the chain any more.
     assert!(sender
-        .transfer_to_chain(Amount::from(3), ChainId::debug(2), UserData::default())
+        .transfer_to_chain(Amount::from(3), ChainId::root(2), UserData::default())
         .await
         .is_err());
 }
@@ -555,7 +566,7 @@ async fn test_initiating_valid_transfer_too_many_faults() {
     assert!(sender
         .transfer_to_chain_unsafe_unconfirmed(
             Amount::from(3),
-            ChainId::debug(2),
+            ChainId::root(2),
             UserData(Some(*b"hello...........hello...........")),
         )
         .await
@@ -569,10 +580,10 @@ async fn test_initiating_valid_transfer_too_many_faults() {
 async fn test_bidirectional_transfer() {
     let mut builder = TestBuilder::new(4, 1);
     let mut client1 = builder
-        .add_initial_chain(ChainId::debug(1), Balance::from(3))
+        .add_initial_chain(ChainDescription::Root(1), Balance::from(3))
         .await;
     let mut client2 = builder
-        .add_initial_chain(ChainId::debug(2), Balance::from(0))
+        .add_initial_chain(ChainDescription::Root(2), Balance::from(0))
         .await;
     assert_eq!(client1.local_balance().await.unwrap(), Balance::from(3));
 
@@ -633,10 +644,10 @@ async fn test_bidirectional_transfer() {
 async fn test_receiving_unconfirmed_transfer() {
     let mut builder = TestBuilder::new(4, 1);
     let mut client1 = builder
-        .add_initial_chain(ChainId::debug(1), Balance::from(3))
+        .add_initial_chain(ChainDescription::Root(1), Balance::from(3))
         .await;
     let mut client2 = builder
-        .add_initial_chain(ChainId::debug(2), Balance::from(0))
+        .add_initial_chain(ChainDescription::Root(2), Balance::from(0))
         .await;
     let certificate = client1
         .transfer_to_chain_unsafe_unconfirmed(
@@ -659,13 +670,13 @@ async fn test_receiving_unconfirmed_transfer() {
 async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
     let mut builder = TestBuilder::new(4, 1);
     let mut client1 = builder
-        .add_initial_chain(ChainId::debug(1), Balance::from(3))
+        .add_initial_chain(ChainDescription::Root(1), Balance::from(3))
         .await;
     let mut client2 = builder
-        .add_initial_chain(ChainId::debug(2), Balance::from(0))
+        .add_initial_chain(ChainDescription::Root(2), Balance::from(0))
         .await;
     let mut client3 = builder
-        .add_initial_chain(ChainId::debug(3), Balance::from(0))
+        .add_initial_chain(ChainDescription::Root(3), Balance::from(0))
         .await;
 
     // Transferring funds from client1 to client2.

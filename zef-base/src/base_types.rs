@@ -28,7 +28,7 @@ pub struct Amount(u64);
 )]
 pub struct Balance(u128);
 
-/// A block height to identify commands issued by a chain.
+/// A block height to identify blocks in a chain.
 #[derive(
     Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
 )]
@@ -51,12 +51,30 @@ pub struct KeyPair(dalek::Keypair);
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash)]
 pub struct PublicKey(pub [u8; dalek::PUBLIC_KEY_LENGTH]);
 
-/// The unique identifier (UID) of a chain.
+/// The index of an operation in a chain.
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Debug, Serialize, Deserialize)]
+pub struct OperationId {
+    pub chain_id: ChainId,
+    pub height: BlockHeight,
+}
+
+/// How to create a chain.
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Debug, Serialize, Deserialize)]
+pub enum ChainDescription {
+    /// The chain was created by the genesis configuration.
+    Root(usize),
+    /// The chain was created by an operation from another chain.
+    Child(OperationId),
+}
+
+impl BcsSignable for ChainDescription {}
+
+/// The unique identifier (UID) of a chain. This is the hash value of a ChainDescription.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Serialize, Deserialize)]
-pub struct ChainId(pub Vec<BlockHeight>);
+pub struct ChainId(pub HashValue);
 
 /// A Sha512 value.
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
 pub struct HashValue(generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Digest>::OutputSize>);
 
 /// Alias for the identity of a validator.
@@ -133,6 +151,40 @@ impl<'de> Deserialize<'de> for PublicKey {
     }
 }
 
+impl Serialize for HashValue {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        if serializer.is_human_readable() {
+            serializer.serialize_str(&self.to_string())
+        } else {
+            serializer.serialize_newtype_struct("HashValue", &self.0)
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for HashValue {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            let s = String::deserialize(deserializer)?;
+            let value =
+                Self::from_str(&s).map_err(|err| serde::de::Error::custom(err.to_string()))?;
+            Ok(value)
+        } else {
+            #[derive(Deserialize)]
+            #[serde(rename = "HashValue")]
+            struct Foo(generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Digest>::OutputSize>);
+
+            let value = Foo::deserialize(deserializer)?;
+            Ok(Self(value.0))
+        }
+    }
+}
+
 impl Serialize for KeyPair {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -200,6 +252,12 @@ impl std::fmt::Display for PublicKey {
     }
 }
 
+impl std::fmt::Display for HashValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", hex::encode(&self.0[..]))
+    }
+}
+
 impl FromStr for PublicKey {
     type Err = failure::Error;
 
@@ -214,9 +272,25 @@ impl FromStr for PublicKey {
     }
 }
 
+impl FromStr for HashValue {
+    type Err = failure::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let value = hex::decode(s)?;
+        if value.len() != <sha2::Sha512 as sha2::Digest>::output_size() {
+            failure::bail!("Invalid length for hex-encoded hash value");
+        }
+        let mut bytes =
+            generic_array::GenericArray::<u8, <sha2::Sha512 as sha2::Digest>::OutputSize>::default(
+            );
+        bytes.copy_from_slice(&value[..<sha2::Sha512 as sha2::Digest>::output_size()]);
+        Ok(Self(bytes))
+    }
+}
+
 impl std::fmt::Display for ChainId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", serde_json::to_string(&self.0).unwrap())
+        write!(f, "{}", self.0)
     }
 }
 
@@ -224,7 +298,7 @@ impl FromStr for ChainId {
     type Err = failure::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(ChainId(serde_json::from_str(s)?))
+        Ok(ChainId(HashValue::from_str(s)?))
     }
 }
 
@@ -247,36 +321,31 @@ impl std::fmt::Debug for PublicKey {
     }
 }
 
+impl std::fmt::Debug for HashValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        write!(f, "{}", self)
+    }
+}
+
 impl std::fmt::Debug for ChainId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         write!(f, "{}", self)
     }
 }
 
+impl From<ChainDescription> for ChainId {
+    fn from(description: ChainDescription) -> Self {
+        Self(HashValue::new(&description))
+    }
+}
+
 impl ChainId {
-    pub fn new(numbers: Vec<BlockHeight>) -> Self {
-        assert!(!numbers.is_empty());
-        Self(numbers)
+    pub fn root(index: usize) -> Self {
+        Self(HashValue::new(&ChainDescription::Root(index)))
     }
 
-    // For testing only
-    pub fn debug(name: u8) -> ChainId {
-        ChainId(vec![BlockHeight(name.into())])
-    }
-
-    pub fn split(&self) -> Option<(ChainId, BlockHeight)> {
-        if self.0.len() <= 1 {
-            return None;
-        }
-        let mut parent = self.clone();
-        let num = parent.0.pop().unwrap();
-        Some((parent, num))
-    }
-
-    pub fn make_child(&self, num: BlockHeight) -> Self {
-        let mut id = self.clone();
-        id.0.push(num);
-        id
+    pub fn child(id: OperationId) -> Self {
+        Self(HashValue::new(&ChainDescription::Child(id)))
     }
 }
 
@@ -544,7 +613,9 @@ impl HashValue {
         HashValue(hasher.finalize())
     }
 
-    pub fn as_bytes(&self) -> &[u8; 64] {
+    pub fn as_bytes(
+        &self,
+    ) -> &generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Digest>::OutputSize> {
         self.0.as_ref().try_into().expect("unexpected size")
     }
 }

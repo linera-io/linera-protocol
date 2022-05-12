@@ -663,11 +663,10 @@ async fn main() {
             let mut genesis_config = GenesisConfig::new(committee_config);
             for i in 0..num {
                 // Create keys.
-                let chain =
-                    UserChain::make_initial(ChainId::new(vec![BlockHeight::from(i as u64)]));
+                let chain = UserChain::make_initial(ChainDescription::Root(i as usize));
                 // Public "genesis" state.
                 genesis_config.chains.push((
-                    chain.chain_id.clone(),
+                    chain.description.clone().unwrap(),
                     chain.key_pair.as_ref().unwrap().public(),
                     initial_funding,
                 ));

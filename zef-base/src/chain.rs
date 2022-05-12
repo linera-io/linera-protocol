@@ -14,6 +14,8 @@ use std::collections::{HashMap, VecDeque};
 pub struct ChainState {
     /// The UID of the chain.
     pub id: ChainId,
+    /// How the chain was created. May be unknown for inactive chains.
+    pub description: Option<ChainDescription>,
     /// Execution state.
     pub state: ExecutionState,
     /// Hash of the latest certified block in this chain, if any.
@@ -79,6 +81,7 @@ impl ChainState {
         };
         Self {
             id,
+            description: None,
             state,
             block_hash: None,
             next_block_height: BlockHeight::new(),
@@ -89,8 +92,14 @@ impl ChainState {
         }
     }
 
-    pub fn create(committee: Committee, id: ChainId, owner: Owner, balance: Balance) -> Self {
-        let mut chain = Self::new(id);
+    pub fn create(
+        committee: Committee,
+        description: ChainDescription,
+        owner: Owner,
+        balance: Balance,
+    ) -> Self {
+        let mut chain = Self::new(description.clone().into());
+        chain.description = Some(description);
         chain.state.committee = Some(committee);
         chain.state.manager = ChainManager::single(owner);
         chain.state.balance = balance;
@@ -98,12 +107,15 @@ impl ChainState {
     }
 
     pub fn is_active(&self) -> bool {
-        self.state.manager.is_active() && self.state.committee.is_some()
+        self.description.is_some()
+            && self.state.manager.is_active()
+            && self.state.committee.is_some()
     }
 
     pub fn make_chain_info(&self, key_pair: Option<&KeyPair>) -> ChainInfoResponse {
         let info = ChainInfo {
             chain_id: self.id.clone(),
+            description: self.description.clone(),
             manager: self.state.manager.clone(),
             balance: self.state.balance,
             queried_committee: None,
@@ -147,7 +159,7 @@ impl ChainState {
         operation: Operation,
         key: HashValue,
     ) -> Result<bool, Error> {
-        let inbox = self.inboxes.entry(sender_id).or_default();
+        let inbox = self.inboxes.entry(sender_id.clone()).or_default();
         if height < inbox.next_height_to_receive {
             // We already received this message.
             return Ok(false);
@@ -159,8 +171,14 @@ impl ChainState {
             owner, committee, ..
         } = &operation
         {
-            assert!(!self.state.manager.is_active()); // guaranteed under BFT assumptions.
+            // guaranteed under BFT assumptions.
+            assert!(self.description.is_none());
+            assert!(!self.state.manager.is_active());
             assert!(self.state.committee.is_none());
+            self.description = Some(ChainDescription::Child(OperationId {
+                chain_id: sender_id,
+                height,
+            }));
             self.state.committee = Some(committee.clone());
             self.state.manager = ChainManager::single(*owner);
             // Proceed to scheduling the operation for "execution". Although it won't do
@@ -218,7 +236,10 @@ impl ChainState {
     ) -> Result<(), Error> {
         match &operation {
             Operation::OpenChain { id, committee, .. } => {
-                let expected_id = chain_id.make_child(height);
+                let expected_id = ChainId::child(OperationId {
+                    chain_id: chain_id.clone(),
+                    height,
+                });
                 ensure!(id == &expected_id, Error::InvalidNewChainId(id.clone()));
                 ensure!(
                     self.state.committee.as_ref() == Some(committee),
