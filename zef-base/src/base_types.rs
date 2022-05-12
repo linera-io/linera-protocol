@@ -52,7 +52,7 @@ pub struct KeyPair(dalek::Keypair);
 pub struct PublicKeyBytes(pub [u8; dalek::PUBLIC_KEY_LENGTH]);
 
 /// The unique identifier (UID) of a chain.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Serialize, Deserialize, Default)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Serialize, Deserialize)]
 pub struct ChainId(pub Vec<BlockHeight>);
 
 /// A Sha512 value.
