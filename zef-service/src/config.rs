@@ -82,6 +82,7 @@ impl CommitteeConfig {
 #[derive(Serialize, Deserialize)]
 pub struct UserChain {
     pub chain_id: ChainId,
+    pub description: Option<ChainDescription>,
     pub key_pair: Option<KeyPair>,
     pub block_hash: Option<HashValue>,
     pub next_block_height: BlockHeight,
@@ -91,16 +92,18 @@ impl UserChain {
     pub fn new(chain_id: ChainId) -> Self {
         Self {
             chain_id,
+            description: None,
             key_pair: None,
             block_hash: None,
             next_block_height: BlockHeight::new(),
         }
     }
 
-    pub fn make_initial(chain_id: ChainId) -> Self {
+    pub fn make_initial(description: ChainDescription) -> Self {
         let key_pair = KeyPair::generate();
         Self {
-            chain_id,
+            chain_id: description.clone().into(),
+            description: Some(description),
             key_pair: Some(key_pair),
             block_hash: None,
             next_block_height: BlockHeight::new(),
@@ -183,7 +186,7 @@ impl WalletState {
 #[derive(Serialize, Deserialize)]
 pub struct GenesisConfig {
     pub committee: CommitteeConfig,
-    pub chains: Vec<(ChainId, Owner, Balance)>,
+    pub chains: Vec<(ChainDescription, Owner, Balance)>,
 }
 
 impl Import for GenesisConfig {}
@@ -201,10 +204,10 @@ impl GenesisConfig {
     where
         S: Storage + Clone + 'static,
     {
-        for (chain_id, owner, balance) in &self.chains {
+        for (description, owner, balance) in &self.chains {
             let chain = ChainState::create(
                 self.committee.clone().into_committee(),
-                chain_id.clone(),
+                description.clone(),
                 *owner,
                 *balance,
             );

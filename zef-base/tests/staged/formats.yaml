@@ -56,14 +56,25 @@ Certificate:
           TUPLE:
             - TYPENAME: PublicKey
             - TYPENAME: Signature
+ChainDescription:
+  ENUM:
+    0:
+      Root:
+        NEWTYPE: U64
+    1:
+      Child:
+        NEWTYPE:
+          TYPENAME: OperationId
 ChainId:
   NEWTYPESTRUCT:
-    SEQ:
-      TYPENAME: BlockHeight
+    TYPENAME: HashValue
 ChainInfo:
   STRUCT:
     - chain_id:
         TYPENAME: ChainId
+    - description:
+        OPTION:
+          TYPENAME: ChainDescription
     - manager:
         TYPENAME: ChainManager
     - balance:
@@ -123,6 +134,9 @@ ChainState:
   STRUCT:
     - id:
         TYPENAME: ChainId
+    - description:
+        OPTION:
+          TYPENAME: ChainDescription
     - state:
         TYPENAME: ExecutionState
     - block_hash:
@@ -377,6 +391,12 @@ Operation:
           - new_owners:
               SEQ:
                 TYPENAME: PublicKey
+OperationId:
+  STRUCT:
+    - chain_id:
+        TYPENAME: ChainId
+    - height:
+        TYPENAME: BlockHeight
 OutboxState:
   STRUCT:
     - queue:

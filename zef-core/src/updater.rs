@@ -156,7 +156,7 @@ where
                 query_received_certificates_excluding_first_nth: None,
             };
             match self.client.handle_chain_info_query(query).await {
-                Ok(response) if response.info.manager.is_active() => {
+                Ok(response) if response.info.description.is_some() => {
                     response.check(self.name)?;
                     jobs.push((
                         chain_id,
@@ -168,12 +168,19 @@ where
                 }
                 Ok(response) => {
                     response.check(self.name)?;
-                    match chain_id.split() {
-                        None => return Err(Error::InactiveChain(chain_id)),
-                        Some((parent_id, number)) => {
+                    // Obtain the chain description from our local node.
+                    let chain = self.store.read_chain_or_default(&chain_id).await?;
+                    match chain.description {
+                        Some(ChainDescription::Child(OperationId {
+                            chain_id: parent_id,
+                            height,
+                        })) => {
                             jobs.push((chain_id, BlockHeight::from(0), target_block_height, true));
                             chain_id = parent_id;
-                            target_block_height = number.try_add_one()?;
+                            target_block_height = height.try_add_one()?;
+                        }
+                        _ => {
+                            return Err(Error::InactiveChain(chain_id));
                         }
                     }
                 }

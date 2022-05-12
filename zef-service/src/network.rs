@@ -554,9 +554,9 @@ fn test_get_shards() {
     let num_shards = 16u32;
     let mut found = vec![false; num_shards as usize];
     let mut left = num_shards;
-    let mut i = 1;
+    let mut i: usize = 1;
     loop {
-        let shard = get_shard(num_shards, &ChainId(vec![i.into()])) as usize;
+        let shard = get_shard(num_shards, &ChainId::root(i)) as usize;
         println!("found {}", shard);
         if !found[shard] {
             found[shard] = true;

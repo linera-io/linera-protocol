@@ -148,8 +148,10 @@ pub struct ChainInfoQuery {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct ChainInfo {
-    /// The chain id
+    /// The chain id.
     pub chain_id: ChainId,
+    /// The chain description.
+    pub description: Option<ChainDescription>,
     /// The state of the chain authentication.
     pub manager: ChainManager,
     /// The current balance.
