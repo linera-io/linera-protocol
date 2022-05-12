@@ -8,7 +8,7 @@ use zef_base::{base_types::*, messages::*};
 async fn test_rocksdb_storage_for_chains() {
     let dir = tempfile::TempDir::new().unwrap();
     let mut client = RocksdbStoreClient::new(dir.path().to_path_buf());
-    let id = ChainId(vec![BlockHeight(1)]);
+    let id = ChainId::root(1);
     {
         let mut chain = client.read_chain_or_default(&id).await.unwrap();
         assert_eq!(chain.next_block_height, BlockHeight(0));
@@ -26,7 +26,7 @@ async fn test_rocksdb_storage_for_certificates() {
     let dir = tempfile::TempDir::new().unwrap();
     let mut client = RocksdbStoreClient::new(dir.path().to_path_buf());
     let block = Block {
-        chain_id: ChainId::debug(1),
+        chain_id: ChainId::root(1),
         incoming_messages: Vec::new(),
         operation: Operation::CloseChain,
         previous_block_hash: None,

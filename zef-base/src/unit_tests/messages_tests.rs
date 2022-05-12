@@ -12,10 +12,10 @@ fn test_signed_values() {
     let name1 = key1.public();
 
     let block = Block {
-        chain_id: ChainId::debug(1),
+        chain_id: ChainId::root(1),
         incoming_messages: Vec::new(),
         operation: Operation::Transfer {
-            recipient: Address::Account(ChainId::debug(2)),
+            recipient: Address::Account(ChainId::root(2)),
             amount: Amount::from(1),
             user_data: UserData::default(),
         },
@@ -45,10 +45,10 @@ fn test_certificates() {
     let committee = Committee::new(validators);
 
     let block = Block {
-        chain_id: ChainId::debug(1),
+        chain_id: ChainId::root(1),
         incoming_messages: Vec::new(),
         operation: Operation::Transfer {
-            recipient: Address::Account(ChainId::debug(1)),
+            recipient: Address::Account(ChainId::root(1)),
             amount: Amount::from(1),
             user_data: UserData::default(),
         },
