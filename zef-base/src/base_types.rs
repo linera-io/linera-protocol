@@ -271,14 +271,6 @@ impl ChainId {
         Some((parent, num))
     }
 
-    pub fn ancestors(&self) -> Vec<ChainId> {
-        let mut ancestors = Vec::new();
-        for i in 1..=self.0.len() {
-            ancestors.push(Self(self.0[0..i].to_vec()));
-        }
-        ancestors
-    }
-
     pub fn make_child(&self, num: BlockHeight) -> Self {
         let mut id = self.clone();
         id.0.push(num);

@@ -57,10 +57,4 @@ fn test_chain_ids() {
 
     let id = chain(vec![1, 2, 3]);
     assert_eq!(id.split(), Some((chain(vec![1, 2]), BlockHeight::from(3))));
-
-    let id = chain(vec![1, 2, 3]);
-    assert_eq!(
-        id.ancestors(),
-        vec![chain(vec![1]), chain(vec![1, 2]), chain(vec![1, 2, 3])]
-    );
 }
