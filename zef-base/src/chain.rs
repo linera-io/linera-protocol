@@ -201,15 +201,20 @@ impl ChainState {
             }
             self.apply_operation_as_recipient(&message.operation)?;
         }
-        self.apply_operation_as_sender(block)?;
+        self.apply_operation_as_sender(&block.chain_id, block.height, &block.operation)?;
         Ok(())
     }
 
     /// Execute the sender's side of the operation.
-    fn apply_operation_as_sender(&mut self, block: &Block) -> Result<(), Error> {
-        match &block.operation {
+    fn apply_operation_as_sender(
+        &mut self,
+        chain_id: &ChainId,
+        height: BlockHeight,
+        operation: &Operation,
+    ) -> Result<(), Error> {
+        match &operation {
             Operation::OpenChain { id, committee, .. } => {
-                let expected_id = block.chain_id.make_child(block.height);
+                let expected_id = chain_id.make_child(height);
                 ensure!(id == &expected_id, Error::InvalidNewChainId(id.clone()));
                 ensure!(
                     self.state.committee.as_ref() == Some(committee),
