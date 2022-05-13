@@ -373,11 +373,14 @@ async fn test_handle_certificate_with_early_incoming_message() {
         vec![Message {
             sender_id: ChainId::root(3),
             height: BlockHeight::from(0),
-            operation: Operation::Transfer {
-                recipient: Address::Account(ChainId::root(1)),
-                amount: Amount::from(995),
-                user_data: UserData::default(),
-            },
+            operations: vec![(
+                0,
+                Operation::Transfer {
+                    recipient: Address::Account(ChainId::root(1)),
+                    amount: Amount::from(995),
+                    user_data: UserData::default(),
+                },
+            )],
         }],
         &committee,
         &state,
@@ -409,7 +412,7 @@ async fn test_handle_certificate_with_early_incoming_message() {
         .is_empty(),);
     assert!(matches!(
         chain.inboxes.get(&ChainId::root(3)).unwrap().expected.front().unwrap(),
-        (height, Operation::Transfer { amount, .. }) if *height == BlockHeight::from(0) && *amount == Amount::from(995),
+        (height, 0, Operation::Transfer { amount, .. }) if *height == BlockHeight::from(0) && *amount == Amount::from(995),
     ));
     assert_eq!(chain.confirmed_log.len(), 1);
     assert_eq!(Some(certificate.hash), chain.block_hash);
@@ -503,7 +506,7 @@ async fn test_handle_certificate_receiver_equal_sender() {
     );
     assert!(matches!(
         chain.inboxes.get(&ChainId::root(1)).unwrap().received.front().unwrap(),
-        (height, Operation::Transfer { amount, .. }) if *height == BlockHeight::from(0) && *amount == Amount::from(1),
+        (height, 0, Operation::Transfer { amount, .. }) if *height == BlockHeight::from(0) && *amount == Amount::from(1),
     ));
     assert_eq!(BlockHeight::from(1), chain.next_block_height);
     assert_eq!(chain.confirmed_log.len(), 1);
@@ -553,7 +556,7 @@ async fn test_handle_cross_chain_request() {
     );
     assert!(matches!(
         chain.inboxes.get(&ChainId::root(1)).unwrap().received.front().unwrap(),
-        (height, Operation::Transfer { amount, .. }) if *height == BlockHeight::from(0) && *amount == Amount::from(10),
+        (height, 0, Operation::Transfer { amount, .. }) if *height == BlockHeight::from(0) && *amount == Amount::from(10),
     ));
     assert_eq!(chain.confirmed_log.len(), 0);
     assert_eq!(None, chain.block_hash);
@@ -672,11 +675,14 @@ async fn test_handle_certificate_to_active_recipient() {
         vec![Message {
             sender_id: ChainId::root(1),
             height: BlockHeight::from(0),
-            operation: Operation::Transfer {
-                recipient: Address::Account(ChainId::root(2)),
-                amount: Amount::from(5),
-                user_data: UserData::default(),
-            },
+            operations: vec![(
+                0,
+                Operation::Transfer {
+                    recipient: Address::Account(ChainId::root(2)),
+                    amount: Amount::from(5),
+                    user_data: UserData::default(),
+                },
+            )],
         }],
         &committee,
         &state,
@@ -714,7 +720,7 @@ async fn test_handle_certificate_to_active_recipient() {
             .value
             .confirmed_block()
             .unwrap()
-            .operation, Operation::Transfer { amount, .. } if amount == Amount::from(5)));
+            .operations[..], [Operation::Transfer { amount, .. }] if amount == Amount::from(5)));
 }
 
 #[tokio::test]
@@ -827,11 +833,11 @@ fn make_transfer_block_proposal(
     let block = Block {
         chain_id,
         incoming_messages,
-        operation: Operation::Transfer {
+        operations: vec![Operation::Transfer {
             recipient,
             amount,
             user_data: UserData::default(),
-        },
+        }],
         previous_block_hash: None,
         height: BlockHeight::new(),
     };

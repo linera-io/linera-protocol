@@ -18,8 +18,9 @@ Block:
     - incoming_messages:
         SEQ:
           TYPENAME: Message
-    - operation:
-        TYPENAME: Operation
+    - operations:
+        SEQ:
+          TYPENAME: Operation
     - height:
         TYPENAME: BlockHeight
     - previous_block_hash:
@@ -330,11 +331,13 @@ InboxState:
         SEQ:
           TUPLE:
             - TYPENAME: BlockHeight
+            - U64
             - TYPENAME: Operation
     - expected:
         SEQ:
           TUPLE:
             - TYPENAME: BlockHeight
+            - U64
             - TYPENAME: Operation
 Message:
   STRUCT:
@@ -342,8 +345,11 @@ Message:
         TYPENAME: ChainId
     - height:
         TYPENAME: BlockHeight
-    - operation:
-        TYPENAME: Operation
+    - operations:
+        SEQ:
+          TUPLE:
+            - U64
+            - TYPENAME: Operation
 MultiOwnerManager:
   STRUCT:
     - owners:
@@ -397,6 +403,7 @@ OperationId:
         TYPENAME: ChainId
     - height:
         TYPENAME: BlockHeight
+    - index: U64
 OutboxState:
   STRUCT:
     - queue:

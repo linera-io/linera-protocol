@@ -56,6 +56,7 @@ pub struct PublicKey(pub [u8; dalek::PUBLIC_KEY_LENGTH]);
 pub struct OperationId {
     pub chain_id: ChainId,
     pub height: BlockHeight,
+    pub index: usize,
 }
 
 /// How to create a chain.

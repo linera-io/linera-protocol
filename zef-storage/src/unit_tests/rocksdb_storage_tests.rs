@@ -28,7 +28,7 @@ async fn test_rocksdb_storage_for_certificates() {
     let block = Block {
         chain_id: ChainId::root(1),
         incoming_messages: Vec::new(),
-        operation: Operation::CloseChain,
+        operations: vec![Operation::CloseChain],
         previous_block_hash: None,
         height: BlockHeight::default(),
     };
