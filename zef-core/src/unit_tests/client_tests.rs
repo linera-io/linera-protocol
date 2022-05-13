@@ -422,7 +422,7 @@ async fn test_open_chain_then_close_it() {
 }
 
 #[tokio::test]
-async fn test_open_chain_after_transfer() {
+async fn test_transfer_then_open_chain() {
     let mut builder = TestBuilder::new(4, 1);
     let mut sender = builder
         .add_initial_chain(dbg_chain(1), Balance::from(4))
@@ -464,10 +464,6 @@ async fn test_open_chain_after_transfer() {
         .await;
     client.receive_certificate(certificate).await.unwrap();
     assert_eq!(client.local_balance().await.unwrap(), Balance::from(3));
-    assert_eq!(
-        client.synchronize_balance().await.unwrap(),
-        Balance::from(3)
-    );
     client
         .transfer_to_chain(Amount::from(3), dbg_chain(3), UserData::default())
         .await
@@ -475,7 +471,7 @@ async fn test_open_chain_after_transfer() {
 }
 
 #[tokio::test]
-async fn test_open_chain_before_transfer() {
+async fn test_open_chain_then_transfer() {
     let mut builder = TestBuilder::new(4, 1);
     let mut sender = builder
         .add_initial_chain(dbg_chain(1), Balance::from(4))
