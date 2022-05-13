@@ -40,27 +40,27 @@ impl InMemoryStoreClient {
 
 #[async_trait]
 impl Storage for InMemoryStoreClient {
-    async fn read_chain_or_default(&mut self, id: &ChainId) -> Result<ChainState, Error> {
+    async fn read_chain_or_default(&mut self, id: ChainId) -> Result<ChainState, Error> {
         let store = self.0.clone();
         let chain = store
             .lock()
             .await
             .chains
-            .get(id)
+            .get(&id)
             .cloned()
-            .unwrap_or_else(|| ChainState::new(id.clone()));
+            .unwrap_or_else(|| ChainState::new(id));
         Ok(chain)
     }
 
     async fn write_chain(&mut self, value: ChainState) -> Result<(), Error> {
         let store = self.0.clone();
-        store.lock().await.chains.insert(value.id.clone(), value);
+        store.lock().await.chains.insert(value.id, value);
         Ok(())
     }
 
-    async fn remove_chain(&mut self, id: &ChainId) -> Result<(), Error> {
+    async fn remove_chain(&mut self, id: ChainId) -> Result<(), Error> {
         let store = self.0.clone();
-        store.lock().await.chains.remove(id);
+        store.lock().await.chains.remove(&id);
         Ok(())
     }
 

@@ -114,13 +114,13 @@ where
 
     async fn try_process_certificates(
         &mut self,
-        chain_id: &ChainId,
+        chain_id: ChainId,
         certificates: Vec<Certificate>,
     ) -> Result<Option<ChainInfo>, Error> {
         let mut info = None;
         for certificate in certificates {
             if let Value::Confirmed { block } = &certificate.value {
-                if &block.chain_id == chain_id {
+                if block.chain_id == chain_id {
                     match self.handle_certificate(certificate).await {
                         Ok(response) => {
                             info = Some(response.info);
@@ -170,14 +170,14 @@ where
         // Sequentially try each validator in random order.
         validators.shuffle(&mut rand::thread_rng());
         for (name, client) in validators {
-            let info = self.local_chain_info(chain_id.clone()).await?;
+            let info = self.local_chain_info(chain_id).await?;
             if target_next_block_height <= info.next_block_height {
                 return Ok(info);
             }
             self.try_download_certificates_from(
                 name,
                 client,
-                chain_id.clone(),
+                chain_id,
                 info.next_block_height,
                 target_next_block_height,
             )
@@ -207,7 +207,7 @@ where
             limit: Some(usize::from(stop) - usize::from(start)),
         };
         let query = ChainInfoQuery {
-            chain_id: chain_id.clone(),
+            chain_id,
             check_next_block_height: None,
             query_committee: false,
             query_pending_messages: false,
@@ -220,7 +220,7 @@ where
                     queried_sent_certificates,
                     ..
                 } = response.info;
-                self.try_process_certificates(&chain_id, queried_sent_certificates)
+                self.try_process_certificates(chain_id, queried_sent_certificates)
                     .await?;
             }
         }
@@ -239,9 +239,8 @@ where
             .into_iter()
             .map(|(name, client)| {
                 let mut node = self.clone();
-                let id = chain_id.clone();
                 async move {
-                    node.try_synchronize_chain_state_from(name, client, id)
+                    node.try_synchronize_chain_state_from(name, client, chain_id)
                         .await
                 }
             })
@@ -260,13 +259,13 @@ where
     where
         A: ValidatorNode + Send + Sync + 'static + Clone,
     {
-        let local_info = self.local_chain_info(chain_id.clone()).await?;
+        let local_info = self.local_chain_info(chain_id).await?;
         let range = BlockHeightRange {
             start: local_info.next_block_height,
             limit: None,
         };
         let query = ChainInfoQuery {
-            chain_id: chain_id.clone(),
+            chain_id,
             check_next_block_height: None,
             query_committee: false,
             query_pending_messages: false,
@@ -281,7 +280,7 @@ where
             }
         };
         if self
-            .try_process_certificates(&chain_id, info.queried_sent_certificates)
+            .try_process_certificates(chain_id, info.queried_sent_certificates)
             .await?
             .is_none()
         {

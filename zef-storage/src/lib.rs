@@ -26,17 +26,17 @@ use zef_base::{
 /// * Reads should be optimized to hit a local cache.
 #[async_trait]
 pub trait Storage: DynClone + Send + Sync {
-    async fn read_active_chain(&mut self, id: &ChainId) -> Result<ChainState, Error> {
+    async fn read_active_chain(&mut self, id: ChainId) -> Result<ChainState, Error> {
         let chain = self.read_chain_or_default(id).await?;
-        ensure!(chain.is_active(), Error::InactiveChain(id.clone()));
+        ensure!(chain.is_active(), Error::InactiveChain(id));
         Ok(chain)
     }
 
-    async fn read_chain_or_default(&mut self, chain_id: &ChainId) -> Result<ChainState, Error>;
+    async fn read_chain_or_default(&mut self, chain_id: ChainId) -> Result<ChainState, Error>;
 
     async fn write_chain(&mut self, state: ChainState) -> Result<(), Error>;
 
-    async fn remove_chain(&mut self, chain_id: &ChainId) -> Result<(), Error>;
+    async fn remove_chain(&mut self, chain_id: ChainId) -> Result<(), Error>;
 
     async fn read_certificate(&mut self, hash: HashValue) -> Result<Certificate, Error>;
 
@@ -69,7 +69,7 @@ dyn_clone::clone_trait_object!(Storage);
 
 #[async_trait]
 impl Storage for Box<dyn Storage> {
-    async fn read_chain_or_default(&mut self, id: &ChainId) -> Result<ChainState, Error> {
+    async fn read_chain_or_default(&mut self, id: ChainId) -> Result<ChainState, Error> {
         self.deref_mut().read_chain_or_default(id).await
     }
 
@@ -77,7 +77,7 @@ impl Storage for Box<dyn Storage> {
         self.deref_mut().write_chain(value).await
     }
 
-    async fn remove_chain(&mut self, id: &ChainId) -> Result<(), Error> {
+    async fn remove_chain(&mut self, id: ChainId) -> Result<(), Error> {
         self.deref_mut().remove_chain(id).await
     }
 

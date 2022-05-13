@@ -148,7 +148,7 @@ where
         loop {
             // Figure out which certificates this validator is missing.
             let query = ChainInfoQuery {
-                chain_id: chain_id.clone(),
+                chain_id,
                 check_next_block_height: None,
                 query_committee: false,
                 query_pending_messages: false,
@@ -169,7 +169,7 @@ where
                 Ok(response) => {
                     response.check(self.name)?;
                     // Obtain the chain description from our local node.
-                    let chain = self.store.read_chain_or_default(&chain_id).await?;
+                    let chain = self.store.read_chain_or_default(chain_id).await?;
                     match chain.description {
                         Some(ChainDescription::Child(OperationId {
                             chain_id: parent_id,
@@ -191,7 +191,7 @@ where
             jobs.into_iter().rev()
         {
             // Obtain chain state.
-            let chain = self.store.read_chain_or_default(&chain_id).await?;
+            let chain = self.store.read_chain_or_default(chain_id).await?;
             // Send the requested certificates in order.
             for number in usize::from(initial_block_height)..usize::from(target_block_height) {
                 let key = chain
@@ -210,9 +210,9 @@ where
         chain_id: ChainId,
     ) -> Result<(), Error> {
         // Obtain chain state.
-        let chain = self.store.read_chain_or_default(&chain_id).await?;
+        let chain = self.store.read_chain_or_default(chain_id).await?;
         for (sender_id, inbox) in chain.inboxes.iter() {
-            self.send_chain_information(sender_id.clone(), inbox.next_height_to_receive)
+            self.send_chain_information(*sender_id, inbox.next_height_to_receive)
                 .await?;
         }
         Ok(())
@@ -234,7 +234,7 @@ where
             CommunicateAction::AdvanceToNextBlockHeight(seq) => *seq,
         };
         // Update the validator with missing information, if needed.
-        self.send_chain_information(chain_id.clone(), target_block_height)
+        self.send_chain_information(chain_id, target_block_height)
             .await?;
         // Send the block proposal (if any) and return a vote.
         match action {

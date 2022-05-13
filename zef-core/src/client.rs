@@ -150,8 +150,8 @@ impl<A, S> ChainClientState<A, S> {
         }
     }
 
-    pub fn chain_id(&self) -> &ChainId {
-        &self.chain_id
+    pub fn chain_id(&self) -> ChainId {
+        self.chain_id
     }
 
     pub fn block_hash(&self) -> Option<HashValue> {
@@ -174,7 +174,7 @@ where
 {
     async fn chain_info(&mut self) -> Result<ChainInfo, Error> {
         let query = ChainInfoQuery {
-            chain_id: self.chain_id.clone(),
+            chain_id: self.chain_id,
             check_next_block_height: None,
             query_committee: false,
             query_pending_messages: false,
@@ -187,7 +187,7 @@ where
 
     async fn pending_messages(&mut self) -> Result<Vec<Message>, Error> {
         let query = ChainInfoQuery {
-            chain_id: self.chain_id.clone(),
+            chain_id: self.chain_id,
             check_next_block_height: None,
             query_committee: false,
             query_pending_messages: true,
@@ -200,7 +200,7 @@ where
 
     async fn committee(&mut self) -> Result<Committee, Error> {
         let query = ChainInfoQuery {
-            chain_id: self.chain_id.clone(),
+            chain_id: self.chain_id,
             check_next_block_height: None,
             query_committee: true,
             query_pending_messages: false,
@@ -211,7 +211,7 @@ where
         response
             .info
             .queried_committee
-            .ok_or_else(|| Error::InactiveChain(self.chain_id.clone()))
+            .ok_or(Error::InactiveChain(self.chain_id))
     }
 
     async fn identity(&mut self) -> Result<Owner, failure::Error> {
@@ -246,7 +246,7 @@ where
                 }
                 Ok(identities.pop().unwrap())
             }
-            ChainManager::None => Err(Error::InactiveChain(self.chain_id.clone()).into()),
+            ChainManager::None => Err(Error::InactiveChain(self.chain_id).into()),
         }
     }
 
@@ -273,7 +273,7 @@ where
             .node_client
             .download_certificates(
                 self.validator_clients.clone(),
-                self.chain_id.clone(),
+                self.chain_id,
                 self.next_block_height,
             )
             .await?;
@@ -287,7 +287,7 @@ where
             // best-effort that depends on network conditions.
             info = self
                 .node_client
-                .synchronize_chain_state(self.validator_clients.clone(), self.chain_id.clone())
+                .synchronize_chain_state(self.validator_clients.clone(), self.chain_id)
                 .await?;
         }
         // Update chain information tracked by the client.
@@ -321,7 +321,6 @@ where
                 retries: cross_chain_retries,
             };
             let action = action.clone();
-            let chain_id = chain_id.clone();
             Box::pin(async move { updater.send_chain_update(chain_id, action).await })
         })
         .await;
@@ -387,17 +386,16 @@ where
     /// However, this should be the case whenever a sender's chain is still in use and
     /// is regularly upgraded to new committees.
     async fn find_received_certificates(&mut self) -> Result<(), failure::Error> {
-        let chain_id = self.chain_id.clone();
+        let chain_id = self.chain_id;
         let committee = self.committee().await?;
         let trackers = self.received_certificate_trackers.clone();
         let result =
             communicate_with_quorum(&self.validator_clients, &committee, |name, mut client| {
-                let chain_id = &chain_id;
                 let tracker = *trackers.get(&name).unwrap_or(&0);
                 Box::pin(async move {
                     // Retrieve new received certificates from this validator.
                     let query = ChainInfoQuery {
-                        chain_id: chain_id.clone(),
+                        chain_id,
                         check_next_block_height: None,
                         query_committee: false,
                         query_pending_messages: false,
@@ -472,7 +470,7 @@ where
             balance
         );
         let block = Block {
-            chain_id: self.chain_id.clone(),
+            chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
             operation: Operation::Transfer {
                 recipient,
@@ -541,7 +539,7 @@ where
                 let certificate = self
                     .communicate_chain_updates(
                         &committee,
-                        self.chain_id.clone(),
+                        self.chain_id,
                         CommunicateAction::SubmitBlockForValidation(proposal.clone()),
                     )
                     .await?
@@ -552,7 +550,7 @@ where
                 );
                 self.communicate_chain_updates(
                     &committee,
-                    self.chain_id.clone(),
+                    self.chain_id,
                     CommunicateAction::FinalizeBlock(certificate),
                 )
                 .await?
@@ -562,7 +560,7 @@ where
                 // Only one round-trip is needed
                 self.communicate_chain_updates(
                     &committee,
-                    self.chain_id.clone(),
+                    self.chain_id,
                     CommunicateAction::SubmitBlockForConfirmation(proposal.clone()),
                 )
                 .await?
@@ -581,7 +579,7 @@ where
         if with_confirmation {
             self.communicate_chain_updates(
                 &committee,
-                self.chain_id.clone(),
+                self.chain_id,
                 CommunicateAction::AdvanceToNextBlockHeight(self.next_block_height),
             )
             .await?;
@@ -591,7 +589,7 @@ where
                     // (This is actually more important that updating the previous committee.)
                     self.communicate_chain_updates(
                         &new_committee,
-                        self.chain_id.clone(),
+                        self.chain_id,
                         CommunicateAction::AdvanceToNextBlockHeight(self.next_block_height),
                     )
                     .await?;
@@ -614,7 +612,7 @@ where
             "The local node is behind and needs synchronization"
         );
         let block = Block {
-            chain_id: self.chain_id.clone(),
+            chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
             operation: Operation::CloseChain, // Placeholder
             previous_block_hash: self.block_hash,
@@ -682,16 +680,12 @@ where
             .ok_or_else(|| failure::format_err!("Was expecting a confirmed chain operation"))?
             .clone();
         ensure!(
-            block.operation.recipient() == Some(&self.chain_id),
+            block.operation.recipient() == Some(self.chain_id),
             "Block should be received by us."
         );
         // Recover history from the network.
         self.node_client
-            .download_certificates(
-                self.validator_clients.clone(),
-                block.chain_id.clone(),
-                block.height,
-            )
+            .download_certificates(self.validator_clients.clone(), block.chain_id, block.height)
             .await?;
         // Process the received operation.
         self.process_certificate(certificate).await?;
@@ -700,7 +694,7 @@ where
         let committee = self.committee().await?;
         self.communicate_chain_updates(
             &committee,
-            block.chain_id.clone(),
+            block.chain_id,
             CommunicateAction::AdvanceToNextBlockHeight(block.height.try_add_one()?),
         )
         .await?;
@@ -711,7 +705,7 @@ where
         self.prepare_chain().await?;
         let new_owner = key_pair.public();
         let block = Block {
-            chain_id: self.chain_id.clone(),
+            chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
             operation: Operation::ChangeOwner { new_owner },
             previous_block_hash: self.block_hash,
@@ -730,7 +724,7 @@ where
     ) -> Result<Certificate, failure::Error> {
         self.prepare_chain().await?;
         let block = Block {
-            chain_id: self.chain_id.clone(),
+            chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
             operation: Operation::ChangeOwner { new_owner },
             previous_block_hash: self.block_hash,
@@ -746,7 +740,7 @@ where
         self.prepare_chain().await?;
         let owner = self.identity().await?;
         let block = Block {
-            chain_id: self.chain_id.clone(),
+            chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
             operation: Operation::ChangeMultipleOwners {
                 new_owners: vec![owner, new_owner],
@@ -763,12 +757,12 @@ where
     async fn open_chain(&mut self, owner: Owner) -> Result<Certificate, failure::Error> {
         self.prepare_chain().await?;
         let id = ChainId::child(OperationId {
-            chain_id: self.chain_id.clone(),
+            chain_id: self.chain_id,
             height: self.next_block_height,
         });
         let committee = self.committee().await?;
         let block = Block {
-            chain_id: self.chain_id.clone(),
+            chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
             operation: Operation::OpenChain {
                 id,
@@ -787,7 +781,7 @@ where
     async fn close_chain(&mut self) -> Result<Certificate, failure::Error> {
         self.prepare_chain().await?;
         let block = Block {
-            chain_id: self.chain_id.clone(),
+            chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
             operation: Operation::CloseChain,
             previous_block_hash: self.block_hash,
@@ -807,7 +801,7 @@ where
     ) -> Result<Certificate, failure::Error> {
         self.prepare_chain().await?;
         let block = Block {
-            chain_id: self.chain_id.clone(),
+            chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
             operation: Operation::Transfer {
                 recipient: Address::Account(recipient),
