@@ -172,7 +172,7 @@ where
     A: ValidatorNode + Send + Sync + 'static + Clone,
     S: Storage + Clone + 'static,
 {
-    async fn chain_info(&mut self) -> ChainInfo {
+    async fn chain_info(&mut self) -> Result<ChainInfo, Error> {
         let query = ChainInfoQuery {
             chain_id: self.chain_id.clone(),
             check_next_block_height: None,
@@ -181,20 +181,11 @@ where
             query_sent_certificates_in_range: None,
             query_received_certificates_excluding_first_nth: None,
         };
-        let response = self
-            .node_client
-            .handle_chain_info_query(query)
-            .await
-            .unwrap();
-        response.info
+        let response = self.node_client.handle_chain_info_query(query).await?;
+        Ok(response.info)
     }
 
-    async fn has_multi_owners(&mut self) -> bool {
-        let manager = self.chain_info().await.manager;
-        matches!(manager, ChainManager::Multi(_))
-    }
-
-    async fn pending_messages(&mut self) -> Vec<Message> {
+    async fn pending_messages(&mut self) -> Result<Vec<Message>, Error> {
         let query = ChainInfoQuery {
             chain_id: self.chain_id.clone(),
             check_next_block_height: None,
@@ -203,12 +194,8 @@ where
             query_sent_certificates_in_range: None,
             query_received_certificates_excluding_first_nth: None,
         };
-        let response = self
-            .node_client
-            .handle_chain_info_query(query)
-            .await
-            .unwrap();
-        response.info.queried_pending_messages
+        let response = self.node_client.handle_chain_info_query(query).await?;
+        Ok(response.info.queried_pending_messages)
     }
 
     async fn committee(&mut self) -> Result<Committee, Error> {
@@ -220,11 +207,7 @@ where
             query_sent_certificates_in_range: None,
             query_received_certificates_excluding_first_nth: None,
         };
-        let response = self
-            .node_client
-            .handle_chain_info_query(query)
-            .await
-            .unwrap();
+        let response = self.node_client.handle_chain_info_query(query).await?;
         response
             .info
             .queried_committee
@@ -232,7 +215,7 @@ where
     }
 
     async fn identity(&mut self) -> Result<Owner, failure::Error> {
-        match self.chain_info().await.manager {
+        match self.chain_info().await?.manager {
             ChainManager::Single(m) => {
                 if !self.known_key_pairs.contains_key(&m.owner) {
                     bail!(
@@ -298,7 +281,7 @@ where
             // Check that our local node has the expected block hash.
             assert_eq!(self.block_hash, info.block_hash);
         }
-        if self.has_multi_owners().await {
+        if matches!(info.manager, ChainManager::Multi(_)) {
             // For multi-owner chains, we could be missing recent certificates created by
             // other owners. Further synchronize blocks from the network. This is a
             // best-effort that depends on network conditions.
@@ -490,7 +473,7 @@ where
         );
         let block = Block {
             chain_id: self.chain_id.clone(),
-            incoming_messages: self.pending_messages().await,
+            incoming_messages: self.pending_messages().await?,
             operation: Operation::Transfer {
                 recipient,
                 amount,
@@ -552,8 +535,8 @@ where
         );
         // Send the query.
         let committee = self.committee().await?;
-        let final_certificate = {
-            if self.has_multi_owners().await {
+        let final_certificate = match self.chain_info().await?.manager {
+            ChainManager::Multi(_) => {
                 // Need two-round trips.
                 let certificate = self
                     .communicate_chain_updates(
@@ -574,7 +557,8 @@ where
                 )
                 .await?
                 .expect("a certificate")
-            } else {
+            }
+            ChainManager::Single(_) => {
                 // Only one round-trip is needed
                 self.communicate_chain_updates(
                     &committee,
@@ -584,6 +568,7 @@ where
                 .await?
                 .expect("a certificate")
             }
+            ChainManager::None => unreachable!("chain is active"),
         };
         // By now the block should be final.
         ensure!(
@@ -625,12 +610,12 @@ where
 {
     async fn local_balance(&mut self) -> Result<Balance, failure::Error> {
         ensure!(
-            self.chain_info().await.next_block_height == self.next_block_height,
+            self.chain_info().await?.next_block_height == self.next_block_height,
             "The local node is behind and needs synchronization"
         );
         let block = Block {
             chain_id: self.chain_id.clone(),
-            incoming_messages: self.pending_messages().await,
+            incoming_messages: self.pending_messages().await?,
             operation: Operation::CloseChain, // Placeholder
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
@@ -727,7 +712,7 @@ where
         let new_owner = key_pair.public();
         let block = Block {
             chain_id: self.chain_id.clone(),
-            incoming_messages: self.pending_messages().await,
+            incoming_messages: self.pending_messages().await?,
             operation: Operation::ChangeOwner { new_owner },
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
@@ -746,7 +731,7 @@ where
         self.prepare_chain().await?;
         let block = Block {
             chain_id: self.chain_id.clone(),
-            incoming_messages: self.pending_messages().await,
+            incoming_messages: self.pending_messages().await?,
             operation: Operation::ChangeOwner { new_owner },
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
@@ -762,7 +747,7 @@ where
         let owner = self.identity().await?;
         let block = Block {
             chain_id: self.chain_id.clone(),
-            incoming_messages: self.pending_messages().await,
+            incoming_messages: self.pending_messages().await?,
             operation: Operation::ChangeMultipleOwners {
                 new_owners: vec![owner, new_owner],
             },
@@ -781,7 +766,7 @@ where
         let committee = self.committee().await?;
         let block = Block {
             chain_id: self.chain_id.clone(),
-            incoming_messages: self.pending_messages().await,
+            incoming_messages: self.pending_messages().await?,
             operation: Operation::OpenChain {
                 id,
                 owner,
@@ -800,7 +785,7 @@ where
         self.prepare_chain().await?;
         let block = Block {
             chain_id: self.chain_id.clone(),
-            incoming_messages: self.pending_messages().await,
+            incoming_messages: self.pending_messages().await?,
             operation: Operation::CloseChain,
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
@@ -820,7 +805,7 @@ where
         self.prepare_chain().await?;
         let block = Block {
             chain_id: self.chain_id.clone(),
-            incoming_messages: self.pending_messages().await,
+            incoming_messages: self.pending_messages().await?,
             operation: Operation::Transfer {
                 recipient: Address::Account(recipient),
                 amount,
