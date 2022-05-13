@@ -44,7 +44,7 @@ BlockProposal:
     - content:
         TYPENAME: BlockAndRound
     - owner:
-        TYPENAME: PublicKeyBytes
+        TYPENAME: PublicKey
     - signature:
         TYPENAME: Signature
 Certificate:
@@ -54,7 +54,7 @@ Certificate:
     - signatures:
         SEQ:
           TUPLE:
-            - TYPENAME: PublicKeyBytes
+            - TYPENAME: PublicKey
             - TYPENAME: Signature
 ChainId:
   NEWTYPESTRUCT:
@@ -153,7 +153,7 @@ Committee:
     - voting_rights:
         MAP:
           KEY:
-            TYPENAME: PublicKeyBytes
+            TYPENAME: PublicKey
           VALUE: U64
     - total_votes: U64
 CrossChainRequest:
@@ -334,7 +334,7 @@ MultiOwnerManager:
   STRUCT:
     - owners:
         SEQ:
-          TYPENAME: PublicKeyBytes
+          TYPENAME: PublicKey
     - proposed:
         OPTION:
           TYPENAME: BlockProposal
@@ -361,7 +361,7 @@ Operation:
           - id:
               TYPENAME: ChainId
           - owner:
-              TYPENAME: PublicKeyBytes
+              TYPENAME: PublicKey
           - committee:
               TYPENAME: Committee
     2:
@@ -370,13 +370,13 @@ Operation:
       ChangeOwner:
         STRUCT:
           - new_owner:
-              TYPENAME: PublicKeyBytes
+              TYPENAME: PublicKey
     4:
       ChangeMultipleOwners:
         STRUCT:
           - new_owners:
               SEQ:
-                TYPENAME: PublicKeyBytes
+                TYPENAME: PublicKey
 OutboxState:
   STRUCT:
     - queue:
@@ -384,7 +384,7 @@ OutboxState:
           TUPLE:
             - TYPENAME: BlockHeight
             - TYPENAME: HashValue
-PublicKeyBytes:
+PublicKey:
   NEWTYPESTRUCT:
     TUPLEARRAY:
       CONTENT: U8
@@ -429,7 +429,7 @@ Signature:
 SingleOwnerManager:
   STRUCT:
     - owner:
-        TYPENAME: PublicKeyBytes
+        TYPENAME: PublicKey
     - pending:
         OPTION:
           TYPENAME: Vote
@@ -458,7 +458,7 @@ Vote:
     - value:
         TYPENAME: Value
     - validator:
-        TYPENAME: PublicKeyBytes
+        TYPENAME: PublicKey
     - signature:
         TYPENAME: Signature
 
