@@ -133,13 +133,9 @@ impl TestBuilder {
     ) -> ChainClientState<LocalValidatorClient, InMemoryStoreClient> {
         let key_pair = KeyPair::generate();
         let owner = key_pair.public();
-        let chain = ChainState::create(self.committee.clone(), description.clone(), owner, balance);
-        let chain_bad = ChainState::create(
-            self.committee.clone(),
-            description.clone(),
-            owner,
-            Balance::from(0),
-        );
+        let chain = ChainState::create(self.committee.clone(), description, owner, balance);
+        let chain_bad =
+            ChainState::create(self.committee.clone(), description, owner, Balance::from(0));
         // Create genesis chain in all the existing stores.
         self.genesis_store.write_chain(chain.clone()).await.unwrap();
         for (name, store) in self.validator_stores.iter_mut() {
@@ -198,7 +194,7 @@ impl TestBuilder {
         target_count: usize,
     ) -> Option<Certificate> {
         let query = ChainInfoQuery {
-            chain_id: chain_id.clone(),
+            chain_id,
             check_next_block_height: None,
             query_committee: false,
             query_pending_messages: false,
@@ -253,11 +249,7 @@ async fn test_initiating_valid_transfer() {
     assert_eq!(sender.local_balance().await.unwrap(), Balance::from(1));
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(
-                sender.chain_id.clone(),
-                BlockHeight::from(0),
-                3
-            )
+            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(0), 3)
             .await
             .unwrap()
             .value,
@@ -279,11 +271,7 @@ async fn test_rotate_key_pair() {
     assert_eq!(sender.identity().await.unwrap(), new_pubk);
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(
-                sender.chain_id.clone(),
-                BlockHeight::from(0),
-                3
-            )
+            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(0), 3)
             .await
             .unwrap()
             .value,
@@ -316,11 +304,7 @@ async fn test_transfer_ownership() {
     assert!(sender.key_pair().await.is_err());
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(
-                sender.chain_id.clone(),
-                BlockHeight::from(0),
-                3
-            )
+            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(0), 3)
             .await
             .unwrap()
             .value,
@@ -352,11 +336,7 @@ async fn test_share_ownership() {
     assert!(sender.key_pair().await.is_ok());
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(
-                sender.chain_id.clone(),
-                BlockHeight::from(0),
-                3
-            )
+            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(0), 3)
             .await
             .unwrap()
             .value,
@@ -440,7 +420,7 @@ async fn test_transfer_then_open_chain() {
     });
     // Transfer before creating the chain.
     sender
-        .transfer_to_chain(Amount::from(3), new_id.clone(), UserData::default())
+        .transfer_to_chain(Amount::from(3), new_id, UserData::default())
         .await
         .unwrap();
     // Open the new chain.
@@ -450,11 +430,7 @@ async fn test_transfer_then_open_chain() {
     assert!(sender.key_pair().await.is_ok());
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(
-                sender.chain_id.clone(),
-                BlockHeight::from(1),
-                3
-            )
+            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(1), 3)
             .await
             .unwrap()
             .value,
@@ -494,7 +470,7 @@ async fn test_open_chain_then_transfer() {
     let creation_certificate = sender.open_chain(new_pubk).await.unwrap();
     // Transfer after creating the chain.
     let transfer_certificate = sender
-        .transfer_to_chain(Amount::from(3), new_id.clone(), UserData::default())
+        .transfer_to_chain(Amount::from(3), new_id, UserData::default())
         .await
         .unwrap();
     assert_eq!(sender.next_block_height, BlockHeight::from(2));
@@ -543,11 +519,7 @@ async fn test_close_chain() {
     assert!(sender.key_pair().await.is_err());
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(
-                sender.chain_id.clone(),
-                BlockHeight::from(0),
-                3
-            )
+            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(0), 3)
             .await
             .unwrap()
             .value,
@@ -588,11 +560,7 @@ async fn test_bidirectional_transfer() {
     assert_eq!(client1.local_balance().await.unwrap(), Balance::from(3));
 
     let certificate = client1
-        .transfer_to_chain(
-            Amount::from(3),
-            client2.chain_id.clone(),
-            UserData::default(),
-        )
+        .transfer_to_chain(Amount::from(3), client2.chain_id, UserData::default())
         .await
         .unwrap();
 
@@ -602,11 +570,7 @@ async fn test_bidirectional_transfer() {
 
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(
-                client1.chain_id.clone(),
-                BlockHeight::from(0),
-                3
-            )
+            .check_that_validators_have_certificate(client1.chain_id, BlockHeight::from(0), 3)
             .await
             .unwrap()
             .value,
@@ -624,11 +588,7 @@ async fn test_bidirectional_transfer() {
     // Send back some money.
     assert_eq!(client2.next_block_height, BlockHeight::from(0));
     client2
-        .transfer_to_chain(
-            Amount::from(1),
-            client1.chain_id.clone(),
-            UserData::default(),
-        )
+        .transfer_to_chain(Amount::from(1), client1.chain_id, UserData::default())
         .await
         .unwrap();
     assert_eq!(client2.next_block_height, BlockHeight::from(1));
@@ -652,7 +612,7 @@ async fn test_receiving_unconfirmed_transfer() {
     let certificate = client1
         .transfer_to_chain_unsafe_unconfirmed(
             Amount::from(2),
-            client2.chain_id.clone(),
+            client2.chain_id,
             UserData::default(),
         )
         .await
@@ -684,7 +644,7 @@ async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
     client1
         .transfer_to_chain_unsafe_unconfirmed(
             Amount::from(1),
-            client2.chain_id.clone(),
+            client2.chain_id,
             UserData::default(),
         )
         .await
@@ -692,7 +652,7 @@ async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
     client1
         .transfer_to_chain_unsafe_unconfirmed(
             Amount::from(1),
-            client2.chain_id.clone(),
+            client2.chain_id,
             UserData::default(),
         )
         .await
@@ -700,7 +660,7 @@ async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
     client1
         .communicate_chain_updates(
             &builder.committee,
-            client1.chain_id.clone(),
+            client1.chain_id,
             CommunicateAction::AdvanceToNextBlockHeight(client1.next_block_height),
         )
         .await
@@ -711,7 +671,7 @@ async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
     assert!(client2
         .transfer_to_chain_unsafe_unconfirmed(
             Amount::from(2),
-            client3.chain_id.clone(),
+            client3.chain_id,
             UserData::default(),
         )
         .await
@@ -725,11 +685,7 @@ async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
         Balance::from(2)
     );
     let certificate = client2
-        .transfer_to_chain(
-            Amount::from(2),
-            client3.chain_id.clone(),
-            UserData::default(),
-        )
+        .transfer_to_chain(Amount::from(2), client3.chain_id, UserData::default())
         .await
         .unwrap();
     // Blocks were executed locally.

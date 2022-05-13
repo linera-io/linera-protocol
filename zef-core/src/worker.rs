@@ -91,7 +91,7 @@ where
         &mut self,
         block: &Block,
     ) -> Result<ChainInfoResponse, Error> {
-        let mut chain = self.storage.read_active_chain(&block.chain_id).await?;
+        let mut chain = self.storage.read_active_chain(block.chain_id).await?;
         chain.execute_block(block)?;
         let info = chain.make_chain_info(None);
         // Do not save the new state.
@@ -104,14 +104,13 @@ where
         chain: &ChainState,
     ) -> Result<Vec<CrossChainRequest>, Error> {
         let mut continuation = Vec::new();
-        for (id, outbox) in &chain.outboxes {
-            let recipient = id.clone();
+        for (&recipient, outbox) in &chain.outboxes {
             let certificates = self
                 .storage
                 .read_certificates(outbox.queue.iter().map(|(_, hash)| *hash))
                 .await?;
             continuation.push(CrossChainRequest::UpdateRecipient {
-                sender: chain.id.clone(),
+                sender: chain.id,
                 recipient,
                 certificates,
             })
@@ -130,9 +129,9 @@ where
             &block.operation
         );
         // Obtain the sender's chain.
-        let sender = block.chain_id.clone();
+        let sender = block.chain_id;
         // Check that the chain is active and ready for this confirmation.
-        let mut chain = self.storage.read_active_chain(&sender).await?;
+        let mut chain = self.storage.read_active_chain(sender).await?;
         if chain.next_block_height < block.height {
             return Err(Error::MissingEarlierBlocks {
                 current_block_height: chain.next_block_height,
@@ -167,7 +166,7 @@ where
             // Schedule a new cross-chain request to update recipient.
             chain
                 .outboxes
-                .entry(id.clone())
+                .entry(id)
                 .or_default()
                 .queue
                 .push_back((block.height, certificate.hash));
@@ -187,7 +186,7 @@ where
     ) -> Result<ChainInfoResponse, Error> {
         assert_eq!(certificate.value.validated_block().unwrap(), &block);
         // Check that the chain is active and ready for this confirmation.
-        let mut chain = self.storage.read_active_chain(&block.chain_id).await?;
+        let mut chain = self.storage.read_active_chain(block.chain_id).await?;
         // Verify the certificate. Returns a catch-all error to make client code more robust.
         certificate
             .check(chain.state.committee.as_ref().expect("chain is active"))
@@ -222,8 +221,8 @@ where
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, Error> {
         // Obtain the sender's chain.
-        let sender = proposal.content.block.chain_id.clone();
-        let mut chain = self.storage.read_active_chain(&sender).await?;
+        let sender = proposal.content.block.chain_id;
+        let mut chain = self.storage.read_active_chain(sender).await?;
         // Check authentication of the block.
         proposal.check(&chain.state.manager)?;
         // Check if the chain is ready for this new block proposal.
@@ -282,7 +281,7 @@ where
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, Error> {
-        let chain = self.storage.read_chain_or_default(&query.chain_id).await?;
+        let chain = self.storage.read_chain_or_default(query.chain_id).await?;
         let mut info = chain.make_chain_info(None).info;
         if query.query_committee {
             info.queried_committee = chain.state.committee;
@@ -295,10 +294,10 @@ where
         }
         if query.query_pending_messages {
             let mut messages = Vec::new();
-            for (sender_id, inbox) in &chain.inboxes {
+            for (&sender_id, inbox) in &chain.inboxes {
                 for (height, operation) in &inbox.received {
                     messages.push(Message {
-                        sender_id: sender_id.clone(),
+                        sender_id,
                         height: *height,
                         operation: operation.clone(),
                     });
@@ -336,7 +335,7 @@ where
                 recipient,
                 certificates,
             } => {
-                let mut chain = self.storage.read_chain_or_default(&recipient).await?;
+                let mut chain = self.storage.read_chain_or_default(recipient).await?;
                 let mut height = None;
                 let mut need_update = false;
                 for certificate in certificates {
@@ -345,14 +344,14 @@ where
                         .confirmed_block()
                         .ok_or(Error::InvalidCrossChainRequest)?;
                     ensure!(
-                        block.operation.recipient() == Some(&recipient),
+                        block.operation.recipient() == Some(recipient),
                         Error::InvalidCrossChainRequest
                     );
                     ensure!(block.chain_id == sender, Error::InvalidCrossChainRequest);
                     ensure!(height < Some(block.height), Error::InvalidCrossChainRequest);
                     height = Some(block.height);
                     if chain.receive_message(
-                        block.chain_id.clone(),
+                        block.chain_id,
                         block.height,
                         block.operation.clone(),
                         certificate.hash,
@@ -386,7 +385,7 @@ where
                 recipient,
                 height,
             } => {
-                let mut chain = self.storage.read_active_chain(&sender).await?;
+                let mut chain = self.storage.read_active_chain(sender).await?;
                 if let std::collections::hash_map::Entry::Occupied(mut entry) =
                     chain.outboxes.entry(recipient)
                 {

@@ -138,12 +138,12 @@ impl FileStoreClient {
 
 #[async_trait]
 impl Storage for FileStoreClient {
-    async fn read_chain_or_default(&mut self, id: &ChainId) -> Result<ChainState, Error> {
+    async fn read_chain_or_default(&mut self, id: ChainId) -> Result<ChainState, Error> {
         let store = self.0.lock().await;
         Ok(store
             .read(&id)
             .await?
-            .unwrap_or_else(|| ChainState::new(id.clone())))
+            .unwrap_or_else(|| ChainState::new(id)))
     }
 
     async fn write_chain(&mut self, state: ChainState) -> Result<(), Error> {
@@ -151,7 +151,7 @@ impl Storage for FileStoreClient {
         store.write(&state.id, &state).await
     }
 
-    async fn remove_chain(&mut self, id: &ChainId) -> Result<(), Error> {
+    async fn remove_chain(&mut self, id: ChainId) -> Result<(), Error> {
         let store = self.0.lock().await;
         store.remove::<_, ChainState>(&id).await
     }

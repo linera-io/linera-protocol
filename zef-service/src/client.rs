@@ -115,7 +115,7 @@ impl ClientContext {
         &self,
         chain_id: ChainId,
     ) -> ChainClientState<network::Client, MixedStorage> {
-        let chain = self.wallet_state.get(&chain_id).expect("Unknown chain");
+        let chain = self.wallet_state.get(chain_id).expect("Unknown chain");
         let validator_clients = self.make_validator_clients();
         ChainClientState::new(
             chain_id,
@@ -140,11 +140,11 @@ impl ClientContext {
         key_pair: Option<KeyPair>,
     ) -> Result<(), failure::Error> {
         let recipient = match &certificate.value {
-            Value::Confirmed { block } => block.operation.recipient().unwrap().clone(),
+            Value::Confirmed { block } => block.operation.recipient().unwrap(),
             _ => failure::bail!("unexpected value in certificate"),
         };
         let validator_clients = self.make_validator_clients();
-        let chain = self.wallet_state.get_or_insert(recipient.clone());
+        let chain = self.wallet_state.get_or_insert(recipient);
         let mut client = ChainClientState::new(
             recipient,
             chain
@@ -173,14 +173,14 @@ impl ClientContext {
     ) -> (Vec<BlockProposal>, Vec<(ChainId, Bytes)>) {
         let mut proposals = Vec::new();
         let mut serialized_proposals = Vec::new();
-        let mut next_recipient = self.wallet_state.last_chain().unwrap().chain_id.clone();
+        let mut next_recipient = self.wallet_state.last_chain().unwrap().chain_id;
         for chain in self.wallet_state.chains_mut() {
             let key_pair = match &chain.key_pair {
                 Some(kp) => kp,
                 None => continue,
             };
             let block = Block {
-                chain_id: chain.chain_id.clone(),
+                chain_id: chain.chain_id,
                 incoming_messages: Vec::new(),
                 operation: Operation::Transfer {
                     recipient: Address::Account(next_recipient),
@@ -201,7 +201,7 @@ impl ClientContext {
             proposals.push(proposal.clone());
             let serialized_proposal =
                 serialize_message(&SerializedMessage::BlockProposal(Box::new(proposal)));
-            serialized_proposals.push((chain.chain_id.clone(), serialized_proposal.into()));
+            serialized_proposals.push((chain.chain_id, serialized_proposal.into()));
             if serialized_proposals.len() >= max_proposals {
                 break;
             }
@@ -210,7 +210,7 @@ impl ClientContext {
             chain.block_hash = Some(HashValue::new(&value));
             chain.next_block_height.try_add_assign_one().unwrap();
 
-            next_recipient = chain.chain_id.clone();
+            next_recipient = chain.chain_id;
         }
         (proposals, serialized_proposals)
     }
@@ -262,7 +262,7 @@ impl ClientContext {
         let mut done_senders = HashSet::new();
         for vote in votes {
             // We aggregate votes indexed by sender.
-            let chain_id = vote.value.chain_id().clone();
+            let chain_id = vote.value.chain_id();
             if done_senders.contains(&chain_id) {
                 continue;
             }
@@ -272,14 +272,14 @@ impl ClientContext {
             );
             let value = vote.value;
             let aggregator = aggregators
-                .entry(chain_id.clone())
+                .entry(chain_id)
                 .or_insert_with(|| SignatureAggregator::new(value, &committee));
             match aggregator.append(vote.validator, vote.signature) {
                 Ok(Some(certificate)) => {
                     debug!("Found certificate: {:?}", certificate);
                     let buf =
                         serialize_message(&SerializedMessage::Certificate(Box::new(certificate)));
-                    certificates.push((chain_id.clone(), buf.into()));
+                    certificates.push((chain_id, buf.into()));
                     done_senders.insert(chain_id);
                 }
                 Ok(None) => {
@@ -308,7 +308,7 @@ impl ClientContext {
             // Re-index proposals by shard for this particular validator client.
             let mut sharded_blocks = HashMap::new();
             for (chain_id, buf) in &proposals {
-                let shard = network::get_shard(num_shards, chain_id);
+                let shard = network::get_shard(num_shards, *chain_id);
                 sharded_blocks
                     .entry(shard)
                     .or_insert_with(Vec::new)
@@ -510,7 +510,7 @@ async fn main() {
             info!("Starting transfer");
             let time_start = Instant::now();
             let certificate = client_state
-                .transfer_to_chain(amount, recipient.clone(), UserData::default())
+                .transfer_to_chain(amount, recipient, UserData::default())
                 .await
                 .unwrap();
             let time_total = time_start.elapsed().as_micros();
@@ -666,7 +666,7 @@ async fn main() {
                 let chain = UserChain::make_initial(ChainDescription::Root(i as usize));
                 // Public "genesis" state.
                 genesis_config.chains.push((
-                    chain.description.clone().unwrap(),
+                    chain.description.unwrap(),
                     chain.key_pair.as_ref().unwrap().public(),
                     initial_funding,
                 ));

@@ -202,24 +202,24 @@ pub enum CrossChainRequest {
 
 impl CrossChainRequest {
     /// Where to send the cross-chain request.
-    pub fn target_chain_id(&self) -> &ChainId {
+    pub fn target_chain_id(&self) -> ChainId {
         use CrossChainRequest::*;
         match self {
-            UpdateRecipient { recipient, .. } => recipient,
-            ConfirmUpdatedRecipient { sender, .. } => sender,
+            UpdateRecipient { recipient, .. } => *recipient,
+            ConfirmUpdatedRecipient { sender, .. } => *sender,
         }
     }
 }
 
 impl Operation {
-    pub fn recipient(&self) -> Option<&ChainId> {
+    pub fn recipient(&self) -> Option<ChainId> {
         use Operation::*;
         match self {
             Transfer {
                 recipient: Address::Account(id),
                 ..
             }
-            | OpenChain { id, .. } => Some(id),
+            | OpenChain { id, .. } => Some(*id),
             _ => None,
         }
     }
@@ -234,10 +234,10 @@ impl Operation {
 }
 
 impl Value {
-    pub fn chain_id(&self) -> &ChainId {
+    pub fn chain_id(&self) -> ChainId {
         match self {
-            Value::Confirmed { block } => &block.chain_id,
-            Value::Validated { block, .. } => &block.chain_id,
+            Value::Confirmed { block } => block.chain_id,
+            Value::Validated { block, .. } => block.chain_id,
         }
     }
 
@@ -280,7 +280,7 @@ impl Value {
 
     pub fn confirmed_key(&self) -> Option<(ChainId, BlockHeight)> {
         match self {
-            Value::Confirmed { block } => Some((block.chain_id.clone(), block.height)),
+            Value::Confirmed { block } => Some((block.chain_id, block.height)),
             _ => None,
         }
     }
@@ -300,7 +300,7 @@ impl BlockProposal {
     pub fn check(&self, manager: &ChainManager) -> Result<(), Error> {
         ensure!(
             manager.is_active(),
-            Error::InactiveChain(self.content.block.chain_id.clone())
+            Error::InactiveChain(self.content.block.chain_id)
         );
         ensure!(manager.has_owner(&self.owner), Error::InvalidOwner);
         self.signature.check(&self.content, self.owner)
