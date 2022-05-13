@@ -49,7 +49,7 @@ pub struct KeyPair(dalek::Keypair);
 
 /// A signature public key.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash)]
-pub struct PublicKeyBytes(pub [u8; dalek::PUBLIC_KEY_LENGTH]);
+pub struct PublicKey(pub [u8; dalek::PUBLIC_KEY_LENGTH]);
 
 /// The unique identifier (UID) of a chain.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Serialize, Deserialize)]
@@ -60,10 +60,10 @@ pub struct ChainId(pub Vec<BlockHeight>);
 pub struct HashValue(generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Digest>::OutputSize>);
 
 /// Alias for the identity of a validator.
-pub type ValidatorName = PublicKeyBytes;
+pub type ValidatorName = PublicKey;
 
 /// Alias for the authentication method of a chain.
-pub type Owner = PublicKeyBytes;
+pub type Owner = PublicKey;
 
 // For testing only
 pub fn dbg_chain(name: u8) -> ChainId {
@@ -71,9 +71,9 @@ pub fn dbg_chain(name: u8) -> ChainId {
 }
 
 // For testing only
-pub fn dbg_addr(name: u8) -> PublicKeyBytes {
+pub fn dbg_addr(name: u8) -> PublicKey {
     let addr = [name; dalek::PUBLIC_KEY_LENGTH];
-    PublicKeyBytes(addr)
+    PublicKey(addr)
 }
 
 /// A signature value.
@@ -89,8 +89,8 @@ impl KeyPair {
     }
 
     /// Obtain the public key of a key-pair.
-    pub fn public(&self) -> PublicKeyBytes {
-        PublicKeyBytes(self.0.public.to_bytes())
+    pub fn public(&self) -> PublicKey {
+        PublicKey(self.0.public.to_bytes())
     }
 
     /// Avoid implementing `clone` on secret keys to prevent mistakes.
@@ -102,7 +102,7 @@ impl KeyPair {
     }
 }
 
-impl Serialize for PublicKeyBytes {
+impl Serialize for PublicKey {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::ser::Serializer,
@@ -110,12 +110,12 @@ impl Serialize for PublicKeyBytes {
         if serializer.is_human_readable() {
             serializer.serialize_str(&self.to_string())
         } else {
-            serializer.serialize_newtype_struct("PublicKeyBytes", &self.0)
+            serializer.serialize_newtype_struct("PublicKey", &self.0)
         }
     }
 }
 
-impl<'de> Deserialize<'de> for PublicKeyBytes {
+impl<'de> Deserialize<'de> for PublicKey {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::de::Deserializer<'de>,
@@ -127,7 +127,7 @@ impl<'de> Deserialize<'de> for PublicKeyBytes {
             Ok(value)
         } else {
             #[derive(Deserialize)]
-            #[serde(rename = "PublicKeyBytes")]
+            #[serde(rename = "PublicKey")]
             struct Foo([u8; dalek::PUBLIC_KEY_LENGTH]);
 
             let value = Foo::deserialize(deserializer)?;
@@ -197,13 +197,13 @@ impl<'de> Deserialize<'de> for Signature {
     }
 }
 
-impl std::fmt::Display for PublicKeyBytes {
+impl std::fmt::Display for PublicKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", hex::encode(&self.0[..]))
     }
 }
 
-impl FromStr for PublicKeyBytes {
+impl FromStr for PublicKey {
     type Err = failure::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -213,7 +213,7 @@ impl FromStr for PublicKeyBytes {
         }
         let mut pubkey = [0u8; dalek::PUBLIC_KEY_LENGTH];
         pubkey.copy_from_slice(&value[..dalek::PUBLIC_KEY_LENGTH]);
-        Ok(PublicKeyBytes(pubkey))
+        Ok(PublicKey(pubkey))
     }
 }
 
@@ -244,7 +244,7 @@ impl std::fmt::Debug for Signature {
     }
 }
 
-impl std::fmt::Debug for PublicKeyBytes {
+impl std::fmt::Debug for PublicKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         write!(f, "{}", self)
     }
@@ -558,11 +558,7 @@ impl Signature {
         Signature(signature)
     }
 
-    fn check_internal<T>(
-        &self,
-        value: &T,
-        author: PublicKeyBytes,
-    ) -> Result<(), dalek::SignatureError>
+    fn check_internal<T>(&self, value: &T, author: PublicKey) -> Result<(), dalek::SignatureError>
     where
         T: Signable<Vec<u8>>,
     {
@@ -572,7 +568,7 @@ impl Signature {
         public_key.verify(&message, &self.0)
     }
 
-    pub fn check<T>(&self, value: &T, author: PublicKeyBytes) -> Result<(), Error>
+    pub fn check<T>(&self, value: &T, author: PublicKey) -> Result<(), Error>
     where
         T: Signable<Vec<u8>> + std::fmt::Debug,
     {
@@ -586,7 +582,7 @@ impl Signature {
     fn verify_batch_internal<'a, T, I>(value: &'a T, votes: I) -> Result<(), dalek::SignatureError>
     where
         T: Signable<Vec<u8>>,
-        I: IntoIterator<Item = &'a (PublicKeyBytes, Signature)>,
+        I: IntoIterator<Item = &'a (PublicKey, Signature)>,
     {
         let mut msg = Vec::new();
         value.write(&mut msg);
@@ -604,7 +600,7 @@ impl Signature {
     pub fn verify_batch<'a, T, I>(value: &'a T, votes: I) -> Result<(), Error>
     where
         T: Signable<Vec<u8>>,
-        I: IntoIterator<Item = &'a (PublicKeyBytes, Signature)>,
+        I: IntoIterator<Item = &'a (PublicKey, Signature)>,
     {
         Signature::verify_batch_internal(value, votes).map_err(|error| Error::InvalidSignature {
             error: format!("batched {}", error),
