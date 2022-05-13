@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
+use std::collections::HashSet;
 use zef_base::{
     base_types::*, chain::ChainState, ensure, error::Error, manager::Outcome, messages::*,
 };
@@ -121,13 +122,12 @@ where
     /// (Trusted) Process a confirmed block (aka a commit).
     async fn process_confirmed_block(
         &mut self,
-        block: Block,
-        certificate: Certificate, // For logging purpose
+        certificate: Certificate,
     ) -> Result<(ChainInfoResponse, Vec<CrossChainRequest>), Error> {
-        assert_eq!(
-            &certificate.value.confirmed_block().unwrap().operation,
-            &block.operation
-        );
+        let block = certificate
+            .value
+            .confirmed_block()
+            .expect("A confirmation certificate");
         // Obtain the sender's chain.
         let sender = block.chain_id;
         // Check that the chain is active and ready for this confirmation.
@@ -152,7 +152,7 @@ where
         // Persist certificate.
         self.storage.write_certificate(certificate.clone()).await?;
         // Execute the block.
-        chain.execute_block(&block)?;
+        chain.execute_block(block)?;
         // Advance to next block height.
         chain.block_hash = Some(certificate.hash);
         chain.confirmed_log.push(certificate.hash);
@@ -161,8 +161,12 @@ where
         // Final touch on the sender's chain.
         let info = chain.make_chain_info(self.key_pair.as_ref());
         // Schedule cross-chain request if any.
-        let operation = &certificate.value.confirmed_block().unwrap().operation;
-        if let Some(id) = operation.recipient() {
+        let operations = &certificate.value.confirmed_block().unwrap().operations;
+        let recipients = operations
+            .iter()
+            .filter_map(|op| op.recipient())
+            .collect::<HashSet<_>>();
+        for id in recipients {
             // Schedule a new cross-chain request to update recipient.
             chain
                 .outboxes
@@ -180,11 +184,12 @@ where
     /// (Trusted) Process a validated block issued from a multi-owner chain.
     async fn process_validated_block(
         &mut self,
-        block: Block,
-        round: RoundNumber,
         certificate: Certificate,
     ) -> Result<ChainInfoResponse, Error> {
-        assert_eq!(certificate.value.validated_block().unwrap(), &block);
+        let (block, round) = certificate
+            .value
+            .validated_block_and_round()
+            .expect("A validation certificate");
         // Check that the chain is active and ready for this confirmation.
         let mut chain = self.storage.read_active_chain(block.chain_id).await?;
         // Verify the certificate. Returns a catch-all error to make client code more robust.
@@ -194,7 +199,7 @@ where
         if chain
             .state
             .manager
-            .check_validated_block(chain.next_block_height, &block, round)?
+            .check_validated_block(chain.next_block_height, block, round)?
             == Outcome::Skip
         {
             // If we just processed the same pending block, return the chain info
@@ -204,7 +209,7 @@ where
         chain
             .state
             .manager
-            .create_final_vote(block, certificate, self.key_pair.as_ref());
+            .create_final_vote(block.clone(), certificate, self.key_pair.as_ref());
         let info = chain.make_chain_info(self.key_pair.as_ref());
         self.storage.write_chain(chain).await?;
         Ok(info)
@@ -262,17 +267,14 @@ where
         certificate: Certificate,
     ) -> Result<(ChainInfoResponse, Vec<CrossChainRequest>), Error> {
         match &certificate.value {
-            Value::Validated { block, round } => {
+            Value::Validated { .. } => {
                 // Confirm the validated block.
-                let info = self
-                    .process_validated_block(block.clone(), *round, certificate)
-                    .await?;
+                let info = self.process_validated_block(certificate).await?;
                 Ok((info, Vec::new()))
             }
-            Value::Confirmed { block } => {
+            Value::Confirmed { .. } => {
                 // Execute the confirmed block.
-                self.process_confirmed_block(block.clone(), certificate)
-                    .await
+                self.process_confirmed_block(certificate).await
             }
         }
     }
@@ -295,11 +297,32 @@ where
         if query.query_pending_messages {
             let mut messages = Vec::new();
             for (&sender_id, inbox) in &chain.inboxes {
-                for (height, operation) in &inbox.received {
+                let mut operations = Vec::new();
+                let mut current_height = None;
+                for (height, index, operation) in &inbox.received {
+                    match current_height {
+                        Some(last_height) if last_height != *height => {
+                            // Pack operations into a new message.
+                            messages.push(Message {
+                                sender_id,
+                                height: last_height,
+                                operations,
+                            });
+                            operations = Vec::new();
+                            current_height = Some(*height);
+                        }
+                        None => {
+                            current_height = Some(*height);
+                        }
+                        _ => (),
+                    }
+                    operations.push((*index, operation.clone()));
+                }
+                if let Some(last_height) = current_height {
                     messages.push(Message {
                         sender_id,
-                        height: *height,
-                        operation: operation.clone(),
+                        height: last_height,
+                        operations,
                     });
                 }
             }
@@ -343,17 +366,13 @@ where
                         .value
                         .confirmed_block()
                         .ok_or(Error::InvalidCrossChainRequest)?;
-                    ensure!(
-                        block.operation.recipient() == Some(recipient),
-                        Error::InvalidCrossChainRequest
-                    );
                     ensure!(block.chain_id == sender, Error::InvalidCrossChainRequest);
                     ensure!(height < Some(block.height), Error::InvalidCrossChainRequest);
                     height = Some(block.height);
-                    if chain.receive_message(
+                    if chain.receive_block(
                         block.chain_id,
                         block.height,
-                        block.operation.clone(),
+                        block.operations.clone(),
                         certificate.hash,
                     )? {
                         self.storage.write_certificate(certificate).await?;

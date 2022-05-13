@@ -53,11 +53,11 @@ pub struct InboxState {
     /// We have already received the cross-chain requests and enqueued all the messages
     /// below this height.
     pub next_height_to_receive: BlockHeight,
-    /// These messages have been received but not yet picked by a block to be executed.
-    pub received: VecDeque<(BlockHeight, Operation)>,
-    /// These messages have been executed but the cross-chain requests have not been
+    /// These operations have been received but not yet picked by a block to be executed.
+    pub received: VecDeque<(BlockHeight, usize, Operation)>,
+    /// These operations have been executed but the cross-chain requests have not been
     /// received yet.
-    pub expected: VecDeque<(BlockHeight, Operation)>,
+    pub expected: VecDeque<(BlockHeight, usize, Operation)>,
 }
 
 /// Execution state of a chain.
@@ -149,81 +149,107 @@ impl ChainState {
         matches!(error, Error::MissingCrossChainUpdate { .. })
     }
 
-    /// Schedule the recipient's side of an operation for execution, unless it was already
-    /// executed. Returns true if the call changed the chain state. Operations must be
-    /// received by order of heights in the sender's chain.
-    pub fn receive_message(
+    /// Schedule operations to be executed as a recipient, unless this block was already
+    /// processed. Returns true if the call changed the chain state. Operations must be
+    /// received by order of heights and indices.
+    pub fn receive_block(
         &mut self,
         sender_id: ChainId,
         height: BlockHeight,
-        operation: Operation,
+        operations: Vec<Operation>,
         key: HashValue,
     ) -> Result<bool, Error> {
         let inbox = self.inboxes.entry(sender_id).or_default();
         if height < inbox.next_height_to_receive {
-            // We already received this message.
+            // We already received this block.
             return Ok(false);
         }
+        // Mark the block as received.
         inbox.next_height_to_receive = height.try_add_one()?;
         self.received_log.push(key);
-        // Chain creation is a special operation that can only be executed (once) in this callback.
-        if let Operation::OpenChain {
-            owner, committee, ..
-        } = &operation
-        {
-            // guaranteed under BFT assumptions.
-            assert!(self.description.is_none());
-            assert!(!self.state.manager.is_active());
-            assert!(self.state.committee.is_none());
-            self.description = Some(ChainDescription::Child(OperationId {
-                chain_id: sender_id,
-                height,
-            }));
-            self.state.committee = Some(committee.clone());
-            self.state.manager = ChainManager::single(*owner);
-            // Proceed to scheduling the operation for "execution". Although it won't do
-            // anything, it's simpler than asking block producers to skip this kind of
-            // incoming message.
-        }
-        // Find if the message was executed ahead of time.
-        if let Some((expected_height, expected_operation)) = inbox.expected.front() {
-            if height == *expected_height && operation == *expected_operation {
-                // We already executed this message. Remove it from the queue.
-                inbox.expected.pop_front();
-                return Ok(true);
+
+        let mut has_processed_operations = false;
+        for (index, operation) in operations.into_iter().enumerate() {
+            if operation.recipient() != Some(self.id) {
+                continue;
             }
-            // Should be unreachable under BFT assumptions.
-            panic!("Given the confirmed blocks that we have seen, we were expecting a different message to come first.");
+            // Chain creation is a special operation that can only be executed (once) in this callback.
+            if let Operation::OpenChain {
+                owner, committee, ..
+            } = &operation
+            {
+                // guaranteed under BFT assumptions.
+                assert!(self.description.is_none());
+                assert!(!self.state.manager.is_active());
+                assert!(self.state.committee.is_none());
+                let description = ChainDescription::Child(OperationId {
+                    chain_id: sender_id,
+                    height,
+                    index,
+                });
+                assert_eq!(self.id, description.into());
+                self.description = Some(description);
+                self.state.committee = Some(committee.clone());
+                self.state.manager = ChainManager::single(*owner);
+                // Proceed to scheduling the operation for "execution". Although it won't do
+                // anything, it's simpler than asking block producers to skip this kind of
+                // incoming message.
+            }
+            // Find if the message was executed ahead of time.
+            if let Some((expected_height, expected_index, expected_operation)) =
+                inbox.expected.front()
+            {
+                if height == *expected_height
+                    && index == *expected_index
+                    && operation == *expected_operation
+                {
+                    // We already executed this message. Remove it from the queue.
+                    inbox.expected.pop_front();
+                    return Ok(true);
+                }
+                // Should be unreachable under BFT assumptions.
+                panic!("Given the confirmed blocks that we have seen, we were expecting a different message to come first.");
+            }
+            // Otherwise, schedule the message for execution.
+            inbox.received.push_back((height, index, operation));
+            has_processed_operations = true;
         }
-        // Otherwise, schedule the message for execution.
-        inbox.received.push_back((height, operation));
+        ensure!(has_processed_operations, Error::InvalidCrossChainRequest);
         Ok(true)
     }
 
     /// Execute a new block: first the incoming messages, then the main operation.
     pub fn execute_block(&mut self, block: &Block) -> Result<(), Error> {
         for message in &block.incoming_messages {
-            let inbox = self.inboxes.entry(message.sender_id).or_default();
-            match inbox.received.front() {
-                Some((height, operation)) => {
-                    ensure!(
-                        message.height == *height && message.operation == *operation,
-                        Error::InvalidMessage {
-                            sender_id: message.sender_id,
-                            height: message.height,
-                        }
-                    );
-                    inbox.received.pop_front().unwrap();
+            for (message_index, message_operation) in &message.operations {
+                let inbox = self.inboxes.entry(message.sender_id).or_default();
+                match inbox.received.front() {
+                    Some((height, index, operation)) => {
+                        ensure!(
+                            message.height == *height
+                                && message_index == index
+                                && message_operation == operation,
+                            Error::InvalidMessage {
+                                sender_id: message.sender_id,
+                                height: message.height,
+                            }
+                        );
+                        inbox.received.pop_front().unwrap();
+                    }
+                    None => {
+                        inbox.expected.push_back((
+                            message.height,
+                            *message_index,
+                            message_operation.clone(),
+                        ));
+                    }
                 }
-                None => {
-                    inbox
-                        .expected
-                        .push_back((message.height, message.operation.clone()));
-                }
+                self.apply_operation_as_recipient(message_operation)?;
             }
-            self.apply_operation_as_recipient(&message.operation)?;
         }
-        self.apply_operation_as_sender(block.chain_id, block.height, &block.operation)?;
+        for (index, operation) in block.operations.iter().enumerate() {
+            self.apply_operation_as_sender(block.chain_id, block.height, index, operation)?;
+        }
         Ok(())
     }
 
@@ -232,11 +258,16 @@ impl ChainState {
         &mut self,
         chain_id: ChainId,
         height: BlockHeight,
+        index: usize,
         operation: &Operation,
     ) -> Result<(), Error> {
         match &operation {
             Operation::OpenChain { id, committee, .. } => {
-                let expected_id = ChainId::child(OperationId { chain_id, height });
+                let expected_id = ChainId::child(OperationId {
+                    chain_id,
+                    height,
+                    index,
+                });
                 ensure!(id == &expected_id, Error::InvalidNewChainId(*id));
                 ensure!(
                     self.state.committee.as_ref() == Some(committee),

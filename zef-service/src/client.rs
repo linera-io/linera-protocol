@@ -140,7 +140,9 @@ impl ClientContext {
         key_pair: Option<KeyPair>,
     ) -> Result<(), failure::Error> {
         let recipient = match &certificate.value {
-            Value::Confirmed { block } => block.operation.recipient().unwrap(),
+            Value::Confirmed { block } if block.operations.len() == 1 => {
+                block.operations[0].recipient().unwrap()
+            }
             _ => failure::bail!("unexpected value in certificate"),
         };
         let validator_clients = self.make_validator_clients();
@@ -182,11 +184,11 @@ impl ClientContext {
             let block = Block {
                 chain_id: chain.chain_id,
                 incoming_messages: Vec::new(),
-                operation: Operation::Transfer {
+                operations: vec![Operation::Transfer {
                     recipient: Address::Account(next_recipient),
                     amount: Amount::from(1),
                     user_data: UserData::default(),
-                },
+                }],
                 previous_block_hash: chain.block_hash,
                 height: chain.next_block_height,
             };
@@ -543,11 +545,7 @@ async fn main() {
             info!("{:?}", certificate);
             println!(
                 "{}",
-                certificate
-                    .value
-                    .confirmed_block()
-                    .unwrap()
-                    .operation
+                certificate.value.confirmed_block().unwrap().operations[0]
                     .recipient()
                     .unwrap()
             );

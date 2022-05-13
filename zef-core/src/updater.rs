@@ -174,6 +174,7 @@ where
                         Some(ChainDescription::Child(OperationId {
                             chain_id: parent_id,
                             height,
+                            index: _,
                         })) => {
                             jobs.push((chain_id, BlockHeight::from(0), target_block_height, true));
                             chain_id = parent_id;
