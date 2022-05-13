@@ -13,11 +13,7 @@ use zef_base::{
 };
 
 #[cfg(test)]
-use zef_base::{
-    base_types::{dbg_chain, PublicKey},
-    committee::Committee,
-    manager::ChainManager,
-};
+use zef_base::{base_types::PublicKey, committee::Committee, manager::ChainManager};
 
 #[cfg(test)]
 #[path = "unit_tests/memory_storage_tests.rs"]
