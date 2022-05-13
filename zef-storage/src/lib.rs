@@ -28,10 +28,7 @@ use zef_base::{
 pub trait Storage: DynClone + Send + Sync {
     async fn read_active_chain(&mut self, id: &ChainId) -> Result<ChainState, Error> {
         let chain = self.read_chain_or_default(id).await?;
-        ensure!(
-            chain.state.manager.is_active() && chain.state.committee.is_some(),
-            Error::InactiveChain(id.clone())
-        );
+        ensure!(chain.is_active(), Error::InactiveChain(id.clone()));
         Ok(chain)
     }
 

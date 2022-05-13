@@ -71,22 +71,6 @@ pub struct ExecutionState {
 }
 
 impl ChainState {
-    pub fn make_chain_info(&self, key_pair: Option<&KeyPair>) -> ChainInfoResponse {
-        let info = ChainInfo {
-            chain_id: self.id.clone(),
-            manager: self.state.manager.clone(),
-            balance: self.state.balance,
-            queried_committee: None,
-            queried_pending_messages: Vec::new(),
-            block_hash: self.block_hash,
-            next_block_height: self.next_block_height,
-            queried_sent_certificates: Vec::new(),
-            count_received_certificates: self.received_log.len(),
-            queried_received_certificates: Vec::new(),
-        };
-        ChainInfoResponse::new(info, key_pair)
-    }
-
     pub fn new(id: ChainId) -> Self {
         let state = ExecutionState {
             committee: None,
@@ -111,6 +95,26 @@ impl ChainState {
         chain.state.manager = ChainManager::single(owner);
         chain.state.balance = balance;
         chain
+    }
+
+    pub fn is_active(&self) -> bool {
+        self.state.manager.is_active() && self.state.committee.is_some()
+    }
+
+    pub fn make_chain_info(&self, key_pair: Option<&KeyPair>) -> ChainInfoResponse {
+        let info = ChainInfo {
+            chain_id: self.id.clone(),
+            manager: self.state.manager.clone(),
+            balance: self.state.balance,
+            queried_committee: None,
+            queried_pending_messages: Vec::new(),
+            block_hash: self.block_hash,
+            next_block_height: self.next_block_height,
+            queried_sent_certificates: Vec::new(),
+            count_received_certificates: self.received_log.len(),
+            queried_received_certificates: Vec::new(),
+        };
+        ChainInfoResponse::new(info, key_pair)
     }
 
     /// Verify that this chain is up-to-date and all the messages executed ahead of time
