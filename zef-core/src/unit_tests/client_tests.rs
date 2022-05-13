@@ -387,6 +387,7 @@ async fn test_open_chain_then_close_it() {
     let new_id = ChainId::child(OperationId {
         chain_id: ChainId::root(1),
         height: BlockHeight::from(0),
+        index: 0,
     });
     // Open the new chain.
     let certificate = sender.open_chain(new_pubk).await.unwrap();
@@ -417,6 +418,7 @@ async fn test_transfer_then_open_chain() {
     let new_id = ChainId::child(OperationId {
         chain_id: ChainId::root(1),
         height: BlockHeight::from(1),
+        index: 0,
     });
     // Transfer before creating the chain.
     sender
@@ -438,9 +440,9 @@ async fn test_transfer_then_open_chain() {
     );
     assert!(matches!(&certificate.value, Value::Confirmed{
         block: Block {
-            operation: Operation::OpenChain { id, .. },
+            operations,
             ..
-        }} if &new_id == id
+        }} if matches!(&operations[..], &[Operation::OpenChain { id, .. }] if new_id == id)
     ));
     // Make a client to try the new chain.
     let mut client = builder
@@ -465,6 +467,7 @@ async fn test_open_chain_then_transfer() {
     let new_id = ChainId::child(OperationId {
         chain_id: ChainId::root(1),
         height: BlockHeight::from(0),
+        index: 0,
     });
     // Open the new chain.
     let creation_certificate = sender.open_chain(new_pubk).await.unwrap();
@@ -509,10 +512,10 @@ async fn test_close_chain() {
         &certificate.value,
         Value::Confirmed {
             block: Block {
-                operation: Operation::CloseChain,
+                operations,
                 ..
             }
-        }
+        } if matches!(&operations[..], &[Operation::CloseChain])
     ));
     assert_eq!(sender.next_block_height, BlockHeight::from(1));
     assert!(sender.pending_block.is_none());

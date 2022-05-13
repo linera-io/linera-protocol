@@ -40,7 +40,7 @@ pub enum Operation {
     ChangeMultipleOwners { new_owners: Vec<Owner> },
 }
 
-/// A block containing a single operation for the given chain, as well as the
+/// A block containing operations to apply on a given chain, as well as the
 /// acknowledgment of a number of incoming messages from other chains.
 /// * Incoming messages must be selected in the order they were
 ///   produced by the sending chain, without skipping messages.
@@ -53,8 +53,8 @@ pub struct Block {
     pub chain_id: ChainId,
     /// A selection of incoming messages to be executed first.
     pub incoming_messages: Vec<Message>,
-    /// The operation to execute.
-    pub operation: Operation,
+    /// The operations to execute.
+    pub operations: Vec<Operation>,
     /// The block height.
     pub height: BlockHeight,
     /// Certified hash (see `Certificate` below) of the previous block in the
@@ -69,12 +69,12 @@ pub struct BlockAndRound {
     pub round: RoundNumber,
 }
 
-/// A message received by a chain.
+/// A selection of operations sent by a block to another chain.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct Message {
     pub sender_id: ChainId,
     pub height: BlockHeight,
-    pub operation: Operation,
+    pub operations: Vec<(usize, Operation)>,
 }
 
 /// An authenticated proposal for a new block.
@@ -266,6 +266,13 @@ impl Value {
     pub fn validated_block(&self) -> Option<&Block> {
         match self {
             Value::Validated { block, .. } => Some(block),
+            _ => None,
+        }
+    }
+
+    pub fn validated_block_and_round(&self) -> Option<(&Block, RoundNumber)> {
+        match self {
+            Value::Validated { block, round } => Some((block, *round)),
             _ => None,
         }
     }

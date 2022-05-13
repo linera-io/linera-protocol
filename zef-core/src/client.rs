@@ -14,8 +14,7 @@ use std::{
     time::Duration,
 };
 use zef_base::{
-    base_types::*, committee::Committee, ensure as my_ensure, error::Error, manager::ChainManager,
-    messages::*,
+    base_types::*, committee::Committee, error::Error, manager::ChainManager, messages::*,
 };
 use zef_storage::Storage;
 
@@ -410,18 +409,10 @@ where
                     // users could send us a lot of uninteresting transactions.
                     response.check(name)?;
                     for certificate in &response.info.queried_received_certificates {
-                        let block = certificate
+                        certificate
                             .value
                             .confirmed_block()
                             .ok_or(Error::ClientErrorWhileQueryingCertificate)?;
-                        let recipient = block
-                            .operation
-                            .recipient()
-                            .ok_or(Error::ClientErrorWhileQueryingCertificate)?;
-                        my_ensure!(
-                            recipient == chain_id,
-                            Error::ClientErrorWhileQueryingCertificate
-                        );
                     }
                     Ok((name, response.info))
                 })
@@ -472,11 +463,11 @@ where
         let block = Block {
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
-            operation: Operation::Transfer {
+            operations: vec![Operation::Transfer {
                 recipient,
                 amount,
                 user_data,
-            },
+            }],
             height: self.next_block_height,
             previous_block_hash: self.block_hash,
         };
@@ -614,7 +605,7 @@ where
         let block = Block {
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
-            operation: Operation::CloseChain, // Placeholder
+            operations: Vec::new(),
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
         };
@@ -679,10 +670,6 @@ where
             .confirmed_block()
             .ok_or_else(|| failure::format_err!("Was expecting a confirmed chain operation"))?
             .clone();
-        ensure!(
-            block.operation.recipient() == Some(self.chain_id),
-            "Block should be received by us."
-        );
         // Recover history from the network.
         self.node_client
             .download_certificates(self.validator_clients.clone(), block.chain_id, block.height)
@@ -707,7 +694,7 @@ where
         let block = Block {
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
-            operation: Operation::ChangeOwner { new_owner },
+            operations: vec![Operation::ChangeOwner { new_owner }],
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
         };
@@ -726,7 +713,7 @@ where
         let block = Block {
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
-            operation: Operation::ChangeOwner { new_owner },
+            operations: vec![Operation::ChangeOwner { new_owner }],
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
         };
@@ -742,9 +729,9 @@ where
         let block = Block {
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
-            operation: Operation::ChangeMultipleOwners {
+            operations: vec![Operation::ChangeMultipleOwners {
                 new_owners: vec![owner, new_owner],
-            },
+            }],
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
         };
@@ -759,16 +746,17 @@ where
         let id = ChainId::child(OperationId {
             chain_id: self.chain_id,
             height: self.next_block_height,
+            index: 0,
         });
         let committee = self.committee().await?;
         let block = Block {
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
-            operation: Operation::OpenChain {
+            operations: vec![Operation::OpenChain {
                 id,
                 owner,
                 committee,
-            },
+            }],
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
         };
@@ -783,7 +771,7 @@ where
         let block = Block {
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
-            operation: Operation::CloseChain,
+            operations: vec![Operation::CloseChain],
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
         };
@@ -803,11 +791,11 @@ where
         let block = Block {
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
-            operation: Operation::Transfer {
+            operations: vec![Operation::Transfer {
                 recipient: Address::Account(recipient),
                 amount,
                 user_data,
-            },
+            }],
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
         };
