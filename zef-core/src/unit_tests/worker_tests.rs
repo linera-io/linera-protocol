@@ -15,7 +15,7 @@ async fn test_handle_block_proposal_bad_signature() {
     let recipient = Address::Account(dbg_chain(2));
     let (_, mut state) = init_state_with_chains(vec![
         (dbg_chain(1), sender_key_pair.public(), Balance::from(5)),
-        (dbg_chain(2), dbg_addr(2), Balance::from(0)),
+        (dbg_chain(2), PublicKey::debug(2), Balance::from(0)),
     ])
     .await;
     let block_proposal = make_transfer_block_proposal(
@@ -50,7 +50,7 @@ async fn test_handle_block_proposal_zero_amount() {
     let recipient = Address::Account(dbg_chain(2));
     let (_, mut state) = init_state_with_chains(vec![
         (dbg_chain(1), sender_key_pair.public(), Balance::from(5)),
-        (dbg_chain(2), dbg_addr(2), Balance::from(0)),
+        (dbg_chain(2), PublicKey::debug(2), Balance::from(0)),
     ])
     .await;
     // test block non-positive amount
@@ -82,7 +82,7 @@ async fn test_handle_block_proposal_unknown_sender() {
     let recipient = Address::Account(dbg_chain(2));
     let (_, mut state) = init_state_with_chains(vec![
         (dbg_chain(1), sender_key_pair.public(), Balance::from(5)),
-        (dbg_chain(2), dbg_addr(2), Balance::from(0)),
+        (dbg_chain(2), PublicKey::debug(2), Balance::from(0)),
     ])
     .await;
     let block_proposal = make_transfer_block_proposal(
@@ -116,7 +116,7 @@ async fn test_handle_block_proposal_bad_block_height() {
     let recipient = Address::Account(dbg_chain(2));
     let (_, mut state) = init_state_with_chains(vec![
         (dbg_chain(1), sender_key_pair.public(), Balance::from(5)),
-        (dbg_chain(2), dbg_addr(2), Balance::from(0)),
+        (dbg_chain(2), PublicKey::debug(2), Balance::from(0)),
     ])
     .await;
     let block_proposal = make_transfer_block_proposal(
@@ -152,7 +152,7 @@ async fn test_handle_block_proposal_exceed_balance() {
     let recipient = Address::Account(dbg_chain(2));
     let (_, mut state) = init_state_with_chains(vec![
         (dbg_chain(1), sender_key_pair.public(), Balance::from(5)),
-        (dbg_chain(2), dbg_addr(2), Balance::from(0)),
+        (dbg_chain(2), PublicKey::debug(2), Balance::from(0)),
     ])
     .await;
     let block_proposal = make_transfer_block_proposal(
@@ -218,7 +218,7 @@ async fn test_handle_block_proposal_replay() {
     let recipient = Address::Account(dbg_chain(2));
     let (_, mut state) = init_state_with_chains(vec![
         (dbg_chain(1), sender_key_pair.public(), Balance::from(5)),
-        (dbg_chain(2), dbg_addr(2), Balance::from(0)),
+        (dbg_chain(2), PublicKey::debug(2), Balance::from(0)),
     ])
     .await;
     let block_proposal = make_transfer_block_proposal(
@@ -249,7 +249,7 @@ async fn test_handle_block_proposal_replay() {
 async fn test_handle_certificate_unknown_sender() {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut state) =
-        init_state_with_chains(vec![(dbg_chain(2), dbg_addr(2), Balance::from(0))]).await;
+        init_state_with_chains(vec![(dbg_chain(2), PublicKey::debug(2), Balance::from(0))]).await;
     let certificate = make_transfer_certificate(
         dbg_chain(1),
         &sender_key_pair,
@@ -267,7 +267,7 @@ async fn test_handle_certificate_bad_block_height() {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut state) = init_state_with_chains(vec![
         (dbg_chain(1), sender_key_pair.public(), Balance::from(5)),
-        (dbg_chain(2), dbg_addr(2), Balance::from(0)),
+        (dbg_chain(2), PublicKey::debug(2), Balance::from(0)),
     ])
     .await;
     let certificate = make_transfer_certificate(
@@ -293,7 +293,7 @@ async fn test_handle_certificate_with_early_incoming_message() {
     let key_pair = KeyPair::generate();
     let (committee, mut state) = init_state_with_chains(vec![
         (dbg_chain(1), key_pair.public(), Balance::from(5)),
-        (dbg_chain(2), dbg_addr(2), Balance::from(0)),
+        (dbg_chain(2), PublicKey::debug(2), Balance::from(0)),
     ])
     .await;
 
@@ -357,7 +357,7 @@ async fn test_handle_certificate_receiver_balance_overflow() {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut state) = init_state_with_chains(vec![
         (dbg_chain(1), sender_key_pair.public(), Balance::from(1)),
-        (dbg_chain(2), dbg_addr(2), Balance::max()),
+        (dbg_chain(2), PublicKey::debug(2), Balance::max()),
     ])
     .await;
 
@@ -437,7 +437,7 @@ async fn test_handle_certificate_receiver_equal_sender() {
 async fn test_handle_cross_chain_request() {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut state) =
-        init_state_with_chains(vec![(dbg_chain(2), dbg_addr(2), Balance::from(1))]).await;
+        init_state_with_chains(vec![(dbg_chain(2), PublicKey::debug(2), Balance::from(1))]).await;
     let certificate = make_transfer_certificate(
         dbg_chain(1),
         &sender_key_pair,
@@ -662,7 +662,8 @@ async fn test_handle_certificate_to_inactive_recipient() {
 #[tokio::test]
 async fn test_read_chain_state() {
     let sender = dbg_chain(1);
-    let (_, mut state) = init_state_with_chain(sender.clone(), dbg_addr(1), Balance::from(5)).await;
+    let (_, mut state) =
+        init_state_with_chain(sender.clone(), PublicKey::debug(1), Balance::from(5)).await;
     state.storage.read_active_chain(&sender).await.unwrap();
 }
 
@@ -670,7 +671,8 @@ async fn test_read_chain_state() {
 async fn test_read_chain_state_unknown_chain() {
     let sender = dbg_chain(1);
     let unknown_chain_id = dbg_chain(99);
-    let (committee, mut state) = init_state_with_chain(sender, dbg_addr(1), Balance::from(5)).await;
+    let (committee, mut state) =
+        init_state_with_chain(sender, PublicKey::debug(1), Balance::from(5)).await;
     assert!(state
         .storage
         .read_active_chain(&unknown_chain_id)
@@ -682,7 +684,7 @@ async fn test_read_chain_state_unknown_chain() {
         .await
         .unwrap();
     chain.state.committee = Some(committee);
-    chain.state.manager = ChainManager::single(dbg_addr(4));
+    chain.state.manager = ChainManager::single(PublicKey::debug(4));
     state.storage.write_chain(chain).await.unwrap();
     state
         .storage
