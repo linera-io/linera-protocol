@@ -32,7 +32,11 @@ async fn make_shard_server(
     // NOTE: This log entry is used to compute performance.
     info!("Shard booted on {}", server_config.validator.host);
     let num_shards = server_config.validator.num_shards;
-    let state = WorkerState::new(Some(server_config.key.copy()), storage);
+    let state = WorkerState::new(
+        Some(server_config.key.copy()),
+        storage,
+        /* allow_inactive_chains */ false,
+    );
     network::Server::new(
         server_config.validator.network_protocol,
         local_ip_addr.to_string(),
