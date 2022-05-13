@@ -70,15 +70,17 @@ pub fn dbg_chain(name: u8) -> ChainId {
     ChainId(vec![BlockHeight(name.into())])
 }
 
-// For testing only
-pub fn dbg_addr(name: u8) -> PublicKey {
-    let addr = [name; dalek::PUBLIC_KEY_LENGTH];
-    PublicKey(addr)
-}
-
 /// A signature value.
 #[derive(Eq, PartialEq, Copy, Clone)]
 pub struct Signature(dalek::Signature);
+
+impl PublicKey {
+    // For testing only
+    pub fn debug(name: u8) -> PublicKey {
+        let addr = [name; dalek::PUBLIC_KEY_LENGTH];
+        PublicKey(addr)
+    }
+}
 
 impl KeyPair {
     /// Generate a new key-pair.
