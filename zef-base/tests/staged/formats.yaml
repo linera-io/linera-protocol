@@ -270,41 +270,53 @@ Error:
           - height:
               TYPENAME: BlockHeight
     26:
-      InvalidMessage:
+      InvalidMessageContent:
         STRUCT:
           - sender_id:
               TYPENAME: ChainId
           - height:
               TYPENAME: BlockHeight
+          - index: U64
     27:
-      CertificateNotFound: UNIT
+      InvalidMessageOrder:
+        STRUCT:
+          - sender_id:
+              TYPENAME: ChainId
+          - height:
+              TYPENAME: BlockHeight
+          - index: U64
+          - expected_height:
+              TYPENAME: BlockHeight
+          - expected_index: U64
     28:
-      InvalidCrossChainRequest: UNIT
+      CertificateNotFound: UNIT
     29:
-      InvalidBlockProposal: UNIT
+      InvalidCrossChainRequest: UNIT
     30:
-      ClientErrorWhileProcessingBlockProposal: UNIT
+      InvalidBlockProposal: UNIT
     31:
-      ClientErrorWhileQueryingCertificate: UNIT
+      ClientErrorWhileProcessingBlockProposal: UNIT
     32:
-      WrongShard: UNIT
+      ClientErrorWhileQueryingCertificate: UNIT
     33:
-      InvalidDecoding: UNIT
+      WrongShard: UNIT
     34:
-      UnexpectedMessage: UNIT
+      InvalidDecoding: UNIT
     35:
+      UnexpectedMessage: UNIT
+    36:
       ClientIoError:
         STRUCT:
           - error: STR
-    36:
+    37:
       StorageIoError:
         STRUCT:
           - error: STR
-    37:
+    38:
       StorageBcsError:
         STRUCT:
           - error: STR
-    38:
+    39:
       MissingCertificate:
         STRUCT:
           - hash:

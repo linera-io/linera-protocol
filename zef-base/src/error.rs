@@ -101,12 +101,24 @@ pub enum Error {
         height: BlockHeight,
     },
     #[fail(
-        display = "Invalid message from chain {:?} at height {:?}",
-        sender_id, height
+        display = "Message in block proposal does not match received message from chain {:?} at height {:?} and index {:?}",
+        sender_id, height, index
     )]
-    InvalidMessage {
+    InvalidMessageContent {
         sender_id: ChainId,
         height: BlockHeight,
+        index: usize,
+    },
+    #[fail(
+        display = "Message in block proposal does not match the order of received messages from chain {:?}: was height {:?} and index {:?} instead of {:?} and {:?})",
+        sender_id, height, index, expected_height, expected_index
+    )]
+    InvalidMessageOrder {
+        sender_id: ChainId,
+        height: BlockHeight,
+        index: usize,
+        expected_height: BlockHeight,
+        expected_index: usize,
     },
 
     // Other server-side errors

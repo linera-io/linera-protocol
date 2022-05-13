@@ -291,7 +291,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             ChainId::root(2),
             &recipient_key_pair,
             Address::Account(ChainId::root(3)),
-            Amount::from(6),
+            Amount::from(5),
             vec![
                 MessageGroup {
                     sender_id: ChainId::root(1),
@@ -333,7 +333,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
         // Inconsistent received messages.
         assert!(matches!(
             state.handle_block_proposal(block_proposal).await,
-            Err(Error::InvalidMessage { .. })
+            Err(Error::InvalidMessageContent { .. })
         ));
     }
     {
@@ -383,7 +383,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
         // Inconsistent order in received messages (indices).
         assert!(matches!(
             state.handle_block_proposal(block_proposal).await,
-            Err(Error::InvalidMessage { .. })
+            Err(Error::InvalidMessageOrder { .. })
         ));
     }
     {
@@ -433,7 +433,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
         // Inconsistent order in received messages (heights).
         assert!(matches!(
             state.handle_block_proposal(block_proposal).await,
-            Err(Error::InvalidMessage { .. })
+            Err(Error::InvalidMessageOrder { .. })
         ));
     }
     {
@@ -473,7 +473,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
         // Cannot skip messages.
         assert!(matches!(
             state.handle_block_proposal(block_proposal).await,
-            Err(Error::InvalidMessage { .. })
+            Err(Error::InvalidMessageOrder { .. })
         ));
     }
     {
