@@ -65,11 +65,6 @@ pub type ValidatorName = PublicKey;
 /// Alias for the authentication method of a chain.
 pub type Owner = PublicKey;
 
-// For testing only
-pub fn dbg_chain(name: u8) -> ChainId {
-    ChainId(vec![BlockHeight(name.into())])
-}
-
 /// A signature value.
 #[derive(Eq, PartialEq, Copy, Clone)]
 pub struct Signature(dalek::Signature);
@@ -262,6 +257,11 @@ impl ChainId {
     pub fn new(numbers: Vec<BlockHeight>) -> Self {
         assert!(!numbers.is_empty());
         Self(numbers)
+    }
+
+    // For testing only
+    pub fn debug(name: u8) -> ChainId {
+        ChainId(vec![BlockHeight(name.into())])
     }
 
     pub fn split(&self) -> Option<(ChainId, BlockHeight)> {
