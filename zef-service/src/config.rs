@@ -102,7 +102,7 @@ impl UserChain {
     pub fn make_initial(description: ChainDescription) -> Self {
         let key_pair = KeyPair::generate();
         Self {
-            chain_id: description.clone().into(),
+            chain_id: description.into(),
             description: Some(description),
             key_pair: Some(key_pair),
             block_hash: None,
@@ -116,18 +116,18 @@ pub struct WalletState {
 }
 
 impl WalletState {
-    pub fn get(&self, chain_id: &ChainId) -> Option<&UserChain> {
-        self.chains.get(chain_id)
+    pub fn get(&self, chain_id: ChainId) -> Option<&UserChain> {
+        self.chains.get(&chain_id)
     }
 
     pub fn get_or_insert(&mut self, chain_id: ChainId) -> &UserChain {
         self.chains
-            .entry(chain_id.clone())
+            .entry(chain_id)
             .or_insert_with(|| UserChain::new(chain_id))
     }
 
     pub fn insert(&mut self, chain: UserChain) {
-        self.chains.insert(chain.chain_id.clone(), chain);
+        self.chains.insert(chain.chain_id, chain);
     }
 
     pub fn num_chains(&self) -> usize {
@@ -149,8 +149,8 @@ impl WalletState {
     {
         let chain = self
             .chains
-            .entry(state.chain_id().clone())
-            .or_insert_with(|| UserChain::new(state.chain_id().clone()));
+            .entry(state.chain_id())
+            .or_insert_with(|| UserChain::new(state.chain_id()));
         chain.key_pair = state.key_pair().await.map(|k| k.copy()).ok();
         chain.block_hash = state.block_hash();
         chain.next_block_height = state.next_block_height();
@@ -167,7 +167,7 @@ impl WalletState {
         Ok(Self {
             chains: stream
                 .filter_map(Result::ok)
-                .map(|chain: UserChain| (chain.chain_id.clone(), chain))
+                .map(|chain: UserChain| (chain.chain_id, chain))
                 .collect(),
         })
     }
@@ -207,7 +207,7 @@ impl GenesisConfig {
         for (description, owner, balance) in &self.chains {
             let chain = ChainState::create(
                 self.committee.clone().into_committee(),
-                description.clone(),
+                *description,
                 *owner,
                 *balance,
             );

@@ -17,7 +17,7 @@ use structopt::StructOpt;
 use tokio::time;
 
 /// Static shard assignment
-pub fn get_shard(num_shards: u32, chain_id: &ChainId) -> u32 {
+pub fn get_shard(num_shards: u32, chain_id: ChainId) -> u32 {
     use std::hash::{Hash, Hasher};
     let mut s = std::collections::hash_map::DefaultHasher::new();
     chain_id.hash(&mut s);
@@ -79,7 +79,7 @@ impl<Storage> Server<Storage> {
         }
     }
 
-    pub(crate) fn which_shard(&self, chain_id: &ChainId) -> ShardId {
+    pub(crate) fn which_shard(&self, chain_id: ChainId) -> ShardId {
         get_shard(self.num_shards, chain_id)
     }
 
@@ -391,7 +391,7 @@ impl ValidatorNode for Client {
         &mut self,
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, Error> {
-        let shard = get_shard(self.num_shards, &proposal.content.block.chain_id);
+        let shard = get_shard(self.num_shards, proposal.content.block.chain_id);
         self.send_recv_info_bytes(
             shard,
             serialize_message(&SerializedMessage::BlockProposal(Box::new(proposal))),
@@ -417,7 +417,7 @@ impl ValidatorNode for Client {
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, Error> {
-        let shard = get_shard(self.num_shards, &query.chain_id);
+        let shard = get_shard(self.num_shards, query.chain_id);
         self.send_recv_info_bytes(
             shard,
             serialize_message(&SerializedMessage::ChainInfoQuery(Box::new(query))),
@@ -556,7 +556,7 @@ fn test_get_shards() {
     let mut left = num_shards;
     let mut i: usize = 1;
     loop {
-        let shard = get_shard(num_shards, &ChainId::root(i)) as usize;
+        let shard = get_shard(num_shards, ChainId::root(i)) as usize;
         println!("found {}", shard);
         if !found[shard] {
             found[shard] = true;

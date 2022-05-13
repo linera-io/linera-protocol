@@ -43,7 +43,7 @@ async fn test_handle_block_proposal_bad_signature() {
         .is_err());
     assert!(state
         .storage
-        .read_active_chain(&ChainId::root(1))
+        .read_active_chain(ChainId::root(1))
         .await
         .unwrap()
         .state
@@ -83,7 +83,7 @@ async fn test_handle_block_proposal_zero_amount() {
         .is_err());
     assert!(state
         .storage
-        .read_active_chain(&ChainId::root(1))
+        .read_active_chain(ChainId::root(1))
         .await
         .unwrap()
         .state
@@ -125,7 +125,7 @@ async fn test_handle_block_proposal_unknown_sender() {
         .is_err());
     assert!(state
         .storage
-        .read_active_chain(&ChainId::root(1))
+        .read_active_chain(ChainId::root(1))
         .await
         .unwrap()
         .state
@@ -161,7 +161,7 @@ async fn test_handle_block_proposal_bad_block_height() {
 
     let mut sender_chain = state
         .storage
-        .read_active_chain(&ChainId::root(1))
+        .read_active_chain(ChainId::root(1))
         .await
         .unwrap();
     sender_chain.next_block_height.try_add_assign_one().unwrap();
@@ -169,7 +169,7 @@ async fn test_handle_block_proposal_bad_block_height() {
     assert!(state.handle_block_proposal(block_proposal).await.is_err());
     assert!(state
         .storage
-        .read_active_chain(&ChainId::root(1))
+        .read_active_chain(ChainId::root(1))
         .await
         .unwrap()
         .state
@@ -205,7 +205,7 @@ async fn test_handle_block_proposal_exceed_balance() {
     assert!(state.handle_block_proposal(block_proposal).await.is_err());
     assert!(state
         .storage
-        .read_active_chain(&ChainId::root(1))
+        .read_active_chain(ChainId::root(1))
         .await
         .unwrap()
         .state
@@ -238,7 +238,7 @@ async fn test_handle_block_proposal() {
         .unwrap();
     let pending = state
         .storage
-        .read_active_chain(&ChainId::root(1))
+        .read_active_chain(ChainId::root(1))
         .await
         .unwrap()
         .state
@@ -388,7 +388,7 @@ async fn test_handle_certificate_with_early_incoming_message() {
         .unwrap();
     let chain = state
         .storage
-        .read_active_chain(&ChainId::root(1))
+        .read_active_chain(ChainId::root(1))
         .await
         .unwrap();
     assert_eq!(Balance::from(0), chain.state.balance);
@@ -415,7 +415,7 @@ async fn test_handle_certificate_with_early_incoming_message() {
     assert_eq!(Some(certificate.hash), chain.block_hash);
     state
         .storage
-        .read_active_chain(&ChainId::root(2))
+        .read_active_chain(ChainId::root(2))
         .await
         .unwrap();
 }
@@ -452,7 +452,7 @@ async fn test_handle_certificate_receiver_balance_overflow() {
         .unwrap();
     let new_sender_chain = state
         .storage
-        .read_active_chain(&ChainId::root(1))
+        .read_active_chain(ChainId::root(1))
         .await
         .unwrap();
     assert_eq!(Balance::from(0), new_sender_chain.state.balance);
@@ -461,7 +461,7 @@ async fn test_handle_certificate_receiver_balance_overflow() {
     assert_eq!(Some(certificate.hash), new_sender_chain.block_hash);
     let new_recipient_chain = state
         .storage
-        .read_active_chain(&ChainId::root(2))
+        .read_active_chain(ChainId::root(2))
         .await
         .unwrap();
     assert_eq!(Balance::max(), new_recipient_chain.state.balance);
@@ -489,7 +489,7 @@ async fn test_handle_certificate_receiver_equal_sender() {
         .unwrap();
     let chain = state
         .storage
-        .read_active_chain(&ChainId::root(1))
+        .read_active_chain(ChainId::root(1))
         .await
         .unwrap();
     assert_eq!(Balance::from(0), chain.state.balance);
@@ -538,7 +538,7 @@ async fn test_handle_cross_chain_request() {
         .unwrap();
     let chain = state
         .storage
-        .read_active_chain(&ChainId::root(2))
+        .read_active_chain(ChainId::root(2))
         .await
         .unwrap();
     assert_eq!(Balance::from(1), chain.state.balance);
@@ -584,7 +584,7 @@ async fn test_handle_cross_chain_request_no_recipient_chain() {
         .is_empty());
     let chain = state
         .storage
-        .read_chain_or_default(&ChainId::root(2))
+        .read_chain_or_default(ChainId::root(2))
         .await
         .unwrap();
     // The target chain did not receive the message
@@ -619,7 +619,7 @@ async fn test_handle_cross_chain_request_no_recipient_chain_with_inactive_chains
     ));
     let chain = state
         .storage
-        .read_chain_or_default(&ChainId::root(2))
+        .read_chain_or_default(ChainId::root(2))
         .await
         .unwrap();
     assert!(!chain.inboxes.is_empty());
@@ -688,7 +688,7 @@ async fn test_handle_certificate_to_active_recipient() {
 
     let recipient_chain = state
         .storage
-        .read_active_chain(&ChainId::root(2))
+        .read_active_chain(ChainId::root(2))
         .await
         .unwrap();
     assert_eq!(recipient_chain.state.balance, Balance::from(4));
@@ -751,11 +751,10 @@ async fn test_handle_certificate_to_inactive_recipient() {
 #[tokio::test]
 async fn test_read_chain_state() {
     let sender = ChainDescription::Root(1);
-    let (_, mut state) =
-        init_state_with_chain(sender.clone(), PublicKey::debug(1), Balance::from(5)).await;
+    let (_, mut state) = init_state_with_chain(sender, PublicKey::debug(1), Balance::from(5)).await;
     state
         .storage
-        .read_active_chain(&sender.into())
+        .read_active_chain(sender.into())
         .await
         .unwrap();
 }
@@ -768,12 +767,12 @@ async fn test_read_chain_state_unknown_chain() {
         init_state_with_chain(sender, PublicKey::debug(1), Balance::from(5)).await;
     assert!(state
         .storage
-        .read_active_chain(&unknown_chain_id)
+        .read_active_chain(unknown_chain_id)
         .await
         .is_err());
     let mut chain = state
         .storage
-        .read_chain_or_default(&unknown_chain_id)
+        .read_chain_or_default(unknown_chain_id)
         .await
         .unwrap();
     chain.description = Some(ChainDescription::Root(99));
@@ -782,7 +781,7 @@ async fn test_read_chain_state_unknown_chain() {
     state.storage.write_chain(chain).await.unwrap();
     state
         .storage
-        .read_active_chain(&unknown_chain_id)
+        .read_active_chain(unknown_chain_id)
         .await
         .unwrap();
 }

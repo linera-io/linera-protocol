@@ -52,14 +52,14 @@ pub struct KeyPair(dalek::Keypair);
 pub struct PublicKey(pub [u8; dalek::PUBLIC_KEY_LENGTH]);
 
 /// The index of an operation in a chain.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Debug, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
 pub struct OperationId {
     pub chain_id: ChainId,
     pub height: BlockHeight,
 }
 
 /// How to create a chain.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Debug, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
 pub enum ChainDescription {
     /// The chain was created by the genesis configuration.
     Root(usize),
@@ -70,7 +70,7 @@ pub enum ChainDescription {
 impl BcsSignable for ChainDescription {}
 
 /// The unique identifier (UID) of a chain. This is the hash value of a ChainDescription.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
 pub struct ChainId(pub HashValue);
 
 /// A Sha512 value.

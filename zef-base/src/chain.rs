@@ -98,7 +98,7 @@ impl ChainState {
         owner: Owner,
         balance: Balance,
     ) -> Self {
-        let mut chain = Self::new(description.clone().into());
+        let mut chain = Self::new(description.into());
         chain.description = Some(description);
         chain.state.committee = Some(committee);
         chain.state.manager = ChainManager::single(owner);
@@ -114,8 +114,8 @@ impl ChainState {
 
     pub fn make_chain_info(&self, key_pair: Option<&KeyPair>) -> ChainInfoResponse {
         let info = ChainInfo {
-            chain_id: self.id.clone(),
-            description: self.description.clone(),
+            chain_id: self.id,
+            description: self.description,
             manager: self.state.manager.clone(),
             balance: self.state.balance,
             queried_committee: None,
@@ -132,11 +132,11 @@ impl ChainState {
     /// Verify that this chain is up-to-date and all the messages executed ahead of time
     /// have been properly received by now.
     pub fn validate_incoming_messages(&self) -> Result<(), Error> {
-        for (sender_id, inbox) in &self.inboxes {
+        for (&sender_id, inbox) in &self.inboxes {
             ensure!(
                 inbox.expected.is_empty(),
                 Error::MissingCrossChainUpdate {
-                    sender_id: sender_id.clone(),
+                    sender_id,
                     height: inbox.expected.front().unwrap().0,
                 }
             );
@@ -159,7 +159,7 @@ impl ChainState {
         operation: Operation,
         key: HashValue,
     ) -> Result<bool, Error> {
-        let inbox = self.inboxes.entry(sender_id.clone()).or_default();
+        let inbox = self.inboxes.entry(sender_id).or_default();
         if height < inbox.next_height_to_receive {
             // We already received this message.
             return Ok(false);
@@ -203,13 +203,13 @@ impl ChainState {
     /// Execute a new block: first the incoming messages, then the main operation.
     pub fn execute_block(&mut self, block: &Block) -> Result<(), Error> {
         for message in &block.incoming_messages {
-            let inbox = self.inboxes.entry(message.sender_id.clone()).or_default();
+            let inbox = self.inboxes.entry(message.sender_id).or_default();
             match inbox.received.front() {
                 Some((height, operation)) => {
                     ensure!(
                         message.height == *height && message.operation == *operation,
                         Error::InvalidMessage {
-                            sender_id: message.sender_id.clone(),
+                            sender_id: message.sender_id,
                             height: message.height,
                         }
                     );
@@ -223,24 +223,21 @@ impl ChainState {
             }
             self.apply_operation_as_recipient(&message.operation)?;
         }
-        self.apply_operation_as_sender(&block.chain_id, block.height, &block.operation)?;
+        self.apply_operation_as_sender(block.chain_id, block.height, &block.operation)?;
         Ok(())
     }
 
     /// Execute the sender's side of the operation.
     fn apply_operation_as_sender(
         &mut self,
-        chain_id: &ChainId,
+        chain_id: ChainId,
         height: BlockHeight,
         operation: &Operation,
     ) -> Result<(), Error> {
         match &operation {
             Operation::OpenChain { id, committee, .. } => {
-                let expected_id = ChainId::child(OperationId {
-                    chain_id: chain_id.clone(),
-                    height,
-                });
-                ensure!(id == &expected_id, Error::InvalidNewChainId(id.clone()));
+                let expected_id = ChainId::child(OperationId { chain_id, height });
+                ensure!(id == &expected_id, Error::InvalidNewChainId(*id));
                 ensure!(
                     self.state.committee.as_ref() == Some(committee),
                     Error::InvalidCommittee
