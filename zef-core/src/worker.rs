@@ -46,8 +46,12 @@ pub trait ValidatorWorker {
 }
 
 impl<Client> WorkerState<Client> {
-    pub fn new(key_pair: Option<KeyPair>, storage: Client) -> Self {
-        WorkerState { key_pair, storage }
+    pub fn new(key_pair: Option<KeyPair>, storage: Client, allow_inactive_chains: bool) -> Self {
+        WorkerState {
+            key_pair,
+            storage,
+            allow_inactive_chains,
+        }
     }
 
     pub(crate) fn storage_client(&self) -> &Client {
@@ -62,6 +66,8 @@ pub struct WorkerState<StorageClient> {
     key_pair: Option<KeyPair>,
     /// Access to local persistent storage.
     storage: StorageClient,
+    /// Whether inactive chains are allowed in storage.
+    allow_inactive_chains: bool,
 }
 
 impl<Client> WorkerState<Client>
@@ -204,32 +210,6 @@ where
         self.storage.write_chain(chain).await?;
         Ok(info)
     }
-
-    /// (Trusted) Try to update the recipient chain in a confirmed block.
-    async fn update_recipient_chain(
-        &mut self,
-        operation: Operation,
-        certificate: Certificate,
-    ) -> Result<(), Error> {
-        if let Some(recipient) = operation.recipient() {
-            let block = certificate.value.confirmed_block().unwrap();
-            assert_eq!(&block.operation, &operation);
-            // Execute the recipient's side of the operation.
-            let mut chain = self.storage.read_chain_or_default(recipient).await?;
-            let need_update = chain.receive_message(
-                block.chain_id.clone(),
-                block.height,
-                block.operation.clone(),
-                certificate.hash,
-            )?;
-            if need_update {
-                self.storage.write_certificate(certificate).await?;
-                self.storage.write_chain(chain).await?;
-            }
-        }
-        // This concludes the confirmation of `certificate`.
-        Ok(())
-    }
 }
 
 #[async_trait]
@@ -356,7 +336,9 @@ where
                 recipient,
                 certificates,
             } => {
+                let mut chain = self.storage.read_chain_or_default(&recipient).await?;
                 let mut height = None;
+                let mut need_update = false;
                 for certificate in certificates {
                     let block = certificate
                         .value
@@ -369,8 +351,24 @@ where
                     ensure!(block.chain_id == sender, Error::InvalidCrossChainRequest);
                     ensure!(height < Some(block.height), Error::InvalidCrossChainRequest);
                     height = Some(block.height);
-                    self.update_recipient_chain(block.operation.clone(), certificate)
-                        .await?;
+                    if chain.receive_message(
+                        block.chain_id.clone(),
+                        block.height,
+                        block.operation.clone(),
+                        certificate.hash,
+                    )? {
+                        self.storage.write_certificate(certificate).await?;
+                        need_update = true;
+                    }
+                }
+                if need_update {
+                    if !self.allow_inactive_chains && !chain.is_active() {
+                        // Refuse to create the chain state if it is still inactive by
+                        // now. Accordingly, do not send a confirmation, so that the
+                        // message is retried later.
+                        return Ok(Vec::new());
+                    }
+                    self.storage.write_chain(chain).await?;
                 }
                 if let Some(height) = height {
                     let request = CrossChainRequest::ConfirmUpdatedRecipient {

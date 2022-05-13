@@ -434,7 +434,7 @@ async fn test_handle_certificate_receiver_equal_sender() {
 }
 
 #[tokio::test]
-async fn test_update_recipient_chain() {
+async fn test_handle_cross_chain_request() {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut state) =
         init_state_with_chains(vec![(dbg_chain(2), dbg_addr(2), Balance::from(1))]).await;
@@ -447,14 +447,12 @@ async fn test_update_recipient_chain() {
         &committee,
         &state,
     );
-    let operation = certificate
-        .value
-        .confirmed_block()
-        .unwrap()
-        .operation
-        .clone();
     state
-        .update_recipient_chain(operation, certificate)
+        .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
+            sender: dbg_chain(1),
+            recipient: dbg_chain(2),
+            certificates: vec![certificate],
+        })
         .await
         .unwrap();
     let chain = state
@@ -479,6 +477,71 @@ async fn test_update_recipient_chain() {
     assert_eq!(chain.confirmed_log.len(), 0);
     assert_eq!(None, chain.block_hash);
     assert_eq!(chain.received_log.len(), 1);
+}
+
+#[tokio::test]
+async fn test_handle_cross_chain_request_no_recipient_chain() {
+    let sender_key_pair = KeyPair::generate();
+    let (committee, mut state) = init_state(/* allow_inactive_chains */ false);
+    let certificate = make_transfer_certificate(
+        dbg_chain(1),
+        &sender_key_pair,
+        Address::Account(dbg_chain(2)),
+        Amount::from(10),
+        Vec::new(),
+        &committee,
+        &state,
+    );
+    assert!(state
+        .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
+            sender: dbg_chain(1),
+            recipient: dbg_chain(2),
+            certificates: vec![certificate],
+        })
+        .await
+        .unwrap()
+        .is_empty());
+    let chain = state
+        .storage
+        .read_chain_or_default(&dbg_chain(2))
+        .await
+        .unwrap();
+    // The target chain did not receive the message
+    assert!(chain.inboxes.is_empty());
+}
+
+#[tokio::test]
+async fn test_handle_cross_chain_request_no_recipient_chain_with_inactive_chains_allowed() {
+    let sender_key_pair = KeyPair::generate();
+    let (committee, mut state) = init_state(/* allow_inactive_chains */ true);
+    let certificate = make_transfer_certificate(
+        dbg_chain(1),
+        &sender_key_pair,
+        Address::Account(dbg_chain(2)),
+        Amount::from(10),
+        Vec::new(),
+        &committee,
+        &state,
+    );
+    // An inactive target chain is created and it acknowledges the message.
+    assert!(matches!(
+        state
+            .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
+                sender: dbg_chain(1),
+                recipient: dbg_chain(2),
+                certificates: vec![certificate],
+            })
+            .await
+            .unwrap()
+            .as_slice(),
+        &[CrossChainRequest::ConfirmUpdatedRecipient { .. }]
+    ));
+    let chain = state
+        .storage
+        .read_chain_or_default(&dbg_chain(2))
+        .await
+        .unwrap();
+    assert!(!chain.inboxes.is_empty());
 }
 
 #[tokio::test]
@@ -630,20 +693,20 @@ async fn test_read_chain_state_unknown_chain() {
 
 // helpers
 
-fn init_state() -> (Committee, WorkerState<InMemoryStoreClient>) {
+fn init_state(allow_inactive_chains: bool) -> (Committee, WorkerState<InMemoryStoreClient>) {
     let key_pair = KeyPair::generate();
     let mut validators = BTreeMap::new();
     validators.insert(key_pair.public(), /* voting right */ 1);
     let committee = Committee::new(validators);
     let client = InMemoryStoreClient::default();
-    let state = WorkerState::new(Some(key_pair), client);
+    let state = WorkerState::new(Some(key_pair), client, allow_inactive_chains);
     (committee, state)
 }
 
 async fn init_state_with_chains<I: IntoIterator<Item = (ChainId, Owner, Balance)>>(
     balances: I,
 ) -> (Committee, WorkerState<InMemoryStoreClient>) {
-    let (committee, mut state) = init_state();
+    let (committee, mut state) = init_state(false);
     for (id, owner, balance) in balances {
         let chain = ChainState::create(committee.clone(), id, owner, balance);
         state.storage.write_chain(chain).await.unwrap();
