@@ -220,18 +220,29 @@ impl ChainState {
 
     /// Execute a new block: first the incoming messages, then the main operation.
     pub fn execute_block(&mut self, block: &Block) -> Result<(), Error> {
+        // First, process incoming messages.
         for message_group in &block.incoming_messages {
             for (message_index, message_operation) in &message_group.operations {
+                // Reconcile the operation with the received queue, or mark it as "expected".
                 let inbox = self.inboxes.entry(message_group.sender_id).or_default();
                 match inbox.received.front() {
                     Some((height, index, operation)) => {
                         ensure!(
-                            message_group.height == *height
-                                && message_index == index
-                                && message_operation == operation,
-                            Error::InvalidMessage {
+                            message_group.height == *height && message_index == index,
+                            Error::InvalidMessageOrder {
                                 sender_id: message_group.sender_id,
                                 height: message_group.height,
+                                index: *message_index,
+                                expected_height: *height,
+                                expected_index: *index,
+                            }
+                        );
+                        ensure!(
+                            message_operation == operation,
+                            Error::InvalidMessageContent {
+                                sender_id: message_group.sender_id,
+                                height: message_group.height,
+                                index: *message_index,
                             }
                         );
                         inbox.received.pop_front().unwrap();
@@ -244,9 +255,11 @@ impl ChainState {
                         ));
                     }
                 }
+                // Execute the received operation.
                 self.apply_operation_as_recipient(message_operation)?;
             }
         }
+        // Second, execute the operations in the block.
         for (index, operation) in block.operations.iter().enumerate() {
             self.apply_operation_as_sender(block.chain_id, block.height, index, operation)?;
         }
