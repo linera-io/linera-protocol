@@ -51,8 +51,9 @@ pub enum Operation {
 pub struct Block {
     /// The subject of the operation.
     pub chain_id: ChainId,
-    /// A selection of incoming messages to be executed first.
-    pub incoming_messages: Vec<Message>,
+    /// A selection of incoming messages to be executed first. Successive messages of same
+    /// sender and height are grouped together for conciseness.
+    pub incoming_messages: Vec<MessageGroup>,
     /// The operations to execute.
     pub operations: Vec<Operation>,
     /// The block height.
@@ -69,9 +70,9 @@ pub struct BlockAndRound {
     pub round: RoundNumber,
 }
 
-/// A selection of operations sent by a block to another chain.
+/// A selection of messages sent by a block to another chain.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct Message {
+pub struct MessageGroup {
     pub sender_id: ChainId,
     pub height: BlockHeight,
     pub operations: Vec<(usize, Operation)>,
@@ -163,7 +164,7 @@ pub struct ChainInfo {
     /// The current committee (if requested)
     pub queried_committee: Option<Committee>,
     /// The received messages that are waiting be picked in the next block (if requested).
-    pub queried_pending_messages: Vec<Message>,
+    pub queried_pending_messages: Vec<MessageGroup>,
     /// The response to `query_sent_certificates_in_range`
     pub queried_sent_certificates: Vec<Certificate>,
     /// The current number of received certificates (useful for `query_received_certificates_excluding_first_nth`)

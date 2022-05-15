@@ -17,7 +17,7 @@ Block:
         TYPENAME: ChainId
     - incoming_messages:
         SEQ:
-          TYPENAME: Message
+          TYPENAME: MessageGroup
     - operations:
         SEQ:
           TYPENAME: Operation
@@ -90,7 +90,7 @@ ChainInfo:
           TYPENAME: Committee
     - queried_pending_messages:
         SEQ:
-          TYPENAME: Message
+          TYPENAME: MessageGroup
     - queried_sent_certificates:
         SEQ:
           TYPENAME: Certificate
@@ -339,7 +339,7 @@ InboxState:
             - TYPENAME: BlockHeight
             - U64
             - TYPENAME: Operation
-Message:
+MessageGroup:
   STRUCT:
     - sender_id:
         TYPENAME: ChainId

@@ -370,7 +370,7 @@ async fn test_handle_certificate_with_early_incoming_message() {
         &key_pair,
         Address::Account(ChainId::root(2)),
         Amount::from(1000),
-        vec![Message {
+        vec![MessageGroup {
             sender_id: ChainId::root(3),
             height: BlockHeight::from(0),
             operations: vec![(
@@ -672,7 +672,7 @@ async fn test_handle_certificate_to_active_recipient() {
         &recipient_key_pair,
         Address::Account(ChainId::root(3)),
         Amount::from(1),
-        vec![Message {
+        vec![MessageGroup {
             sender_id: ChainId::root(1),
             height: BlockHeight::from(0),
             operations: vec![(
@@ -828,7 +828,7 @@ fn make_transfer_block_proposal(
     secret: &KeyPair,
     recipient: Address,
     amount: Amount,
-    incoming_messages: Vec<Message>,
+    incoming_messages: Vec<MessageGroup>,
 ) -> BlockProposal {
     let block = Block {
         chain_id,
@@ -868,7 +868,7 @@ fn make_transfer_certificate(
     key_pair: &KeyPair,
     recipient: Address,
     amount: Amount,
-    incoming_messages: Vec<Message>,
+    incoming_messages: Vec<MessageGroup>,
     committee: &Committee,
     state: &WorkerState<InMemoryStoreClient>,
 ) -> Certificate {

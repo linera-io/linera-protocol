@@ -184,7 +184,7 @@ where
         Ok(response.info)
     }
 
-    async fn pending_messages(&mut self) -> Result<Vec<Message>, Error> {
+    async fn pending_messages(&mut self) -> Result<Vec<MessageGroup>, Error> {
         let query = ChainInfoQuery {
             chain_id: self.chain_id,
             check_next_block_height: None,
