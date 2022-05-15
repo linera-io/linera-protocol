@@ -220,25 +220,25 @@ impl ChainState {
 
     /// Execute a new block: first the incoming messages, then the main operation.
     pub fn execute_block(&mut self, block: &Block) -> Result<(), Error> {
-        for message in &block.incoming_messages {
-            for (message_index, message_operation) in &message.operations {
-                let inbox = self.inboxes.entry(message.sender_id).or_default();
+        for message_group in &block.incoming_messages {
+            for (message_index, message_operation) in &message_group.operations {
+                let inbox = self.inboxes.entry(message_group.sender_id).or_default();
                 match inbox.received.front() {
                     Some((height, index, operation)) => {
                         ensure!(
-                            message.height == *height
+                            message_group.height == *height
                                 && message_index == index
                                 && message_operation == operation,
                             Error::InvalidMessage {
-                                sender_id: message.sender_id,
-                                height: message.height,
+                                sender_id: message_group.sender_id,
+                                height: message_group.height,
                             }
                         );
                         inbox.received.pop_front().unwrap();
                     }
                     None => {
                         inbox.expected.push_back((
-                            message.height,
+                            message_group.height,
                             *message_index,
                             message_operation.clone(),
                         ));

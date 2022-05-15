@@ -295,15 +295,15 @@ where
             );
         }
         if query.query_pending_messages {
-            let mut messages = Vec::new();
+            let mut message_groups = Vec::new();
             for (&sender_id, inbox) in &chain.inboxes {
                 let mut operations = Vec::new();
                 let mut current_height = None;
                 for (height, index, operation) in &inbox.received {
                     match current_height {
                         Some(last_height) if last_height != *height => {
-                            // Pack operations into a new message.
-                            messages.push(Message {
+                            // Pack operations into a new group.
+                            message_groups.push(MessageGroup {
                                 sender_id,
                                 height: last_height,
                                 operations,
@@ -319,14 +319,14 @@ where
                     operations.push((*index, operation.clone()));
                 }
                 if let Some(last_height) = current_height {
-                    messages.push(Message {
+                    message_groups.push(MessageGroup {
                         sender_id,
                         height: last_height,
                         operations,
                     });
                 }
             }
-            info.queried_pending_messages = messages;
+            info.queried_pending_messages = message_groups;
         }
         if let Some(range) = query.query_sent_certificates_in_range {
             let keys = chain.confirmed_log[..]
