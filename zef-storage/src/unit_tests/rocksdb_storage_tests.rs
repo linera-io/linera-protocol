@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use zef_base::{base_types::*, messages::*};
+use zef_base::{base_types::*, chain::ExecutionState, messages::*};
 
 #[tokio::test]
 async fn test_rocksdb_storage_for_chains() {
@@ -32,7 +32,10 @@ async fn test_rocksdb_storage_for_certificates() {
         previous_block_hash: None,
         height: BlockHeight::default(),
     };
-    let value = Value::Confirmed { block };
+    let value = Value::Confirmed {
+        block,
+        state_hash: HashValue::new(&ExecutionState::default()),
+    };
     let certificate = Certificate::new(value, vec![]);
     client.write_certificate(certificate.clone()).await.unwrap();
     let read_certificate = client.read_certificate(certificate.hash).await.unwrap();

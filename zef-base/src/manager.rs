@@ -3,7 +3,7 @@
 
 use crate::{base_types::*, ensure, error::Error, messages::*};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::HashMap;
 
 /// How to produce new blocks.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -32,7 +32,8 @@ pub struct SingleOwnerManager {
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct MultiOwnerManager {
     /// The co-owners of the chain.
-    pub owners: HashSet<Owner>,
+    /// Using a map instead a hashset because Serde treats HashSet's as vectors.
+    pub owners: HashMap<Owner, ()>,
     /// Latest authenticated block that we have received.
     pub proposed: Option<BlockProposal>,
     /// Latest validated proposal that we have seen (and voted to confirm).
@@ -64,7 +65,7 @@ impl SingleOwnerManager {
 }
 
 impl MultiOwnerManager {
-    pub fn new(owners: HashSet<Owner>) -> Self {
+    pub fn new(owners: HashMap<Owner, ()>) -> Self {
         MultiOwnerManager {
             owners,
             proposed: None,
@@ -96,8 +97,10 @@ impl ChainManager {
         ChainManager::Single(Box::new(SingleOwnerManager::new(owner)))
     }
 
-    pub fn multiple(owners: HashSet<Owner>) -> Self {
-        ChainManager::Multi(Box::new(MultiOwnerManager::new(owners)))
+    pub fn multiple(owners: Vec<Owner>) -> Self {
+        ChainManager::Multi(Box::new(MultiOwnerManager::new(
+            owners.into_iter().map(|o| (o, ())).collect(),
+        )))
     }
 
     pub fn reset(&mut self) {
@@ -120,7 +123,7 @@ impl ChainManager {
     pub fn has_owner(&self, owner: &Owner) -> bool {
         match self {
             ChainManager::Single(manager) => manager.owner == *owner,
-            ChainManager::Multi(manager) => manager.owners.contains(owner),
+            ChainManager::Multi(manager) => manager.owners.contains_key(owner),
             ChainManager::None => false,
         }
     }
@@ -171,7 +174,7 @@ impl ChainManager {
                 );
                 if let Some(vote) = &manager.pending {
                     match &vote.value {
-                        Value::Confirmed { block } if block != new_block => {
+                        Value::Confirmed { block, .. } if block != new_block => {
                             return Err(Error::PreviousBlockMustBeConfirmedFirst);
                         }
                         Value::Validated { .. } => {
@@ -198,7 +201,7 @@ impl ChainManager {
                         Value::Validated { round, .. } if new_round <= *round => {
                             return Err(Error::InsufficientRound(*round));
                         }
-                        Value::Validated { block, round } if new_block != block => {
+                        Value::Validated { block, round, .. } if new_block != block => {
                             return Err(Error::HasLockedBlock(block.height, *round));
                         }
                         _ => (),
@@ -229,7 +232,7 @@ impl ChainManager {
             ChainManager::Multi(manager) => {
                 if let Some(vote) = &manager.pending {
                     match &vote.value {
-                        Value::Confirmed { block } if block == new_block => {
+                        Value::Confirmed { block, .. } if block == new_block => {
                             return Ok(Outcome::Skip);
                         }
                         Value::Validated { round, .. } if new_round < *round => {
@@ -252,13 +255,18 @@ impl ChainManager {
         }
     }
 
-    pub fn create_vote(&mut self, proposal: BlockProposal, key_pair: Option<&KeyPair>) {
+    pub fn create_vote(
+        &mut self,
+        proposal: BlockProposal,
+        state_hash: HashValue,
+        key_pair: Option<&KeyPair>,
+    ) {
         match self {
             ChainManager::Single(manager) => {
                 if let Some(key_pair) = key_pair {
                     // Vote to confirm.
                     let BlockAndRound { block, .. } = proposal.content;
-                    let value = Value::Confirmed { block };
+                    let value = Value::Confirmed { block, state_hash };
                     let vote = Vote::new(value, key_pair);
                     manager.pending = Some(vote);
                 }
@@ -270,7 +278,11 @@ impl ChainManager {
                 if let Some(key_pair) = key_pair {
                     // Vote to validate.
                     let BlockAndRound { block, round } = proposal.content;
-                    let value = Value::Validated { block, round };
+                    let value = Value::Validated {
+                        block,
+                        round,
+                        state_hash,
+                    };
                     let vote = Vote::new(value, key_pair);
                     manager.pending = Some(vote);
                 }
@@ -282,6 +294,7 @@ impl ChainManager {
     pub fn create_final_vote(
         &mut self,
         block: Block,
+        state_hash: HashValue,
         certificate: Certificate,
         key_pair: Option<&KeyPair>,
     ) {
@@ -292,7 +305,7 @@ impl ChainManager {
                 manager.locked = Some(certificate);
                 if let Some(key_pair) = key_pair {
                     // Vote to confirm.
-                    let value = Value::Confirmed { block };
+                    let value = Value::Confirmed { block, state_hash };
                     let vote = Vote::new(value, key_pair);
                     // Ok to overwrite validation votes with confirmation votes at equal or
                     // higher round.

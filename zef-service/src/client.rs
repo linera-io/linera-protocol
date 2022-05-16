@@ -144,7 +144,7 @@ impl ClientContext {
         key_pair: Option<KeyPair>,
     ) -> Result<(), failure::Error> {
         let recipient = match &certificate.value {
-            Value::Confirmed { block } if block.operations.len() == 1 => {
+            Value::Confirmed { block, .. } if block.operations.len() == 1 => {
                 block.operations[0].recipient().unwrap()
             }
             _ => failure::bail!("unexpected value in certificate"),
