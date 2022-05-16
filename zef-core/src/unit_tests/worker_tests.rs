@@ -5,7 +5,8 @@
 use crate::worker::{ValidatorWorker, WorkerState};
 use std::collections::BTreeMap;
 use zef_base::{
-    base_types::*, chain::ChainState, committee::Committee, manager::ChainManager, messages::*,
+    base_types::*, chain::ChainState, committee::Committee, error::Error, manager::ChainManager,
+    messages::*,
 };
 use zef_storage::{InMemoryStoreClient, Storage};
 
@@ -32,6 +33,7 @@ async fn test_handle_block_proposal_bad_signature() {
         recipient,
         Amount::from(5),
         Vec::new(),
+        None,
     );
     let unknown_key_pair = KeyPair::generate();
     let mut bad_signature_block_proposal = block_proposal.clone();
@@ -76,6 +78,7 @@ async fn test_handle_block_proposal_zero_amount() {
         recipient,
         Amount::zero(),
         Vec::new(),
+        None,
     );
     assert!(state
         .handle_block_proposal(zero_amount_block_proposal)
@@ -115,6 +118,7 @@ async fn test_handle_block_proposal_unknown_sender() {
         recipient,
         Amount::from(5),
         Vec::new(),
+        None,
     );
     let unknown_key = KeyPair::generate();
 
@@ -135,38 +139,46 @@ async fn test_handle_block_proposal_unknown_sender() {
 }
 
 #[tokio::test]
-async fn test_handle_block_proposal_bad_block_height() {
+async fn test_handle_block_proposal_with_chaining() {
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(ChainId::root(2));
-    let (_, mut state) = init_state_with_chains(vec![
-        (
-            ChainDescription::Root(1),
-            sender_key_pair.public(),
-            Balance::from(5),
-        ),
-        (
-            ChainDescription::Root(2),
-            PublicKey::debug(2),
-            Balance::from(0),
-        ),
-    ])
+    let (committee, mut state) = init_state_with_chains(vec![(
+        ChainDescription::Root(1),
+        sender_key_pair.public(),
+        Balance::from(5),
+    )])
     .await;
-    let block_proposal = make_transfer_block_proposal(
+    let block_proposal0 = make_transfer_block_proposal(
         ChainId::root(1),
         &sender_key_pair,
         recipient,
-        Amount::from(5),
+        Amount::from(1),
         Vec::new(),
+        None,
+    );
+    let certificate0 = make_transfer_certificate(
+        ChainId::root(1),
+        &sender_key_pair,
+        recipient,
+        Amount::from(1),
+        Vec::new(),
+        &committee,
+        &state,
+        None,
+    );
+    let block_proposal1 = make_transfer_block_proposal(
+        ChainId::root(1),
+        &sender_key_pair,
+        recipient,
+        Amount::from(2),
+        Vec::new(),
+        Some(&certificate0),
     );
 
-    let mut sender_chain = state
-        .storage
-        .read_active_chain(ChainId::root(1))
+    assert!(state
+        .handle_block_proposal(block_proposal1.clone())
         .await
-        .unwrap();
-    sender_chain.next_block_height.try_add_assign_one().unwrap();
-    state.storage.write_chain(sender_chain).await.unwrap();
-    assert!(state.handle_block_proposal(block_proposal).await.is_err());
+        .is_err());
     assert!(state
         .storage
         .read_active_chain(ChainId::root(1))
@@ -176,6 +188,366 @@ async fn test_handle_block_proposal_bad_block_height() {
         .manager
         .pending()
         .is_none());
+
+    state
+        .handle_block_proposal(block_proposal0.clone())
+        .await
+        .unwrap();
+    assert!(state
+        .storage
+        .read_active_chain(ChainId::root(1))
+        .await
+        .unwrap()
+        .state
+        .manager
+        .pending()
+        .is_some());
+    state.handle_certificate(certificate0).await.unwrap();
+    state.handle_block_proposal(block_proposal1).await.unwrap();
+    assert!(state
+        .storage
+        .read_active_chain(ChainId::root(1))
+        .await
+        .unwrap()
+        .state
+        .manager
+        .pending()
+        .is_some());
+    assert!(state.handle_block_proposal(block_proposal0).await.is_err());
+}
+
+#[tokio::test]
+async fn test_handle_block_proposal_with_incoming_messages() {
+    let sender_key_pair = KeyPair::generate();
+    let recipient_key_pair = KeyPair::generate();
+    let recipient = Address::Account(ChainId::root(2));
+    let (committee, mut state) = init_state_with_chains(vec![
+        (
+            ChainDescription::Root(1),
+            sender_key_pair.public(),
+            Balance::from(6),
+        ),
+        (
+            ChainDescription::Root(2),
+            recipient_key_pair.public(),
+            Balance::from(0),
+        ),
+    ])
+    .await;
+    let block0 = Block {
+        chain_id: ChainId::root(1),
+        incoming_messages: Vec::new(),
+        operations: vec![
+            Operation::Transfer {
+                recipient,
+                amount: Amount::from(1),
+                user_data: UserData::default(),
+            },
+            Operation::Transfer {
+                recipient,
+                amount: Amount::from(2),
+                user_data: UserData::default(),
+            },
+        ],
+        previous_block_hash: None,
+        height: BlockHeight::new(),
+    };
+    let certificate0 = make_certificate(&committee, &state, Value::Confirmed { block: block0 });
+    let block1 = Block {
+        chain_id: ChainId::root(1),
+        incoming_messages: Vec::new(),
+        operations: vec![Operation::Transfer {
+            recipient,
+            amount: Amount::from(3),
+            user_data: UserData::default(),
+        }],
+        previous_block_hash: Some(certificate0.hash),
+        height: BlockHeight::from(1),
+    };
+    let certificate1 = make_certificate(&committee, &state, Value::Confirmed { block: block1 });
+
+    // Missing earlier blocks
+    assert!(state
+        .handle_certificate(certificate1.clone())
+        .await
+        .is_err());
+
+    state.fully_handle_certificate(certificate0).await.unwrap();
+    state.fully_handle_certificate(certificate1).await.unwrap();
+    {
+        let block_proposal = make_transfer_block_proposal(
+            ChainId::root(2),
+            &recipient_key_pair,
+            Address::Account(ChainId::root(3)),
+            Amount::from(6),
+            Vec::new(),
+            None,
+        );
+        // Insufficient funding
+        assert!(state.handle_block_proposal(block_proposal).await.is_err());
+    }
+    {
+        let block_proposal = make_transfer_block_proposal(
+            ChainId::root(2),
+            &recipient_key_pair,
+            Address::Account(ChainId::root(3)),
+            Amount::from(6),
+            vec![
+                MessageGroup {
+                    sender_id: ChainId::root(1),
+                    height: BlockHeight::from(0),
+                    operations: vec![
+                        (
+                            0,
+                            Operation::Transfer {
+                                recipient: Address::Account(ChainId::root(2)),
+                                amount: Amount::from(1),
+                                user_data: UserData::default(),
+                            },
+                        ),
+                        (
+                            1,
+                            Operation::Transfer {
+                                recipient: Address::Account(ChainId::root(2)),
+                                amount: Amount::from(2),
+                                user_data: UserData::default(),
+                            },
+                        ),
+                    ],
+                },
+                MessageGroup {
+                    sender_id: ChainId::root(1),
+                    height: BlockHeight::from(1),
+                    operations: vec![(
+                        0,
+                        Operation::Transfer {
+                            recipient: Address::Account(ChainId::root(2)),
+                            amount: Amount::from(2), // wrong
+                            user_data: UserData::default(),
+                        },
+                    )],
+                },
+            ],
+            None,
+        );
+        // Inconsistent received messages.
+        assert!(matches!(
+            state.handle_block_proposal(block_proposal).await,
+            Err(Error::InvalidMessage { .. })
+        ));
+    }
+    {
+        let block_proposal = make_transfer_block_proposal(
+            ChainId::root(2),
+            &recipient_key_pair,
+            Address::Account(ChainId::root(3)),
+            Amount::from(6),
+            vec![
+                MessageGroup {
+                    sender_id: ChainId::root(1),
+                    height: BlockHeight::from(0),
+                    operations: vec![
+                        (
+                            1,
+                            Operation::Transfer {
+                                recipient: Address::Account(ChainId::root(2)),
+                                amount: Amount::from(2),
+                                user_data: UserData::default(),
+                            },
+                        ),
+                        (
+                            0,
+                            Operation::Transfer {
+                                recipient: Address::Account(ChainId::root(2)),
+                                amount: Amount::from(1),
+                                user_data: UserData::default(),
+                            },
+                        ),
+                    ],
+                },
+                MessageGroup {
+                    sender_id: ChainId::root(1),
+                    height: BlockHeight::from(1),
+                    operations: vec![(
+                        0,
+                        Operation::Transfer {
+                            recipient: Address::Account(ChainId::root(2)),
+                            amount: Amount::from(3),
+                            user_data: UserData::default(),
+                        },
+                    )],
+                },
+            ],
+            None,
+        );
+        // Inconsistent order in received messages (indices).
+        assert!(matches!(
+            state.handle_block_proposal(block_proposal).await,
+            Err(Error::InvalidMessage { .. })
+        ));
+    }
+    {
+        let block_proposal = make_transfer_block_proposal(
+            ChainId::root(2),
+            &recipient_key_pair,
+            Address::Account(ChainId::root(3)),
+            Amount::from(6),
+            vec![
+                MessageGroup {
+                    sender_id: ChainId::root(1),
+                    height: BlockHeight::from(1),
+                    operations: vec![(
+                        0,
+                        Operation::Transfer {
+                            recipient: Address::Account(ChainId::root(2)),
+                            amount: Amount::from(3),
+                            user_data: UserData::default(),
+                        },
+                    )],
+                },
+                MessageGroup {
+                    sender_id: ChainId::root(1),
+                    height: BlockHeight::from(0),
+                    operations: vec![
+                        (
+                            0,
+                            Operation::Transfer {
+                                recipient: Address::Account(ChainId::root(2)),
+                                amount: Amount::from(1),
+                                user_data: UserData::default(),
+                            },
+                        ),
+                        (
+                            1,
+                            Operation::Transfer {
+                                recipient: Address::Account(ChainId::root(2)),
+                                amount: Amount::from(2),
+                                user_data: UserData::default(),
+                            },
+                        ),
+                    ],
+                },
+            ],
+            None,
+        );
+        // Inconsistent order in received messages (heights).
+        assert!(matches!(
+            state.handle_block_proposal(block_proposal).await,
+            Err(Error::InvalidMessage { .. })
+        ));
+    }
+    {
+        let block_proposal = make_transfer_block_proposal(
+            ChainId::root(2),
+            &recipient_key_pair,
+            Address::Account(ChainId::root(3)),
+            Amount::from(4),
+            vec![
+                MessageGroup {
+                    sender_id: ChainId::root(1),
+                    height: BlockHeight::from(0),
+                    operations: vec![(
+                        0,
+                        Operation::Transfer {
+                            recipient: Address::Account(ChainId::root(2)),
+                            amount: Amount::from(1),
+                            user_data: UserData::default(),
+                        },
+                    )], // missing message
+                },
+                MessageGroup {
+                    sender_id: ChainId::root(1),
+                    height: BlockHeight::from(1),
+                    operations: vec![(
+                        0,
+                        Operation::Transfer {
+                            recipient: Address::Account(ChainId::root(2)),
+                            amount: Amount::from(3),
+                            user_data: UserData::default(),
+                        },
+                    )],
+                },
+            ],
+            None,
+        );
+        // Cannot skip messages.
+        assert!(matches!(
+            state.handle_block_proposal(block_proposal).await,
+            Err(Error::InvalidMessage { .. })
+        ));
+    }
+    {
+        let block_proposal = make_transfer_block_proposal(
+            ChainId::root(2),
+            &recipient_key_pair,
+            Address::Account(ChainId::root(3)),
+            Amount::from(1),
+            vec![MessageGroup {
+                sender_id: ChainId::root(1),
+                height: BlockHeight::from(0),
+                operations: vec![(
+                    0,
+                    Operation::Transfer {
+                        recipient: Address::Account(ChainId::root(2)),
+                        amount: Amount::from(1),
+                        user_data: UserData::default(),
+                    },
+                )],
+            }],
+            None,
+        );
+        // Taking the first message only is ok.
+        state
+            .handle_block_proposal(block_proposal.clone())
+            .await
+            .unwrap();
+        let certificate = make_certificate(
+            &committee,
+            &state,
+            Value::Confirmed {
+                block: block_proposal.content.block,
+            },
+        );
+        state.handle_certificate(certificate.clone()).await.unwrap();
+        // Then receive the last two messages.
+        let block_proposal = make_transfer_block_proposal(
+            ChainId::root(2),
+            &recipient_key_pair,
+            Address::Account(ChainId::root(3)),
+            Amount::from(5),
+            vec![
+                MessageGroup {
+                    sender_id: ChainId::root(1),
+                    height: BlockHeight::from(0),
+                    operations: vec![(
+                        1,
+                        Operation::Transfer {
+                            recipient: Address::Account(ChainId::root(2)),
+                            amount: Amount::from(2),
+                            user_data: UserData::default(),
+                        },
+                    )],
+                },
+                MessageGroup {
+                    sender_id: ChainId::root(1),
+                    height: BlockHeight::from(1),
+                    operations: vec![(
+                        0,
+                        Operation::Transfer {
+                            recipient: Address::Account(ChainId::root(2)),
+                            amount: Amount::from(3),
+                            user_data: UserData::default(),
+                        },
+                    )],
+                },
+            ],
+            Some(&certificate),
+        );
+        state
+            .handle_block_proposal(block_proposal.clone())
+            .await
+            .unwrap();
+    }
 }
 
 #[tokio::test]
@@ -201,6 +573,7 @@ async fn test_handle_block_proposal_exceed_balance() {
         recipient,
         Amount::from(1000),
         Vec::new(),
+        None,
     );
     assert!(state.handle_block_proposal(block_proposal).await.is_err());
     assert!(state
@@ -230,6 +603,7 @@ async fn test_handle_block_proposal() {
         recipient,
         Amount::from(5),
         Vec::new(),
+        None,
     );
 
     let chain_info_response = state.handle_block_proposal(block_proposal).await.unwrap();
@@ -275,6 +649,7 @@ async fn test_handle_block_proposal_replay() {
         recipient,
         Amount::from(5),
         Vec::new(),
+        None,
     );
 
     let response = state
@@ -310,6 +685,7 @@ async fn test_handle_certificate_unknown_sender() {
         Vec::new(),
         &committee,
         &state,
+        None,
     );
     assert!(state.fully_handle_certificate(certificate).await.is_err());
 }
@@ -338,6 +714,7 @@ async fn test_handle_certificate_bad_block_height() {
         Vec::new(),
         &committee,
         &state,
+        None,
     );
     // Replays are ignored.
     state
@@ -345,7 +722,6 @@ async fn test_handle_certificate_bad_block_height() {
         .await
         .unwrap();
     state.fully_handle_certificate(certificate).await.unwrap();
-    // TODO: test the case of a block height in the future (aka lagging validator)
 }
 
 #[tokio::test]
@@ -384,6 +760,7 @@ async fn test_handle_certificate_with_early_incoming_message() {
         }],
         &committee,
         &state,
+        None,
     );
     state
         .fully_handle_certificate(certificate.clone())
@@ -448,6 +825,7 @@ async fn test_handle_certificate_receiver_balance_overflow() {
         Vec::new(),
         &committee,
         &state,
+        None,
     );
     state
         .fully_handle_certificate(certificate.clone())
@@ -485,6 +863,7 @@ async fn test_handle_certificate_receiver_equal_sender() {
         Vec::new(),
         &committee,
         &state,
+        None,
     );
     state
         .fully_handle_certificate(certificate.clone())
@@ -530,6 +909,7 @@ async fn test_handle_cross_chain_request() {
         Vec::new(),
         &committee,
         &state,
+        None,
     );
     state
         .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
@@ -575,6 +955,7 @@ async fn test_handle_cross_chain_request_no_recipient_chain() {
         Vec::new(),
         &committee,
         &state,
+        None,
     );
     assert!(state
         .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
@@ -606,6 +987,7 @@ async fn test_handle_cross_chain_request_no_recipient_chain_with_inactive_chains
         Vec::new(),
         &committee,
         &state,
+        None,
     );
     // An inactive target chain is created and it acknowledges the message.
     assert!(matches!(
@@ -653,6 +1035,7 @@ async fn test_handle_certificate_to_active_recipient() {
         Vec::new(),
         &committee,
         &state,
+        None,
     );
 
     let info = state
@@ -686,6 +1069,7 @@ async fn test_handle_certificate_to_active_recipient() {
         }],
         &committee,
         &state,
+        None,
     );
     state
         .fully_handle_certificate(certificate.clone())
@@ -740,6 +1124,7 @@ async fn test_handle_certificate_to_inactive_recipient() {
         Vec::new(),
         &committee,
         &state,
+        None,
     );
 
     let info = state
@@ -829,7 +1214,19 @@ fn make_transfer_block_proposal(
     recipient: Address,
     amount: Amount,
     incoming_messages: Vec<MessageGroup>,
+    previous_confirmed_block: Option<&Certificate>,
 ) -> BlockProposal {
+    let previous_block_hash = previous_confirmed_block.as_ref().map(|cert| cert.hash);
+    let height = match &previous_confirmed_block {
+        None => BlockHeight::default(),
+        Some(cert) => cert
+            .value
+            .confirmed_block()
+            .unwrap()
+            .height
+            .try_add_one()
+            .unwrap(),
+    };
     let block = Block {
         chain_id,
         incoming_messages,
@@ -838,8 +1235,8 @@ fn make_transfer_block_proposal(
             amount,
             user_data: UserData::default(),
         }],
-        previous_block_hash: None,
-        height: BlockHeight::new(),
+        previous_block_hash,
+        height,
     };
     BlockProposal::new(
         BlockAndRound {
@@ -863,6 +1260,7 @@ fn make_certificate(
         .unwrap()
 }
 
+#[allow(clippy::too_many_arguments)]
 fn make_transfer_certificate(
     chain_id: ChainId,
     key_pair: &KeyPair,
@@ -871,11 +1269,18 @@ fn make_transfer_certificate(
     incoming_messages: Vec<MessageGroup>,
     committee: &Committee,
     state: &WorkerState<InMemoryStoreClient>,
+    previous_confirmed_block: Option<&Certificate>,
 ) -> Certificate {
-    let block =
-        make_transfer_block_proposal(chain_id, key_pair, recipient, amount, incoming_messages)
-            .content
-            .block;
+    let block = make_transfer_block_proposal(
+        chain_id,
+        key_pair,
+        recipient,
+        amount,
+        incoming_messages,
+        previous_confirmed_block,
+    )
+    .content
+    .block;
     let value = Value::Confirmed { block };
     make_certificate(committee, state, value)
 }
