@@ -214,7 +214,7 @@ impl TestBuilder {
                         ..
                     } = response.info;
                     if let Some(cert) = queried_sent_certificates.pop() {
-                        if let Value::Confirmed { block } = &cert.value {
+                        if let Value::Confirmed { block, .. } = &cert.value {
                             if block.chain_id == chain_id && block.height == block_height {
                                 cert.check(&self.committee).unwrap();
                                 count += 1;
@@ -442,7 +442,7 @@ async fn test_transfer_then_open_chain() {
         block: Block {
             operations,
             ..
-        }} if matches!(&operations[..], &[Operation::OpenChain { id, .. }] if new_id == id)
+        }, ..} if matches!(&operations[..], &[Operation::OpenChain { id, .. }] if new_id == id)
     ));
     // Make a client to try the new chain.
     let mut client = builder
@@ -514,7 +514,8 @@ async fn test_close_chain() {
             block: Block {
                 operations,
                 ..
-            }
+            },
+            ..
         } if matches!(&operations[..], &[Operation::CloseChain])
     ));
     assert_eq!(sender.next_block_height, BlockHeight::from(1));

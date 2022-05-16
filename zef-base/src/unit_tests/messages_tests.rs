@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
+use crate::chain::ExecutionState;
 use std::collections::BTreeMap;
 
 #[test]
@@ -22,7 +23,10 @@ fn test_signed_values() {
         height: BlockHeight::from(0),
         previous_block_hash: None,
     };
-    let value = Value::Confirmed { block };
+    let value = Value::Confirmed {
+        block,
+        state_hash: HashValue::new(&ExecutionState::default()),
+    };
 
     let v = Vote::new(value.clone(), &key1);
     assert!(v.check(name1).is_ok());
@@ -55,7 +59,10 @@ fn test_certificates() {
         previous_block_hash: None,
         height: BlockHeight::from(0),
     };
-    let value = Value::Confirmed { block };
+    let value = Value::Confirmed {
+        block,
+        state_hash: HashValue::new(&ExecutionState::default()),
+    };
 
     let v1 = Vote::new(value.clone(), &key1);
     let v2 = Vote::new(value.clone(), &key2);

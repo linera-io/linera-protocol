@@ -70,7 +70,7 @@ pub struct Event {
 }
 
 /// Execution state of a chain.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct ExecutionState {
     /// Current committee, if any.
@@ -80,6 +80,8 @@ pub struct ExecutionState {
     /// Balance of the chain.
     pub balance: Balance,
 }
+
+impl BcsSignable for ExecutionState {}
 
 impl ChainState {
     pub fn new(id: ChainId) -> Self {
@@ -127,10 +129,11 @@ impl ChainState {
             description: self.description,
             manager: self.state.manager.clone(),
             balance: self.state.balance,
-            queried_committee: None,
-            queried_pending_messages: Vec::new(),
             block_hash: self.block_hash,
             next_block_height: self.next_block_height,
+            state_hash: HashValue::new(&self.state),
+            queried_committee: None,
+            queried_pending_messages: Vec::new(),
             queried_sent_certificates: Vec::new(),
             count_received_certificates: self.received_log.len(),
             queried_received_certificates: Vec::new(),

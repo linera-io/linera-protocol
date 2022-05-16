@@ -128,6 +128,8 @@ pub enum Error {
     InvalidCrossChainRequest,
     #[fail(display = "Invalid block proposal.")]
     InvalidBlockProposal,
+    #[fail(display = "Chaining between blocks appears to be inconsistent despite the certificate")]
+    InvalidBlockChaining,
 
     // Client errors
     #[fail(display = "Client failed to obtain a valid response to the block proposal")]

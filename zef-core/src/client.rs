@@ -226,7 +226,7 @@ where
             }
             ChainManager::Multi(m) => {
                 let mut identities = Vec::new();
-                for owner in &m.owners {
+                for (owner, ()) in &m.owners {
                     if self.known_key_pairs.contains_key(owner) {
                         identities.push(*owner);
                     }
@@ -278,7 +278,10 @@ where
             .await?;
         if info.next_block_height == self.next_block_height {
             // Check that our local node has the expected block hash.
-            assert_eq!(self.block_hash, info.block_hash);
+            zef_base::ensure!(
+                self.block_hash == info.block_hash,
+                Error::InvalidBlockChaining
+            );
         }
         if matches!(info.manager, ChainManager::Multi(_)) {
             // For multi-owner chains, we could be missing recent certificates created by
@@ -311,20 +314,27 @@ where
         let storage_client = self.node_client.storage_client().await;
         let cross_chain_delay = self.cross_chain_delay;
         let cross_chain_retries = self.cross_chain_retries;
-        let result = communicate_with_quorum(&self.validator_clients, committee, |name, client| {
-            let mut updater = ValidatorUpdater {
-                name,
-                client,
-                store: storage_client.clone(),
-                delay: cross_chain_delay,
-                retries: cross_chain_retries,
-            };
-            let action = action.clone();
-            Box::pin(async move { updater.send_chain_update(chain_id, action).await })
-        })
+        let result = communicate_with_quorum(
+            &self.validator_clients,
+            committee,
+            |value: &Option<Vote>| -> Option<HashValue> {
+                value.as_ref().map(|vote| vote.value.state_hash())
+            },
+            |name, client| {
+                let mut updater = ValidatorUpdater {
+                    name,
+                    client,
+                    store: storage_client.clone(),
+                    delay: cross_chain_delay,
+                    retries: cross_chain_retries,
+                };
+                let action = action.clone();
+                Box::pin(async move { updater.send_chain_update(chain_id, action).await })
+            },
+        )
         .await;
-        let votes = match result {
-            Ok(votes) => votes,
+        let (state_hash, votes): (Option<_>, Vec<_>) = match result {
+            Ok(content) => content,
             Err(Some(Error::InactiveChain(id)))
                 if id == chain_id
                     && matches!(action, CommunicateAction::AdvanceToNextBlockHeight(_)) =>
@@ -347,8 +357,10 @@ where
             .collect();
         match action {
             CommunicateAction::SubmitBlockForConfirmation(proposal) => {
+                let state_hash = state_hash.expect("this action produces votes");
                 let value = Value::Confirmed {
                     block: proposal.content.block,
+                    state_hash,
                 };
                 let certificate = Certificate::new(value, signatures);
                 // Certificate is valid because
@@ -358,18 +370,25 @@ where
                 Ok(Some(certificate))
             }
             CommunicateAction::SubmitBlockForValidation(proposal) => {
+                let state_hash = state_hash.expect("this action produces votes");
                 let BlockAndRound { block, round } = proposal.content;
-                let value = Value::Validated { block, round };
+                let value = Value::Validated {
+                    block,
+                    round,
+                    state_hash,
+                };
                 let certificate = Certificate::new(value, signatures);
                 Ok(Some(certificate))
             }
             CommunicateAction::FinalizeBlock(validity_certificate) => {
-                let block = validity_certificate
-                    .value
-                    .validated_block()
-                    .unwrap()
-                    .clone();
-                let certificate = Certificate::new(Value::Confirmed { block }, signatures);
+                let (block, state_hash) = match validity_certificate.value {
+                    Value::Validated {
+                        block, state_hash, ..
+                    } => (block, state_hash),
+                    _ => unreachable!(),
+                };
+                let certificate =
+                    Certificate::new(Value::Confirmed { block, state_hash }, signatures);
                 Ok(Some(certificate))
             }
             CommunicateAction::AdvanceToNextBlockHeight(_) => Ok(None),
@@ -388,8 +407,11 @@ where
         let chain_id = self.chain_id;
         let committee = self.committee().await?;
         let trackers = self.received_certificate_trackers.clone();
-        let result =
-            communicate_with_quorum(&self.validator_clients, &committee, |name, mut client| {
+        let result = communicate_with_quorum(
+            &self.validator_clients,
+            &committee,
+            |_| (),
+            |name, mut client| {
                 let tracker = *trackers.get(&name).unwrap_or(&0);
                 Box::pin(async move {
                     // Retrieve new received certificates from this validator.
@@ -416,10 +438,11 @@ where
                     }
                     Ok((name, response.info))
                 })
-            })
-            .await;
+            },
+        )
+        .await;
         let responses = match result {
-            Ok(responses) => responses,
+            Ok(((), responses)) => responses,
             Err(Some(Error::InactiveChain(id))) if id == chain_id => {
                 // The chain is visibly not active (yet or any more) so there is no need
                 // to synchronize received certificates.

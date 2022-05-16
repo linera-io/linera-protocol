@@ -4,7 +4,7 @@
 
 use crate::node::ValidatorNode;
 use futures::{future, StreamExt};
-use std::{collections::HashMap, time::Duration};
+use std::{collections::HashMap, hash::Hash, time::Duration};
 use zef_base::{base_types::*, chain::ChainState, committee::Committee, error::Error, messages::*};
 use zef_storage::Storage;
 
@@ -28,14 +28,18 @@ pub struct ValidatorUpdater<A, S> {
 
 /// Execute a sequence of actions in parallel for all validators.
 /// Try to stop early when a quorum is reached.
-pub async fn communicate_with_quorum<'a, A, V, F>(
+pub async fn communicate_with_quorum<'a, A, V, K, F, G>(
     validator_clients: &'a [(ValidatorName, A)],
     committee: &Committee,
+    group_by: G,
     execute: F,
-) -> Result<Vec<V>, Option<Error>>
+) -> Result<(K, Vec<V>), Option<Error>>
 where
     A: ValidatorNode + Send + Sync + 'static + Clone,
     F: Fn(ValidatorName, A) -> future::BoxFuture<'a, Result<V, Error>> + Clone,
+    G: Fn(&V) -> K,
+    K: Hash + PartialEq + Eq + Copy,
+    V: 'static,
 {
     let mut responses: futures::stream::FuturesUnordered<_> = validator_clients
         .iter()
@@ -52,17 +56,18 @@ where
         })
         .collect();
 
-    let mut values = Vec::new();
-    let mut value_score = 0;
+    let mut value_scores = HashMap::new();
     let mut error_scores = HashMap::new();
     while let Some((name, result)) = responses.next().await {
         match result {
             Ok(value) => {
-                values.push(value);
-                value_score += committee.weight(&name);
-                if value_score >= committee.quorum_threshold() {
+                let key = group_by(&value);
+                let entry = value_scores.entry(key).or_insert((0, Vec::new()));
+                entry.0 += committee.weight(&name);
+                entry.1.push(value);
+                if entry.0 >= committee.quorum_threshold() {
                     // Success!
-                    return Ok(values);
+                    return Ok((key, std::mem::take(&mut entry.1)));
                 }
             }
             Err(err) => {

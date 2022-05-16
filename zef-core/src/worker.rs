@@ -148,7 +148,10 @@ where
             return Ok((info, continuation));
         }
         // This should always be true for valid certificates.
-        assert_eq!(chain.block_hash, block.previous_block_hash);
+        ensure!(
+            chain.block_hash == block.previous_block_hash,
+            Error::InvalidBlockChaining
+        );
         // Persist certificate.
         self.storage.write_certificate(certificate.clone()).await?;
         // Execute the block.
@@ -158,6 +161,11 @@ where
         chain.confirmed_log.push(certificate.hash);
         chain.next_block_height.try_add_assign_one()?;
         chain.state.manager.reset();
+        // We should always agree on the state hash.
+        ensure!(
+            HashValue::new(&chain.state) == certificate.value.state_hash(),
+            Error::InvalidBlockChaining
+        );
         // Final touch on the sender's chain.
         let info = chain.make_chain_info(self.key_pair.as_ref());
         // Schedule cross-chain request if any.
@@ -186,10 +194,14 @@ where
         &mut self,
         certificate: Certificate,
     ) -> Result<ChainInfoResponse, Error> {
-        let (block, round) = certificate
-            .value
-            .validated_block_and_round()
-            .expect("A validation certificate");
+        let (block, round, state_hash) = match &certificate.value {
+            Value::Validated {
+                block,
+                round,
+                state_hash,
+            } => (block, *round, *state_hash),
+            _ => panic!("Expecting a validation certificate"),
+        };
         // Check that the chain is active and ready for this confirmation.
         let mut chain = self.storage.read_active_chain(block.chain_id).await?;
         // Verify the certificate. Returns a catch-all error to make client code more robust.
@@ -206,10 +218,12 @@ where
             // unchanged.
             return Ok(chain.make_chain_info(self.key_pair.as_ref()));
         }
-        chain
-            .state
-            .manager
-            .create_final_vote(block.clone(), certificate, self.key_pair.as_ref());
+        chain.state.manager.create_final_vote(
+            block.clone(),
+            state_hash,
+            certificate,
+            self.key_pair.as_ref(),
+        );
         let info = chain.make_chain_info(self.key_pair.as_ref());
         self.storage.write_chain(chain).await?;
         Ok(info)
@@ -243,19 +257,20 @@ where
             // unchanged.
             return Ok(chain.make_chain_info(self.key_pair.as_ref()));
         }
-        {
+        let state_hash = {
             // Execute the block on a copy of the chain state for validation.
             let mut staged = chain.clone();
             staged.execute_block(&proposal.content.block)?;
             // Verify that the resulting chain would have no unconfirmed incoming
             // messages.
             staged.validate_incoming_messages()?;
-        }
+            HashValue::new(&staged.state)
+        };
         // Create the vote and store it in the chain state.
         chain
             .state
             .manager
-            .create_vote(proposal, self.key_pair.as_ref());
+            .create_vote(proposal, state_hash, self.key_pair.as_ref());
         let info = chain.make_chain_info(self.key_pair.as_ref());
         self.storage.write_chain(chain).await?;
         Ok(info)
