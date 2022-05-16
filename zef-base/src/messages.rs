@@ -91,9 +91,13 @@ pub struct BlockProposal {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Value {
     /// The block was validated but confirmation will require additional steps.
-    Validated { block: Block, round: RoundNumber },
-    /// The block is validated and final (i.e. ready to be executed).
-    Confirmed { block: Block },
+    Validated {
+        block: Block,
+        round: RoundNumber,
+        state_hash: HashValue,
+    },
+    /// The block is validated and final (i.e. ready to be published).
+    Confirmed { block: Block, state_hash: HashValue },
 }
 
 /// A vote on a statement from a validator.
@@ -159,8 +163,10 @@ pub struct ChainInfo {
     pub balance: Balance,
     /// The last block hash, if any.
     pub block_hash: Option<HashValue>,
-    /// The current block height
+    /// The height after the latest block in the chain.
     pub next_block_height: BlockHeight,
+    /// The hash of the current execution state.
+    pub state_hash: HashValue,
     /// The current committee (if requested)
     pub queried_committee: Option<Committee>,
     /// The received messages that are waiting be picked in the next block (if requested).
@@ -237,29 +243,36 @@ impl Operation {
 impl Value {
     pub fn chain_id(&self) -> ChainId {
         match self {
-            Value::Confirmed { block } => block.chain_id,
+            Value::Confirmed { block, .. } => block.chain_id,
             Value::Validated { block, .. } => block.chain_id,
         }
     }
 
     pub fn block(&self) -> &Block {
         match self {
-            Value::Confirmed { block } => block,
+            Value::Confirmed { block, .. } => block,
             Value::Validated { block, .. } => block,
+        }
+    }
+
+    pub fn state_hash(&self) -> HashValue {
+        match self {
+            Value::Confirmed { state_hash, .. } => *state_hash,
+            Value::Validated { state_hash, .. } => *state_hash,
         }
     }
 
     #[cfg(test)]
     pub fn confirmed_block_height(&self) -> Option<BlockHeight> {
         match self {
-            Value::Confirmed { block } => Some(block.height),
+            Value::Confirmed { block, .. } => Some(block.height),
             _ => None,
         }
     }
 
     pub fn confirmed_block(&self) -> Option<&Block> {
         match self {
-            Value::Confirmed { block } => Some(block),
+            Value::Confirmed { block, .. } => Some(block),
             _ => None,
         }
     }
@@ -271,24 +284,17 @@ impl Value {
         }
     }
 
-    pub fn validated_block_and_round(&self) -> Option<(&Block, RoundNumber)> {
-        match self {
-            Value::Validated { block, round } => Some((block, *round)),
-            _ => None,
-        }
-    }
-
     #[cfg(test)]
     pub fn confirmed_block_mut(&mut self) -> Option<&mut Block> {
         match self {
-            Value::Confirmed { block } => Some(block),
+            Value::Confirmed { block, .. } => Some(block),
             _ => None,
         }
     }
 
     pub fn confirmed_key(&self) -> Option<(ChainId, BlockHeight)> {
         match self {
-            Value::Confirmed { block } => Some((block.chain_id, block.height)),
+            Value::Confirmed { block, .. } => Some((block.chain_id, block.height)),
             _ => None,
         }
     }

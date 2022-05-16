@@ -85,6 +85,8 @@ ChainInfo:
           TYPENAME: HashValue
     - next_block_height:
         TYPENAME: BlockHeight
+    - state_hash:
+        TYPENAME: HashValue
     - queried_committee:
         OPTION:
           TYPENAME: Committee
@@ -295,28 +297,30 @@ Error:
     30:
       InvalidBlockProposal: UNIT
     31:
-      ClientErrorWhileProcessingBlockProposal: UNIT
+      InvalidBlockChaining: UNIT
     32:
-      ClientErrorWhileQueryingCertificate: UNIT
+      ClientErrorWhileProcessingBlockProposal: UNIT
     33:
-      WrongShard: UNIT
+      ClientErrorWhileQueryingCertificate: UNIT
     34:
-      InvalidDecoding: UNIT
+      WrongShard: UNIT
     35:
-      UnexpectedMessage: UNIT
+      InvalidDecoding: UNIT
     36:
+      UnexpectedMessage: UNIT
+    37:
       ClientIoError:
         STRUCT:
           - error: STR
-    37:
+    38:
       StorageIoError:
         STRUCT:
           - error: STR
-    38:
+    39:
       StorageBcsError:
         STRUCT:
           - error: STR
-    39:
+    40:
       MissingCertificate:
         STRUCT:
           - hash:
@@ -366,8 +370,10 @@ MessageGroup:
 MultiOwnerManager:
   STRUCT:
     - owners:
-        SEQ:
-          TYPENAME: PublicKey
+        MAP:
+          KEY:
+            TYPENAME: PublicKey
+          VALUE: UNIT
     - proposed:
         OPTION:
           TYPENAME: BlockProposal
@@ -488,11 +494,15 @@ Value:
               TYPENAME: Block
           - round:
               TYPENAME: RoundNumber
+          - state_hash:
+              TYPENAME: HashValue
     1:
       Confirmed:
         STRUCT:
           - block:
               TYPENAME: Block
+          - state_hash:
+              TYPENAME: HashValue
 Vote:
   STRUCT:
     - value:

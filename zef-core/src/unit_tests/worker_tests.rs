@@ -6,7 +6,7 @@ use crate::worker::{ValidatorWorker, WorkerState};
 use std::collections::BTreeMap;
 use zef_base::{
     base_types::*,
-    chain::{ChainState, Event},
+    chain::{ChainState, Event, ExecutionState},
     committee::Committee,
     error::Error,
     manager::ChainManager,
@@ -167,6 +167,7 @@ async fn test_handle_block_proposal_with_chaining() {
         Amount::from(1),
         Vec::new(),
         &committee,
+        Balance::from(4),
         &state,
         None,
     );
@@ -256,7 +257,18 @@ async fn test_handle_block_proposal_with_incoming_messages() {
         previous_block_hash: None,
         height: BlockHeight::from(0),
     };
-    let certificate0 = make_certificate(&committee, &state, Value::Confirmed { block: block0 });
+    let certificate0 = make_certificate(
+        &committee,
+        &state,
+        Value::Confirmed {
+            block: block0,
+            state_hash: HashValue::new(&ExecutionState {
+                committee: Some(committee.clone()),
+                manager: ChainManager::single(sender_key_pair.public()),
+                balance: Balance::from(3),
+            }),
+        },
+    );
     let block1 = Block {
         chain_id: ChainId::root(1),
         incoming_messages: Vec::new(),
@@ -268,8 +280,18 @@ async fn test_handle_block_proposal_with_incoming_messages() {
         previous_block_hash: Some(certificate0.hash),
         height: BlockHeight::from(1),
     };
-    let certificate1 = make_certificate(&committee, &state, Value::Confirmed { block: block1 });
-
+    let certificate1 = make_certificate(
+        &committee,
+        &state,
+        Value::Confirmed {
+            block: block1,
+            state_hash: HashValue::new(&ExecutionState {
+                committee: Some(committee.clone()),
+                manager: ChainManager::single(sender_key_pair.public()),
+                balance: Balance::from(0),
+            }),
+        },
+    );
     // Missing earlier blocks
     assert!(state
         .handle_certificate(certificate1.clone())
@@ -510,6 +532,11 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             &state,
             Value::Confirmed {
                 block: block_proposal.content.block,
+                state_hash: HashValue::new(&ExecutionState {
+                    committee: Some(committee.clone()),
+                    manager: ChainManager::single(recipient_key_pair.public()),
+                    balance: Balance::from(0),
+                }),
             },
         );
         state.handle_certificate(certificate.clone()).await.unwrap();
@@ -688,6 +715,7 @@ async fn test_handle_certificate_unknown_sender() {
         Amount::from(5),
         Vec::new(),
         &committee,
+        Balance::from(0),
         &state,
         None,
     );
@@ -717,6 +745,7 @@ async fn test_handle_certificate_bad_block_height() {
         Amount::from(5),
         Vec::new(),
         &committee,
+        Balance::from(0),
         &state,
         None,
     );
@@ -763,6 +792,7 @@ async fn test_handle_certificate_with_early_incoming_message() {
             )],
         }],
         &committee,
+        Balance::from(0),
         &state,
         None,
     );
@@ -828,6 +858,7 @@ async fn test_handle_certificate_receiver_balance_overflow() {
         Amount::from(1),
         Vec::new(),
         &committee,
+        Balance::from(0),
         &state,
         None,
     );
@@ -866,6 +897,7 @@ async fn test_handle_certificate_receiver_equal_sender() {
         Amount::from(1),
         Vec::new(),
         &committee,
+        Balance::from(0),
         &state,
         None,
     );
@@ -912,6 +944,7 @@ async fn test_handle_cross_chain_request() {
         Amount::from(10),
         Vec::new(),
         &committee,
+        Balance::from(0),
         &state,
         None,
     );
@@ -958,6 +991,7 @@ async fn test_handle_cross_chain_request_no_recipient_chain() {
         Amount::from(10),
         Vec::new(),
         &committee,
+        Balance::from(0),
         &state,
         None,
     );
@@ -990,6 +1024,7 @@ async fn test_handle_cross_chain_request_no_recipient_chain_with_inactive_chains
         Amount::from(10),
         Vec::new(),
         &committee,
+        Balance::from(0),
         &state,
         None,
     );
@@ -1038,6 +1073,7 @@ async fn test_handle_certificate_to_active_recipient() {
         Amount::from(5),
         Vec::new(),
         &committee,
+        Balance::from(0),
         &state,
         None,
     );
@@ -1072,6 +1108,7 @@ async fn test_handle_certificate_to_active_recipient() {
             )],
         }],
         &committee,
+        Balance::from(4),
         &state,
         None,
     );
@@ -1127,6 +1164,7 @@ async fn test_handle_certificate_to_inactive_recipient() {
         Amount::from(5),
         Vec::new(),
         &committee,
+        Balance::from(0),
         &state,
         None,
     );
@@ -1272,6 +1310,7 @@ fn make_transfer_certificate(
     amount: Amount,
     incoming_messages: Vec<MessageGroup>,
     committee: &Committee,
+    balance: Balance,
     state: &WorkerState<InMemoryStoreClient>,
     previous_confirmed_block: Option<&Certificate>,
 ) -> Certificate {
@@ -1285,6 +1324,11 @@ fn make_transfer_certificate(
     )
     .content
     .block;
-    let value = Value::Confirmed { block };
+    let state_hash = HashValue::new(&ExecutionState {
+        committee: Some(committee.clone()),
+        manager: ChainManager::single(key_pair.public()),
+        balance,
+    });
+    let value = Value::Confirmed { block, state_hash };
     make_certificate(committee, state, value)
 }
