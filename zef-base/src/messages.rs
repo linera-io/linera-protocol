@@ -11,7 +11,7 @@ use std::collections::HashSet;
 mod messages_tests;
 
 /// A recipient's address.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Serialize, Deserialize)]
 pub enum Address {
     Burn,             // for demo purposes
     Account(ChainId), // TODO: support several accounts per chain
