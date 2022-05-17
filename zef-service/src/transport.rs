@@ -12,10 +12,6 @@ use tokio::{
     net::{TcpListener, TcpStream, UdpSocket},
 };
 
-#[cfg(test)]
-#[path = "unit_tests/transport_tests.rs"]
-mod transport_tests;
-
 /// Suggested buffer size
 pub const DEFAULT_MAX_DATAGRAM_SIZE: &str = "65507";
 
