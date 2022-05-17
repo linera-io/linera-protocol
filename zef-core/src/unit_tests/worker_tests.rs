@@ -5,7 +5,11 @@
 use crate::worker::{ValidatorWorker, WorkerState};
 use std::collections::BTreeMap;
 use zef_base::{
-    base_types::*, chain::ChainState, committee::Committee, error::Error, manager::ChainManager,
+    base_types::*,
+    chain::{ChainState, Event},
+    committee::Committee,
+    error::Error,
+    manager::ChainManager,
     messages::*,
 };
 use zef_storage::{InMemoryStoreClient, Storage};
@@ -785,11 +789,11 @@ async fn test_handle_certificate_with_early_incoming_message() {
         .inboxes
         .get(&ChainId::root(3))
         .unwrap()
-        .received
+        .received_events
         .is_empty(),);
     assert!(matches!(
-        chain.inboxes.get(&ChainId::root(3)).unwrap().expected.front().unwrap(),
-        (height, 0, Operation::Transfer { amount, .. }) if *height == BlockHeight::from(0) && *amount == Amount::from(995),
+        chain.inboxes.get(&ChainId::root(3)).unwrap().expected_events.front().unwrap(),
+        Event { height, index: 0, operation: Operation::Transfer { amount, .. }} if *height == BlockHeight::from(0) && *amount == Amount::from(995),
     ));
     assert_eq!(chain.confirmed_log.len(), 1);
     assert_eq!(Some(certificate.hash), chain.block_hash);
@@ -884,8 +888,8 @@ async fn test_handle_certificate_receiver_equal_sender() {
             .next_height_to_receive
     );
     assert!(matches!(
-        chain.inboxes.get(&ChainId::root(1)).unwrap().received.front().unwrap(),
-        (height, 0, Operation::Transfer { amount, .. }) if *height == BlockHeight::from(0) && *amount == Amount::from(1),
+        chain.inboxes.get(&ChainId::root(1)).unwrap().received_events.front().unwrap(),
+        Event { height, index: 0, operation: Operation::Transfer { amount, .. }} if *height == BlockHeight::from(0) && *amount == Amount::from(1),
     ));
     assert_eq!(BlockHeight::from(1), chain.next_block_height);
     assert_eq!(chain.confirmed_log.len(), 1);
@@ -935,8 +939,8 @@ async fn test_handle_cross_chain_request() {
             .next_height_to_receive
     );
     assert!(matches!(
-        chain.inboxes.get(&ChainId::root(1)).unwrap().received.front().unwrap(),
-        (height, 0, Operation::Transfer { amount, .. }) if *height == BlockHeight::from(0) && *amount == Amount::from(10),
+        chain.inboxes.get(&ChainId::root(1)).unwrap().received_events.front().unwrap(),
+        Event { height, index: 0, operation: Operation::Transfer { amount, .. }} if *height == BlockHeight::from(0) && *amount == Amount::from(10),
     ));
     assert_eq!(chain.confirmed_log.len(), 0);
     assert_eq!(None, chain.block_hash);
