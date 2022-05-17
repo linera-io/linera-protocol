@@ -279,18 +279,21 @@ impl ChainState {
                     }
                 }
                 // Execute the received operation.
-                self.apply_operation_as_recipient(message_operation)?;
+                self.state.apply_operation_as_recipient(message_operation)?;
             }
         }
         // Second, execute the operations in the block.
         for (index, operation) in block.operations.iter().enumerate() {
-            self.apply_operation_as_sender(block.chain_id, block.height, index, operation)?;
+            self.state
+                .apply_operation_as_sender(block.chain_id, block.height, index, operation)?;
         }
         // Last, recompute the state hash.
         self.state_hash = HashValue::new(&self.state);
         Ok(())
     }
+}
 
+impl ExecutionState {
     /// Execute the sender's side of the operation.
     fn apply_operation_as_sender(
         &mut self,
@@ -308,28 +311,28 @@ impl ChainState {
                 });
                 ensure!(id == &expected_id, Error::InvalidNewChainId(*id));
                 ensure!(
-                    self.state.committee.as_ref() == Some(committee),
+                    self.committee.as_ref() == Some(committee),
                     Error::InvalidCommittee
                 );
             }
             Operation::ChangeOwner { new_owner } => {
-                self.state.manager = ChainManager::single(*new_owner);
+                self.manager = ChainManager::single(*new_owner);
             }
             Operation::ChangeMultipleOwners { new_owners } => {
-                self.state.manager = ChainManager::multiple(new_owners.clone());
+                self.manager = ChainManager::multiple(new_owners.clone());
             }
             Operation::CloseChain => {
-                self.state.manager = ChainManager::default();
+                self.manager = ChainManager::default();
             }
             Operation::Transfer { amount, .. } => {
                 ensure!(*amount > Amount::zero(), Error::IncorrectTransferAmount);
                 ensure!(
-                    self.state.balance >= (*amount).into(),
+                    self.balance >= (*amount).into(),
                     Error::InsufficientFunding {
-                        current_balance: self.state.balance
+                        current_balance: self.balance
                     }
                 );
-                self.state.balance.try_sub_assign((*amount).into())?;
+                self.balance.try_sub_assign((*amount).into())?;
             }
         };
         Ok(())
@@ -340,8 +343,7 @@ impl ChainState {
     /// Operations must be executed by order of heights in the sender's chain.
     fn apply_operation_as_recipient(&mut self, operation: &Operation) -> Result<(), Error> {
         if let Operation::Transfer { amount, .. } = operation {
-            self.state.balance = self
-                .state
+            self.balance = self
                 .balance
                 .try_add((*amount).into())
                 .unwrap_or_else(|_| Balance::max());
