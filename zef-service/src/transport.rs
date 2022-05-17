@@ -73,8 +73,8 @@ impl NetworkProtocol {
     pub async fn connect(
         self,
         address: String,
-        max_data_size: usize,
     ) -> Result<Box<dyn DataStream>, std::io::Error> {
+        let max_data_size = 1000;
         let stream: Box<dyn DataStream> = match self {
             NetworkProtocol::Udp => Box::new(UdpDataStream::connect(address, max_data_size).await?),
             NetworkProtocol::Tcp => Box::new(TcpDataStream::connect(address, max_data_size).await?),
