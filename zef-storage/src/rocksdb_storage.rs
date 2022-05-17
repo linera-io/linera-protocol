@@ -79,15 +79,14 @@ impl RocksdbStore {
     }
 
     fn get_db_handler(&mut self, kind: &str) -> Result<ColumnHandle<'_>, rocksdb::Error> {
-        let handle = match self.db.cf_handle(kind) {
-            Some(handle) => handle,
-            None => {
-                self.db.create_cf(kind, &rocksdb::Options::default())?;
-                self.db
-                    .cf_handle(kind)
-                    .expect("Unable to create Rocksdb ColumnFamily")
-            }
-        };
+        if self.db.cf_handle(kind).is_none() {
+            self.db.create_cf(kind, &rocksdb::Options::default())?;
+        }
+
+        let handle = self
+            .db
+            .cf_handle(kind)
+            .expect("Unable to create Rocksdb ColumnFamily");
 
         Ok(ColumnHandle::new(&self.db, handle))
     }
