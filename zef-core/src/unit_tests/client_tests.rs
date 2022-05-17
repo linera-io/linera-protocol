@@ -384,13 +384,8 @@ async fn test_open_chain_then_close_it() {
         .await;
     let new_key_pair = KeyPair::generate();
     let new_pubk = new_key_pair.public();
-    let new_id = ChainId::child(OperationId {
-        chain_id: ChainId::root(1),
-        height: BlockHeight::from(0),
-        index: 0,
-    });
     // Open the new chain.
-    let certificate = sender.open_chain(new_pubk).await.unwrap();
+    let (new_id, certificate) = sender.open_chain(new_pubk).await.unwrap();
     assert_eq!(sender.next_block_height, BlockHeight::from(1));
     assert!(sender.pending_block.is_none());
     assert!(sender.key_pair().await.is_ok());
@@ -426,7 +421,8 @@ async fn test_transfer_then_open_chain() {
         .await
         .unwrap();
     // Open the new chain.
-    let certificate = sender.open_chain(new_pubk).await.unwrap();
+    let (new_id2, certificate) = sender.open_chain(new_pubk).await.unwrap();
+    assert_eq!(new_id, new_id2);
     assert_eq!(sender.next_block_height, BlockHeight::from(2));
     assert!(sender.pending_block.is_none());
     assert!(sender.key_pair().await.is_ok());
@@ -464,13 +460,8 @@ async fn test_open_chain_then_transfer() {
         .await;
     let new_key_pair = KeyPair::generate();
     let new_pubk = new_key_pair.public();
-    let new_id = ChainId::child(OperationId {
-        chain_id: ChainId::root(1),
-        height: BlockHeight::from(0),
-        index: 0,
-    });
     // Open the new chain.
-    let creation_certificate = sender.open_chain(new_pubk).await.unwrap();
+    let (new_id, creation_certificate) = sender.open_chain(new_pubk).await.unwrap();
     // Transfer after creating the chain.
     let transfer_certificate = sender
         .transfer_to_chain(Amount::from(3), new_id, UserData::default())
