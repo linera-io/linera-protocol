@@ -164,7 +164,7 @@ impl ClientContext {
             0,
         );
         client.receive_certificate(certificate).await?;
-        self.update_chain_from_state(&mut client).await;
+        self.update_wallet_from_client(&mut client).await;
         Ok(())
     }
 
@@ -340,7 +340,7 @@ impl ClientContext {
         info!("Saved user chain states");
     }
 
-    async fn update_chain_from_state<A, S>(&mut self, state: &mut ChainClientState<A, S>)
+    async fn update_wallet_from_client<A, S>(&mut self, state: &mut ChainClientState<A, S>)
     where
         A: ValidatorNode + Send + Sync + 'static + Clone,
         S: Storage + Clone + 'static,
@@ -518,7 +518,7 @@ async fn main() {
             let time_total = time_start.elapsed().as_micros();
             info!("Operation confirmed after {} us", time_total);
             info!("{:?}", certificate);
-            context.update_chain_from_state(&mut client_state).await;
+            context.update_wallet_from_client(&mut client_state).await;
 
             info!("Updating recipient's local chain");
             context
@@ -549,7 +549,7 @@ async fn main() {
                     .recipient()
                     .unwrap()
             );
-            context.update_chain_from_state(&mut client_state).await;
+            context.update_wallet_from_client(&mut client_state).await;
 
             info!("Updating recipient's local chain");
             context
@@ -567,7 +567,7 @@ async fn main() {
             let time_total = time_start.elapsed().as_micros();
             info!("Operation confirmed after {} us", time_total);
             info!("{:?}", certificate);
-            context.update_chain_from_state(&mut client_state).await;
+            context.update_wallet_from_client(&mut client_state).await;
             context.save_chains();
         }
 
@@ -579,7 +579,7 @@ async fn main() {
             let time_total = time_start.elapsed().as_micros();
             info!("Local balance obtained after {} us", time_total);
             println!("{}", balance);
-            context.update_chain_from_state(&mut client_state).await;
+            context.update_wallet_from_client(&mut client_state).await;
             context.save_chains();
         }
 
@@ -591,7 +591,7 @@ async fn main() {
             let time_total = time_start.elapsed().as_micros();
             info!("Chain balance synchronized after {} us", time_total);
             println!("{}", balance);
-            context.update_chain_from_state(&mut client_state).await;
+            context.update_wallet_from_client(&mut client_state).await;
             context.save_chains();
         }
 
