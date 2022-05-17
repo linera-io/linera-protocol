@@ -53,11 +53,20 @@ pub struct InboxState {
     /// We have already received the cross-chain requests and enqueued all the messages
     /// below this height.
     pub next_height_to_receive: BlockHeight,
-    /// These operations have been received but not yet picked by a block to be executed.
-    pub received: VecDeque<(BlockHeight, usize, Operation)>,
-    /// These operations have been executed but the cross-chain requests have not been
+    /// These events have been received but not yet picked by a block to be executed.
+    pub received_events: VecDeque<Event>,
+    /// These events have been executed but the cross-chain requests have not been
     /// received yet.
-    pub expected: VecDeque<(BlockHeight, usize, Operation)>,
+    pub expected_events: VecDeque<Event>,
+}
+
+/// A message sent by some (unspecified) chain at a particular height and index.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
+pub struct Event {
+    pub height: BlockHeight,
+    pub index: usize,
+    pub operation: Operation,
 }
 
 /// Execution state of a chain.
@@ -134,10 +143,10 @@ impl ChainState {
     pub fn validate_incoming_messages(&self) -> Result<(), Error> {
         for (&sender_id, inbox) in &self.inboxes {
             ensure!(
-                inbox.expected.is_empty(),
+                inbox.expected_events.is_empty(),
                 Error::MissingCrossChainUpdate {
                     sender_id,
-                    height: inbox.expected.front().unwrap().0,
+                    height: inbox.expected_events.front().unwrap().height,
                 }
             );
         }
@@ -196,22 +205,21 @@ impl ChainState {
                 // incoming message.
             }
             // Find if the message was executed ahead of time.
-            if let Some((expected_height, expected_index, expected_operation)) =
-                inbox.expected.front()
-            {
-                if height == *expected_height
-                    && index == *expected_index
-                    && operation == *expected_operation
-                {
+            if let Some(event) = inbox.expected_events.front() {
+                if height == event.height && index == event.index && operation == event.operation {
                     // We already executed this message. Remove it from the queue.
-                    inbox.expected.pop_front();
+                    inbox.expected_events.pop_front();
                     return Ok(true);
                 }
                 // Should be unreachable under BFT assumptions.
                 panic!("Given the confirmed blocks that we have seen, we were expecting a different message to come first.");
             }
             // Otherwise, schedule the message for execution.
-            inbox.received.push_back((height, index, operation));
+            inbox.received_events.push_back(Event {
+                height,
+                index,
+                operation,
+            });
             has_processed_operations = true;
         }
         ensure!(has_processed_operations, Error::InvalidCrossChainRequest);
@@ -225,8 +233,12 @@ impl ChainState {
             for (message_index, message_operation) in &message_group.operations {
                 // Reconcile the operation with the received queue, or mark it as "expected".
                 let inbox = self.inboxes.entry(message_group.sender_id).or_default();
-                match inbox.received.front() {
-                    Some((height, index, operation)) => {
+                match inbox.received_events.front() {
+                    Some(Event {
+                        height,
+                        index,
+                        operation,
+                    }) => {
                         ensure!(
                             message_group.height == *height && message_index == index,
                             Error::InvalidMessageOrder {
@@ -245,14 +257,14 @@ impl ChainState {
                                 index: *message_index,
                             }
                         );
-                        inbox.received.pop_front().unwrap();
+                        inbox.received_events.pop_front().unwrap();
                     }
                     None => {
-                        inbox.expected.push_back((
-                            message_group.height,
-                            *message_index,
-                            message_operation.clone(),
-                        ));
+                        inbox.expected_events.push_back(Event {
+                            height: message_group.height,
+                            index: *message_index,
+                            operation: message_operation.clone(),
+                        });
                     }
                 }
                 // Execute the received operation.

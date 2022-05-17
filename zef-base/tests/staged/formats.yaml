@@ -321,6 +321,13 @@ Error:
         STRUCT:
           - hash:
               TYPENAME: HashValue
+Event:
+  STRUCT:
+    - height:
+        TYPENAME: BlockHeight
+    - index: U64
+    - operation:
+        TYPENAME: Operation
 ExecutionState:
   STRUCT:
     - committee:
@@ -339,18 +346,12 @@ InboxState:
   STRUCT:
     - next_height_to_receive:
         TYPENAME: BlockHeight
-    - received:
+    - received_events:
         SEQ:
-          TUPLE:
-            - TYPENAME: BlockHeight
-            - U64
-            - TYPENAME: Operation
-    - expected:
+          TYPENAME: Event
+    - expected_events:
         SEQ:
-          TUPLE:
-            - TYPENAME: BlockHeight
-            - U64
-            - TYPENAME: Operation
+          TYPENAME: Event
 MessageGroup:
   STRUCT:
     - sender_id:

@@ -299,29 +299,32 @@ where
             for (&sender_id, inbox) in &chain.inboxes {
                 let mut operations = Vec::new();
                 let mut current_height = None;
-                for (height, index, operation) in &inbox.received {
+                for event in &inbox.received_events {
                     match current_height {
-                        Some(last_height) if last_height != *height => {
-                            // Pack operations into a new group.
+                        None => {
+                            current_height = Some(event.height);
+                        }
+                        Some(height) if height != event.height => {
+                            // If the height changed, flush the accumulated operations
+                            // into a new group.
                             message_groups.push(MessageGroup {
                                 sender_id,
-                                height: last_height,
+                                height,
                                 operations,
                             });
                             operations = Vec::new();
-                            current_height = Some(*height);
+                            current_height = Some(event.height);
                         }
-                        None => {
-                            current_height = Some(*height);
+                        _ => {
+                            // Otherwise, continue adding operations to the same group.
                         }
-                        _ => (),
                     }
-                    operations.push((*index, operation.clone()));
+                    operations.push((event.index, event.operation.clone()));
                 }
-                if let Some(last_height) = current_height {
+                if let Some(height) = current_height {
                     message_groups.push(MessageGroup {
                         sender_id,
-                        height: last_height,
+                        height,
                         operations,
                     });
                 }
