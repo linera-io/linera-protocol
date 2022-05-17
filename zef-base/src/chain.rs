@@ -66,8 +66,11 @@ pub struct InboxState {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct Event {
+    /// The height of the block that created the event.
     pub height: BlockHeight,
+    /// The index of the operation.
     pub index: usize,
+    /// The operation that created the event.
     pub operation: Operation,
 }
 
