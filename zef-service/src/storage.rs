@@ -3,7 +3,7 @@
 
 use crate::config::GenesisConfig;
 use std::path::PathBuf;
-use zef_storage::{FileStoreClient, InMemoryStoreClient, Storage};
+use zef_storage::{RocksdbStorageClient, FileStoreClient, InMemoryStoreClient, Storage};
 
 pub type MixedStorage = Box<dyn Storage>;
 
