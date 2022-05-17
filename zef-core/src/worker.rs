@@ -186,7 +186,7 @@ where
         }
         let continuation = self.make_continuation(&chain).await?;
         // Persist chain.
-        self.storage.write_chain(chain.clone()).await?;
+        self.storage.write_chain(chain).await?;
         Ok((info, continuation))
     }
 
