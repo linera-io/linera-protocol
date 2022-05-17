@@ -18,6 +18,8 @@ pub struct ChainState {
     pub description: Option<ChainDescription>,
     /// Execution state.
     pub state: ExecutionState,
+    /// Hash of the execution state.
+    pub state_hash: HashValue,
     /// Hash of the latest certified block in this chain, if any.
     pub block_hash: Option<HashValue>,
     /// Sequence number tracking blocks.
@@ -90,10 +92,12 @@ impl ChainState {
             manager: ChainManager::None,
             balance: Balance::default(),
         };
+        let state_hash = HashValue::new(&state);
         Self {
             id,
             description: None,
             state,
+            state_hash,
             block_hash: None,
             next_block_height: BlockHeight::default(),
             confirmed_log: Vec::new(),
@@ -114,6 +118,7 @@ impl ChainState {
         chain.state.committee = Some(committee);
         chain.state.manager = ChainManager::single(owner);
         chain.state.balance = balance;
+        chain.state_hash = HashValue::new(&chain.state);
         chain
     }
 
@@ -131,7 +136,7 @@ impl ChainState {
             balance: self.state.balance,
             block_hash: self.block_hash,
             next_block_height: self.next_block_height,
-            state_hash: HashValue::new(&self.state),
+            state_hash: self.state_hash,
             queried_committee: None,
             queried_pending_messages: Vec::new(),
             queried_sent_certificates: Vec::new(),
@@ -203,9 +208,10 @@ impl ChainState {
                 self.description = Some(description);
                 self.state.committee = Some(committee.clone());
                 self.state.manager = ChainManager::single(*owner);
-                // Proceed to scheduling the operation for "execution". Although it won't do
-                // anything, it's simpler than asking block producers to skip this kind of
-                // incoming message.
+                self.state_hash = HashValue::new(&self.state);
+                // Proceed to scheduling the `OpenChain` operation for "execution".
+                // Although it won't do anything, it's simpler than asking block producers
+                // to skip this kind of incoming messages.
             }
             // Find if the message was executed ahead of time.
             if let Some(event) = inbox.expected_events.front() {
@@ -225,11 +231,13 @@ impl ChainState {
             });
             has_processed_operations = true;
         }
+        // Update the state hash at the end.
         ensure!(has_processed_operations, Error::InvalidCrossChainRequest);
         Ok(true)
     }
 
-    /// Execute a new block: first the incoming messages, then the main operation.
+    /// Execute a new block: first the incoming messages, then the main operation. In case
+    /// of errors, `self` may not be consistent any more and should be thrown away.
     pub fn execute_block(&mut self, block: &Block) -> Result<(), Error> {
         // First, process incoming messages.
         for message_group in &block.incoming_messages {
@@ -278,6 +286,8 @@ impl ChainState {
         for (index, operation) in block.operations.iter().enumerate() {
             self.apply_operation_as_sender(block.chain_id, block.height, index, operation)?;
         }
+        // Last, recompute the state hash.
+        self.state_hash = HashValue::new(&self.state);
         Ok(())
     }
 
@@ -306,7 +316,7 @@ impl ChainState {
                 self.state.manager = ChainManager::single(*new_owner);
             }
             Operation::ChangeMultipleOwners { new_owners } => {
-                self.state.manager = ChainManager::multiple(new_owners.iter().cloned().collect());
+                self.state.manager = ChainManager::multiple(new_owners.clone());
             }
             Operation::CloseChain => {
                 self.state.manager = ChainManager::default();

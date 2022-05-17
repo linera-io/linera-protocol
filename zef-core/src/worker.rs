@@ -154,16 +154,17 @@ where
         );
         // Persist certificate.
         self.storage.write_certificate(certificate.clone()).await?;
+        // Make sure temporary manager information are cleared.
+        chain.state.manager.reset();
         // Execute the block.
         chain.execute_block(block)?;
         // Advance to next block height.
         chain.block_hash = Some(certificate.hash);
         chain.confirmed_log.push(certificate.hash);
         chain.next_block_height.try_add_assign_one()?;
-        chain.state.manager.reset();
         // We should always agree on the state hash.
         ensure!(
-            HashValue::new(&chain.state) == certificate.value.state_hash(),
+            chain.state_hash == certificate.value.state_hash(),
             Error::InvalidBlockChaining
         );
         // Final touch on the sender's chain.
@@ -260,11 +261,14 @@ where
         let state_hash = {
             // Execute the block on a copy of the chain state for validation.
             let mut staged = chain.clone();
+            // Make sure the clear round information in the state so that it is not
+            // hashed.
+            staged.state.manager.reset();
             staged.execute_block(&proposal.content.block)?;
             // Verify that the resulting chain would have no unconfirmed incoming
             // messages.
             staged.validate_incoming_messages()?;
-            HashValue::new(&staged.state)
+            staged.state_hash
         };
         // Create the vote and store it in the chain state.
         chain
