@@ -473,11 +473,6 @@ impl TryFrom<Balance> for Amount {
 
 impl BlockHeight {
     #[inline]
-    pub fn new() -> Self {
-        BlockHeight(0)
-    }
-
-    #[inline]
     pub fn max() -> Self {
         BlockHeight(0x7fff_ffff_ffff_ffff)
     }
@@ -508,11 +503,6 @@ impl BlockHeight {
 }
 
 impl RoundNumber {
-    #[inline]
-    pub fn new() -> Self {
-        RoundNumber(0)
-    }
-
     #[inline]
     pub fn max() -> Self {
         RoundNumber(0x7fff_ffff_ffff_ffff)
