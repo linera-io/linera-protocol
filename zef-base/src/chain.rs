@@ -93,7 +93,7 @@ impl ChainState {
             description: None,
             state,
             block_hash: None,
-            next_block_height: BlockHeight::new(),
+            next_block_height: BlockHeight::default(),
             confirmed_log: Vec::new(),
             received_log: Vec::new(),
             inboxes: HashMap::new(),

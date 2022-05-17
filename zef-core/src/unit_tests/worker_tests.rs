@@ -254,7 +254,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             },
         ],
         previous_block_hash: None,
-        height: BlockHeight::new(),
+        height: BlockHeight::from(0),
     };
     let certificate0 = make_certificate(&committee, &state, Value::Confirmed { block: block0 });
     let block1 = Block {

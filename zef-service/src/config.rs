@@ -95,7 +95,7 @@ impl UserChain {
             description: None,
             key_pair: None,
             block_hash: None,
-            next_block_height: BlockHeight::new(),
+            next_block_height: BlockHeight::from(0),
         }
     }
 
@@ -106,7 +106,7 @@ impl UserChain {
             description: Some(description),
             key_pair: Some(key_pair),
             block_hash: None,
-            next_block_height: BlockHeight::new(),
+            next_block_height: BlockHeight::from(0),
         }
     }
 }
