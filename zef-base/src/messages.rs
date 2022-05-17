@@ -230,14 +230,6 @@ impl Operation {
             _ => None,
         }
     }
-
-    pub fn received_amount(&self) -> Option<Amount> {
-        use Operation::*;
-        match self {
-            Transfer { amount, .. } => Some(*amount),
-            _ => None,
-        }
-    }
 }
 
 impl Value {
@@ -262,14 +254,6 @@ impl Value {
         }
     }
 
-    #[cfg(test)]
-    pub fn confirmed_block_height(&self) -> Option<BlockHeight> {
-        match self {
-            Value::Confirmed { block, .. } => Some(block.height),
-            _ => None,
-        }
-    }
-
     pub fn confirmed_block(&self) -> Option<&Block> {
         match self {
             Value::Confirmed { block, .. } => Some(block),
@@ -280,21 +264,6 @@ impl Value {
     pub fn validated_block(&self) -> Option<&Block> {
         match self {
             Value::Validated { block, .. } => Some(block),
-            _ => None,
-        }
-    }
-
-    #[cfg(test)]
-    pub fn confirmed_block_mut(&mut self) -> Option<&mut Block> {
-        match self {
-            Value::Confirmed { block, .. } => Some(block),
-            _ => None,
-        }
-    }
-
-    pub fn confirmed_key(&self) -> Option<(ChainId, BlockHeight)> {
-        match self {
-            Value::Confirmed { block, .. } => Some((block.chain_id, block.height)),
             _ => None,
         }
     }
