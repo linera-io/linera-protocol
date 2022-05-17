@@ -24,7 +24,31 @@ pub struct RocksdbStore {
     /// Base path.
     path: PathBuf,
     /// RockdbDB handle.
-    db: Mutex<rocksdb::DB>,
+    db: rocksdb::DB,
+}
+
+#[derive(Clone, Copy)]
+pub struct ColumnHandle<'db> {
+    db: &'db rocksdb::DB,
+    column: &'db rocksdb::ColumnFamily,
+}
+
+impl<'db> ColumnHandle<'db> {
+    pub fn new(db: &'db rocksdb::DB, column: &'db rocksdb::ColumnFamily) -> Self {
+        ColumnHandle { db, column }
+    }
+
+    pub fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, rocksdb::Error> {
+        self.db.get_cf(self.column, key)
+    }
+
+    pub fn put(&self, key: &[u8], value: &[u8]) -> Result<(), rocksdb::Error> {
+        self.db.put_cf(self.column, key, value)
+    }
+
+    pub fn delete(&self, key: &[u8]) -> Result<(), rocksdb::Error> {
+        self.db.delete_cf(self.column, key)
+    }
 }
 
 fn open_db(path: &PathBuf) -> Result<rocksdb::DB, rocksdb::Error> {
@@ -50,19 +74,22 @@ impl RocksdbStore {
         assert!(path.is_dir());
         Ok(Self {
             path: path.clone(),
-            db : Mutex::new(open_db(&path)?),
+            db: open_db(&path)?,
         })
     }
 
-    fn get_db_handler(&mut self, kind: &str) -> Result<&rocksdb::ColumnFamily, rocksdb::Error> {
-        let tmp = self.db.lock();
-        match tmp.cf_handle(kind){
-            Some(handle) => Ok(handle),
+    fn get_db_handler(&mut self, kind: &str) -> Result<ColumnHandle<'_>, rocksdb::Error> {
+        let handle = match self.db.cf_handle(kind) {
+            Some(handle) => handle,
             None => {
-                tmp.create_cf(kind, &rocksdb::Options::default())?;
-                Ok(tmp.cf_handle(kind).expect("Unable to create Rocksdb ColumnFamily"))
+                self.db.create_cf(kind, &rocksdb::Options::default())?;
+                self.db
+                    .cf_handle(kind)
+                    .expect("Unable to create Rocksdb ColumnFamily")
             }
-        }
+        };
+
+        Ok(ColumnHandle::new(&self.db, handle))
     }
 
     async fn read_value(
@@ -70,12 +97,7 @@ impl RocksdbStore {
         kind: &str,
         key: &[u8],
     ) -> Result<std::option::Option<Vec<u8>>, rocksdb::Error> {
-        let cf_handle = self.get_db_handler(kind)?;
-        match self.db.get_cf(cf_handle, key) {
-            Ok(Some(value)) => Ok(Some(value)),
-            Ok(None) => Ok(None),
-            Err(e) => Err(e),
-        }
+        self.get_db_handler(kind)?.get(key)
     }
 
     async fn write_value(
@@ -84,15 +106,11 @@ impl RocksdbStore {
         key: &[u8],
         value: &[u8],
     ) -> Result<(), rocksdb::Error> {
-        let cf_handle = self.get_db_handler(kind)?;
-        self.db.put_cf(&cf_handle, key, value)?;
-        Ok(())
+        self.get_db_handler(kind)?.put(key, value)
     }
 
     async fn remove_value(&mut self, kind: &str, key: &[u8]) -> Result<(), rocksdb::Error> {
-        let cf_handle = self.get_db_handler(kind)?;
-        self.db.delete_cf(&cf_handle, key)?;
-        Ok(())
+        self.get_db_handler(kind)?.delete(key)
     }
 
     async fn read<K, V>(&mut self, key: &K) -> Result<Option<V>, Error>
