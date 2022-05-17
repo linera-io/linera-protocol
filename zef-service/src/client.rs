@@ -13,8 +13,12 @@ use std::{
     time::{Duration, Instant},
 };
 use structopt::StructOpt;
-use zef_base::{base_types::*, committee::Committee, messages::*, serialize::*};
-use zef_core::{client::*, node::ValidatorNode};
+use zef_base::{base_types::*, messages::*, serialize::*};
+use zef_core::{
+    client::*,
+    node::{LocalNodeClient, ValidatorNode},
+    worker::WorkerState,
+};
 use zef_service::{config::*, network, storage::MixedStorage, transport};
 use zef_storage::{InMemoryStoreClient, Storage};
 
@@ -169,12 +173,8 @@ impl ClientContext {
     }
 
     /// Make one block proposal per chain, up to `max_proposals` blocks.
-    fn make_benchmark_block_proposals(
-        &mut self,
-        max_proposals: usize,
-    ) -> (Vec<BlockProposal>, Vec<(ChainId, Bytes)>) {
+    fn make_benchmark_block_proposals(&mut self, max_proposals: usize) -> Vec<(ChainId, Bytes)> {
         let mut proposals = Vec::new();
-        let mut serialized_proposals = Vec::new();
         let mut next_recipient = self.wallet_state.last_chain().unwrap().chain_id;
         for chain in self.wallet_state.chains_mut() {
             let key_pair = match &chain.key_pair {
@@ -200,64 +200,19 @@ impl ClientContext {
                 },
                 key_pair,
             );
-            proposals.push(proposal.clone());
             let serialized_proposal =
                 serialize_message(&SerializedMessage::BlockProposal(Box::new(proposal)));
-            serialized_proposals.push((chain.chain_id, serialized_proposal.into()));
-            if serialized_proposals.len() >= max_proposals {
+            proposals.push((chain.chain_id, serialized_proposal.into()));
+            if proposals.len() >= max_proposals {
                 break;
             }
-            // Update the state of the wallet.
-            let value = Value::Confirmed { block };
-            chain.block_hash = Some(HashValue::new(&value));
-            chain.next_block_height.try_add_assign_one().unwrap();
-
             next_recipient = chain.chain_id;
         }
-        (proposals, serialized_proposals)
-    }
-
-    /// Try to make certificates from proposals and server configs
-    fn make_benchmark_certificates_from_proposals_and_server_configs(
-        proposals: Vec<BlockProposal>,
-        server_config: Vec<&std::path::Path>,
-    ) -> Vec<(ChainId, Bytes)> {
-        let mut keys = Vec::new();
-        for file in server_config {
-            let server_config =
-                ValidatorServerConfig::read(file).expect("Fail to read server config");
-            keys.push((server_config.validator.name, server_config.key));
-        }
-        let committee = Committee::make_simple(keys.iter().map(|(n, _)| *n).collect());
-        assert!(
-            keys.len() >= committee.quorum_threshold(),
-            "Not enough server configs were provided with --server-configs"
-        );
-        let mut serialized_certificates = Vec::new();
-        for proposal in proposals {
-            let mut certificate = Certificate::new(
-                Value::Confirmed {
-                    block: proposal.content.block.clone(),
-                },
-                Vec::new(),
-            );
-            for i in 0..committee.quorum_threshold() {
-                let (pubx, secx) = keys.get(i).unwrap();
-                let sig = Signature::new(&certificate.value, secx);
-                certificate.signatures.push((*pubx, sig));
-            }
-            let serialized_certificate =
-                serialize_message(&SerializedMessage::Certificate(Box::new(certificate)));
-            serialized_certificates.push((
-                proposal.content.block.chain_id,
-                serialized_certificate.into(),
-            ));
-        }
-        serialized_certificates
+        proposals
     }
 
     /// Try to aggregate votes into certificates.
-    fn make_benchmark_certificates_from_votes(&self, votes: Vec<Vote>) -> Vec<(ChainId, Bytes)> {
+    fn make_benchmark_certificates_from_votes(&self, votes: Vec<Vote>) -> Vec<Certificate> {
         let committee = self.committee_config.clone().into_committee();
         let mut aggregators = HashMap::new();
         let mut certificates = Vec::new();
@@ -279,9 +234,7 @@ impl ClientContext {
             match aggregator.append(vote.validator, vote.signature) {
                 Ok(Some(certificate)) => {
                     debug!("Found certificate: {:?}", certificate);
-                    let buf =
-                        serialize_message(&SerializedMessage::Certificate(Box::new(certificate)));
-                    certificates.push((chain_id, buf.into()));
+                    certificates.push(certificate);
                     done_senders.insert(chain_id);
                 }
                 Ok(None) => {
@@ -346,6 +299,35 @@ impl ClientContext {
         S: Storage + Clone + 'static,
     {
         self.wallet_state.update_from_state(state).await
+    }
+
+    async fn update_wallet_from_certificates(&mut self, certificates: Vec<Certificate>) {
+        // First instantiate a local node on top of storage.
+        let worker = WorkerState::new(
+            None,
+            self.storage_client.clone(),
+            /* allow_inactive_chains */ true,
+        );
+        let mut node = LocalNodeClient::new(worker);
+        // Second replay the certificates locally.
+        for certificate in certificates {
+            node.handle_certificate(certificate).await.unwrap();
+        }
+        // Last update the wallet.
+        for chain in self.wallet_state.chains_mut() {
+            let query = ChainInfoQuery {
+                chain_id: chain.chain_id,
+                check_next_block_height: None,
+                query_committee: false,
+                query_pending_messages: false,
+                query_sent_certificates_in_range: None,
+                query_received_certificates_excluding_first_nth: None,
+            };
+            let info = node.handle_chain_info_query(query).await.unwrap().info;
+            // We don't have private keys but that's ok.
+            chain.block_hash = info.block_hash;
+            chain.next_block_height = info.next_block_height;
+        }
     }
 }
 
@@ -450,7 +432,7 @@ enum ClientCommands {
         sender: ChainId,
     },
 
-    /// Obtain the balance of the chain directly from a quorum of validators.
+    /// Read the balance of the chain from the local state of the client.
     #[structopt(name = "query_balance")]
     QueryBalance {
         /// Chain id
@@ -475,10 +457,6 @@ enum ClientCommands {
         /// Use a subset of the chains to generate N transfers
         #[structopt(long)]
         max_proposals: Option<usize>,
-
-        /// Use server configuration files to generate certificates (instead of aggregating received votes).
-        #[structopt(long)]
-        server_configs: Option<Vec<String>>,
     },
 
     /// Create initial user chains and print information to be used for initialization of validator setup.
@@ -598,14 +576,14 @@ async fn main() {
         ClientCommands::Benchmark {
             max_in_flight,
             max_proposals,
-            server_configs,
         } => {
+            // For this command, we create proposals and gather certificates without using
+            // the client library. We update the wallet storage at the end using a local node.
             let max_proposals = max_proposals.unwrap_or_else(|| context.wallet_state.num_chains());
             warn!("Starting benchmark phase 1 (block proposals)");
-            let (proposals, serialize_proposals) =
-                context.make_benchmark_block_proposals(max_proposals);
+            let proposals = context.make_benchmark_block_proposals(max_proposals);
             let responses = context
-                .mass_broadcast("block proposals", max_in_flight, serialize_proposals)
+                .mass_broadcast("block proposals", max_in_flight, proposals)
                 .await;
             let votes: Vec<_> = responses
                 .into_iter()
@@ -617,18 +595,19 @@ async fn main() {
             warn!("Received {} valid votes.", votes.len());
 
             warn!("Starting benchmark phase 2 (certified blocks)");
-            let certificates = if let Some(files) = server_configs {
-                warn!("Using server configs provided by --server-configs");
-                let files = files.iter().map(AsRef::as_ref).collect();
-                ClientContext::make_benchmark_certificates_from_proposals_and_server_configs(
-                    proposals, files,
-                )
-            } else {
-                warn!("Using committee config");
-                context.make_benchmark_certificates_from_votes(votes)
-            };
+            let certificates = context.make_benchmark_certificates_from_votes(votes);
+            let messages = certificates
+                .iter()
+                .map(|certificate| {
+                    let id = certificate.value.confirmed_block().unwrap().chain_id;
+                    let bytes = serialize_message(&SerializedMessage::Certificate(Box::new(
+                        certificate.clone(),
+                    )));
+                    (id, bytes.into())
+                })
+                .collect();
             let responses = context
-                .mass_broadcast("certificates", max_in_flight, certificates.clone())
+                .mass_broadcast("certificates", max_in_flight, messages)
                 .await;
             let mut confirmed = HashSet::new();
             let num_valid =
@@ -648,6 +627,7 @@ async fn main() {
             );
 
             warn!("Updating local state of user chains");
+            context.update_wallet_from_certificates(certificates).await;
             context.save_chains();
         }
 
