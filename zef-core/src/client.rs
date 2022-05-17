@@ -51,7 +51,7 @@ pub trait ChainClient {
     async fn share_ownership(&mut self, new_owner: Owner) -> Result<Certificate>;
 
     /// Open a new chain with a derived UID.
-    async fn open_chain(&mut self, new_owner: Owner) -> Result<Certificate>;
+    async fn open_chain(&mut self, owner: Owner) -> Result<(ChainId, Certificate)>;
 
     /// Close the chain (and lose everything in it!!)
     async fn close_chain(&mut self) -> Result<Certificate>;
@@ -748,7 +748,7 @@ where
         Ok(certificate)
     }
 
-    async fn open_chain(&mut self, owner: Owner) -> Result<Certificate> {
+    async fn open_chain(&mut self, owner: Owner) -> Result<(ChainId, Certificate)> {
         self.prepare_chain().await?;
         let id = ChainId::child(OperationId {
             chain_id: self.chain_id,
@@ -770,7 +770,7 @@ where
         let certificate = self
             .propose_block(block, /* with_confirmation */ true)
             .await?;
-        Ok(certificate)
+        Ok((id, certificate))
     }
 
     async fn close_chain(&mut self) -> Result<Certificate> {

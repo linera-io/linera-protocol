@@ -133,40 +133,6 @@ impl ClientContext {
         )
     }
 
-    async fn update_recipient_chain(
-        &mut self,
-        certificate: Certificate,
-        key_pair: Option<KeyPair>,
-    ) -> anyhow::Result<()> {
-        let recipient = match &certificate.value {
-            Value::Confirmed { block, .. } if block.operations.len() == 1 => {
-                block.operations[0].recipient().unwrap()
-            }
-            _ => anyhow::bail!("unexpected value in certificate"),
-        };
-        let validator_clients = self.make_validator_clients();
-        let chain = self.wallet_state.get_or_insert(recipient);
-        let mut client = ChainClientState::new(
-            recipient,
-            chain
-                .key_pair
-                .as_ref()
-                .map(|kp| kp.copy())
-                .or(key_pair)
-                .into_iter()
-                .collect(),
-            validator_clients,
-            self.storage_client.clone(),
-            chain.block_hash,
-            chain.next_block_height,
-            Duration::default(),
-            0,
-        );
-        client.receive_certificate(certificate).await?;
-        self.update_wallet_from_client(&mut client).await;
-        Ok(())
-    }
-
     /// Make one block proposal per chain, up to `max_proposals` blocks.
     fn make_benchmark_block_proposals(
         &mut self,
@@ -295,6 +261,16 @@ impl ClientContext {
         S: Storage + Clone + 'static,
     {
         self.wallet_state.update_from_state(state).await
+    }
+
+    /// Remember the new private key (if any) in the wallet.
+    fn update_wallet_for_new_chain(&mut self, chain_id: ChainId, key_pair: Option<KeyPair>) {
+        self.wallet_state.insert(UserChain {
+            chain_id,
+            key_pair: key_pair.as_ref().map(|kp| kp.copy()),
+            block_hash: None,
+            next_block_height: BlockHeight::from(0),
+        });
     }
 
     async fn update_wallet_from_certificates(&mut self, certificates: Vec<Certificate>) {
@@ -482,12 +458,6 @@ async fn main() {
             info!("Operation confirmed after {} us", time_total);
             info!("{:?}", certificate);
             context.update_wallet_from_client(&mut client_state).await;
-
-            info!("Updating recipient's local chain");
-            context
-                .update_recipient_chain(certificate, None)
-                .await
-                .unwrap();
             context.save_chains();
         }
 
@@ -502,23 +472,14 @@ async fn main() {
             };
             info!("Starting operation to open a new chain");
             let time_start = Instant::now();
-            let certificate = client_state.open_chain(new_owner).await.unwrap();
+            let (id, certificate) = client_state.open_chain(new_owner).await.unwrap();
             let time_total = time_start.elapsed().as_micros();
             info!("Operation confirmed after {} us", time_total);
             info!("{:?}", certificate);
-            println!(
-                "{}",
-                certificate.value.confirmed_block().unwrap().operations[0]
-                    .recipient()
-                    .unwrap()
-            );
             context.update_wallet_from_client(&mut client_state).await;
-
-            info!("Updating recipient's local chain");
-            context
-                .update_recipient_chain(certificate, key_pair)
-                .await
-                .unwrap();
+            context.update_wallet_for_new_chain(id, key_pair);
+            // Print the new chain id(s) on stdout for the scripting purposes.
+            println!("{}", id);
             context.save_chains();
         }
 
@@ -623,11 +584,12 @@ async fn main() {
                 .expect("Unable to read committee config file");
             let mut genesis_config = GenesisConfig::new(committee_config);
             for i in 0..num {
+                let description = ChainDescription::Root(i as usize);
                 // Create keys.
-                let chain = UserChain::make_initial(ChainDescription::Root(i as usize));
+                let chain = UserChain::make_initial(description);
                 // Public "genesis" state.
                 genesis_config.chains.push((
-                    chain.description.unwrap(),
+                    description,
                     chain.key_pair.as_ref().unwrap().public(),
                     initial_funding,
                 ));
