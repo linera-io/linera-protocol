@@ -3,7 +3,8 @@
 
 use crate::config::GenesisConfig;
 use std::path::PathBuf;
-use zef_storage::{RocksdbStorageClient, FileStoreClient, InMemoryStoreClient, Storage};
+use zef_storage::{RocksdbStoreClient, InMemoryStoreClient, Storage};
+//use zef_storage::{FileStoreClient, InMemoryStoreClient, Storage};
 
 pub type MixedStorage = Box<dyn Storage>;
 
@@ -19,12 +20,12 @@ pub async fn make_storage(
         }
         Some(path) if path.is_dir() => {
             log::warn!("Using existing database {:?}", path);
-            let client = FileStoreClient::new(path.clone());
+            let client = RocksdbStoreClient::new(path.clone()).unwrap();
             Box::new(client)
         }
         Some(path) => {
             std::fs::create_dir_all(path)?;
-            let mut client = FileStoreClient::new(path.clone());
+            let mut client = RocksdbStoreClient::new(path.clone()).unwrap();
             config.initialize_store(&mut client).await?;
             Box::new(client)
         }

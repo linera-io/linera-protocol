@@ -7,7 +7,7 @@ use zef_base::{base_types::*, messages::*};
 #[tokio::test]
 async fn test_rocksdb_storage_for_accounts() {
     let dir = tempfile::TempDir::new().unwrap();
-    let mut client = RocksdbStoreClient::new(dir.path().to_path_buf());
+    let mut client = RocksdbStoreClient::new(dir.path().to_path_buf()).unwrap();
     let id = AccountId(vec![SequenceNumber(1)]);
     {
         let mut account = client.read_account_or_default(&id).await.unwrap();
@@ -24,7 +24,7 @@ async fn test_rocksdb_storage_for_accounts() {
 #[tokio::test]
 async fn test_rocksdb_storage_for_certificates() {
     let dir = tempfile::TempDir::new().unwrap();
-    let mut client = RocksdbStoreClient::new(dir.path().to_path_buf());
+    let mut client = RocksdbStoreClient::new(dir.path().to_path_buf()).unwrap();
     let request = Request {
         account_id: AccountId::default(),
         operation: Operation::CloseAccount,

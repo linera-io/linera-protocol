@@ -21,8 +21,6 @@ mod rocksdb_storage_tests;
 /// Rocksdb-based store.
 #[derive(Debug)]
 pub struct RocksdbStore {
-    /// Base path.
-    path: PathBuf,
     /// RockdbDB handle.
     db: rocksdb::DB,
 }
@@ -51,7 +49,7 @@ impl<'db> ColumnHandle<'db> {
     }
 }
 
-fn open_db(path: &PathBuf) -> Result<rocksdb::DB, rocksdb::Error> {
+fn open_db(path: &Path) -> Result<rocksdb::DB, rocksdb::Error> {
     let cfs = match rocksdb::DB::list_cf(&rocksdb::Options::default(), path){
         Ok(cfs) => cfs,
         Err(_e) => vec![String::from("None")],
@@ -73,21 +71,19 @@ impl RocksdbStore {
     pub fn new(path: PathBuf) -> Result<Self, rocksdb::Error> {
         assert!(path.is_dir());
         Ok(Self {
-            path: path.clone(),
             db: open_db(&path)?,
         })
     }
 
     fn get_db_handler(&mut self, kind: &str) -> Result<ColumnHandle<'_>, rocksdb::Error> {
-        let handle = match self.db.cf_handle(kind) {
-            Some(handle) => handle,
-            None => {
-                self.db.create_cf(kind, &rocksdb::Options::default())?;
-                self.db
-                    .cf_handle(kind)
-                    .expect("Unable to create Rocksdb ColumnFamily")
-            }
-        };
+        if self.db.cf_handle(kind).is_none() {
+            self.db.create_cf(kind, &rocksdb::Options::default())?;
+        }
+
+        let handle = self
+            .db
+            .cf_handle(kind)
+            .expect("Unable to create Rocksdb ColumnFamily");
 
         Ok(ColumnHandle::new(&self.db, handle))
     }
