@@ -19,7 +19,7 @@ use zef_core::{
     node::{LocalNodeClient, ValidatorNode},
     worker::WorkerState,
 };
-use zef_service::{config::*, network, storage::MixedStorage, transport};
+use zef_service::{config::*, network, storage::MixedStorage};
 use zef_storage::{InMemoryStoreClient, Storage};
 
 struct ClientContext {
@@ -27,7 +27,6 @@ struct ClientContext {
     wallet_state_path: PathBuf,
     wallet_state: WalletState,
     storage_client: MixedStorage,
-    buffer_size: usize,
     send_timeout: Duration,
     recv_timeout: Duration,
     cross_chain_delay: Duration,
@@ -72,7 +71,6 @@ impl ClientContext {
             wallet_state_path,
             wallet_state,
             storage_client,
-            buffer_size: options.buffer_size,
             send_timeout,
             recv_timeout,
             cross_chain_delay,
@@ -89,7 +87,6 @@ impl ClientContext {
                 config.host,
                 config.base_port,
                 config.num_shards,
-                self.buffer_size,
                 self.send_timeout,
                 self.recv_timeout,
             );
@@ -105,7 +102,6 @@ impl ClientContext {
                 config.network_protocol,
                 config.host.clone(),
                 config.base_port,
-                self.buffer_size,
                 self.send_timeout,
                 self.recv_timeout,
                 max_in_flight / config.num_shards as u64, // Distribute window to diff shards
@@ -377,10 +373,6 @@ struct ClientOptions {
     /// Timeout for receiving responses (us)
     #[structopt(long, default_value = "4000000")]
     recv_timeout_us: u64,
-
-    /// Maximum size of datagrams received and sent (bytes)
-    #[structopt(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE)]
-    buffer_size: usize,
 
     /// Time between attempts while waiting on cross-chain updates (ms)
     #[structopt(long, default_value = "4000")]

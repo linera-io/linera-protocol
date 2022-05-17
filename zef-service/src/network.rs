@@ -320,7 +320,6 @@ pub struct Client {
     base_address: String,
     base_port: u32,
     num_shards: u32,
-    buffer_size: usize,
     send_timeout: std::time::Duration,
     recv_timeout: std::time::Duration,
 }
@@ -331,7 +330,6 @@ impl Client {
         base_address: String,
         base_port: u32,
         num_shards: u32,
-        buffer_size: usize,
         send_timeout: std::time::Duration,
         recv_timeout: std::time::Duration,
     ) -> Self {
@@ -340,7 +338,6 @@ impl Client {
             base_address,
             base_port,
             num_shards,
-            buffer_size,
             send_timeout,
             recv_timeout,
         }
@@ -352,10 +349,7 @@ impl Client {
         buf: Vec<u8>,
     ) -> Result<Vec<u8>, io::Error> {
         let address = format!("{}:{}", self.base_address, self.base_port + shard);
-        let mut stream = self
-            .network_protocol
-            .connect(address, self.buffer_size)
-            .await?;
+        let mut stream = self.network_protocol.connect(address).await?;
         // Send message
         time::timeout(self.send_timeout, stream.write_data(&buf)).await??;
         // Wait for reply
@@ -431,7 +425,6 @@ pub struct MassClient {
     network_protocol: NetworkProtocol,
     base_address: String,
     base_port: u32,
-    buffer_size: usize,
     send_timeout: std::time::Duration,
     recv_timeout: std::time::Duration,
     max_in_flight: u64,
@@ -442,7 +435,6 @@ impl MassClient {
         network_protocol: NetworkProtocol,
         base_address: String,
         base_port: u32,
-        buffer_size: usize,
         send_timeout: std::time::Duration,
         recv_timeout: std::time::Duration,
         max_in_flight: u64,
@@ -451,7 +443,6 @@ impl MassClient {
             network_protocol,
             base_address,
             base_port,
-            buffer_size,
             send_timeout,
             recv_timeout,
             max_in_flight,
@@ -460,10 +451,7 @@ impl MassClient {
 
     async fn run_shard(&self, shard: u32, requests: Vec<Bytes>) -> Result<Vec<Bytes>, io::Error> {
         let address = format!("{}:{}", self.base_address, self.base_port + shard);
-        let mut stream = self
-            .network_protocol
-            .connect(address, self.buffer_size)
-            .await?;
+        let mut stream = self.network_protocol.connect(address).await?;
         let mut requests = requests.iter();
         let mut in_flight: u64 = 0;
         let mut responses = Vec::new();
