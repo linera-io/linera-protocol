@@ -142,6 +142,8 @@ ChainState:
           TYPENAME: ChainDescription
     - state:
         TYPENAME: ExecutionState
+    - state_hash:
+        TYPENAME: HashValue
     - block_hash:
         OPTION:
           TYPENAME: HashValue
