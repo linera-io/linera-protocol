@@ -20,9 +20,5 @@ tempfile = "3.2.0"
 tokio = { version = "1.12.0", features = ["full"] }
 log = "0.4.14"
 rocksdb = "0.18.0"
-<<<<<<< HEAD
-
-=======
->>>>>>> 03eb7448daa0bbc5661dd73ccbbfb694ed44047d
 
 zef-base = { path = "../zef-base" }
