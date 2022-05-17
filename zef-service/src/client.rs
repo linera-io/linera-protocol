@@ -169,7 +169,10 @@ impl ClientContext {
     }
 
     /// Make one block proposal per chain, up to `max_proposals` blocks.
-    fn make_benchmark_block_proposals(&mut self, max_proposals: usize) -> Vec<(ChainId, Bytes)> {
+    fn make_benchmark_block_proposals(
+        &mut self,
+        max_proposals: usize,
+    ) -> Vec<(ChainId, SerializedMessage)> {
         let mut proposals = Vec::new();
         let mut next_recipient = self.wallet_state.last_chain().unwrap().chain_id;
         for chain in self.wallet_state.chains_mut() {
@@ -196,9 +199,7 @@ impl ClientContext {
                 },
                 key_pair,
             );
-            let serialized_proposal =
-                serialize_message(&SerializedMessage::BlockProposal(Box::new(proposal)));
-            proposals.push((chain.chain_id, serialized_proposal.into()));
+            proposals.push((chain.chain_id, proposal.into()));
             if proposals.len() >= max_proposals {
                 break;
             }
@@ -574,8 +575,12 @@ async fn main() {
             let max_proposals = max_proposals.unwrap_or_else(|| context.wallet_state.num_chains());
             warn!("Starting benchmark phase 1 (block proposals)");
             let proposals = context.make_benchmark_block_proposals(max_proposals);
+            let serialized_proposals = proposals
+                .into_iter()
+                .map(|(chain, message)| (chain, serialize_message(&message).into()))
+                .collect();
             let responses = context
-                .mass_broadcast("block proposals", max_in_flight, proposals)
+                .mass_broadcast("block proposals", max_in_flight, serialized_proposals)
                 .await;
             let votes: Vec<_> = responses
                 .into_iter()
