@@ -82,7 +82,6 @@ impl CommitteeConfig {
 #[derive(Serialize, Deserialize)]
 pub struct UserChain {
     pub chain_id: ChainId,
-    pub description: Option<ChainDescription>,
     pub key_pair: Option<KeyPair>,
     pub block_hash: Option<HashValue>,
     pub next_block_height: BlockHeight,
@@ -92,7 +91,6 @@ impl UserChain {
     pub fn new(chain_id: ChainId) -> Self {
         Self {
             chain_id,
-            description: None,
             key_pair: None,
             block_hash: None,
             next_block_height: BlockHeight::from(0),
@@ -103,7 +101,6 @@ impl UserChain {
         let key_pair = KeyPair::generate();
         Self {
             chain_id: description.into(),
-            description: Some(description),
             key_pair: Some(key_pair),
             block_hash: None,
             next_block_height: BlockHeight::from(0),

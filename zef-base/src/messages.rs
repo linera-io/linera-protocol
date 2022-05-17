@@ -96,7 +96,7 @@ pub enum Value {
         round: RoundNumber,
         state_hash: HashValue,
     },
-    /// The block is validated and final (i.e. ready to be published).
+    /// The block is validated and confirmed (i.e. ready to be published).
     Confirmed { block: Block, state_hash: HashValue },
 }
 
@@ -214,20 +214,6 @@ impl CrossChainRequest {
         match self {
             UpdateRecipient { recipient, .. } => *recipient,
             ConfirmUpdatedRecipient { sender, .. } => *sender,
-        }
-    }
-}
-
-impl Operation {
-    pub fn recipient(&self) -> Option<ChainId> {
-        use Operation::*;
-        match self {
-            Transfer {
-                recipient: Address::Account(id),
-                ..
-            }
-            | OpenChain { id, .. } => Some(*id),
-            _ => None,
         }
     }
 }

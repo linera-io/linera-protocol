@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use std::collections::HashSet;
 use zef_base::{
     base_types::*, chain::ChainState, ensure, error::Error, manager::Outcome, messages::*,
 };
@@ -157,7 +156,7 @@ where
         // Make sure temporary manager information are cleared.
         chain.state.manager.reset();
         // Execute the block.
-        chain.execute_block(block)?;
+        let recipients = chain.execute_block(block)?;
         // Advance to next block height.
         chain.block_hash = Some(certificate.hash);
         chain.confirmed_log.push(certificate.hash);
@@ -169,14 +168,8 @@ where
         );
         // Final touch on the sender's chain.
         let info = chain.make_chain_info(self.key_pair.as_ref());
-        // Schedule cross-chain request if any.
-        let operations = &certificate.value.confirmed_block().unwrap().operations;
-        let recipients = operations
-            .iter()
-            .filter_map(|op| op.recipient())
-            .collect::<HashSet<_>>();
+        // Schedule a new cross-chain request to update each (unique) recipient.
         for id in recipients {
-            // Schedule a new cross-chain request to update recipient.
             chain
                 .outboxes
                 .entry(id)

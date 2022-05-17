@@ -6,7 +6,7 @@ use crate::{
     base_types::*, committee::Committee, ensure, error::Error, manager::ChainManager, messages::*,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 /// State of a chain.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -190,7 +190,7 @@ impl ChainState {
 
         let mut has_processed_operations = false;
         for (index, operation) in operations.into_iter().enumerate() {
-            if operation.recipient() != Some(self.id) {
+            if !self.state.has_recipient(&operation, self.id) {
                 continue;
             }
             // Chain creation is a special operation that can only be executed (once) in this callback.
@@ -241,7 +241,7 @@ impl ChainState {
 
     /// Execute a new block: first the incoming messages, then the main operation. In case
     /// of errors, `self` may not be consistent any more and should be thrown away.
-    pub fn execute_block(&mut self, block: &Block) -> Result<(), Error> {
+    pub fn execute_block(&mut self, block: &Block) -> Result<HashSet<ChainId>, Error> {
         // First, process incoming messages.
         for message_group in &block.incoming_messages {
             for (message_index, message_operation) in &message_group.operations {
@@ -285,26 +285,42 @@ impl ChainState {
                 self.state.apply_operation_as_recipient(message_operation)?;
             }
         }
-        // Second, execute the operations in the block.
+        // Second, execute the operations in the block and remember recipients to notify.
+        let mut recipients = HashSet::new();
         for (index, operation) in block.operations.iter().enumerate() {
-            self.state
-                .apply_operation_as_sender(block.chain_id, block.height, index, operation)?;
+            recipients.extend(self.state.apply_operation_as_sender(
+                block.chain_id,
+                block.height,
+                index,
+                operation,
+            )?);
         }
         // Last, recompute the state hash.
         self.state_hash = HashValue::new(&self.state);
-        Ok(())
+        Ok(recipients)
     }
 }
 
 impl ExecutionState {
+    fn has_recipient(&self, operation: &Operation, chain_id: ChainId) -> bool {
+        use Operation::*;
+        matches!(operation,
+            Transfer {
+                recipient: Address::Account(id),
+                ..
+            }
+            | OpenChain { id, .. } if *id == chain_id)
+    }
+
     /// Execute the sender's side of the operation.
+    /// Return a list of recipients who need to be notified.
     fn apply_operation_as_sender(
         &mut self,
         chain_id: ChainId,
         height: BlockHeight,
         index: usize,
         operation: &Operation,
-    ) -> Result<(), Error> {
+    ) -> Result<Vec<ChainId>, Error> {
         match &operation {
             Operation::OpenChain { id, committee, .. } => {
                 let expected_id = ChainId::child(OperationId {
@@ -317,17 +333,23 @@ impl ExecutionState {
                     self.committee.as_ref() == Some(committee),
                     Error::InvalidCommittee
                 );
+                Ok(vec![*id])
             }
             Operation::ChangeOwner { new_owner } => {
                 self.manager = ChainManager::single(*new_owner);
+                Ok(Vec::new())
             }
             Operation::ChangeMultipleOwners { new_owners } => {
                 self.manager = ChainManager::multiple(new_owners.clone());
+                Ok(Vec::new())
             }
             Operation::CloseChain => {
                 self.manager = ChainManager::default();
+                Ok(Vec::new())
             }
-            Operation::Transfer { amount, .. } => {
+            Operation::Transfer {
+                amount, recipient, ..
+            } => {
                 ensure!(*amount > Amount::zero(), Error::IncorrectTransferAmount);
                 ensure!(
                     self.balance >= (*amount).into(),
@@ -336,9 +358,12 @@ impl ExecutionState {
                     }
                 );
                 self.balance.try_sub_assign((*amount).into())?;
+                match recipient {
+                    Address::Burn => Ok(Vec::new()),
+                    Address::Account(id) => Ok(vec![*id]),
+                }
             }
-        };
-        Ok(())
+        }
     }
 
     /// Execute the recipient's side of an operation.
