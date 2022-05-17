@@ -19,6 +19,7 @@ jobs:
         rustup toolchain install 1.60.0-x86_64-unknown-linux-gnu
         rustup component add rustfmt --toolchain 1.60.0-x86_64-unknown-linux-gnu
         rustup component add clippy --toolchain 1.60.0-x86_64-unknown-linux-gnu
+        echo 'RUSTFLAGS=-D warnings' >> $GITHUB_ENV
     - name: Build
       run: cargo build
     - name: Run tests
