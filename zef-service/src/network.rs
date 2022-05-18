@@ -346,15 +346,23 @@ impl Client {
         &mut self,
         shard: ShardId,
         message: SerializedMessage,
-    ) -> Result<Option<SerializedMessage>, io::Error> {
+    ) -> Result<SerializedMessage, Box<bincode::ErrorKind>> {
         let address = format!("{}:{}", self.base_address, self.base_port + shard);
-        let mut stream = self.network_protocol.connect(address).await?;
+        let mut stream = self.network_protocol.connect_transport(address).await?;
         // Send message
-        let buf = serialize_message(&message);
-        time::timeout(self.send_timeout, stream.write_data(&buf)).await??;
+        time::timeout(self.send_timeout, stream.send(message))
+            .await
+            .map_err(|timeout| bincode::ErrorKind::Io(timeout.into()))??;
         // Wait for reply
-        let reply = time::timeout(self.recv_timeout, stream.read_data()).await??;
-        Ok(deserialize_message(&mut &*reply).ok())
+        time::timeout(self.recv_timeout, stream.next())
+            .await
+            .map_err(|timeout| bincode::ErrorKind::Io(timeout.into()))?
+            .transpose()?
+            .ok_or_else(|| {
+                Box::new(bincode::ErrorKind::Io(
+                    std::io::ErrorKind::UnexpectedEof.into(),
+                ))
+            })
     }
 
     pub async fn send_recv_info(
@@ -363,18 +371,15 @@ impl Client {
         message: SerializedMessage,
     ) -> Result<ChainInfoResponse, Error> {
         match self.send_recv_internal(shard, message).await {
-            Err(error) => Err(Error::ClientIoError {
-                error: format!("{}", error),
-            }),
-            Ok(response) => {
-                // Parse reply
-                match response {
-                    Some(SerializedMessage::ChainInfoResponse(resp)) => Ok(*resp),
-                    Some(SerializedMessage::Error(error)) => Err(*error),
-                    Some(_) => Err(Error::UnexpectedMessage),
-                    None => Err(Error::InvalidDecoding),
-                }
-            }
+            Ok(SerializedMessage::ChainInfoResponse(response)) => Ok(*response),
+            Ok(SerializedMessage::Error(error)) => Err(*error),
+            Ok(_) => Err(Error::UnexpectedMessage),
+            Err(error) => match *error {
+                bincode::ErrorKind::Io(io_error) => Err(Error::ClientIoError {
+                    error: format!("{}", io_error),
+                }),
+                _ => Err(Error::InvalidDecoding),
+            },
         }
     }
 }
@@ -444,7 +449,7 @@ impl MassClient {
         requests: Vec<SerializedMessage>,
     ) -> Result<Vec<SerializedMessage>, io::Error> {
         let address = format!("{}:{}", self.base_address, self.base_port + shard);
-        let mut stream = self.network_protocol.connect(address).await?;
+        let mut stream = self.network_protocol.connect_transport(address).await?;
         let mut requests = requests.into_iter();
         let mut in_flight: u64 = 0;
         let mut responses = Vec::new();
@@ -459,9 +464,9 @@ impl MassClient {
                         // No more entries to send.
                         break;
                     }
-                    Some(request) => serialize_message(&request),
+                    Some(request) => request,
                 };
-                let status = time::timeout(self.send_timeout, stream.write_data(&request)).await;
+                let status = time::timeout(self.send_timeout, stream.send(request)).await;
                 if let Err(error) = status {
                     error!("Failed to send request: {}", error);
                     continue;
@@ -471,20 +476,17 @@ impl MassClient {
             if requests.len() % 5000 == 0 && requests.len() > 0 {
                 info!("In flight {} Remaining {}", in_flight, requests.len());
             }
-            match time::timeout(self.recv_timeout, stream.read_data()).await {
-                Ok(Ok(buffer)) => {
+            match time::timeout(self.recv_timeout, stream.next()).await {
+                Ok(Some(Ok(message))) => {
                     in_flight -= 1;
-                    match deserialize_message(&mut &*buffer) {
-                        Ok(response) => responses.push(response),
-                        Err(error) => error!("Received invalid message: {}", error),
-                    }
+                    responses.push(message);
                 }
-                Ok(Err(error)) => {
-                    if error.kind() == io::ErrorKind::UnexpectedEof {
-                        info!("Socket closed by server");
-                        return Ok(responses);
-                    }
+                Ok(Some(Err(error))) => {
                     error!("Received error response: {}", error);
+                }
+                Ok(None) => {
+                    info!("Socket closed by server");
+                    return Ok(responses);
                 }
                 Err(error) => {
                     error!(
