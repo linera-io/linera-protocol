@@ -9,7 +9,7 @@ async fn test_read_write() {
     let mut store = InMemoryStoreClient::default();
     let mut chain = store.read_chain_or_default(ChainId::root(1)).await.unwrap();
     chain.description = Some(ChainDescription::Root(1));
-    chain.state.committee = Some(Committee::make_simple(Vec::new()));
+    chain.state.committees = vec![Committee::make_simple(Vec::new())];
     chain.state.status = Some(ChainStatus::Managing {
         subscribers: Vec::new(),
     });

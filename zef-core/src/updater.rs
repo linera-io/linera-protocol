@@ -155,7 +155,7 @@ where
             let query = ChainInfoQuery {
                 chain_id,
                 check_next_block_height: None,
-                query_committee: false,
+                query_committees: false,
                 query_pending_messages: false,
                 query_sent_certificates_in_range: None,
                 query_received_certificates_excluding_first_nth: None,

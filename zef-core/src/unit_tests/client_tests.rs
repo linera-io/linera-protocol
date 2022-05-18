@@ -209,7 +209,7 @@ impl TestBuilder {
         let query = ChainInfoQuery {
             chain_id,
             check_next_block_height: None,
-            query_committee: false,
+            query_committees: false,
             query_pending_messages: false,
             query_sent_certificates_in_range: Some(BlockHeightRange {
                 start: block_height,

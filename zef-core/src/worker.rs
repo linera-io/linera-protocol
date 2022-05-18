@@ -138,7 +138,14 @@ where
         }
         // Verify the certificate. Returns a catch-all error to make client code more robust.
         certificate
-            .check(chain.state.committee.as_ref().expect("chain is active"))
+            .check(
+                chain
+                    .state
+                    .committees
+                    .last()
+                    .as_ref()
+                    .expect("chain is active"),
+            )
             .map_err(|_| Error::InvalidCertificate)?;
         if chain.next_block_height > block.height {
             // Block was already confirmed.
@@ -200,7 +207,14 @@ where
         let mut chain = self.storage.read_active_chain(block.chain_id).await?;
         // Verify the certificate. Returns a catch-all error to make client code more robust.
         certificate
-            .check(chain.state.committee.as_ref().expect("chain is active"))
+            .check(
+                chain
+                    .state
+                    .committees
+                    .last()
+                    .as_ref()
+                    .expect("chain is active"),
+            )
             .map_err(|_| Error::InvalidCertificate)?;
         if chain
             .state
@@ -297,8 +311,8 @@ where
     ) -> Result<ChainInfoResponse, Error> {
         let chain = self.storage.read_chain_or_default(query.chain_id).await?;
         let mut info = chain.make_chain_info(None).info;
-        if query.query_committee {
-            info.queried_committee = chain.state.committee;
+        if query.query_committees {
+            info.queried_committees = chain.state.committees;
         }
         if let Some(next_block_height) = query.check_next_block_height {
             ensure!(
