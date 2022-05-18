@@ -449,10 +449,14 @@ impl MassClient {
         }
     }
 
-    async fn run_shard(&self, shard: u32, requests: Vec<Bytes>) -> Result<Vec<Bytes>, io::Error> {
+    async fn run_shard(
+        &self,
+        shard: u32,
+        requests: Vec<SerializedMessage>,
+    ) -> Result<Vec<Bytes>, io::Error> {
         let address = format!("{}:{}", self.base_address, self.base_port + shard);
         let mut stream = self.network_protocol.connect(address).await?;
-        let mut requests = requests.iter();
+        let mut requests = requests.into_iter();
         let mut in_flight: u64 = 0;
         let mut responses = Vec::new();
 
@@ -466,9 +470,9 @@ impl MassClient {
                         // No more entries to send.
                         break;
                     }
-                    Some(request) => request,
+                    Some(request) => serialize_message(&request),
                 };
-                let status = time::timeout(self.send_timeout, stream.write_data(request)).await;
+                let status = time::timeout(self.send_timeout, stream.write_data(&request)).await;
                 if let Err(error) = status {
                     error!("Failed to send request: {}", error);
                     continue;
@@ -517,10 +521,6 @@ impl MassClient {
                         client.base_port + shard,
                         shard
                     );
-                    let requests = requests
-                        .into_iter()
-                        .map(|message| serialize_message(&message).into())
-                        .collect();
                     let responses = client
                         .run_shard(shard, requests)
                         .await
