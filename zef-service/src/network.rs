@@ -9,7 +9,6 @@ use zef_core::{node::ValidatorNode, worker::*};
 
 #[cfg(feature = "benchmark")]
 use crate::network_server::BenchmarkServer;
-use bytes::Bytes;
 use futures::{channel::mpsc, future::FutureExt, sink::SinkExt, stream::StreamExt};
 use log::*;
 use std::{io, time::Duration};
@@ -453,7 +452,7 @@ impl MassClient {
         &self,
         shard: u32,
         requests: Vec<SerializedMessage>,
-    ) -> Result<Vec<Bytes>, io::Error> {
+    ) -> Result<Vec<SerializedMessage>, io::Error> {
         let address = format!("{}:{}", self.base_address, self.base_port + shard);
         let mut stream = self.network_protocol.connect(address).await?;
         let mut requests = requests.into_iter();
@@ -485,7 +484,10 @@ impl MassClient {
             match time::timeout(self.recv_timeout, stream.read_data()).await {
                 Ok(Ok(buffer)) => {
                     in_flight -= 1;
-                    responses.push(Bytes::from(buffer));
+                    match deserialize_message(&mut &*buffer) {
+                        Ok(response) => responses.push(response),
+                        Err(error) => error!("Received invalid message: {}", error),
+                    }
                 }
                 Ok(Err(error)) => {
                     if error.kind() == io::ErrorKind::UnexpectedEof {
@@ -505,7 +507,10 @@ impl MassClient {
     }
 
     /// Spin off one task for each shard based on this validator client.
-    pub fn run<I>(&self, sharded_requests: I) -> impl futures::stream::Stream<Item = Vec<Bytes>>
+    pub fn run<I>(
+        &self,
+        sharded_requests: I,
+    ) -> impl futures::stream::Stream<Item = Vec<SerializedMessage>>
     where
         I: IntoIterator<Item = (ShardId, Vec<SerializedMessage>)>,
     {
