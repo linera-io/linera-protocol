@@ -280,9 +280,6 @@ impl ClientContext {
             phase
         );
         responses
-            .into_iter()
-            .filter_map(|bytes| deserialize_message(&mut &*bytes).ok())
-            .collect()
     }
 
     fn save_chains(&self) {
