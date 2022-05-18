@@ -348,7 +348,7 @@ impl Client {
         message: SerializedMessage,
     ) -> Result<SerializedMessage, Box<bincode::ErrorKind>> {
         let address = format!("{}:{}", self.base_address, self.base_port + shard);
-        let mut stream = self.network_protocol.connect_transport(address).await?;
+        let mut stream = self.network_protocol.connect(address).await?;
         // Send message
         time::timeout(self.send_timeout, stream.send(message))
             .await
@@ -449,7 +449,7 @@ impl MassClient {
         requests: Vec<SerializedMessage>,
     ) -> Result<Vec<SerializedMessage>, io::Error> {
         let address = format!("{}:{}", self.base_address, self.base_port + shard);
-        let mut stream = self.network_protocol.connect_transport(address).await?;
+        let mut stream = self.network_protocol.connect(address).await?;
         let mut requests = requests.into_iter();
         let mut in_flight: u64 = 0;
         let mut responses = Vec::new();
