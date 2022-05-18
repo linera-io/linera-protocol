@@ -147,45 +147,6 @@ impl NetworkProtocol {
     }
 }
 
-/// An implementation of DataStream based on UDP.
-struct UdpDataStream {
-    socket: UdpSocket,
-    address: String,
-    buffer: Vec<u8>,
-}
-
-impl UdpDataStream {
-    #[allow(dead_code)]
-    async fn connect(address: String, max_data_size: usize) -> Result<Self, std::io::Error> {
-        let socket = UdpSocket::bind(&"0.0.0.0:0").await?;
-        let buffer = vec![0u8; max_data_size];
-        Ok(Self {
-            socket,
-            address,
-            buffer,
-        })
-    }
-}
-
-impl DataStream for UdpDataStream {
-    fn write_data<'a>(
-        &'a mut self,
-        buffer: &'a [u8],
-    ) -> future::BoxFuture<'a, Result<(), std::io::Error>> {
-        Box::pin(async move {
-            self.socket.send_to(buffer, &*self.address).await?;
-            Ok(())
-        })
-    }
-
-    fn read_data(&mut self) -> future::BoxFuture<Result<Vec<u8>, std::io::Error>> {
-        Box::pin(async move {
-            let size = self.socket.recv(&mut self.buffer).await?;
-            Ok(self.buffer[..size].into())
-        })
-    }
-}
-
 /// An implementation of DataStreamPool based on UDP.
 struct UdpDataStreamPool {
     socket: UdpSocket,
