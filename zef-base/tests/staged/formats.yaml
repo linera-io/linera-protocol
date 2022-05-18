@@ -178,7 +178,11 @@ ChainStatus:
           - admin_id:
               TYPENAME: ChainId
     1:
-      Managing: UNIT
+      Managing:
+        STRUCT:
+          - subscribers:
+              SEQ:
+                TYPENAME: ChainId
 Committee:
   STRUCT:
     - voting_rights:
@@ -268,24 +272,28 @@ Error:
         NEWTYPE:
           TYPENAME: ChainId
     22:
-      InvalidCommittee: UNIT
+      InvalidNewChainAdminId:
+        NEWTYPE:
+          TYPENAME: ChainId
     23:
+      InvalidCommittee: UNIT
+    24:
       InsufficientRound:
         NEWTYPE:
           TYPENAME: RoundNumber
-    24:
+    25:
       HasLockedBlock:
         TUPLE:
           - TYPENAME: BlockHeight
           - TYPENAME: RoundNumber
-    25:
+    26:
       MissingCrossChainUpdate:
         STRUCT:
           - sender_id:
               TYPENAME: ChainId
           - height:
               TYPENAME: BlockHeight
-    26:
+    27:
       InvalidMessageContent:
         STRUCT:
           - sender_id:
@@ -293,7 +301,7 @@ Error:
           - height:
               TYPENAME: BlockHeight
           - index: U64
-    27:
+    28:
       InvalidMessageOrder:
         STRUCT:
           - sender_id:
@@ -304,37 +312,37 @@ Error:
           - expected_height:
               TYPENAME: BlockHeight
           - expected_index: U64
-    28:
-      CertificateNotFound: UNIT
     29:
-      InvalidCrossChainRequest: UNIT
+      CertificateNotFound: UNIT
     30:
-      InvalidBlockProposal: UNIT
+      InvalidCrossChainRequest: UNIT
     31:
-      InvalidBlockChaining: UNIT
+      InvalidBlockProposal: UNIT
     32:
-      ClientErrorWhileProcessingBlockProposal: UNIT
+      InvalidBlockChaining: UNIT
     33:
-      ClientErrorWhileQueryingCertificate: UNIT
+      ClientErrorWhileProcessingBlockProposal: UNIT
     34:
-      WrongShard: UNIT
+      ClientErrorWhileQueryingCertificate: UNIT
     35:
-      InvalidDecoding: UNIT
+      WrongShard: UNIT
     36:
-      UnexpectedMessage: UNIT
+      InvalidDecoding: UNIT
     37:
+      UnexpectedMessage: UNIT
+    38:
       ClientIoError:
         STRUCT:
           - error: STR
-    38:
+    39:
       StorageIoError:
         STRUCT:
           - error: STR
-    39:
+    40:
       StorageBcsError:
         STRUCT:
           - error: STR
-    40:
+    41:
       MissingCertificate:
         STRUCT:
           - hash:

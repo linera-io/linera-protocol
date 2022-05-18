@@ -96,7 +96,7 @@ impl BcsSignable for ExecutionState {}
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub enum ChainStatus {
     ManagedBy { admin_id: ChainId },
-    Managing,
+    Managing { subscribers: Vec<ChainId> },
 }
 
 impl ChainState {
@@ -125,7 +125,9 @@ impl ChainState {
         balance: Balance,
     ) -> Self {
         let status = if ChainId::from(description) == admin_id {
-            ChainStatus::Managing
+            ChainStatus::Managing {
+                subscribers: Vec::new(),
+            }
         } else {
             ChainStatus::ManagedBy { admin_id }
         };
@@ -147,16 +149,12 @@ impl ChainState {
     }
 
     pub fn make_chain_info(&self, key_pair: Option<&KeyPair>) -> ChainInfoResponse {
-        let admin_id = match self.state.status {
-            Some(ChainStatus::ManagedBy { admin_id }) => Some(admin_id),
-            _ => None,
-        };
         let info = ChainInfo {
             chain_id: self.id,
             description: self.description,
             manager: self.state.manager.clone(),
             balance: self.state.balance,
-            admin_id,
+            admin_id: self.state.admin_id(self.id),
             block_hash: self.block_hash,
             next_block_height: self.next_block_height,
             state_hash: self.state_hash,
@@ -215,32 +213,35 @@ impl ChainState {
             }
             // Chain creation is a special operation that can only be executed (once) in this callback.
             if let Operation::OpenChain {
+                id,
                 owner,
                 committee,
                 admin_id,
                 ..
             } = &operation
             {
-                // guaranteed under BFT assumptions.
-                assert!(self.description.is_none());
-                assert!(!self.state.manager.is_active());
-                assert!(self.state.committee.is_none());
-                let description = ChainDescription::Child(OperationId {
-                    chain_id: sender_id,
-                    height,
-                    index,
-                });
-                assert_eq!(self.id, description.into());
-                self.description = Some(description);
-                self.state.committee = Some(committee.clone());
-                self.state.status = Some(ChainStatus::ManagedBy {
-                    admin_id: *admin_id,
-                });
-                self.state.manager = ChainManager::single(*owner);
-                self.state_hash = HashValue::new(&self.state);
-                // Proceed to scheduling the `OpenChain` operation for "execution".
-                // Although it won't do anything, it's simpler than asking block producers
-                // to skip this kind of incoming messages.
+                if id == &self.id {
+                    // guaranteed under BFT assumptions.
+                    assert!(self.description.is_none());
+                    assert!(!self.state.manager.is_active());
+                    assert!(self.state.committee.is_none());
+                    let description = ChainDescription::Child(OperationId {
+                        chain_id: sender_id,
+                        height,
+                        index,
+                    });
+                    assert_eq!(self.id, description.into());
+                    self.description = Some(description);
+                    self.state.committee = Some(committee.clone());
+                    self.state.status = Some(ChainStatus::ManagedBy {
+                        admin_id: *admin_id,
+                    });
+                    self.state.manager = ChainManager::single(*owner);
+                    self.state_hash = HashValue::new(&self.state);
+                    // Proceed to scheduling the `OpenChain` operation for "execution".
+                    // Although it won't do anything, it's simpler than asking block producers
+                    // to skip this kind of incoming messages.
+                }
             }
             // Find if the message was executed ahead of time.
             if let Some(event) = inbox.expected_events.front() {
@@ -308,7 +309,8 @@ impl ChainState {
                     }
                 }
                 // Execute the received operation.
-                self.state.apply_operation_as_recipient(message_operation)?;
+                self.state
+                    .apply_operation_as_recipient(self.id, message_operation)?;
             }
         }
         // Second, execute the operations in the block and remember recipients to notify.
@@ -328,14 +330,23 @@ impl ChainState {
 }
 
 impl ExecutionState {
+    pub fn admin_id(&self, chain_id: ChainId) -> Option<ChainId> {
+        match self.status.as_ref()? {
+            ChainStatus::ManagedBy { admin_id } => Some(*admin_id),
+            ChainStatus::Managing { .. } => Some(chain_id),
+        }
+    }
+
     fn has_recipient(&self, operation: &Operation, chain_id: ChainId) -> bool {
         use Operation::*;
-        matches!(operation,
+        match operation {
             Transfer {
                 recipient: Address::Account(id),
                 ..
-            }
-            | OpenChain { id, .. } if *id == chain_id)
+            } => chain_id == *id,
+            OpenChain { id, admin_id, .. } => chain_id == *id || chain_id == *admin_id,
+            _ => false,
+        }
     }
 
     /// Execute the sender's side of the operation.
@@ -348,7 +359,12 @@ impl ExecutionState {
         operation: &Operation,
     ) -> Result<Vec<ChainId>, Error> {
         match &operation {
-            Operation::OpenChain { id, committee, .. } => {
+            Operation::OpenChain {
+                id,
+                committee,
+                admin_id,
+                ..
+            } => {
                 let expected_id = ChainId::child(OperationId {
                     chain_id,
                     height,
@@ -356,10 +372,14 @@ impl ExecutionState {
                 });
                 ensure!(id == &expected_id, Error::InvalidNewChainId(*id));
                 ensure!(
+                    Some(admin_id) == self.admin_id(chain_id).as_ref(),
+                    Error::InvalidNewChainAdminId(*id)
+                );
+                ensure!(
                     self.committee.as_ref() == Some(committee),
                     Error::InvalidCommittee
                 );
-                Ok(vec![*id])
+                Ok(vec![*id, *admin_id])
             }
             Operation::ChangeOwner { new_owner } => {
                 self.manager = ChainManager::single(*new_owner);
@@ -395,13 +415,29 @@ impl ExecutionState {
     /// Execute the recipient's side of an operation.
     /// Returns true if the operation changed the chain state.
     /// Operations must be executed by order of heights in the sender's chain.
-    fn apply_operation_as_recipient(&mut self, operation: &Operation) -> Result<(), Error> {
-        if let Operation::Transfer { amount, .. } = operation {
-            self.balance = self
-                .balance
-                .try_add((*amount).into())
-                .unwrap_or_else(|_| Balance::max());
+    fn apply_operation_as_recipient(
+        &mut self,
+        chain_id: ChainId,
+        operation: &Operation,
+    ) -> Result<(), Error> {
+        match operation {
+            Operation::Transfer { amount, .. } => {
+                self.balance = self
+                    .balance
+                    .try_add((*amount).into())
+                    .unwrap_or_else(|_| Balance::max());
+                Ok(())
+            }
+            Operation::OpenChain { id, admin_id, .. } if *admin_id == chain_id => {
+                match &mut self.status {
+                    Some(ChainStatus::Managing { subscribers }) => {
+                        subscribers.push(*id);
+                        Ok(())
+                    }
+                    _ => Err(Error::InvalidCrossChainRequest),
+                }
+            }
+            _ => Ok(()),
         }
-        Ok(())
     }
 }
