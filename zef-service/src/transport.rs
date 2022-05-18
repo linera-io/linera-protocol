@@ -211,15 +211,6 @@ struct TcpDataStream {
 }
 
 impl TcpDataStream {
-    #[allow(dead_code)]
-    async fn connect(address: String, max_data_size: usize) -> Result<Self, std::io::Error> {
-        let stream = TcpStream::connect(address).await?;
-        Ok(Self {
-            stream,
-            max_data_size,
-        })
-    }
-
     async fn tcp_write_data<S>(stream: &mut S, buffer: &[u8]) -> Result<(), std::io::Error>
     where
         S: AsyncWrite + Unpin,
