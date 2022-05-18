@@ -136,7 +136,7 @@ fn make_transfer_certificate(
         status: Some(ChainStatus::ManagedBy {
             admin_id: ChainId::root(0),
         }),
-        committee: Some(committee.clone()),
+        committees: vec![committee.clone()],
         manager: ChainManager::single(key_pair.public()),
         balance,
     };
@@ -184,7 +184,7 @@ async fn test_read_chain_state_unknown_chain() {
         .await
         .unwrap();
     chain.description = Some(ChainDescription::Root(99));
-    chain.state.committee = Some(committee);
+    chain.state.committees = vec![committee];
     chain.state.status = Some(ChainStatus::Managing {
         subscribers: Vec::new(),
     });
@@ -450,7 +450,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                 status: Some(ChainStatus::ManagedBy {
                     admin_id: ChainId::root(0),
                 }),
-                committee: Some(committee.clone()),
+                committees: vec![committee.clone()],
                 manager: ChainManager::single(sender_key_pair.public()),
                 balance: Balance::from(3),
             }),
@@ -477,7 +477,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                 status: Some(ChainStatus::ManagedBy {
                     admin_id: ChainId::root(0),
                 }),
-                committee: Some(committee.clone()),
+                committees: vec![committee.clone()],
                 manager: ChainManager::single(sender_key_pair.public()),
                 balance: Balance::from(0),
             }),
@@ -728,7 +728,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                     status: Some(ChainStatus::ManagedBy {
                         admin_id: ChainId::root(0),
                     }),
-                    committee: Some(committee.clone()),
+                    committees: vec![committee.clone()],
                     manager: ChainManager::single(recipient_key_pair.public()),
                     balance: Balance::from(0),
                 }),
@@ -1332,7 +1332,7 @@ async fn test_handle_certificate_to_active_recipient() {
     let info_query = ChainInfoQuery {
         chain_id: ChainId::root(2),
         check_next_block_height: None,
-        query_committee: false,
+        query_committees: false,
         query_pending_messages: false,
         query_sent_certificates_in_range: None,
         query_received_certificates_excluding_first_nth: Some(0),
@@ -1400,7 +1400,7 @@ async fn test_chain_creation() {
         operations: vec![Operation::OpenChain {
             id: child_id,
             owner: key_pair.public(),
-            committee: committee.clone(),
+            committees: vec![committee.clone()],
             admin_id: root_id,
         }],
         previous_block_hash: None,
@@ -1416,7 +1416,7 @@ async fn test_chain_creation() {
                 status: Some(ChainStatus::Managing {
                     subscribers: Vec::new(),
                 }),
-                committee: Some(committee.clone()),
+                committees: vec![committee.clone()],
                 manager: ChainManager::single(key_pair.public()),
                 balance: Balance::from(0),
             }),
@@ -1457,7 +1457,7 @@ async fn test_chain_creation() {
                 Operation::OpenChain {
                     id: child_id,
                     owner: key_pair.public(),
-                    committee: committee.clone(),
+                    committees: vec![committee.clone()],
                     admin_id: root_id,
                 },
             )],
@@ -1476,7 +1476,7 @@ async fn test_chain_creation() {
                 status: Some(ChainStatus::Managing {
                     subscribers: vec![child_id], // was just added
                 }),
-                committee: Some(committee.clone()),
+                committees: vec![committee.clone()],
                 manager: ChainManager::single(key_pair.public()),
                 balance: Balance::from(0),
             }),

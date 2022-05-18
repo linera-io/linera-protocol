@@ -75,8 +75,10 @@ pub enum Error {
     InvalidNewChainId(ChainId),
     #[error("Invalid admin id in new chain: {0}")]
     InvalidNewChainAdminId(ChainId),
-    #[error("Invalid committee")]
-    InvalidCommittee,
+    #[error("Invalid committees")]
+    InvalidCommittees,
+    #[error("Failed to create new committee")]
+    InvalidCommitteeCreation,
     #[error("Round number should be greater than {0:?}")]
     InsufficientRound(RoundNumber),
     #[error("A different block for height {0:?} was already locked at round number {1:?}")]
