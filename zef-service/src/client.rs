@@ -4,7 +4,6 @@
 
 #![deny(warnings)]
 
-use bytes::Bytes;
 use futures::stream::StreamExt;
 use log::*;
 use std::{
@@ -251,7 +250,7 @@ impl ClientContext {
         phase: &'static str,
         max_in_flight: u64,
         proposals: Vec<(ChainId, SerializedMessage)>,
-    ) -> Vec<Bytes> {
+    ) -> Vec<SerializedMessage> {
         let time_start = Instant::now();
         info!("Broadcasting {} {}", proposals.len(), phase);
         let validator_clients = self.make_validator_mass_clients(max_in_flight);
@@ -281,6 +280,9 @@ impl ClientContext {
             phase
         );
         responses
+            .into_iter()
+            .filter_map(|bytes| deserialize_message(&mut &*bytes).ok())
+            .collect()
     }
 
     fn save_chains(&self) {
@@ -328,22 +330,15 @@ impl ClientContext {
     }
 }
 
-fn deserialize_response(response: &[u8]) -> Option<ChainInfoResponse> {
-    match deserialize_message(response) {
-        Ok(SerializedMessage::ChainInfoResponse(info)) => Some(*info),
-        Ok(SerializedMessage::Error(error)) => {
+fn deserialize_response(response: SerializedMessage) -> Option<ChainInfoResponse> {
+    match response {
+        SerializedMessage::ChainInfoResponse(info) => Some(*info),
+        SerializedMessage::Error(error) => {
             error!("Received error value: {}", error);
             None
         }
-        Ok(_) => {
+        _ => {
             error!("Unexpected return value");
-            None
-        }
-        Err(error) => {
-            error!(
-                "Unexpected error: {} while deserializing {:?}",
-                error, response
-            );
             None
         }
     }
@@ -580,8 +575,8 @@ async fn main() {
                 .await;
             let votes: Vec<_> = responses
                 .into_iter()
-                .filter_map(|buf| {
-                    deserialize_response(&buf[..])
+                .filter_map(|message| {
+                    deserialize_response(message)
                         .and_then(|response| response.info.manager.pending().cloned())
                 })
                 .collect();
@@ -603,8 +598,8 @@ async fn main() {
             let mut confirmed = HashSet::new();
             let num_valid =
                 responses
-                    .iter()
-                    .fold(0, |acc, buf| match deserialize_response(&buf[..]) {
+                    .into_iter()
+                    .fold(0, |acc, message| match deserialize_response(message) {
                         Some(response) => {
                             confirmed.insert(response.info.chain_id);
                             acc + 1
