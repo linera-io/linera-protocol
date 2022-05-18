@@ -184,7 +184,9 @@ async fn test_read_chain_state_unknown_chain() {
         .unwrap();
     chain.description = Some(ChainDescription::Root(99));
     chain.state.committee = Some(committee);
-    chain.state.status = Some(ChainStatus::Managing);
+    chain.state.status = Some(ChainStatus::Managing {
+        subscribers: Vec::new(),
+    });
     chain.state.manager = ChainManager::single(PublicKey::debug(4));
     worker.storage.write_chain(chain).await.unwrap();
     worker
@@ -1406,18 +1408,26 @@ async fn test_chain_creation() {
         Value::Confirmed {
             block,
             state_hash: HashValue::new(&ExecutionState {
-                status: Some(ChainStatus::Managing),
+                status: Some(ChainStatus::Managing {
+                    subscribers: Vec::new(),
+                }),
                 committee: Some(committee.clone()),
                 manager: ChainManager::single(key_pair.public()),
                 balance: Balance::from(0),
             }),
         },
     );
-    worker.fully_handle_certificate(certificate).await.unwrap();
+    worker
+        .fully_handle_certificate(certificate.clone())
+        .await
+        .unwrap();
 
     let root_chain = worker.storage.read_active_chain(root_id).await.unwrap();
     assert_eq!(BlockHeight::from(1), root_chain.next_block_height);
     assert!(!root_chain.outboxes.contains_key(&child_id));
+    assert!(
+        matches!(root_chain.state.status, Some(ChainStatus::Managing { subscribers }) if subscribers.is_empty())
+    );
 
     let child_chain = worker.storage.read_active_chain(child_id).await.unwrap();
     assert_eq!(BlockHeight::from(0), child_chain.next_block_height);
@@ -1430,4 +1440,41 @@ async fn test_chain_creation() {
         .unwrap()
         .received_events
         .is_empty());
+
+    // Make the root receive the subscription.
+    let block = Block {
+        chain_id: root_id,
+        incoming_messages: vec![MessageGroup {
+            sender_id: ChainId::root(1),
+            height: BlockHeight::from(0),
+            operations: vec![(
+                0,
+                Operation::OpenChain {
+                    id: child_id,
+                    owner: key_pair.public(),
+                    committee: committee.clone(),
+                    admin_id: root_id,
+                },
+            )],
+        }],
+        operations: Vec::new(),
+        previous_block_hash: Some(certificate.hash),
+        height: BlockHeight::from(1),
+    };
+    let certificate = make_certificate(
+        &committee,
+        &worker,
+        Value::Confirmed {
+            block,
+            state_hash: HashValue::new(&ExecutionState {
+                status: Some(ChainStatus::Managing {
+                    subscribers: vec![child_id], // was just added
+                }),
+                committee: Some(committee.clone()),
+                manager: ChainManager::single(key_pair.public()),
+                balance: Balance::from(0),
+            }),
+        },
+    );
+    worker.fully_handle_certificate(certificate).await.unwrap();
 }
