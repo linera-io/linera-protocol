@@ -132,6 +132,7 @@ fn make_transfer_certificate(
     previous_confirmed_block: Option<&Certificate>,
 ) -> Certificate {
     let state = ExecutionState {
+        chain_id,
         status: Some(ChainStatus::ManagedBy {
             admin_id: ChainId::root(0),
         }),
@@ -445,6 +446,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
         Value::ConfirmedBlock {
             block: block0,
             state_hash: HashValue::new(&ExecutionState {
+                chain_id: ChainId::root(1),
                 status: Some(ChainStatus::ManagedBy {
                     admin_id: ChainId::root(0),
                 }),
@@ -471,6 +473,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
         Value::ConfirmedBlock {
             block: block1,
             state_hash: HashValue::new(&ExecutionState {
+                chain_id: ChainId::root(1),
                 status: Some(ChainStatus::ManagedBy {
                     admin_id: ChainId::root(0),
                 }),
@@ -721,6 +724,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             Value::ConfirmedBlock {
                 block: block_proposal.content.block,
                 state_hash: HashValue::new(&ExecutionState {
+                    chain_id: ChainId::root(2),
                     status: Some(ChainStatus::ManagedBy {
                         admin_id: ChainId::root(0),
                     }),
@@ -1408,6 +1412,7 @@ async fn test_chain_creation() {
         Value::ConfirmedBlock {
             block,
             state_hash: HashValue::new(&ExecutionState {
+                chain_id: root_id,
                 status: Some(ChainStatus::Managing {
                     subscribers: Vec::new(),
                 }),
@@ -1467,6 +1472,7 @@ async fn test_chain_creation() {
         Value::ConfirmedBlock {
             block,
             state_hash: HashValue::new(&ExecutionState {
+                chain_id: root_id,
                 status: Some(ChainStatus::Managing {
                     subscribers: vec![child_id], // was just added
                 }),

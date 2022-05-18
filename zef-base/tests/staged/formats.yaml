@@ -138,8 +138,6 @@ ChainManager:
           TYPENAME: MultiOwnerManager
 ChainState:
   STRUCT:
-    - id:
-        TYPENAME: ChainId
     - description:
         OPTION:
           TYPENAME: ChainDescription
@@ -356,6 +354,8 @@ Event:
         TYPENAME: Operation
 ExecutionState:
   STRUCT:
+    - chain_id:
+        TYPENAME: ChainId
     - status:
         OPTION:
           TYPENAME: ChainStatus
