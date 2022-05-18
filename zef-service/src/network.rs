@@ -503,7 +503,7 @@ impl MassClient {
     /// Spin off one task for each shard based on this validator client.
     pub fn run<I>(&self, sharded_requests: I) -> impl futures::stream::Stream<Item = Vec<Bytes>>
     where
-        I: IntoIterator<Item = (ShardId, Vec<Bytes>)>,
+        I: IntoIterator<Item = (ShardId, Vec<SerializedMessage>)>,
     {
         let handles = futures::stream::FuturesUnordered::new();
         for (shard, requests) in sharded_requests {
@@ -517,6 +517,10 @@ impl MassClient {
                         client.base_port + shard,
                         shard
                     );
+                    let requests = requests
+                        .into_iter()
+                        .map(|message| serialize_message(&message).into())
+                        .collect();
                     let responses = client
                         .run_shard(shard, requests)
                         .await
