@@ -220,8 +220,7 @@ where
         let committee = info
             .queried_committee
             .ok_or(Error::InactiveChain(self.chain_id))?;
-        // `info.admin_id == None` means that this is the beacon chain.
-        let admin_id = info.admin_id.unwrap_or(self.chain_id);
+        let admin_id = info.admin_id.ok_or(Error::InactiveChain(self.chain_id))?;
         Ok((committee, admin_id))
     }
 
