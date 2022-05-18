@@ -21,8 +21,6 @@ mod rocksdb_storage_tests;
 /// Rocksdb-based store.
 #[derive(Debug)]
 pub struct RocksdbStore {
-    /// Base path.
-    path: PathBuf,
     /// RockdbDB handle.
     db: rocksdb::DB,
 }
@@ -51,7 +49,7 @@ impl<'db> ColumnHandle<'db> {
     }
 }
 
-fn open_db(path: &PathBuf) -> Result<rocksdb::DB, rocksdb::Error> {
+fn open_db(path: &Path) -> Result<rocksdb::DB, rocksdb::Error> {
     let cfs = match rocksdb::DB::list_cf(&rocksdb::Options::default(), path){
         Ok(cfs) => cfs,
         Err(_e) => vec![String::from("None")],
@@ -73,7 +71,6 @@ impl RocksdbStore {
     pub fn new(path: PathBuf) -> Result<Self, rocksdb::Error> {
         assert!(path.is_dir());
         Ok(Self {
-            path: path.clone(),
             db: open_db(&path)?,
         })
     }
