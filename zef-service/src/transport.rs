@@ -2,15 +2,17 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::codec::Codec;
 use clap::arg_enum;
-use futures::{future, Sink, Stream};
+use futures::{future, Sink, SinkExt, Stream, StreamExt, TryStreamExt};
 use log::*;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, convert::TryInto, io, sync::Arc};
+use std::{collections::HashMap, convert::TryInto, io, net::SocketAddr, sync::Arc};
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     net::{TcpListener, TcpStream, UdpSocket},
 };
+use tokio_util::{codec::Framed, udp::UdpFramed};
 use zef_base::serialize::SerializedMessage;
 
 /// Suggested buffer size
@@ -87,15 +89,38 @@ impl<T> Transport for T where
 
 impl NetworkProtocol {
     /// Create a DataStream for this protocol.
-    pub async fn connect(
-        self,
-        address: String,
-    ) -> Result<Box<dyn DataStream>, std::io::Error> {
+    pub async fn connect(self, address: String) -> Result<Box<dyn DataStream>, std::io::Error> {
         let max_data_size = 1000;
         let stream: Box<dyn DataStream> = match self {
             NetworkProtocol::Udp => Box::new(UdpDataStream::connect(address, max_data_size).await?),
             NetworkProtocol::Tcp => Box::new(TcpDataStream::connect(address, max_data_size).await?),
         };
+        Ok(stream)
+    }
+
+    /// Create a transport for this protocol.
+    pub async fn connect_transport(
+        self,
+        address: String,
+    ) -> Result<impl Transport, std::io::Error> {
+        let address: SocketAddr = address.parse().expect("Invalid address to connect to");
+
+        let stream: futures::future::Either<_, _> = match self {
+            NetworkProtocol::Udp => {
+                let socket = UdpSocket::bind(&"0.0.0.0:0").await?;
+
+                UdpFramed::new(socket, Codec)
+                    .with(move |message| future::ready(Ok((message, address))))
+                    .map_ok(|(message, _address)| message)
+                    .left_stream()
+            }
+            NetworkProtocol::Tcp => {
+                let stream = TcpStream::connect(address).await?;
+
+                Framed::new(stream, Codec).right_stream()
+            }
+        };
+
         Ok(stream)
     }
 
