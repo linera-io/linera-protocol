@@ -85,7 +85,7 @@ pub trait ChainClient {
 pub struct ChainClientState<ValidatorNode, StorageClient> {
     /// The off-chain chain id.
     chain_id: ChainId,
-    /// How to talk to this committee.
+    /// How to talk to the validators.
     validator_clients: Vec<(ValidatorName, ValidatorNode)>,
     /// Latest block hash, if any.
     block_hash: Option<HashValue>,
@@ -169,7 +169,7 @@ where
         let query = ChainInfoQuery {
             chain_id: self.chain_id,
             check_next_block_height: None,
-            query_committee: false,
+            query_committees: false,
             query_pending_messages: false,
             query_sent_certificates_in_range: None,
             query_received_certificates_excluding_first_nth: None,
@@ -182,7 +182,7 @@ where
         let query = ChainInfoQuery {
             chain_id: self.chain_id,
             check_next_block_height: None,
-            query_committee: false,
+            query_committees: false,
             query_pending_messages: true,
             query_sent_certificates_in_range: None,
             query_received_certificates_excluding_first_nth: None,
@@ -195,33 +195,32 @@ where
         let query = ChainInfoQuery {
             chain_id: self.chain_id,
             check_next_block_height: None,
-            query_committee: true,
+            query_committees: true,
             query_pending_messages: false,
             query_sent_certificates_in_range: None,
             query_received_certificates_excluding_first_nth: None,
         };
-        let response = self.node_client.handle_chain_info_query(query).await?;
+        let mut response = self.node_client.handle_chain_info_query(query).await?;
         response
             .info
-            .queried_committee
+            .queried_committees
+            .pop()
             .ok_or(Error::InactiveChain(self.chain_id))
     }
 
-    async fn committee_and_admin(&mut self) -> Result<(Committee, ChainId), Error> {
+    async fn committees_and_admin(&mut self) -> Result<(Vec<Committee>, ChainId), Error> {
         let query = ChainInfoQuery {
             chain_id: self.chain_id,
             check_next_block_height: None,
-            query_committee: true,
+            query_committees: true,
             query_pending_messages: false,
             query_sent_certificates_in_range: None,
             query_received_certificates_excluding_first_nth: None,
         };
         let info = self.node_client.handle_chain_info_query(query).await?.info;
-        let committee = info
-            .queried_committee
-            .ok_or(Error::InactiveChain(self.chain_id))?;
+        let committees = info.queried_committees;
         let admin_id = info.admin_id.ok_or(Error::InactiveChain(self.chain_id))?;
-        Ok((committee, admin_id))
+        Ok((committees, admin_id))
     }
 
     async fn identity(&mut self) -> Result<Owner, anyhow::Error> {
@@ -429,7 +428,7 @@ where
                     let query = ChainInfoQuery {
                         chain_id,
                         check_next_block_height: None,
-                        query_committee: false,
+                        query_committees: false,
                         query_pending_messages: false,
                         query_sent_certificates_in_range: None,
                         query_received_certificates_excluding_first_nth: Some(tracker),
@@ -772,14 +771,14 @@ where
             height: self.next_block_height,
             index: 0,
         });
-        let (committee, admin_id) = self.committee_and_admin().await?;
+        let (committees, admin_id) = self.committees_and_admin().await?;
         let block = Block {
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
             operations: vec![Operation::OpenChain {
                 id,
                 owner,
-                committee,
+                committees,
                 admin_id,
             }],
             previous_block_hash: self.block_hash,

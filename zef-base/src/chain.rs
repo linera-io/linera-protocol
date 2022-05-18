@@ -81,8 +81,8 @@ pub struct ExecutionState {
     /// Whether our reconfigurations are managed by a "beacon" chain, or if we are it and
     /// managing other chains.
     pub status: Option<ChainStatus>,
-    /// Current committee, if any.
-    pub committee: Option<Committee>,
+    /// The committees that we trust.
+    pub committees: Vec<Committee>,
     /// Manager of the chain.
     pub manager: ChainManager,
     /// Balance of the chain.
@@ -96,7 +96,7 @@ impl ExecutionState {
         Self {
             chain_id,
             status: None,
-            committee: None,
+            committees: Vec::new(),
             manager: ChainManager::default(),
             balance: Balance::default(),
         }
@@ -145,7 +145,7 @@ impl ChainState {
         let mut chain = Self::new(description.into());
         chain.description = Some(description);
         chain.state.status = Some(status);
-        chain.state.committee = Some(committee);
+        chain.state.committees = vec![committee];
         chain.state.manager = ChainManager::single(owner);
         chain.state.balance = balance;
         chain.state_hash = HashValue::new(&chain.state);
@@ -155,7 +155,7 @@ impl ChainState {
     pub fn is_active(&self) -> bool {
         self.description.is_some()
             && self.state.manager.is_active()
-            && self.state.committee.is_some()
+            && !self.state.committees.is_empty()
             && self.state.status.is_some()
     }
 
@@ -169,7 +169,7 @@ impl ChainState {
             block_hash: self.block_hash,
             next_block_height: self.next_block_height,
             state_hash: self.state_hash,
-            queried_committee: None,
+            queried_committees: Vec::new(),
             queried_pending_messages: Vec::new(),
             queried_sent_certificates: Vec::new(),
             count_received_certificates: self.received_log.len(),
@@ -226,7 +226,7 @@ impl ChainState {
             if let Operation::OpenChain {
                 id,
                 owner,
-                committee,
+                committees,
                 admin_id,
                 ..
             } = &operation
@@ -235,7 +235,7 @@ impl ChainState {
                     // guaranteed under BFT assumptions.
                     assert!(self.description.is_none());
                     assert!(!self.state.manager.is_active());
-                    assert!(self.state.committee.is_none());
+                    assert!(self.state.committees.is_empty());
                     let description = ChainDescription::Child(OperationId {
                         chain_id: sender_id,
                         height,
@@ -243,7 +243,7 @@ impl ChainState {
                     });
                     assert_eq!(self.state.chain_id, description.into());
                     self.description = Some(description);
-                    self.state.committee = Some(committee.clone());
+                    self.state.committees = committees.clone();
                     self.state.status = Some(ChainStatus::ManagedBy {
                         admin_id: *admin_id,
                     });
@@ -356,6 +356,7 @@ impl ExecutionState {
                 ..
             } => self.chain_id == *id,
             OpenChain { id, admin_id, .. } => self.chain_id == *id || self.chain_id == *admin_id,
+            NewCommittee { admin_id, .. } => Some(admin_id) == self.admin_id().as_ref(),
             _ => false,
         }
     }
@@ -372,7 +373,7 @@ impl ExecutionState {
         match operation {
             Operation::OpenChain {
                 id,
-                committee,
+                committees,
                 admin_id,
                 ..
             } => {
@@ -386,10 +387,7 @@ impl ExecutionState {
                     Some(admin_id) == self.admin_id().as_ref(),
                     Error::InvalidNewChainAdminId(*id)
                 );
-                ensure!(
-                    self.committee.as_ref() == Some(committee),
-                    Error::InvalidCommittee
-                );
+                ensure!(&self.committees == committees, Error::InvalidCommittees);
                 Ok(vec![*id, *admin_id])
             }
             Operation::ChangeOwner { new_owner } => {
@@ -420,6 +418,16 @@ impl ExecutionState {
                     Address::Account(id) => Ok(vec![*id]),
                 }
             }
+            Operation::NewCommittee { admin_id, .. } => {
+                ensure!(*admin_id == chain_id, Error::InvalidCommitteeCreation);
+                let mut subscribers = match &self.status {
+                    Some(ChainStatus::Managing { subscribers }) => subscribers.clone(),
+                    _ => return Err(Error::InvalidCommitteeCreation),
+                };
+                // Make sure to also migrate the admin chain.
+                subscribers.push(chain_id);
+                Ok(subscribers)
+            }
         }
     }
 
@@ -446,6 +454,10 @@ impl ExecutionState {
                     }
                     _ => Err(Error::InvalidCrossChainRequest),
                 }
+            }
+            Operation::NewCommittee { committee, .. } => {
+                self.committees.push(committee.clone());
+                Ok(())
             }
             _ => Ok(()),
         }
