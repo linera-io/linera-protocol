@@ -227,7 +227,7 @@ impl TestBuilder {
                         ..
                     } = response.info;
                     if let Some(cert) = queried_sent_certificates.pop() {
-                        if let Value::Confirmed { block, .. } = &cert.value {
+                        if let Value::ConfirmedBlock { block, .. } = &cert.value {
                             if block.chain_id == chain_id && block.height == block_height {
                                 cert.check(&self.committee).unwrap();
                                 count += 1;
@@ -447,7 +447,7 @@ async fn test_transfer_then_open_chain() {
             .value,
         certificate.value
     );
-    assert!(matches!(&certificate.value, Value::Confirmed{
+    assert!(matches!(&certificate.value, Value::ConfirmedBlock{
         block: Block {
             operations,
             ..
@@ -514,7 +514,7 @@ async fn test_close_chain() {
     let certificate = sender.close_chain().await.unwrap();
     assert!(matches!(
         &certificate.value,
-        Value::Confirmed {
+        Value::ConfirmedBlock {
             block: Block {
                 operations,
                 ..

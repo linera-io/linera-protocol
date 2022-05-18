@@ -23,7 +23,7 @@ fn test_signed_values() {
         height: BlockHeight::from(0),
         previous_block_hash: None,
     };
-    let value = Value::Confirmed {
+    let value = Value::ConfirmedBlock {
         block,
         state_hash: HashValue::new(&ExecutionState::default()),
     };
@@ -59,7 +59,7 @@ fn test_certificates() {
         previous_block_hash: None,
         height: BlockHeight::from(0),
     };
-    let value = Value::Confirmed {
+    let value = Value::ConfirmedBlock {
         block,
         state_hash: HashValue::new(&ExecutionState::default()),
     };

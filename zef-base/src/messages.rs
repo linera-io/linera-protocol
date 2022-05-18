@@ -92,13 +92,13 @@ pub struct BlockProposal {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Value {
     /// The block was validated but confirmation will require additional steps.
-    Validated {
+    ValidatedBlock {
         block: Block,
         round: RoundNumber,
         state_hash: HashValue,
     },
     /// The block is validated and confirmed (i.e. ready to be published).
-    Confirmed { block: Block, state_hash: HashValue },
+    ConfirmedBlock { block: Block, state_hash: HashValue },
 }
 
 /// A vote on a statement from a validator.
@@ -224,35 +224,35 @@ impl CrossChainRequest {
 impl Value {
     pub fn chain_id(&self) -> ChainId {
         match self {
-            Value::Confirmed { block, .. } => block.chain_id,
-            Value::Validated { block, .. } => block.chain_id,
+            Value::ConfirmedBlock { block, .. } => block.chain_id,
+            Value::ValidatedBlock { block, .. } => block.chain_id,
         }
     }
 
     pub fn block(&self) -> &Block {
         match self {
-            Value::Confirmed { block, .. } => block,
-            Value::Validated { block, .. } => block,
+            Value::ConfirmedBlock { block, .. } => block,
+            Value::ValidatedBlock { block, .. } => block,
         }
     }
 
     pub fn state_hash(&self) -> HashValue {
         match self {
-            Value::Confirmed { state_hash, .. } => *state_hash,
-            Value::Validated { state_hash, .. } => *state_hash,
+            Value::ConfirmedBlock { state_hash, .. } => *state_hash,
+            Value::ValidatedBlock { state_hash, .. } => *state_hash,
         }
     }
 
     pub fn confirmed_block(&self) -> Option<&Block> {
         match self {
-            Value::Confirmed { block, .. } => Some(block),
+            Value::ConfirmedBlock { block, .. } => Some(block),
             _ => None,
         }
     }
 
     pub fn validated_block(&self) -> Option<&Block> {
         match self {
-            Value::Validated { block, .. } => Some(block),
+            Value::ValidatedBlock { block, .. } => Some(block),
             _ => None,
         }
     }
