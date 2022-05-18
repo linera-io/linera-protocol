@@ -264,7 +264,7 @@ impl ClientContext {
                 sharded_blocks
                     .entry(shard)
                     .or_insert_with(Vec::new)
-                    .push(Bytes::from(serialize_message(message)));
+                    .push(message.clone());
             }
             streams.push(client.run(sharded_blocks));
         }
