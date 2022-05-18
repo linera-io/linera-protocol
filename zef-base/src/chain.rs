@@ -12,8 +12,6 @@ use std::collections::{HashMap, HashSet, VecDeque};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct ChainState {
-    /// The UID of the chain.
-    pub id: ChainId,
     /// How the chain was created. May be unknown for inactive chains.
     pub description: Option<ChainDescription>,
     /// Execution state.
@@ -75,9 +73,11 @@ pub struct Event {
 }
 
 /// Execution state of a chain.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct ExecutionState {
+    /// The UID of the chain.
+    pub chain_id: ChainId,
     /// Whether our reconfigurations are managed by a "beacon" chain, or if we are it and
     /// managing other chains.
     pub status: Option<ChainStatus>,
@@ -91,6 +91,18 @@ pub struct ExecutionState {
 
 impl BcsSignable for ExecutionState {}
 
+impl ExecutionState {
+    pub fn new(chain_id: ChainId) -> Self {
+        Self {
+            chain_id,
+            status: None,
+            committee: None,
+            manager: ChainManager::default(),
+            balance: Balance::default(),
+        }
+    }
+}
+
 /// The administrative status of this chain w.r.t reconfigurations.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
@@ -101,10 +113,9 @@ pub enum ChainStatus {
 
 impl ChainState {
     pub fn new(id: ChainId) -> Self {
-        let state = ExecutionState::default();
+        let state = ExecutionState::new(id);
         let state_hash = HashValue::new(&state);
         Self {
-            id,
             description: None,
             state,
             state_hash,
@@ -150,11 +161,11 @@ impl ChainState {
 
     pub fn make_chain_info(&self, key_pair: Option<&KeyPair>) -> ChainInfoResponse {
         let info = ChainInfo {
-            chain_id: self.id,
+            chain_id: self.state.chain_id,
             description: self.description,
             manager: self.state.manager.clone(),
             balance: self.state.balance,
-            admin_id: self.state.admin_id(self.id),
+            admin_id: self.state.admin_id(),
             block_hash: self.block_hash,
             next_block_height: self.next_block_height,
             state_hash: self.state_hash,
@@ -208,7 +219,7 @@ impl ChainState {
 
         let mut has_processed_operations = false;
         for (index, operation) in operations.into_iter().enumerate() {
-            if !self.state.has_recipient(&operation, self.id) {
+            if !self.state.is_recipient(&operation) {
                 continue;
             }
             // Chain creation is a special operation that can only be executed (once) in this callback.
@@ -220,7 +231,7 @@ impl ChainState {
                 ..
             } = &operation
             {
-                if id == &self.id {
+                if id == &self.state.chain_id {
                     // guaranteed under BFT assumptions.
                     assert!(self.description.is_none());
                     assert!(!self.state.manager.is_active());
@@ -230,7 +241,7 @@ impl ChainState {
                         height,
                         index,
                     });
-                    assert_eq!(self.id, description.into());
+                    assert_eq!(self.state.chain_id, description.into());
                     self.description = Some(description);
                     self.state.committee = Some(committee.clone());
                     self.state.status = Some(ChainStatus::ManagedBy {
@@ -310,7 +321,7 @@ impl ChainState {
                 }
                 // Execute the received operation.
                 self.state
-                    .apply_operation_as_recipient(self.id, message_operation)?;
+                    .apply_operation_as_recipient(self.state.chain_id, message_operation)?;
             }
         }
         // Second, execute the operations in the block and remember recipients to notify.
@@ -330,21 +341,21 @@ impl ChainState {
 }
 
 impl ExecutionState {
-    pub fn admin_id(&self, chain_id: ChainId) -> Option<ChainId> {
+    pub fn admin_id(&self) -> Option<ChainId> {
         match self.status.as_ref()? {
             ChainStatus::ManagedBy { admin_id } => Some(*admin_id),
-            ChainStatus::Managing { .. } => Some(chain_id),
+            ChainStatus::Managing { .. } => Some(self.chain_id),
         }
     }
 
-    fn has_recipient(&self, operation: &Operation, chain_id: ChainId) -> bool {
+    fn is_recipient(&self, operation: &Operation) -> bool {
         use Operation::*;
         match operation {
             Transfer {
                 recipient: Address::Account(id),
                 ..
-            } => chain_id == *id,
-            OpenChain { id, admin_id, .. } => chain_id == *id || chain_id == *admin_id,
+            } => self.chain_id == *id,
+            OpenChain { id, admin_id, .. } => self.chain_id == *id || self.chain_id == *admin_id,
             _ => false,
         }
     }
@@ -358,7 +369,7 @@ impl ExecutionState {
         index: usize,
         operation: &Operation,
     ) -> Result<Vec<ChainId>, Error> {
-        match &operation {
+        match operation {
             Operation::OpenChain {
                 id,
                 committee,
@@ -372,7 +383,7 @@ impl ExecutionState {
                 });
                 ensure!(id == &expected_id, Error::InvalidNewChainId(*id));
                 ensure!(
-                    Some(admin_id) == self.admin_id(chain_id).as_ref(),
+                    Some(admin_id) == self.admin_id().as_ref(),
                     Error::InvalidNewChainAdminId(*id)
                 );
                 ensure!(
@@ -413,7 +424,6 @@ impl ExecutionState {
     }
 
     /// Execute the recipient's side of an operation.
-    /// Returns true if the operation changed the chain state.
     /// Operations must be executed by order of heights in the sender's chain.
     fn apply_operation_as_recipient(
         &mut self,

@@ -34,7 +34,7 @@ async fn test_rocksdb_storage_for_certificates() {
     };
     let value = Value::ConfirmedBlock {
         block,
-        state_hash: HashValue::new(&ExecutionState::default()),
+        state_hash: HashValue::new(&ExecutionState::new(ChainId::root(1))),
     };
     let certificate = Certificate::new(value, vec![]);
     client.write_certificate(certificate.clone()).await.unwrap();

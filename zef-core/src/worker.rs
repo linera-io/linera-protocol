@@ -110,7 +110,7 @@ where
                 .read_certificates(outbox.queue.iter().map(|(_, hash)| *hash))
                 .await?;
             continuation.push(CrossChainRequest::UpdateRecipient {
-                sender: chain.id,
+                sender: chain.state.chain_id,
                 recipient,
                 certificates,
             })
