@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::arg_enum;
-use futures::future;
+use futures::{future, Sink, Stream};
 use log::*;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, convert::TryInto, io, sync::Arc};
@@ -11,6 +11,7 @@ use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     net::{TcpListener, TcpStream, UdpSocket},
 };
+use zef_base::serialize::SerializedMessage;
 
 /// Suggested buffer size
 pub const DEFAULT_MAX_DATAGRAM_SIZE: &str = "65507";
@@ -66,6 +67,22 @@ impl SpawnedServer {
         self.handle.await??;
         Ok(())
     }
+}
+
+/// A trait alias for a protocol transport.
+///
+/// A transport is an active connection that can be used to send and receive
+/// [`SerializedMessages`]s.
+pub trait Transport:
+    Stream<Item = Result<SerializedMessage, Box<bincode::ErrorKind>>>
+    + Sink<SerializedMessage, Error = Box<bincode::ErrorKind>>
+{
+}
+
+impl<T> Transport for T where
+    T: Stream<Item = Result<SerializedMessage, Box<bincode::ErrorKind>>>
+        + Sink<SerializedMessage, Error = Box<bincode::ErrorKind>>
+{
 }
 
 impl NetworkProtocol {
