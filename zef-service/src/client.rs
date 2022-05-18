@@ -250,7 +250,7 @@ impl ClientContext {
         &self,
         phase: &'static str,
         max_in_flight: u64,
-        proposals: Vec<(ChainId, Bytes)>,
+        proposals: Vec<(ChainId, SerializedMessage)>,
     ) -> Vec<Bytes> {
         let time_start = Instant::now();
         info!("Broadcasting {} {}", proposals.len(), phase);
@@ -259,12 +259,12 @@ impl ClientContext {
         for (num_shards, client) in validator_clients {
             // Re-index proposals by shard for this particular validator client.
             let mut sharded_blocks = HashMap::new();
-            for (chain_id, buf) in &proposals {
+            for (chain_id, message) in &proposals {
                 let shard = network::get_shard(num_shards, *chain_id);
                 sharded_blocks
                     .entry(shard)
                     .or_insert_with(Vec::new)
-                    .push(buf.clone());
+                    .push(Bytes::from(serialize_message(message)));
             }
             streams.push(client.run(sharded_blocks));
         }
@@ -575,12 +575,8 @@ async fn main() {
             let max_proposals = max_proposals.unwrap_or_else(|| context.wallet_state.num_chains());
             warn!("Starting benchmark phase 1 (block proposals)");
             let proposals = context.make_benchmark_block_proposals(max_proposals);
-            let serialized_proposals = proposals
-                .into_iter()
-                .map(|(chain, message)| (chain, serialize_message(&message).into()))
-                .collect();
             let responses = context
-                .mass_broadcast("block proposals", max_in_flight, serialized_proposals)
+                .mass_broadcast("block proposals", max_in_flight, proposals)
                 .await;
             let votes: Vec<_> = responses
                 .into_iter()
@@ -597,10 +593,8 @@ async fn main() {
                 .iter()
                 .map(|certificate| {
                     let id = certificate.value.confirmed_block().unwrap().chain_id;
-                    let bytes = serialize_message(&SerializedMessage::Certificate(Box::new(
-                        certificate.clone(),
-                    )));
-                    (id, bytes.into())
+                    let message = certificate.clone().into();
+                    (id, message)
                 })
                 .collect();
             let responses = context
