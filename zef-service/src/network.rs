@@ -355,11 +355,12 @@ impl Client {
         time::timeout(self.recv_timeout, stream.read_data()).await?
     }
 
-    pub async fn send_recv_info_bytes(
+    pub async fn send_recv_info(
         &mut self,
         shard: ShardId,
-        buf: Vec<u8>,
+        message: SerializedMessage,
     ) -> Result<ChainInfoResponse, Error> {
+        let buf = serialize_message(&message);
         match self.send_recv_bytes_internal(shard, buf).await {
             Err(error) => Err(Error::ClientIoError {
                 error: format!("{}", error),
@@ -385,11 +386,7 @@ impl ValidatorNode for Client {
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, Error> {
         let shard = get_shard(self.num_shards, proposal.content.block.chain_id);
-        self.send_recv_info_bytes(
-            shard,
-            serialize_message(&SerializedMessage::BlockProposal(Box::new(proposal))),
-        )
-        .await
+        self.send_recv_info(shard, proposal.into()).await
     }
 
     /// Process a certificate.
@@ -398,11 +395,7 @@ impl ValidatorNode for Client {
         certificate: Certificate,
     ) -> Result<ChainInfoResponse, Error> {
         let shard = get_shard(self.num_shards, certificate.value.chain_id());
-        self.send_recv_info_bytes(
-            shard,
-            serialize_message(&SerializedMessage::Certificate(Box::new(certificate))),
-        )
-        .await
+        self.send_recv_info(shard, certificate.into()).await
     }
 
     /// Handle information queries for this chain.
@@ -411,11 +404,7 @@ impl ValidatorNode for Client {
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, Error> {
         let shard = get_shard(self.num_shards, query.chain_id);
-        self.send_recv_info_bytes(
-            shard,
-            serialize_message(&SerializedMessage::ChainInfoQuery(Box::new(query))),
-        )
-        .await
+        self.send_recv_info(shard, query.into()).await
     }
 }
 
