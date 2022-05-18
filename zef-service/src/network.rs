@@ -342,17 +342,19 @@ impl Client {
         }
     }
 
-    async fn send_recv_bytes_internal(
+    async fn send_recv_internal(
         &mut self,
         shard: ShardId,
-        buf: Vec<u8>,
-    ) -> Result<Vec<u8>, io::Error> {
+        message: SerializedMessage,
+    ) -> Result<Option<SerializedMessage>, io::Error> {
         let address = format!("{}:{}", self.base_address, self.base_port + shard);
         let mut stream = self.network_protocol.connect(address).await?;
         // Send message
+        let buf = serialize_message(&message);
         time::timeout(self.send_timeout, stream.write_data(&buf)).await??;
         // Wait for reply
-        time::timeout(self.recv_timeout, stream.read_data()).await?
+        let reply = time::timeout(self.recv_timeout, stream.read_data()).await??;
+        Ok(deserialize_message(&mut &*reply).ok())
     }
 
     pub async fn send_recv_info(
@@ -360,18 +362,17 @@ impl Client {
         shard: ShardId,
         message: SerializedMessage,
     ) -> Result<ChainInfoResponse, Error> {
-        let buf = serialize_message(&message);
-        match self.send_recv_bytes_internal(shard, buf).await {
+        match self.send_recv_internal(shard, message).await {
             Err(error) => Err(Error::ClientIoError {
                 error: format!("{}", error),
             }),
             Ok(response) => {
                 // Parse reply
-                match deserialize_message(&response[..]) {
-                    Ok(SerializedMessage::ChainInfoResponse(resp)) => Ok(*resp),
-                    Ok(SerializedMessage::Error(error)) => Err(*error),
-                    Err(_) => Err(Error::InvalidDecoding),
-                    _ => Err(Error::UnexpectedMessage),
+                match response {
+                    Some(SerializedMessage::ChainInfoResponse(resp)) => Ok(*resp),
+                    Some(SerializedMessage::Error(error)) => Err(*error),
+                    Some(_) => Err(Error::UnexpectedMessage),
+                    None => Err(Error::InvalidDecoding),
                 }
             }
         }
