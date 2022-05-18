@@ -119,7 +119,7 @@ where
     ) -> Result<Option<ChainInfo>, Error> {
         let mut info = None;
         for certificate in certificates {
-            if let Value::Confirmed { block, .. } = &certificate.value {
+            if let Value::ConfirmedBlock { block, .. } = &certificate.value {
                 if block.chain_id == chain_id {
                     match self.handle_certificate(certificate).await {
                         Ok(response) => {
@@ -293,7 +293,7 @@ where
                 }
             }
             if let Some(cert) = manager.locked {
-                if let Value::Validated { block, .. } = &cert.value {
+                if let Value::ValidatedBlock { block, .. } = &cert.value {
                     if block.chain_id == chain_id {
                         self.handle_certificate(cert).await.ok();
                     }

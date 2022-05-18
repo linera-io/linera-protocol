@@ -369,7 +369,7 @@ where
         match action {
             CommunicateAction::SubmitBlockForConfirmation(proposal) => {
                 let state_hash = state_hash.expect("this action produces votes");
-                let value = Value::Confirmed {
+                let value = Value::ConfirmedBlock {
                     block: proposal.content.block,
                     state_hash,
                 };
@@ -383,7 +383,7 @@ where
             CommunicateAction::SubmitBlockForValidation(proposal) => {
                 let state_hash = state_hash.expect("this action produces votes");
                 let BlockAndRound { block, round } = proposal.content;
-                let value = Value::Validated {
+                let value = Value::ValidatedBlock {
                     block,
                     round,
                     state_hash,
@@ -393,13 +393,13 @@ where
             }
             CommunicateAction::FinalizeBlock(validity_certificate) => {
                 let (block, state_hash) = match validity_certificate.value {
-                    Value::Validated {
+                    Value::ValidatedBlock {
                         block, state_hash, ..
                     } => (block, state_hash),
                     _ => unreachable!(),
                 };
                 let certificate =
-                    Certificate::new(Value::Confirmed { block, state_hash }, signatures);
+                    Certificate::new(Value::ConfirmedBlock { block, state_hash }, signatures);
                 Ok(Some(certificate))
             }
             CommunicateAction::AdvanceToNextBlockHeight(_) => Ok(None),

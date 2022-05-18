@@ -32,7 +32,7 @@ async fn test_rocksdb_storage_for_certificates() {
         previous_block_hash: None,
         height: BlockHeight::default(),
     };
-    let value = Value::Confirmed {
+    let value = Value::ConfirmedBlock {
         block,
         state_hash: HashValue::new(&ExecutionState::default()),
     };

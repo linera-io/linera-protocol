@@ -189,7 +189,7 @@ where
         certificate: Certificate,
     ) -> Result<ChainInfoResponse, Error> {
         let (block, round, state_hash) = match &certificate.value {
-            Value::Validated {
+            Value::ValidatedBlock {
                 block,
                 round,
                 state_hash,
@@ -279,12 +279,12 @@ where
         certificate: Certificate,
     ) -> Result<(ChainInfoResponse, Vec<CrossChainRequest>), Error> {
         match &certificate.value {
-            Value::Validated { .. } => {
+            Value::ValidatedBlock { .. } => {
                 // Confirm the validated block.
                 let info = self.process_validated_block(certificate).await?;
                 Ok((info, Vec::new()))
             }
-            Value::Confirmed { .. } => {
+            Value::ConfirmedBlock { .. } => {
                 // Execute the confirmed block.
                 self.process_confirmed_block(certificate).await
             }
