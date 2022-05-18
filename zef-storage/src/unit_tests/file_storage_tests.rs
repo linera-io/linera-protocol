@@ -32,7 +32,7 @@ async fn test_file_storage_for_certificates() {
         height: BlockHeight::default(),
         previous_block_hash: None,
     };
-    let value = Value::Confirmed {
+    let value = Value::ConfirmedBlock {
         block,
         state_hash: HashValue::new(&ExecutionState::default()),
     };

@@ -150,7 +150,7 @@ fn make_transfer_certificate(
         previous_confirmed_block,
     );
     let state_hash = HashValue::new(&state);
-    let value = Value::Confirmed { block, state_hash };
+    let value = Value::ConfirmedBlock { block, state_hash };
     make_certificate(committee, worker, value)
 }
 
@@ -442,7 +442,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
     let certificate0 = make_certificate(
         &committee,
         &worker,
-        Value::Confirmed {
+        Value::ConfirmedBlock {
             block: block0,
             state_hash: HashValue::new(&ExecutionState {
                 status: Some(ChainStatus::ManagedBy {
@@ -468,7 +468,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
     let certificate1 = make_certificate(
         &committee,
         &worker,
-        Value::Confirmed {
+        Value::ConfirmedBlock {
             block: block1,
             state_hash: HashValue::new(&ExecutionState {
                 status: Some(ChainStatus::ManagedBy {
@@ -718,7 +718,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
         let certificate = make_certificate(
             &committee,
             &worker,
-            Value::Confirmed {
+            Value::ConfirmedBlock {
                 block: block_proposal.content.block,
                 state_hash: HashValue::new(&ExecutionState {
                     status: Some(ChainStatus::ManagedBy {
@@ -1405,7 +1405,7 @@ async fn test_chain_creation() {
     let certificate = make_certificate(
         &committee,
         &worker,
-        Value::Confirmed {
+        Value::ConfirmedBlock {
             block,
             state_hash: HashValue::new(&ExecutionState {
                 status: Some(ChainStatus::Managing {
@@ -1464,7 +1464,7 @@ async fn test_chain_creation() {
     let certificate = make_certificate(
         &committee,
         &worker,
-        Value::Confirmed {
+        Value::ConfirmedBlock {
             block,
             state_hash: HashValue::new(&ExecutionState {
                 status: Some(ChainStatus::Managing {

@@ -515,7 +515,7 @@ UserData:
 Value:
   ENUM:
     0:
-      Validated:
+      ValidatedBlock:
         STRUCT:
           - block:
               TYPENAME: Block
@@ -524,7 +524,7 @@ Value:
           - state_hash:
               TYPENAME: HashValue
     1:
-      Confirmed:
+      ConfirmedBlock:
         STRUCT:
           - block:
               TYPENAME: Block
