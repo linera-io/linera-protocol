@@ -13,7 +13,7 @@ use tokio::{
     net::{TcpListener, TcpStream, UdpSocket},
 };
 use tokio_util::{codec::Framed, udp::UdpFramed};
-use zef_base::serialize::SerializedMessage;
+use zef_base::serialize::{deserialize_message, serialize_message, SerializedMessage};
 
 /// Suggested buffer size
 pub const DEFAULT_MAX_DATAGRAM_SIZE: &str = "65507";
@@ -47,8 +47,10 @@ pub trait DataStreamPool: Send {
 
 /// The handler required to create a service.
 pub trait MessageHandler {
-    fn handle_message<'a>(&'a mut self, buffer: &'a [u8])
-        -> future::BoxFuture<'a, Option<Vec<u8>>>;
+    fn handle_message(
+        &mut self,
+        message: SerializedMessage,
+    ) -> future::BoxFuture<Option<SerializedMessage>>;
 }
 
 /// The result of spawning a server is oneshot channel to kill it and a handle to track completion.
@@ -192,8 +194,15 @@ impl NetworkProtocol {
                         value?
                     }
                 };
-            if let Some(reply) = state.handle_message(&buffer[..size]).await {
-                let status = socket.send_to(&reply[..], &peer).await;
+            let message = match deserialize_message(&buffer[..size]) {
+                Ok(message) => message,
+                Err(error) => {
+                    warn!("Received an invalid message: {error}");
+                    continue;
+                }
+            };
+            if let Some(reply) = state.handle_message(message).await {
+                let status = socket.send_to(&serialize_message(&reply), &peer).await;
                 if let Err(error) = status {
                     error!("Failed to send query response: {}", error);
                 }
@@ -339,10 +348,17 @@ impl NetworkProtocol {
                         }
                     };
 
-                    if let Some(reply) =
-                        guarded_state.lock().await.handle_message(&buffer[..]).await
-                    {
-                        let status = TcpDataStream::tcp_write_data(&mut socket, &reply[..]).await;
+                    let message = match deserialize_message(&buffer[..]) {
+                        Ok(message) => message,
+                        Err(error) => {
+                            warn!("Received an invalid message: {error}");
+                            continue;
+                        }
+                    };
+                    if let Some(reply) = guarded_state.lock().await.handle_message(message).await {
+                        let status =
+                            TcpDataStream::tcp_write_data(&mut socket, &serialize_message(&reply))
+                                .await;
                         if let Err(error) = status {
                             error!("Failed to send query response: {}", error);
                         }
