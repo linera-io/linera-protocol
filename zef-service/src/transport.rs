@@ -13,7 +13,7 @@ use tokio::{
     net::{TcpListener, TcpStream, UdpSocket},
 };
 use tokio_util::{codec::Framed, udp::UdpFramed};
-use zef_base::serialize::{deserialize_message, serialize_message, SerializedMessage};
+use zef_base::serialize::SerializedMessage;
 
 /// Suggested buffer size
 pub const DEFAULT_MAX_DATAGRAM_SIZE: &str = "65507";
@@ -183,26 +183,27 @@ impl NetworkProtocol {
     where
         S: MessageHandler + Send + 'static,
     {
-        let buffer_size = 1000;
-        let mut buffer = vec![0; buffer_size];
+        let mut transport = UdpFramed::new(socket, Codec);
         loop {
-            let (size, peer) =
-                match future::select(exit_future, Box::pin(socket.recv_from(&mut buffer))).await {
-                    future::Either::Left(_) => break,
-                    future::Either::Right((value, new_exit_future)) => {
-                        exit_future = new_exit_future;
-                        value?
+            let (message, peer) = match future::select(exit_future, transport.next()).await {
+                future::Either::Left(_) => break,
+                future::Either::Right((value, new_exit_future)) => {
+                    exit_future = new_exit_future;
+                    match value {
+                        Some(Ok(value)) => value,
+                        Some(Err(error)) => match *error {
+                            bincode::ErrorKind::Io(io_error) => return Err(io_error),
+                            other_error => {
+                                warn!("Received an invalid message: {other_error}");
+                                continue;
+                            }
+                        },
+                        None => return Err(std::io::ErrorKind::UnexpectedEof.into()),
                     }
-                };
-            let message = match deserialize_message(&buffer[..size]) {
-                Ok(message) => message,
-                Err(error) => {
-                    warn!("Received an invalid message: {error}");
-                    continue;
                 }
             };
             if let Some(reply) = state.handle_message(message).await {
-                let status = socket.send_to(&serialize_message(&reply), &peer).await;
+                let status = transport.send((reply, peer)).await;
                 if let Err(error) = status {
                     error!("Failed to send query response: {}", error);
                 }
