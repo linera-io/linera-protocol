@@ -6,7 +6,7 @@ use crate::{
     base_types::*, committee::Committee, ensure, error::Error, manager::ChainManager, messages::*,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{BTreeSet, HashMap, VecDeque};
 
 /// State of a chain.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -282,7 +282,12 @@ impl ChainState {
 
     /// Execute a new block: first the incoming messages, then the main operation. In case
     /// of errors, `self` may not be consistent any more and should be thrown away.
-    pub fn execute_block(&mut self, block: &Block) -> Result<HashSet<ChainId>, Error> {
+    /// Returns a map of recipients to notify about some of our blocks (usually the block being executed).
+    pub fn execute_block(
+        &mut self,
+        block: &Block,
+    ) -> Result<HashMap<ChainId, BTreeSet<BlockHeight>>, Error> {
+        let mut notifications = HashMap::<_, BTreeSet<_>>::new();
         // First, process incoming messages.
         for message_group in &block.incoming_messages {
             for (message_index, message_operation) in &message_group.operations {
@@ -322,24 +327,34 @@ impl ChainState {
                         });
                     }
                 }
-                // Execute the received operation.
-                self.state
+                // Execute the received operation. This may create more notifications
+                // about previous blocks.
+                let new_notifications = self
+                    .state
                     .apply_operation_as_recipient(self.state.chain_id, message_operation)?;
+                for (recipient, heights) in new_notifications {
+                    notifications.entry(recipient).or_default().extend(heights);
+                }
             }
         }
         // Second, execute the operations in the block and remember recipients to notify.
-        let mut recipients = HashSet::new();
         for (index, operation) in block.operations.iter().enumerate() {
-            recipients.extend(self.state.apply_operation_as_sender(
+            for recipient in self.state.apply_operation_as_sender(
                 block.chain_id,
                 block.height,
                 index,
                 operation,
-            )?);
+            )? {
+                // Notify recipients about this block.
+                notifications
+                    .entry(recipient)
+                    .or_default()
+                    .insert(block.height);
+            }
         }
         // Last, recompute the state hash.
         self.state_hash = HashValue::new(&self.state);
-        Ok(recipients)
+        Ok(notifications)
     }
 }
 
@@ -440,29 +455,29 @@ impl ExecutionState {
         &mut self,
         chain_id: ChainId,
         operation: &Operation,
-    ) -> Result<(), Error> {
+    ) -> Result<Vec<(ChainId, Vec<BlockHeight>)>, Error> {
         match operation {
             Operation::Transfer { amount, .. } => {
                 self.balance = self
                     .balance
                     .try_add((*amount).into())
                     .unwrap_or_else(|_| Balance::max());
-                Ok(())
+                Ok(Vec::new())
             }
             Operation::OpenChain { id, admin_id, .. } if *admin_id == chain_id => {
                 match &mut self.status {
                     Some(ChainStatus::Managing { subscribers }) => {
                         subscribers.push(*id);
-                        Ok(())
+                        Ok(Vec::new())
                     }
                     _ => Err(Error::InvalidCrossChainRequest),
                 }
             }
             Operation::NewCommittee { committee, .. } => {
                 self.committees.push(committee.clone());
-                Ok(())
+                Ok(Vec::new())
             }
-            _ => Ok(()),
+            _ => Ok(Vec::new()),
         }
     }
 }

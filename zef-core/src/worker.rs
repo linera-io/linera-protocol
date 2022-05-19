@@ -163,7 +163,7 @@ where
         // Make sure temporary manager information are cleared.
         chain.state.manager.reset();
         // Execute the block.
-        let recipients = chain.execute_block(block)?;
+        let notifications = chain.execute_block(block)?;
         // Advance to next block height.
         chain.block_hash = Some(certificate.hash);
         chain.confirmed_log.push(certificate.hash);
@@ -175,14 +175,14 @@ where
         );
         // Final touch on the sender's chain.
         let info = chain.make_chain_info(self.key_pair.as_ref());
-        // Schedule a new cross-chain request to update each (unique) recipient.
-        for id in recipients {
-            chain
-                .outboxes
-                .entry(id)
-                .or_default()
-                .queue
-                .push_back((block.height, certificate.hash));
+        // Schedule a new cross-chain request to notify each recipient about the given
+        // blocks (generally, just this one).
+        for (recipient, heights) in notifications {
+            let queue = &mut chain.outboxes.entry(recipient).or_default().queue;
+            for height in heights {
+                let hash = chain.confirmed_log[usize::from(height)];
+                queue.push_back((height, hash));
+            }
         }
         let continuation = self.make_continuation(&chain).await?;
         // Persist chain.
