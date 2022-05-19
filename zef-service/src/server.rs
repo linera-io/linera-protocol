@@ -25,7 +25,6 @@ use zef_service::{
 async fn make_shard_server(
     local_ip_addr: &str,
     server_config: &ValidatorServerConfig,
-    buffer_size: usize,
     cross_chain_config: network::CrossChainConfig,
     shard: u32,
     storage: MixedStorage,
@@ -45,7 +44,6 @@ async fn make_shard_server(
         state,
         shard,
         num_shards,
-        buffer_size,
         cross_chain_config,
     )
 }
@@ -54,7 +52,6 @@ async fn make_servers(
     local_ip_addr: &str,
     server_config: &ValidatorServerConfig,
     genesis_config: &GenesisConfig,
-    buffer_size: usize,
     cross_chain_config: network::CrossChainConfig,
     storage: Option<&PathBuf>,
 ) -> Vec<network::Server<MixedStorage>> {
@@ -66,7 +63,6 @@ async fn make_servers(
         let server = make_shard_server(
             local_ip_addr,
             server_config,
-            buffer_size,
             cross_chain_config.clone(),
             shard,
             storage,
@@ -163,10 +159,6 @@ enum ServerCommands {
         #[structopt(long = "storage")]
         storage_path: Option<PathBuf>,
 
-        /// Maximum size of datagrams received and sent (bytes)
-        #[structopt(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE)]
-        buffer_size: usize,
-
         /// Configuration for cross-chain requests
         #[structopt(flatten)]
         cross_chain_config: network::CrossChainConfig,
@@ -211,7 +203,6 @@ async fn main() {
         ServerCommands::Run {
             server_config_path,
             storage_path,
-            buffer_size,
             cross_chain_config,
             genesis_config_path,
             shard,
@@ -234,7 +225,6 @@ async fn main() {
                     let server = make_shard_server(
                         "0.0.0.0", // Allow local IP address to be different from the public one.
                         &server_config,
-                        buffer_size,
                         cross_chain_config,
                         shard,
                         storage,
@@ -248,7 +238,6 @@ async fn main() {
                         "0.0.0.0", // Allow local IP address to be different from the public one.
                         &server_config,
                         &genesis_config,
-                        buffer_size,
                         cross_chain_config,
                         storage_path.as_ref(),
                     )

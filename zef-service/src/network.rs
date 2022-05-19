@@ -45,7 +45,6 @@ pub struct Server<Storage> {
     state: WorkerState<Storage>,
     shard_id: ShardId,
     num_shards: u32,
-    buffer_size: usize,
     cross_chain_config: CrossChainConfig,
     // Stats
     packets_processed: u64,
@@ -61,7 +60,6 @@ impl<Storage> Server<Storage> {
         state: WorkerState<Storage>,
         shard_id: ShardId,
         num_shards: u32,
-        buffer_size: usize,
         cross_chain_config: CrossChainConfig,
     ) -> Self {
         Self {
@@ -71,7 +69,6 @@ impl<Storage> Server<Storage> {
             state,
             shard_id,
             num_shards,
-            buffer_size,
             cross_chain_config,
             packets_processed: 0,
             user_errors: 0,
@@ -170,7 +167,6 @@ where
             cross_chain_receiver,
         ));
 
-        let buffer_size = self.buffer_size;
         let protocol = self.network_protocol;
         let state = RunningServerState {
             server: self,
@@ -179,14 +175,13 @@ where
         // Launch server for the appropriate protocol.
         #[cfg(feature = "benchmark")]
         {
-            let _buffer_size = buffer_size;
             let _protocol = protocol;
             BenchmarkServer::spawn(address, state)
         }
 
         #[cfg(not(feature = "benchmark"))]
         {
-            protocol.spawn_server(&address, state, buffer_size).await
+            protocol.spawn_server(&address, state).await
         }
     }
 }
