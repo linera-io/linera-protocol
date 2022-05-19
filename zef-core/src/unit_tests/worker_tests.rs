@@ -14,11 +14,187 @@ use zef_base::{
 };
 use zef_storage::{InMemoryStoreClient, Storage};
 
+/// Instantiate the protocol with a single validator. Returns the corresponding committee
+/// and the (non-sharded, in-memory) "worker" that we can interact with.
+fn init_worker(allow_inactive_chains: bool) -> (Committee, WorkerState<InMemoryStoreClient>) {
+    let key_pair = KeyPair::generate();
+    let mut validators = BTreeMap::new();
+    validators.insert(key_pair.public(), /* voting right */ 1);
+    let committee = Committee::new(validators);
+    let client = InMemoryStoreClient::default();
+    let worker = WorkerState::new(Some(key_pair), client, allow_inactive_chains);
+    (committee, worker)
+}
+
+/// Same as `init_worker` but also instantiate some initial chains.
+async fn init_worker_with_chains<I: IntoIterator<Item = (ChainDescription, Owner, Balance)>>(
+    balances: I,
+) -> (Committee, WorkerState<InMemoryStoreClient>) {
+    let (committee, mut worker) = init_worker(/* allow_inactive_chains */ false);
+    for (description, owner, balance) in balances {
+        let chain = ChainState::create(
+            committee.clone(),
+            description,
+            owner,
+            balance,
+        );
+        worker.storage.write_chain(chain).await.unwrap();
+    }
+    (committee, worker)
+}
+
+/// Same as `init_worker` but also instantiate a single initial chain.
+async fn init_worker_with_chain(
+    description: ChainDescription,
+    owner: Owner,
+    balance: Balance,
+) -> (Committee, WorkerState<InMemoryStoreClient>) {
+    init_worker_with_chains(std::iter::once((description, owner, balance))).await
+}
+
+fn make_block(
+    chain_id: ChainId,
+    operations: Vec<Operation>,
+    incoming_messages: Vec<MessageGroup>,
+    previous_confirmed_block: Option<&Certificate>,
+) -> Block {
+    let previous_block_hash = previous_confirmed_block.as_ref().map(|cert| cert.hash);
+    let height = match &previous_confirmed_block {
+        None => BlockHeight::default(),
+        Some(cert) => cert
+            .value
+            .confirmed_block()
+            .unwrap()
+            .height
+            .try_add_one()
+            .unwrap(),
+    };
+    Block {
+        chain_id,
+        incoming_messages,
+        operations,
+        previous_block_hash,
+        height,
+    }
+}
+
+fn make_transfer_block_proposal(
+    chain_id: ChainId,
+    key_pair: &KeyPair,
+    recipient: Address,
+    amount: Amount,
+    incoming_messages: Vec<MessageGroup>,
+    previous_confirmed_block: Option<&Certificate>,
+) -> BlockProposal {
+    let block = make_block(
+        chain_id,
+        vec![Operation::Transfer {
+            recipient,
+            amount,
+            user_data: UserData::default(),
+        }],
+        incoming_messages,
+        previous_confirmed_block,
+    );
+    BlockProposal::new(
+        BlockAndRound {
+            block,
+            round: RoundNumber::default(),
+        },
+        key_pair,
+    )
+}
+
+fn make_certificate(
+    committee: &Committee,
+    worker: &WorkerState<InMemoryStoreClient>,
+    value: Value,
+) -> Certificate {
+    let vote = Vote::new(value.clone(), worker.key_pair.as_ref().unwrap());
+    let mut builder = SignatureAggregator::new(value, committee);
+    builder
+        .append(vote.validator, vote.signature)
+        .unwrap()
+        .unwrap()
+}
+
+#[allow(clippy::too_many_arguments)]
+fn make_transfer_certificate(
+    chain_id: ChainId,
+    key_pair: &KeyPair,
+    recipient: Address,
+    amount: Amount,
+    incoming_messages: Vec<MessageGroup>,
+    committee: &Committee,
+    balance: Balance,
+    worker: &WorkerState<InMemoryStoreClient>,
+    previous_confirmed_block: Option<&Certificate>,
+) -> Certificate {
+    let state = ExecutionState {
+        committee: Some(committee.clone()),
+        manager: ChainManager::single(key_pair.public()),
+        balance,
+    };
+    let block = make_block(
+        chain_id,
+        vec![Operation::Transfer {
+            recipient,
+            amount,
+            user_data: UserData::default(),
+        }],
+        incoming_messages,
+        previous_confirmed_block,
+    );
+    let state_hash = HashValue::new(&state);
+    let value = Value::Confirmed { block, state_hash };
+    make_certificate(committee, worker, value)
+}
+
+
+#[tokio::test]
+async fn test_read_chain_state() {
+    let sender = ChainDescription::Root(1);
+    let (_, mut worker) =
+        init_worker_with_chain(sender, PublicKey::debug(1), Balance::from(5)).await;
+    worker
+        .storage
+        .read_active_chain(sender.into())
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn test_read_chain_state_unknown_chain() {
+    let sender = ChainDescription::Root(1);
+    let unknown_chain_id = ChainId::root(99);
+    let (committee, mut worker) =
+        init_worker_with_chain(sender, PublicKey::debug(1), Balance::from(5)).await;
+    assert!(worker
+        .storage
+        .read_active_chain(unknown_chain_id)
+        .await
+        .is_err());
+    let mut chain = worker
+        .storage
+        .read_chain_or_default(unknown_chain_id)
+        .await
+        .unwrap();
+    chain.description = Some(ChainDescription::Root(99));
+    chain.state.committee = Some(committee);
+    chain.state.manager = ChainManager::single(PublicKey::debug(4));
+    worker.storage.write_chain(chain).await.unwrap();
+    worker
+        .storage
+        .read_active_chain(unknown_chain_id)
+        .await
+        .unwrap();
+}
+
 #[tokio::test]
 async fn test_handle_block_proposal_bad_signature() {
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(ChainId::root(2));
-    let (_, mut state) = init_state_with_chains(vec![
+    let (_, mut worker) = init_worker_with_chains(vec![
         (
             ChainDescription::Root(1),
             sender_key_pair.public(),
@@ -43,11 +219,11 @@ async fn test_handle_block_proposal_bad_signature() {
     let mut bad_signature_block_proposal = block_proposal.clone();
     bad_signature_block_proposal.signature =
         Signature::new(&block_proposal.content, &unknown_key_pair);
-    assert!(state
+    assert!(worker
         .handle_block_proposal(bad_signature_block_proposal)
         .await
         .is_err());
-    assert!(state
+    assert!(worker
         .storage
         .read_active_chain(ChainId::root(1))
         .await
@@ -62,7 +238,7 @@ async fn test_handle_block_proposal_bad_signature() {
 async fn test_handle_block_proposal_zero_amount() {
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(ChainId::root(2));
-    let (_, mut state) = init_state_with_chains(vec![
+    let (_, mut worker) = init_worker_with_chains(vec![
         (
             ChainDescription::Root(1),
             sender_key_pair.public(),
@@ -84,11 +260,11 @@ async fn test_handle_block_proposal_zero_amount() {
         Vec::new(),
         None,
     );
-    assert!(state
+    assert!(worker
         .handle_block_proposal(zero_amount_block_proposal)
         .await
         .is_err());
-    assert!(state
+    assert!(worker
         .storage
         .read_active_chain(ChainId::root(1))
         .await
@@ -103,7 +279,7 @@ async fn test_handle_block_proposal_zero_amount() {
 async fn test_handle_block_proposal_unknown_sender() {
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(ChainId::root(2));
-    let (_, mut state) = init_state_with_chains(vec![
+    let (_, mut worker) = init_worker_with_chains(vec![
         (
             ChainDescription::Root(1),
             sender_key_pair.public(),
@@ -127,11 +303,11 @@ async fn test_handle_block_proposal_unknown_sender() {
     let unknown_key = KeyPair::generate();
 
     let unknown_sender_block_proposal = BlockProposal::new(block_proposal.content, &unknown_key);
-    assert!(state
+    assert!(worker
         .handle_block_proposal(unknown_sender_block_proposal)
         .await
         .is_err());
-    assert!(state
+    assert!(worker
         .storage
         .read_active_chain(ChainId::root(1))
         .await
@@ -146,7 +322,7 @@ async fn test_handle_block_proposal_unknown_sender() {
 async fn test_handle_block_proposal_with_chaining() {
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(ChainId::root(2));
-    let (committee, mut state) = init_state_with_chains(vec![(
+    let (committee, mut worker) = init_worker_with_chains(vec![(
         ChainDescription::Root(1),
         sender_key_pair.public(),
         Balance::from(5),
@@ -168,7 +344,7 @@ async fn test_handle_block_proposal_with_chaining() {
         Vec::new(),
         &committee,
         Balance::from(4),
-        &state,
+        &worker,
         None,
     );
     let block_proposal1 = make_transfer_block_proposal(
@@ -180,11 +356,11 @@ async fn test_handle_block_proposal_with_chaining() {
         Some(&certificate0),
     );
 
-    assert!(state
+    assert!(worker
         .handle_block_proposal(block_proposal1.clone())
         .await
         .is_err());
-    assert!(state
+    assert!(worker
         .storage
         .read_active_chain(ChainId::root(1))
         .await
@@ -194,11 +370,11 @@ async fn test_handle_block_proposal_with_chaining() {
         .pending()
         .is_none());
 
-    state
+    worker
         .handle_block_proposal(block_proposal0.clone())
         .await
         .unwrap();
-    assert!(state
+    assert!(worker
         .storage
         .read_active_chain(ChainId::root(1))
         .await
@@ -207,9 +383,9 @@ async fn test_handle_block_proposal_with_chaining() {
         .manager
         .pending()
         .is_some());
-    state.handle_certificate(certificate0).await.unwrap();
-    state.handle_block_proposal(block_proposal1).await.unwrap();
-    assert!(state
+    worker.handle_certificate(certificate0).await.unwrap();
+    worker.handle_block_proposal(block_proposal1).await.unwrap();
+    assert!(worker
         .storage
         .read_active_chain(ChainId::root(1))
         .await
@@ -218,7 +394,7 @@ async fn test_handle_block_proposal_with_chaining() {
         .manager
         .pending()
         .is_some());
-    assert!(state.handle_block_proposal(block_proposal0).await.is_err());
+    assert!(worker.handle_block_proposal(block_proposal0).await.is_err());
 }
 
 #[tokio::test]
@@ -226,7 +402,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
     let sender_key_pair = KeyPair::generate();
     let recipient_key_pair = KeyPair::generate();
     let recipient = Address::Account(ChainId::root(2));
-    let (committee, mut state) = init_state_with_chains(vec![
+    let (committee, mut worker) = init_worker_with_chains(vec![
         (
             ChainDescription::Root(1),
             sender_key_pair.public(),
@@ -259,7 +435,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
     };
     let certificate0 = make_certificate(
         &committee,
-        &state,
+        &worker,
         Value::Confirmed {
             block: block0,
             state_hash: HashValue::new(&ExecutionState {
@@ -282,7 +458,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
     };
     let certificate1 = make_certificate(
         &committee,
-        &state,
+        &worker,
         Value::Confirmed {
             block: block1,
             state_hash: HashValue::new(&ExecutionState {
@@ -293,13 +469,13 @@ async fn test_handle_block_proposal_with_incoming_messages() {
         },
     );
     // Missing earlier blocks
-    assert!(state
+    assert!(worker
         .handle_certificate(certificate1.clone())
         .await
         .is_err());
 
-    state.fully_handle_certificate(certificate0).await.unwrap();
-    state.fully_handle_certificate(certificate1).await.unwrap();
+    worker.fully_handle_certificate(certificate0).await.unwrap();
+    worker.fully_handle_certificate(certificate1).await.unwrap();
     {
         let block_proposal = make_transfer_block_proposal(
             ChainId::root(2),
@@ -310,7 +486,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             None,
         );
         // Insufficient funding
-        assert!(state.handle_block_proposal(block_proposal).await.is_err());
+        assert!(worker.handle_block_proposal(block_proposal).await.is_err());
     }
     {
         let block_proposal = make_transfer_block_proposal(
@@ -358,7 +534,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
         );
         // Inconsistent received messages.
         assert!(matches!(
-            state.handle_block_proposal(block_proposal).await,
+            worker.handle_block_proposal(block_proposal).await,
             Err(Error::InvalidMessageContent { .. })
         ));
     }
@@ -408,7 +584,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
         );
         // Inconsistent order in received messages (indices).
         assert!(matches!(
-            state.handle_block_proposal(block_proposal).await,
+            worker.handle_block_proposal(block_proposal).await,
             Err(Error::InvalidMessageOrder { .. })
         ));
     }
@@ -458,7 +634,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
         );
         // Inconsistent order in received messages (heights).
         assert!(matches!(
-            state.handle_block_proposal(block_proposal).await,
+            worker.handle_block_proposal(block_proposal).await,
             Err(Error::InvalidMessageOrder { .. })
         ));
     }
@@ -498,7 +674,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
         );
         // Cannot skip messages.
         assert!(matches!(
-            state.handle_block_proposal(block_proposal).await,
+            worker.handle_block_proposal(block_proposal).await,
             Err(Error::InvalidMessageOrder { .. })
         ));
     }
@@ -523,13 +699,13 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             None,
         );
         // Taking the first message only is ok.
-        state
+        worker
             .handle_block_proposal(block_proposal.clone())
             .await
             .unwrap();
         let certificate = make_certificate(
             &committee,
-            &state,
+            &worker,
             Value::Confirmed {
                 block: block_proposal.content.block,
                 state_hash: HashValue::new(&ExecutionState {
@@ -539,7 +715,10 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                 }),
             },
         );
-        state.handle_certificate(certificate.clone()).await.unwrap();
+        worker
+            .handle_certificate(certificate.clone())
+            .await
+            .unwrap();
         // Then receive the last two messages.
         let block_proposal = make_transfer_block_proposal(
             ChainId::root(2),
@@ -574,7 +753,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             ],
             Some(&certificate),
         );
-        state
+        worker
             .handle_block_proposal(block_proposal.clone())
             .await
             .unwrap();
@@ -585,7 +764,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
 async fn test_handle_block_proposal_exceed_balance() {
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(ChainId::root(2));
-    let (_, mut state) = init_state_with_chains(vec![
+    let (_, mut worker) = init_worker_with_chains(vec![
         (
             ChainDescription::Root(1),
             sender_key_pair.public(),
@@ -606,8 +785,8 @@ async fn test_handle_block_proposal_exceed_balance() {
         Vec::new(),
         None,
     );
-    assert!(state.handle_block_proposal(block_proposal).await.is_err());
-    assert!(state
+    assert!(worker.handle_block_proposal(block_proposal).await.is_err());
+    assert!(worker
         .storage
         .read_active_chain(ChainId::root(1))
         .await
@@ -622,7 +801,7 @@ async fn test_handle_block_proposal_exceed_balance() {
 async fn test_handle_block_proposal() {
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(ChainId::root(2));
-    let (_, mut state) = init_state_with_chains(vec![(
+    let (_, mut worker) = init_worker_with_chains(vec![(
         ChainDescription::Root(1),
         sender_key_pair.public(),
         Balance::from(5),
@@ -637,11 +816,11 @@ async fn test_handle_block_proposal() {
         None,
     );
 
-    let chain_info_response = state.handle_block_proposal(block_proposal).await.unwrap();
+    let chain_info_response = worker.handle_block_proposal(block_proposal).await.unwrap();
     chain_info_response
-        .check(state.key_pair.unwrap().public())
+        .check(worker.key_pair.unwrap().public())
         .unwrap();
-    let pending = state
+    let pending = worker
         .storage
         .read_active_chain(ChainId::root(1))
         .await
@@ -661,7 +840,7 @@ async fn test_handle_block_proposal() {
 async fn test_handle_block_proposal_replay() {
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(ChainId::root(2));
-    let (_, mut state) = init_state_with_chains(vec![
+    let (_, mut worker) = init_worker_with_chains(vec![
         (
             ChainDescription::Root(1),
             sender_key_pair.public(),
@@ -683,15 +862,15 @@ async fn test_handle_block_proposal_replay() {
         None,
     );
 
-    let response = state
+    let response = worker
         .handle_block_proposal(block_proposal.clone())
         .await
         .unwrap();
     response
-        .check(state.key_pair.as_ref().unwrap().public())
+        .check(worker.key_pair.as_ref().unwrap().public())
         .as_ref()
         .unwrap();
-    let replay_response = state.handle_block_proposal(block_proposal).await.unwrap();
+    let replay_response = worker.handle_block_proposal(block_proposal).await.unwrap();
     // Workaround lack of equality.
     assert_eq!(
         HashValue::new(&response.info),
@@ -702,7 +881,7 @@ async fn test_handle_block_proposal_replay() {
 #[tokio::test]
 async fn test_handle_certificate_unknown_sender() {
     let sender_key_pair = KeyPair::generate();
-    let (committee, mut state) = init_state_with_chains(vec![(
+    let (committee, mut worker) = init_worker_with_chains(vec![(
         ChainDescription::Root(2),
         PublicKey::debug(2),
         Balance::from(0),
@@ -716,16 +895,16 @@ async fn test_handle_certificate_unknown_sender() {
         Vec::new(),
         &committee,
         Balance::from(0),
-        &state,
+        &worker,
         None,
     );
-    assert!(state.fully_handle_certificate(certificate).await.is_err());
+    assert!(worker.fully_handle_certificate(certificate).await.is_err());
 }
 
 #[tokio::test]
 async fn test_handle_certificate_bad_block_height() {
     let sender_key_pair = KeyPair::generate();
-    let (committee, mut state) = init_state_with_chains(vec![
+    let (committee, mut worker) = init_worker_with_chains(vec![
         (
             ChainDescription::Root(1),
             sender_key_pair.public(),
@@ -746,21 +925,21 @@ async fn test_handle_certificate_bad_block_height() {
         Vec::new(),
         &committee,
         Balance::from(0),
-        &state,
+        &worker,
         None,
     );
     // Replays are ignored.
-    state
+    worker
         .fully_handle_certificate(certificate.clone())
         .await
         .unwrap();
-    state.fully_handle_certificate(certificate).await.unwrap();
+    worker.fully_handle_certificate(certificate).await.unwrap();
 }
 
 #[tokio::test]
 async fn test_handle_certificate_with_early_incoming_message() {
     let key_pair = KeyPair::generate();
-    let (committee, mut state) = init_state_with_chains(vec![
+    let (committee, mut worker) = init_worker_with_chains(vec![
         (
             ChainDescription::Root(1),
             key_pair.public(),
@@ -793,14 +972,14 @@ async fn test_handle_certificate_with_early_incoming_message() {
         }],
         &committee,
         Balance::from(0),
-        &state,
+        &worker,
         None,
     );
-    state
+    worker
         .fully_handle_certificate(certificate.clone())
         .await
         .unwrap();
-    let chain = state
+    let chain = worker
         .storage
         .read_active_chain(ChainId::root(1))
         .await
@@ -827,7 +1006,7 @@ async fn test_handle_certificate_with_early_incoming_message() {
     ));
     assert_eq!(chain.confirmed_log.len(), 1);
     assert_eq!(Some(certificate.hash), chain.block_hash);
-    state
+    worker
         .storage
         .read_active_chain(ChainId::root(2))
         .await
@@ -837,7 +1016,7 @@ async fn test_handle_certificate_with_early_incoming_message() {
 #[tokio::test]
 async fn test_handle_certificate_receiver_balance_overflow() {
     let sender_key_pair = KeyPair::generate();
-    let (committee, mut state) = init_state_with_chains(vec![
+    let (committee, mut worker) = init_worker_with_chains(vec![
         (
             ChainDescription::Root(1),
             sender_key_pair.public(),
@@ -859,14 +1038,14 @@ async fn test_handle_certificate_receiver_balance_overflow() {
         Vec::new(),
         &committee,
         Balance::from(0),
-        &state,
+        &worker,
         None,
     );
-    state
+    worker
         .fully_handle_certificate(certificate.clone())
         .await
         .unwrap();
-    let new_sender_chain = state
+    let new_sender_chain = worker
         .storage
         .read_active_chain(ChainId::root(1))
         .await
@@ -875,7 +1054,7 @@ async fn test_handle_certificate_receiver_balance_overflow() {
     assert_eq!(BlockHeight::from(1), new_sender_chain.next_block_height);
     assert_eq!(new_sender_chain.confirmed_log.len(), 1);
     assert_eq!(Some(certificate.hash), new_sender_chain.block_hash);
-    let new_recipient_chain = state
+    let new_recipient_chain = worker
         .storage
         .read_active_chain(ChainId::root(2))
         .await
@@ -887,8 +1066,8 @@ async fn test_handle_certificate_receiver_balance_overflow() {
 async fn test_handle_certificate_receiver_equal_sender() {
     let key_pair = KeyPair::generate();
     let name = key_pair.public();
-    let (committee, mut state) =
-        init_state_with_chain(ChainDescription::Root(1), name, Balance::from(1)).await;
+    let (committee, mut worker) =
+        init_worker_with_chain(ChainDescription::Root(1), name, Balance::from(1)).await;
 
     let certificate = make_transfer_certificate(
         ChainId::root(1),
@@ -898,14 +1077,14 @@ async fn test_handle_certificate_receiver_equal_sender() {
         Vec::new(),
         &committee,
         Balance::from(0),
-        &state,
+        &worker,
         None,
     );
-    state
+    worker
         .fully_handle_certificate(certificate.clone())
         .await
         .unwrap();
-    let chain = state
+    let chain = worker
         .storage
         .read_active_chain(ChainId::root(1))
         .await
@@ -931,7 +1110,7 @@ async fn test_handle_certificate_receiver_equal_sender() {
 #[tokio::test]
 async fn test_handle_cross_chain_request() {
     let sender_key_pair = KeyPair::generate();
-    let (committee, mut state) = init_state_with_chains(vec![(
+    let (committee, mut worker) = init_worker_with_chains(vec![(
         ChainDescription::Root(2),
         PublicKey::debug(2),
         Balance::from(1),
@@ -945,10 +1124,10 @@ async fn test_handle_cross_chain_request() {
         Vec::new(),
         &committee,
         Balance::from(0),
-        &state,
+        &worker,
         None,
     );
-    state
+    worker
         .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
             sender: ChainId::root(1),
             recipient: ChainId::root(2),
@@ -956,7 +1135,7 @@ async fn test_handle_cross_chain_request() {
         })
         .await
         .unwrap();
-    let chain = state
+    let chain = worker
         .storage
         .read_active_chain(ChainId::root(2))
         .await
@@ -983,7 +1162,7 @@ async fn test_handle_cross_chain_request() {
 #[tokio::test]
 async fn test_handle_cross_chain_request_no_recipient_chain() {
     let sender_key_pair = KeyPair::generate();
-    let (committee, mut state) = init_state(/* allow_inactive_chains */ false);
+    let (committee, mut worker) = init_worker(/* allow_inactive_chains */ false);
     let certificate = make_transfer_certificate(
         ChainId::root(1),
         &sender_key_pair,
@@ -992,10 +1171,10 @@ async fn test_handle_cross_chain_request_no_recipient_chain() {
         Vec::new(),
         &committee,
         Balance::from(0),
-        &state,
+        &worker,
         None,
     );
-    assert!(state
+    assert!(worker
         .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
             sender: ChainId::root(1),
             recipient: ChainId::root(2),
@@ -1004,7 +1183,7 @@ async fn test_handle_cross_chain_request_no_recipient_chain() {
         .await
         .unwrap()
         .is_empty());
-    let chain = state
+    let chain = worker
         .storage
         .read_chain_or_default(ChainId::root(2))
         .await
@@ -1016,7 +1195,7 @@ async fn test_handle_cross_chain_request_no_recipient_chain() {
 #[tokio::test]
 async fn test_handle_cross_chain_request_no_recipient_chain_with_inactive_chains_allowed() {
     let sender_key_pair = KeyPair::generate();
-    let (committee, mut state) = init_state(/* allow_inactive_chains */ true);
+    let (committee, mut worker) = init_worker(/* allow_inactive_chains */ true);
     let certificate = make_transfer_certificate(
         ChainId::root(1),
         &sender_key_pair,
@@ -1025,12 +1204,12 @@ async fn test_handle_cross_chain_request_no_recipient_chain_with_inactive_chains
         Vec::new(),
         &committee,
         Balance::from(0),
-        &state,
+        &worker,
         None,
     );
     // An inactive target chain is created and it acknowledges the message.
     assert!(matches!(
-        state
+        worker
             .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
                 sender: ChainId::root(1),
                 recipient: ChainId::root(2),
@@ -1041,7 +1220,7 @@ async fn test_handle_cross_chain_request_no_recipient_chain_with_inactive_chains
             .as_slice(),
         &[CrossChainRequest::ConfirmUpdatedRecipient { .. }]
     ));
-    let chain = state
+    let chain = worker
         .storage
         .read_chain_or_default(ChainId::root(2))
         .await
@@ -1053,7 +1232,7 @@ async fn test_handle_cross_chain_request_no_recipient_chain_with_inactive_chains
 async fn test_handle_certificate_to_active_recipient() {
     let sender_key_pair = KeyPair::generate();
     let recipient_key_pair = KeyPair::generate();
-    let (committee, mut state) = init_state_with_chains(vec![
+    let (committee, mut worker) = init_worker_with_chains(vec![
         (
             ChainDescription::Root(1),
             sender_key_pair.public(),
@@ -1074,11 +1253,11 @@ async fn test_handle_certificate_to_active_recipient() {
         Vec::new(),
         &committee,
         Balance::from(0),
-        &state,
+        &worker,
         None,
     );
 
-    let info = state
+    let info = worker
         .fully_handle_certificate(certificate.clone())
         .await
         .unwrap()
@@ -1109,15 +1288,15 @@ async fn test_handle_certificate_to_active_recipient() {
         }],
         &committee,
         Balance::from(4),
-        &state,
+        &worker,
         None,
     );
-    state
+    worker
         .fully_handle_certificate(certificate.clone())
         .await
         .unwrap();
 
-    let recipient_chain = state
+    let recipient_chain = worker
         .storage
         .read_active_chain(ChainId::root(2))
         .await
@@ -1139,7 +1318,7 @@ async fn test_handle_certificate_to_active_recipient() {
         query_sent_certificates_in_range: None,
         query_received_certificates_excluding_first_nth: Some(0),
     };
-    let response = state.handle_chain_info_query(info_query).await.unwrap();
+    let response = worker.handle_chain_info_query(info_query).await.unwrap();
     assert_eq!(response.info.queried_received_certificates.len(), 1);
     assert!(matches!(response.info.queried_received_certificates[0]
             .value
@@ -1151,7 +1330,7 @@ async fn test_handle_certificate_to_active_recipient() {
 #[tokio::test]
 async fn test_handle_certificate_to_inactive_recipient() {
     let sender_key_pair = KeyPair::generate();
-    let (committee, mut state) = init_state_with_chains(vec![(
+    let (committee, mut worker) = init_worker_with_chains(vec![(
         ChainDescription::Root(1),
         sender_key_pair.public(),
         Balance::from(5),
@@ -1165,11 +1344,11 @@ async fn test_handle_certificate_to_inactive_recipient() {
         Vec::new(),
         &committee,
         Balance::from(0),
-        &state,
+        &worker,
         None,
     );
 
-    let info = state
+    let info = worker
         .fully_handle_certificate(certificate.clone())
         .await
         .unwrap()
@@ -1179,156 +1358,4 @@ async fn test_handle_certificate_to_inactive_recipient() {
     assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert_eq!(Some(certificate.hash), info.block_hash);
     assert!(info.manager.pending().is_none());
-}
-
-#[tokio::test]
-async fn test_read_chain_state() {
-    let sender = ChainDescription::Root(1);
-    let (_, mut state) = init_state_with_chain(sender, PublicKey::debug(1), Balance::from(5)).await;
-    state
-        .storage
-        .read_active_chain(sender.into())
-        .await
-        .unwrap();
-}
-
-#[tokio::test]
-async fn test_read_chain_state_unknown_chain() {
-    let sender = ChainDescription::Root(1);
-    let unknown_chain_id = ChainId::root(99);
-    let (committee, mut state) =
-        init_state_with_chain(sender, PublicKey::debug(1), Balance::from(5)).await;
-    assert!(state
-        .storage
-        .read_active_chain(unknown_chain_id)
-        .await
-        .is_err());
-    let mut chain = state
-        .storage
-        .read_chain_or_default(unknown_chain_id)
-        .await
-        .unwrap();
-    chain.description = Some(ChainDescription::Root(99));
-    chain.state.committee = Some(committee);
-    chain.state.manager = ChainManager::single(PublicKey::debug(4));
-    state.storage.write_chain(chain).await.unwrap();
-    state
-        .storage
-        .read_active_chain(unknown_chain_id)
-        .await
-        .unwrap();
-}
-
-// helpers
-
-fn init_state(allow_inactive_chains: bool) -> (Committee, WorkerState<InMemoryStoreClient>) {
-    let key_pair = KeyPair::generate();
-    let mut validators = BTreeMap::new();
-    validators.insert(key_pair.public(), /* voting right */ 1);
-    let committee = Committee::new(validators);
-    let client = InMemoryStoreClient::default();
-    let state = WorkerState::new(Some(key_pair), client, allow_inactive_chains);
-    (committee, state)
-}
-
-async fn init_state_with_chains<I: IntoIterator<Item = (ChainDescription, Owner, Balance)>>(
-    balances: I,
-) -> (Committee, WorkerState<InMemoryStoreClient>) {
-    let (committee, mut state) = init_state(false);
-    for (description, owner, balance) in balances {
-        let chain = ChainState::create(committee.clone(), description, owner, balance);
-        state.storage.write_chain(chain).await.unwrap();
-    }
-    (committee, state)
-}
-
-async fn init_state_with_chain(
-    description: ChainDescription,
-    owner: Owner,
-    balance: Balance,
-) -> (Committee, WorkerState<InMemoryStoreClient>) {
-    init_state_with_chains(std::iter::once((description, owner, balance))).await
-}
-
-fn make_transfer_block_proposal(
-    chain_id: ChainId,
-    secret: &KeyPair,
-    recipient: Address,
-    amount: Amount,
-    incoming_messages: Vec<MessageGroup>,
-    previous_confirmed_block: Option<&Certificate>,
-) -> BlockProposal {
-    let previous_block_hash = previous_confirmed_block.as_ref().map(|cert| cert.hash);
-    let height = match &previous_confirmed_block {
-        None => BlockHeight::default(),
-        Some(cert) => cert
-            .value
-            .confirmed_block()
-            .unwrap()
-            .height
-            .try_add_one()
-            .unwrap(),
-    };
-    let block = Block {
-        chain_id,
-        incoming_messages,
-        operations: vec![Operation::Transfer {
-            recipient,
-            amount,
-            user_data: UserData::default(),
-        }],
-        previous_block_hash,
-        height,
-    };
-    BlockProposal::new(
-        BlockAndRound {
-            block,
-            round: RoundNumber::default(),
-        },
-        secret,
-    )
-}
-
-fn make_certificate(
-    committee: &Committee,
-    state: &WorkerState<InMemoryStoreClient>,
-    value: Value,
-) -> Certificate {
-    let vote = Vote::new(value.clone(), state.key_pair.as_ref().unwrap());
-    let mut builder = SignatureAggregator::new(value, committee);
-    builder
-        .append(vote.validator, vote.signature)
-        .unwrap()
-        .unwrap()
-}
-
-#[allow(clippy::too_many_arguments)]
-fn make_transfer_certificate(
-    chain_id: ChainId,
-    key_pair: &KeyPair,
-    recipient: Address,
-    amount: Amount,
-    incoming_messages: Vec<MessageGroup>,
-    committee: &Committee,
-    balance: Balance,
-    state: &WorkerState<InMemoryStoreClient>,
-    previous_confirmed_block: Option<&Certificate>,
-) -> Certificate {
-    let block = make_transfer_block_proposal(
-        chain_id,
-        key_pair,
-        recipient,
-        amount,
-        incoming_messages,
-        previous_confirmed_block,
-    )
-    .content
-    .block;
-    let state_hash = HashValue::new(&ExecutionState {
-        committee: Some(committee.clone()),
-        manager: ChainManager::single(key_pair.public()),
-        balance,
-    });
-    let value = Value::Confirmed { block, state_hash };
-    make_certificate(committee, state, value)
 }
