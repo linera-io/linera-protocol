@@ -46,7 +46,7 @@ fn test_certificates() {
     let mut validators = BTreeMap::new();
     validators.insert(name1, /* voting right */ 1);
     validators.insert(name2, /* voting right */ 1);
-    let committee = Committee::new(validators);
+    let committee = Committee::new(validators, None);
 
     let block = Block {
         chain_id: ChainId::root(1),

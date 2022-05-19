@@ -67,7 +67,7 @@ impl Export for CommitteeConfig {}
 
 impl CommitteeConfig {
     pub fn into_committee(self) -> Committee {
-        Committee::new(self.voting_rights())
+        Committee::new(self.voting_rights(), None)
     }
 
     fn voting_rights(&self) -> BTreeMap<ValidatorName, usize> {

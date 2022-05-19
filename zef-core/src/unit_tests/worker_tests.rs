@@ -20,7 +20,7 @@ fn init_worker(allow_inactive_chains: bool) -> (Committee, WorkerState<InMemoryS
     let key_pair = KeyPair::generate();
     let mut validators = BTreeMap::new();
     validators.insert(key_pair.public(), /* voting right */ 1);
-    let committee = Committee::new(validators);
+    let committee = Committee::new(validators, None);
     let client = InMemoryStoreClient::default();
     let worker = WorkerState::new(Some(key_pair), client, allow_inactive_chains);
     (committee, worker)
@@ -956,7 +956,7 @@ async fn test_handle_certificate_bad_block_height() {
 }
 
 #[tokio::test]
-async fn test_handle_certificate_with_early_incoming_message() {
+async fn test_handle_certificate_with_anticipated_incoming_message() {
     let key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(vec![
         (
@@ -1380,7 +1380,7 @@ async fn test_handle_certificate_to_inactive_recipient() {
 }
 
 #[tokio::test]
-async fn test_chain_creation() {
+async fn test_chain_creation_with_committee_creation() {
     let key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(vec![(
         ChainDescription::Root(0),
@@ -1389,7 +1389,8 @@ async fn test_chain_creation() {
     )])
     .await;
     let root_id = ChainId::root(0);
-    let child_id = ChainId::child(OperationId {
+    // Have the root create a new chain.
+    let child_id0 = ChainId::child(OperationId {
         chain_id: root_id,
         height: BlockHeight::from(0),
         index: 0,
@@ -1402,7 +1403,7 @@ async fn test_chain_creation() {
                 chain_id: root_id,
                 incoming_messages: Vec::new(),
                 operations: vec![Operation::OpenChain {
-                    id: child_id,
+                    id: child_id0,
                     owner: key_pair.public(),
                     committees: vec![committee.clone()],
                     admin_id: root_id,
@@ -1425,7 +1426,43 @@ async fn test_chain_creation() {
         .fully_handle_certificate(certificate0.clone())
         .await
         .unwrap();
+    // Then, let the new chain immediately create another one.
+    let child_id = ChainId::child(OperationId {
+        chain_id: child_id0,
+        height: BlockHeight::from(0),
+        index: 0,
+    });
+    let certificate00 = make_certificate(
+        &committee,
+        &worker,
+        Value::ConfirmedBlock {
+            block: Block {
+                chain_id: child_id0,
+                incoming_messages: Vec::new(),
+                operations: vec![Operation::OpenChain {
+                    id: child_id,
+                    owner: key_pair.public(),
+                    committees: vec![committee.clone()],
+                    admin_id: root_id,
+                }],
+                previous_block_hash: None,
+                height: BlockHeight::from(0),
+            },
+            state_hash: HashValue::new(&ExecutionState {
+                chain_id: child_id0,
+                status: Some(ChainStatus::ManagedBy { admin_id: root_id }),
+                committees: vec![committee.clone()],
+                manager: ChainManager::single(key_pair.public()),
+                balance: Balance::from(0),
+            }),
+        },
+    );
+    worker
+        .fully_handle_certificate(certificate00.clone())
+        .await
+        .unwrap();
 
+    // The root chain still has no subscribers.
     let root_chain = worker.storage.read_active_chain(root_id).await.unwrap();
     assert_eq!(BlockHeight::from(1), root_chain.next_block_height);
     assert!(!root_chain.outboxes.contains_key(&child_id));
@@ -1433,6 +1470,7 @@ async fn test_chain_creation() {
         matches!(root_chain.state.status, Some(ChainStatus::Managing { subscribers }) if subscribers.is_empty())
     );
 
+    // The second child chain is active.
     let child_chain = worker.storage.read_active_chain(child_id).await.unwrap();
     assert_eq!(BlockHeight::from(0), child_chain.next_block_height);
     assert!(
@@ -1440,20 +1478,92 @@ async fn test_chain_creation() {
     );
     assert!(!child_chain
         .inboxes
-        .get(&root_id)
+        .get(&child_id0)
         .unwrap()
         .received_events
         .is_empty());
 
-    // Make the root receive the subscription.
+    // Create a committee before receiving the subscription of the new chain.
+    // Migrate right away to this committee.
+    let mut committee2 = committee.clone();
+    committee2.origin = Some(OperationId {
+        chain_id: root_id,
+        height: BlockHeight::from(1),
+        index: 0,
+    });
     let certificate1 = make_certificate(
         &committee,
         &worker,
         Value::ConfirmedBlock {
             block: Block {
                 chain_id: root_id,
+                incoming_messages: vec![
+                    MessageGroup {
+                        sender_id: ChainId::root(0),
+                        height: BlockHeight::from(0),
+                        operations: vec![(
+                            0,
+                            // Forced because we want to receive the next new committee.
+                            Operation::OpenChain {
+                                id: child_id0,
+                                owner: key_pair.public(),
+                                committees: vec![committee.clone()],
+                                admin_id: root_id,
+                            },
+                        )],
+                    },
+                    MessageGroup {
+                        sender_id: ChainId::root(0),
+                        height: BlockHeight::from(1),
+                        operations: vec![(
+                            0,
+                            // Migrate to the committee right away by receiving our own
+                            // message by anticipation.
+                            Operation::NewCommittee {
+                                admin_id: root_id,
+                                committee: committee2.clone(),
+                            },
+                        )],
+                    },
+                ],
+                // Create the new committee.
+                operations: vec![Operation::NewCommittee {
+                    admin_id: root_id,
+                    committee: committee2.clone(),
+                }],
+                previous_block_hash: Some(certificate0.hash),
+                height: BlockHeight::from(1),
+            },
+            state_hash: HashValue::new(&ExecutionState {
+                chain_id: root_id,
+                status: Some(ChainStatus::Managing {
+                    subscribers: vec![child_id0], // Only the first child was subscribed
+                }),
+                // The root chain knows both committees at the end.
+                committees: vec![committee.clone(), committee2.clone()],
+                manager: ChainManager::single(key_pair.public()),
+                balance: Balance::from(0),
+            }),
+        },
+    );
+    worker
+        .fully_handle_certificate(certificate1.clone())
+        .await
+        .unwrap();
+
+    // Child still has no clue about the new committee.
+    let child_chain = worker.storage.read_active_chain(child_id).await.unwrap();
+    assert_eq!(child_chain.state.committees.len(), 1);
+
+    // Make the root receive the subscription from the last child.
+    let certificate2 = make_certificate(
+        &committee,
+        &worker,
+        Value::ConfirmedBlock {
+            block: Block {
+                chain_id: root_id,
                 incoming_messages: vec![MessageGroup {
-                    sender_id: ChainId::root(1),
+                    sender_id: child_id,
                     height: BlockHeight::from(0),
                     operations: vec![(
                         0,
@@ -1466,19 +1576,57 @@ async fn test_chain_creation() {
                     )],
                 }],
                 operations: Vec::new(),
-                previous_block_hash: Some(certificate0.hash),
-                height: BlockHeight::from(1),
+                previous_block_hash: Some(certificate1.hash),
+                height: BlockHeight::from(2),
             },
             state_hash: HashValue::new(&ExecutionState {
                 chain_id: root_id,
                 status: Some(ChainStatus::Managing {
-                    subscribers: vec![child_id], // was just added
+                    subscribers: vec![child_id0, child_id], // was just added
                 }),
-                committees: vec![committee.clone()],
+                committees: vec![committee.clone(), committee2.clone()],
                 manager: ChainManager::single(key_pair.public()),
                 balance: Balance::from(0),
             }),
         },
     );
-    worker.fully_handle_certificate(certificate1).await.unwrap();
+    worker.fully_handle_certificate(certificate2).await.unwrap();
+
+    // Make the child receive the pending notification from root.
+    let certificate000 = make_certificate(
+        &committee,
+        &worker,
+        Value::ConfirmedBlock {
+            block: Block {
+                chain_id: child_id,
+                incoming_messages: vec![MessageGroup {
+                    sender_id: root_id,
+                    // Height shows up at 1 but the message was triggered above by the block 2.
+                    height: BlockHeight::from(1),
+                    operations: vec![(
+                        0,
+                        Operation::NewCommittee {
+                            admin_id: root_id,
+                            committee: committee2.clone(),
+                        },
+                    )],
+                }],
+                operations: Vec::new(),
+                previous_block_hash: None,
+                height: BlockHeight::from(0),
+            },
+            state_hash: HashValue::new(&ExecutionState {
+                chain_id: child_id,
+                status: Some(ChainStatus::ManagedBy { admin_id: root_id }),
+                // Finally the child knows about both committees.
+                committees: vec![committee.clone(), committee2.clone()],
+                manager: ChainManager::single(key_pair.public()),
+                balance: Balance::from(0),
+            }),
+        },
+    );
+    worker
+        .fully_handle_certificate(certificate000)
+        .await
+        .unwrap();
 }
