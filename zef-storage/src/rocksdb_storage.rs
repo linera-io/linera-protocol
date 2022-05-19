@@ -4,10 +4,6 @@ use crate::Storage;
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use std::{
-    collections::{
-        hash_map::Entry::{Occupied, Vacant},
-        HashMap,
-    },
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -25,39 +21,71 @@ mod rocksdb_storage_tests;
 /// Rocksdb-based store.
 #[derive(Debug)]
 pub struct RocksdbStore {
-    /// Base path.
-    path: PathBuf,
-    /// Open DB connections indexed by kind.
-    dbs: HashMap<String, rocksdb::DB>,
+    /// RockdbDB handle.
+    db: rocksdb::DB,
 }
 
-fn open_db(path: &Path, kind: &str) -> Result<rocksdb::DB, rocksdb::Error> {
-    let cf_opts = rocksdb::Options::default();
-    let cf = rocksdb::ColumnFamilyDescriptor::new(kind, cf_opts);
+#[derive(Clone, Copy)]
+pub struct ColumnHandle<'db> {
+    db: &'db rocksdb::DB,
+    column: &'db rocksdb::ColumnFamily,
+}
+
+impl<'db> ColumnHandle<'db> {
+    pub fn new(db: &'db rocksdb::DB, column: &'db rocksdb::ColumnFamily) -> Self {
+        ColumnHandle { db, column }
+    }
+
+    pub fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, rocksdb::Error> {
+        self.db.get_cf(self.column, key)
+    }
+
+    pub fn put(&self, key: &[u8], value: &[u8]) -> Result<(), rocksdb::Error> {
+        self.db.put_cf(self.column, key, value)
+    }
+
+    pub fn delete(&self, key: &[u8]) -> Result<(), rocksdb::Error> {
+        self.db.delete_cf(self.column, key)
+    }
+}
+
+fn open_db(path: &Path) -> Result<rocksdb::DB, rocksdb::Error> {
+    let cfs = match rocksdb::DB::list_cf(&rocksdb::Options::default(), path){
+        Ok(cfs) => cfs,
+        Err(_e) => vec![String::from("None")],
+    };
+
+    let mut v_cf: Vec<rocksdb::ColumnFamilyDescriptor> = Vec::new();
+    for i in &cfs {
+        v_cf.push(rocksdb::ColumnFamilyDescriptor::new(i, rocksdb::Options::default()));
+    }
 
     let mut db_opts = rocksdb::Options::default();
     db_opts.create_missing_column_families(true);
     db_opts.create_if_missing(true);
-    rocksdb::DB::open_cf_descriptors(&db_opts, path, vec![cf])
+
+    rocksdb::DB::open_cf_descriptors(&db_opts, path, v_cf)
 }
 
 impl RocksdbStore {
-    pub fn new(path: PathBuf) -> Self {
+    pub fn new(path: PathBuf) -> Result<Self, rocksdb::Error> {
         assert!(path.is_dir());
-        Self {
-            path,
-            dbs: HashMap::new(),
-        }
+        Ok(Self {
+            db: open_db(&path)?,
+        })
     }
 
-    fn get_db(&mut self, kind: &str) -> Result<&mut rocksdb::DB, rocksdb::Error> {
-        match self.dbs.entry(String::from(kind)) {
-            Vacant(entry) => {
-                let db = open_db(&self.path, kind)?;
-                Ok(entry.insert(db))
-            }
-            Occupied(entry) => Ok(entry.into_mut()),
+    fn get_db_handler(&mut self, kind: &str) -> Result<ColumnHandle<'_>, rocksdb::Error> {
+        if self.db.cf_handle(kind).is_none() {
+            self.db.create_cf(kind, &rocksdb::Options::default())?;
         }
+
+        let handle = self
+            .db
+            .cf_handle(kind)
+            .expect("Unable to create Rocksdb ColumnFamily");
+
+        Ok(ColumnHandle::new(&self.db, handle))
     }
 
     async fn read_value(
@@ -65,13 +93,9 @@ impl RocksdbStore {
         kind: &str,
         key: &[u8],
     ) -> Result<std::option::Option<Vec<u8>>, rocksdb::Error> {
-        let db = self.get_db(kind)?;
-        match db.get(key) {
-            Ok(Some(value)) => Ok(Some(value)),
-            Ok(None) => Ok(None),
-            Err(e) => Err(e),
-        }
+        self.get_db_handler(kind)?.get(key)
     }
+
 
     async fn write_value(
         &mut self,
@@ -79,15 +103,11 @@ impl RocksdbStore {
         key: &[u8],
         value: &[u8],
     ) -> Result<(), rocksdb::Error> {
-        let db = self.get_db(kind)?;
-        db.put(key, value)?;
-        Ok(())
+        self.get_db_handler(kind)?.put(key, value)
     }
 
     async fn remove_value(&mut self, kind: &str, key: &[u8]) -> Result<(), rocksdb::Error> {
-        let db = self.get_db(kind)?;
-        db.delete(key)?;
-        Ok(())
+        self.get_db_handler(kind)?.delete(key)
     }
 
     async fn read<K, V>(&mut self, key: &K) -> Result<Option<V>, Error>
@@ -144,12 +164,13 @@ impl RocksdbStore {
     }
 }
 
+
 #[derive(Clone)]
 pub struct RocksdbStoreClient(Arc<Mutex<RocksdbStore>>);
 
 impl RocksdbStoreClient {
-    pub fn new(path: PathBuf) -> Self {
-        RocksdbStoreClient(Arc::new(Mutex::new(RocksdbStore::new(path))))
+    pub fn new(path: PathBuf) -> Result<Self, rocksdb::Error> {
+        Ok(RocksdbStoreClient(Arc::new(Mutex::new(RocksdbStore::new(path)?))))
     }
 }
 
