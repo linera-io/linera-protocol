@@ -99,7 +99,7 @@ where
         cross_chain_max_retries: usize,
         cross_chain_retry_delay: Duration,
         this_shard: ShardId,
-        mut receiver: mpsc::Receiver<(Vec<u8>, ShardId)>,
+        mut receiver: mpsc::Receiver<(SerializedMessage, ShardId)>,
     ) {
         let mut pool = network_protocol
             .make_outgoing_connection_pool()
@@ -107,7 +107,8 @@ where
             .expect("Initialization should not fail");
 
         let mut queries_sent = 0u64;
-        while let Some((buf, shard)) = receiver.next().await {
+        while let Some((message, shard)) = receiver.next().await {
+            let buf = serialize_message(&message);
             // Send cross-chain query.
             let remote_address = format!("{}:{}", base_address, base_port + shard);
             for i in 0..cross_chain_max_retries {
@@ -188,7 +189,7 @@ where
 
 struct RunningServerState<Storage> {
     server: Server<Storage>,
-    cross_chain_sender: mpsc::Sender<(Vec<u8>, ShardId)>,
+    cross_chain_sender: mpsc::Sender<(SerializedMessage, ShardId)>,
 }
 
 impl<Storage> MessageHandler for RunningServerState<Storage>
@@ -275,14 +276,12 @@ where
         Box::pin(async move {
             for request in requests {
                 let shard_id = self.server.which_shard(request.target_chain_id());
-                let buffer =
-                    serialize_message(&SerializedMessage::CrossChainRequest(Box::new(request)));
                 debug!(
                     "Scheduling cross-chain query: {} -> {}",
                     self.server.shard_id, shard_id
                 );
                 self.cross_chain_sender
-                    .send((buffer, shard_id))
+                    .send((request.into(), shard_id))
                     .await
                     .expect("internal channel should not fail");
             }
