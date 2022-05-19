@@ -20,12 +20,12 @@ pub async fn make_storage(
         }
         Some(path) if path.is_dir() => {
             log::warn!("Using existing database {:?}", path);
-            let client = RocksdbStoreClient::new(path.clone()).unwrap();
+            let client = RocksdbStoreClient::new(path.clone())?;
             Box::new(client)
         }
         Some(path) => {
             std::fs::create_dir_all(path)?;
-            let mut client = RocksdbStoreClient::new(path.clone()).unwrap();
+            let mut client = RocksdbStoreClient::new(path.clone())?;
             config.initialize_store(&mut client).await?;
             Box::new(client)
         }
