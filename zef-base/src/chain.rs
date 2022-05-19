@@ -262,7 +262,10 @@ impl ChainState {
                     return Ok(true);
                 }
                 // Should be unreachable under BFT assumptions.
-                panic!("Given the confirmed blocks that we have seen, we were expecting a different message to come first.");
+                panic!(
+                    "Given the confirmed blocks that we have seen, \
+                        we were expecting a different message to come first."
+                );
             }
             // Otherwise, schedule the message for execution.
             inbox.received_events.push_back(Event {
