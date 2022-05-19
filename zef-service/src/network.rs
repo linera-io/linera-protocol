@@ -195,66 +195,50 @@ impl<Storage> MessageHandler for RunningServerState<Storage>
 where
     Storage: zef_storage::Storage + Clone + 'static,
 {
-    fn handle_message<'a>(
-        &'a mut self,
-        buffer: &'a [u8],
-    ) -> futures::future::BoxFuture<'a, Option<Vec<u8>>> {
+    fn handle_message(
+        &mut self,
+        message: SerializedMessage,
+    ) -> futures::future::BoxFuture<Option<SerializedMessage>> {
         Box::pin(async move {
-            let result = deserialize_message(buffer);
-            let reply = match result {
-                Err(_) => Err(Error::InvalidDecoding),
-                Ok(result) => {
-                    match result {
-                        SerializedMessage::BlockProposal(message) => self
-                            .server
-                            .state
-                            .handle_block_proposal(*message)
-                            .await
-                            .map(|info| {
-                                Some(serialize_message(&SerializedMessage::ChainInfoResponse(
-                                    Box::new(info),
-                                )))
-                            }),
-                        SerializedMessage::Certificate(message) => {
-                            match self.server.state.handle_certificate(*message).await {
-                                Ok((info, continuation)) => {
-                                    // Cross-shard requests
-                                    self.handle_continuation(continuation).await;
-                                    // Response
-                                    Ok(Some(serialize_message(
-                                        &SerializedMessage::ChainInfoResponse(Box::new(info)),
-                                    )))
-                                }
-                                Err(error) => Err(error),
-                            }
+            let reply = match message {
+                SerializedMessage::BlockProposal(message) => self
+                    .server
+                    .state
+                    .handle_block_proposal(*message)
+                    .await
+                    .map(|info| Some(info.into())),
+                SerializedMessage::Certificate(message) => {
+                    match self.server.state.handle_certificate(*message).await {
+                        Ok((info, continuation)) => {
+                            // Cross-shard requests
+                            self.handle_continuation(continuation).await;
+                            // Response
+                            Ok(Some(info.into()))
                         }
-                        SerializedMessage::ChainInfoQuery(message) => self
-                            .server
-                            .state
-                            .handle_chain_info_query(*message)
-                            .await
-                            .map(|info| {
-                                Some(serialize_message(&SerializedMessage::ChainInfoResponse(
-                                    Box::new(info),
-                                )))
-                            }),
-                        SerializedMessage::CrossChainRequest(request) => {
-                            match self.server.state.handle_cross_chain_request(*request).await {
-                                Ok(continuation) => {
-                                    self.handle_continuation(continuation).await;
-                                }
-                                Err(error) => {
-                                    error!("Failed to handle cross-chain request: {}", error);
-                                }
-                            }
-                            // No user to respond to.
-                            Ok(None)
-                        }
-                        SerializedMessage::Vote(_)
-                        | SerializedMessage::Error(_)
-                        | SerializedMessage::ChainInfoResponse(_) => Err(Error::UnexpectedMessage),
+                        Err(error) => Err(error),
                     }
                 }
+                SerializedMessage::ChainInfoQuery(message) => self
+                    .server
+                    .state
+                    .handle_chain_info_query(*message)
+                    .await
+                    .map(|info| Some(info.into())),
+                SerializedMessage::CrossChainRequest(request) => {
+                    match self.server.state.handle_cross_chain_request(*request).await {
+                        Ok(continuation) => {
+                            self.handle_continuation(continuation).await;
+                        }
+                        Err(error) => {
+                            error!("Failed to handle cross-chain request: {}", error);
+                        }
+                    }
+                    // No user to respond to.
+                    Ok(None)
+                }
+                SerializedMessage::Vote(_)
+                | SerializedMessage::Error(_)
+                | SerializedMessage::ChainInfoResponse(_) => Err(Error::UnexpectedMessage),
             };
 
             self.server.packets_processed += 1;
@@ -273,9 +257,7 @@ where
                 Err(error) => {
                     warn!("User query failed: {}", error);
                     self.server.user_errors += 1;
-                    Some(serialize_message(&SerializedMessage::Error(Box::new(
-                        error,
-                    ))))
+                    Some(error.into())
                 }
             }
         })
