@@ -320,49 +320,41 @@ impl NetworkProtocol {
     where
         S: MessageHandler + Send + 'static,
     {
-        let buffer_size = 1000;
         let guarded_state = Arc::new(futures::lock::Mutex::new(state));
         loop {
-            let (mut socket, _) =
-                match future::select(exit_future, Box::pin(listener.accept())).await {
-                    future::Either::Left(_) => break,
-                    future::Either::Right((value, new_exit_future)) => {
-                        exit_future = new_exit_future;
-                        value?
-                    }
-                };
+            let (socket, _) = match future::select(exit_future, Box::pin(listener.accept())).await {
+                future::Either::Left(_) => break,
+                future::Either::Right((value, new_exit_future)) => {
+                    exit_future = new_exit_future;
+                    value?
+                }
+            };
             let guarded_state = guarded_state.clone();
             tokio::spawn(async move {
-                loop {
-                    let buffer = match TcpDataStream::tcp_read_data(&mut socket, buffer_size).await
-                    {
-                        Ok(buffer) => buffer,
-                        Err(err) => {
+                let mut transport = Framed::new(socket, Codec);
+                while let Some(maybe_message) = transport.next().await {
+                    let message = match maybe_message {
+                        Ok(message) => message,
+                        Err(error) => {
                             // We expect some EOF or disconnect error at the end.
-                            if err.kind() != io::ErrorKind::UnexpectedEof
-                                && err.kind() != io::ErrorKind::ConnectionReset
-                            {
-                                error!("Error while reading TCP stream: {}", err);
+                            if matches!(
+                                &*error,
+                                bincode::ErrorKind::Io(error)
+                                    if error.kind() != io::ErrorKind::UnexpectedEof
+                                    && error.kind() != io::ErrorKind::ConnectionReset
+                            ) {
+                                error!("Error while reading TCP stream: {}", error);
                             }
+
                             break;
                         }
                     };
 
-                    let message = match deserialize_message(&buffer[..]) {
-                        Ok(message) => message,
-                        Err(error) => {
-                            warn!("Received an invalid message: {error}");
-                            continue;
-                        }
-                    };
                     if let Some(reply) = guarded_state.lock().await.handle_message(message).await {
-                        let status =
-                            TcpDataStream::tcp_write_data(&mut socket, &serialize_message(&reply))
-                                .await;
-                        if let Err(error) = status {
+                        if let Err(error) = transport.send(reply).await {
                             error!("Failed to send query response: {}", error);
                         }
-                    };
+                    }
                 }
             });
         }
