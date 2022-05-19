@@ -127,7 +127,6 @@ impl NetworkProtocol {
         self,
         address: &str,
         state: S,
-        buffer_size: usize,
     ) -> Result<SpawnedServer, std::io::Error>
     where
         S: MessageHandler + Send + 'static,
@@ -136,11 +135,11 @@ impl NetworkProtocol {
         let handle = match self {
             Self::Udp => {
                 let socket = UdpSocket::bind(&address).await?;
-                tokio::spawn(Self::run_udp_server(socket, state, receiver, buffer_size))
+                tokio::spawn(Self::run_udp_server(socket, state, receiver))
             }
             Self::Tcp => {
                 let listener = TcpListener::bind(address).await?;
-                tokio::spawn(Self::run_tcp_server(listener, state, receiver, buffer_size))
+                tokio::spawn(Self::run_tcp_server(listener, state, receiver))
             }
         };
         Ok(SpawnedServer { complete, handle })
@@ -178,11 +177,11 @@ impl NetworkProtocol {
         socket: UdpSocket,
         mut state: S,
         mut exit_future: futures::channel::oneshot::Receiver<()>,
-        buffer_size: usize,
     ) -> Result<(), std::io::Error>
     where
         S: MessageHandler + Send + 'static,
     {
+        let buffer_size = 1000;
         let mut buffer = vec![0; buffer_size];
         loop {
             let (size, peer) =
@@ -308,11 +307,11 @@ impl NetworkProtocol {
         listener: TcpListener,
         state: S,
         mut exit_future: futures::channel::oneshot::Receiver<()>,
-        buffer_size: usize,
     ) -> Result<(), std::io::Error>
     where
         S: MessageHandler + Send + 'static,
     {
+        let buffer_size = 1000;
         let guarded_state = Arc::new(futures::lock::Mutex::new(state));
         loop {
             let (mut socket, _) =
