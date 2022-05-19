@@ -282,7 +282,8 @@ impl ChainState {
 
     /// Execute a new block: first the incoming messages, then the main operation. In case
     /// of errors, `self` may not be consistent any more and should be thrown away.
-    /// Returns a map of recipients to notify about some of our blocks (usually the block being executed).
+    /// Returns a map of recipients to notify about some of our blocks (usually the block
+    /// being executed).
     pub fn execute_block(
         &mut self,
         block: &Block,
@@ -373,8 +374,14 @@ impl ExecutionState {
                 recipient: Address::Account(id),
                 ..
             } => self.chain_id == *id,
-            OpenChain { id, admin_id, .. } => self.chain_id == *id || self.chain_id == *admin_id,
-            NewCommittee { admin_id, .. } => Some(admin_id) == self.admin_id().as_ref(),
+            OpenChain { id, admin_id, .. } => {
+                // Are we the admin or the created chain?
+                self.chain_id == *id || self.chain_id == *admin_id
+            }
+            NewCommittee { admin_id, .. } => {
+                // Is this a committee created by our admin?
+                Some(admin_id) == self.admin_id().as_ref()
+            }
             _ => false,
         }
     }
@@ -388,6 +395,11 @@ impl ExecutionState {
         index: usize,
         operation: &Operation,
     ) -> Result<Vec<ChainId>, Error> {
+        let operation_id = OperationId {
+            chain_id,
+            height,
+            index,
+        };
         match operation {
             Operation::OpenChain {
                 id,
@@ -395,11 +407,7 @@ impl ExecutionState {
                 admin_id,
                 ..
             } => {
-                let expected_id = ChainId::child(OperationId {
-                    chain_id,
-                    height,
-                    index,
-                });
+                let expected_id = ChainId::child(operation_id);
                 ensure!(id == &expected_id, Error::InvalidNewChainId(*id));
                 ensure!(
                     Some(admin_id) == self.admin_id().as_ref(),
@@ -436,15 +444,23 @@ impl ExecutionState {
                     Address::Account(id) => Ok(vec![*id]),
                 }
             }
-            Operation::NewCommittee { admin_id, .. } => {
+            Operation::NewCommittee {
+                admin_id,
+                committee,
+            } => {
+                // We are the admin chain and want to create a committee.
                 ensure!(*admin_id == chain_id, Error::InvalidCommitteeCreation);
-                let mut subscribers = match &self.status {
+                ensure!(
+                    committee.origin == Some(operation_id),
+                    Error::InvalidCommitteeCreation
+                );
+                // Notify our subscribers (plus ourself) to do the migration.
+                let mut recipients = match &self.status {
                     Some(ChainStatus::Managing { subscribers }) => subscribers.clone(),
                     _ => return Err(Error::InvalidCommitteeCreation),
                 };
-                // Make sure to also migrate the admin chain.
-                subscribers.push(chain_id);
-                Ok(subscribers)
+                recipients.push(chain_id);
+                Ok(recipients)
             }
         }
     }
@@ -464,13 +480,34 @@ impl ExecutionState {
                     .unwrap_or_else(|_| Balance::max());
                 Ok(Vec::new())
             }
-            Operation::OpenChain { id, admin_id, .. } if *admin_id == chain_id => {
+            Operation::OpenChain {
+                id,
+                admin_id,
+                committees,
+                ..
+            } if *admin_id == chain_id => {
+                // We are the admin chain and are being notified that a subchain was just created.
+                // First, register the new chain as a subscriber.
                 match &mut self.status {
                     Some(ChainStatus::Managing { subscribers }) => {
                         subscribers.push(*id);
-                        Ok(Vec::new())
                     }
-                    _ => Err(Error::InvalidCrossChainRequest),
+                    _ => return Err(Error::InvalidCrossChainRequest),
+                }
+                // Second, see if the new chain is missing some of our recently created
+                // committees. Now is the time to issue the corresponding notifications.
+                assert!(committees
+                    .iter()
+                    .zip(self.committees.iter())
+                    .all(|(c1, c2)| c1.origin == c2.origin));
+                if committees.len() < self.committees.len() {
+                    let heights = self.committees[committees.len()..]
+                        .iter()
+                        .filter_map(|c| c.origin.as_ref().map(|operation| operation.height))
+                        .collect();
+                    Ok(vec![(*id, heights)])
+                } else {
+                    Ok(Vec::new())
                 }
             }
             Operation::NewCommittee { committee, .. } => {

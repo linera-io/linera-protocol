@@ -30,8 +30,8 @@ pub enum Operation {
     OpenChain {
         id: ChainId,
         owner: Owner,
-        committees: Vec<Committee>,
         admin_id: ChainId,
+        committees: Vec<Committee>,
     },
     /// Close the chain.
     CloseChain,

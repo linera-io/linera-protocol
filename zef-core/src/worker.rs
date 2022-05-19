@@ -178,6 +178,10 @@ where
         // Schedule a new cross-chain request to notify each recipient about the given
         // blocks (generally, just this one).
         for (recipient, heights) in notifications {
+            if heights.is_empty() {
+                // Save a few bytes in the outbox.
+                continue;
+            }
             let queue = &mut chain.outboxes.entry(recipient).or_default().queue;
             for height in heights {
                 let hash = chain.confirmed_log[usize::from(height)];
