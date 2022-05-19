@@ -108,11 +108,10 @@ where
 
         let mut queries_sent = 0u64;
         while let Some((message, shard)) = receiver.next().await {
-            let buf = serialize_message(&message);
             // Send cross-chain query.
             let remote_address = format!("{}:{}", base_address, base_port + shard);
             for i in 0..cross_chain_max_retries {
-                let status = pool.send_data_to(&buf, &remote_address).await;
+                let status = pool.send_message_to(message.clone(), &remote_address).await;
                 match status {
                     Err(error) => {
                         if i < cross_chain_max_retries {
