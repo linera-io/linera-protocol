@@ -7,11 +7,8 @@ use clap::arg_enum;
 use futures::{future, Sink, SinkExt, Stream, StreamExt, TryStreamExt};
 use log::*;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, convert::TryInto, io, net::SocketAddr, sync::Arc};
-use tokio::{
-    io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
-    net::{TcpListener, TcpStream, UdpSocket},
-};
+use std::{collections::HashMap, io, net::SocketAddr, sync::Arc};
+use tokio::net::{TcpListener, TcpStream, UdpSocket};
 use tokio_util::{codec::Framed, udp::UdpFramed};
 use zef_base::serialize::SerializedMessage;
 
@@ -25,15 +22,6 @@ arg_enum! {
         Udp,
         Tcp,
     }
-}
-
-/// How to send and obtain data packets over an "active socket".
-pub trait DataStream: Send {
-    fn write_data<'a>(
-        &'a mut self,
-        buffer: &'a [u8],
-    ) -> future::BoxFuture<'a, Result<(), std::io::Error>>;
-    fn read_data(&mut self) -> future::BoxFuture<Result<Vec<u8>, std::io::Error>>;
 }
 
 /// A pool of (outgoing) data streams.
@@ -220,60 +208,6 @@ impl NetworkProtocol {
             }
         }
         Ok(())
-    }
-}
-
-/// An implementation of DataStream based on TCP.
-struct TcpDataStream {
-    stream: TcpStream,
-    max_data_size: usize,
-}
-
-impl TcpDataStream {
-    async fn tcp_write_data<S>(stream: &mut S, buffer: &[u8]) -> Result<(), std::io::Error>
-    where
-        S: AsyncWrite + Unpin,
-    {
-        stream
-            .write_all(&u32::to_le_bytes(
-                buffer
-                    .len()
-                    .try_into()
-                    .expect("length must not exceed u32::MAX"),
-            ))
-            .await?;
-        stream.write_all(buffer).await
-    }
-
-    async fn tcp_read_data<S>(stream: &mut S, max_size: usize) -> Result<Vec<u8>, std::io::Error>
-    where
-        S: AsyncRead + Unpin,
-    {
-        let mut size_buf = [0u8; 4];
-        stream.read_exact(&mut size_buf).await?;
-        let size = u32::from_le_bytes(size_buf);
-        if size as usize > max_size {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "Message size exceeds buffer size",
-            ));
-        }
-        let mut buf = vec![0u8; size as usize];
-        stream.read_exact(&mut buf).await?;
-        Ok(buf)
-    }
-}
-
-impl DataStream for TcpDataStream {
-    fn write_data<'a>(
-        &'a mut self,
-        buffer: &'a [u8],
-    ) -> future::BoxFuture<'a, Result<(), std::io::Error>> {
-        Box::pin(Self::tcp_write_data(&mut self.stream, buffer))
-    }
-
-    fn read_data(&mut self) -> future::BoxFuture<Result<Vec<u8>, std::io::Error>> {
-        Box::pin(Self::tcp_read_data(&mut self.stream, self.max_data_size))
     }
 }
 
