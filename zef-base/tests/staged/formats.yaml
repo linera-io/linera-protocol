@@ -189,6 +189,9 @@ Committee:
             TYPENAME: PublicKey
           VALUE: U64
     - total_votes: U64
+    - origin:
+        OPTION:
+          TYPENAME: OperationId
 CrossChainRequest:
   ENUM:
     0:
@@ -460,11 +463,11 @@ Operation:
               TYPENAME: ChainId
           - owner:
               TYPENAME: PublicKey
+          - admin_id:
+              TYPENAME: ChainId
           - committees:
               SEQ:
                 TYPENAME: Committee
-          - admin_id:
-              TYPENAME: ChainId
     2:
       CloseChain: UNIT
     3:

@@ -95,7 +95,7 @@ impl TestBuilder {
             voting_rights.insert(key_pair.public(), 1);
             key_pairs.push(key_pair);
         }
-        let committee = Committee::new(voting_rights);
+        let committee = Committee::new(voting_rights, None);
         let mut validator_clients = Vec::new();
         let mut validator_stores = HashMap::new();
         let mut faulty_validators = HashSet::new();
