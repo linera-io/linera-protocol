@@ -8,6 +8,3 @@ pub mod config;
 pub mod network;
 pub mod storage;
 pub mod transport;
-
-#[cfg(feature = "benchmark")]
-mod network_server;
