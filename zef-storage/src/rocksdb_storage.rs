@@ -50,14 +50,17 @@ impl<'db> ColumnHandle<'db> {
 }
 
 fn open_db(path: &Path) -> Result<rocksdb::DB, rocksdb::Error> {
-    let cfs = match rocksdb::DB::list_cf(&rocksdb::Options::default(), path){
+    let cfs = match rocksdb::DB::list_cf(&rocksdb::Options::default(), path) {
         Ok(cfs) => cfs,
         Err(_e) => vec![String::from("None")],
     };
 
     let mut v_cf: Vec<rocksdb::ColumnFamilyDescriptor> = Vec::new();
     for i in &cfs {
-        v_cf.push(rocksdb::ColumnFamilyDescriptor::new(i, rocksdb::Options::default()));
+        v_cf.push(rocksdb::ColumnFamilyDescriptor::new(
+            i,
+            rocksdb::Options::default(),
+        ));
     }
 
     let mut db_opts = rocksdb::Options::default();
@@ -95,7 +98,6 @@ impl RocksdbStore {
     ) -> Result<std::option::Option<Vec<u8>>, rocksdb::Error> {
         self.get_db_handler(kind)?.get(key)
     }
-
 
     async fn write_value(
         &mut self,
@@ -169,7 +171,9 @@ pub struct RocksdbStoreClient(Arc<Mutex<RocksdbStore>>);
 
 impl RocksdbStoreClient {
     pub fn new(path: PathBuf) -> Result<Self, rocksdb::Error> {
-        Ok(RocksdbStoreClient(Arc::new(Mutex::new(RocksdbStore::new(path)?))))
+        Ok(RocksdbStoreClient(Arc::new(Mutex::new(RocksdbStore::new(
+            path,
+        )?))))
     }
 }
 
