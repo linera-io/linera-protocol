@@ -38,9 +38,9 @@ pub trait DataStream: Send {
 
 /// A pool of (outgoing) data streams.
 pub trait DataStreamPool: Send {
-    fn send_data_to<'a>(
+    fn send_message_to<'a>(
         &'a mut self,
-        buffer: &'a [u8],
+        message: SerializedMessage,
         address: &'a str,
     ) -> future::BoxFuture<'a, Result<(), io::Error>>;
 }
@@ -150,24 +150,34 @@ impl NetworkProtocol {
 
 /// An implementation of DataStreamPool based on UDP.
 struct UdpDataStreamPool {
-    socket: UdpSocket,
+    transport: UdpFramed<Codec>,
 }
 
 impl UdpDataStreamPool {
     async fn new() -> Result<Self, std::io::Error> {
         let socket = UdpSocket::bind(&"0.0.0.0:0").await?;
-        Ok(Self { socket })
+        let transport = UdpFramed::new(socket, Codec);
+        Ok(Self { transport })
     }
 }
 
 impl DataStreamPool for UdpDataStreamPool {
-    fn send_data_to<'a>(
+    fn send_message_to<'a>(
         &'a mut self,
-        buffer: &'a [u8],
+        message: SerializedMessage,
         address: &'a str,
     ) -> future::BoxFuture<'a, Result<(), std::io::Error>> {
         Box::pin(async move {
-            self.socket.send_to(buffer, address).await?;
+            let address = address
+                .parse()
+                .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
+            self.transport
+                .send((message, address))
+                .await
+                .map_err(|error| match *error {
+                    bincode::ErrorKind::Io(io_error) => io_error,
+                    _ => std::io::Error::new(std::io::ErrorKind::Other, error),
+                })?;
             Ok(())
         })
     }
@@ -269,7 +279,7 @@ impl DataStream for TcpDataStream {
 
 /// An implementation of DataStreamPool based on TCP.
 struct TcpDataStreamPool {
-    streams: HashMap<String, TcpStream>,
+    streams: HashMap<String, Framed<TcpStream, Codec>>,
 }
 
 impl TcpDataStreamPool {
@@ -278,11 +288,15 @@ impl TcpDataStreamPool {
         Ok(Self { streams })
     }
 
-    async fn get_stream(&mut self, address: &str) -> Result<&mut TcpStream, io::Error> {
+    async fn get_stream(
+        &mut self,
+        address: &str,
+    ) -> Result<&mut Framed<TcpStream, Codec>, io::Error> {
         if !self.streams.contains_key(address) {
             match TcpStream::connect(address).await {
                 Ok(s) => {
-                    self.streams.insert(address.to_string(), s);
+                    self.streams
+                        .insert(address.to_string(), Framed::new(s, Codec));
                 }
                 Err(error) => {
                     error!("Failed to open connection to {}: {}", address, error);
@@ -295,18 +309,21 @@ impl TcpDataStreamPool {
 }
 
 impl DataStreamPool for TcpDataStreamPool {
-    fn send_data_to<'a>(
+    fn send_message_to<'a>(
         &'a mut self,
-        buffer: &'a [u8],
+        message: SerializedMessage,
         address: &'a str,
     ) -> future::BoxFuture<'a, Result<(), std::io::Error>> {
         Box::pin(async move {
             let stream = self.get_stream(address).await?;
-            let result = TcpDataStream::tcp_write_data(stream, buffer).await;
+            let result = stream.send(message).await;
             if result.is_err() {
                 self.streams.remove(address);
             }
-            result
+            result.map_err(|error| match *error {
+                bincode::ErrorKind::Io(io_error) => io_error,
+                _ => std::io::Error::new(std::io::ErrorKind::Other, error),
+            })
         })
     }
 }
