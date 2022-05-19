@@ -164,7 +164,6 @@ impl RocksdbStore {
     }
 }
 
-
 #[derive(Clone)]
 pub struct RocksdbStoreClient(Arc<Mutex<RocksdbStore>>);
 
