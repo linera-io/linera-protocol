@@ -6,7 +6,7 @@ use crate::worker::{ValidatorWorker, WorkerState};
 use std::collections::BTreeMap;
 use zef_base::{
     base_types::*,
-    chain::{ChainState, Event, ExecutionState},
+    chain::{ChainState, ChainStatus, Event, ExecutionState},
     committee::Committee,
     error::Error,
     manager::ChainManager,
@@ -34,6 +34,7 @@ async fn init_worker_with_chains<I: IntoIterator<Item = (ChainDescription, Owner
     for (description, owner, balance) in balances {
         let chain = ChainState::create(
             committee.clone(),
+            ChainId::root(0),
             description,
             owner,
             balance,
@@ -131,6 +132,9 @@ fn make_transfer_certificate(
     previous_confirmed_block: Option<&Certificate>,
 ) -> Certificate {
     let state = ExecutionState {
+        status: Some(ChainStatus::ManagedBy {
+            admin_id: ChainId::root(0),
+        }),
         committee: Some(committee.clone()),
         manager: ChainManager::single(key_pair.public()),
         balance,
@@ -149,7 +153,6 @@ fn make_transfer_certificate(
     let value = Value::Confirmed { block, state_hash };
     make_certificate(committee, worker, value)
 }
-
 
 #[tokio::test]
 async fn test_read_chain_state() {
@@ -181,6 +184,7 @@ async fn test_read_chain_state_unknown_chain() {
         .unwrap();
     chain.description = Some(ChainDescription::Root(99));
     chain.state.committee = Some(committee);
+    chain.state.status = Some(ChainStatus::Managing);
     chain.state.manager = ChainManager::single(PublicKey::debug(4));
     worker.storage.write_chain(chain).await.unwrap();
     worker
@@ -439,6 +443,9 @@ async fn test_handle_block_proposal_with_incoming_messages() {
         Value::Confirmed {
             block: block0,
             state_hash: HashValue::new(&ExecutionState {
+                status: Some(ChainStatus::ManagedBy {
+                    admin_id: ChainId::root(0),
+                }),
                 committee: Some(committee.clone()),
                 manager: ChainManager::single(sender_key_pair.public()),
                 balance: Balance::from(3),
@@ -462,6 +469,9 @@ async fn test_handle_block_proposal_with_incoming_messages() {
         Value::Confirmed {
             block: block1,
             state_hash: HashValue::new(&ExecutionState {
+                status: Some(ChainStatus::ManagedBy {
+                    admin_id: ChainId::root(0),
+                }),
                 committee: Some(committee.clone()),
                 manager: ChainManager::single(sender_key_pair.public()),
                 balance: Balance::from(0),
@@ -709,6 +719,9 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             Value::Confirmed {
                 block: block_proposal.content.block,
                 state_hash: HashValue::new(&ExecutionState {
+                    status: Some(ChainStatus::ManagedBy {
+                        admin_id: ChainId::root(0),
+                    }),
                     committee: Some(committee.clone()),
                     manager: ChainManager::single(recipient_key_pair.public()),
                     balance: Balance::from(0),
@@ -1358,4 +1371,63 @@ async fn test_handle_certificate_to_inactive_recipient() {
     assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert_eq!(Some(certificate.hash), info.block_hash);
     assert!(info.manager.pending().is_none());
+}
+
+#[tokio::test]
+async fn test_chain_creation() {
+    let key_pair = KeyPair::generate();
+    let (committee, mut worker) = init_worker_with_chains(vec![(
+        ChainDescription::Root(0),
+        key_pair.public(),
+        Balance::from(0),
+    )])
+    .await;
+    let root_id = ChainId::root(0);
+    let child_id = ChainId::child(OperationId {
+        chain_id: root_id,
+        height: BlockHeight::from(0),
+        index: 0,
+    });
+    let block = Block {
+        chain_id: root_id,
+        incoming_messages: Vec::new(),
+        operations: vec![Operation::OpenChain {
+            id: child_id,
+            owner: key_pair.public(),
+            committee: committee.clone(),
+            admin_id: root_id,
+        }],
+        previous_block_hash: None,
+        height: BlockHeight::from(0),
+    };
+    let certificate = make_certificate(
+        &committee,
+        &worker,
+        Value::Confirmed {
+            block,
+            state_hash: HashValue::new(&ExecutionState {
+                status: Some(ChainStatus::Managing),
+                committee: Some(committee.clone()),
+                manager: ChainManager::single(key_pair.public()),
+                balance: Balance::from(0),
+            }),
+        },
+    );
+    worker.fully_handle_certificate(certificate).await.unwrap();
+
+    let root_chain = worker.storage.read_active_chain(root_id).await.unwrap();
+    assert_eq!(BlockHeight::from(1), root_chain.next_block_height);
+    assert!(!root_chain.outboxes.contains_key(&child_id));
+
+    let child_chain = worker.storage.read_active_chain(child_id).await.unwrap();
+    assert_eq!(BlockHeight::from(0), child_chain.next_block_height);
+    assert!(
+        matches!(child_chain.state.status, Some(ChainStatus::ManagedBy { admin_id }) if admin_id == root_id)
+    );
+    assert!(!child_chain
+        .inboxes
+        .get(&root_id)
+        .unwrap()
+        .received_events
+        .is_empty());
 }
