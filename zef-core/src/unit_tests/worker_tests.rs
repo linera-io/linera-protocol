@@ -135,6 +135,7 @@ fn make_transfer_certificate(
         chain_id,
         status: Some(ChainStatus::ManagedBy {
             admin_id: ChainId::root(0),
+            subscribed: false,
         }),
         committees: vec![committee.clone()],
         manager: ChainManager::single(key_pair.public()),
@@ -449,6 +450,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                 chain_id: ChainId::root(1),
                 status: Some(ChainStatus::ManagedBy {
                     admin_id: ChainId::root(0),
+                    subscribed: false,
                 }),
                 committees: vec![committee.clone()],
                 manager: ChainManager::single(sender_key_pair.public()),
@@ -476,6 +478,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                 chain_id: ChainId::root(1),
                 status: Some(ChainStatus::ManagedBy {
                     admin_id: ChainId::root(0),
+                    subscribed: false,
                 }),
                 committees: vec![committee.clone()],
                 manager: ChainManager::single(sender_key_pair.public()),
@@ -727,6 +730,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                     chain_id: ChainId::root(2),
                     status: Some(ChainStatus::ManagedBy {
                         admin_id: ChainId::root(0),
+                        subscribed: false,
                     }),
                     committees: vec![committee.clone()],
                     manager: ChainManager::single(recipient_key_pair.public()),
@@ -1450,7 +1454,10 @@ async fn test_chain_creation_with_committee_creation() {
             },
             state_hash: HashValue::new(&ExecutionState {
                 chain_id: child_id0,
-                status: Some(ChainStatus::ManagedBy { admin_id: root_id }),
+                status: Some(ChainStatus::ManagedBy {
+                    admin_id: root_id,
+                    subscribed: true,
+                }),
                 committees: vec![committee.clone()],
                 manager: ChainManager::single(key_pair.public()),
                 balance: Balance::from(0),
@@ -1474,7 +1481,7 @@ async fn test_chain_creation_with_committee_creation() {
     let child_chain = worker.storage.read_active_chain(child_id).await.unwrap();
     assert_eq!(BlockHeight::from(0), child_chain.next_block_height);
     assert!(
-        matches!(child_chain.state.status, Some(ChainStatus::ManagedBy { admin_id }) if admin_id == root_id)
+        matches!(child_chain.state.status, Some(ChainStatus::ManagedBy { admin_id, subscribed }) if admin_id == root_id && subscribed)
     );
     assert!(!child_chain
         .inboxes
@@ -1617,7 +1624,10 @@ async fn test_chain_creation_with_committee_creation() {
             },
             state_hash: HashValue::new(&ExecutionState {
                 chain_id: child_id,
-                status: Some(ChainStatus::ManagedBy { admin_id: root_id }),
+                status: Some(ChainStatus::ManagedBy {
+                    admin_id: root_id,
+                    subscribed: true,
+                }),
                 // Finally the child knows about both committees.
                 committees: vec![committee.clone(), committee2.clone()],
                 manager: ChainManager::single(key_pair.public()),

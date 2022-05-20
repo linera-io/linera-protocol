@@ -77,7 +77,7 @@ impl LocalValidatorClient {
 // * Most tests have 1 faulty validator out 4 so that there is exactly only 1 quorum to
 // communicate with.
 struct TestBuilder {
-    committee: Committee,
+    initial_committee: Committee,
     admin_id: ChainId,
     genesis_store: InMemoryStoreClient,
     faulty_validators: HashSet<ValidatorName>,
@@ -95,7 +95,7 @@ impl TestBuilder {
             voting_rights.insert(key_pair.public(), 1);
             key_pairs.push(key_pair);
         }
-        let committee = Committee::new(voting_rights, None);
+        let initial_committee = Committee::new(voting_rights, None);
         let mut validator_clients = Vec::new();
         let mut validator_stores = HashMap::new();
         let mut faulty_validators = HashSet::new();
@@ -118,7 +118,7 @@ impl TestBuilder {
         }
         eprintln!("faulty validators: {:?}", faulty_validators);
         Self {
-            committee,
+            initial_committee,
             admin_id: ChainId::root(0),
             genesis_store: InMemoryStoreClient::default(),
             faulty_validators,
@@ -136,14 +136,14 @@ impl TestBuilder {
         let key_pair = KeyPair::generate();
         let owner = key_pair.public();
         let chain = ChainState::create(
-            self.committee.clone(),
+            self.initial_committee.clone(),
             self.admin_id,
             description,
             owner,
             balance,
         );
         let chain_bad = ChainState::create(
-            self.committee.clone(),
+            self.initial_committee.clone(),
             self.admin_id,
             description,
             owner,
@@ -218,7 +218,7 @@ impl TestBuilder {
                     if let Some(cert) = queried_sent_certificates.pop() {
                         if let Value::ConfirmedBlock { block, .. } = &cert.value {
                             if block.chain_id == chain_id && block.height == block_height {
-                                cert.check(&self.committee).unwrap();
+                                cert.check(&self.initial_committee).unwrap();
                                 count += 1;
                                 certificate = Some(cert);
                             }
@@ -659,7 +659,7 @@ async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
         .unwrap();
     client1
         .communicate_chain_updates(
-            &builder.committee,
+            &builder.initial_committee,
             client1.chain_id,
             CommunicateAction::AdvanceToNextBlockHeight(client1.next_block_height),
         )
@@ -700,4 +700,59 @@ async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
     // Let the receiver confirm in last resort.
     client3.receive_certificate(certificate).await.unwrap();
     assert_eq!(client3.local_balance().await.unwrap(), Balance::from(2));
+}
+
+#[tokio::test]
+async fn test_change_voting_rights() {
+    let mut builder = TestBuilder::new(4, 1);
+    let mut admin = builder
+        .add_initial_chain(ChainDescription::Root(0), Balance::from(4))
+        .await;
+    let mut receiver = builder
+        .add_initial_chain(ChainDescription::Root(1), Balance::from(0))
+        .await;
+    let voting_rights = builder.initial_committee.voting_rights;
+    admin.stage_new_voting_rights(voting_rights).await.unwrap();
+    assert_eq!(admin.next_block_height, BlockHeight::from(1));
+    assert!(admin.pending_block.is_none());
+    assert!(admin.key_pair().await.is_ok());
+    assert!(admin.committee().await.unwrap().origin.is_none());
+
+    // Actually migrate the admin itself.
+    admin.process_inbox().await.unwrap();
+    assert_eq!(admin.next_block_height, BlockHeight::from(2));
+    assert_eq!(
+        admin.committee().await.unwrap().origin,
+        Some(OperationId {
+            chain_id: ChainId::root(0),
+            height: BlockHeight::from(0),
+            index: 0,
+        })
+    );
+
+    // Receiver is a genesis chain so it was not subscribed to the admin automatically.
+    assert_eq!(
+        receiver.synchronize_balance().await.unwrap(),
+        Balance::from(0)
+    );
+    receiver.process_inbox().await.unwrap();
+    assert!(receiver.committee().await.unwrap().origin.is_none());
+
+    // Now subscribe explicitly.
+    receiver.subscribe_to_new_committees().await.unwrap();
+    // Have the admin process the subscription
+    admin.synchronize_balance().await.unwrap();
+    let cert = admin.process_inbox().await.unwrap();
+
+    // Receive the notification to migrate.
+    receiver.receive_certificate(cert).await.unwrap();
+    receiver.process_inbox().await.unwrap();
+    assert_eq!(
+        receiver.committee().await.unwrap().origin,
+        Some(OperationId {
+            chain_id: ChainId::root(0),
+            height: BlockHeight::from(0),
+            index: 0,
+        })
+    );
 }
