@@ -261,17 +261,27 @@ impl std::fmt::Display for HashValue {
 }
 
 impl FromStr for PublicKey {
-    type Err = failure::Error;
+    type Err = PublicKeyFromStrError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let value = hex::decode(s)?;
         if value.len() != dalek::PUBLIC_KEY_LENGTH {
-            failure::bail!("Invalid length for hex-encoded public key");
+            return Err(PublicKeyFromStrError::InvalidLength);
         }
         let mut pubkey = [0u8; dalek::PUBLIC_KEY_LENGTH];
         pubkey.copy_from_slice(&value[..dalek::PUBLIC_KEY_LENGTH]);
         Ok(PublicKey(pubkey))
     }
+}
+
+/// Error when attempting to convert a string into a [`PublicKey`].
+#[derive(Clone, Copy, Debug, Error)]
+pub enum PublicKeyFromStrError {
+    #[error("Invalid length for hex-encoded public key value")]
+    InvalidLength,
+
+    #[error("String contains non-hexadecimal digits")]
+    NonHexDigits(#[from] hex::FromHexError),
 }
 
 impl FromStr for HashValue {
