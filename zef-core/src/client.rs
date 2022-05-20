@@ -207,7 +207,25 @@ where
             .ok_or(Error::InactiveChain(self.chain_id))
     }
 
-    async fn identity(&mut self) -> Result<Owner> {
+    async fn committee_and_admin(&mut self) -> Result<(Committee, ChainId), Error> {
+        let query = ChainInfoQuery {
+            chain_id: self.chain_id,
+            check_next_block_height: None,
+            query_committee: true,
+            query_pending_messages: false,
+            query_sent_certificates_in_range: None,
+            query_received_certificates_excluding_first_nth: None,
+        };
+        let info = self.node_client.handle_chain_info_query(query).await?.info;
+        let committee = info
+            .queried_committee
+            .ok_or(Error::InactiveChain(self.chain_id))?;
+        // `info.admin_id == None` means that this is the beacon chain.
+        let admin_id = info.admin_id.unwrap_or(self.chain_id);
+        Ok((committee, admin_id))
+    }
+
+    async fn identity(&mut self) -> Result<Owner, anyhow::Error> {
         match self.chain_info().await?.manager {
             ChainManager::Single(m) => {
                 if !self.known_key_pairs.contains_key(&m.owner) {
@@ -755,7 +773,7 @@ where
             height: self.next_block_height,
             index: 0,
         });
-        let committee = self.committee().await?;
+        let (committee, admin_id) = self.committee_and_admin().await?;
         let block = Block {
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
@@ -763,6 +781,7 @@ where
                 id,
                 owner,
                 committee,
+                admin_id,
             }],
             previous_block_hash: self.block_hash,
             height: self.next_block_height,

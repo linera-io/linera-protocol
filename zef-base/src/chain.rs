@@ -78,6 +78,9 @@ pub struct Event {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct ExecutionState {
+    /// Whether our reconfigurations are managed by a "beacon" chain, or if we are it and
+    /// managing other chains.
+    pub status: Option<ChainStatus>,
     /// Current committee, if any.
     pub committee: Option<Committee>,
     /// Manager of the chain.
@@ -88,13 +91,17 @@ pub struct ExecutionState {
 
 impl BcsSignable for ExecutionState {}
 
+/// The administrative status of this chain w.r.t reconfigurations.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
+pub enum ChainStatus {
+    ManagedBy { admin_id: ChainId },
+    Managing,
+}
+
 impl ChainState {
     pub fn new(id: ChainId) -> Self {
-        let state = ExecutionState {
-            committee: None,
-            manager: ChainManager::None,
-            balance: Balance::default(),
-        };
+        let state = ExecutionState::default();
         let state_hash = HashValue::new(&state);
         Self {
             id,
@@ -112,12 +119,19 @@ impl ChainState {
 
     pub fn create(
         committee: Committee,
+        admin_id: ChainId,
         description: ChainDescription,
         owner: Owner,
         balance: Balance,
     ) -> Self {
+        let status = if ChainId::from(description) == admin_id {
+            ChainStatus::Managing
+        } else {
+            ChainStatus::ManagedBy { admin_id }
+        };
         let mut chain = Self::new(description.into());
         chain.description = Some(description);
+        chain.state.status = Some(status);
         chain.state.committee = Some(committee);
         chain.state.manager = ChainManager::single(owner);
         chain.state.balance = balance;
@@ -129,14 +143,20 @@ impl ChainState {
         self.description.is_some()
             && self.state.manager.is_active()
             && self.state.committee.is_some()
+            && self.state.status.is_some()
     }
 
     pub fn make_chain_info(&self, key_pair: Option<&KeyPair>) -> ChainInfoResponse {
+        let admin_id = match self.state.status {
+            Some(ChainStatus::ManagedBy { admin_id }) => Some(admin_id),
+            _ => None,
+        };
         let info = ChainInfo {
             chain_id: self.id,
             description: self.description,
             manager: self.state.manager.clone(),
             balance: self.state.balance,
+            admin_id,
             block_hash: self.block_hash,
             next_block_height: self.next_block_height,
             state_hash: self.state_hash,
@@ -195,7 +215,10 @@ impl ChainState {
             }
             // Chain creation is a special operation that can only be executed (once) in this callback.
             if let Operation::OpenChain {
-                owner, committee, ..
+                owner,
+                committee,
+                admin_id,
+                ..
             } = &operation
             {
                 // guaranteed under BFT assumptions.
@@ -210,6 +233,9 @@ impl ChainState {
                 assert_eq!(self.id, description.into());
                 self.description = Some(description);
                 self.state.committee = Some(committee.clone());
+                self.state.status = Some(ChainStatus::ManagedBy {
+                    admin_id: *admin_id,
+                });
                 self.state.manager = ChainManager::single(*owner);
                 self.state_hash = HashValue::new(&self.state);
                 // Proceed to scheduling the `OpenChain` operation for "execution".

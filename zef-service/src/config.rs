@@ -183,6 +183,7 @@ impl WalletState {
 #[derive(Serialize, Deserialize)]
 pub struct GenesisConfig {
     pub committee: CommitteeConfig,
+    pub admin_id: ChainId,
     pub chains: Vec<(ChainDescription, Owner, Balance)>,
 }
 
@@ -190,9 +191,10 @@ impl Import for GenesisConfig {}
 impl Export for GenesisConfig {}
 
 impl GenesisConfig {
-    pub fn new(committee: CommitteeConfig) -> Self {
+    pub fn new(committee: CommitteeConfig, admin_id: ChainId) -> Self {
         Self {
             committee,
+            admin_id,
             chains: Vec::new(),
         }
     }
@@ -204,6 +206,7 @@ impl GenesisConfig {
         for (description, owner, balance) in &self.chains {
             let chain = ChainState::create(
                 self.committee.clone().into_committee(),
+                self.admin_id,
                 *description,
                 *owner,
                 *balance,

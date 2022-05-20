@@ -31,6 +31,7 @@ pub enum Operation {
         id: ChainId,
         owner: Owner,
         committee: Committee,
+        admin_id: ChainId,
     },
     /// Close the chain.
     CloseChain,
@@ -161,6 +162,8 @@ pub struct ChainInfo {
     pub manager: ChainManager,
     /// The current balance.
     pub balance: Balance,
+    /// The admin chain.
+    pub admin_id: Option<ChainId>,
     /// The last block hash, if any.
     pub block_hash: Option<HashValue>,
     /// The height after the latest block in the chain.
