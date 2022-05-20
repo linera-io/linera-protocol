@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::transport::*;
+use crate::{codec, transport::*};
 use async_trait::async_trait;
 use zef_base::{base_types::*, error::*, messages::*, serialize::*};
 use zef_core::{node::ValidatorNode, worker::*};
@@ -321,23 +321,19 @@ impl Client {
         &mut self,
         shard: ShardId,
         message: SerializedMessage,
-    ) -> Result<SerializedMessage, Box<bincode::ErrorKind>> {
+    ) -> Result<SerializedMessage, codec::Error> {
         let address = format!("{}:{}", self.base_address, self.base_port + shard);
         let mut stream = self.network_protocol.connect(address).await?;
         // Send message
         time::timeout(self.send_timeout, stream.send(message))
             .await
-            .map_err(|timeout| bincode::ErrorKind::Io(timeout.into()))??;
+            .map_err(|timeout| codec::Error::Io(timeout.into()))??;
         // Wait for reply
         time::timeout(self.recv_timeout, stream.next())
             .await
-            .map_err(|timeout| bincode::ErrorKind::Io(timeout.into()))?
+            .map_err(|timeout| codec::Error::Io(timeout.into()))?
             .transpose()?
-            .ok_or_else(|| {
-                Box::new(bincode::ErrorKind::Io(
-                    std::io::ErrorKind::UnexpectedEof.into(),
-                ))
-            })
+            .ok_or_else(|| codec::Error::Io(std::io::ErrorKind::UnexpectedEof.into()))
     }
 
     pub async fn send_recv_info(
@@ -349,8 +345,8 @@ impl Client {
             Ok(SerializedMessage::ChainInfoResponse(response)) => Ok(*response),
             Ok(SerializedMessage::Error(error)) => Err(*error),
             Ok(_) => Err(Error::UnexpectedMessage),
-            Err(error) => match *error {
-                bincode::ErrorKind::Io(io_error) => Err(Error::ClientIoError {
+            Err(error) => match error {
+                codec::Error::Io(io_error) => Err(Error::ClientIoError {
                     error: format!("{}", io_error),
                 }),
                 _ => Err(Error::InvalidDecoding),
