@@ -321,28 +321,30 @@ Error:
     33:
       InvalidBlockChaining: UNIT
     34:
-      ClientErrorWhileProcessingBlockProposal: UNIT
+      IncorrectStateHash: UNIT
     35:
-      ClientErrorWhileQueryingCertificate: UNIT
+      ClientErrorWhileProcessingBlockProposal: UNIT
     36:
-      WrongShard: UNIT
+      ClientErrorWhileQueryingCertificate: UNIT
     37:
-      InvalidDecoding: UNIT
+      WrongShard: UNIT
     38:
-      UnexpectedMessage: UNIT
+      InvalidDecoding: UNIT
     39:
+      UnexpectedMessage: UNIT
+    40:
       ClientIoError:
         STRUCT:
           - error: STR
-    40:
+    41:
       StorageIoError:
         STRUCT:
           - error: STR
-    41:
+    42:
       StorageBcsError:
         STRUCT:
           - error: STR
-    42:
+    43:
       MissingCertificate:
         STRUCT:
           - hash:
