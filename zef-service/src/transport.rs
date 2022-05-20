@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::codec::Codec;
+use crate::codec::{self, Codec};
 use clap::arg_enum;
 use futures::{future, Sink, SinkExt, Stream, StreamExt, TryStreamExt};
 use log::*;
@@ -66,14 +66,14 @@ impl SpawnedServer {
 /// A transport is an active connection that can be used to send and receive
 /// [`SerializedMessages`]s.
 pub trait Transport:
-    Stream<Item = Result<SerializedMessage, Box<bincode::ErrorKind>>>
-    + Sink<SerializedMessage, Error = Box<bincode::ErrorKind>>
+    Stream<Item = Result<SerializedMessage, codec::Error>>
+    + Sink<SerializedMessage, Error = codec::Error>
 {
 }
 
 impl<T> Transport for T where
-    T: Stream<Item = Result<SerializedMessage, Box<bincode::ErrorKind>>>
-        + Sink<SerializedMessage, Error = Box<bincode::ErrorKind>>
+    T: Stream<Item = Result<SerializedMessage, codec::Error>>
+        + Sink<SerializedMessage, Error = codec::Error>
 {
 }
 
@@ -162,8 +162,8 @@ impl DataStreamPool for UdpDataStreamPool {
             self.transport
                 .send((message, address))
                 .await
-                .map_err(|error| match *error {
-                    bincode::ErrorKind::Io(io_error) => io_error,
+                .map_err(|error| match error {
+                    codec::Error::Io(io_error) => io_error,
                     _ => std::io::Error::new(std::io::ErrorKind::Other, error),
                 })?;
             Ok(())
@@ -189,13 +189,11 @@ impl NetworkProtocol {
                     exit_future = new_exit_future;
                     match value {
                         Some(Ok(value)) => value,
-                        Some(Err(error)) => match *error {
-                            bincode::ErrorKind::Io(io_error) => return Err(io_error),
-                            other_error => {
-                                warn!("Received an invalid message: {other_error}");
-                                continue;
-                            }
-                        },
+                        Some(Err(codec::Error::Io(io_error))) => return Err(io_error),
+                        Some(Err(other_error)) => {
+                            warn!("Received an invalid message: {other_error}");
+                            continue;
+                        }
                         None => return Err(std::io::ErrorKind::UnexpectedEof.into()),
                     }
                 }
@@ -254,8 +252,8 @@ impl DataStreamPool for TcpDataStreamPool {
             if result.is_err() {
                 self.streams.remove(address);
             }
-            result.map_err(|error| match *error {
-                bincode::ErrorKind::Io(io_error) => io_error,
+            result.map_err(|error| match error {
+                codec::Error::Io(io_error) => io_error,
                 _ => std::io::Error::new(std::io::ErrorKind::Other, error),
             })
         })
@@ -289,11 +287,11 @@ impl NetworkProtocol {
                         Ok(message) => message,
                         Err(error) => {
                             // We expect some EOF or disconnect error at the end.
-                            if matches!(
-                                &*error,
-                                bincode::ErrorKind::Io(error)
-                                    if error.kind() != io::ErrorKind::UnexpectedEof
-                                    && error.kind() != io::ErrorKind::ConnectionReset
+                            if !matches!(
+                                &error,
+                                codec::Error::Io(error)
+                                    if error.kind() == io::ErrorKind::UnexpectedEof
+                                    || error.kind() == io::ErrorKind::ConnectionReset
                             ) {
                                 error!("Error while reading TCP stream: {}", error);
                             }
