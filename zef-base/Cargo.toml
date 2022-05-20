@@ -18,6 +18,7 @@ serde_json = "1.0.68"
 serde-name = "0.2.0"
 sha2 = "0.9.8"
 structopt = "0.3.23"
+thiserror = "1.0.31"
 
 [dev-dependencies]
 similar-asserts = "1.1.0"
