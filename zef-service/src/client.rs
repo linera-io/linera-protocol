@@ -5,6 +5,7 @@
 #![deny(warnings)]
 
 use bytes::Bytes;
+use failure::ResultExt;
 use futures::stream::StreamExt;
 use log::*;
 use std::{
@@ -142,12 +143,12 @@ impl ClientContext {
         &mut self,
         certificate: Certificate,
         key_pair: Option<KeyPair>,
-    ) -> Result<(), failure::Error> {
+    ) -> anyhow::Result<()> {
         let recipient = match &certificate.value {
             Value::Confirmed { block, .. } if block.operations.len() == 1 => {
                 block.operations[0].recipient().unwrap()
             }
-            _ => failure::bail!("unexpected value in certificate"),
+            _ => anyhow::bail!("unexpected value in certificate"),
         };
         let validator_clients = self.make_validator_clients();
         let chain = self.wallet_state.get_or_insert(recipient);
@@ -167,7 +168,7 @@ impl ClientContext {
             Duration::default(),
             0,
         );
-        client.receive_certificate(certificate).await?;
+        client.receive_certificate(certificate).await.compat()?;
         self.update_wallet_from_client(&mut client).await;
         Ok(())
     }
