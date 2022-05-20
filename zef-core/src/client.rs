@@ -53,8 +53,17 @@ pub trait ChainClient {
     /// Open a new chain with a derived UID.
     async fn open_chain(&mut self, owner: Owner) -> Result<(ChainId, Certificate)>;
 
-    /// Close the chain (and lose everything in it!!)
+    /// Close the chain (and lose everything in it!!).
     async fn close_chain(&mut self) -> Result<Certificate>;
+
+    /// Create a new committee ("admin" chains only).
+    async fn change_voting_rights(
+        &mut self,
+        voting_rights: BTreeMap<ValidatorName, usize>,
+    ) -> Result<Certificate, failure::Error>;
+
+    /// Create an empty block to process all incoming messages.
+    async fn bounce(&mut self) -> Result<Certificate, failure::Error>;
 
     /// Send money to a chain.
     /// Do not check balance. (This may block the client)
@@ -796,6 +805,48 @@ where
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
             operations: vec![Operation::CloseChain],
+            previous_block_hash: self.block_hash,
+            height: self.next_block_height,
+        };
+        let certificate = self
+            .propose_block(block, /* with_confirmation */ true)
+            .await?;
+        Ok(certificate)
+    }
+
+    async fn change_voting_rights(
+        &mut self,
+        voting_rights: BTreeMap<ValidatorName, usize>,
+    ) -> Result<Certificate, failure::Error> {
+        self.prepare_chain().await?;
+        let id = OperationId {
+            chain_id: self.chain_id,
+            height: self.next_block_height,
+            index: 0,
+        };
+        let committee = Committee::new(voting_rights, Some(id));
+        let block = Block {
+            chain_id: self.chain_id,
+            incoming_messages: self.pending_messages().await?,
+            operations: vec![Operation::NewCommittee {
+                admin_id: self.chain_id,
+                committee,
+            }],
+            previous_block_hash: self.block_hash,
+            height: self.next_block_height,
+        };
+        let certificate = self
+            .propose_block(block, /* with_confirmation */ true)
+            .await?;
+        Ok(certificate)
+    }
+
+    async fn bounce(&mut self) -> Result<Certificate, failure::Error> {
+        self.prepare_chain().await?;
+        let block = Block {
+            chain_id: self.chain_id,
+            incoming_messages: self.pending_messages().await?,
+            operations: Vec::new(),
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
         };
