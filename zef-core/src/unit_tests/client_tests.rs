@@ -188,17 +188,6 @@ impl TestBuilder {
         )
     }
 
-    async fn single_chain(
-        count: usize,
-        with_faulty_validators: usize,
-        balance: Balance,
-    ) -> ChainClientState<LocalValidatorClient, InMemoryStoreClient> {
-        let mut builder = TestBuilder::new(count, with_faulty_validators);
-        builder
-            .add_initial_chain(ChainDescription::Root(1), balance)
-            .await
-    }
-
     /// Try to find a (confirmation) certificate for the given chain_id and block height.
     async fn check_that_validators_have_certificate(
         &self,
@@ -542,7 +531,10 @@ async fn test_close_chain() {
 
 #[tokio::test]
 async fn test_initiating_valid_transfer_too_many_faults() {
-    let mut sender = TestBuilder::single_chain(4, 2, Balance::from(4)).await;
+    let mut builder = TestBuilder::new(4, 2);
+    let mut sender = builder
+        .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
+        .await;
     assert!(sender
         .transfer_to_chain_unsafe_unconfirmed(
             Amount::from(3),
