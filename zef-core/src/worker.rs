@@ -171,7 +171,7 @@ where
         // We should always agree on the state hash.
         ensure!(
             chain.state_hash == certificate.value.state_hash(),
-            Error::InvalidBlockChaining
+            Error::IncorrectStateHash
         );
         // Final touch on the sender's chain.
         let info = chain.make_chain_info(self.key_pair.as_ref());
