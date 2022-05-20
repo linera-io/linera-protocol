@@ -422,29 +422,29 @@ async fn test_handle_block_proposal_with_incoming_messages() {
         ),
     ])
     .await;
-    let block0 = Block {
-        chain_id: ChainId::root(1),
-        incoming_messages: Vec::new(),
-        operations: vec![
-            Operation::Transfer {
-                recipient,
-                amount: Amount::from(1),
-                user_data: UserData::default(),
-            },
-            Operation::Transfer {
-                recipient,
-                amount: Amount::from(2),
-                user_data: UserData::default(),
-            },
-        ],
-        previous_block_hash: None,
-        height: BlockHeight::from(0),
-    };
+
     let certificate0 = make_certificate(
         &committee,
         &worker,
         Value::ConfirmedBlock {
-            block: block0,
+            block: Block {
+                chain_id: ChainId::root(1),
+                incoming_messages: Vec::new(),
+                operations: vec![
+                    Operation::Transfer {
+                        recipient,
+                        amount: Amount::from(1),
+                        user_data: UserData::default(),
+                    },
+                    Operation::Transfer {
+                        recipient,
+                        amount: Amount::from(2),
+                        user_data: UserData::default(),
+                    },
+                ],
+                previous_block_hash: None,
+                height: BlockHeight::from(0),
+            },
             state_hash: HashValue::new(&ExecutionState {
                 chain_id: ChainId::root(1),
                 status: Some(ChainStatus::ManagedBy {
@@ -456,22 +456,22 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             }),
         },
     );
-    let block1 = Block {
-        chain_id: ChainId::root(1),
-        incoming_messages: Vec::new(),
-        operations: vec![Operation::Transfer {
-            recipient,
-            amount: Amount::from(3),
-            user_data: UserData::default(),
-        }],
-        previous_block_hash: Some(certificate0.hash),
-        height: BlockHeight::from(1),
-    };
+
     let certificate1 = make_certificate(
         &committee,
         &worker,
         Value::ConfirmedBlock {
-            block: block1,
+            block: Block {
+                chain_id: ChainId::root(1),
+                incoming_messages: Vec::new(),
+                operations: vec![Operation::Transfer {
+                    recipient,
+                    amount: Amount::from(3),
+                    user_data: UserData::default(),
+                }],
+                previous_block_hash: Some(certificate0.hash),
+                height: BlockHeight::from(1),
+            },
             state_hash: HashValue::new(&ExecutionState {
                 chain_id: ChainId::root(1),
                 status: Some(ChainStatus::ManagedBy {
@@ -1394,23 +1394,22 @@ async fn test_chain_creation() {
         height: BlockHeight::from(0),
         index: 0,
     });
-    let block = Block {
-        chain_id: root_id,
-        incoming_messages: Vec::new(),
-        operations: vec![Operation::OpenChain {
-            id: child_id,
-            owner: key_pair.public(),
-            committees: vec![committee.clone()],
-            admin_id: root_id,
-        }],
-        previous_block_hash: None,
-        height: BlockHeight::from(0),
-    };
-    let certificate = make_certificate(
+    let certificate0 = make_certificate(
         &committee,
         &worker,
         Value::ConfirmedBlock {
-            block,
+            block: Block {
+                chain_id: root_id,
+                incoming_messages: Vec::new(),
+                operations: vec![Operation::OpenChain {
+                    id: child_id,
+                    owner: key_pair.public(),
+                    committees: vec![committee.clone()],
+                    admin_id: root_id,
+                }],
+                previous_block_hash: None,
+                height: BlockHeight::from(0),
+            },
             state_hash: HashValue::new(&ExecutionState {
                 chain_id: root_id,
                 status: Some(ChainStatus::Managing {
@@ -1423,7 +1422,7 @@ async fn test_chain_creation() {
         },
     );
     worker
-        .fully_handle_certificate(certificate.clone())
+        .fully_handle_certificate(certificate0.clone())
         .await
         .unwrap();
 
@@ -1447,30 +1446,29 @@ async fn test_chain_creation() {
         .is_empty());
 
     // Make the root receive the subscription.
-    let block = Block {
-        chain_id: root_id,
-        incoming_messages: vec![MessageGroup {
-            sender_id: ChainId::root(1),
-            height: BlockHeight::from(0),
-            operations: vec![(
-                0,
-                Operation::OpenChain {
-                    id: child_id,
-                    owner: key_pair.public(),
-                    committees: vec![committee.clone()],
-                    admin_id: root_id,
-                },
-            )],
-        }],
-        operations: Vec::new(),
-        previous_block_hash: Some(certificate.hash),
-        height: BlockHeight::from(1),
-    };
-    let certificate = make_certificate(
+    let certificate1 = make_certificate(
         &committee,
         &worker,
         Value::ConfirmedBlock {
-            block,
+            block: Block {
+                chain_id: root_id,
+                incoming_messages: vec![MessageGroup {
+                    sender_id: ChainId::root(1),
+                    height: BlockHeight::from(0),
+                    operations: vec![(
+                        0,
+                        Operation::OpenChain {
+                            id: child_id,
+                            owner: key_pair.public(),
+                            committees: vec![committee.clone()],
+                            admin_id: root_id,
+                        },
+                    )],
+                }],
+                operations: Vec::new(),
+                previous_block_hash: Some(certificate0.hash),
+                height: BlockHeight::from(1),
+            },
             state_hash: HashValue::new(&ExecutionState {
                 chain_id: root_id,
                 status: Some(ChainStatus::Managing {
@@ -1482,5 +1480,5 @@ async fn test_chain_creation() {
             }),
         },
     );
-    worker.fully_handle_certificate(certificate).await.unwrap();
+    worker.fully_handle_certificate(certificate1).await.unwrap();
 }
