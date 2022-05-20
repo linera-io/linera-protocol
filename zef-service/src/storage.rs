@@ -10,7 +10,7 @@ pub type MixedStorage = Box<dyn Storage>;
 pub async fn make_storage(
     db_path: Option<&PathBuf>,
     config: &GenesisConfig,
-) -> Result<MixedStorage, failure::Error> {
+) -> Result<MixedStorage, anyhow::Error> {
     let client: MixedStorage = match db_path {
         None => {
             let mut client = InMemoryStoreClient::default();

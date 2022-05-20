@@ -200,7 +200,7 @@ impl GenesisConfig {
         }
     }
 
-    pub async fn initialize_store<S>(&self, store: &mut S) -> Result<(), failure::Error>
+    pub async fn initialize_store<S>(&self, store: &mut S) -> Result<(), anyhow::Error>
     where
         S: Storage + Clone + 'static,
     {

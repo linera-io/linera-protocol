@@ -4,6 +4,7 @@
 
 #![deny(warnings)]
 
+use anyhow::{anyhow, ensure};
 use futures::future::join_all;
 use log::*;
 use std::{
@@ -111,19 +112,17 @@ struct ValidatorOptions {
 }
 
 impl FromStr for ValidatorOptions {
-    type Err = failure::Error;
+    type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let parts: Vec<&str> = s.split(':').collect();
-        failure::ensure!(
+        ensure!(
             parts.len() == 5,
             "Expecting format `file.json:(udp|tcp):host:port:num-shards`"
         );
 
         let server_config_path = Path::new(parts[0]).to_path_buf();
-        let protocol = parts[1]
-            .parse()
-            .map_err(|s| failure::format_err!("{}", s))?;
+        let protocol = parts[1].parse().map_err(|s| anyhow!("{}", s))?;
         let host = parts[2].to_string();
         let port = parts[3].parse()?;
         let shards = parts[4].parse()?;
