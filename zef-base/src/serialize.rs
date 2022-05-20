@@ -5,7 +5,6 @@
 use super::messages::*;
 use crate::error::*;
 
-use failure::format_err;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -36,9 +35,9 @@ pub fn serialize_message(msg: &SerializedMessage) -> Vec<u8> {
     serialize(msg)
 }
 
-pub fn deserialize_message<R>(reader: R) -> Result<SerializedMessage, failure::Error>
+pub fn deserialize_message<R>(reader: R) -> Result<SerializedMessage, Box<bincode::ErrorKind>>
 where
     R: std::io::Read,
 {
-    bincode::deserialize_from(reader).map_err(|err| format_err!("{}", err))
+    bincode::deserialize_from(reader)
 }
