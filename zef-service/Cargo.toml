@@ -5,6 +5,7 @@ authors = ["Zefchain <devops@zefchain.com>"]
 edition = "2021"
 
 [dependencies]
+anyhow = "1.0.57"
 async-trait = "0.1.52"
 bcs = "0.1.3"
 bytes = "1.1.0"
