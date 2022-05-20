@@ -21,7 +21,18 @@ impl Decoder for Codec {
     type Error = Error;
 
     fn decode(&mut self, buffer: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-        Ok(bincode::deserialize_from(buffer.reader()).ok())
+        match bincode::deserialize_from(buffer.reader()) {
+            Ok(message) => Ok(Some(message)),
+            Err(boxed_error) => match *boxed_error {
+                bincode::ErrorKind::Io(io_error)
+                    if io_error.kind() == io::ErrorKind::UnexpectedEof =>
+                {
+                    Ok(None)
+                }
+                bincode::ErrorKind::Io(io_error) => Err(Error::Io(io_error)),
+                error => Err(Error::Deserialization(error)),
+            },
+        }
     }
 }
 
