@@ -30,7 +30,7 @@ pub trait DataStreamPool: Send {
         &'a mut self,
         message: SerializedMessage,
         address: &'a str,
-    ) -> future::BoxFuture<'a, Result<(), io::Error>>;
+    ) -> future::BoxFuture<'a, Result<(), codec::Error>>;
 }
 
 /// The handler required to create a service.
@@ -154,19 +154,12 @@ impl DataStreamPool for UdpDataStreamPool {
         &'a mut self,
         message: SerializedMessage,
         address: &'a str,
-    ) -> future::BoxFuture<'a, Result<(), std::io::Error>> {
+    ) -> future::BoxFuture<'a, Result<(), codec::Error>> {
         Box::pin(async move {
             let address = address
                 .parse()
                 .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
-            self.transport
-                .send((message, address))
-                .await
-                .map_err(|error| match error {
-                    codec::Error::Io(io_error) => io_error,
-                    _ => std::io::Error::new(std::io::ErrorKind::Other, error),
-                })?;
-            Ok(())
+            self.transport.send((message, address)).await
         })
     }
 }
@@ -245,17 +238,14 @@ impl DataStreamPool for TcpDataStreamPool {
         &'a mut self,
         message: SerializedMessage,
         address: &'a str,
-    ) -> future::BoxFuture<'a, Result<(), std::io::Error>> {
+    ) -> future::BoxFuture<'a, Result<(), codec::Error>> {
         Box::pin(async move {
             let stream = self.get_stream(address).await?;
             let result = stream.send(message).await;
             if result.is_err() {
                 self.streams.remove(address);
             }
-            result.map_err(|error| match error {
-                codec::Error::Io(io_error) => io_error,
-                _ => std::io::Error::new(std::io::ErrorKind::Other, error),
-            })
+            result
         })
     }
 }
