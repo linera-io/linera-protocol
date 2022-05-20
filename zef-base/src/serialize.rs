@@ -21,27 +21,6 @@ pub enum SerializedMessage {
     CrossChainRequest(Box<CrossChainRequest>),
 }
 
-fn serialize<T>(msg: &T) -> Vec<u8>
-where
-    T: Serialize,
-{
-    let mut buf = Vec::new();
-    bincode::serialize_into(&mut buf, msg)
-        .expect("Serializing to a resizable buffer should not fail.");
-    buf
-}
-
-pub fn serialize_message(msg: &SerializedMessage) -> Vec<u8> {
-    serialize(msg)
-}
-
-pub fn deserialize_message<R>(reader: R) -> Result<SerializedMessage, Box<bincode::ErrorKind>>
-where
-    R: std::io::Read,
-{
-    bincode::deserialize_from(reader)
-}
-
 impl From<BlockProposal> for SerializedMessage {
     fn from(block_proposal: BlockProposal) -> Self {
         SerializedMessage::BlockProposal(Box::new(block_proposal))
