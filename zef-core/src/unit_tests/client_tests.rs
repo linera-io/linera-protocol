@@ -78,6 +78,7 @@ impl LocalValidatorClient {
 // communicate with.
 struct TestBuilder {
     committee: Committee,
+    admin_id: ChainId,
     genesis_store: InMemoryStoreClient,
     faulty_validators: HashSet<ValidatorName>,
     validator_clients: Vec<(ValidatorName, LocalValidatorClient)>,
@@ -118,6 +119,7 @@ impl TestBuilder {
         eprintln!("faulty validators: {:?}", faulty_validators);
         Self {
             committee,
+            admin_id: ChainId::root(0),
             genesis_store: InMemoryStoreClient::default(),
             faulty_validators,
             validator_clients,
@@ -133,9 +135,20 @@ impl TestBuilder {
     ) -> ChainClientState<LocalValidatorClient, InMemoryStoreClient> {
         let key_pair = KeyPair::generate();
         let owner = key_pair.public();
-        let chain = ChainState::create(self.committee.clone(), description, owner, balance);
-        let chain_bad =
-            ChainState::create(self.committee.clone(), description, owner, Balance::from(0));
+        let chain = ChainState::create(
+            self.committee.clone(),
+            self.admin_id,
+            description,
+            owner,
+            balance,
+        );
+        let chain_bad = ChainState::create(
+            self.committee.clone(),
+            self.admin_id,
+            description,
+            owner,
+            Balance::from(0),
+        );
         // Create genesis chain in all the existing stores.
         self.genesis_store.write_chain(chain.clone()).await.unwrap();
         for (name, store) in self.validator_stores.iter_mut() {

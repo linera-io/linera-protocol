@@ -80,6 +80,9 @@ ChainInfo:
         TYPENAME: ChainManager
     - balance:
         TYPENAME: Balance
+    - admin_id:
+        OPTION:
+          TYPENAME: ChainId
     - block_hash:
         OPTION:
           TYPENAME: HashValue
@@ -167,6 +170,15 @@ ChainState:
             TYPENAME: ChainId
           VALUE:
             TYPENAME: InboxState
+ChainStatus:
+  ENUM:
+    0:
+      ManagedBy:
+        STRUCT:
+          - admin_id:
+              TYPENAME: ChainId
+    1:
+      Managing: UNIT
 Committee:
   STRUCT:
     - voting_rights:
@@ -336,6 +348,9 @@ Event:
         TYPENAME: Operation
 ExecutionState:
   STRUCT:
+    - status:
+        OPTION:
+          TYPENAME: ChainStatus
     - committee:
         OPTION:
           TYPENAME: Committee
@@ -435,6 +450,8 @@ Operation:
               TYPENAME: PublicKey
           - committee:
               TYPENAME: Committee
+          - admin_id:
+              TYPENAME: ChainId
     2:
       CloseChain: UNIT
     3:
