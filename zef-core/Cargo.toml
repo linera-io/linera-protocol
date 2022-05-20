@@ -5,9 +5,9 @@ authors = ["Zefchain <devops@zefchain.com>"]
 edition = "2021"
 
 [dependencies]
+anyhow = "1.0.57"
 async-trait = "0.1.52"
 dyn-clone = "1.0.4"
-failure = "0.1.8"
 futures = "0.3.17"
 rand = "0.7.3"
 serde = { version = "1.0.130", features = ["derive"] }

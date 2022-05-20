@@ -5,7 +5,6 @@
 #![deny(warnings)]
 
 use bytes::Bytes;
-use failure::ResultExt;
 use futures::stream::StreamExt;
 use log::*;
 use std::{
@@ -168,7 +167,7 @@ impl ClientContext {
             Duration::default(),
             0,
         );
-        client.receive_certificate(certificate).await.compat()?;
+        client.receive_certificate(certificate).await?;
         self.update_wallet_from_client(&mut client).await;
         Ok(())
     }
