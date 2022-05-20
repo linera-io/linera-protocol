@@ -8,4 +8,4 @@ pub mod committee;
 pub mod error;
 pub mod manager;
 pub mod messages;
-pub mod serialize;
+pub mod rpc;
