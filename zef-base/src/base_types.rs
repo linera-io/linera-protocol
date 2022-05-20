@@ -11,6 +11,7 @@ use std::{
     convert::{TryFrom, TryInto},
     str::FromStr,
 };
+use thiserror::Error;
 
 #[cfg(test)]
 #[path = "unit_tests/base_types_tests.rs"]
@@ -274,12 +275,12 @@ impl FromStr for PublicKey {
 }
 
 impl FromStr for HashValue {
-    type Err = failure::Error;
+    type Err = HashFromStrError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let value = hex::decode(s)?;
         if value.len() != <sha2::Sha512 as sha2::Digest>::output_size() {
-            failure::bail!("Invalid length for hex-encoded hash value");
+            return Err(HashFromStrError::InvalidLength);
         }
         let mut bytes =
             generic_array::GenericArray::<u8, <sha2::Sha512 as sha2::Digest>::OutputSize>::default(
@@ -296,11 +297,21 @@ impl std::fmt::Display for ChainId {
 }
 
 impl FromStr for ChainId {
-    type Err = failure::Error;
+    type Err = HashFromStrError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(ChainId(HashValue::from_str(s)?))
     }
+}
+
+/// Error when attempting to convert a string into a [`HashValue`].
+#[derive(Clone, Copy, Debug, Error)]
+pub enum HashFromStrError {
+    #[error("Invalid length for hex-encoded hash value")]
+    InvalidLength,
+
+    #[error("String contains non-hexadecimal digits")]
+    NonHexDigits(#[from] hex::FromHexError),
 }
 
 impl std::fmt::Display for Signature {
