@@ -57,13 +57,16 @@ pub trait ChainClient {
     async fn close_chain(&mut self) -> Result<Certificate>;
 
     /// Create a new committee ("admin" chains only).
-    async fn change_voting_rights(
+    async fn stage_new_voting_rights(
         &mut self,
         voting_rights: BTreeMap<ValidatorName, usize>,
-    ) -> Result<Certificate, failure::Error>;
+    ) -> Result<Certificate>;
 
     /// Create an empty block to process all incoming messages.
-    async fn bounce(&mut self) -> Result<Certificate, failure::Error>;
+    async fn process_inbox(&mut self) -> Result<Certificate>;
+
+    /// Start listening to the admin chain for new committees. (This is only useful for other genesis chains.)
+    async fn subscribe_to_new_committees(&mut self) -> Result<Certificate>;
 
     /// Send money to a chain.
     /// Do not check balance. (This may block the client)
@@ -814,10 +817,10 @@ where
         Ok(certificate)
     }
 
-    async fn change_voting_rights(
+    async fn stage_new_voting_rights(
         &mut self,
         voting_rights: BTreeMap<ValidatorName, usize>,
-    ) -> Result<Certificate, failure::Error> {
+    ) -> Result<Certificate> {
         self.prepare_chain().await?;
         let id = OperationId {
             chain_id: self.chain_id,
@@ -841,12 +844,32 @@ where
         Ok(certificate)
     }
 
-    async fn bounce(&mut self) -> Result<Certificate, failure::Error> {
+    async fn process_inbox(&mut self) -> Result<Certificate> {
         self.prepare_chain().await?;
         let block = Block {
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
             operations: Vec::new(),
+            previous_block_hash: self.block_hash,
+            height: self.next_block_height,
+        };
+        let certificate = self
+            .propose_block(block, /* with_confirmation */ true)
+            .await?;
+        Ok(certificate)
+    }
+
+    async fn subscribe_to_new_committees(&mut self) -> Result<Certificate> {
+        self.prepare_chain().await?;
+        let (committees, admin_id) = self.committees_and_admin().await?;
+        let block = Block {
+            chain_id: self.chain_id,
+            incoming_messages: self.pending_messages().await?,
+            operations: vec![Operation::SubscribeToNewCommittees {
+                id: self.chain_id,
+                committees,
+                admin_id,
+            }],
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
         };

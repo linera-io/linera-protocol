@@ -107,7 +107,7 @@ impl ExecutionState {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub enum ChainStatus {
-    ManagedBy { admin_id: ChainId },
+    ManagedBy { admin_id: ChainId, subscribed: bool },
     Managing { subscribers: Vec<ChainId> },
 }
 
@@ -140,7 +140,10 @@ impl ChainState {
                 subscribers: Vec::new(),
             }
         } else {
-            ChainStatus::ManagedBy { admin_id }
+            ChainStatus::ManagedBy {
+                admin_id,
+                subscribed: false,
+            }
         };
         let mut chain = Self::new(description.into());
         chain.description = Some(description);
@@ -246,6 +249,7 @@ impl ChainState {
                     self.state.committees = committees.clone();
                     self.state.status = Some(ChainStatus::ManagedBy {
                         admin_id: *admin_id,
+                        subscribed: true,
                     });
                     self.state.manager = ChainManager::single(*owner);
                     self.state_hash = HashValue::new(&self.state);
@@ -362,7 +366,7 @@ impl ChainState {
 impl ExecutionState {
     pub fn admin_id(&self) -> Option<ChainId> {
         match self.status.as_ref()? {
-            ChainStatus::ManagedBy { admin_id } => Some(*admin_id),
+            ChainStatus::ManagedBy { admin_id, .. } => Some(*admin_id),
             ChainStatus::Managing { .. } => Some(self.chain_id),
         }
     }
@@ -373,13 +377,20 @@ impl ExecutionState {
             Transfer {
                 recipient: Address::Account(id),
                 ..
-            } => self.chain_id == *id,
+            } => {
+                // We are the recipient of the transfer
+                self.chain_id == *id
+            }
             OpenChain { id, admin_id, .. } => {
-                // Are we the admin or the created chain?
+                // We are the admin or the created chain
                 self.chain_id == *id || self.chain_id == *admin_id
             }
+            SubscribeToNewCommittees { admin_id, .. } => {
+                // We are the admin chain
+                self.chain_id == *admin_id
+            }
             NewCommittee { admin_id, .. } => {
-                // Is this a committee created by our admin?
+                // We have the same admin chain
                 Some(admin_id) == self.admin_id().as_ref()
             }
             _ => false,
@@ -462,6 +473,28 @@ impl ExecutionState {
                 recipients.push(chain_id);
                 Ok(recipients)
             }
+            Operation::SubscribeToNewCommittees {
+                id,
+                admin_id,
+                committees,
+            } => {
+                ensure!(
+                    *id == chain_id || id != admin_id,
+                    Error::InvalidSubscriptionToNewCommittees(*id)
+                );
+                match &mut self.status {
+                    Some(ChainStatus::ManagedBy {
+                        admin_id: id,
+                        subscribed,
+                    }) if *admin_id == *id && !*subscribed => {
+                        // Flip the value to prevent multiple subscriptions.
+                        *subscribed = true;
+                    }
+                    _ => return Err(Error::InvalidSubscriptionToNewCommittees(*id)),
+                }
+                ensure!(&self.committees == committees, Error::InvalidCommittees);
+                Ok(vec![*admin_id])
+            }
         }
     }
 
@@ -481,6 +514,12 @@ impl ExecutionState {
                 Ok(Vec::new())
             }
             Operation::OpenChain {
+                id,
+                admin_id,
+                committees,
+                ..
+            }
+            | Operation::SubscribeToNewCommittees {
                 id,
                 admin_id,
                 committees,

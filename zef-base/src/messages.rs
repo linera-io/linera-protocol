@@ -27,6 +27,7 @@ pub enum Operation {
         user_data: UserData,
     },
     /// Create (or activate) a new chain by installing the given authentication key.
+    /// This will automatically subscribe to future committees created by `admin_id`.
     OpenChain {
         id: ChainId,
         owner: Owner,
@@ -43,6 +44,13 @@ pub enum Operation {
     NewCommittee {
         admin_id: ChainId,
         committee: Committee,
+    },
+    /// Subscribe to future committees created by `admin_id`. Same as OpenChain but useful
+    /// for root chains (other than admin_id) created in the genenis config.
+    SubscribeToNewCommittees {
+        id: ChainId,
+        admin_id: ChainId,
+        committees: Vec<Committee>,
     },
 }
 

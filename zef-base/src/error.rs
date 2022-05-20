@@ -75,6 +75,8 @@ pub enum Error {
     InvalidNewChainId(ChainId),
     #[error("Invalid admin id in new chain: {0}")]
     InvalidNewChainAdminId(ChainId),
+    #[error("Invalid admin id in subscription to new committees: {0}")]
+    InvalidSubscriptionToNewCommittees(ChainId),
     #[error("Invalid committees")]
     InvalidCommittees,
     #[error("Failed to create new committee")]

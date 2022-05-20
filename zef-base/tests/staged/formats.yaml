@@ -175,6 +175,7 @@ ChainStatus:
         STRUCT:
           - admin_id:
               TYPENAME: ChainId
+          - subscribed: BOOL
     1:
       Managing:
         STRUCT:
@@ -277,26 +278,30 @@ Error:
         NEWTYPE:
           TYPENAME: ChainId
     23:
-      InvalidCommittees: UNIT
+      InvalidSubscriptionToNewCommittees:
+        NEWTYPE:
+          TYPENAME: ChainId
     24:
-      InvalidCommitteeCreation: UNIT
+      InvalidCommittees: UNIT
     25:
+      InvalidCommitteeCreation: UNIT
+    26:
       InsufficientRound:
         NEWTYPE:
           TYPENAME: RoundNumber
-    26:
+    27:
       HasLockedBlock:
         TUPLE:
           - TYPENAME: BlockHeight
           - TYPENAME: RoundNumber
-    27:
+    28:
       MissingCrossChainUpdate:
         STRUCT:
           - sender_id:
               TYPENAME: ChainId
           - height:
               TYPENAME: BlockHeight
-    28:
+    29:
       InvalidMessageContent:
         STRUCT:
           - sender_id:
@@ -304,7 +309,7 @@ Error:
           - height:
               TYPENAME: BlockHeight
           - index: U64
-    29:
+    30:
       InvalidMessageOrder:
         STRUCT:
           - sender_id:
@@ -315,39 +320,39 @@ Error:
           - expected_height:
               TYPENAME: BlockHeight
           - expected_index: U64
-    30:
-      CertificateNotFound: UNIT
     31:
-      InvalidCrossChainRequest: UNIT
+      CertificateNotFound: UNIT
     32:
-      InvalidBlockProposal: UNIT
+      InvalidCrossChainRequest: UNIT
     33:
-      InvalidBlockChaining: UNIT
+      InvalidBlockProposal: UNIT
     34:
-      IncorrectStateHash: UNIT
+      InvalidBlockChaining: UNIT
     35:
-      ClientErrorWhileProcessingBlockProposal: UNIT
+      IncorrectStateHash: UNIT
     36:
-      ClientErrorWhileQueryingCertificate: UNIT
+      ClientErrorWhileProcessingBlockProposal: UNIT
     37:
-      WrongShard: UNIT
+      ClientErrorWhileQueryingCertificate: UNIT
     38:
-      InvalidDecoding: UNIT
+      WrongShard: UNIT
     39:
-      UnexpectedMessage: UNIT
+      InvalidDecoding: UNIT
     40:
+      UnexpectedMessage: UNIT
+    41:
       ClientIoError:
         STRUCT:
           - error: STR
-    41:
+    42:
       StorageIoError:
         STRUCT:
           - error: STR
-    42:
+    43:
       StorageBcsError:
         STRUCT:
           - error: STR
-    43:
+    44:
       MissingCertificate:
         STRUCT:
           - hash:
@@ -488,6 +493,16 @@ Operation:
               TYPENAME: ChainId
           - committee:
               TYPENAME: Committee
+    6:
+      SubscribeToNewCommittees:
+        STRUCT:
+          - id:
+              TYPENAME: ChainId
+          - admin_id:
+              TYPENAME: ChainId
+          - committees:
+              SEQ:
+                TYPENAME: Committee
 OperationId:
   STRUCT:
     - chain_id:
