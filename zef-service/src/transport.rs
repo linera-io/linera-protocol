@@ -25,7 +25,7 @@ arg_enum! {
 }
 
 /// A pool of (outgoing) data streams.
-pub trait DataStreamPool: Send {
+pub trait ConnectionPool: Send {
     fn send_message_to<'a>(
         &'a mut self,
         message: SerializedMessage,
@@ -101,13 +101,13 @@ impl NetworkProtocol {
         Ok(stream)
     }
 
-    /// Create a DataStreamPool for this protocol.
+    /// Create a [`ConnectionPool`] for this protocol.
     pub async fn make_outgoing_connection_pool(
         self,
-    ) -> Result<Box<dyn DataStreamPool>, std::io::Error> {
-        let pool: Box<dyn DataStreamPool> = match self {
-            Self::Udp => Box::new(UdpDataStreamPool::new().await?),
-            Self::Tcp => Box::new(TcpDataStreamPool::new().await?),
+    ) -> Result<Box<dyn ConnectionPool>, std::io::Error> {
+        let pool: Box<dyn ConnectionPool> = match self {
+            Self::Udp => Box::new(UdpConnectionPool::new().await?),
+            Self::Tcp => Box::new(TcpConnectionPool::new().await?),
         };
         Ok(pool)
     }
@@ -136,12 +136,12 @@ impl NetworkProtocol {
     }
 }
 
-/// An implementation of DataStreamPool based on UDP.
-struct UdpDataStreamPool {
+/// An implementation of [`ConnectionPool`] based on UDP.
+struct UdpConnectionPool {
     transport: UdpFramed<Codec>,
 }
 
-impl UdpDataStreamPool {
+impl UdpConnectionPool {
     async fn new() -> Result<Self, std::io::Error> {
         let socket = UdpSocket::bind(&"0.0.0.0:0").await?;
         let transport = UdpFramed::new(socket, Codec);
@@ -149,7 +149,7 @@ impl UdpDataStreamPool {
     }
 }
 
-impl DataStreamPool for UdpDataStreamPool {
+impl ConnectionPool for UdpConnectionPool {
     fn send_message_to<'a>(
         &'a mut self,
         message: SerializedMessage,
@@ -202,12 +202,12 @@ impl NetworkProtocol {
     }
 }
 
-/// An implementation of DataStreamPool based on TCP.
-struct TcpDataStreamPool {
+/// An implementation of [`ConnectionPool`] based on TCP.
+struct TcpConnectionPool {
     streams: HashMap<String, Framed<TcpStream, Codec>>,
 }
 
-impl TcpDataStreamPool {
+impl TcpConnectionPool {
     async fn new() -> Result<Self, std::io::Error> {
         let streams = HashMap::new();
         Ok(Self { streams })
@@ -233,7 +233,7 @@ impl TcpDataStreamPool {
     }
 }
 
-impl DataStreamPool for TcpDataStreamPool {
+impl ConnectionPool for TcpConnectionPool {
     fn send_message_to<'a>(
         &'a mut self,
         message: SerializedMessage,
