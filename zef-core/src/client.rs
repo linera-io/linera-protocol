@@ -7,8 +7,8 @@ use crate::{
     updater::{communicate_with_quorum, CommunicateAction, ValidatorUpdater},
     worker::WorkerState,
 };
+use anyhow::{anyhow, bail, ensure, Result};
 use async_trait::async_trait;
-use failure::{bail, ensure};
 use std::{
     collections::{BTreeMap, HashMap},
     time::Duration,
@@ -33,34 +33,28 @@ pub trait ChainClient {
         amount: Amount,
         recipient: ChainId,
         user_data: UserData,
-    ) -> Result<Certificate, failure::Error>;
+    ) -> Result<Certificate>;
 
     /// Burn money.
-    async fn burn(
-        &mut self,
-        amount: Amount,
-        user_data: UserData,
-    ) -> Result<Certificate, failure::Error>;
+    async fn burn(&mut self, amount: Amount, user_data: UserData) -> Result<Certificate>;
 
     /// Process confirmed operation for which this chain is a recipient.
-    async fn receive_certificate(&mut self, certificate: Certificate)
-        -> Result<(), failure::Error>;
+    async fn receive_certificate(&mut self, certificate: Certificate) -> Result<()>;
 
     /// Rotate the key of the chain.
-    async fn rotate_key_pair(&mut self, key_pair: KeyPair) -> Result<Certificate, failure::Error>;
+    async fn rotate_key_pair(&mut self, key_pair: KeyPair) -> Result<Certificate>;
 
     /// Transfer ownership of the chain.
-    async fn transfer_ownership(&mut self, new_owner: Owner)
-        -> Result<Certificate, failure::Error>;
+    async fn transfer_ownership(&mut self, new_owner: Owner) -> Result<Certificate>;
 
     /// Add another owner to the chain.
-    async fn share_ownership(&mut self, new_owner: Owner) -> Result<Certificate, failure::Error>;
+    async fn share_ownership(&mut self, new_owner: Owner) -> Result<Certificate>;
 
     /// Open a new chain with a derived UID.
-    async fn open_chain(&mut self, new_owner: Owner) -> Result<Certificate, failure::Error>;
+    async fn open_chain(&mut self, new_owner: Owner) -> Result<Certificate>;
 
     /// Close the chain (and lose everything in it!!)
-    async fn close_chain(&mut self) -> Result<Certificate, failure::Error>;
+    async fn close_chain(&mut self) -> Result<Certificate>;
 
     /// Send money to a chain.
     /// Do not check balance. (This may block the client)
@@ -70,19 +64,19 @@ pub trait ChainClient {
         amount: Amount,
         recipient: ChainId,
         user_data: UserData,
-    ) -> Result<Certificate, failure::Error>;
+    ) -> Result<Certificate>;
 
     /// Attempt to synchronize with validators and re-compute our balance.
-    async fn synchronize_balance(&mut self) -> Result<Balance, failure::Error>;
+    async fn synchronize_balance(&mut self) -> Result<Balance>;
 
     /// Retry the last pending block
-    async fn retry_pending_block(&mut self) -> Result<Option<Certificate>, failure::Error>;
+    async fn retry_pending_block(&mut self) -> Result<Option<Certificate>>;
 
     /// Clear the information on any operation that previously failed.
     async fn clear_pending_block(&mut self);
 
     /// Return the current local balance.
-    async fn local_balance(&mut self) -> Result<Balance, failure::Error>;
+    async fn local_balance(&mut self) -> Result<Balance>;
 }
 
 /// Reference implementation of the `ChainClient` trait using many instances of some
@@ -213,7 +207,7 @@ where
             .ok_or(Error::InactiveChain(self.chain_id))
     }
 
-    async fn identity(&mut self) -> Result<Owner, failure::Error> {
+    async fn identity(&mut self) -> Result<Owner> {
         match self.chain_info().await?.manager {
             ChainManager::Single(m) => {
                 if !self.known_key_pairs.contains_key(&m.owner) {
@@ -249,7 +243,7 @@ where
         }
     }
 
-    pub async fn key_pair(&mut self) -> Result<&KeyPair, failure::Error> {
+    pub async fn key_pair(&mut self) -> Result<&KeyPair> {
         let id = self.identity().await?;
         Ok(self
             .known_key_pairs
@@ -310,7 +304,7 @@ where
         committee: &Committee,
         chain_id: ChainId,
         action: CommunicateAction,
-    ) -> Result<Option<Certificate>, failure::Error> {
+    ) -> Result<Option<Certificate>> {
         let storage_client = self.node_client.storage_client().await;
         let cross_chain_delay = self.cross_chain_delay;
         let cross_chain_retries = self.cross_chain_retries;
@@ -403,7 +397,7 @@ where
     ///
     /// However, this should be the case whenever a sender's chain is still in use and
     /// is regularly upgraded to new committees.
-    async fn find_received_certificates(&mut self) -> Result<(), failure::Error> {
+    async fn find_received_certificates(&mut self) -> Result<()> {
         let chain_id = self.chain_id;
         let committee = self.committee().await?;
         let trackers = self.received_certificate_trackers.clone();
@@ -475,7 +469,7 @@ where
         amount: Amount,
         recipient: Address,
         user_data: UserData,
-    ) -> Result<Certificate, failure::Error> {
+    ) -> Result<Certificate> {
         let balance = self.synchronize_balance().await?;
         ensure!(
             Balance::from(amount) <= balance,
@@ -519,7 +513,7 @@ where
         &mut self,
         block: Block,
         with_confirmation: bool,
-    ) -> Result<Certificate, failure::Error> {
+    ) -> Result<Certificate> {
         let next_round = self.next_round;
         ensure!(
             matches!(&self.pending_block, None)
@@ -620,7 +614,7 @@ where
     A: ValidatorNode + Send + Sync + Clone + 'static,
     S: Storage + Clone + 'static,
 {
-    async fn local_balance(&mut self) -> Result<Balance, failure::Error> {
+    async fn local_balance(&mut self) -> Result<Balance> {
         ensure!(
             self.chain_info().await?.next_block_height == self.next_block_height,
             "The local node is behind and needs synchronization"
@@ -645,26 +639,22 @@ where
         amount: Amount,
         recipient: ChainId,
         user_data: UserData,
-    ) -> Result<Certificate, failure::Error> {
+    ) -> Result<Certificate> {
         self.transfer(amount, Address::Account(recipient), user_data)
             .await
     }
 
-    async fn burn(
-        &mut self,
-        amount: Amount,
-        user_data: UserData,
-    ) -> Result<Certificate, failure::Error> {
+    async fn burn(&mut self, amount: Amount, user_data: UserData) -> Result<Certificate> {
         self.transfer(amount, Address::Burn, user_data).await
     }
 
-    async fn synchronize_balance(&mut self) -> Result<Balance, failure::Error> {
+    async fn synchronize_balance(&mut self) -> Result<Balance> {
         self.find_received_certificates().await?;
         self.prepare_chain().await?;
         self.local_balance().await
     }
 
-    async fn retry_pending_block(&mut self) -> Result<Option<Certificate>, failure::Error> {
+    async fn retry_pending_block(&mut self) -> Result<Option<Certificate>> {
         self.find_received_certificates().await?;
         self.prepare_chain().await?;
         match &self.pending_block {
@@ -684,14 +674,11 @@ where
         self.pending_block = None;
     }
 
-    async fn receive_certificate(
-        &mut self,
-        certificate: Certificate,
-    ) -> Result<(), failure::Error> {
+    async fn receive_certificate(&mut self, certificate: Certificate) -> Result<()> {
         let block = certificate
             .value
             .confirmed_block()
-            .ok_or_else(|| failure::format_err!("Was expecting a confirmed chain operation"))?
+            .ok_or_else(|| anyhow!("Was expecting a confirmed chain operation"))?
             .clone();
         // Recover history from the network.
         self.node_client
@@ -711,7 +698,7 @@ where
         Ok(())
     }
 
-    async fn rotate_key_pair(&mut self, key_pair: KeyPair) -> Result<Certificate, failure::Error> {
+    async fn rotate_key_pair(&mut self, key_pair: KeyPair) -> Result<Certificate> {
         self.prepare_chain().await?;
         let new_owner = key_pair.public();
         let block = Block {
@@ -728,10 +715,7 @@ where
         Ok(certificate)
     }
 
-    async fn transfer_ownership(
-        &mut self,
-        new_owner: Owner,
-    ) -> Result<Certificate, failure::Error> {
+    async fn transfer_ownership(&mut self, new_owner: Owner) -> Result<Certificate> {
         self.prepare_chain().await?;
         let block = Block {
             chain_id: self.chain_id,
@@ -746,7 +730,7 @@ where
         Ok(certificate)
     }
 
-    async fn share_ownership(&mut self, new_owner: Owner) -> Result<Certificate, failure::Error> {
+    async fn share_ownership(&mut self, new_owner: Owner) -> Result<Certificate> {
         self.prepare_chain().await?;
         let owner = self.identity().await?;
         let block = Block {
@@ -764,7 +748,7 @@ where
         Ok(certificate)
     }
 
-    async fn open_chain(&mut self, owner: Owner) -> Result<Certificate, failure::Error> {
+    async fn open_chain(&mut self, owner: Owner) -> Result<Certificate> {
         self.prepare_chain().await?;
         let id = ChainId::child(OperationId {
             chain_id: self.chain_id,
@@ -789,7 +773,7 @@ where
         Ok(certificate)
     }
 
-    async fn close_chain(&mut self) -> Result<Certificate, failure::Error> {
+    async fn close_chain(&mut self) -> Result<Certificate> {
         self.prepare_chain().await?;
         let block = Block {
             chain_id: self.chain_id,
@@ -809,7 +793,7 @@ where
         amount: Amount,
         recipient: ChainId,
         user_data: UserData,
-    ) -> Result<Certificate, failure::Error> {
+    ) -> Result<Certificate> {
         self.prepare_chain().await?;
         let block = Block {
             chain_id: self.chain_id,
