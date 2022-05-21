@@ -45,9 +45,28 @@ pub trait ValidatorWorker {
     ) -> Result<Vec<CrossChainRequest>, Error>;
 }
 
+/// State of a worker in a validator or a local node.
+pub struct WorkerState<StorageClient> {
+    /// A name used for logging
+    nickname: String,
+    /// The signature key pair of the validator. The key may be missing for replicas
+    /// without voting rights (possibly with a partial view of chains).
+    key_pair: Option<KeyPair>,
+    /// Access to local persistent storage.
+    storage: StorageClient,
+    /// Whether inactive chains are allowed in storage.
+    allow_inactive_chains: bool,
+}
+
 impl<Client> WorkerState<Client> {
-    pub fn new(key_pair: Option<KeyPair>, storage: Client, allow_inactive_chains: bool) -> Self {
+    pub fn new(
+        nickname: String,
+        key_pair: Option<KeyPair>,
+        storage: Client,
+        allow_inactive_chains: bool,
+    ) -> Self {
         WorkerState {
+            nickname,
             key_pair,
             storage,
             allow_inactive_chains,
@@ -57,17 +76,6 @@ impl<Client> WorkerState<Client> {
     pub(crate) fn storage_client(&self) -> &Client {
         &self.storage
     }
-}
-
-/// State of a worker in a validator or a local node.
-pub struct WorkerState<StorageClient> {
-    /// The signature key pair of the validator. The key may be missing for replicas
-    /// without voting rights (possibly with a partial view of chains).
-    key_pair: Option<KeyPair>,
-    /// Access to local persistent storage.
-    storage: StorageClient,
-    /// Whether inactive chains are allowed in storage.
-    allow_inactive_chains: bool,
 }
 
 impl<Client> WorkerState<Client>
@@ -115,6 +123,7 @@ where
                 certificates,
             })
         }
+        log::trace!("{} --> {:?}", self.nickname, continuation);
         Ok(continuation)
     }
 
@@ -251,6 +260,7 @@ where
         &mut self,
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, Error> {
+        log::trace!("{} <-- {:?}", self.nickname, proposal);
         // Obtain the sender's chain.
         let sender = proposal.content.block.chain_id;
         let mut chain = self.storage.read_active_chain(sender).await?;
@@ -296,6 +306,7 @@ where
         &mut self,
         certificate: Certificate,
     ) -> Result<(ChainInfoResponse, Vec<CrossChainRequest>), Error> {
+        log::trace!("{} <-- {:?}", self.nickname, certificate);
         match &certificate.value {
             Value::ValidatedBlock { .. } => {
                 // Confirm the validated block.
@@ -313,6 +324,7 @@ where
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, Error> {
+        log::trace!("{} <-- {:?}", self.nickname, query);
         let chain = self.storage.read_chain_or_default(query.chain_id).await?;
         let mut info = chain.make_chain_info(None).info;
         if query.query_committees {
@@ -385,6 +397,7 @@ where
         &mut self,
         request: CrossChainRequest,
     ) -> Result<Vec<CrossChainRequest>, Error> {
+        log::trace!("{} <-- {:?}", self.nickname, request);
         match request {
             CrossChainRequest::UpdateRecipient {
                 sender,

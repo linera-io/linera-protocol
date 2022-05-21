@@ -276,6 +276,7 @@ impl ClientContext {
     async fn update_wallet_from_certificates(&mut self, certificates: Vec<Certificate>) {
         // First instantiate a local node on top of storage.
         let worker = WorkerState::new(
+            "Temporary client node".to_string(),
             None,
             self.storage_client.clone(),
             /* allow_inactive_chains */ true,
