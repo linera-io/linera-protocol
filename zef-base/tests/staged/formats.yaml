@@ -248,60 +248,62 @@ Error:
     12:
       BalanceUnderflow: UNIT
     13:
+      UnsupportedOperation: UNIT
+    14:
       InvalidSignature:
         STRUCT:
           - error: STR
           - type_name: STR
-    14:
-      InvalidSigner: UNIT
     15:
-      CertificateRequiresQuorum: UNIT
+      InvalidSigner: UNIT
     16:
-      CertificateValidatorReuse: UNIT
+      CertificateRequiresQuorum: UNIT
     17:
-      InvalidCertificate: UNIT
+      CertificateValidatorReuse: UNIT
     18:
-      InvalidChainInfoResponse: UNIT
+      InvalidCertificate: UNIT
     19:
-      IncorrectTransferAmount: UNIT
+      InvalidChainInfoResponse: UNIT
     20:
+      IncorrectTransferAmount: UNIT
+    21:
       InsufficientFunding:
         STRUCT:
           - current_balance:
               TYPENAME: Balance
-    21:
+    22:
       InvalidNewChainId:
         NEWTYPE:
           TYPENAME: ChainId
-    22:
+    23:
       InvalidNewChainAdminId:
         NEWTYPE:
           TYPENAME: ChainId
-    23:
+    24:
       InvalidSubscriptionToNewCommittees:
         NEWTYPE:
           TYPENAME: ChainId
-    24:
-      InvalidCommittees: UNIT
     25:
-      InvalidCommitteeCreation: UNIT
+      InvalidCommittees: UNIT
     26:
+      InvalidCommitteeCreation: UNIT
+    27:
       InsufficientRound:
         NEWTYPE:
           TYPENAME: RoundNumber
-    27:
+    28:
       HasLockedBlock:
         TUPLE:
           - TYPENAME: BlockHeight
           - TYPENAME: RoundNumber
-    28:
+    29:
       MissingCrossChainUpdate:
         STRUCT:
           - sender_id:
               TYPENAME: ChainId
           - height:
               TYPENAME: BlockHeight
-    29:
+    30:
       InvalidMessageContent:
         STRUCT:
           - sender_id:
@@ -309,7 +311,7 @@ Error:
           - height:
               TYPENAME: BlockHeight
           - index: U64
-    30:
+    31:
       InvalidMessageOrder:
         STRUCT:
           - sender_id:
@@ -320,39 +322,39 @@ Error:
           - expected_height:
               TYPENAME: BlockHeight
           - expected_index: U64
-    31:
-      CertificateNotFound: UNIT
     32:
-      InvalidCrossChainRequest: UNIT
+      CertificateNotFound: UNIT
     33:
-      InvalidBlockProposal: UNIT
+      InvalidCrossChainRequest: UNIT
     34:
-      InvalidBlockChaining: UNIT
+      InvalidBlockProposal: UNIT
     35:
-      IncorrectStateHash: UNIT
+      InvalidBlockChaining: UNIT
     36:
-      ClientErrorWhileProcessingBlockProposal: UNIT
+      IncorrectStateHash: UNIT
     37:
-      ClientErrorWhileQueryingCertificate: UNIT
+      ClientErrorWhileProcessingBlockProposal: UNIT
     38:
-      WrongShard: UNIT
+      ClientErrorWhileQueryingCertificate: UNIT
     39:
-      InvalidDecoding: UNIT
+      WrongShard: UNIT
     40:
-      UnexpectedMessage: UNIT
+      InvalidDecoding: UNIT
     41:
+      UnexpectedMessage: UNIT
+    42:
       ClientIoError:
         STRUCT:
           - error: STR
-    42:
+    43:
       StorageIoError:
         STRUCT:
           - error: STR
-    43:
+    44:
       StorageBcsError:
         STRUCT:
           - error: STR
-    44:
+    45:
       MissingCertificate:
         STRUCT:
           - hash:
