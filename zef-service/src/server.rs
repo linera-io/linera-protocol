@@ -33,6 +33,10 @@ async fn make_shard_server(
     info!("Shard booted on {}", server_config.validator.host);
     let num_shards = server_config.validator.num_shards;
     let state = WorkerState::new(
+        format!(
+            "Node {}/{} @ {}:{}",
+            shard, num_shards, local_ip_addr, server_config.validator.base_port
+        ),
         Some(server_config.key.copy()),
         storage,
         /* allow_inactive_chains */ false,

@@ -121,14 +121,21 @@ where
         for certificate in certificates {
             if let Value::ConfirmedBlock { block, .. } = &certificate.value {
                 if block.chain_id == chain_id {
-                    match self.handle_certificate(certificate).await {
+                    match self.handle_certificate(certificate.clone()).await {
                         Ok(response) => {
                             info = Some(response.info);
                             // Continue with the next certificate.
                             continue;
                         }
-                        Err(Error::InvalidCertificate | Error::MissingEarlierBlocks { .. }) => {
+                        Err(
+                            e @ (Error::InvalidCertificate | Error::MissingEarlierBlocks { .. }),
+                        ) => {
                             // The certificate is not as expected. Give up.
+                            log::warn!(
+                                "Failed to process network certificate {}: {}",
+                                certificate.hash,
+                                e
+                            );
                             return Ok(info);
                         }
                         Err(e) => {
@@ -140,6 +147,7 @@ where
                 }
             }
             // The certificate is not as expected. Give up.
+            log::warn!("Failed to process network certificate {}", certificate.hash);
             return Ok(info);
         }
         // Done with all certificates.
@@ -276,6 +284,7 @@ where
             Ok(response) if response.check(name).is_ok() => response.info,
             _ => {
                 // Give up on this validator.
+                log::warn!("Ignoring validator response");
                 return Ok(());
             }
         };
@@ -289,13 +298,19 @@ where
         if let ChainManager::Multi(manager) = info.manager {
             if let Some(proposal) = manager.proposed {
                 if proposal.content.block.chain_id == chain_id {
-                    self.handle_block_proposal(proposal).await.ok();
+                    let owner = proposal.owner;
+                    if let Err(error) = self.handle_block_proposal(proposal).await {
+                        log::warn!("Skipping proposal from {}: {}", owner, error);
+                    }
                 }
             }
             if let Some(cert) = manager.locked {
                 if let Value::ValidatedBlock { block, .. } = &cert.value {
                     if block.chain_id == chain_id {
-                        self.handle_certificate(cert).await.ok();
+                        let hash = cert.hash;
+                        if let Err(error) = self.handle_certificate(cert).await {
+                            log::warn!("Skipping certificate {}: {}", hash, error);
+                        }
                     }
                 }
             }
