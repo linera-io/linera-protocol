@@ -49,6 +49,8 @@ pub enum Error {
     BalanceOverflow,
     #[error("Chain balance underflow.")]
     BalanceUnderflow,
+    #[error("Operation is not supported for this chain.")]
+    UnsupportedOperation,
 
     // Signatures and certificates
     #[error("Signature for object {type_name} is not valid: {error}")]

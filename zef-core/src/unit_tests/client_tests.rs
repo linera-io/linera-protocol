@@ -735,6 +735,13 @@ async fn test_change_voting_rights() {
         })
     );
 
+    // Sending money from the admin chain is not supported yet.
+    assert!(admin
+        .transfer_to_chain(Amount::from(3), ChainId::root(1), UserData(None),)
+        .await
+        .is_err());
+    admin.clear_pending_block().await;
+
     // Receiver is a genesis chain so it was not subscribed to the admin automatically.
     assert_eq!(
         receiver.synchronize_balance().await.unwrap(),
