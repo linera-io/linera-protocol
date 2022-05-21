@@ -213,9 +213,21 @@ impl ChainState {
     ) -> Result<bool, Error> {
         let inbox = self.inboxes.entry(sender_id).or_default();
         if height < inbox.next_height_to_receive {
-            // We already received this block.
+            // We have already received this block.
+            log::warn!(
+                "Ignoring past messages to {} from {} at height {}",
+                self.state.chain_id,
+                sender_id,
+                height
+            );
             return Ok(false);
         }
+        log::trace!(
+            "Processing new messages to {} from {} at height {}",
+            self.state.chain_id,
+            sender_id,
+            height
+        );
         // Mark the block as received.
         inbox.next_height_to_receive = height.try_add_one()?;
         self.received_log.push(key);

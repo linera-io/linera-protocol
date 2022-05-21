@@ -4,6 +4,7 @@
 
 use crate::worker::{ValidatorWorker, WorkerState};
 use std::collections::BTreeMap;
+use test_log::test;
 use zef_base::{
     base_types::*,
     chain::{ChainState, ChainStatus, Event, ExecutionState},
@@ -22,7 +23,12 @@ fn init_worker(allow_inactive_chains: bool) -> (Committee, WorkerState<InMemoryS
     validators.insert(key_pair.public(), /* voting right */ 1);
     let committee = Committee::new(validators, None);
     let client = InMemoryStoreClient::default();
-    let worker = WorkerState::new(Some(key_pair), client, allow_inactive_chains);
+    let worker = WorkerState::new(
+        "Single validator node".to_string(),
+        Some(key_pair),
+        client,
+        allow_inactive_chains,
+    );
     (committee, worker)
 }
 
@@ -156,7 +162,7 @@ fn make_transfer_certificate(
     make_certificate(committee, worker, value)
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn test_read_chain_state() {
     let sender = ChainDescription::Root(1);
     let (_, mut worker) =
@@ -168,7 +174,7 @@ async fn test_read_chain_state() {
         .unwrap();
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn test_read_chain_state_unknown_chain() {
     let sender = ChainDescription::Root(1);
     let unknown_chain_id = ChainId::root(99);
@@ -198,7 +204,7 @@ async fn test_read_chain_state_unknown_chain() {
         .unwrap();
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn test_handle_block_proposal_bad_signature() {
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(ChainId::root(2));
@@ -242,7 +248,7 @@ async fn test_handle_block_proposal_bad_signature() {
         .is_none());
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn test_handle_block_proposal_zero_amount() {
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(ChainId::root(2));
@@ -283,7 +289,7 @@ async fn test_handle_block_proposal_zero_amount() {
         .is_none());
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn test_handle_block_proposal_unknown_sender() {
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(ChainId::root(2));
@@ -326,7 +332,7 @@ async fn test_handle_block_proposal_unknown_sender() {
         .is_none());
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn test_handle_block_proposal_with_chaining() {
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(ChainId::root(2));
@@ -405,7 +411,7 @@ async fn test_handle_block_proposal_with_chaining() {
     assert!(worker.handle_block_proposal(block_proposal0).await.is_err());
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn test_handle_block_proposal_with_incoming_messages() {
     let sender_key_pair = KeyPair::generate();
     let recipient_key_pair = KeyPair::generate();
@@ -783,7 +789,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
     }
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn test_handle_block_proposal_exceed_balance() {
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(ChainId::root(2));
@@ -820,7 +826,7 @@ async fn test_handle_block_proposal_exceed_balance() {
         .is_none());
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn test_handle_block_proposal() {
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(ChainId::root(2));
@@ -859,7 +865,7 @@ async fn test_handle_block_proposal() {
     );
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn test_handle_block_proposal_replay() {
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(ChainId::root(2));
@@ -901,7 +907,7 @@ async fn test_handle_block_proposal_replay() {
     );
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn test_handle_certificate_unknown_sender() {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(vec![(
@@ -924,7 +930,7 @@ async fn test_handle_certificate_unknown_sender() {
     assert!(worker.fully_handle_certificate(certificate).await.is_err());
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn test_handle_certificate_bad_block_height() {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(vec![
@@ -959,7 +965,7 @@ async fn test_handle_certificate_bad_block_height() {
     worker.fully_handle_certificate(certificate).await.unwrap();
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn test_handle_certificate_with_anticipated_incoming_message() {
     let key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(vec![
@@ -1036,7 +1042,7 @@ async fn test_handle_certificate_with_anticipated_incoming_message() {
         .unwrap();
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn test_handle_certificate_receiver_balance_overflow() {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(vec![
@@ -1085,7 +1091,7 @@ async fn test_handle_certificate_receiver_balance_overflow() {
     assert_eq!(Balance::max(), new_recipient_chain.state.balance);
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn test_handle_certificate_receiver_equal_sender() {
     let key_pair = KeyPair::generate();
     let name = key_pair.public();
@@ -1130,7 +1136,7 @@ async fn test_handle_certificate_receiver_equal_sender() {
     assert_eq!(Some(certificate.hash), chain.block_hash);
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn test_handle_cross_chain_request() {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(vec![(
@@ -1182,7 +1188,7 @@ async fn test_handle_cross_chain_request() {
     assert_eq!(chain.received_log.len(), 1);
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn test_handle_cross_chain_request_no_recipient_chain() {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker(/* allow_inactive_chains */ false);
@@ -1215,7 +1221,7 @@ async fn test_handle_cross_chain_request_no_recipient_chain() {
     assert!(chain.inboxes.is_empty());
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn test_handle_cross_chain_request_no_recipient_chain_with_inactive_chains_allowed() {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker(/* allow_inactive_chains */ true);
@@ -1251,7 +1257,7 @@ async fn test_handle_cross_chain_request_no_recipient_chain_with_inactive_chains
     assert!(!chain.inboxes.is_empty());
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn test_handle_certificate_to_active_recipient() {
     let sender_key_pair = KeyPair::generate();
     let recipient_key_pair = KeyPair::generate();
@@ -1350,7 +1356,7 @@ async fn test_handle_certificate_to_active_recipient() {
             .operations[..], [Operation::Transfer { amount, .. }] if amount == Amount::from(5)));
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn test_handle_certificate_to_inactive_recipient() {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(vec![(
@@ -1383,7 +1389,7 @@ async fn test_handle_certificate_to_inactive_recipient() {
     assert!(info.manager.pending().is_none());
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn test_chain_creation_with_committee_creation() {
     let key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(vec![(

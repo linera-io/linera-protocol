@@ -12,6 +12,7 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     sync::Arc,
 };
+use test_log::test;
 use zef_base::{base_types::*, chain::ChainState, committee::Committee, error::Error, messages::*};
 use zef_storage::{InMemoryStoreClient, Storage};
 
@@ -103,6 +104,7 @@ impl TestBuilder {
             let name = key_pair.public();
             let store = InMemoryStoreClient::default();
             let state = WorkerState::new(
+                format!("Node {}", i),
                 Some(key_pair),
                 store.clone(),
                 /* allow_inactive_chains */ false,
@@ -116,7 +118,10 @@ impl TestBuilder {
             validator_clients.push((name, validator));
             validator_stores.insert(name, store);
         }
-        eprintln!("faulty validators: {:?}", faulty_validators);
+        log::info!(
+            "Test will use the following faulty validators: {:?}",
+            faulty_validators
+        );
         Self {
             initial_committee,
             admin_id: ChainId::root(0),
@@ -232,7 +237,7 @@ impl TestBuilder {
     }
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn test_initiating_valid_transfer() {
     let mut builder = TestBuilder::new(4, 1);
     let mut sender = builder
@@ -259,7 +264,7 @@ async fn test_initiating_valid_transfer() {
     );
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn test_rotate_key_pair() {
     let mut builder = TestBuilder::new(4, 1);
     let mut sender = builder
@@ -291,7 +296,7 @@ async fn test_rotate_key_pair() {
         .unwrap();
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn test_transfer_ownership() {
     let mut builder = TestBuilder::new(4, 1);
     let mut sender = builder
@@ -324,7 +329,7 @@ async fn test_transfer_ownership() {
         .is_err());
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn test_share_ownership() {
     let mut builder = TestBuilder::new(4, 1);
     let mut sender = builder
@@ -378,7 +383,7 @@ async fn test_share_ownership() {
         .unwrap();
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn test_open_chain_then_close_it() {
     let mut builder = TestBuilder::new(4, 1);
     let mut sender = builder
@@ -404,7 +409,7 @@ async fn test_open_chain_then_close_it() {
     client.close_chain().await.unwrap();
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn test_transfer_then_open_chain() {
     let mut builder = TestBuilder::new(4, 1);
     let mut sender = builder
@@ -454,7 +459,7 @@ async fn test_transfer_then_open_chain() {
         .unwrap();
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn test_open_chain_then_transfer() {
     let mut builder = TestBuilder::new(4, 1);
     let mut sender = builder
@@ -494,7 +499,7 @@ async fn test_open_chain_then_transfer() {
     assert_eq!(client.local_balance().await.unwrap(), Balance::from(0));
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn test_close_chain() {
     let mut builder = TestBuilder::new(4, 1);
     let mut sender = builder
@@ -529,7 +534,7 @@ async fn test_close_chain() {
         .is_err());
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn test_initiating_valid_transfer_too_many_faults() {
     let mut builder = TestBuilder::new(4, 2);
     let mut sender = builder
@@ -548,7 +553,7 @@ async fn test_initiating_valid_transfer_too_many_faults() {
     assert_eq!(sender.local_balance().await.unwrap(), Balance::from(4));
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn test_bidirectional_transfer() {
     let mut builder = TestBuilder::new(4, 1);
     let mut client1 = builder
@@ -600,7 +605,7 @@ async fn test_bidirectional_transfer() {
     );
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn test_receiving_unconfirmed_transfer() {
     let mut builder = TestBuilder::new(4, 1);
     let mut client1 = builder
@@ -626,7 +631,7 @@ async fn test_receiving_unconfirmed_transfer() {
     assert_eq!(client2.local_balance().await.unwrap(), Balance::from(2));
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
     let mut builder = TestBuilder::new(4, 1);
     let mut client1 = builder
@@ -702,7 +707,7 @@ async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
     assert_eq!(client3.local_balance().await.unwrap(), Balance::from(2));
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn test_change_voting_rights() {
     let mut builder = TestBuilder::new(4, 1);
     let mut admin = builder
