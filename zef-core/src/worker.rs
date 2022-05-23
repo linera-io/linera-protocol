@@ -265,7 +265,13 @@ where
         let sender = proposal.content.block.chain_id;
         let mut chain = self.storage.read_active_chain(sender).await?;
         // Check authentication of the block.
-        proposal.check(&chain.state.manager)?;
+        ensure!(
+            chain.state.manager.has_owner(&proposal.owner),
+            Error::InvalidOwner
+        );
+        proposal
+            .signature
+            .check(&proposal.content, proposal.owner)?;
         // Check if the chain is ready for this new block proposal.
         // This should always pass for nodes without voting key.
         if chain.state.manager.check_proposed_block(
