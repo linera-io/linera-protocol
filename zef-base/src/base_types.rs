@@ -33,29 +33,6 @@ pub struct KeyPair(dalek::Keypair);
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash)]
 pub struct PublicKey(pub [u8; dalek::PUBLIC_KEY_LENGTH]);
 
-/// The index of an operation in a chain.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
-pub struct OperationId {
-    pub chain_id: ChainId,
-    pub height: BlockHeight,
-    pub index: usize,
-}
-
-/// How to create a chain.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
-pub enum ChainDescription {
-    /// The chain was created by the genesis configuration.
-    Root(usize),
-    /// The chain was created by an operation from another chain.
-    Child(OperationId),
-}
-
-impl BcsSignable for ChainDescription {}
-
-/// The unique identifier (UID) of a chain. This is the hash value of a ChainDescription.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
-pub struct ChainId(pub HashValue);
-
 /// A Sha512 value.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
 pub struct HashValue(generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Digest>::OutputSize>);
@@ -281,20 +258,6 @@ impl FromStr for HashValue {
     }
 }
 
-impl std::fmt::Display for ChainId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl FromStr for ChainId {
-    type Err = HashFromStrError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(ChainId(HashValue::from_str(s)?))
-    }
-}
-
 /// Error when attempting to convert a string into a [`HashValue`].
 #[derive(Clone, Copy, Debug, Error)]
 pub enum HashFromStrError {
@@ -327,28 +290,6 @@ impl std::fmt::Debug for PublicKey {
 impl std::fmt::Debug for HashValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         write!(f, "{}", self)
-    }
-}
-
-impl std::fmt::Debug for ChainId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        write!(f, "{}", self)
-    }
-}
-
-impl From<ChainDescription> for ChainId {
-    fn from(description: ChainDescription) -> Self {
-        Self(HashValue::new(&description))
-    }
-}
-
-impl ChainId {
-    pub fn root(index: usize) -> Self {
-        Self(HashValue::new(&ChainDescription::Root(index)))
-    }
-
-    pub fn child(id: OperationId) -> Self {
-        Self(HashValue::new(&ChainDescription::Child(id)))
     }
 }
 

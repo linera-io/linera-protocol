@@ -6,8 +6,8 @@ use async_trait::async_trait;
 use futures::lock::Mutex;
 use std::{collections::HashMap, sync::Arc};
 use zef_base::{
-    base_types::{ChainId, HashValue},
-    chain::ChainState,
+    base_types::HashValue,
+    chain::{ChainId, ChainState},
     error::Error,
     messages::Certificate,
 };

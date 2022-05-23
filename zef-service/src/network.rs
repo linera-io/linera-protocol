@@ -4,7 +4,7 @@
 
 use crate::{codec, transport::*};
 use async_trait::async_trait;
-use zef_base::{base_types::*, error::*, messages::*, rpc};
+use zef_base::{chain::ChainId, error::*, messages::*, rpc};
 use zef_core::{node::ValidatorNode, worker::*};
 
 #[cfg(feature = "benchmark")]
