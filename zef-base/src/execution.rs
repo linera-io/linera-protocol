@@ -2,7 +2,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{base_types::*, committee::Committee, ensure, error::Error, manager::ChainManager};
+use crate::{
+    base_types::*,
+    chain::{ChainId, OperationId},
+    committee::Committee,
+    ensure,
+    error::Error,
+    manager::ChainManager,
+};
 use serde::{Deserialize, Serialize};
 use std::convert::{TryFrom, TryInto};
 

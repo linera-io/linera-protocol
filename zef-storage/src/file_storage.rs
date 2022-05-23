@@ -8,8 +8,8 @@ use sha2::Digest;
 use std::{path::PathBuf, sync::Arc};
 use tokio::fs;
 use zef_base::{
-    base_types::{ChainId, HashValue},
-    chain::ChainState,
+    base_types::HashValue,
+    chain::{ChainId, ChainState},
     error::Error,
     messages::Certificate,
 };

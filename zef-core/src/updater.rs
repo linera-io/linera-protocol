@@ -5,7 +5,13 @@
 use crate::node::ValidatorNode;
 use futures::{future, StreamExt};
 use std::{collections::HashMap, hash::Hash, time::Duration};
-use zef_base::{base_types::*, chain::ChainState, committee::Committee, error::Error, messages::*};
+use zef_base::{
+    base_types::*,
+    chain::{ChainDescription, ChainId, ChainState, OperationId},
+    committee::Committee,
+    error::Error,
+    messages::*,
+};
 use zef_storage::Storage;
 
 /// Used for `communicate_chain_updates`

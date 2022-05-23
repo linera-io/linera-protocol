@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::base_types::*;
+use crate::{base_types::*, chain::OperationId};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
