@@ -271,7 +271,7 @@ where
         );
         proposal
             .signature
-            .check(&proposal.content, proposal.owner)?;
+            .check(&proposal.content, proposal.owner.0)?;
         // Check if the chain is ready for this new block proposal.
         // This should always pass for nodes without voting key.
         if chain.state.manager.check_proposed_block(

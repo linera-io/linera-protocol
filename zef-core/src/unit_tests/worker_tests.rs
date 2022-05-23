@@ -21,7 +21,7 @@ use zef_storage::{InMemoryStoreClient, Storage};
 fn init_worker(allow_inactive_chains: bool) -> (Committee, WorkerState<InMemoryStoreClient>) {
     let key_pair = KeyPair::generate();
     let mut validators = BTreeMap::new();
-    validators.insert(key_pair.public(), /* voting right */ 1);
+    validators.insert(ValidatorName(key_pair.public()), /* voting right */ 1);
     let committee = Committee::new(validators, None);
     let client = InMemoryStoreClient::default();
     let worker = WorkerState::new(
@@ -34,7 +34,7 @@ fn init_worker(allow_inactive_chains: bool) -> (Committee, WorkerState<InMemoryS
 }
 
 /// Same as `init_worker` but also instantiate some initial chains.
-async fn init_worker_with_chains<I: IntoIterator<Item = (ChainDescription, Owner, Balance)>>(
+async fn init_worker_with_chains<I: IntoIterator<Item = (ChainDescription, PublicKey, Balance)>>(
     balances: I,
 ) -> (Committee, WorkerState<InMemoryStoreClient>) {
     let (committee, mut worker) = init_worker(/* allow_inactive_chains */ false);
@@ -43,7 +43,7 @@ async fn init_worker_with_chains<I: IntoIterator<Item = (ChainDescription, Owner
             committee.clone(),
             ChainId::root(0),
             description,
-            owner,
+            Owner(owner),
             balance,
         );
         worker.storage.write_chain(chain).await.unwrap();
@@ -54,7 +54,7 @@ async fn init_worker_with_chains<I: IntoIterator<Item = (ChainDescription, Owner
 /// Same as `init_worker` but also instantiate a single initial chain.
 async fn init_worker_with_chain(
     description: ChainDescription,
-    owner: Owner,
+    owner: PublicKey,
     balance: Balance,
 ) -> (Committee, WorkerState<InMemoryStoreClient>) {
     init_worker_with_chains([(description, owner, balance)]).await
@@ -145,7 +145,7 @@ fn make_transfer_certificate(
             subscribed: false,
         }),
         committees: vec![committee.clone()],
-        manager: ChainManager::single(key_pair.public()),
+        manager: ChainManager::single(Owner(key_pair.public())),
         balance,
     };
     let block = make_block(
@@ -196,7 +196,7 @@ async fn test_read_chain_state_unknown_chain() {
     chain.state.status = Some(ChainStatus::Managing {
         subscribers: Vec::new(),
     });
-    chain.state.manager = ChainManager::single(PublicKey::debug(4));
+    chain.state.manager = ChainManager::single(Owner(PublicKey::debug(4)));
     worker.storage.write_chain(chain).await.unwrap();
     worker
         .storage
@@ -460,7 +460,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                     subscribed: false,
                 }),
                 committees: vec![committee.clone()],
-                manager: ChainManager::single(sender_key_pair.public()),
+                manager: ChainManager::single(Owner(sender_key_pair.public())),
                 balance: Balance::from(3),
             }),
         },
@@ -488,7 +488,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                     subscribed: false,
                 }),
                 committees: vec![committee.clone()],
-                manager: ChainManager::single(sender_key_pair.public()),
+                manager: ChainManager::single(Owner(sender_key_pair.public())),
                 balance: Balance::from(0),
             }),
         },
@@ -740,7 +740,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                         subscribed: false,
                     }),
                     committees: vec![committee.clone()],
-                    manager: ChainManager::single(recipient_key_pair.public()),
+                    manager: ChainManager::single(Owner(recipient_key_pair.public())),
                     balance: Balance::from(0),
                 }),
             },
@@ -848,7 +848,7 @@ async fn test_handle_block_proposal() {
 
     let chain_info_response = worker.handle_block_proposal(block_proposal).await.unwrap();
     chain_info_response
-        .check(worker.key_pair.unwrap().public())
+        .check(ValidatorName(worker.key_pair.unwrap().public()))
         .unwrap();
     let pending = worker
         .storage
@@ -897,7 +897,7 @@ async fn test_handle_block_proposal_replay() {
         .await
         .unwrap();
     response
-        .check(worker.key_pair.as_ref().unwrap().public())
+        .check(ValidatorName(worker.key_pair.as_ref().unwrap().public()))
         .as_ref()
         .unwrap();
     let replay_response = worker.handle_block_proposal(block_proposal).await.unwrap();
@@ -1335,7 +1335,7 @@ async fn test_handle_certificate_to_active_recipient() {
     assert!(recipient_chain
         .state
         .manager
-        .has_owner(&recipient_key_pair.public()));
+        .has_owner(&Owner(recipient_key_pair.public())));
     assert_eq!(recipient_chain.confirmed_log.len(), 1);
     assert_eq!(recipient_chain.block_hash, Some(certificate.hash));
     assert_eq!(recipient_chain.received_log.len(), 1);
@@ -1415,7 +1415,7 @@ async fn test_chain_creation_with_committee_creation() {
                 incoming_messages: Vec::new(),
                 operations: vec![Operation::OpenChain {
                     id: child_id0,
-                    owner: key_pair.public(),
+                    owner: Owner(key_pair.public()),
                     committees: vec![committee.clone()],
                     admin_id: root_id,
                 }],
@@ -1428,7 +1428,7 @@ async fn test_chain_creation_with_committee_creation() {
                     subscribers: Vec::new(),
                 }),
                 committees: vec![committee.clone()],
-                manager: ChainManager::single(key_pair.public()),
+                manager: ChainManager::single(Owner(key_pair.public())),
                 balance: Balance::from(0),
             }),
         },
@@ -1452,7 +1452,7 @@ async fn test_chain_creation_with_committee_creation() {
                 incoming_messages: Vec::new(),
                 operations: vec![Operation::OpenChain {
                     id: child_id,
-                    owner: key_pair.public(),
+                    owner: Owner(key_pair.public()),
                     committees: vec![committee.clone()],
                     admin_id: root_id,
                 }],
@@ -1466,7 +1466,7 @@ async fn test_chain_creation_with_committee_creation() {
                     subscribed: true,
                 }),
                 committees: vec![committee.clone()],
-                manager: ChainManager::single(key_pair.public()),
+                manager: ChainManager::single(Owner(key_pair.public())),
                 balance: Balance::from(0),
             }),
         },
@@ -1520,7 +1520,7 @@ async fn test_chain_creation_with_committee_creation() {
                             // Forced because we want to receive the next new committee.
                             Operation::OpenChain {
                                 id: child_id0,
-                                owner: key_pair.public(),
+                                owner: Owner(key_pair.public()),
                                 committees: vec![committee.clone()],
                                 admin_id: root_id,
                             },
@@ -1555,7 +1555,7 @@ async fn test_chain_creation_with_committee_creation() {
                 }),
                 // The root chain knows both committees at the end.
                 committees: vec![committee.clone(), committee2.clone()],
-                manager: ChainManager::single(key_pair.public()),
+                manager: ChainManager::single(Owner(key_pair.public())),
                 balance: Balance::from(0),
             }),
         },
@@ -1583,7 +1583,7 @@ async fn test_chain_creation_with_committee_creation() {
                         0,
                         Operation::OpenChain {
                             id: child_id,
-                            owner: key_pair.public(),
+                            owner: Owner(key_pair.public()),
                             committees: vec![committee.clone()],
                             admin_id: root_id,
                         },
@@ -1599,7 +1599,7 @@ async fn test_chain_creation_with_committee_creation() {
                     subscribers: vec![child_id0, child_id], // was just added
                 }),
                 committees: vec![committee.clone(), committee2.clone()],
-                manager: ChainManager::single(key_pair.public()),
+                manager: ChainManager::single(Owner(key_pair.public())),
                 balance: Balance::from(0),
             }),
         },
@@ -1637,7 +1637,7 @@ async fn test_chain_creation_with_committee_creation() {
                 }),
                 // Finally the child knows about both committees.
                 committees: vec![committee.clone(), committee2.clone()],
-                manager: ChainManager::single(key_pair.public()),
+                manager: ChainManager::single(Owner(key_pair.public())),
                 balance: Balance::from(0),
             }),
         },
