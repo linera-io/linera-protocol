@@ -142,7 +142,7 @@ impl<A, S> ChainClientState<A, S> {
     ) -> Self {
         let known_key_pairs = known_key_pairs
             .into_iter()
-            .map(|kp| (kp.public(), kp))
+            .map(|kp| (Owner(kp.public()), kp))
             .collect();
         let state = WorkerState::new(
             "Client node".to_string(),
@@ -741,7 +741,7 @@ where
 
     async fn rotate_key_pair(&mut self, key_pair: KeyPair) -> Result<Certificate> {
         self.prepare_chain().await?;
-        let new_owner = key_pair.public();
+        let new_owner = Owner(key_pair.public());
         let block = Block {
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
@@ -749,7 +749,7 @@ where
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
         };
-        self.known_key_pairs.insert(key_pair.public(), key_pair);
+        self.known_key_pairs.insert(new_owner, key_pair);
         let certificate = self
             .propose_block(block, /* with_confirmation */ true)
             .await?;

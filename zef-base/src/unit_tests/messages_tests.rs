@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 fn test_signed_values() {
     let key1 = KeyPair::generate();
     let key2 = KeyPair::generate();
-    let name1 = key1.public();
+    let name1 = ValidatorName(key1.public());
 
     let block = Block {
         chain_id: ChainId::root(1),
@@ -40,8 +40,8 @@ fn test_certificates() {
     let key1 = KeyPair::generate();
     let key2 = KeyPair::generate();
     let key3 = KeyPair::generate();
-    let name1 = key1.public();
-    let name2 = key2.public();
+    let name1 = ValidatorName(key1.public());
+    let name2 = ValidatorName(key2.public());
 
     let mut validators = BTreeMap::new();
     validators.insert(name1, /* voting right */ 1);

@@ -5,6 +5,7 @@
 #![allow(clippy::blacklisted_name)]
 
 use super::*;
+use crate::messages::BlockHeight;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Foo(String);

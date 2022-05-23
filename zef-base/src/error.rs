@@ -2,7 +2,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{base_types::*, chain::ChainId, execution::Balance};
+use crate::{
+    base_types::*,
+    chain::ChainId,
+    execution::Balance,
+    messages::{BlockHeight, RoundNumber},
+};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 

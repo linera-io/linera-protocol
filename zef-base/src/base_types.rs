@@ -14,18 +14,6 @@ use thiserror::Error;
 #[path = "unit_tests/base_types_tests.rs"]
 mod base_types_tests;
 
-/// A block height to identify blocks in a chain.
-#[derive(
-    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
-)]
-pub struct BlockHeight(pub u64);
-
-/// A number to identify successive attempts to decide a value in a consensus protocol.
-#[derive(
-    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
-)]
-pub struct RoundNumber(pub u64);
-
 /// A signature key-pair.
 pub struct KeyPair(dalek::Keypair);
 
@@ -36,12 +24,6 @@ pub struct PublicKey(pub [u8; dalek::PUBLIC_KEY_LENGTH]);
 /// A Sha512 value.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
 pub struct HashValue(generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Digest>::OutputSize>);
-
-/// Alias for the identity of a validator.
-pub type ValidatorName = PublicKey;
-
-/// Alias for the authentication method of a chain.
-pub type Owner = PublicKey;
 
 /// A signature value.
 #[derive(Eq, PartialEq, Copy, Clone)]
@@ -293,92 +275,6 @@ impl std::fmt::Debug for HashValue {
     }
 }
 
-impl std::fmt::Display for BlockHeight {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl BlockHeight {
-    #[inline]
-    pub fn max() -> Self {
-        BlockHeight(0x7fff_ffff_ffff_ffff)
-    }
-
-    #[inline]
-    pub fn try_add_one(self) -> Result<BlockHeight, Error> {
-        let val = self.0.checked_add(1).ok_or(Error::SequenceOverflow)?;
-        Ok(Self(val))
-    }
-
-    #[inline]
-    pub fn try_sub_one(self) -> Result<BlockHeight, Error> {
-        let val = self.0.checked_sub(1).ok_or(Error::SequenceUnderflow)?;
-        Ok(Self(val))
-    }
-
-    #[inline]
-    pub fn try_add_assign_one(&mut self) -> Result<(), Error> {
-        self.0 = self.0.checked_add(1).ok_or(Error::SequenceOverflow)?;
-        Ok(())
-    }
-
-    #[inline]
-    pub fn try_sub_assign_one(&mut self) -> Result<(), Error> {
-        self.0 = self.0.checked_sub(1).ok_or(Error::SequenceUnderflow)?;
-        Ok(())
-    }
-}
-
-impl RoundNumber {
-    #[inline]
-    pub fn max() -> Self {
-        RoundNumber(0x7fff_ffff_ffff_ffff)
-    }
-
-    #[inline]
-    pub fn try_add_one(self) -> Result<RoundNumber, Error> {
-        let val = self.0.checked_add(1).ok_or(Error::SequenceOverflow)?;
-        Ok(Self(val))
-    }
-
-    #[inline]
-    pub fn try_sub_one(self) -> Result<RoundNumber, Error> {
-        let val = self.0.checked_sub(1).ok_or(Error::SequenceUnderflow)?;
-        Ok(Self(val))
-    }
-
-    #[inline]
-    pub fn try_add_assign_one(&mut self) -> Result<(), Error> {
-        self.0 = self.0.checked_add(1).ok_or(Error::SequenceOverflow)?;
-        Ok(())
-    }
-
-    #[inline]
-    pub fn try_sub_assign_one(&mut self) -> Result<(), Error> {
-        self.0 = self.0.checked_sub(1).ok_or(Error::SequenceUnderflow)?;
-        Ok(())
-    }
-}
-
-impl From<BlockHeight> for u64 {
-    fn from(val: BlockHeight) -> Self {
-        val.0
-    }
-}
-
-impl From<u64> for BlockHeight {
-    fn from(value: u64) -> Self {
-        BlockHeight(value)
-    }
-}
-
-impl From<BlockHeight> for usize {
-    fn from(value: BlockHeight) -> Self {
-        value.0 as usize
-    }
-}
-
 /// Something that we know how to hash and sign.
 pub trait Signable<Hasher> {
     fn write(&self, hasher: &mut Hasher);
@@ -462,7 +358,7 @@ impl Signature {
     fn verify_batch_internal<'a, T, I>(value: &'a T, votes: I) -> Result<(), dalek::SignatureError>
     where
         T: Signable<Vec<u8>>,
-        I: IntoIterator<Item = &'a (PublicKey, Signature)>,
+        I: IntoIterator<Item = (&'a PublicKey, &'a Signature)>,
     {
         let mut msg = Vec::new();
         value.write(&mut msg);
@@ -480,7 +376,7 @@ impl Signature {
     pub fn verify_batch<'a, T, I>(value: &'a T, votes: I) -> Result<(), Error>
     where
         T: Signable<Vec<u8>>,
-        I: IntoIterator<Item = &'a (PublicKey, Signature)>,
+        I: IntoIterator<Item = (&'a PublicKey, &'a Signature)>,
     {
         Signature::verify_batch_internal(value, votes).map_err(|error| Error::InvalidSignature {
             error: format!("batched {}", error),
