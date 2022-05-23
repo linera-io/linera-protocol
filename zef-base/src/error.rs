@@ -19,7 +19,7 @@ macro_rules! ensure {
 /// Custom error type.
 pub enum Error {
     // Chain access control
-    #[error("The chain being queried is not active {:?}", 0)]
+    #[error("The chain being queried is not active {0:?}")]
     InactiveChain(ChainId),
     #[error("Block was not signed by an authorized owner")]
     InvalidOwner,
@@ -33,10 +33,7 @@ pub enum Error {
     InvalidBlockHeight,
     #[error("Cannot initiate a new block while the previous one is still pending confirmation")]
     PreviousBlockMustBeConfirmedFirst,
-    #[error(
-        "Cannot confirm a block before its predecessors: {:?}",
-        current_block_height
-    )]
+    #[error("Cannot confirm a block before its predecessors: {current_block_height:?}")]
     MissingEarlierBlocks { current_block_height: BlockHeight },
 
     // Algorithmic operations
@@ -54,7 +51,7 @@ pub enum Error {
     BalanceUnderflow,
 
     // Signatures and certificates
-    #[error("Signature for object {} is not valid: {}", type_name, error)]
+    #[error("Signature for object {type_name} is not valid: {error}")]
     InvalidSignature { error: String, type_name: String },
     #[error("The signature was not created by a valid entity")]
     InvalidSigner,
@@ -71,34 +68,26 @@ pub enum Error {
     #[error("Transfers must have positive amount")]
     IncorrectTransferAmount,
     #[error(
-        "The transferred amount must be not exceed the current chain balance: {:?}",
-        current_balance
+        "The transferred amount must be not exceed the current chain balance: {current_balance:?}"
     )]
     InsufficientFunding { current_balance: Balance },
-    #[error("Invalid new chain id: {}", 0)]
+    #[error("Invalid new chain id: {0}")]
     InvalidNewChainId(ChainId),
     #[error("Invalid committee")]
     InvalidCommittee,
-    #[error("Round number should be greater than {:?}", 0)]
+    #[error("Round number should be greater than {0:?}")]
     InsufficientRound(RoundNumber),
-    #[error(
-        "A different block for height {:?} was already locked at round number {:?}",
-        0,
-        1
-    )]
+    #[error("A different block for height {0:?} was already locked at round number {1:?}")]
     HasLockedBlock(BlockHeight, RoundNumber),
     #[error(
-        "This replica has not processed any update from chain {:?} at height {:?} yet",
-        sender_id,
-        height
+        "This replica has not processed any update from chain {sender_id:?} at height {height:?} yet"
     )]
     MissingCrossChainUpdate {
         sender_id: ChainId,
         height: BlockHeight,
     },
     #[error(
-        "Message in block proposal does not match received message from chain {:?} at height {:?} and index {:?}",
-        sender_id, height, index
+        "Message in block proposal does not match received message from chain {sender_id:?} at height {height:?} and index {index:?}"
     )]
     InvalidMessageContent {
         sender_id: ChainId,
@@ -106,8 +95,7 @@ pub enum Error {
         index: usize,
     },
     #[error(
-        "Message in block proposal does not match the order of received messages from chain {:?}: was height {:?} and index {:?} instead of {:?} and {:?})",
-        sender_id, height, index, expected_height, expected_index
+        "Message in block proposal does not match the order of received messages from chain {sender_id:?}: was height {height:?} and index {index:?} instead of {expected_height:?} and {expected_index:?})"
     )]
     InvalidMessageOrder {
         sender_id: ChainId,
@@ -140,14 +128,14 @@ pub enum Error {
     InvalidDecoding,
     #[error("Unexpected message.")]
     UnexpectedMessage,
-    #[error("Network error while querying service: {:?}.", error)]
+    #[error("Network error while querying service: {error:?}.")]
     ClientIoError { error: String },
-    #[error("Storage error while querying service: {:?}.", error)]
+    #[error("Storage error while querying service: {error:?}.")]
     StorageIoError { error: String },
-    #[error("Storage (de)serialization error: {:?}.", error)]
+    #[error("Storage (de)serialization error: {error:?}.")]
     StorageBcsError { error: String },
 
     // Storage
-    #[error("Missing certificate: {:?}", hash)]
+    #[error("Missing certificate: {hash:?}")]
     MissingCertificate { hash: HashValue },
 }
