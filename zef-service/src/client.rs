@@ -12,7 +12,12 @@ use std::{
     time::{Duration, Instant},
 };
 use structopt::StructOpt;
-use zef_base::{base_types::*, messages::*, rpc};
+use zef_base::{
+    base_types::*,
+    execution::{Address, Amount, Balance, Operation, UserData},
+    messages::*,
+    rpc,
+};
 use zef_core::{
     client::*,
     node::{LocalNodeClient, ValidatorNode},
