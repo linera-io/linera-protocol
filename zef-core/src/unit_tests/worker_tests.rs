@@ -6,9 +6,9 @@ use crate::worker::{ValidatorWorker, WorkerState};
 use std::collections::BTreeMap;
 use test_log::test;
 use zef_base::{
-    base_types::*,
     chain::{ChainDescription, ChainId, ChainState, Event, OperationId},
     committee::Committee,
+    crypto::*,
     error::Error,
     execution::{Address, Amount, Balance, ChainStatus, ExecutionState, Operation, UserData},
     manager::ChainManager,

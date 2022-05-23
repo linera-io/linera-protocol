@@ -14,8 +14,8 @@ use dyn_clone::DynClone;
 use futures::future;
 use std::ops::DerefMut;
 use zef_base::{
-    base_types::HashValue,
     chain::{ChainId, ChainState},
+    crypto::HashValue,
     ensure,
     error::Error,
     messages::Certificate,

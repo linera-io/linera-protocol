@@ -11,9 +11,9 @@ use std::{
     path::Path,
 };
 use zef_base::{
-    base_types::*,
     chain::{ChainDescription, ChainId, ChainState},
     committee::Committee,
+    crypto::*,
     execution::Balance,
     messages::{BlockHeight, Owner, ValidatorName},
 };

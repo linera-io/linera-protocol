@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    base_types::*,
     chain::{ChainDescription, ChainId},
     committee::Committee,
+    crypto::*,
     ensure,
     error::Error,
     execution::{Balance, Operation},
