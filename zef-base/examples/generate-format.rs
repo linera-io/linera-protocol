@@ -16,8 +16,8 @@ fn get_registry() -> Result<Registry> {
     let samples = Samples::new();
     // 1. Record samples for types with custom deserializers.
     // 2. Trace the main entry point(s) + every enum separately.
-    tracer.trace_type::<messages::Address>(&samples)?;
-    tracer.trace_type::<messages::Operation>(&samples)?;
+    tracer.trace_type::<execution::Address>(&samples)?;
+    tracer.trace_type::<execution::Operation>(&samples)?;
     tracer.trace_type::<messages::Value>(&samples)?;
     tracer.trace_type::<base_types::ChainDescription>(&samples)?;
     tracer.trace_type::<manager::ChainManager>(&samples)?;

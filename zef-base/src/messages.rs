@@ -2,57 +2,20 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{base_types::*, committee::Committee, ensure, error::Error, manager::ChainManager};
+use super::{
+    base_types::*,
+    committee::Committee,
+    ensure,
+    error::Error,
+    execution::{Balance, Operation},
+    manager::ChainManager,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
 #[cfg(test)]
 #[path = "unit_tests/messages_tests.rs"]
 mod messages_tests;
-
-/// A recipient's address.
-#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Serialize, Deserialize)]
-pub enum Address {
-    Burn,             // for demo purposes
-    Account(ChainId), // TODO: support several accounts per chain
-}
-
-/// An chain operation.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub enum Operation {
-    /// Transfer `amount` units of value to the recipient.
-    Transfer {
-        recipient: Address,
-        amount: Amount,
-        user_data: UserData,
-    },
-    /// Create (or activate) a new chain by installing the given authentication key.
-    /// This will automatically subscribe to future committees created by `admin_id`.
-    OpenChain {
-        id: ChainId,
-        owner: Owner,
-        admin_id: ChainId,
-        committees: Vec<Committee>,
-    },
-    /// Close the chain.
-    CloseChain,
-    /// Change the authentication key of the chain.
-    ChangeOwner { new_owner: Owner },
-    /// Change the authentication key of the chain.
-    ChangeMultipleOwners { new_owners: Vec<Owner> },
-    /// Register a new committee.
-    NewCommittee {
-        admin_id: ChainId,
-        committee: Committee,
-    },
-    /// Subscribe to future committees created by `admin_id`. Same as OpenChain but useful
-    /// for root chains (other than admin_id) created in the genenis config.
-    SubscribeToNewCommittees {
-        id: ChainId,
-        admin_id: ChainId,
-        committees: Vec<Committee>,
-    },
-}
 
 /// A block containing operations to apply on a given chain, as well as the
 /// acknowledgment of a number of incoming messages from other chains.

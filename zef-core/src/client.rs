@@ -14,7 +14,12 @@ use std::{
     time::Duration,
 };
 use zef_base::{
-    base_types::*, committee::Committee, error::Error, manager::ChainManager, messages::*,
+    base_types::*,
+    committee::Committee,
+    error::Error,
+    execution::{Address, Amount, Balance, Operation, UserData},
+    manager::ChainManager,
+    messages::*,
 };
 use zef_storage::Storage;
 
