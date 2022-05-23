@@ -21,7 +21,7 @@ mod rocksdb_storage_tests;
 /// Rocksdb-based store.
 #[derive(Debug)]
 pub struct RocksdbStore {
-    /// RockdbDB handle.
+    /// RocksDB handle.
     db: rocksdb::DB,
 }
 
