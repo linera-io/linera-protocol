@@ -280,16 +280,6 @@ impl BlockProposal {
             signature,
         }
     }
-
-    // TODO: this API is not great
-    pub fn check(&self, manager: &ChainManager) -> Result<(), Error> {
-        ensure!(
-            manager.is_active(),
-            Error::InactiveChain(self.content.block.chain_id)
-        );
-        ensure!(manager.has_owner(&self.owner), Error::InvalidOwner);
-        self.signature.check(&self.content, self.owner)
-    }
 }
 
 impl Vote {
