@@ -7,9 +7,10 @@ use std::collections::BTreeMap;
 use test_log::test;
 use zef_base::{
     base_types::*,
-    chain::{ChainState, ChainStatus, Event, ExecutionState},
+    chain::{ChainState, Event},
     committee::Committee,
     error::Error,
+    execution::{ChainStatus, ExecutionState},
     manager::ChainManager,
     messages::*,
 };
