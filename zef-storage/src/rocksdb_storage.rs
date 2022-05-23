@@ -12,8 +12,8 @@ use std::{
     sync::Arc,
 };
 use zef_base::{
-    base_types::HashValue,
     chain::{ChainId, ChainState},
+    crypto::HashValue,
     error::Error,
     messages::Certificate,
 };

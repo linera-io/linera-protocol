@@ -11,8 +11,8 @@ use std::str::FromStr;
 use thiserror::Error;
 
 #[cfg(test)]
-#[path = "unit_tests/base_types_tests.rs"]
-mod base_types_tests;
+#[path = "unit_tests/crypto_tests.rs"]
+mod crypto_tests;
 
 /// A signature key-pair.
 pub struct KeyPair(dalek::Keypair);

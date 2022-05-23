@@ -14,9 +14,9 @@ use std::{
 };
 use test_log::test;
 use zef_base::{
-    base_types::*,
     chain::{ChainDescription, ChainId, ChainState, OperationId},
     committee::Committee,
+    crypto::*,
     error::Error,
     execution::{Amount, Balance, Operation, UserData},
     messages::*,
