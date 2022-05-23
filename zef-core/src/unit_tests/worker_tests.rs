@@ -57,7 +57,7 @@ async fn init_worker_with_chain(
     owner: Owner,
     balance: Balance,
 ) -> (Committee, WorkerState<InMemoryStoreClient>) {
-    init_worker_with_chains(std::iter::once((description, owner, balance))).await
+    init_worker_with_chains([(description, owner, balance)]).await
 }
 
 fn make_block(
