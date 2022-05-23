@@ -2,8 +2,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{
+use crate::{
     base_types::*,
+    chain::{ChainDescription, ChainId},
     committee::Committee,
     ensure,
     error::Error,

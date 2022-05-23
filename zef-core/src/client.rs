@@ -15,6 +15,7 @@ use std::{
 };
 use zef_base::{
     base_types::*,
+    chain::{ChainId, OperationId},
     committee::Committee,
     error::Error,
     execution::{Address, Amount, Balance, Operation, UserData},
