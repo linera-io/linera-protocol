@@ -18,6 +18,26 @@ use std::collections::HashSet;
 #[path = "unit_tests/messages_tests.rs"]
 mod messages_tests;
 
+/// A block height to identify blocks in a chain.
+#[derive(
+    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
+)]
+pub struct BlockHeight(pub u64);
+
+/// A number to identify successive attempts to decide a value in a consensus protocol.
+#[derive(
+    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
+)]
+pub struct RoundNumber(pub u64);
+
+/// The identity of a validator.
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
+pub struct ValidatorName(pub PublicKey);
+
+/// The owner of a chain.
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
+pub struct Owner(pub PublicKey);
+
 /// A block containing operations to apply on a given chain, as well as the
 /// acknowledgment of a number of incoming messages from other chains.
 /// * Incoming messages must be selected in the order they were
@@ -240,7 +260,7 @@ impl BlockProposal {
         let signature = Signature::new(&content, secret);
         Self {
             content,
-            owner: secret.public(),
+            owner: Owner(secret.public()),
             signature,
         }
     }
@@ -252,14 +272,14 @@ impl Vote {
         let signature = Signature::new(&value, key_pair);
         Self {
             value,
-            validator: key_pair.public(),
+            validator: ValidatorName(key_pair.public()),
             signature,
         }
     }
 
     /// Verify the signature in the vote.
     pub fn check(&self, name: ValidatorName) -> Result<(), Error> {
-        self.signature.check(&self.value, name)
+        self.signature.check(&self.value, name.0)
     }
 }
 
@@ -271,7 +291,7 @@ impl ChainInfoResponse {
 
     pub fn check(&self, name: ValidatorName) -> Result<(), Error> {
         match self.signature {
-            Some(sig) => sig.check(&self.info, name),
+            Some(sig) => sig.check(&self.info, name.0),
             None => Err(Error::InvalidChainInfoResponse),
         }
     }
@@ -308,7 +328,7 @@ impl<'a> SignatureAggregator<'a> {
         validator: ValidatorName,
         signature: Signature,
     ) -> Result<Option<Certificate>, Error> {
-        signature.check(&self.partial.value, validator)?;
+        signature.check(&self.partial.value, validator.0)?;
         // Check that each validator only appears once.
         ensure!(
             !self.used_validators.contains(&validator),
@@ -380,8 +400,114 @@ impl Certificate {
             Error::CertificateRequiresQuorum
         );
         // All what is left is checking signatures!
-        Signature::verify_batch(&self.value, &self.signatures)?;
+        Signature::verify_batch(&self.value, self.signatures.iter().map(|(v, s)| (&v.0, s)))?;
         Ok(&self.value)
+    }
+}
+
+impl std::fmt::Display for BlockHeight {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::fmt::Display for Owner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::fmt::Display for ValidatorName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl BlockHeight {
+    #[inline]
+    pub fn max() -> Self {
+        BlockHeight(0x7fff_ffff_ffff_ffff)
+    }
+
+    #[inline]
+    pub fn try_add_one(self) -> Result<BlockHeight, Error> {
+        let val = self.0.checked_add(1).ok_or(Error::SequenceOverflow)?;
+        Ok(Self(val))
+    }
+
+    #[inline]
+    pub fn try_sub_one(self) -> Result<BlockHeight, Error> {
+        let val = self.0.checked_sub(1).ok_or(Error::SequenceUnderflow)?;
+        Ok(Self(val))
+    }
+
+    #[inline]
+    pub fn try_add_assign_one(&mut self) -> Result<(), Error> {
+        self.0 = self.0.checked_add(1).ok_or(Error::SequenceOverflow)?;
+        Ok(())
+    }
+
+    #[inline]
+    pub fn try_sub_assign_one(&mut self) -> Result<(), Error> {
+        self.0 = self.0.checked_sub(1).ok_or(Error::SequenceUnderflow)?;
+        Ok(())
+    }
+}
+
+impl RoundNumber {
+    #[inline]
+    pub fn max() -> Self {
+        RoundNumber(0x7fff_ffff_ffff_ffff)
+    }
+
+    #[inline]
+    pub fn try_add_one(self) -> Result<RoundNumber, Error> {
+        let val = self.0.checked_add(1).ok_or(Error::SequenceOverflow)?;
+        Ok(Self(val))
+    }
+
+    #[inline]
+    pub fn try_sub_one(self) -> Result<RoundNumber, Error> {
+        let val = self.0.checked_sub(1).ok_or(Error::SequenceUnderflow)?;
+        Ok(Self(val))
+    }
+
+    #[inline]
+    pub fn try_add_assign_one(&mut self) -> Result<(), Error> {
+        self.0 = self.0.checked_add(1).ok_or(Error::SequenceOverflow)?;
+        Ok(())
+    }
+
+    #[inline]
+    pub fn try_sub_assign_one(&mut self) -> Result<(), Error> {
+        self.0 = self.0.checked_sub(1).ok_or(Error::SequenceUnderflow)?;
+        Ok(())
+    }
+}
+
+impl From<BlockHeight> for u64 {
+    fn from(val: BlockHeight) -> Self {
+        val.0
+    }
+}
+
+impl From<u64> for BlockHeight {
+    fn from(value: u64) -> Self {
+        BlockHeight(value)
+    }
+}
+
+impl From<BlockHeight> for usize {
+    fn from(value: BlockHeight) -> Self {
+        value.0 as usize
+    }
+}
+
+impl std::str::FromStr for Owner {
+    type Err = PublicKeyFromStrError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Owner(PublicKey::from_str(s)?))
     }
 }
 

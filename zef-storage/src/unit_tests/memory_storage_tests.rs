@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use zef_base::{chain::ChainDescription, execution::ChainStatus};
+use zef_base::{chain::ChainDescription, execution::ChainStatus, messages::Owner};
 
 #[tokio::test]
 async fn test_read_write() {
@@ -13,7 +13,7 @@ async fn test_read_write() {
     chain.state.status = Some(ChainStatus::Managing {
         subscribers: Vec::new(),
     });
-    chain.state.manager = ChainManager::single(PublicKey::debug(2));
+    chain.state.manager = ChainManager::single(Owner(PublicKey::debug(2)));
     store.write_chain(chain).await.unwrap();
     store
         .clone()

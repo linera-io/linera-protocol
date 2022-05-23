@@ -9,6 +9,7 @@ use crate::{
     ensure,
     error::Error,
     manager::ChainManager,
+    messages::{BlockHeight, Owner},
 };
 use serde::{Deserialize, Serialize};
 use std::convert::{TryFrom, TryInto};

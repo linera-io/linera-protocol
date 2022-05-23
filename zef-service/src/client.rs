@@ -474,7 +474,7 @@ async fn main() {
                 Some(key) => (key, None),
                 None => {
                     let key_pair = KeyPair::generate();
-                    (key_pair.public(), Some(key_pair))
+                    (Owner(key_pair.public()), Some(key_pair))
                 }
             };
             info!("Starting operation to open a new chain");
@@ -598,7 +598,7 @@ async fn main() {
                 // Public "genesis" state.
                 genesis_config.chains.push((
                     description,
-                    chain.key_pair.as_ref().unwrap().public(),
+                    Owner(chain.key_pair.as_ref().unwrap().public()),
                     initial_funding,
                 ));
                 // Private keys.

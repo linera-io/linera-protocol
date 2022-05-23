@@ -12,7 +12,7 @@ use std::{
     str::FromStr,
 };
 use structopt::StructOpt;
-use zef_base::base_types::*;
+use zef_base::{base_types::*, messages::ValidatorName};
 use zef_core::worker::*;
 use zef_service::{
     config::*,
@@ -139,7 +139,7 @@ impl FromStr for ValidatorOptions {
 
 fn make_server_config(options: ValidatorOptions) -> ValidatorServerConfig {
     let key = KeyPair::generate();
-    let name = key.public();
+    let name = ValidatorName(key.public());
     let validator = ValidatorConfig {
         network_protocol: options.protocol,
         name,

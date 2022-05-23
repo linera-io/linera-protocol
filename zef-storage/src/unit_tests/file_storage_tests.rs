@@ -3,7 +3,6 @@
 
 use super::*;
 use zef_base::{
-    base_types::*,
     execution::{ExecutionState, Operation},
     messages::*,
 };

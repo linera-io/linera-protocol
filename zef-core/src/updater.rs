@@ -6,7 +6,6 @@ use crate::node::ValidatorNode;
 use futures::{future, StreamExt};
 use std::{collections::HashMap, hash::Hash, time::Duration};
 use zef_base::{
-    base_types::*,
     chain::{ChainDescription, ChainId, ChainState, OperationId},
     committee::Committee,
     error::Error,

@@ -45,7 +45,7 @@ BlockProposal:
     - content:
         TYPENAME: BlockAndRound
     - owner:
-        TYPENAME: PublicKey
+        TYPENAME: Owner
     - signature:
         TYPENAME: Signature
 Certificate:
@@ -55,7 +55,7 @@ Certificate:
     - signatures:
         SEQ:
           TUPLE:
-            - TYPENAME: PublicKey
+            - TYPENAME: ValidatorName
             - TYPENAME: Signature
 ChainDescription:
   ENUM:
@@ -187,7 +187,7 @@ Committee:
     - voting_rights:
         MAP:
           KEY:
-            TYPENAME: PublicKey
+            TYPENAME: ValidatorName
           VALUE: U64
     - total_votes: U64
     - origin:
@@ -441,7 +441,7 @@ MultiOwnerManager:
     - owners:
         MAP:
           KEY:
-            TYPENAME: PublicKey
+            TYPENAME: Owner
           VALUE: UNIT
     - proposed:
         OPTION:
@@ -469,7 +469,7 @@ Operation:
           - id:
               TYPENAME: ChainId
           - owner:
-              TYPENAME: PublicKey
+              TYPENAME: Owner
           - admin_id:
               TYPENAME: ChainId
           - committees:
@@ -481,13 +481,13 @@ Operation:
       ChangeOwner:
         STRUCT:
           - new_owner:
-              TYPENAME: PublicKey
+              TYPENAME: Owner
     4:
       ChangeMultipleOwners:
         STRUCT:
           - new_owners:
               SEQ:
-                TYPENAME: PublicKey
+                TYPENAME: Owner
     5:
       NewCommittee:
         STRUCT:
@@ -519,6 +519,9 @@ OutboxState:
           TUPLE:
             - TYPENAME: BlockHeight
             - TYPENAME: HashValue
+Owner:
+  NEWTYPESTRUCT:
+    TYPENAME: PublicKey
 PublicKey:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -534,7 +537,7 @@ Signature:
 SingleOwnerManager:
   STRUCT:
     - owner:
-        TYPENAME: PublicKey
+        TYPENAME: Owner
     - pending:
         OPTION:
           TYPENAME: Vote
@@ -544,6 +547,9 @@ UserData:
       TUPLEARRAY:
         CONTENT: U8
         SIZE: 32
+ValidatorName:
+  NEWTYPESTRUCT:
+    TYPENAME: PublicKey
 Value:
   ENUM:
     0:
@@ -567,7 +573,7 @@ Vote:
     - value:
         TYPENAME: Value
     - validator:
-        TYPENAME: PublicKey
+        TYPENAME: ValidatorName
     - signature:
         TYPENAME: Signature
 
