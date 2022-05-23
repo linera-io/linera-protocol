@@ -13,7 +13,14 @@ use std::{
     sync::Arc,
 };
 use test_log::test;
-use zef_base::{base_types::*, chain::ChainState, committee::Committee, error::Error, messages::*};
+use zef_base::{
+    base_types::*,
+    chain::ChainState,
+    committee::Committee,
+    error::Error,
+    execution::{Amount, Balance, Operation, UserData},
+    messages::*,
+};
 use zef_storage::{InMemoryStoreClient, Storage};
 
 /// An validator used for testing. "Faulty" validators ignore block proposals (but not

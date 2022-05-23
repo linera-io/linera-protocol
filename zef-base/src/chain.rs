@@ -7,7 +7,7 @@ use crate::{
     committee::Committee,
     ensure,
     error::Error,
-    execution::{ChainStatus, ExecutionState},
+    execution::{Balance, ChainStatus, ExecutionState, Operation},
     manager::ChainManager,
     messages::*,
 };

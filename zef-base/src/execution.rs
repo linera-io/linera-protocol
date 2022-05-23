@@ -2,10 +2,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    base_types::*, committee::Committee, ensure, error::Error, manager::ChainManager, messages::*,
-};
+use crate::{base_types::*, committee::Committee, ensure, error::Error, manager::ChainManager};
 use serde::{Deserialize, Serialize};
+use std::convert::{TryFrom, TryInto};
 
 /// Execution state of a chain.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -22,6 +21,66 @@ pub struct ExecutionState {
     pub manager: ChainManager,
     /// Balance of the chain.
     pub balance: Balance,
+}
+
+/// A recipient's address.
+#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Serialize, Deserialize)]
+pub enum Address {
+    Burn,             // for demo purposes
+    Account(ChainId), // TODO: support several accounts per chain
+}
+
+/// A non-negative amount of money to be transferred.
+#[derive(
+    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
+)]
+pub struct Amount(u64);
+
+/// The balance of a chain.
+#[derive(
+    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
+)]
+pub struct Balance(u128);
+
+/// Optional user message attached to a transfer.
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]
+pub struct UserData(pub Option<[u8; 32]>);
+
+/// An chain operation.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub enum Operation {
+    /// Transfer `amount` units of value to the recipient.
+    Transfer {
+        recipient: Address,
+        amount: Amount,
+        user_data: UserData,
+    },
+    /// Create (or activate) a new chain by installing the given authentication key.
+    /// This will automatically subscribe to future committees created by `admin_id`.
+    OpenChain {
+        id: ChainId,
+        owner: Owner,
+        admin_id: ChainId,
+        committees: Vec<Committee>,
+    },
+    /// Close the chain.
+    CloseChain,
+    /// Change the authentication key of the chain.
+    ChangeOwner { new_owner: Owner },
+    /// Change the authentication key of the chain.
+    ChangeMultipleOwners { new_owners: Vec<Owner> },
+    /// Register a new committee.
+    NewCommittee {
+        admin_id: ChainId,
+        committee: Committee,
+    },
+    /// Subscribe to future committees created by `admin_id`. Same as OpenChain but useful
+    /// for root chains (other than admin_id) created in the genenis config.
+    SubscribeToNewCommittees {
+        id: ChainId,
+        admin_id: ChainId,
+        committees: Vec<Committee>,
+    },
 }
 
 impl BcsSignable for ExecutionState {}
@@ -242,5 +301,132 @@ impl ExecutionState {
             }
             _ => Ok(Vec::new()),
         }
+    }
+}
+
+impl Amount {
+    #[inline]
+    pub fn zero() -> Self {
+        Amount(0)
+    }
+
+    #[inline]
+    pub fn try_add(self, other: Self) -> Result<Self, Error> {
+        let val = self.0.checked_add(other.0).ok_or(Error::AmountOverflow)?;
+        Ok(Self(val))
+    }
+
+    #[inline]
+    pub fn try_sub(self, other: Self) -> Result<Self, Error> {
+        let val = self.0.checked_sub(other.0).ok_or(Error::AmountUnderflow)?;
+        Ok(Self(val))
+    }
+
+    #[inline]
+    pub fn try_add_assign(&mut self, other: Self) -> Result<(), Error> {
+        self.0 = self.0.checked_add(other.0).ok_or(Error::AmountOverflow)?;
+        Ok(())
+    }
+
+    #[inline]
+    pub fn try_sub_assign(&mut self, other: Self) -> Result<(), Error> {
+        self.0 = self.0.checked_sub(other.0).ok_or(Error::AmountUnderflow)?;
+        Ok(())
+    }
+}
+
+impl Balance {
+    #[inline]
+    pub fn zero() -> Self {
+        Balance(0)
+    }
+
+    #[inline]
+    pub fn max() -> Self {
+        Balance(std::u128::MAX)
+    }
+
+    #[inline]
+    pub fn try_add(self, other: Self) -> Result<Self, Error> {
+        let val = self.0.checked_add(other.0).ok_or(Error::BalanceOverflow)?;
+        Ok(Self(val))
+    }
+
+    #[inline]
+    pub fn try_sub(self, other: Self) -> Result<Self, Error> {
+        let val = self.0.checked_sub(other.0).ok_or(Error::BalanceUnderflow)?;
+        Ok(Self(val))
+    }
+
+    #[inline]
+    pub fn try_add_assign(&mut self, other: Self) -> Result<(), Error> {
+        self.0 = self.0.checked_add(other.0).ok_or(Error::BalanceOverflow)?;
+        Ok(())
+    }
+
+    #[inline]
+    pub fn try_sub_assign(&mut self, other: Self) -> Result<(), Error> {
+        self.0 = self.0.checked_sub(other.0).ok_or(Error::BalanceUnderflow)?;
+        Ok(())
+    }
+}
+
+impl std::fmt::Display for Balance {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::fmt::Display for Amount {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::str::FromStr for Balance {
+    type Err = std::num::ParseIntError;
+
+    fn from_str(src: &str) -> Result<Self, Self::Err> {
+        Ok(Self(u128::from_str(src)?))
+    }
+}
+
+impl std::str::FromStr for Amount {
+    type Err = std::num::ParseIntError;
+
+    fn from_str(src: &str) -> Result<Self, Self::Err> {
+        Ok(Self(u64::from_str(src)?))
+    }
+}
+
+impl From<Amount> for u64 {
+    fn from(val: Amount) -> Self {
+        val.0
+    }
+}
+
+impl From<Amount> for Balance {
+    fn from(val: Amount) -> Self {
+        Balance(val.0 as u128)
+    }
+}
+
+impl TryFrom<Balance> for Amount {
+    type Error = std::num::TryFromIntError;
+
+    fn try_from(val: Balance) -> Result<Self, Self::Error> {
+        Ok(Amount(val.0.try_into()?))
+    }
+}
+
+impl From<u64> for Amount {
+    fn from(value: u64) -> Self {
+        Amount(value)
+    }
+}
+
+impl From<u128> for Balance {
+    fn from(value: u128) -> Self {
+        Balance(value)
     }
 }

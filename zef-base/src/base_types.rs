@@ -7,27 +7,12 @@ use ed25519_dalek as dalek;
 use ed25519_dalek::{Signer, Verifier};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
-use std::{
-    convert::{TryFrom, TryInto},
-    str::FromStr,
-};
+use std::str::FromStr;
 use thiserror::Error;
 
 #[cfg(test)]
 #[path = "unit_tests/base_types_tests.rs"]
 mod base_types_tests;
-
-/// A non-negative amount of money to be transferred.
-#[derive(
-    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
-)]
-pub struct Amount(u64);
-
-/// The balance of a chain.
-#[derive(
-    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
-)]
-pub struct Balance(u128);
 
 /// A block height to identify blocks in a chain.
 #[derive(
@@ -40,10 +25,6 @@ pub struct BlockHeight(pub u64);
     Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
 )]
 pub struct RoundNumber(pub u64);
-
-/// Optional user message attached to a transfer.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]
-pub struct UserData(pub Option<[u8; 32]>);
 
 /// A signature key-pair.
 pub struct KeyPair(dalek::Keypair);
@@ -371,124 +352,9 @@ impl ChainId {
     }
 }
 
-impl Amount {
-    #[inline]
-    pub fn zero() -> Self {
-        Amount(0)
-    }
-
-    #[inline]
-    pub fn try_add(self, other: Self) -> Result<Self, Error> {
-        let val = self.0.checked_add(other.0).ok_or(Error::AmountOverflow)?;
-        Ok(Self(val))
-    }
-
-    #[inline]
-    pub fn try_sub(self, other: Self) -> Result<Self, Error> {
-        let val = self.0.checked_sub(other.0).ok_or(Error::AmountUnderflow)?;
-        Ok(Self(val))
-    }
-
-    #[inline]
-    pub fn try_add_assign(&mut self, other: Self) -> Result<(), Error> {
-        self.0 = self.0.checked_add(other.0).ok_or(Error::AmountOverflow)?;
-        Ok(())
-    }
-
-    #[inline]
-    pub fn try_sub_assign(&mut self, other: Self) -> Result<(), Error> {
-        self.0 = self.0.checked_sub(other.0).ok_or(Error::AmountUnderflow)?;
-        Ok(())
-    }
-}
-
-impl Balance {
-    #[inline]
-    pub fn zero() -> Self {
-        Balance(0)
-    }
-
-    #[inline]
-    pub fn max() -> Self {
-        Balance(std::u128::MAX)
-    }
-
-    #[inline]
-    pub fn try_add(self, other: Self) -> Result<Self, Error> {
-        let val = self.0.checked_add(other.0).ok_or(Error::BalanceOverflow)?;
-        Ok(Self(val))
-    }
-
-    #[inline]
-    pub fn try_sub(self, other: Self) -> Result<Self, Error> {
-        let val = self.0.checked_sub(other.0).ok_or(Error::BalanceUnderflow)?;
-        Ok(Self(val))
-    }
-
-    #[inline]
-    pub fn try_add_assign(&mut self, other: Self) -> Result<(), Error> {
-        self.0 = self.0.checked_add(other.0).ok_or(Error::BalanceOverflow)?;
-        Ok(())
-    }
-
-    #[inline]
-    pub fn try_sub_assign(&mut self, other: Self) -> Result<(), Error> {
-        self.0 = self.0.checked_sub(other.0).ok_or(Error::BalanceUnderflow)?;
-        Ok(())
-    }
-}
-
-impl std::fmt::Display for Balance {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
 impl std::fmt::Display for BlockHeight {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
-    }
-}
-
-impl std::fmt::Display for Amount {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl std::str::FromStr for Balance {
-    type Err = std::num::ParseIntError;
-
-    fn from_str(src: &str) -> Result<Self, Self::Err> {
-        Ok(Self(u128::from_str(src)?))
-    }
-}
-
-impl std::str::FromStr for Amount {
-    type Err = std::num::ParseIntError;
-
-    fn from_str(src: &str) -> Result<Self, Self::Err> {
-        Ok(Self(u64::from_str(src)?))
-    }
-}
-
-impl From<Amount> for u64 {
-    fn from(val: Amount) -> Self {
-        val.0
-    }
-}
-
-impl From<Amount> for Balance {
-    fn from(val: Amount) -> Self {
-        Balance(val.0 as u128)
-    }
-}
-
-impl TryFrom<Balance> for Amount {
-    type Error = std::num::TryFromIntError;
-
-    fn try_from(val: Balance) -> Result<Self, Self::Error> {
-        Ok(Amount(val.0.try_into()?))
     }
 }
 
@@ -557,18 +423,6 @@ impl RoundNumber {
 impl From<BlockHeight> for u64 {
     fn from(val: BlockHeight) -> Self {
         val.0
-    }
-}
-
-impl From<u64> for Amount {
-    fn from(value: u64) -> Self {
-        Amount(value)
-    }
-}
-
-impl From<u128> for Balance {
-    fn from(value: u128) -> Self {
-        Balance(value)
     }
 }
 

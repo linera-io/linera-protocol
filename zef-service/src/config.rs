@@ -10,7 +10,7 @@ use std::{
     io::{BufReader, BufWriter, Write},
     path::Path,
 };
-use zef_base::{base_types::*, chain::ChainState, committee::Committee};
+use zef_base::{base_types::*, chain::ChainState, committee::Committee, execution::Balance};
 use zef_core::{client::ChainClientState, node::ValidatorNode};
 use zef_storage::Storage;
 

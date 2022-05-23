@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use crate::execution::ExecutionState;
+use crate::execution::{Address, Amount, ExecutionState, Operation, UserData};
 use std::collections::BTreeMap;
 
 #[test]

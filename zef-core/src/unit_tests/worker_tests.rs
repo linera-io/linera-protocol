@@ -10,7 +10,7 @@ use zef_base::{
     chain::{ChainState, Event},
     committee::Committee,
     error::Error,
-    execution::{ChainStatus, ExecutionState},
+    execution::{Address, Amount, Balance, ChainStatus, ExecutionState, Operation, UserData},
     manager::ChainManager,
     messages::*,
 };
