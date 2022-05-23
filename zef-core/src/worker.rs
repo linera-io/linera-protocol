@@ -3,9 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use zef_base::{
-    base_types::*, chain::ChainState, ensure, error::Error, manager::Outcome, messages::*,
-};
+use zef_base::{chain::ChainState, crypto::*, ensure, error::Error, manager::Outcome, messages::*};
 use zef_storage::Storage;
 
 #[cfg(test)]

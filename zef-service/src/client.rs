@@ -13,8 +13,8 @@ use std::{
 };
 use structopt::StructOpt;
 use zef_base::{
-    base_types::*,
     chain::{ChainDescription, ChainId},
+    crypto::*,
     execution::{Address, Amount, Balance, Operation, UserData},
     messages::*,
     rpc,

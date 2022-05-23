@@ -12,7 +12,7 @@ use std::{
     str::FromStr,
 };
 use structopt::StructOpt;
-use zef_base::{base_types::*, messages::ValidatorName};
+use zef_base::{crypto::*, messages::ValidatorName};
 use zef_core::worker::*;
 use zef_service::{
     config::*,

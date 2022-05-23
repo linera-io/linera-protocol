@@ -6,14 +6,14 @@ use async_trait::async_trait;
 use futures::lock::Mutex;
 use std::{collections::HashMap, sync::Arc};
 use zef_base::{
-    base_types::HashValue,
     chain::{ChainId, ChainState},
+    crypto::HashValue,
     error::Error,
     messages::Certificate,
 };
 
 #[cfg(test)]
-use zef_base::{base_types::PublicKey, committee::Committee, manager::ChainManager};
+use zef_base::{committee::Committee, crypto::PublicKey, manager::ChainManager};
 
 #[cfg(test)]
 #[path = "unit_tests/memory_storage_tests.rs"]
