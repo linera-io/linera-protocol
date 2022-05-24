@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use zef_base::{chain::ChainDescription, execution::ChainStatus, messages::Owner};
+use zef_base::{
+    execution::ChainStatus,
+    messages::{ChainDescription, Owner},
+};
 
 #[tokio::test]
 async fn test_read_write() {

@@ -11,11 +11,11 @@ use std::{
     path::Path,
 };
 use zef_base::{
-    chain::{ChainDescription, ChainId, ChainState},
+    chain::ChainState,
     committee::Committee,
     crypto::*,
     execution::Balance,
-    messages::{BlockHeight, Owner, ValidatorName},
+    messages::{BlockHeight, ChainDescription, ChainId, Owner, ValidatorName},
 };
 use zef_core::{client::ChainClientState, node::ValidatorNode};
 use zef_storage::Storage;

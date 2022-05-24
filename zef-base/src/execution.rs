@@ -3,13 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    chain::{ChainId, OperationId},
     committee::Committee,
     crypto::*,
     ensure,
     error::Error,
     manager::ChainManager,
-    messages::{BlockHeight, Owner},
+    messages::{BlockHeight, ChainId, OperationId, Owner},
 };
 use serde::{Deserialize, Serialize};
 use std::convert::{TryFrom, TryInto};
