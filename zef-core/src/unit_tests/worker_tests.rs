@@ -22,7 +22,7 @@ fn init_worker(allow_inactive_chains: bool) -> (Committee, WorkerState<InMemoryS
     let key_pair = KeyPair::generate();
     let mut validators = BTreeMap::new();
     validators.insert(ValidatorName(key_pair.public()), /* voting right */ 1);
-    let committee = Committee::new(validators, None);
+    let committee = Committee::new(validators);
     let client = InMemoryStoreClient::default();
     let worker = WorkerState::new(
         "Single validator node".to_string(),
@@ -61,6 +61,7 @@ async fn init_worker_with_chain(
 }
 
 fn make_block(
+    epoch: Epoch,
     chain_id: ChainId,
     operations: Vec<Operation>,
     incoming_messages: Vec<MessageGroup>,
@@ -78,6 +79,7 @@ fn make_block(
             .unwrap(),
     };
     Block {
+        epoch,
         chain_id,
         incoming_messages,
         operations,
@@ -95,6 +97,7 @@ fn make_transfer_block_proposal(
     previous_confirmed_block: Option<&Certificate>,
 ) -> BlockProposal {
     let block = make_block(
+        Epoch::from(0),
         chain_id,
         vec![Operation::Transfer {
             recipient,
@@ -139,16 +142,19 @@ fn make_transfer_certificate(
     previous_confirmed_block: Option<&Certificate>,
 ) -> Certificate {
     let state = ExecutionState {
+        epoch: Some(Epoch::from(0)),
         chain_id,
         status: Some(ChainStatus::ManagedBy {
             admin_id: ChainId::root(0),
             subscribed: false,
+            next_admin_height: BlockHeight::from(0),
         }),
-        committees: vec![committee.clone()],
+        committees: [(Epoch::from(0), committee.clone())].into_iter().collect(),
         manager: ChainManager::single(key_pair.public().into()),
         balance,
     };
     let block = make_block(
+        Epoch::from(0),
         chain_id,
         vec![Operation::Transfer {
             recipient,
@@ -192,9 +198,12 @@ async fn test_read_chain_state_unknown_chain() {
         .await
         .unwrap();
     chain.description = Some(ChainDescription::Root(99));
-    chain.state.committees = vec![committee];
+    chain.state.committees.insert(Epoch(0), committee);
+    chain.state.epoch = Some(Epoch(0));
     chain.state.status = Some(ChainStatus::Managing {
         subscribers: Vec::new(),
+        next_epoch_to_create: Epoch::from(0),
+        history: Vec::new(),
     });
     chain.state.manager = ChainManager::single(PublicKey::debug(4).into());
     worker.storage.write_chain(chain).await.unwrap();
@@ -431,11 +440,13 @@ async fn test_handle_block_proposal_with_incoming_messages() {
     ])
     .await;
 
+    let epoch = Epoch::from(0);
     let certificate0 = make_certificate(
         &committee,
         &worker,
         Value::ConfirmedBlock {
             block: Block {
+                epoch,
                 chain_id: ChainId::root(1),
                 incoming_messages: Vec::new(),
                 operations: vec![
@@ -454,12 +465,14 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                 height: BlockHeight::from(0),
             },
             state_hash: HashValue::new(&ExecutionState {
+                epoch: Some(epoch),
                 chain_id: ChainId::root(1),
                 status: Some(ChainStatus::ManagedBy {
                     admin_id: ChainId::root(0),
                     subscribed: false,
+                    next_admin_height: BlockHeight::from(0),
                 }),
-                committees: vec![committee.clone()],
+                committees: [(epoch, committee.clone())].into_iter().collect(),
                 manager: ChainManager::single(sender_key_pair.public().into()),
                 balance: Balance::from(3),
             }),
@@ -471,6 +484,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
         &worker,
         Value::ConfirmedBlock {
             block: Block {
+                epoch,
                 chain_id: ChainId::root(1),
                 incoming_messages: Vec::new(),
                 operations: vec![Operation::Transfer {
@@ -482,12 +496,14 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                 height: BlockHeight::from(1),
             },
             state_hash: HashValue::new(&ExecutionState {
+                epoch: Some(epoch),
                 chain_id: ChainId::root(1),
                 status: Some(ChainStatus::ManagedBy {
                     admin_id: ChainId::root(0),
                     subscribed: false,
+                    next_admin_height: BlockHeight::from(0),
                 }),
-                committees: vec![committee.clone()],
+                committees: [(epoch, committee.clone())].into_iter().collect(),
                 manager: ChainManager::single(sender_key_pair.public().into()),
                 balance: Balance::from(0),
             }),
@@ -734,12 +750,14 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             Value::ConfirmedBlock {
                 block: block_proposal.content.block,
                 state_hash: HashValue::new(&ExecutionState {
+                    epoch: Some(epoch),
                     chain_id: ChainId::root(2),
                     status: Some(ChainStatus::ManagedBy {
                         admin_id: ChainId::root(0),
                         subscribed: false,
+                        next_admin_height: BlockHeight::from(0),
                     }),
-                    committees: vec![committee.clone()],
+                    committees: [(epoch, committee.clone())].into_iter().collect(),
                     manager: ChainManager::single(recipient_key_pair.public().into()),
                     balance: Balance::from(0),
                 }),
@@ -1406,28 +1424,36 @@ async fn test_chain_creation_with_committee_creation() {
         height: BlockHeight::from(0),
         index: 0,
     });
+    let mut committees = BTreeMap::new();
+    committees.insert(Epoch::from(0), committee.clone());
     let certificate0 = make_certificate(
         &committee,
         &worker,
         Value::ConfirmedBlock {
             block: Block {
+                epoch: Epoch::from(0),
                 chain_id: root_id,
                 incoming_messages: Vec::new(),
                 operations: vec![Operation::OpenChain {
                     id: child_id0,
                     owner: key_pair.public().into(),
-                    committees: vec![committee.clone()],
+                    epoch: Epoch::from(0),
+                    committees: committees.clone(),
                     admin_id: root_id,
+                    next_admin_height: BlockHeight(0),
                 }],
                 previous_block_hash: None,
                 height: BlockHeight::from(0),
             },
             state_hash: HashValue::new(&ExecutionState {
+                epoch: Some(Epoch::from(0)),
                 chain_id: root_id,
                 status: Some(ChainStatus::Managing {
                     subscribers: Vec::new(),
+                    next_epoch_to_create: Epoch::from(1),
+                    history: Vec::new(),
                 }),
-                committees: vec![committee.clone()],
+                committees: committees.clone(),
                 manager: ChainManager::single(key_pair.public().into()),
                 balance: Balance::from(0),
             }),
@@ -1448,24 +1474,29 @@ async fn test_chain_creation_with_committee_creation() {
         &worker,
         Value::ConfirmedBlock {
             block: Block {
+                epoch: Epoch::from(0),
                 chain_id: child_id0,
                 incoming_messages: Vec::new(),
                 operations: vec![Operation::OpenChain {
                     id: child_id,
                     owner: key_pair.public().into(),
-                    committees: vec![committee.clone()],
+                    epoch: Epoch::from(0),
+                    committees: committees.clone(),
                     admin_id: root_id,
+                    next_admin_height: BlockHeight::from(0),
                 }],
                 previous_block_hash: None,
                 height: BlockHeight::from(0),
             },
             state_hash: HashValue::new(&ExecutionState {
+                epoch: Some(Epoch::from(0)),
                 chain_id: child_id0,
                 status: Some(ChainStatus::ManagedBy {
                     admin_id: root_id,
                     subscribed: true,
+                    next_admin_height: BlockHeight::from(0),
                 }),
-                committees: vec![committee.clone()],
+                committees: committees.clone(),
                 manager: ChainManager::single(key_pair.public().into()),
                 balance: Balance::from(0),
             }),
@@ -1481,14 +1512,14 @@ async fn test_chain_creation_with_committee_creation() {
     assert_eq!(BlockHeight::from(1), root_chain.next_block_height);
     assert!(!root_chain.outboxes.contains_key(&child_id));
     assert!(
-        matches!(root_chain.state.status, Some(ChainStatus::Managing { subscribers }) if subscribers.is_empty())
+        matches!(root_chain.state.status, Some(ChainStatus::Managing { subscribers, .. }) if subscribers.is_empty())
     );
 
     // The second child chain is active.
     let child_chain = worker.storage.read_active_chain(child_id).await.unwrap();
     assert_eq!(BlockHeight::from(0), child_chain.next_block_height);
     assert!(
-        matches!(child_chain.state.status, Some(ChainStatus::ManagedBy { admin_id, subscribed }) if admin_id == root_id && subscribed)
+        matches!(child_chain.state.status, Some(ChainStatus::ManagedBy { admin_id, subscribed, .. }) if admin_id == root_id && subscribed)
     );
     assert!(!child_chain
         .inboxes
@@ -1499,17 +1530,12 @@ async fn test_chain_creation_with_committee_creation() {
 
     // Create a committee before receiving the subscription of the new chain.
     // Migrate right away to this committee.
-    let mut committee2 = committee.clone();
-    committee2.origin = Some(OperationId {
-        chain_id: root_id,
-        height: BlockHeight::from(1),
-        index: 0,
-    });
     let certificate1 = make_certificate(
         &committee,
         &worker,
         Value::ConfirmedBlock {
             block: Block {
+                epoch: Epoch::from(0),
                 chain_id: root_id,
                 incoming_messages: vec![
                     MessageGroup {
@@ -1521,8 +1547,10 @@ async fn test_chain_creation_with_committee_creation() {
                             Operation::OpenChain {
                                 id: child_id0,
                                 owner: key_pair.public().into(),
-                                committees: vec![committee.clone()],
+                                epoch: Epoch::from(0),
+                                committees: committees.clone(),
                                 admin_id: root_id,
+                                next_admin_height: BlockHeight::from(0),
                             },
                         )],
                     },
@@ -1535,7 +1563,8 @@ async fn test_chain_creation_with_committee_creation() {
                             // message by anticipation.
                             Operation::NewCommittee {
                                 admin_id: root_id,
-                                committee: committee2.clone(),
+                                epoch: Epoch::from(1),
+                                committee: committee.clone(),
                             },
                         )],
                     },
@@ -1543,18 +1572,27 @@ async fn test_chain_creation_with_committee_creation() {
                 // Create the new committee.
                 operations: vec![Operation::NewCommittee {
                     admin_id: root_id,
-                    committee: committee2.clone(),
+                    epoch: Epoch::from(1),
+                    committee: committee.clone(),
                 }],
                 previous_block_hash: Some(certificate0.hash),
                 height: BlockHeight::from(1),
             },
             state_hash: HashValue::new(&ExecutionState {
+                epoch: Some(Epoch::from(1)),
                 chain_id: root_id,
                 status: Some(ChainStatus::Managing {
                     subscribers: vec![child_id0], // Only the first child was subscribed
+                    next_epoch_to_create: Epoch::from(2),
+                    history: vec![BlockHeight::from(1)], // Height 1 is relevant as an admin chain.
                 }),
                 // The root chain knows both committees at the end.
-                committees: vec![committee.clone(), committee2.clone()],
+                committees: [
+                    (Epoch::from(0), committee.clone()),
+                    (Epoch::from(1), committee.clone()),
+                ]
+                .into_iter()
+                .collect(),
                 manager: ChainManager::single(key_pair.public().into()),
                 balance: Balance::from(0),
             }),
@@ -1575,6 +1613,7 @@ async fn test_chain_creation_with_committee_creation() {
         &worker,
         Value::ConfirmedBlock {
             block: Block {
+                epoch: Epoch::from(1),
                 chain_id: root_id,
                 incoming_messages: vec![MessageGroup {
                     sender_id: child_id,
@@ -1584,8 +1623,10 @@ async fn test_chain_creation_with_committee_creation() {
                         Operation::OpenChain {
                             id: child_id,
                             owner: key_pair.public().into(),
-                            committees: vec![committee.clone()],
+                            committees: committees.clone(),
                             admin_id: root_id,
+                            epoch: Epoch::from(0),
+                            next_admin_height: BlockHeight::from(0),
                         },
                     )],
                 }],
@@ -1594,11 +1635,19 @@ async fn test_chain_creation_with_committee_creation() {
                 height: BlockHeight::from(2),
             },
             state_hash: HashValue::new(&ExecutionState {
+                epoch: Some(Epoch::from(1)),
                 chain_id: root_id,
                 status: Some(ChainStatus::Managing {
                     subscribers: vec![child_id0, child_id], // was just added
+                    next_epoch_to_create: Epoch::from(2),
+                    history: vec![BlockHeight::from(1)],
                 }),
-                committees: vec![committee.clone(), committee2.clone()],
+                committees: [
+                    (Epoch::from(0), committee.clone()),
+                    (Epoch::from(1), committee.clone()),
+                ]
+                .into_iter()
+                .collect(),
                 manager: ChainManager::single(key_pair.public().into()),
                 balance: Balance::from(0),
             }),
@@ -1612,6 +1661,7 @@ async fn test_chain_creation_with_committee_creation() {
         &worker,
         Value::ConfirmedBlock {
             block: Block {
+                epoch: Epoch::from(0),
                 chain_id: child_id,
                 incoming_messages: vec![MessageGroup {
                     sender_id: root_id,
@@ -1621,7 +1671,8 @@ async fn test_chain_creation_with_committee_creation() {
                         0,
                         Operation::NewCommittee {
                             admin_id: root_id,
-                            committee: committee2.clone(),
+                            epoch: Epoch::from(1),
+                            committee: committee.clone(),
                         },
                     )],
                 }],
@@ -1630,13 +1681,20 @@ async fn test_chain_creation_with_committee_creation() {
                 height: BlockHeight::from(0),
             },
             state_hash: HashValue::new(&ExecutionState {
+                epoch: Some(Epoch::from(1)),
                 chain_id: child_id,
                 status: Some(ChainStatus::ManagedBy {
                     admin_id: root_id,
                     subscribed: true,
+                    next_admin_height: BlockHeight::from(2),
                 }),
                 // Finally the child knows about both committees.
-                committees: vec![committee.clone(), committee2.clone()],
+                committees: [
+                    (Epoch::from(0), committee.clone()),
+                    (Epoch::from(1), committee.clone()),
+                ]
+                .into_iter()
+                .collect(),
                 manager: ChainManager::single(key_pair.public().into()),
                 balance: Balance::from(0),
             }),

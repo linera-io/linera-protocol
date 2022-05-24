@@ -11,7 +11,10 @@ use crate::{
     manager::ChainManager,
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::HashSet, str::FromStr};
+use std::{
+    collections::{BTreeMap, HashSet},
+    str::FromStr,
+};
 
 #[cfg(any(test, feature = "test"))]
 use test_strategy::Arbitrary;
@@ -40,6 +43,12 @@ pub struct ValidatorName(pub PublicKey);
 /// The owner of a chain.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
 pub struct Owner(pub PublicKey);
+
+/// A number identifying the configuration of the chain (aka the committee).
+#[derive(
+    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
+)]
+pub struct Epoch(pub u64);
 
 /// How to create a chain.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
@@ -72,8 +81,10 @@ pub struct OperationId {
 /// * This constraint does not apply to the execution of confirmed blocks.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct Block {
-    /// The subject of the operation.
+    /// The chain to which this block belongs.
     pub chain_id: ChainId,
+    /// The number identifying the current configuration.
+    pub epoch: Epoch,
     /// A selection of incoming messages to be executed first. Successive messages of same
     /// sender and height are grouped together for conciseness.
     pub incoming_messages: Vec<MessageGroup>,
@@ -178,6 +189,8 @@ pub struct ChainInfoQuery {
 pub struct ChainInfo {
     /// The chain id.
     pub chain_id: ChainId,
+    /// The number identifying the current configuration.
+    pub epoch: Option<Epoch>,
     /// The chain description.
     pub description: Option<ChainDescription>,
     /// The state of the chain authentication.
@@ -186,6 +199,8 @@ pub struct ChainInfo {
     pub balance: Balance,
     /// The admin chain.
     pub admin_id: Option<ChainId>,
+    /// The minimum height we expect from the admin chain next time.
+    pub next_admin_height: BlockHeight,
     /// The last block hash, if any.
     pub block_hash: Option<HashValue>,
     /// The height after the latest block in the chain.
@@ -193,7 +208,7 @@ pub struct ChainInfo {
     /// The hash of the current execution state.
     pub state_hash: HashValue,
     /// The current committees.
-    pub queried_committees: Vec<Committee>,
+    pub queried_committees: BTreeMap<Epoch, Committee>,
     /// The received messages that are waiting be picked in the next block (if requested).
     pub queried_pending_messages: Vec<MessageGroup>,
     /// The response to `query_sent_certificates_in_range`
@@ -510,6 +525,20 @@ impl RoundNumber {
     }
 }
 
+impl Epoch {
+    #[inline]
+    pub fn try_add_one(self) -> Result<Self, Error> {
+        let val = self.0.checked_add(1).ok_or(Error::SequenceOverflow)?;
+        Ok(Self(val))
+    }
+
+    #[inline]
+    pub fn try_add_assign_one(&mut self) -> Result<(), Error> {
+        self.0 = self.0.checked_add(1).ok_or(Error::SequenceOverflow)?;
+        Ok(())
+    }
+}
+
 impl From<BlockHeight> for u64 {
     fn from(val: BlockHeight) -> Self {
         val.0
@@ -525,6 +554,12 @@ impl From<u64> for BlockHeight {
 impl From<BlockHeight> for usize {
     fn from(value: BlockHeight) -> Self {
         value.0 as usize
+    }
+}
+
+impl From<u64> for Epoch {
+    fn from(value: u64) -> Self {
+        Epoch(value)
     }
 }
 

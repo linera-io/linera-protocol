@@ -5,7 +5,7 @@
 use crate::{
     crypto::*,
     execution::Balance,
-    messages::{BlockHeight, ChainId, RoundNumber},
+    messages::{BlockHeight, ChainId, Epoch, RoundNumber},
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -69,6 +69,8 @@ pub enum Error {
     InvalidCertificate,
     #[error("The given chain info response is invalid.")]
     InvalidChainInfoResponse,
+    #[error("{epoch:?} is not recognized by chain {chain_id:}.")]
+    InvalidEpoch { chain_id: ChainId, epoch: Epoch },
 
     // Validation of operations and blocks
     #[error("Transfers must have positive amount")]
@@ -79,6 +81,8 @@ pub enum Error {
     InsufficientFunding { current_balance: Balance },
     #[error("Invalid new chain id: {0}")]
     InvalidNewChainId(ChainId),
+    #[error("Invalid admin height in new chain: {0}")]
+    InvalidNewChainAdminHeight(ChainId),
     #[error("Invalid admin id in new chain: {0}")]
     InvalidNewChainAdminId(ChainId),
     #[error("Invalid admin id in subscription to new committees: {0}")]
