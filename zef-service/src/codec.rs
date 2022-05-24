@@ -4,6 +4,9 @@ use thiserror::Error;
 use tokio_util::codec::{Decoder, Encoder};
 use zef_base::rpc;
 
+/// An encoder/decoder of [`rpc::Message`]s for the RPC protocol.
+///
+/// Handles the serialization of RPC messages.
 #[derive(Clone, Copy, Debug)]
 pub struct Codec;
 
@@ -36,6 +39,7 @@ impl Decoder for Codec {
     }
 }
 
+/// Errors that can arise during transmission or reception of [`rpc::Message`]s.
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("IO error in the underlying transport")]
