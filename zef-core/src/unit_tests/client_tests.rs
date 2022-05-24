@@ -278,11 +278,11 @@ async fn test_rotate_key_pair() {
         .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await;
     let new_key_pair = KeyPair::generate();
-    let new_pubk = Owner(new_key_pair.public());
+    let new_owner = Owner(new_key_pair.public());
     let certificate = sender.rotate_key_pair(new_key_pair).await.unwrap();
     assert_eq!(sender.next_block_height, BlockHeight::from(1));
     assert!(sender.pending_block.is_none());
-    assert_eq!(sender.identity().await.unwrap(), new_pubk);
+    assert_eq!(sender.identity().await.unwrap(), new_owner);
     assert_eq!(
         builder
             .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(0), 3)
@@ -311,8 +311,8 @@ async fn test_transfer_ownership() {
         .await;
 
     let new_key_pair = KeyPair::generate();
-    let new_pubk = Owner(new_key_pair.public());
-    let certificate = sender.transfer_ownership(new_pubk).await.unwrap();
+    let new_owner = Owner(new_key_pair.public());
+    let certificate = sender.transfer_ownership(new_owner).await.unwrap();
     assert_eq!(sender.next_block_height, BlockHeight::from(1));
     assert!(sender.pending_block.is_none());
     assert!(sender.key_pair().await.is_err());
@@ -343,8 +343,8 @@ async fn test_share_ownership() {
         .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await;
     let new_key_pair = KeyPair::generate();
-    let new_pubk = Owner(new_key_pair.public());
-    let certificate = sender.share_ownership(new_pubk).await.unwrap();
+    let new_owner = Owner(new_key_pair.public());
+    let certificate = sender.share_ownership(new_owner).await.unwrap();
     assert_eq!(sender.next_block_height, BlockHeight::from(1));
     assert!(sender.pending_block.is_none());
     assert!(sender.key_pair().await.is_ok());
@@ -397,9 +397,9 @@ async fn test_open_chain_then_close_it() {
         .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await;
     let new_key_pair = KeyPair::generate();
-    let new_pubk = Owner(new_key_pair.public());
+    let new_owner = Owner(new_key_pair.public());
     // Open the new chain.
-    let (new_id, certificate) = sender.open_chain(new_pubk).await.unwrap();
+    let (new_id, certificate) = sender.open_chain(new_owner).await.unwrap();
     assert_eq!(sender.next_block_height, BlockHeight::from(1));
     assert!(sender.pending_block.is_none());
     assert!(sender.key_pair().await.is_ok());
@@ -423,7 +423,7 @@ async fn test_transfer_then_open_chain() {
         .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await;
     let new_key_pair = KeyPair::generate();
-    let new_pubk = Owner(new_key_pair.public());
+    let new_owner = Owner(new_key_pair.public());
     let new_id = ChainId::child(OperationId {
         chain_id: ChainId::root(1),
         height: BlockHeight::from(1),
@@ -435,7 +435,7 @@ async fn test_transfer_then_open_chain() {
         .await
         .unwrap();
     // Open the new chain.
-    let (new_id2, certificate) = sender.open_chain(new_pubk).await.unwrap();
+    let (new_id2, certificate) = sender.open_chain(new_owner).await.unwrap();
     assert_eq!(new_id, new_id2);
     assert_eq!(sender.next_block_height, BlockHeight::from(2));
     assert!(sender.pending_block.is_none());
@@ -473,9 +473,9 @@ async fn test_open_chain_then_transfer() {
         .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await;
     let new_key_pair = KeyPair::generate();
-    let new_pubk = Owner(new_key_pair.public());
+    let new_owner = Owner(new_key_pair.public());
     // Open the new chain.
-    let (new_id, creation_certificate) = sender.open_chain(new_pubk).await.unwrap();
+    let (new_id, creation_certificate) = sender.open_chain(new_owner).await.unwrap();
     // Transfer after creating the chain.
     let transfer_certificate = sender
         .transfer_to_chain(Amount::from(3), new_id, UserData::default())
