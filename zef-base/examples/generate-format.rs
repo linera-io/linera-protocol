@@ -19,7 +19,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<execution::Address>(&samples)?;
     tracer.trace_type::<execution::Operation>(&samples)?;
     tracer.trace_type::<messages::Value>(&samples)?;
-    tracer.trace_type::<chain::ChainDescription>(&samples)?;
+    tracer.trace_type::<messages::ChainDescription>(&samples)?;
     tracer.trace_type::<manager::ChainManager>(&samples)?;
     tracer.trace_type::<messages::CrossChainRequest>(&samples)?;
     tracer.trace_type::<error::Error>(&samples)?;

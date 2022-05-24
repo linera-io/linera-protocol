@@ -14,7 +14,6 @@ use std::{
     time::Duration,
 };
 use zef_base::{
-    chain::{ChainId, OperationId},
     committee::Committee,
     crypto::*,
     error::Error,
