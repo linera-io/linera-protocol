@@ -12,10 +12,10 @@ use std::{
     sync::Arc,
 };
 use zef_base::{
-    chain::{ChainId, ChainState},
+    chain::ChainState,
     crypto::HashValue,
     error::Error,
-    messages::Certificate,
+    messages::{Certificate, ChainId},
 };
 
 #[cfg(test)]

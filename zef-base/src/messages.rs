@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    chain::{ChainDescription, ChainId},
     committee::Committee,
     crypto::*,
     ensure,
@@ -12,7 +11,7 @@ use crate::{
     manager::ChainManager,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::{collections::HashSet, str::FromStr};
 
 #[cfg(test)]
 #[path = "unit_tests/messages_tests.rs"]
@@ -37,6 +36,27 @@ pub struct ValidatorName(pub PublicKey);
 /// The owner of a chain.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
 pub struct Owner(pub PublicKey);
+
+/// How to create a chain.
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
+pub enum ChainDescription {
+    /// The chain was created by the genesis configuration.
+    Root(usize),
+    /// The chain was created by an operation from another chain.
+    Child(OperationId),
+}
+
+/// The unique identifier (UID) of a chain. This is the hash value of a ChainDescription.
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
+pub struct ChainId(pub HashValue);
+
+/// The index of an operation in a chain.
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
+pub struct OperationId {
+    pub chain_id: ChainId,
+    pub height: BlockHeight,
+    pub index: usize,
+}
 
 /// A block containing operations to apply on a given chain, as well as the
 /// acknowledgment of a number of incoming messages from other chains.
@@ -511,6 +531,43 @@ impl std::str::FromStr for Owner {
     }
 }
 
+impl std::fmt::Display for ChainId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl FromStr for ChainId {
+    type Err = HashFromStrError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(ChainId(HashValue::from_str(s)?))
+    }
+}
+
+impl std::fmt::Debug for ChainId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        write!(f, "{}", self)
+    }
+}
+
+impl From<ChainDescription> for ChainId {
+    fn from(description: ChainDescription) -> Self {
+        Self(HashValue::new(&description))
+    }
+}
+
+impl ChainId {
+    pub fn root(index: usize) -> Self {
+        Self(HashValue::new(&ChainDescription::Root(index)))
+    }
+
+    pub fn child(id: OperationId) -> Self {
+        Self(HashValue::new(&ChainDescription::Child(id)))
+    }
+}
+
+impl BcsSignable for ChainDescription {}
 impl BcsSignable for ChainInfo {}
 impl BcsSignable for BlockAndRound {}
 impl BcsSignable for Value {}

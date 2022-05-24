@@ -14,11 +14,11 @@ use dyn_clone::DynClone;
 use futures::future;
 use std::ops::DerefMut;
 use zef_base::{
-    chain::{ChainId, ChainState},
+    chain::ChainState,
     crypto::HashValue,
     ensure,
     error::Error,
-    messages::Certificate,
+    messages::{Certificate, ChainId},
 };
 
 /// How to communicate with a persistent storage.

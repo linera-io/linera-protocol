@@ -6,10 +6,10 @@ use async_trait::async_trait;
 use futures::lock::Mutex;
 use std::{collections::HashMap, sync::Arc};
 use zef_base::{
-    chain::{ChainId, ChainState},
+    chain::ChainState,
     crypto::HashValue,
     error::Error,
-    messages::Certificate,
+    messages::{Certificate, ChainId},
 };
 
 #[cfg(test)]
