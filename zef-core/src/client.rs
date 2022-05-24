@@ -222,15 +222,16 @@ where
             query_sent_certificates_in_range: None,
             query_received_certificates_excluding_first_nth: None,
         };
-        let mut response = self.node_client.handle_chain_info_query(query).await?;
-        response
-            .info
-            .queried_committees
-            .pop()
+        let mut info = self.node_client.handle_chain_info_query(query).await?.info;
+        let epoch = info.epoch.ok_or(Error::InactiveChain(self.chain_id))?;
+        info.queried_committees
+            .remove(&epoch)
             .ok_or(Error::InactiveChain(self.chain_id))
     }
 
-    async fn committees_and_admin(&mut self) -> Result<(Vec<Committee>, ChainId), Error> {
+    async fn committees_and_admin(
+        &mut self,
+    ) -> Result<(BTreeMap<Epoch, Committee>, ChainId), Error> {
         let query = ChainInfoQuery {
             chain_id: self.chain_id,
             check_next_block_height: None,
@@ -243,6 +244,18 @@ where
         let committees = info.queried_committees;
         let admin_id = info.admin_id.ok_or(Error::InactiveChain(self.chain_id))?;
         Ok((committees, admin_id))
+    }
+
+    async fn epoch(&mut self) -> Result<Epoch, anyhow::Error> {
+        Ok(self
+            .chain_info()
+            .await?
+            .epoch
+            .ok_or(Error::InactiveChain(self.chain_id))?)
+    }
+
+    async fn next_admin_height(&mut self) -> Result<BlockHeight, anyhow::Error> {
+        Ok(self.chain_info().await?.next_admin_height)
     }
 
     async fn identity(&mut self) -> Result<Owner, anyhow::Error> {
@@ -518,6 +531,7 @@ where
             balance
         );
         let block = Block {
+            epoch: self.epoch().await?,
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
             operations: vec![Operation::Transfer {
@@ -660,6 +674,7 @@ where
             "The local node is behind and needs synchronization"
         );
         let block = Block {
+            epoch: self.epoch().await?,
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
             operations: Vec::new(),
@@ -742,6 +757,7 @@ where
         self.prepare_chain().await?;
         let new_owner = Owner(key_pair.public());
         let block = Block {
+            epoch: self.epoch().await?,
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
             operations: vec![Operation::ChangeOwner { new_owner }],
@@ -758,6 +774,7 @@ where
     async fn transfer_ownership(&mut self, new_owner: Owner) -> Result<Certificate> {
         self.prepare_chain().await?;
         let block = Block {
+            epoch: self.epoch().await?,
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
             operations: vec![Operation::ChangeOwner { new_owner }],
@@ -774,6 +791,7 @@ where
         self.prepare_chain().await?;
         let owner = self.identity().await?;
         let block = Block {
+            epoch: self.epoch().await?,
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
             operations: vec![Operation::ChangeMultipleOwners {
@@ -796,7 +814,9 @@ where
             index: 0,
         });
         let (committees, admin_id) = self.committees_and_admin().await?;
+        let epoch = self.epoch().await?;
         let block = Block {
+            epoch,
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
             operations: vec![Operation::OpenChain {
@@ -804,6 +824,8 @@ where
                 owner,
                 committees,
                 admin_id,
+                epoch,
+                next_admin_height: self.next_admin_height().await?,
             }],
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
@@ -817,6 +839,7 @@ where
     async fn close_chain(&mut self) -> Result<Certificate> {
         self.prepare_chain().await?;
         let block = Block {
+            epoch: self.epoch().await?,
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
             operations: vec![Operation::CloseChain],
@@ -834,17 +857,15 @@ where
         voting_rights: BTreeMap<ValidatorName, usize>,
     ) -> Result<Certificate> {
         self.prepare_chain().await?;
-        let id = OperationId {
-            chain_id: self.chain_id,
-            height: self.next_block_height,
-            index: 0,
-        };
-        let committee = Committee::new(voting_rights, Some(id));
+        let committee = Committee::new(voting_rights);
+        let epoch = self.epoch().await?;
         let block = Block {
+            epoch,
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
             operations: vec![Operation::NewCommittee {
                 admin_id: self.chain_id,
+                epoch: epoch.try_add_one()?,
                 committee,
             }],
             previous_block_hash: self.block_hash,
@@ -859,6 +880,7 @@ where
     async fn process_inbox(&mut self) -> Result<Certificate> {
         self.prepare_chain().await?;
         let block = Block {
+            epoch: self.epoch().await?,
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
             operations: Vec::new(),
@@ -873,14 +895,15 @@ where
 
     async fn subscribe_to_new_committees(&mut self) -> Result<Certificate> {
         self.prepare_chain().await?;
-        let (committees, admin_id) = self.committees_and_admin().await?;
+        let (_, admin_id) = self.committees_and_admin().await?;
         let block = Block {
+            epoch: self.epoch().await?,
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
             operations: vec![Operation::SubscribeToNewCommittees {
                 id: self.chain_id,
-                committees,
                 admin_id,
+                next_admin_height: self.next_admin_height().await?,
             }],
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
@@ -899,6 +922,7 @@ where
     ) -> Result<Certificate> {
         self.prepare_chain().await?;
         let block = Block {
+            epoch: self.epoch().await?,
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
             operations: vec![Operation::Transfer {

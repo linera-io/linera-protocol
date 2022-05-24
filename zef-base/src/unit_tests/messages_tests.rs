@@ -13,6 +13,7 @@ fn test_signed_values() {
     let name1 = ValidatorName(key1.public());
 
     let block = Block {
+        epoch: Epoch::from(0),
         chain_id: ChainId::root(1),
         incoming_messages: Vec::new(),
         operations: vec![Operation::Transfer {
@@ -46,9 +47,10 @@ fn test_certificates() {
     let mut validators = BTreeMap::new();
     validators.insert(name1, /* voting right */ 1);
     validators.insert(name2, /* voting right */ 1);
-    let committee = Committee::new(validators, None);
+    let committee = Committee::new(validators);
 
     let block = Block {
+        epoch: Epoch::from(0),
         chain_id: ChainId::root(1),
         incoming_messages: Vec::new(),
         operations: vec![Operation::Transfer {

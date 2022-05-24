@@ -61,7 +61,6 @@ async fn make_servers(
 ) -> Vec<network::Server<MixedStorage>> {
     let num_shards = server_config.validator.num_shards;
     let mut servers = Vec::new();
-    // TODO: create servers in parallel
     for shard in 0..num_shards {
         let storage = make_storage(storage, genesis_config).await.unwrap();
         let server = make_shard_server(

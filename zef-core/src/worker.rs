@@ -143,23 +143,25 @@ where
                 current_block_height: chain.next_block_height,
             });
         }
-        // Verify the certificate. Returns a catch-all error to make client code more robust.
-        certificate
-            .check(
-                chain
-                    .state
-                    .committees
-                    .last()
-                    .as_ref()
-                    .expect("chain is active"),
-            )
-            .map_err(|_| Error::InvalidCertificate)?;
         if chain.next_block_height > block.height {
             // Block was already confirmed.
             let info = chain.make_chain_info(self.key_pair.as_ref());
             let continuation = self.make_continuation(&chain).await?;
             return Ok((info, continuation));
         }
+        // Verify the certificate. Returns a catch-all error to make client code more robust.
+        let epoch = chain.state.epoch.expect("chain is active");
+        ensure!(
+            block.epoch == epoch,
+            Error::InvalidEpoch {
+                chain_id: sender,
+                epoch: block.epoch,
+            }
+        );
+        let committee = chain.state.committees.get(&epoch).expect("chain is active");
+        certificate
+            .check(committee)
+            .map_err(|_| Error::InvalidCertificate)?;
         // This should always be true for valid certificates.
         ensure!(
             chain.block_hash == block.previous_block_hash,
@@ -217,15 +219,17 @@ where
         // Check that the chain is active and ready for this confirmation.
         let mut chain = self.storage.read_active_chain(block.chain_id).await?;
         // Verify the certificate. Returns a catch-all error to make client code more robust.
+        let epoch = chain.state.epoch.expect("chain is active");
+        ensure!(
+            block.epoch == epoch,
+            Error::InvalidEpoch {
+                chain_id: block.chain_id,
+                epoch: block.epoch,
+            }
+        );
+        let committee = chain.state.committees.get(&epoch).expect("chain is active");
         certificate
-            .check(
-                chain
-                    .state
-                    .committees
-                    .last()
-                    .as_ref()
-                    .expect("chain is active"),
-            )
+            .check(committee)
             .map_err(|_| Error::InvalidCertificate)?;
         if chain
             .state
@@ -262,6 +266,15 @@ where
         // Obtain the sender's chain.
         let sender = proposal.content.block.chain_id;
         let mut chain = self.storage.read_active_chain(sender).await?;
+        // Check the epoch.
+        let epoch = chain.state.epoch.expect("chain is active");
+        ensure!(
+            proposal.content.block.epoch == epoch,
+            Error::InvalidEpoch {
+                chain_id: sender,
+                epoch,
+            }
+        );
         // Check authentication of the block.
         ensure!(
             chain.state.manager.has_owner(&proposal.owner),
