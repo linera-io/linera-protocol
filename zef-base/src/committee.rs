@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::messages::{OperationId, ValidatorName};
+use crate::messages::ValidatorName;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -13,16 +13,12 @@ pub struct Committee {
     pub voting_rights: BTreeMap<ValidatorName, usize>,
     /// The sum of all voting rights.
     pub total_votes: usize,
-    /// How this committee was created: either by the genesis (`None`) or by an operation
-    /// of an admin chain.
-    pub origin: Option<OperationId>,
 }
 
 impl Committee {
-    pub fn new(voting_rights: BTreeMap<ValidatorName, usize>, origin: Option<OperationId>) -> Self {
+    pub fn new(voting_rights: BTreeMap<ValidatorName, usize>) -> Self {
         let total_votes = voting_rights.iter().fold(0, |sum, (_, votes)| sum + *votes);
         Committee {
-            origin,
             voting_rights,
             total_votes,
         }
@@ -33,7 +29,6 @@ impl Committee {
         Committee {
             voting_rights: keys.into_iter().map(|k| (k, 1)).collect(),
             total_votes,
-            origin: None,
         }
     }
 

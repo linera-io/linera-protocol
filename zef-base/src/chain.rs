@@ -12,7 +12,7 @@ use crate::{
     messages::*,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeSet, HashMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 
 /// The state of a chain.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -105,41 +105,53 @@ impl ChainState {
         let status = if ChainId::from(description) == admin_id {
             ChainStatus::Managing {
                 subscribers: Vec::new(),
+                next_epoch_to_create: Epoch::from(1),
+                history: Vec::new(),
             }
         } else {
             ChainStatus::ManagedBy {
                 admin_id,
                 subscribed: false,
+                next_admin_height: BlockHeight::from(0),
             }
         };
         let mut chain = Self::new(description.into());
         chain.description = Some(description);
+        chain.state.epoch = Some(Epoch::from(0));
         chain.state.status = Some(status);
-        chain.state.committees = vec![committee];
+        chain.state.committees.insert(Epoch::from(0), committee);
         chain.state.manager = ChainManager::single(owner);
         chain.state.balance = balance;
         chain.state_hash = HashValue::new(&chain.state);
+        assert!(chain.is_active());
         chain
     }
 
+    /// Invariant for the states of active chains.
     pub fn is_active(&self) -> bool {
         self.description.is_some()
             && self.state.manager.is_active()
-            && !self.state.committees.is_empty()
+            && self.state.epoch.is_some()
+            && self
+                .state
+                .committees
+                .contains_key(self.state.epoch.as_ref().unwrap())
             && self.state.status.is_some()
     }
 
     pub fn make_chain_info(&self, key_pair: Option<&KeyPair>) -> ChainInfoResponse {
         let info = ChainInfo {
             chain_id: self.state.chain_id,
+            epoch: self.state.epoch,
             description: self.description,
             manager: self.state.manager.clone(),
             balance: self.state.balance,
             admin_id: self.state.admin_id(),
+            next_admin_height: self.state.next_admin_height(),
             block_hash: self.block_hash,
             next_block_height: self.next_block_height,
             state_hash: self.state_hash,
-            queried_committees: Vec::new(),
+            queried_committees: BTreeMap::new(),
             queried_pending_messages: Vec::new(),
             queried_sent_certificates: Vec::new(),
             count_received_certificates: self.received_log.len(),
@@ -208,9 +220,10 @@ impl ChainState {
             if let Operation::OpenChain {
                 id,
                 owner,
+                epoch,
                 committees,
                 admin_id,
-                ..
+                next_admin_height,
             } = &operation
             {
                 if id == &self.state.chain_id {
@@ -225,10 +238,12 @@ impl ChainState {
                     });
                     assert_eq!(self.state.chain_id, description.into());
                     self.description = Some(description);
+                    self.state.epoch = Some(*epoch);
                     self.state.committees = committees.clone();
                     self.state.status = Some(ChainStatus::ManagedBy {
                         admin_id: *admin_id,
                         subscribed: true,
+                        next_admin_height: *next_admin_height,
                     });
                     self.state.manager = ChainManager::single(*owner);
                     self.state_hash = HashValue::new(&self.state);
@@ -313,9 +328,11 @@ impl ChainState {
                 }
                 // Execute the received operation. This may create more notifications
                 // about previous blocks.
-                let new_notifications = self
-                    .state
-                    .apply_operation_as_recipient(self.state.chain_id, message_operation)?;
+                let new_notifications = self.state.apply_operation_as_recipient(
+                    self.state.chain_id,
+                    message_group.height,
+                    message_operation,
+                )?;
                 for (recipient, heights) in new_notifications {
                     notifications.entry(recipient).or_default().extend(heights);
                 }

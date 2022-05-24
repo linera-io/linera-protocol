@@ -103,7 +103,7 @@ impl TestBuilder {
             voting_rights.insert(ValidatorName(key_pair.public()), 1);
             key_pairs.push(key_pair);
         }
-        let initial_committee = Committee::new(voting_rights, None);
+        let initial_committee = Committee::new(voting_rights);
         let mut validator_clients = Vec::new();
         let mut validator_stores = HashMap::new();
         let mut faulty_validators = HashSet::new();
@@ -728,19 +728,12 @@ async fn test_change_voting_rights() {
     assert_eq!(admin.next_block_height, BlockHeight::from(1));
     assert!(admin.pending_block.is_none());
     assert!(admin.key_pair().await.is_ok());
-    assert!(admin.committee().await.unwrap().origin.is_none());
+    assert_eq!(admin.epoch().await.unwrap(), Epoch::from(0));
 
     // Actually migrate the admin itself.
     admin.process_inbox().await.unwrap();
     assert_eq!(admin.next_block_height, BlockHeight::from(2));
-    assert_eq!(
-        admin.committee().await.unwrap().origin,
-        Some(OperationId {
-            chain_id: ChainId::root(0),
-            height: BlockHeight::from(0),
-            index: 0,
-        })
-    );
+    assert_eq!(admin.epoch().await.unwrap(), Epoch::from(1));
 
     // Sending money from the admin chain is not supported yet.
     assert!(admin
@@ -755,7 +748,7 @@ async fn test_change_voting_rights() {
         Balance::from(0)
     );
     receiver.process_inbox().await.unwrap();
-    assert!(receiver.committee().await.unwrap().origin.is_none());
+    assert_eq!(receiver.epoch().await.unwrap(), Epoch::from(0));
 
     // Now subscribe explicitly.
     receiver.subscribe_to_new_committees().await.unwrap();
@@ -766,12 +759,5 @@ async fn test_change_voting_rights() {
     // Receive the notification to migrate.
     receiver.receive_certificate(cert).await.unwrap();
     receiver.process_inbox().await.unwrap();
-    assert_eq!(
-        receiver.committee().await.unwrap().origin,
-        Some(OperationId {
-            chain_id: ChainId::root(0),
-            height: BlockHeight::from(0),
-            index: 0,
-        })
-    );
+    assert_eq!(receiver.epoch().await.unwrap(), Epoch::from(1));
 }

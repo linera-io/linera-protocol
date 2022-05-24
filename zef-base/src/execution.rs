@@ -8,9 +8,10 @@ use crate::{
     ensure,
     error::Error,
     manager::ChainManager,
-    messages::{BlockHeight, ChainId, OperationId, Owner},
+    messages::{BlockHeight, ChainId, Epoch, OperationId, Owner},
 };
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 /// Execution state of a chain.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -18,11 +19,13 @@ use serde::{Deserialize, Serialize};
 pub struct ExecutionState {
     /// The UID of the chain.
     pub chain_id: ChainId,
+    /// The number identifying the current configuration.
+    pub epoch: Option<Epoch>,
     /// Whether our reconfigurations are managed by a "beacon" chain, or if we are it and
     /// managing other chains.
     pub status: Option<ChainStatus>,
-    /// The committees that we trust.
-    pub committees: Vec<Committee>,
+    /// The committees that we trust, indexed by epoch number.
+    pub committees: BTreeMap<Epoch, Committee>,
     /// Manager of the chain.
     pub manager: ChainManager,
     /// Balance of the chain.
@@ -32,8 +35,10 @@ pub struct ExecutionState {
 /// A recipient's address.
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Serialize, Deserialize)]
 pub enum Address {
-    Burn,             // for demo purposes
-    Account(ChainId), // TODO: support several accounts per chain
+    // This is mainly a placeholder for future extensions.
+    Burn,
+    // We currently support only one user account per chain.
+    Account(ChainId),
 }
 
 /// A non-negative amount of money to be transferred.
@@ -62,12 +67,14 @@ pub enum Operation {
         user_data: UserData,
     },
     /// Create (or activate) a new chain by installing the given authentication key.
-    /// This will automatically subscribe to future committees created by `admin_id`.
+    /// This will automatically subscribe to the future committees created by `admin_id`.
     OpenChain {
         id: ChainId,
         owner: Owner,
         admin_id: ChainId,
-        committees: Vec<Committee>,
+        epoch: Epoch,
+        committees: BTreeMap<Epoch, Committee>,
+        next_admin_height: BlockHeight,
     },
     /// Close the chain.
     CloseChain,
@@ -78,14 +85,31 @@ pub enum Operation {
     /// Register a new committee.
     NewCommittee {
         admin_id: ChainId,
+        epoch: Epoch,
         committee: Committee,
     },
     /// Subscribe to future committees created by `admin_id`. Same as OpenChain but useful
-    /// for root chains (other than admin_id) created in the genenis config.
+    /// for root chains (other than admin_id) created in the genesis config.
     SubscribeToNewCommittees {
         id: ChainId,
         admin_id: ChainId,
-        committees: Vec<Committee>,
+        next_admin_height: BlockHeight,
+    },
+}
+
+/// The administrative status of this chain w.r.t reconfigurations.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+pub enum ChainStatus {
+    ManagedBy {
+        admin_id: ChainId,
+        subscribed: bool,
+        next_admin_height: BlockHeight,
+    },
+    Managing {
+        subscribers: Vec<ChainId>,
+        next_epoch_to_create: Epoch,
+        history: Vec<BlockHeight>,
     },
 }
 
@@ -95,20 +119,13 @@ impl ExecutionState {
     pub fn new(chain_id: ChainId) -> Self {
         Self {
             chain_id,
+            epoch: None,
             status: None,
-            committees: Vec::new(),
+            committees: BTreeMap::new(),
             manager: ChainManager::default(),
             balance: Balance::default(),
         }
     }
-}
-
-/// The administrative status of this chain w.r.t reconfigurations.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub enum ChainStatus {
-    ManagedBy { admin_id: ChainId, subscribed: bool },
-    Managing { subscribers: Vec<ChainId> },
 }
 
 impl ExecutionState {
@@ -116,6 +133,18 @@ impl ExecutionState {
         match self.status.as_ref()? {
             ChainStatus::ManagedBy { admin_id, .. } => Some(*admin_id),
             ChainStatus::Managing { .. } => Some(self.chain_id),
+        }
+    }
+
+    pub fn next_admin_height(&self) -> BlockHeight {
+        match &self.status {
+            None => BlockHeight::default(),
+            Some(ChainStatus::ManagedBy {
+                next_admin_height, ..
+            }) => *next_admin_height,
+            Some(ChainStatus::Managing { history, .. }) => {
+                history.last().cloned().unwrap_or_default()
+            }
         }
     }
 
@@ -164,6 +193,7 @@ impl ExecutionState {
                 id,
                 committees,
                 admin_id,
+                next_admin_height,
                 ..
             } => {
                 let expected_id = ChainId::child(operation_id);
@@ -171,6 +201,10 @@ impl ExecutionState {
                 ensure!(
                     Some(admin_id) == self.admin_id().as_ref(),
                     Error::InvalidNewChainAdminId(*id)
+                );
+                ensure!(
+                    *next_admin_height == self.next_admin_height(),
+                    Error::InvalidNewChainAdminHeight(*id)
                 );
                 ensure!(&self.committees == committees, Error::InvalidCommittees);
                 Ok(vec![*id, *admin_id])
@@ -208,18 +242,25 @@ impl ExecutionState {
                 }
             }
             Operation::NewCommittee {
-                admin_id,
-                committee,
+                admin_id, epoch, ..
             } => {
                 // We are the admin chain and want to create a committee.
                 ensure!(*admin_id == chain_id, Error::InvalidCommitteeCreation);
-                ensure!(
-                    committee.origin == Some(operation_id),
-                    Error::InvalidCommitteeCreation
-                );
                 // Notify our subscribers (plus ourself) to do the migration.
-                let mut recipients = match &self.status {
-                    Some(ChainStatus::Managing { subscribers }) => subscribers.clone(),
+                let mut recipients = match &mut self.status {
+                    Some(ChainStatus::Managing {
+                        subscribers,
+                        next_epoch_to_create,
+                        history,
+                    }) => {
+                        ensure!(
+                            *epoch == *next_epoch_to_create,
+                            Error::InvalidCommitteeCreation
+                        );
+                        next_epoch_to_create.try_add_assign_one()?;
+                        history.push(height);
+                        subscribers.clone()
+                    }
                     _ => return Err(Error::InvalidCommitteeCreation),
                 };
                 recipients.push(chain_id);
@@ -228,7 +269,7 @@ impl ExecutionState {
             Operation::SubscribeToNewCommittees {
                 id,
                 admin_id,
-                committees,
+                next_admin_height,
             } => {
                 ensure!(
                     *id == chain_id || id != admin_id,
@@ -238,13 +279,13 @@ impl ExecutionState {
                     Some(ChainStatus::ManagedBy {
                         admin_id: id,
                         subscribed,
-                    }) if *admin_id == *id && !*subscribed => {
+                        next_admin_height: height,
+                    }) if admin_id == id && !*subscribed && next_admin_height == height => {
                         // Flip the value to prevent multiple subscriptions.
                         *subscribed = true;
                     }
                     _ => return Err(Error::InvalidSubscriptionToNewCommittees(*id)),
                 }
-                ensure!(&self.committees == committees, Error::InvalidCommittees);
                 Ok(vec![*admin_id])
             }
         }
@@ -255,6 +296,7 @@ impl ExecutionState {
     pub(crate) fn apply_operation_as_recipient(
         &mut self,
         chain_id: ChainId,
+        height: BlockHeight,
         operation: &Operation,
     ) -> Result<Vec<(ChainId, Vec<BlockHeight>)>, Error> {
         match operation {
@@ -268,41 +310,64 @@ impl ExecutionState {
             Operation::OpenChain {
                 id,
                 admin_id,
-                committees,
+                next_admin_height,
                 ..
             }
             | Operation::SubscribeToNewCommittees {
                 id,
                 admin_id,
-                committees,
+                next_admin_height,
                 ..
             } if *admin_id == chain_id => {
                 // We are the admin chain and are being notified that a subchain was just created.
                 // First, register the new chain as a subscriber.
                 match &mut self.status {
-                    Some(ChainStatus::Managing { subscribers }) => {
+                    Some(ChainStatus::Managing {
+                        subscribers,
+                        history,
+                        ..
+                    }) => {
                         subscribers.push(*id);
+                        // Second, see if the new chain is missing some of our recently created
+                        // committees. Now is the time to issue the corresponding notifications.
+                        if let Some(height) = history.last() {
+                            if next_admin_height <= height {
+                                let index = history
+                                    .binary_search(next_admin_height)
+                                    .unwrap_or_else(|x| x);
+                                let heights = history[index..].to_vec();
+                                Ok(vec![(*id, heights)])
+                            } else {
+                                Ok(Vec::new())
+                            }
+                        } else {
+                            Ok(Vec::new())
+                        }
                     }
-                    _ => return Err(Error::InvalidCrossChainRequest),
-                }
-                // Second, see if the new chain is missing some of our recently created
-                // committees. Now is the time to issue the corresponding notifications.
-                assert!(committees
-                    .iter()
-                    .zip(self.committees.iter())
-                    .all(|(c1, c2)| c1.origin == c2.origin));
-                if committees.len() < self.committees.len() {
-                    let heights = self.committees[committees.len()..]
-                        .iter()
-                        .filter_map(|c| c.origin.as_ref().map(|operation| operation.height))
-                        .collect();
-                    Ok(vec![(*id, heights)])
-                } else {
-                    Ok(Vec::new())
+                    _ => Err(Error::InvalidCrossChainRequest),
                 }
             }
-            Operation::NewCommittee { committee, .. } => {
-                self.committees.push(committee.clone());
+            Operation::NewCommittee {
+                epoch,
+                committee,
+                admin_id,
+            } if Some(*admin_id) == self.admin_id() => {
+                self.committees.insert(*epoch, committee.clone());
+                ensure!(
+                    *epoch > self.epoch.expect("chain is active"),
+                    Error::InvalidCrossChainRequest
+                );
+                self.epoch = Some(*epoch);
+                if let Some(ChainStatus::ManagedBy {
+                    next_admin_height, ..
+                }) = &mut self.status
+                {
+                    ensure!(
+                        height >= *next_admin_height,
+                        Error::InvalidCrossChainRequest
+                    );
+                    *next_admin_height = height.try_add_one()?;
+                }
                 Ok(Vec::new())
             }
             _ => Ok(Vec::new()),

@@ -31,6 +31,7 @@ async fn test_rocksdb_storage_for_certificates() {
     for i in 0..2 {
         let mut client = RocksdbStoreClient::new(dir.path().to_path_buf()).unwrap();
         let block = Block {
+            epoch: Epoch::from(0),
             chain_id: ChainId::root(i),
             incoming_messages: Vec::new(),
             operations: vec![Operation::CloseChain],

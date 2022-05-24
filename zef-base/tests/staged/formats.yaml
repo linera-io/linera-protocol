@@ -15,6 +15,8 @@ Block:
   STRUCT:
     - chain_id:
         TYPENAME: ChainId
+    - epoch:
+        TYPENAME: Epoch
     - incoming_messages:
         SEQ:
           TYPENAME: MessageGroup
@@ -73,6 +75,9 @@ ChainInfo:
   STRUCT:
     - chain_id:
         TYPENAME: ChainId
+    - epoch:
+        OPTION:
+          TYPENAME: Epoch
     - description:
         OPTION:
           TYPENAME: ChainDescription
@@ -83,6 +88,8 @@ ChainInfo:
     - admin_id:
         OPTION:
           TYPENAME: ChainId
+    - next_admin_height:
+        TYPENAME: BlockHeight
     - block_hash:
         OPTION:
           TYPENAME: HashValue
@@ -91,8 +98,11 @@ ChainInfo:
     - state_hash:
         TYPENAME: HashValue
     - queried_committees:
-        SEQ:
-          TYPENAME: Committee
+        MAP:
+          KEY:
+            TYPENAME: Epoch
+          VALUE:
+            TYPENAME: Committee
     - queried_pending_messages:
         SEQ:
           TYPENAME: MessageGroup
@@ -176,12 +186,19 @@ ChainStatus:
           - admin_id:
               TYPENAME: ChainId
           - subscribed: BOOL
+          - next_admin_height:
+              TYPENAME: BlockHeight
     1:
       Managing:
         STRUCT:
           - subscribers:
               SEQ:
                 TYPENAME: ChainId
+          - next_epoch_to_create:
+              TYPENAME: Epoch
+          - history:
+              SEQ:
+                TYPENAME: BlockHeight
 Committee:
   STRUCT:
     - voting_rights:
@@ -190,9 +207,6 @@ Committee:
             TYPENAME: ValidatorName
           VALUE: U64
     - total_votes: U64
-    - origin:
-        OPTION:
-          TYPENAME: OperationId
 CrossChainRequest:
   ENUM:
     0:
@@ -214,6 +228,8 @@ CrossChainRequest:
               TYPENAME: ChainId
           - height:
               TYPENAME: BlockHeight
+Epoch:
+  NEWTYPESTRUCT: U64
 Error:
   ENUM:
     0:
@@ -265,45 +281,56 @@ Error:
     19:
       InvalidChainInfoResponse: UNIT
     20:
-      IncorrectTransferAmount: UNIT
+      InvalidEpoch:
+        STRUCT:
+          - chain_id:
+              TYPENAME: ChainId
+          - epoch:
+              TYPENAME: Epoch
     21:
+      IncorrectTransferAmount: UNIT
+    22:
       InsufficientFunding:
         STRUCT:
           - current_balance:
               TYPENAME: Balance
-    22:
+    23:
       InvalidNewChainId:
         NEWTYPE:
           TYPENAME: ChainId
-    23:
-      InvalidNewChainAdminId:
-        NEWTYPE:
-          TYPENAME: ChainId
     24:
-      InvalidSubscriptionToNewCommittees:
+      InvalidNewChainAdminHeight:
         NEWTYPE:
           TYPENAME: ChainId
     25:
-      InvalidCommittees: UNIT
+      InvalidNewChainAdminId:
+        NEWTYPE:
+          TYPENAME: ChainId
     26:
-      InvalidCommitteeCreation: UNIT
+      InvalidSubscriptionToNewCommittees:
+        NEWTYPE:
+          TYPENAME: ChainId
     27:
+      InvalidCommittees: UNIT
+    28:
+      InvalidCommitteeCreation: UNIT
+    29:
       InsufficientRound:
         NEWTYPE:
           TYPENAME: RoundNumber
-    28:
+    30:
       HasLockedBlock:
         TUPLE:
           - TYPENAME: BlockHeight
           - TYPENAME: RoundNumber
-    29:
+    31:
       MissingCrossChainUpdate:
         STRUCT:
           - sender_id:
               TYPENAME: ChainId
           - height:
               TYPENAME: BlockHeight
-    30:
+    32:
       InvalidMessageContent:
         STRUCT:
           - sender_id:
@@ -311,7 +338,7 @@ Error:
           - height:
               TYPENAME: BlockHeight
           - index: U64
-    31:
+    33:
       InvalidMessageOrder:
         STRUCT:
           - sender_id:
@@ -322,39 +349,39 @@ Error:
           - expected_height:
               TYPENAME: BlockHeight
           - expected_index: U64
-    32:
-      CertificateNotFound: UNIT
-    33:
-      InvalidCrossChainRequest: UNIT
     34:
-      InvalidBlockProposal: UNIT
+      CertificateNotFound: UNIT
     35:
-      InvalidBlockChaining: UNIT
+      InvalidCrossChainRequest: UNIT
     36:
-      IncorrectStateHash: UNIT
+      InvalidBlockProposal: UNIT
     37:
-      ClientErrorWhileProcessingBlockProposal: UNIT
+      InvalidBlockChaining: UNIT
     38:
-      ClientErrorWhileQueryingCertificate: UNIT
+      IncorrectStateHash: UNIT
     39:
-      WrongShard: UNIT
+      ClientErrorWhileProcessingBlockProposal: UNIT
     40:
-      InvalidDecoding: UNIT
+      ClientErrorWhileQueryingCertificate: UNIT
     41:
-      UnexpectedMessage: UNIT
+      WrongShard: UNIT
     42:
+      InvalidDecoding: UNIT
+    43:
+      UnexpectedMessage: UNIT
+    44:
       ClientIoError:
         STRUCT:
           - error: STR
-    43:
+    45:
       StorageIoError:
         STRUCT:
           - error: STR
-    44:
+    46:
       StorageBcsError:
         STRUCT:
           - error: STR
-    45:
+    47:
       MissingCertificate:
         STRUCT:
           - hash:
@@ -370,12 +397,18 @@ ExecutionState:
   STRUCT:
     - chain_id:
         TYPENAME: ChainId
+    - epoch:
+        OPTION:
+          TYPENAME: Epoch
     - status:
         OPTION:
           TYPENAME: ChainStatus
     - committees:
-        SEQ:
-          TYPENAME: Committee
+        MAP:
+          KEY:
+            TYPENAME: Epoch
+          VALUE:
+            TYPENAME: Committee
     - manager:
         TYPENAME: ChainManager
     - balance:
@@ -472,9 +505,16 @@ Operation:
               TYPENAME: Owner
           - admin_id:
               TYPENAME: ChainId
+          - epoch:
+              TYPENAME: Epoch
           - committees:
-              SEQ:
-                TYPENAME: Committee
+              MAP:
+                KEY:
+                  TYPENAME: Epoch
+                VALUE:
+                  TYPENAME: Committee
+          - next_admin_height:
+              TYPENAME: BlockHeight
     2:
       CloseChain: UNIT
     3:
@@ -493,6 +533,8 @@ Operation:
         STRUCT:
           - admin_id:
               TYPENAME: ChainId
+          - epoch:
+              TYPENAME: Epoch
           - committee:
               TYPENAME: Committee
     6:
@@ -502,9 +544,8 @@ Operation:
               TYPENAME: ChainId
           - admin_id:
               TYPENAME: ChainId
-          - committees:
-              SEQ:
-                TYPENAME: Committee
+          - next_admin_height:
+              TYPENAME: BlockHeight
 OperationId:
   STRUCT:
     - chain_id:

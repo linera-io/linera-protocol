@@ -29,6 +29,7 @@ async fn test_file_storage_for_certificates() {
     let dir = tempfile::TempDir::new().unwrap();
     let mut client = FileStoreClient::new(dir.path().to_path_buf());
     let block = Block {
+        epoch: Epoch::from(0),
         chain_id: ChainId::root(1),
         incoming_messages: Vec::new(),
         operations: vec![Operation::CloseChain],

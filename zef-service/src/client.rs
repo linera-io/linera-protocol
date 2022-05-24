@@ -151,6 +151,7 @@ impl ClientContext {
                 None => continue,
             };
             let block = Block {
+                epoch: Epoch::from(0),
                 chain_id: chain.chain_id,
                 incoming_messages: Vec::new(),
                 operations: vec![Operation::Transfer {
