@@ -11,7 +11,6 @@ use crate::{
     messages::{BlockHeight, ChainId, OperationId, Owner},
 };
 use serde::{Deserialize, Serialize};
-use std::convert::{TryFrom, TryInto};
 
 /// Execution state of a chain.
 #[derive(Debug, Clone, Serialize, Deserialize)]

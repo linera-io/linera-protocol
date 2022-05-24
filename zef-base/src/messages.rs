@@ -523,6 +523,18 @@ impl From<BlockHeight> for usize {
     }
 }
 
+impl From<PublicKey> for ValidatorName {
+    fn from(value: PublicKey) -> Self {
+        Self(value)
+    }
+}
+
+impl From<PublicKey> for Owner {
+    fn from(value: PublicKey) -> Self {
+        Self(value)
+    }
+}
+
 impl std::str::FromStr for Owner {
     type Err = PublicKeyFromStrError;
 
