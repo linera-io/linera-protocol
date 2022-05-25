@@ -49,3 +49,55 @@ async fn test_rocksdb_storage_for_certificates() {
         assert_eq!(read_certificate.hash, certificate.hash);
     }
 }
+
+#[tokio::test]
+async fn test_rocksdb_persistance_across_write() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let block = Block {
+        chain_id: ChainId::root(1),
+        incoming_messages: Vec::new(),
+        operations: vec![Operation::CloseChain],
+        previous_block_hash: None,
+        height: BlockHeight::default(),
+    };
+    let value = Value::ConfirmedBlock {
+        block,
+        state_hash: HashValue::new(&ExecutionState::new(ChainId::root(1))),
+    };
+    let certificate = Certificate::new(value, vec![]);
+
+    {
+        let mut client1 = RocksdbStoreClient::new(dir.path().to_path_buf()).unwrap();
+        client1
+            .write_certificate(certificate.clone())
+            .await
+            .unwrap();
+    }
+
+    {
+        let mut client2 = RocksdbStoreClient::new(dir.path().to_path_buf()).unwrap();
+        let read_certificate = client2.read_certificate(certificate.hash).await.unwrap();
+        assert_eq!(read_certificate.hash, certificate.hash);
+    }
+
+    //read
+
+    // Perform more than 1 read/write to catch issues with opening the DB multiple times.
+    /*for i in 1..3 {
+        let block = Block {
+            chain_id: ChainId::root(i),
+            incoming_messages: Vec::new(),
+            operations: vec![Operation::CloseChain],
+            previous_block_hash: None,
+            height: BlockHeight::default(),
+        };
+        let value = Value::ConfirmedBlock {
+            block,
+            state_hash: HashValue::new(&ExecutionState::new(ChainId::root(1))),
+        };
+        let certificate = Certificate::new(value, vec![]);
+        client.write_certificate(certificate.clone()).await.unwrap();
+        let read_certificate = client.read_certificate(certificate.hash).await.unwrap();
+        assert_eq!(read_certificate.hash, certificate.hash);
+    }*/
+}
