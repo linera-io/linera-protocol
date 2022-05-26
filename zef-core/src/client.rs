@@ -17,7 +17,7 @@ use zef_base::{
     committee::Committee,
     crypto::*,
     error::Error,
-    execution::{Address, Amount, Balance, Operation, UserData},
+    execution::{Address, Amount, Balance, ExecutionState, Operation, UserData},
     manager::ChainManager,
     messages::*,
 };
@@ -188,62 +188,29 @@ where
     S: Storage + Clone + 'static,
 {
     async fn chain_info(&mut self) -> Result<ChainInfo, Error> {
-        let query = ChainInfoQuery {
-            chain_id: self.chain_id,
-            check_next_block_height: None,
-            query_committees: false,
-            query_pending_messages: false,
-            query_sent_certificates_in_range: None,
-            query_received_certificates_excluding_first_nth: None,
-        };
+        let query = ChainInfoQuery::new(self.chain_id);
         let response = self.node_client.handle_chain_info_query(query).await?;
         Ok(response.info)
     }
 
     async fn pending_messages(&mut self) -> Result<Vec<MessageGroup>, Error> {
-        let query = ChainInfoQuery {
-            chain_id: self.chain_id,
-            check_next_block_height: None,
-            query_committees: false,
-            query_pending_messages: true,
-            query_sent_certificates_in_range: None,
-            query_received_certificates_excluding_first_nth: None,
-        };
+        let query = ChainInfoQuery::new(self.chain_id).with_pending_messages();
         let response = self.node_client.handle_chain_info_query(query).await?;
         Ok(response.info.queried_pending_messages)
     }
 
     async fn committee(&mut self) -> Result<Committee, Error> {
-        let query = ChainInfoQuery {
-            chain_id: self.chain_id,
-            check_next_block_height: None,
-            query_committees: true,
-            query_pending_messages: false,
-            query_sent_certificates_in_range: None,
-            query_received_certificates_excluding_first_nth: None,
-        };
-        let mut info = self.node_client.handle_chain_info_query(query).await?.info;
-        let epoch = info.epoch.ok_or(Error::InactiveChain(self.chain_id))?;
-        info.queried_committees
-            .remove(&epoch)
+        let mut state = self.execution_state().await?;
+        state
+            .committees
+            .remove(&state.epoch.ok_or(Error::InactiveChain(self.chain_id))?)
             .ok_or(Error::InactiveChain(self.chain_id))
     }
 
-    async fn committees_and_admin(
-        &mut self,
-    ) -> Result<(BTreeMap<Epoch, Committee>, ChainId), Error> {
-        let query = ChainInfoQuery {
-            chain_id: self.chain_id,
-            check_next_block_height: None,
-            query_committees: true,
-            query_pending_messages: false,
-            query_sent_certificates_in_range: None,
-            query_received_certificates_excluding_first_nth: None,
-        };
+    async fn execution_state(&mut self) -> Result<ExecutionState, Error> {
+        let query = ChainInfoQuery::new(self.chain_id).with_execution_state();
         let info = self.node_client.handle_chain_info_query(query).await?.info;
-        let committees = info.queried_committees;
-        let admin_id = info.admin_id.ok_or(Error::InactiveChain(self.chain_id))?;
-        Ok((committees, admin_id))
+        Ok(info.queried_execution_state.expect("the queried state"))
     }
 
     async fn epoch(&mut self) -> Result<Epoch, anyhow::Error> {
@@ -254,8 +221,8 @@ where
             .ok_or(Error::InactiveChain(self.chain_id))?)
     }
 
-    async fn next_admin_height(&mut self) -> Result<BlockHeight, anyhow::Error> {
-        Ok(self.chain_info().await?.next_admin_height)
+    async fn next_admin_height(&mut self) -> Result<BlockHeight, Error> {
+        Ok(self.execution_state().await?.next_admin_height())
     }
 
     async fn identity(&mut self) -> Result<Owner, anyhow::Error> {
@@ -460,21 +427,16 @@ where
                 let tracker = *trackers.get(&name).unwrap_or(&0);
                 Box::pin(async move {
                     // Retrieve new received certificates from this validator.
-                    let query = ChainInfoQuery {
-                        chain_id,
-                        check_next_block_height: None,
-                        query_committees: false,
-                        query_pending_messages: false,
-                        query_sent_certificates_in_range: None,
-                        query_received_certificates_excluding_first_nth: Some(tracker),
-                    };
+                    let query = ChainInfoQuery::new(chain_id)
+                        .with_received_certificates_excluding_first_nth(tracker);
                     let response = client.handle_chain_info_query(query).await?;
+                    // Response are authenticated for accountability.
+                    response.check(name)?;
                     // TODO: These quick verifications are not enough to discard (1) all
                     // invalid certificates or (2) spammy received certificates. (1): a
                     // dishonest validator could try to make us work by producing
                     // good-looking certificates with high block heights. (2): Other
                     // users could send us a lot of uninteresting transactions.
-                    response.check(name)?;
                     for certificate in &response.info.queried_received_certificates {
                         certificate
                             .value
@@ -813,7 +775,9 @@ where
             height: self.next_block_height,
             index: 0,
         });
-        let (committees, admin_id) = self.committees_and_admin().await?;
+        let execution_state = self.execution_state().await?;
+        let admin_id = execution_state.admin_id()?;
+        let committees = execution_state.committees;
         let epoch = self.epoch().await?;
         let block = Block {
             epoch,
@@ -895,7 +859,7 @@ where
 
     async fn subscribe_to_new_committees(&mut self) -> Result<Certificate> {
         self.prepare_chain().await?;
-        let (_, admin_id) = self.committees_and_admin().await?;
+        let admin_id = self.execution_state().await?.admin_id()?;
         let block = Block {
             epoch: self.epoch().await?,
             chain_id: self.chain_id,

@@ -1358,15 +1358,9 @@ async fn test_handle_certificate_to_active_recipient() {
     assert_eq!(recipient_chain.block_hash, Some(certificate.hash));
     assert_eq!(recipient_chain.received_log.len(), 1);
 
-    let info_query = ChainInfoQuery {
-        chain_id: ChainId::root(2),
-        check_next_block_height: None,
-        query_committees: false,
-        query_pending_messages: false,
-        query_sent_certificates_in_range: None,
-        query_received_certificates_excluding_first_nth: Some(0),
-    };
-    let response = worker.handle_chain_info_query(info_query).await.unwrap();
+    let query =
+        ChainInfoQuery::new(ChainId::root(2)).with_received_certificates_excluding_first_nth(0);
+    let response = worker.handle_chain_info_query(query).await.unwrap();
     assert_eq!(response.info.queried_received_certificates.len(), 1);
     assert!(matches!(response.info.queried_received_certificates[0]
             .value

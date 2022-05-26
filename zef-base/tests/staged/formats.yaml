@@ -85,11 +85,6 @@ ChainInfo:
         TYPENAME: ChainManager
     - balance:
         TYPENAME: Balance
-    - admin_id:
-        OPTION:
-          TYPENAME: ChainId
-    - next_admin_height:
-        TYPENAME: BlockHeight
     - block_hash:
         OPTION:
           TYPENAME: HashValue
@@ -97,12 +92,9 @@ ChainInfo:
         TYPENAME: BlockHeight
     - state_hash:
         TYPENAME: HashValue
-    - queried_committees:
-        MAP:
-          KEY:
-            TYPENAME: Epoch
-          VALUE:
-            TYPENAME: Committee
+    - queried_execution_state:
+        OPTION:
+          TYPENAME: ExecutionState
     - queried_pending_messages:
         SEQ:
           TYPENAME: MessageGroup
@@ -120,7 +112,7 @@ ChainInfoQuery:
     - check_next_block_height:
         OPTION:
           TYPENAME: BlockHeight
-    - query_committees: BOOL
+    - query_execution_state: BOOL
     - query_pending_messages: BOOL
     - query_sent_certificates_in_range:
         OPTION:

@@ -12,7 +12,7 @@ use crate::{
     messages::*,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
+use std::collections::{BTreeSet, HashMap, VecDeque};
 
 /// The state of a chain.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -146,12 +146,10 @@ impl ChainState {
             description: self.description,
             manager: self.state.manager.clone(),
             balance: self.state.balance,
-            admin_id: self.state.admin_id(),
-            next_admin_height: self.state.next_admin_height(),
             block_hash: self.block_hash,
             next_block_height: self.next_block_height,
             state_hash: self.state_hash,
-            queried_committees: BTreeMap::new(),
+            queried_execution_state: None,
             queried_pending_messages: Vec::new(),
             queried_sent_certificates: Vec::new(),
             count_received_certificates: self.received_log.len(),

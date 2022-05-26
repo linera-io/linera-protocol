@@ -152,14 +152,7 @@ where
         let mut jobs = Vec::new();
         loop {
             // Figure out which certificates this validator is missing.
-            let query = ChainInfoQuery {
-                chain_id,
-                check_next_block_height: None,
-                query_committees: false,
-                query_pending_messages: false,
-                query_sent_certificates_in_range: None,
-                query_received_certificates_excluding_first_nth: None,
-            };
+            let query = ChainInfoQuery::new(chain_id);
             match self.client.handle_chain_info_query(query).await {
                 Ok(response) if response.info.description.is_some() => {
                     response.check(self.name)?;
