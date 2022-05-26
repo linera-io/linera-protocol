@@ -100,7 +100,7 @@ mod tests {
     use super::{Codec, PREFIX_SIZE};
     use bytes::{BufMut, BytesMut};
     use test_strategy::proptest;
-    use tokio_util::codec::Decoder;
+    use tokio_util::codec::{Decoder, Encoder};
     use zef_base::{messages::ChainInfoQuery, rpc};
 
     /// Test decoding of a frame from a buffer.
@@ -138,5 +138,49 @@ mod tests {
 
         assert_eq!(&start_of_buffer, &leading_bytes);
         assert_eq!(&buffer, &trailing_bytes);
+    }
+
+    /// Test encoding a message to buffer.
+    ///
+    /// The buffer may already contain some leading bytes, but the cursor is set to where the frame
+    /// should start.
+    ///
+    /// The encoder should write a prefix with the size of the serialized message, followed by the
+    /// serialized message bytes. It should not touch the leading bytes nor append any trailing
+    /// bytes.
+    #[proptest]
+    fn encodes_at_the_correct_buffer_offset(
+        leading_bytes: Vec<u8>,
+        message_contents: ChainInfoQuery,
+    ) {
+        let message = rpc::Message::from(message_contents);
+        let serialized_message =
+            bincode::serialize(&message).expect("Serialization should succeed");
+
+        let mut buffer = BytesMut::new();
+
+        buffer.extend_from_slice(&leading_bytes);
+
+        let frame_start = buffer.len();
+        let prefix_end = frame_start + PREFIX_SIZE as usize;
+
+        let result = Codec.encode(message, &mut buffer);
+
+        assert!(matches!(result, Ok(())));
+        assert_eq!(&buffer[..frame_start], &leading_bytes);
+
+        let prefix = u32::from_le_bytes(
+            buffer[frame_start..prefix_end]
+                .try_into()
+                .expect("Incorrect prefix slice indices"),
+        );
+
+        assert_eq!(prefix as usize, serialized_message.len());
+        assert_eq!(
+            buffer.len(),
+            leading_bytes.len() + PREFIX_SIZE as usize + prefix as usize
+        );
+
+        assert_eq!(&buffer[prefix_end..], &serialized_message);
     }
 }
