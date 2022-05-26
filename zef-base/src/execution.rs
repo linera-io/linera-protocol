@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 
 /// Execution state of a chain.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct ExecutionState {
     /// The UID of the chain.
     pub chain_id: ChainId,
@@ -105,7 +105,7 @@ impl ExecutionState {
 
 /// The administrative status of this chain w.r.t reconfigurations.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub enum ChainStatus {
     ManagedBy { admin_id: ChainId, subscribed: bool },
     Managing { subscribers: Vec<ChainId> },

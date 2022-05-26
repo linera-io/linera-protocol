@@ -98,7 +98,7 @@ pub struct MessageGroup {
 
 /// An authenticated proposal for a new block.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct BlockProposal {
     pub content: BlockAndRound,
     pub owner: Owner,
@@ -120,7 +120,7 @@ pub enum Value {
 
 /// A vote on a statement from a validator.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct Vote {
     pub value: Value,
     pub validator: ValidatorName,
@@ -129,7 +129,7 @@ pub struct Vote {
 
 /// A certified statement from the committee.
 #[derive(Clone, Debug, Serialize)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct Certificate {
     /// The certified value.
     pub value: Value,
@@ -142,7 +142,7 @@ pub struct Certificate {
 
 /// A range of block heights as used in ChainInfoQuery.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct BlockHeightRange {
     /// Starting point
     pub start: BlockHeight,
@@ -152,7 +152,7 @@ pub struct BlockHeightRange {
 
 /// Message to obtain information on a chain.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct ChainInfoQuery {
     /// The chain id
     pub chain_id: ChainId,
@@ -169,7 +169,7 @@ pub struct ChainInfoQuery {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct ChainInfo {
     /// The chain id.
     pub chain_id: ChainId,
@@ -201,7 +201,7 @@ pub struct ChainInfo {
 
 /// The response to an `ChainInfoQuery`
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct ChainInfoResponse {
     pub info: ChainInfo,
     pub signature: Option<Signature>,
@@ -209,7 +209,7 @@ pub struct ChainInfoResponse {
 
 /// An internal message between chains within a validator.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 #[allow(clippy::large_enum_variant)]
 pub enum CrossChainRequest {
     /// Communicate a number of confirmed blocks from the sender to the recipient.
