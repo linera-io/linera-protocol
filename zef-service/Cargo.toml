@@ -28,7 +28,11 @@ zef-base = { path = "../zef-base" }
 zef-storage = { path = "../zef-storage" }
 
 [dev-dependencies]
+proptest = "1.0.0"
 tempfile = "3.2.0"
+test-strategy = "0.2.0"
+
+zef-base = { path = "../zef-base", features = ["test"] }
 
 [[bin]]
 name = "client"

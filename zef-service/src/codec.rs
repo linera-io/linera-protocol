@@ -94,3 +94,49 @@ pub enum Error {
         max = u32::MAX)]
     MessageTooBig { size: usize },
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{Codec, PREFIX_SIZE};
+    use bytes::{BufMut, BytesMut};
+    use test_strategy::proptest;
+    use tokio_util::codec::Decoder;
+    use zef_base::{messages::ChainInfoQuery, rpc};
+
+    /// Test decoding of a frame from a buffer.
+    ///
+    /// The buffer may contain leading or trailing bytes around the frame. The frame contains the
+    /// size of the payload, and the payload is a serialized dummy [`rpc::Message`].
+    ///
+    /// The decoder should produce the exact same message as used as the test input, and it should
+    /// ignore the leading and trailing bytes.
+    #[proptest]
+    fn decodes_frame_ignoring_leading_and_trailing_bytes(
+        leading_bytes: Vec<u8>,
+        message_contents: ChainInfoQuery,
+        trailing_bytes: Vec<u8>,
+    ) {
+        let message = rpc::Message::from(message_contents);
+        let payload = bincode::serialize(&message).expect("Message is serializable");
+
+        let mut buffer = BytesMut::with_capacity(
+            leading_bytes.len() + PREFIX_SIZE as usize + payload.len() + trailing_bytes.len(),
+        );
+
+        buffer.extend_from_slice(&leading_bytes);
+
+        let start_of_buffer = buffer.split();
+
+        buffer.put_u32_le(payload.len() as u32);
+        buffer.extend_from_slice(&payload);
+        buffer.extend_from_slice(&trailing_bytes);
+
+        let result = Codec.decode(&mut buffer);
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), Some(message));
+
+        assert_eq!(&start_of_buffer, &leading_bytes);
+        assert_eq!(&buffer, &trailing_bytes);
+    }
+}
