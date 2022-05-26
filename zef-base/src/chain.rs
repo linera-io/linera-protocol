@@ -16,7 +16,7 @@ use std::collections::{BTreeSet, HashMap, VecDeque};
 
 /// The state of a chain.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct ChainState {
     /// How the chain was created. May be unknown for inactive chains.
     pub description: Option<ChainDescription>,
@@ -45,7 +45,7 @@ pub struct ChainState {
 /// execution of blocks, so currently we just send the certified blocks over and let the
 /// receivers figure out what was the message for them.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct OutboxState {
     /// Keep sending these certified blocks of ours until they are acknowledged by
     /// receivers. Keep the height around so that we can quickly dequeue.
@@ -54,7 +54,7 @@ pub struct OutboxState {
 
 /// An inbox used to receive and execute messages from another chain.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct InboxState {
     /// We have already received the cross-chain requests and enqueued all the messages
     /// below this height.
@@ -68,7 +68,7 @@ pub struct InboxState {
 
 /// A message sent by some (unspecified) chain at a particular height and index.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct Event {
     /// The height of the block that created the event.
     pub height: BlockHeight,

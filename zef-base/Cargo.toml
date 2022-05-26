@@ -4,6 +4,9 @@ version = "0.1.0"
 authors = ["Zefchain <devops@zefchain.com>"]
 edition = "2021"
 
+[features]
+test = []
+
 [dependencies]
 bcs = "0.1.3"
 bincode = "1.3.3"
