@@ -5,7 +5,7 @@ authors = ["Zefchain <devops@zefchain.com>"]
 edition = "2021"
 
 [features]
-test = []
+test = ["test-strategy", "proptest"]
 
 [dependencies]
 bcs = "0.1.3"
@@ -17,13 +17,17 @@ rand = "0.7.3"
 serde = { version = "1.0.130", features = ["derive"] }
 ed25519 = "1.2.0"
 ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
+proptest = { version = "1.0.0", optional = true }
 serde_json = "1.0.68"
 serde-name = "0.2.0"
 sha2 = "0.9.8"
 structopt = "0.3.23"
 thiserror = "1.0.31"
+test-strategy = { version = "0.2.0", optional = true }
 
 [dev-dependencies]
+proptest = "1.0.0"
 similar-asserts = "1.1.0"
 serde-reflection = "0.3.5"
 serde_yaml = "0.8.21"
+test-strategy = "0.2.0"

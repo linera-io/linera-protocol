@@ -10,6 +10,16 @@ use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use thiserror::Error;
 
+#[cfg(any(test, feature = "test"))]
+use {
+    proptest::{
+        collection::{vec, VecStrategy},
+        prelude::Arbitrary,
+        strategy::{self, Strategy},
+    },
+    std::ops::RangeInclusive,
+};
+
 #[cfg(test)]
 #[path = "unit_tests/crypto_tests.rs"]
 mod crypto_tests;
@@ -381,6 +391,20 @@ impl Signature {
         Signature::verify_batch_internal(value, votes).map_err(|error| Error::InvalidSignature {
             error: format!("batched {}", error),
             type_name: T::type_name().to_string(),
+        })
+    }
+}
+
+#[cfg(any(test, feature = "test"))]
+impl Arbitrary for HashValue {
+    type Parameters = ();
+    type Strategy = strategy::Map<VecStrategy<RangeInclusive<u8>>, fn(Vec<u8>) -> HashValue>;
+
+    fn arbitrary_with((): Self::Parameters) -> Self::Strategy {
+        vec(u8::MIN..=u8::MAX, 64).prop_map(|vector| {
+            let bytes: [u8; 64] = vector.try_into().expect("Incorrect vector size");
+
+            HashValue(generic_array::GenericArray::clone_from_slice(&bytes))
         })
     }
 }
