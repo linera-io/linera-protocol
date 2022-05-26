@@ -13,6 +13,9 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, str::FromStr};
 
+#[cfg(any(test, feature = "test"))]
+use test_strategy::Arbitrary;
+
 #[cfg(test)]
 #[path = "unit_tests/messages_tests.rs"]
 mod messages_tests;
@@ -21,6 +24,7 @@ mod messages_tests;
 #[derive(
     Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
 )]
+#[cfg_attr(any(test, feature = "test"), derive(Arbitrary))]
 pub struct BlockHeight(pub u64);
 
 /// A number to identify successive attempts to decide a value in a consensus protocol.
@@ -48,6 +52,7 @@ pub enum ChainDescription {
 
 /// The unique identifier (UID) of a chain. This is the hash value of a ChainDescription.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
+#[cfg_attr(any(test, feature = "test"), derive(Arbitrary))]
 pub struct ChainId(pub HashValue);
 
 /// The index of an operation in a chain.
@@ -142,7 +147,7 @@ pub struct Certificate {
 
 /// A range of block heights as used in ChainInfoQuery.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+#[cfg_attr(any(test, feature = "test"), derive(Arbitrary, Eq, PartialEq))]
 pub struct BlockHeightRange {
     /// Starting point
     pub start: BlockHeight,
@@ -152,7 +157,7 @@ pub struct BlockHeightRange {
 
 /// Message to obtain information on a chain.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+#[cfg_attr(any(test, feature = "test"), derive(Arbitrary, Eq, PartialEq))]
 pub struct ChainInfoQuery {
     /// The chain id
     pub chain_id: ChainId,
