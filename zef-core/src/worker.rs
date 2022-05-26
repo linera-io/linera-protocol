@@ -125,7 +125,7 @@ where
         Ok(continuation)
     }
 
-    /// (Trusted) Process a confirmed block (aka a commit).
+    /// Process a confirmed block (aka a commit).
     async fn process_confirmed_block(
         &mut self,
         certificate: Certificate,
@@ -203,7 +203,7 @@ where
         Ok((info, continuation))
     }
 
-    /// (Trusted) Process a validated block issued from a multi-owner chain.
+    /// Process a validated block issued from a multi-owner chain.
     async fn process_validated_block(
         &mut self,
         certificate: Certificate,
