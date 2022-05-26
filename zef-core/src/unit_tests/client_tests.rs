@@ -218,10 +218,10 @@ impl TestBuilder {
             if let Ok(response) = client.handle_chain_info_query(query.clone()).await {
                 if response.check(name).is_ok() {
                     let ChainInfo {
-                        mut queried_sent_certificates,
+                        mut requested_sent_certificates,
                         ..
                     } = response.info;
-                    if let Some(cert) = queried_sent_certificates.pop() {
+                    if let Some(cert) = requested_sent_certificates.pop() {
                         if let Value::ConfirmedBlock { block, .. } = &cert.value {
                             if block.chain_id == chain_id && block.height == block_height {
                                 cert.check(&self.initial_committee).unwrap();

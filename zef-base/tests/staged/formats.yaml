@@ -92,32 +92,32 @@ ChainInfo:
         TYPENAME: BlockHeight
     - state_hash:
         TYPENAME: HashValue
-    - queried_execution_state:
+    - requested_execution_state:
         OPTION:
           TYPENAME: ExecutionState
-    - queried_pending_messages:
+    - requested_pending_messages:
         SEQ:
           TYPENAME: MessageGroup
-    - queried_sent_certificates:
+    - requested_sent_certificates:
         SEQ:
           TYPENAME: Certificate
     - count_received_certificates: U64
-    - queried_received_certificates:
+    - requested_received_certificates:
         SEQ:
           TYPENAME: Certificate
 ChainInfoQuery:
   STRUCT:
     - chain_id:
         TYPENAME: ChainId
-    - check_next_block_height:
+    - test_next_block_height:
         OPTION:
           TYPENAME: BlockHeight
-    - query_execution_state: BOOL
-    - query_pending_messages: BOOL
-    - query_sent_certificates_in_range:
+    - request_execution_state: BOOL
+    - request_pending_messages: BOOL
+    - request_sent_certificates_in_range:
         OPTION:
           TYPENAME: BlockHeightRange
-    - query_received_certificates_excluding_first_nth:
+    - request_received_certificates_excluding_first_nth:
         OPTION: U64
 ChainInfoResponse:
   STRUCT:
