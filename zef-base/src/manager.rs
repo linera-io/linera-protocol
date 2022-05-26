@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 /// How to produce new blocks.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub enum ChainManager {
     /// The chain is not active. (No blocks can be created)
     None,
@@ -19,7 +19,7 @@ pub enum ChainManager {
 
 /// The specific state of a chain managed by one owner.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct SingleOwnerManager {
     /// The owner of the chain.
     pub owner: Owner,
@@ -29,7 +29,7 @@ pub struct SingleOwnerManager {
 
 /// The specific state of a chain managed by multiple owners.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct MultiOwnerManager {
     /// The co-owners of the chain.
     /// Using a map instead a hashset because Serde treats HashSet's as vectors.
