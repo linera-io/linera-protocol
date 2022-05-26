@@ -155,14 +155,7 @@ where
     }
 
     pub async fn local_chain_info(&mut self, chain_id: ChainId) -> Result<ChainInfo, Error> {
-        let query = ChainInfoQuery {
-            chain_id,
-            check_next_block_height: None,
-            query_committees: false,
-            query_pending_messages: false,
-            query_sent_certificates_in_range: None,
-            query_received_certificates_excluding_first_nth: None,
-        };
+        let query = ChainInfoQuery::new(chain_id);
         Ok(self.handle_chain_info_query(query).await?.info)
     }
 
@@ -214,14 +207,7 @@ where
             start,
             limit: Some(usize::from(stop) - usize::from(start)),
         };
-        let query = ChainInfoQuery {
-            chain_id,
-            check_next_block_height: None,
-            query_committees: false,
-            query_pending_messages: false,
-            query_sent_certificates_in_range: Some(range),
-            query_received_certificates_excluding_first_nth: None,
-        };
+        let query = ChainInfoQuery::new(chain_id).with_sent_certificates_in_range(range);
         if let Ok(response) = client.handle_chain_info_query(query).await {
             if response.check(name).is_ok() {
                 let ChainInfo {
@@ -272,14 +258,7 @@ where
             start: local_info.next_block_height,
             limit: None,
         };
-        let query = ChainInfoQuery {
-            chain_id,
-            check_next_block_height: None,
-            query_committees: false,
-            query_pending_messages: false,
-            query_sent_certificates_in_range: Some(range),
-            query_received_certificates_excluding_first_nth: None,
-        };
+        let query = ChainInfoQuery::new(chain_id).with_sent_certificates_in_range(range);
         let info = match client.handle_chain_info_query(query).await {
             Ok(response) if response.check(name).is_ok() => response.info,
             _ => {

@@ -207,17 +207,11 @@ impl TestBuilder {
         block_height: BlockHeight,
         target_count: usize,
     ) -> Option<Certificate> {
-        let query = ChainInfoQuery {
-            chain_id,
-            check_next_block_height: None,
-            query_committees: false,
-            query_pending_messages: false,
-            query_sent_certificates_in_range: Some(BlockHeightRange {
+        let query =
+            ChainInfoQuery::new(chain_id).with_sent_certificates_in_range(BlockHeightRange {
                 start: block_height,
                 limit: Some(1),
-            }),
-            query_received_certificates_excluding_first_nth: None,
-        };
+            });
         let mut count = 0;
         let mut certificate = None;
         for (name, mut client) in self.validator_clients.clone() {
