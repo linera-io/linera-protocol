@@ -424,15 +424,22 @@ where
             } => {
                 let mut chain = self.storage.read_chain_or_default(recipient).await?;
                 let mut height = None;
+                let mut epoch = None;
                 let mut need_update = false;
                 for certificate in certificates {
+                    // Start by checking a few invariants. Note that we still crucially
+                    // trust the worker of the sending chain to have verified and executed
+                    // the blocks correctly.
                     let block = certificate
                         .value
                         .confirmed_block()
                         .ok_or(Error::InvalidCrossChainRequest)?;
                     ensure!(block.chain_id == sender, Error::InvalidCrossChainRequest);
                     ensure!(height < Some(block.height), Error::InvalidCrossChainRequest);
+                    ensure!(epoch <= Some(block.epoch), Error::InvalidCrossChainRequest);
                     height = Some(block.height);
+                    epoch = Some(block.epoch);
+                    // Update the staged chain state with the received block.
                     if chain.receive_block(
                         block.chain_id,
                         block.height,
@@ -444,11 +451,25 @@ where
                     }
                 }
                 if need_update {
-                    if !self.allow_inactive_chains && !chain.is_active() {
-                        // Refuse to create the chain state if it is still inactive by
-                        // now. Accordingly, do not send a confirmation, so that the
-                        // message is retried later.
-                        return Ok(Vec::new());
+                    if !self.allow_inactive_chains {
+                        // Validator nodes are more strict than clients when it comes to
+                        // processing cross-chain messages.
+                        if !chain.is_active() {
+                            // Refuse to create the chain state if it is still inactive by
+                            // now. Accordingly, do not send a confirmation, so that the
+                            // message is retried later.
+                            log::warn!("Refusing to store inactive chain {recipient}");
+                            return Ok(Vec::new());
+                        }
+                        let epoch = epoch.expect("need_update implies epoch.is_some()");
+                        if epoch < chain.state.epoch.expect("chain is active")
+                            && !chain.state.committees.contains_key(&epoch)
+                        {
+                            // Refuse to create the chain state if the latest epoch is not
+                            // recognized. Epochs in the future are ok.
+                            log::warn!("Refusing updates from untrusted epoch {epoch:?}");
+                            return Ok(Vec::new());
+                        }
                     }
                     self.storage.write_chain(chain).await?;
                 }

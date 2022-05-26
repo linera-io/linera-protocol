@@ -413,14 +413,21 @@ where
     /// is regularly upgraded to new committees.
     async fn find_received_certificates(&mut self) -> Result<()> {
         let chain_id = self.chain_id;
-        let committee = self.committee().await?;
+        let state = self.execution_state().await?;
+        let admin_id = state.admin_id()?;
+        let committees = state.committees;
+        let epoch = state.epoch.ok_or(Error::InactiveChain(chain_id))?;
+        let committee = committees
+            .get(&epoch)
+            .ok_or(Error::InactiveChain(chain_id))?;
         let trackers = self.received_certificate_trackers.clone();
         let result = communicate_with_quorum(
             &self.validator_clients,
-            &committee,
+            committee,
             |_| (),
             |name, mut client| {
                 let tracker = *trackers.get(&name).unwrap_or(&0);
+                let committees = committees.clone();
                 Box::pin(async move {
                     // Retrieve new received certificates from this validator.
                     let query = ChainInfoQuery::new(chain_id)
@@ -428,18 +435,58 @@ where
                     let response = client.handle_chain_info_query(query).await?;
                     // Response are authenticated for accountability.
                     response.check(name)?;
-                    // TODO: These quick verifications are not enough to discard (1) all
-                    // invalid certificates or (2) spammy received certificates. (1): a
-                    // dishonest validator could try to make us work by producing
-                    // good-looking certificates with high block heights. (2): Other
-                    // users could send us a lot of uninteresting transactions.
-                    for certificate in &response.info.requested_received_certificates {
-                        certificate
+                    let mut certificates = Vec::new();
+                    let mut new_tracker = tracker;
+                    for certificate in response.info.requested_received_certificates {
+                        let block = certificate
                             .value
                             .confirmed_block()
                             .ok_or(Error::ClientErrorWhileQueryingCertificate)?;
+                        // Check that certificates  are valid w.r.t one of our trusted
+                        // committees.
+                        if block.chain_id == admin_id {
+                            // That is, unless it comes from the admin chain. We don't
+                            // have a good way to enforce the policy on the admin chain
+                            // yet because subscriptions may accepted in a later epoch.
+                            certificates.push(certificate);
+                            new_tracker += 1;
+                            continue;
+                        }
+                        if block.epoch > epoch {
+                            // We don't accept a certificate from a committee in the
+                            // future.
+                            log::warn!(
+                                "Postponing received certificate from future epoch {:?}",
+                                block.epoch
+                            );
+                            // Stop the synchronization here. Do not incrememt the tracker
+                            // so that the certificate can still be downloaded later, once
+                            // our committee was updated.
+                            break;
+                        }
+                        match committees.get(&block.epoch) {
+                            Some(committee) => {
+                                // This epoch is recognized by our chain. Let's verify the
+                                // certificate.
+                                certificate.check(committee)?;
+                                certificates.push(certificate);
+                                new_tracker += 1;
+                            }
+                            None => {
+                                // This epoch is not recognized any more. Let's skip the
+                                // certificate. If a higher block with a recognized epoch
+                                // comes up later from the same chain, the call to
+                                // `receive_certificate` below will download the skipped
+                                // certificate again.
+                                log::warn!(
+                                    "Skipping received certificate from past epoch {:?}",
+                                    block.epoch
+                                );
+                                new_tracker += 1;
+                            }
+                        }
                     }
-                    Ok((name, response.info))
+                    Ok((name, new_tracker, certificates))
                 })
             },
         )
@@ -456,20 +503,19 @@ where
                 bail!("Failed to communicate with a quorum of validators (multiple errors)")
             }
         };
-        'outer: for (name, response) in responses {
+        'outer: for (name, tracker, certificates) in responses {
             // Process received certificates.
-            for certificate in response.requested_received_certificates {
+            for certificate in certificates {
                 let hash = certificate.hash;
                 if let Err(e) = self.receive_certificate(certificate.clone()).await {
-                    log::warn!("Dropping invalid certificate {hash:?}: {e}");
+                    log::warn!("Received invalid certificate {hash} from {name}: {e}");
                     // Do not update the validator's tracker in case of error.
                     // Move on to the next validator.
                     continue 'outer;
                 }
             }
             // Update tracker.
-            self.received_certificate_trackers
-                .insert(name, response.count_received_certificates);
+            self.received_certificate_trackers.insert(name, tracker);
         }
         Ok(())
     }
@@ -693,6 +739,21 @@ where
             .confirmed_block()
             .ok_or_else(|| anyhow!("Was expecting a confirmed chain operation"))?
             .clone();
+        let state = self.execution_state().await?;
+        if let Some(epoch) = state.epoch {
+            if block.chain_id != state.admin_id()? {
+                ensure!(
+                    block.epoch <= epoch,
+                    "Cannot accept a certificate from an unknown committee in the future. Please synchronize the local chain",
+                );
+                match state.committees.get(&block.epoch) {
+                    Some(committee) => {
+                        certificate.check(committee)?;
+                    }
+                    None => bail!("Cannot accept a certificate from a committee that was retired. Try a newer certificate from the same chain"),
+                }
+            }
+        }
         // Recover history from the network.
         self.node_client
             .download_certificates(self.validator_clients.clone(), block.chain_id, block.height)
