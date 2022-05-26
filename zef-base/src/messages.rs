@@ -7,14 +7,11 @@ use crate::{
     crypto::*,
     ensure,
     error::Error,
-    execution::{Balance, Operation},
+    execution::{Balance, ExecutionState, Operation},
     manager::ChainManager,
 };
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::{BTreeMap, HashSet},
-    str::FromStr,
-};
+use std::{collections::HashSet, str::FromStr};
 
 #[cfg(any(test, feature = "test"))]
 use test_strategy::Arbitrary;
@@ -174,14 +171,52 @@ pub struct ChainInfoQuery {
     pub chain_id: ChainId,
     /// Optionally block that the block height is the one expected.
     pub check_next_block_height: Option<BlockHeight>,
-    /// Query the current committees.
-    pub query_committees: bool,
+    /// Query the full execution state (may not supported by all validators).
+    pub query_execution_state: bool,
     /// Query the received messages that are waiting be picked in the next block.
     pub query_pending_messages: bool,
     /// Query a range of certificates sent from the chain.
     pub query_sent_certificates_in_range: Option<BlockHeightRange>,
     /// Query new certificates received from the chain.
     pub query_received_certificates_excluding_first_nth: Option<usize>,
+}
+
+impl ChainInfoQuery {
+    pub fn new(chain_id: ChainId) -> Self {
+        Self {
+            chain_id,
+            check_next_block_height: None,
+            query_execution_state: false,
+            query_pending_messages: false,
+            query_sent_certificates_in_range: None,
+            query_received_certificates_excluding_first_nth: None,
+        }
+    }
+
+    pub fn check_next_block_height(mut self, height: BlockHeight) -> Self {
+        self.check_next_block_height = Some(height);
+        self
+    }
+
+    pub fn with_execution_state(mut self) -> Self {
+        self.query_execution_state = true;
+        self
+    }
+
+    pub fn with_pending_messages(mut self) -> Self {
+        self.query_pending_messages = true;
+        self
+    }
+
+    pub fn with_sent_certificates_in_range(mut self, range: BlockHeightRange) -> Self {
+        self.query_sent_certificates_in_range = Some(range);
+        self
+    }
+
+    pub fn with_received_certificates_excluding_first_nth(mut self, n: usize) -> Self {
+        self.query_received_certificates_excluding_first_nth = Some(n);
+        self
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -197,18 +232,14 @@ pub struct ChainInfo {
     pub manager: ChainManager,
     /// The current balance.
     pub balance: Balance,
-    /// The admin chain.
-    pub admin_id: Option<ChainId>,
-    /// The minimum height we expect from the admin chain next time.
-    pub next_admin_height: BlockHeight,
     /// The last block hash, if any.
     pub block_hash: Option<HashValue>,
     /// The height after the latest block in the chain.
     pub next_block_height: BlockHeight,
     /// The hash of the current execution state.
     pub state_hash: HashValue,
-    /// The current committees.
-    pub queried_committees: BTreeMap<Epoch, Committee>,
+    /// The full execution state.
+    pub queried_execution_state: Option<ExecutionState>,
     /// The received messages that are waiting be picked in the next block (if requested).
     pub queried_pending_messages: Vec<MessageGroup>,
     /// The response to `query_sent_certificates_in_range`

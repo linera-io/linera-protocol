@@ -129,10 +129,14 @@ impl ExecutionState {
 }
 
 impl ExecutionState {
-    pub fn admin_id(&self) -> Option<ChainId> {
-        match self.status.as_ref()? {
-            ChainStatus::ManagedBy { admin_id, .. } => Some(*admin_id),
-            ChainStatus::Managing { .. } => Some(self.chain_id),
+    pub fn admin_id(&self) -> Result<ChainId, Error> {
+        match self
+            .status
+            .as_ref()
+            .ok_or(Error::InactiveChain(self.chain_id))?
+        {
+            ChainStatus::ManagedBy { admin_id, .. } => Ok(*admin_id),
+            ChainStatus::Managing { .. } => Ok(self.chain_id),
         }
     }
 
@@ -168,7 +172,7 @@ impl ExecutionState {
             }
             NewCommittee { admin_id, .. } => {
                 // We have the same admin chain
-                Some(admin_id) == self.admin_id().as_ref()
+                self.admin_id() == Ok(*admin_id)
             }
             _ => false,
         }
@@ -199,7 +203,7 @@ impl ExecutionState {
                 let expected_id = ChainId::child(operation_id);
                 ensure!(id == &expected_id, Error::InvalidNewChainId(*id));
                 ensure!(
-                    Some(admin_id) == self.admin_id().as_ref(),
+                    self.admin_id() == Ok(*admin_id),
                     Error::InvalidNewChainAdminId(*id)
                 );
                 ensure!(
@@ -351,7 +355,7 @@ impl ExecutionState {
                 epoch,
                 committee,
                 admin_id,
-            } if Some(*admin_id) == self.admin_id() => {
+            } if self.admin_id() == Ok(*admin_id) => {
                 self.committees.insert(*epoch, committee.clone());
                 ensure!(
                     *epoch > self.epoch.expect("chain is active"),

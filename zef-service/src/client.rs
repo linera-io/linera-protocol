@@ -294,14 +294,7 @@ impl ClientContext {
         }
         // Last update the wallet.
         for chain in self.wallet_state.chains_mut() {
-            let query = ChainInfoQuery {
-                chain_id: chain.chain_id,
-                check_next_block_height: None,
-                query_committees: false,
-                query_pending_messages: false,
-                query_sent_certificates_in_range: None,
-                query_received_certificates_excluding_first_nth: None,
-            };
+            let query = ChainInfoQuery::new(chain.chain_id);
             let info = node.handle_chain_info_query(query).await.unwrap().info;
             // We don't have private keys but that's ok.
             chain.block_hash = info.block_hash;
