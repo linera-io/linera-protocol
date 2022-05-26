@@ -196,7 +196,7 @@ where
     async fn pending_messages(&mut self) -> Result<Vec<MessageGroup>, Error> {
         let query = ChainInfoQuery::new(self.chain_id).with_pending_messages();
         let response = self.node_client.handle_chain_info_query(query).await?;
-        Ok(response.info.queried_pending_messages)
+        Ok(response.info.requested_pending_messages)
     }
 
     async fn committee(&mut self) -> Result<Committee, Error> {
@@ -210,7 +210,7 @@ where
     async fn execution_state(&mut self) -> Result<ExecutionState, Error> {
         let query = ChainInfoQuery::new(self.chain_id).with_execution_state();
         let info = self.node_client.handle_chain_info_query(query).await?.info;
-        Ok(info.queried_execution_state.expect("the queried state"))
+        Ok(info.requested_execution_state.expect("the queried state"))
     }
 
     async fn epoch(&mut self) -> Result<Epoch, anyhow::Error> {
@@ -437,7 +437,7 @@ where
                     // dishonest validator could try to make us work by producing
                     // good-looking certificates with high block heights. (2): Other
                     // users could send us a lot of uninteresting transactions.
-                    for certificate in &response.info.queried_received_certificates {
+                    for certificate in &response.info.requested_received_certificates {
                         certificate
                             .value
                             .confirmed_block()
@@ -462,7 +462,7 @@ where
         };
         'outer: for (name, response) in responses {
             // Process received certificates.
-            for certificate in response.queried_received_certificates {
+            for certificate in response.requested_received_certificates {
                 let hash = certificate.hash;
                 if let Err(e) = self.receive_certificate(certificate.clone()).await {
                     log::warn!("Dropping invalid certificate {}: {}", hash, e);

@@ -149,11 +149,11 @@ impl ChainState {
             block_hash: self.block_hash,
             next_block_height: self.next_block_height,
             state_hash: self.state_hash,
-            queried_execution_state: None,
-            queried_pending_messages: Vec::new(),
-            queried_sent_certificates: Vec::new(),
+            requested_execution_state: None,
+            requested_pending_messages: Vec::new(),
+            requested_sent_certificates: Vec::new(),
             count_received_certificates: self.received_log.len(),
-            queried_received_certificates: Vec::new(),
+            requested_received_certificates: Vec::new(),
         };
         ChainInfoResponse::new(info, key_pair)
     }

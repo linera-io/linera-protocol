@@ -169,52 +169,52 @@ pub struct BlockHeightRange {
 pub struct ChainInfoQuery {
     /// The chain id
     pub chain_id: ChainId,
-    /// Optionally block that the block height is the one expected.
-    pub check_next_block_height: Option<BlockHeight>,
+    /// Optionally test that the block height is the one expected.
+    pub test_next_block_height: Option<BlockHeight>,
     /// Query the full execution state (may not supported by all validators).
-    pub query_execution_state: bool,
+    pub request_execution_state: bool,
     /// Query the received messages that are waiting be picked in the next block.
-    pub query_pending_messages: bool,
+    pub request_pending_messages: bool,
     /// Query a range of certificates sent from the chain.
-    pub query_sent_certificates_in_range: Option<BlockHeightRange>,
+    pub request_sent_certificates_in_range: Option<BlockHeightRange>,
     /// Query new certificates received from the chain.
-    pub query_received_certificates_excluding_first_nth: Option<usize>,
+    pub request_received_certificates_excluding_first_nth: Option<usize>,
 }
 
 impl ChainInfoQuery {
     pub fn new(chain_id: ChainId) -> Self {
         Self {
             chain_id,
-            check_next_block_height: None,
-            query_execution_state: false,
-            query_pending_messages: false,
-            query_sent_certificates_in_range: None,
-            query_received_certificates_excluding_first_nth: None,
+            test_next_block_height: None,
+            request_execution_state: false,
+            request_pending_messages: false,
+            request_sent_certificates_in_range: None,
+            request_received_certificates_excluding_first_nth: None,
         }
     }
 
-    pub fn check_next_block_height(mut self, height: BlockHeight) -> Self {
-        self.check_next_block_height = Some(height);
+    pub fn test_next_block_height(mut self, height: BlockHeight) -> Self {
+        self.test_next_block_height = Some(height);
         self
     }
 
     pub fn with_execution_state(mut self) -> Self {
-        self.query_execution_state = true;
+        self.request_execution_state = true;
         self
     }
 
     pub fn with_pending_messages(mut self) -> Self {
-        self.query_pending_messages = true;
+        self.request_pending_messages = true;
         self
     }
 
     pub fn with_sent_certificates_in_range(mut self, range: BlockHeightRange) -> Self {
-        self.query_sent_certificates_in_range = Some(range);
+        self.request_sent_certificates_in_range = Some(range);
         self
     }
 
     pub fn with_received_certificates_excluding_first_nth(mut self, n: usize) -> Self {
-        self.query_received_certificates_excluding_first_nth = Some(n);
+        self.request_received_certificates_excluding_first_nth = Some(n);
         self
     }
 }
@@ -239,15 +239,15 @@ pub struct ChainInfo {
     /// The hash of the current execution state.
     pub state_hash: HashValue,
     /// The full execution state.
-    pub queried_execution_state: Option<ExecutionState>,
+    pub requested_execution_state: Option<ExecutionState>,
     /// The received messages that are waiting be picked in the next block (if requested).
-    pub queried_pending_messages: Vec<MessageGroup>,
-    /// The response to `query_sent_certificates_in_range`
-    pub queried_sent_certificates: Vec<Certificate>,
-    /// The current number of received certificates (useful for `query_received_certificates_excluding_first_nth`)
+    pub requested_pending_messages: Vec<MessageGroup>,
+    /// The response to `request_sent_certificates_in_range`
+    pub requested_sent_certificates: Vec<Certificate>,
+    /// The current number of received certificates (useful for `request_received_certificates_excluding_first_nth`)
     pub count_received_certificates: usize,
-    /// The response to `query_received_certificates_excluding_first_nth`
-    pub queried_received_certificates: Vec<Certificate>,
+    /// The response to `request_received_certificates_excluding_first_nth`
+    pub requested_received_certificates: Vec<Certificate>,
 }
 
 /// The response to an `ChainInfoQuery`

@@ -1361,8 +1361,8 @@ async fn test_handle_certificate_to_active_recipient() {
     let query =
         ChainInfoQuery::new(ChainId::root(2)).with_received_certificates_excluding_first_nth(0);
     let response = worker.handle_chain_info_query(query).await.unwrap();
-    assert_eq!(response.info.queried_received_certificates.len(), 1);
-    assert!(matches!(response.info.queried_received_certificates[0]
+    assert_eq!(response.info.requested_received_certificates.len(), 1);
+    assert!(matches!(response.info.requested_received_certificates[0]
             .value
             .confirmed_block()
             .unwrap()

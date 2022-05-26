@@ -344,16 +344,16 @@ where
         log::trace!("{} <-- {:?}", self.nickname, query);
         let chain = self.storage.read_chain_or_default(query.chain_id).await?;
         let mut info = chain.make_chain_info(None).info;
-        if query.query_execution_state {
-            info.queried_execution_state = Some(chain.state);
+        if query.request_execution_state {
+            info.requested_execution_state = Some(chain.state);
         }
-        if let Some(next_block_height) = query.check_next_block_height {
+        if let Some(next_block_height) = query.test_next_block_height {
             ensure!(
                 chain.next_block_height == next_block_height,
                 Error::UnexpectedBlockHeight
             );
         }
-        if query.query_pending_messages {
+        if query.request_pending_messages {
             let mut message_groups = Vec::new();
             for (&sender_id, inbox) in &chain.inboxes {
                 let mut operations = Vec::new();
@@ -388,9 +388,9 @@ where
                     });
                 }
             }
-            info.queried_pending_messages = message_groups;
+            info.requested_pending_messages = message_groups;
         }
-        if let Some(range) = query.query_sent_certificates_in_range {
+        if let Some(range) = query.request_sent_certificates_in_range {
             let keys = chain.confirmed_log[..]
                 .iter()
                 .skip(range.start.into())
@@ -399,12 +399,12 @@ where
                 None => self.storage.read_certificates(keys).await?,
                 Some(count) => self.storage.read_certificates(keys.take(count)).await?,
             };
-            info.queried_sent_certificates = certs;
+            info.requested_sent_certificates = certs;
         }
-        if let Some(idx) = query.query_received_certificates_excluding_first_nth {
+        if let Some(idx) = query.request_received_certificates_excluding_first_nth {
             let keys = chain.received_log[..].iter().skip(idx).cloned();
             let certs = self.storage.read_certificates(keys).await?;
-            info.queried_received_certificates = certs;
+            info.requested_received_certificates = certs;
         }
         let response = ChainInfoResponse::new(info, self.key_pair.as_ref());
         Ok(response)

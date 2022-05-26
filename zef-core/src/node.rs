@@ -211,10 +211,10 @@ where
         if let Ok(response) = client.handle_chain_info_query(query).await {
             if response.check(name).is_ok() {
                 let ChainInfo {
-                    queried_sent_certificates,
+                    requested_sent_certificates,
                     ..
                 } = response.info;
-                self.try_process_certificates(chain_id, queried_sent_certificates)
+                self.try_process_certificates(chain_id, requested_sent_certificates)
                     .await?;
             }
         }
@@ -268,7 +268,7 @@ where
             }
         };
         if self
-            .try_process_certificates(chain_id, info.queried_sent_certificates)
+            .try_process_certificates(chain_id, info.requested_sent_certificates)
             .await?
             .is_none()
         {
