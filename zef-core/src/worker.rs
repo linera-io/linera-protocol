@@ -57,18 +57,18 @@ pub struct WorkerState<StorageClient> {
 }
 
 impl<Client> WorkerState<Client> {
-    pub fn new(
-        nickname: String,
-        key_pair: Option<KeyPair>,
-        storage: Client,
-        allow_inactive_chains: bool,
-    ) -> Self {
+    pub fn new(nickname: String, key_pair: Option<KeyPair>, storage: Client) -> Self {
         WorkerState {
             nickname,
             key_pair,
             storage,
-            allow_inactive_chains,
+            allow_inactive_chains: false,
         }
+    }
+
+    pub fn allow_inactive_chains(mut self, value: bool) -> Self {
+        self.allow_inactive_chains = value;
+        self
     }
 
     pub(crate) fn storage_client(&self) -> &Client {

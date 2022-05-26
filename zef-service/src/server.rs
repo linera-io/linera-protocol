@@ -39,8 +39,8 @@ async fn make_shard_server(
         ),
         Some(server_config.key.copy()),
         storage,
-        /* allow_inactive_chains */ false,
-    );
+    )
+    .allow_inactive_chains(false);
     network::Server::new(
         server_config.validator.network_protocol,
         local_ip_addr.to_string(),
