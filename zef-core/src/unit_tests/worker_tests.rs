@@ -24,12 +24,8 @@ fn init_worker(allow_inactive_chains: bool) -> (Committee, WorkerState<InMemoryS
     validators.insert(ValidatorName(key_pair.public()), /* voting right */ 1);
     let committee = Committee::new(validators);
     let client = InMemoryStoreClient::default();
-    let worker = WorkerState::new(
-        "Single validator node".to_string(),
-        Some(key_pair),
-        client,
-        allow_inactive_chains,
-    );
+    let worker = WorkerState::new("Single validator node".to_string(), Some(key_pair), client)
+        .allow_inactive_chains(allow_inactive_chains);
     (committee, worker)
 }
 

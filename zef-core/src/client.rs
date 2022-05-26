@@ -143,12 +143,8 @@ impl<A, S> ChainClientState<A, S> {
             .into_iter()
             .map(|kp| (Owner(kp.public()), kp))
             .collect();
-        let state = WorkerState::new(
-            "Client node".to_string(),
-            None,
-            storage_client,
-            /* allow_inactive_chains */ true,
-        );
+        let state = WorkerState::new("Client node".to_string(), None, storage_client)
+            .allow_inactive_chains(true);
         let node_client = LocalNodeClient::new(state);
         Self {
             chain_id,

@@ -285,8 +285,8 @@ impl ClientContext {
             "Temporary client node".to_string(),
             None,
             self.storage_client.clone(),
-            /* allow_inactive_chains */ true,
-        );
+        )
+        .allow_inactive_chains(true);
         let mut node = LocalNodeClient::new(worker);
         // Second replay the certificates locally.
         for certificate in certificates {
