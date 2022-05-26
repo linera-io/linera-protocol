@@ -8,6 +8,7 @@ use crate::error::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub enum Message {
     // Inbound
     BlockProposal(Box<BlockProposal>),
