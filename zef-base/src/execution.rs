@@ -82,8 +82,10 @@ pub enum Operation {
     ChangeOwner { new_owner: Owner },
     /// Change the authentication key of the chain.
     ChangeMultipleOwners { new_owners: Vec<Owner> },
-    /// Register a new committee.
-    NewCommittee {
+    /// (admin chain only) Register a new committee. This will notify the subscribers of
+    /// the admin chain so that they can migrate to the new epoch (by accepting the
+    /// notification as an "incoming message" in a next block).
+    CreateCommittee {
         admin_id: ChainId,
         epoch: Epoch,
         committee: Committee,
@@ -95,9 +97,9 @@ pub enum Operation {
         admin_id: ChainId,
         next_admin_height: BlockHeight,
     },
-    /// Remove a committee. Once this message accepted by a chain, blocks from the retired
-    /// epoch will not be accepted until they are followed by a block certified a recent
-    /// committee.
+    /// (admin chain only) Remove a committee. Once this message accepted by a chain,
+    /// blocks from the retired epoch will not be accepted until they are followed by a
+    /// block certified a recent committee.
     RemoveCommittee { admin_id: ChainId, epoch: Epoch },
 }
 
@@ -174,7 +176,7 @@ impl ExecutionState {
                 // We are the admin chain
                 self.chain_id == *admin_id
             }
-            NewCommittee { admin_id, .. } => {
+            CreateCommittee { admin_id, .. } => {
                 // We have the same admin chain
                 self.admin_id() == Ok(*admin_id)
             }
@@ -249,7 +251,7 @@ impl ExecutionState {
                     Address::Account(id) => Ok(vec![*id]),
                 }
             }
-            Operation::NewCommittee {
+            Operation::CreateCommittee {
                 admin_id, epoch, ..
             } => {
                 // We are the admin chain and want to create a committee.
@@ -384,7 +386,7 @@ impl ExecutionState {
                     _ => Err(Error::InvalidCrossChainRequest),
                 }
             }
-            Operation::NewCommittee {
+            Operation::CreateCommittee {
                 epoch,
                 committee,
                 admin_id,
