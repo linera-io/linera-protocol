@@ -1551,7 +1551,7 @@ async fn test_chain_creation_with_committee_creation() {
                             0,
                             // Migrate to the committee right away by receiving our own
                             // message by anticipation.
-                            Operation::NewCommittee {
+                            Operation::CreateCommittee {
                                 admin_id: root_id,
                                 epoch: Epoch::from(1),
                                 committee: committee.clone(),
@@ -1560,7 +1560,7 @@ async fn test_chain_creation_with_committee_creation() {
                     },
                 ],
                 // Create the new committee.
-                operations: vec![Operation::NewCommittee {
+                operations: vec![Operation::CreateCommittee {
                     admin_id: root_id,
                     epoch: Epoch::from(1),
                     committee: committee.clone(),
@@ -1659,7 +1659,7 @@ async fn test_chain_creation_with_committee_creation() {
                     height: BlockHeight::from(1),
                     operations: vec![(
                         0,
-                        Operation::NewCommittee {
+                        Operation::CreateCommittee {
                             admin_id: root_id,
                             epoch: Epoch::from(1),
                             committee: committee.clone(),

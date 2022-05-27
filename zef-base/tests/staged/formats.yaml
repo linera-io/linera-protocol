@@ -523,7 +523,7 @@ Operation:
               SEQ:
                 TYPENAME: Owner
     5:
-      NewCommittee:
+      CreateCommittee:
         STRUCT:
           - admin_id:
               TYPENAME: ChainId

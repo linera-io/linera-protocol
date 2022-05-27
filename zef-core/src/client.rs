@@ -884,7 +884,7 @@ where
             epoch,
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
-            operations: vec![Operation::NewCommittee {
+            operations: vec![Operation::CreateCommittee {
                 admin_id: self.chain_id,
                 epoch: epoch.try_add_one()?,
                 committee,
