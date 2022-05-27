@@ -198,18 +198,6 @@ impl<'de> Deserialize<'de> for Signature {
     }
 }
 
-impl std::fmt::Display for PublicKey {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", hex::encode(&self.0[..]))
-    }
-}
-
-impl std::fmt::Display for HashValue {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", hex::encode(&self.0[..]))
-    }
-}
-
 impl FromStr for PublicKey {
     type Err = PublicKeyFromStrError;
 
@@ -267,21 +255,34 @@ impl std::fmt::Display for Signature {
     }
 }
 
+impl std::fmt::Display for PublicKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", hex::encode(&self.0[..]))
+    }
+}
+
+impl std::fmt::Display for HashValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", hex::encode(&self.0[..]))
+    }
+}
+
 impl std::fmt::Debug for Signature {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        write!(f, "{}", self)
+        let s = hex::encode(&self.0.to_bytes()[0..8]);
+        write!(f, "{}", s)
     }
 }
 
 impl std::fmt::Debug for PublicKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        write!(f, "{}", self)
+        write!(f, "{}", hex::encode(&self.0[..8]))
     }
 }
 
 impl std::fmt::Debug for HashValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        write!(f, "{}", self)
+        write!(f, "{}", hex::encode(&self.0[..8]))
     }
 }
 

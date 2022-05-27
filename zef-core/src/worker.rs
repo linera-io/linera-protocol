@@ -407,6 +407,7 @@ where
             info.requested_received_certificates = certs;
         }
         let response = ChainInfoResponse::new(info, self.key_pair.as_ref());
+        log::trace!("{} --> {:?}", self.nickname, response);
         Ok(response)
     }
 
