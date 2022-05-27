@@ -209,7 +209,6 @@ impl ChainState {
         inbox.next_height_to_receive = height.try_add_one()?;
         self.received_log.push(key);
 
-        let mut has_processed_operations = false;
         for (index, operation) in operations.into_iter().enumerate() {
             if !self.state.is_recipient(&operation) {
                 continue;
@@ -269,10 +268,7 @@ impl ChainState {
                 index,
                 operation,
             });
-            has_processed_operations = true;
         }
-        // Update the state hash at the end.
-        ensure!(has_processed_operations, Error::InvalidCrossChainRequest);
         Ok(true)
     }
 
@@ -330,6 +326,7 @@ impl ChainState {
                     self.state.chain_id,
                     message_group.height,
                     message_operation,
+                    block.height,
                 )?;
                 for (recipient, heights) in new_notifications {
                     notifications.entry(recipient).or_default().extend(heights);
