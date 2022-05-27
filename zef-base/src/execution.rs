@@ -302,6 +302,7 @@ impl ExecutionState {
         chain_id: ChainId,
         height: BlockHeight,
         operation: &Operation,
+        receiving_height: BlockHeight,
     ) -> Result<Vec<(ChainId, Vec<BlockHeight>)>, Error> {
         match operation {
             Operation::Transfer { amount, .. } => {
@@ -339,7 +340,13 @@ impl ExecutionState {
                                 let index = history
                                     .binary_search(next_admin_height)
                                     .unwrap_or_else(|x| x);
-                                let heights = history[index..].to_vec();
+                                let mut heights = history[index..].to_vec();
+                                // HACK: Also notify about the current block where
+                                // `SubscribeToNewCommittees` is in the incoming messages.
+                                // This is needed so that this block appears in the
+                                // `receive_log` of `id` and can be downloaded by its
+                                // client later.
+                                heights.push(receiving_height);
                                 Ok(vec![(*id, heights)])
                             } else {
                                 Ok(Vec::new())
