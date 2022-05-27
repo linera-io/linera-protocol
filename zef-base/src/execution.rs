@@ -57,7 +57,7 @@ pub struct Balance(u128);
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]
 pub struct UserData(pub Option<[u8; 32]>);
 
-/// An chain operation.
+/// A chain operation.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Operation {
     /// Transfer `amount` units of value to the recipient.
@@ -95,6 +95,10 @@ pub enum Operation {
         admin_id: ChainId,
         next_admin_height: BlockHeight,
     },
+    /// Remove a committee. Once this message accepted by a chain, blocks from the retired
+    /// epoch will not be accepted until they are followed by a block certified a recent
+    /// committee.
+    RemoveCommittee { admin_id: ChainId, epoch: Epoch },
 }
 
 /// The administrative status of this chain w.r.t reconfigurations.
@@ -270,6 +274,28 @@ impl ExecutionState {
                 recipients.push(chain_id);
                 Ok(recipients)
             }
+            Operation::RemoveCommittee { admin_id, epoch } => {
+                // We are the admin chain and want to remove a committee.
+                ensure!(*admin_id == chain_id, Error::InvalidCommitteeRemoval);
+                ensure!(
+                    self.committees.contains_key(epoch),
+                    Error::InvalidCommitteeRemoval
+                );
+                // Notify our subscribers (plus ourself) to do the migration.
+                let mut recipients = match &mut self.status {
+                    Some(ChainStatus::Managing {
+                        subscribers,
+                        history,
+                        ..
+                    }) => {
+                        history.push(height);
+                        subscribers.clone()
+                    }
+                    _ => return Err(Error::InvalidCommitteeRemoval),
+                };
+                recipients.push(chain_id);
+                Ok(recipients)
+            }
             Operation::SubscribeToNewCommittees {
                 id,
                 admin_id,
@@ -381,7 +407,17 @@ impl ExecutionState {
                 }
                 Ok(Vec::new())
             }
-            _ => Ok(Vec::new()),
+            Operation::RemoveCommittee { admin_id, epoch } if self.admin_id() == Ok(*admin_id) => {
+                ensure!(
+                    self.committees.remove(epoch).is_some(),
+                    Error::InvalidCrossChainRequest
+                );
+                Ok(Vec::new())
+            }
+            _ => {
+                log::error!("Skipping unexpected received operation: {operation:?}");
+                Ok(Vec::new())
+            }
         }
     }
 }
