@@ -143,7 +143,7 @@ impl<A, S> ChainClientState<A, S> {
             .into_iter()
             .map(|kp| (Owner(kp.public()), kp))
             .collect();
-        let state = WorkerState::new("Client node".to_string(), None, storage_client)
+        let state = WorkerState::new(format!("Client node {:?}", chain_id), None, storage_client)
             .allow_inactive_chains(true);
         let node_client = LocalNodeClient::new(state);
         Self {
@@ -461,7 +461,7 @@ where
             for certificate in response.requested_received_certificates {
                 let hash = certificate.hash;
                 if let Err(e) = self.receive_certificate(certificate.clone()).await {
-                    log::warn!("Dropping invalid certificate {}: {}", hash, e);
+                    log::warn!("Dropping invalid certificate {hash:?}: {e}");
                     // Do not update the validator's tracker in case of error.
                     // Move on to the next validator.
                     continue 'outer;

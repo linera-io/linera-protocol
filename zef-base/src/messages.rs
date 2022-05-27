@@ -630,7 +630,7 @@ impl FromStr for ChainId {
 
 impl std::fmt::Debug for ChainId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        write!(f, "{}", self)
+        write!(f, "{:?}", self.0)
     }
 }
 

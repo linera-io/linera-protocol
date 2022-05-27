@@ -192,7 +192,7 @@ impl ChainState {
         if height < inbox.next_height_to_receive {
             // We have already received this block.
             log::warn!(
-                "Ignoring past messages to {} from {} at height {}",
+                "Ignoring past messages to {:?} from {:?} at height {}",
                 self.state.chain_id,
                 sender_id,
                 height
@@ -200,7 +200,7 @@ impl ChainState {
             return Ok(false);
         }
         log::trace!(
-            "Processing new messages to {} from {} at height {}",
+            "Processing new messages to {:?} from {:?} at height {}",
             self.state.chain_id,
             sender_id,
             height
