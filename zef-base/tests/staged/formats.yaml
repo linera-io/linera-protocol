@@ -307,22 +307,24 @@ Error:
     28:
       InvalidCommitteeCreation: UNIT
     29:
+      InvalidCommitteeRemoval: UNIT
+    30:
       InsufficientRound:
         NEWTYPE:
           TYPENAME: RoundNumber
-    30:
+    31:
       HasLockedBlock:
         TUPLE:
           - TYPENAME: BlockHeight
           - TYPENAME: RoundNumber
-    31:
+    32:
       MissingCrossChainUpdate:
         STRUCT:
           - sender_id:
               TYPENAME: ChainId
           - height:
               TYPENAME: BlockHeight
-    32:
+    33:
       InvalidMessageContent:
         STRUCT:
           - sender_id:
@@ -330,7 +332,7 @@ Error:
           - height:
               TYPENAME: BlockHeight
           - index: U64
-    33:
+    34:
       InvalidMessageOrder:
         STRUCT:
           - sender_id:
@@ -341,39 +343,39 @@ Error:
           - expected_height:
               TYPENAME: BlockHeight
           - expected_index: U64
-    34:
-      CertificateNotFound: UNIT
     35:
-      InvalidCrossChainRequest: UNIT
+      CertificateNotFound: UNIT
     36:
-      InvalidBlockProposal: UNIT
+      InvalidCrossChainRequest: UNIT
     37:
-      InvalidBlockChaining: UNIT
+      InvalidBlockProposal: UNIT
     38:
-      IncorrectStateHash: UNIT
+      InvalidBlockChaining: UNIT
     39:
-      ClientErrorWhileProcessingBlockProposal: UNIT
+      IncorrectStateHash: UNIT
     40:
-      ClientErrorWhileQueryingCertificate: UNIT
+      ClientErrorWhileProcessingBlockProposal: UNIT
     41:
-      WrongShard: UNIT
+      ClientErrorWhileQueryingCertificate: UNIT
     42:
-      InvalidDecoding: UNIT
+      WrongShard: UNIT
     43:
-      UnexpectedMessage: UNIT
+      InvalidDecoding: UNIT
     44:
+      UnexpectedMessage: UNIT
+    45:
       ClientIoError:
         STRUCT:
           - error: STR
-    45:
+    46:
       StorageIoError:
         STRUCT:
           - error: STR
-    46:
+    47:
       StorageBcsError:
         STRUCT:
           - error: STR
-    47:
+    48:
       MissingCertificate:
         STRUCT:
           - hash:
@@ -538,6 +540,13 @@ Operation:
               TYPENAME: ChainId
           - next_admin_height:
               TYPENAME: BlockHeight
+    7:
+      RemoveCommittee:
+        STRUCT:
+          - admin_id:
+              TYPENAME: ChainId
+          - epoch:
+              TYPENAME: Epoch
 OperationId:
   STRUCT:
     - chain_id:
