@@ -91,6 +91,8 @@ pub enum Error {
     InvalidCommittees,
     #[error("Failed to create new committee")]
     InvalidCommitteeCreation,
+    #[error("Failed to remove committee")]
+    InvalidCommitteeRemoval,
     #[error("Round number should be greater than {0:?}")]
     InsufficientRound(RoundNumber),
     #[error("A different block for height {0:?} was already locked at round number {1:?}")]
