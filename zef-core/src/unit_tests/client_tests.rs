@@ -744,10 +744,10 @@ async fn test_change_voting_rights() {
     receiver.subscribe_to_new_committees().await.unwrap();
     // Have the admin process the subscription
     admin.synchronize_balance().await.unwrap();
-    let cert = admin.process_inbox().await.unwrap();
+    admin.process_inbox().await.unwrap();
 
     // Receive the notification to migrate.
-    receiver.receive_certificate(cert).await.unwrap();
+    receiver.synchronize_balance().await.unwrap();
     receiver.process_inbox().await.unwrap();
     assert_eq!(receiver.epoch().await.unwrap(), Epoch::from(1));
 }
