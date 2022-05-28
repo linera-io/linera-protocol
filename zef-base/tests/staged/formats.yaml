@@ -178,19 +178,12 @@ ChainStatus:
           - admin_id:
               TYPENAME: ChainId
           - subscribed: BOOL
-          - next_admin_height:
-              TYPENAME: BlockHeight
     1:
       Managing:
         STRUCT:
           - subscribers:
               SEQ:
                 TYPENAME: ChainId
-          - next_epoch_to_create:
-              TYPENAME: Epoch
-          - history:
-              SEQ:
-                TYPENAME: BlockHeight
 Committee:
   STRUCT:
     - voting_rights:
@@ -246,17 +239,19 @@ Effect:
                   TYPENAME: Epoch
                 VALUE:
                   TYPENAME: Committee
-          - next_admin_height:
-              TYPENAME: BlockHeight
     2:
-      CreateCommittee:
+      SetCommittees:
         STRUCT:
           - admin_id:
               TYPENAME: ChainId
           - epoch:
               TYPENAME: Epoch
-          - committee:
-              TYPENAME: Committee
+          - committees:
+              MAP:
+                KEY:
+                  TYPENAME: Epoch
+                VALUE:
+                  TYPENAME: Committee
     3:
       SubscribeToNewCommittees:
         STRUCT:
@@ -264,15 +259,6 @@ Effect:
               TYPENAME: ChainId
           - admin_id:
               TYPENAME: ChainId
-          - next_admin_height:
-              TYPENAME: BlockHeight
-    4:
-      RemoveCommittee:
-        STRUCT:
-          - admin_id:
-              TYPENAME: ChainId
-          - epoch:
-              TYPENAME: Epoch
 EffectId:
   STRUCT:
     - chain_id:
@@ -351,40 +337,36 @@ Error:
         NEWTYPE:
           TYPENAME: ChainId
     24:
-      InvalidNewChainAdminHeight:
-        NEWTYPE:
-          TYPENAME: ChainId
-    25:
       InvalidNewChainAdminId:
         NEWTYPE:
           TYPENAME: ChainId
-    26:
+    25:
       InvalidSubscriptionToNewCommittees:
         NEWTYPE:
           TYPENAME: ChainId
-    27:
+    26:
       InvalidCommittees: UNIT
-    28:
+    27:
       InvalidCommitteeCreation: UNIT
-    29:
+    28:
       InvalidCommitteeRemoval: UNIT
-    30:
+    29:
       InsufficientRound:
         NEWTYPE:
           TYPENAME: RoundNumber
-    31:
+    30:
       HasLockedBlock:
         TUPLE:
           - TYPENAME: BlockHeight
           - TYPENAME: RoundNumber
-    32:
+    31:
       MissingCrossChainUpdate:
         STRUCT:
           - sender_id:
               TYPENAME: ChainId
           - height:
               TYPENAME: BlockHeight
-    33:
+    32:
       InvalidMessageContent:
         STRUCT:
           - sender_id:
@@ -392,7 +374,7 @@ Error:
           - height:
               TYPENAME: BlockHeight
           - index: U64
-    34:
+    33:
       InvalidMessageOrder:
         STRUCT:
           - sender_id:
@@ -403,41 +385,41 @@ Error:
           - expected_height:
               TYPENAME: BlockHeight
           - expected_index: U64
-    35:
+    34:
       CertificateNotFound: UNIT
-    36:
+    35:
       InvalidCrossChainRequest: UNIT
-    37:
+    36:
       InvalidBlockProposal: UNIT
-    38:
+    37:
       InvalidBlockChaining: UNIT
-    39:
+    38:
       IncorrectStateHash: UNIT
-    40:
+    39:
       IncorrectEffects: UNIT
-    41:
+    40:
       ClientErrorWhileProcessingBlockProposal: UNIT
-    42:
+    41:
       ClientErrorWhileQueryingCertificate: UNIT
-    43:
+    42:
       WrongShard: UNIT
-    44:
+    43:
       InvalidDecoding: UNIT
-    45:
+    44:
       UnexpectedMessage: UNIT
-    46:
+    45:
       ClientIoError:
         STRUCT:
           - error: STR
-    47:
+    46:
       StorageIoError:
         STRUCT:
           - error: STR
-    48:
+    47:
       StorageBcsError:
         STRUCT:
           - error: STR
-    49:
+    48:
       MissingCertificate:
         STRUCT:
           - hash:
@@ -569,8 +551,6 @@ Operation:
                   TYPENAME: Epoch
                 VALUE:
                   TYPENAME: Committee
-          - next_admin_height:
-              TYPENAME: BlockHeight
     2:
       CloseChain: UNIT
     3:
@@ -600,8 +580,6 @@ Operation:
               TYPENAME: ChainId
           - admin_id:
               TYPENAME: ChainId
-          - next_admin_height:
-              TYPENAME: BlockHeight
     7:
       RemoveCommittee:
         STRUCT:
