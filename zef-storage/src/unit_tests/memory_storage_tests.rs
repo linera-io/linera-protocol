@@ -19,8 +19,6 @@ async fn test_read_write() {
     chain.state.epoch = Some(Epoch::from(0));
     chain.state.status = Some(ChainStatus::Managing {
         subscribers: Vec::new(),
-        next_epoch_to_create: Epoch::from(0),
-        history: Vec::new(),
     });
     chain.state.manager = ChainManager::single(Owner(PublicKey::debug(2)));
     store.write_chain(chain).await.unwrap();

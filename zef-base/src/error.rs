@@ -81,8 +81,6 @@ pub enum Error {
     InsufficientFunding { current_balance: Balance },
     #[error("Invalid new chain id: {0}")]
     InvalidNewChainId(ChainId),
-    #[error("Invalid admin height in new chain: {0}")]
-    InvalidNewChainAdminHeight(ChainId),
     #[error("Invalid admin id in new chain: {0}")]
     InvalidNewChainAdminId(ChainId),
     #[error("Invalid admin id in subscription to new committees: {0}")]

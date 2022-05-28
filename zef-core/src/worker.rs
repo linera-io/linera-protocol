@@ -188,16 +188,9 @@ where
         let info = chain.make_chain_info(self.key_pair.as_ref());
         // Schedule a new cross-chain request to notify each recipient about the given
         // blocks (generally, just this one).
-        for (recipient, heights) in execution_result.notifications {
-            if heights.is_empty() {
-                // Save a few bytes in the outbox.
-                continue;
-            }
+        for recipient in execution_result.notifications {
             let queue = &mut chain.outboxes.entry(recipient).or_default().queue;
-            for height in heights {
-                let hash = chain.confirmed_log[usize::from(height)];
-                queue.push_back((height, hash));
-            }
+            queue.push_back((block.height, certificate.hash));
         }
         let continuation = self.make_continuation(&chain).await?;
         // Persist chain.
