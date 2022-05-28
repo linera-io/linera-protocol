@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{crypto::*, ensure, error::Error, messages::*};
+use crate::{crypto::*, ensure, error::Error, execution::Effect, messages::*};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -258,6 +258,7 @@ impl ChainManager {
     pub fn create_vote(
         &mut self,
         proposal: BlockProposal,
+        effects: Vec<Effect>,
         state_hash: HashValue,
         key_pair: Option<&KeyPair>,
     ) {
@@ -266,7 +267,11 @@ impl ChainManager {
                 if let Some(key_pair) = key_pair {
                     // Vote to confirm.
                     let BlockAndRound { block, .. } = proposal.content;
-                    let value = Value::ConfirmedBlock { block, state_hash };
+                    let value = Value::ConfirmedBlock {
+                        block,
+                        effects,
+                        state_hash,
+                    };
                     let vote = Vote::new(value, key_pair);
                     manager.pending = Some(vote);
                 }
@@ -281,6 +286,7 @@ impl ChainManager {
                     let value = Value::ValidatedBlock {
                         block,
                         round,
+                        effects,
                         state_hash,
                     };
                     let vote = Vote::new(value, key_pair);
@@ -294,6 +300,7 @@ impl ChainManager {
     pub fn create_final_vote(
         &mut self,
         block: Block,
+        effects: Vec<Effect>,
         state_hash: HashValue,
         certificate: Certificate,
         key_pair: Option<&KeyPair>,
@@ -305,7 +312,11 @@ impl ChainManager {
                 manager.locked = Some(certificate);
                 if let Some(key_pair) = key_pair {
                     // Vote to confirm.
-                    let value = Value::ConfirmedBlock { block, state_hash };
+                    let value = Value::ConfirmedBlock {
+                        block,
+                        effects,
+                        state_hash,
+                    };
                     let vote = Vote::new(value, key_pair);
                     // Ok to overwrite validation votes with confirmation votes at equal or
                     // higher round.

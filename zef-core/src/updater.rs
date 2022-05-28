@@ -38,7 +38,7 @@ where
     A: ValidatorNode + Send + Sync + 'static + Clone,
     F: Fn(ValidatorName, A) -> future::BoxFuture<'a, Result<V, Error>> + Clone,
     G: Fn(&V) -> K,
-    K: Hash + PartialEq + Eq + Copy,
+    K: Hash + PartialEq + Eq + Clone + 'static,
     V: 'static,
 {
     let mut responses: futures::stream::FuturesUnordered<_> = validator_clients
@@ -62,7 +62,7 @@ where
         match result {
             Ok(value) => {
                 let key = group_by(&value);
-                let entry = value_scores.entry(key).or_insert((0, Vec::new()));
+                let entry = value_scores.entry(key.clone()).or_insert((0, Vec::new()));
                 entry.0 += committee.weight(&name);
                 entry.1.push(value);
                 if entry.0 >= committee.quorum_threshold() {
@@ -169,7 +169,7 @@ where
                     // Obtain the chain description from our local node.
                     let chain = self.store.read_chain_or_default(chain_id).await?;
                     match chain.description {
-                        Some(ChainDescription::Child(OperationId {
+                        Some(ChainDescription::Child(EffectId {
                             chain_id: parent_id,
                             height,
                             index: _,

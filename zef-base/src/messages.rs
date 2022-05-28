@@ -7,7 +7,7 @@ use crate::{
     crypto::*,
     ensure,
     error::Error,
-    execution::{Balance, ExecutionState, Operation},
+    execution::{Balance, Effect, ExecutionState, Operation},
     manager::ChainManager,
 };
 use serde::{Deserialize, Serialize};
@@ -52,8 +52,8 @@ pub struct Epoch(pub u64);
 pub enum ChainDescription {
     /// The chain was created by the genesis configuration.
     Root(usize),
-    /// The chain was created by an operation from another chain.
-    Child(OperationId),
+    /// The chain was created by an effect from another chain.
+    Child(EffectId),
 }
 
 /// The unique identifier (UID) of a chain. This is the hash value of a ChainDescription.
@@ -61,9 +61,9 @@ pub enum ChainDescription {
 #[cfg_attr(any(test, feature = "test"), derive(Arbitrary))]
 pub struct ChainId(pub HashValue);
 
-/// The index of an operation in a chain.
+/// The index of an effect in a chain.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
-pub struct OperationId {
+pub struct EffectId {
     pub chain_id: ChainId,
     pub height: BlockHeight,
     pub index: usize,
@@ -106,7 +106,7 @@ pub struct BlockAndRound {
 pub struct MessageGroup {
     pub sender_id: ChainId,
     pub height: BlockHeight,
-    pub operations: Vec<(usize, Operation)>,
+    pub effects: Vec<(usize, Effect)>,
 }
 
 /// An authenticated proposal for a new block.
@@ -125,10 +125,15 @@ pub enum Value {
     ValidatedBlock {
         block: Block,
         round: RoundNumber,
+        effects: Vec<Effect>,
         state_hash: HashValue,
     },
     /// The block is validated and confirmed (i.e. ready to be published).
-    ConfirmedBlock { block: Block, state_hash: HashValue },
+    ConfirmedBlock {
+        block: Block,
+        effects: Vec<Effect>,
+        state_hash: HashValue,
+    },
 }
 
 /// A vote on a statement from a validator.
@@ -308,6 +313,21 @@ impl Value {
         match self {
             Value::ConfirmedBlock { state_hash, .. } => *state_hash,
             Value::ValidatedBlock { state_hash, .. } => *state_hash,
+        }
+    }
+
+    pub fn effects_and_state_hash(&self) -> (Vec<Effect>, HashValue) {
+        match self {
+            Value::ConfirmedBlock {
+                effects,
+                state_hash,
+                ..
+            } => (effects.clone(), *state_hash),
+            Value::ValidatedBlock {
+                effects,
+                state_hash,
+                ..
+            } => (effects.clone(), *state_hash),
         }
     }
 
@@ -645,7 +665,7 @@ impl ChainId {
         Self(HashValue::new(&ChainDescription::Root(index)))
     }
 
-    pub fn child(id: OperationId) -> Self {
+    pub fn child(id: EffectId) -> Self {
         Self(HashValue::new(&ChainDescription::Child(id)))
     }
 }
