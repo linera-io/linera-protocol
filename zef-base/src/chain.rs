@@ -12,7 +12,7 @@ use crate::{
     messages::*,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeSet, HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 /// The state of a chain.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -80,7 +80,7 @@ pub struct Event {
 
 pub struct ExecutionResult {
     pub effects: Vec<Effect>,
-    pub notifications: HashMap<ChainId, BTreeSet<BlockHeight>>,
+    pub notifications: HashSet<ChainId>,
 }
 
 impl ChainState {
@@ -110,14 +110,11 @@ impl ChainState {
         let status = if ChainId::from(description) == admin_id {
             ChainStatus::Managing {
                 subscribers: Vec::new(),
-                next_epoch_to_create: Epoch::from(1),
-                history: Vec::new(),
             }
         } else {
             ChainStatus::ManagedBy {
                 admin_id,
                 subscribed: false,
-                next_admin_height: BlockHeight::from(0),
             }
         };
         let mut chain = Self::new(description.into());
@@ -225,7 +222,6 @@ impl ChainState {
                 epoch,
                 committees,
                 admin_id,
-                next_admin_height,
             } = &effect
             {
                 if id == &self.state.chain_id {
@@ -245,7 +241,6 @@ impl ChainState {
                     self.state.status = Some(ChainStatus::ManagedBy {
                         admin_id: *admin_id,
                         subscribed: true,
-                        next_admin_height: *next_admin_height,
                     });
                     self.state.manager = ChainManager::single(*owner);
                     self.state_hash = HashValue::new(&self.state);
@@ -282,7 +277,8 @@ impl ChainState {
     /// Returns a map of recipients to notify about some of our blocks (usually the block
     /// being executed).
     pub fn execute_block(&mut self, block: &Block) -> Result<ExecutionResult, Error> {
-        let mut notifications = HashMap::<_, BTreeSet<_>>::new();
+        let mut notifications = HashSet::new();
+        let mut effects = Vec::new();
         // First, process incoming messages.
         for message_group in &block.incoming_messages {
             for (message_index, message_effect) in &message_group.effects {
@@ -324,31 +320,22 @@ impl ChainState {
                 }
                 // Execute the received effect. This may create more notifications
                 // about previous blocks.
-                let new_notifications = self.state.apply_effect(
-                    self.state.chain_id,
-                    message_group.height,
-                    message_effect,
-                    block.height,
-                )?;
-                for (recipient, heights) in new_notifications {
-                    notifications.entry(recipient).or_default().extend(heights);
+                let new_notifications = self
+                    .state
+                    .apply_effect(self.state.chain_id, message_effect)?;
+                for (recipient, effect) in new_notifications {
+                    notifications.insert(recipient);
+                    effects.push(effect);
                 }
             }
         }
         // Second, execute the operations in the block and remember recipients to notify.
-        let mut effects = Vec::new();
         for (index, operation) in block.operations.iter().enumerate() {
             let (new_effects, recipients) =
                 self.state
                     .apply_operation(block.chain_id, block.height, index, operation)?;
             effects.extend(new_effects);
-            for recipient in recipients {
-                // Notify recipients about this block.
-                notifications
-                    .entry(recipient)
-                    .or_default()
-                    .insert(block.height);
-            }
+            notifications.extend(recipients);
         }
         // Last, recompute the state hash.
         self.state_hash = HashValue::new(&self.state);

@@ -718,11 +718,6 @@ async fn test_change_voting_rights() {
     assert_eq!(admin.next_block_height, BlockHeight::from(1));
     assert!(admin.pending_block.is_none());
     assert!(admin.key_pair().await.is_ok());
-    assert_eq!(admin.epoch().await.unwrap(), Epoch::from(0));
-
-    // Actually migrate the admin itself.
-    admin.process_inbox().await.unwrap();
-    assert_eq!(admin.next_block_height, BlockHeight::from(2));
     assert_eq!(admin.epoch().await.unwrap(), Epoch::from(1));
 
     // Sending money from the admin chain is not supported yet.

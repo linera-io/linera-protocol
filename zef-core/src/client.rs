@@ -227,10 +227,6 @@ where
             .ok_or(Error::InactiveChain(self.chain_id))?)
     }
 
-    async fn next_admin_height(&mut self) -> Result<BlockHeight, Error> {
-        Ok(self.execution_state().await?.next_admin_height())
-    }
-
     async fn identity(&mut self) -> Result<Owner, anyhow::Error> {
         match self.chain_info().await?.manager {
             ChainManager::Single(m) => {
@@ -871,7 +867,6 @@ where
                 committees,
                 admin_id,
                 epoch,
-                next_admin_height: self.next_admin_height().await?,
             }],
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
@@ -949,7 +944,6 @@ where
             operations: vec![Operation::SubscribeToNewCommittees {
                 id: self.chain_id,
                 admin_id,
-                next_admin_height: self.next_admin_height().await?,
             }],
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
