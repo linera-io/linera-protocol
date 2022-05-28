@@ -301,7 +301,7 @@ impl ExecutionState {
             Operation::RemoveCommittee { admin_id, epoch } => {
                 // We are the admin chain and want to remove a committee.
                 ensure!(*admin_id == chain_id, Error::InvalidCommitteeRemoval);
-                let recipients = match &mut self.status {
+                let recipients = match &self.status {
                     Some(ChainStatus::Managing { subscribers, .. }) => subscribers.clone(),
                     _ => return Err(Error::InvalidCommitteeRemoval),
                 };
