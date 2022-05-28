@@ -138,6 +138,8 @@ pub enum Error {
     InvalidBlockChaining,
     #[error("The given state hash is not what we computed after executing the block")]
     IncorrectStateHash,
+    #[error("The given effects are not what we computed after executing the block")]
+    IncorrectEffects,
 
     // Client errors
     #[error("Client failed to obtain a valid response to the block proposal")]

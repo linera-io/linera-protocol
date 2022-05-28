@@ -18,6 +18,7 @@ fn get_registry() -> Result<Registry> {
     // 2. Trace the main entry point(s) + every enum separately.
     tracer.trace_type::<execution::Address>(&samples)?;
     tracer.trace_type::<execution::Operation>(&samples)?;
+    tracer.trace_type::<execution::Effect>(&samples)?;
     tracer.trace_type::<messages::Value>(&samples)?;
     tracer.trace_type::<messages::ChainDescription>(&samples)?;
     tracer.trace_type::<manager::ChainManager>(&samples)?;

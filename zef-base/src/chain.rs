@@ -7,7 +7,7 @@ use crate::{
     crypto::*,
     ensure,
     error::Error,
-    execution::{Balance, ChainStatus, ExecutionState, Operation},
+    execution::{Balance, ChainStatus, Effect, ExecutionState},
     manager::ChainManager,
     messages::*,
 };
@@ -72,10 +72,15 @@ pub struct InboxState {
 pub struct Event {
     /// The height of the block that created the event.
     pub height: BlockHeight,
-    /// The index of the operation.
+    /// The index of the effect.
     pub index: usize,
-    /// The operation that created the event.
-    pub operation: Operation,
+    /// The effect of the event.
+    pub effect: Effect,
+}
+
+pub struct ExecutionResult {
+    pub effects: Vec<Effect>,
+    pub notifications: HashMap<ChainId, BTreeSet<BlockHeight>>,
 }
 
 impl ChainState {
@@ -185,7 +190,7 @@ impl ChainState {
         &mut self,
         sender_id: ChainId,
         height: BlockHeight,
-        operations: Vec<Operation>,
+        effects: Vec<Effect>,
         key: HashValue,
     ) -> Result<bool, Error> {
         let inbox = self.inboxes.entry(sender_id).or_default();
@@ -209,26 +214,26 @@ impl ChainState {
         inbox.next_height_to_receive = height.try_add_one()?;
         self.received_log.push(key);
 
-        for (index, operation) in operations.into_iter().enumerate() {
-            if !self.state.is_recipient(&operation) {
+        for (index, effect) in effects.into_iter().enumerate() {
+            if !self.state.is_recipient(&effect) {
                 continue;
             }
-            // Chain creation is a special operation that can only be executed (once) in this callback.
-            if let Operation::OpenChain {
+            // Chain creation is a special effect that can only be executed (once) in this callback.
+            if let Effect::OpenChain {
                 id,
                 owner,
                 epoch,
                 committees,
                 admin_id,
                 next_admin_height,
-            } = &operation
+            } = &effect
             {
                 if id == &self.state.chain_id {
                     // guaranteed under BFT assumptions.
                     assert!(self.description.is_none());
                     assert!(!self.state.manager.is_active());
                     assert!(self.state.committees.is_empty());
-                    let description = ChainDescription::Child(OperationId {
+                    let description = ChainDescription::Child(EffectId {
                         chain_id: sender_id,
                         height,
                         index,
@@ -244,14 +249,14 @@ impl ChainState {
                     });
                     self.state.manager = ChainManager::single(*owner);
                     self.state_hash = HashValue::new(&self.state);
-                    // Proceed to scheduling the `OpenChain` operation for "execution".
+                    // Proceed to scheduling the `OpenChain` effect for "execution".
                     // Although it won't do anything, it's simpler than asking block producers
                     // to skip this kind of incoming messages.
                 }
             }
             // Find if the message was executed ahead of time.
             if let Some(event) = inbox.expected_events.front() {
-                if height == event.height && index == event.index && operation == event.operation {
+                if height == event.height && index == event.index && effect == event.effect {
                     // We already executed this message. Remove it from the queue.
                     inbox.expected_events.pop_front();
                     return Ok(true);
@@ -266,7 +271,7 @@ impl ChainState {
             inbox.received_events.push_back(Event {
                 height,
                 index,
-                operation,
+                effect,
             });
         }
         Ok(true)
@@ -276,21 +281,18 @@ impl ChainState {
     /// of errors, `self` may not be consistent any more and should be thrown away.
     /// Returns a map of recipients to notify about some of our blocks (usually the block
     /// being executed).
-    pub fn execute_block(
-        &mut self,
-        block: &Block,
-    ) -> Result<HashMap<ChainId, BTreeSet<BlockHeight>>, Error> {
+    pub fn execute_block(&mut self, block: &Block) -> Result<ExecutionResult, Error> {
         let mut notifications = HashMap::<_, BTreeSet<_>>::new();
         // First, process incoming messages.
         for message_group in &block.incoming_messages {
-            for (message_index, message_operation) in &message_group.operations {
-                // Reconcile the operation with the received queue, or mark it as "expected".
+            for (message_index, message_effect) in &message_group.effects {
+                // Reconcile the effect with the received queue, or mark it as "expected".
                 let inbox = self.inboxes.entry(message_group.sender_id).or_default();
                 match inbox.received_events.front() {
                     Some(Event {
                         height,
                         index,
-                        operation,
+                        effect,
                     }) => {
                         ensure!(
                             message_group.height == *height && message_index == index,
@@ -303,7 +305,7 @@ impl ChainState {
                             }
                         );
                         ensure!(
-                            message_operation == operation,
+                            message_effect == effect,
                             Error::InvalidMessageContent {
                                 sender_id: message_group.sender_id,
                                 height: message_group.height,
@@ -316,16 +318,16 @@ impl ChainState {
                         inbox.expected_events.push_back(Event {
                             height: message_group.height,
                             index: *message_index,
-                            operation: message_operation.clone(),
+                            effect: message_effect.clone(),
                         });
                     }
                 }
-                // Execute the received operation. This may create more notifications
+                // Execute the received effect. This may create more notifications
                 // about previous blocks.
-                let new_notifications = self.state.apply_operation_as_recipient(
+                let new_notifications = self.state.apply_effect(
                     self.state.chain_id,
                     message_group.height,
-                    message_operation,
+                    message_effect,
                     block.height,
                 )?;
                 for (recipient, heights) in new_notifications {
@@ -334,13 +336,13 @@ impl ChainState {
             }
         }
         // Second, execute the operations in the block and remember recipients to notify.
+        let mut effects = Vec::new();
         for (index, operation) in block.operations.iter().enumerate() {
-            for recipient in self.state.apply_operation_as_sender(
-                block.chain_id,
-                block.height,
-                index,
-                operation,
-            )? {
+            let (new_effects, recipients) =
+                self.state
+                    .apply_operation(block.chain_id, block.height, index, operation)?;
+            effects.extend(new_effects);
+            for recipient in recipients {
                 // Notify recipients about this block.
                 notifications
                     .entry(recipient)
@@ -350,6 +352,9 @@ impl ChainState {
         }
         // Last, recompute the state hash.
         self.state_hash = HashValue::new(&self.state);
-        Ok(notifications)
+        Ok(ExecutionResult {
+            effects,
+            notifications,
+        })
     }
 }

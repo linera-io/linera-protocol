@@ -414,7 +414,7 @@ async fn test_transfer_then_open_chain() {
         .await;
     let new_key_pair = KeyPair::generate();
     let new_owner = Owner(new_key_pair.public());
-    let new_id = ChainId::child(OperationId {
+    let new_id = ChainId::child(EffectId {
         chain_id: ChainId::root(1),
         height: BlockHeight::from(1),
         index: 0,

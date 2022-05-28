@@ -67,7 +67,7 @@ ChainDescription:
     1:
       Child:
         NEWTYPE:
-          TYPENAME: OperationId
+          TYPENAME: EffectId
 ChainId:
   NEWTYPESTRUCT:
     TYPENAME: HashValue
@@ -220,6 +220,66 @@ CrossChainRequest:
               TYPENAME: ChainId
           - height:
               TYPENAME: BlockHeight
+Effect:
+  ENUM:
+    0:
+      Transfer:
+        STRUCT:
+          - recipient:
+              TYPENAME: ChainId
+          - amount:
+              TYPENAME: Amount
+    1:
+      OpenChain:
+        STRUCT:
+          - id:
+              TYPENAME: ChainId
+          - owner:
+              TYPENAME: Owner
+          - admin_id:
+              TYPENAME: ChainId
+          - epoch:
+              TYPENAME: Epoch
+          - committees:
+              MAP:
+                KEY:
+                  TYPENAME: Epoch
+                VALUE:
+                  TYPENAME: Committee
+          - next_admin_height:
+              TYPENAME: BlockHeight
+    2:
+      CreateCommittee:
+        STRUCT:
+          - admin_id:
+              TYPENAME: ChainId
+          - epoch:
+              TYPENAME: Epoch
+          - committee:
+              TYPENAME: Committee
+    3:
+      SubscribeToNewCommittees:
+        STRUCT:
+          - id:
+              TYPENAME: ChainId
+          - admin_id:
+              TYPENAME: ChainId
+          - next_admin_height:
+              TYPENAME: BlockHeight
+    4:
+      RemoveCommittee:
+        STRUCT:
+          - admin_id:
+              TYPENAME: ChainId
+          - epoch:
+              TYPENAME: Epoch
+EffectId:
+  STRUCT:
+    - chain_id:
+        TYPENAME: ChainId
+    - height:
+        TYPENAME: BlockHeight
+    - index: U64
 Epoch:
   NEWTYPESTRUCT: U64
 Error:
@@ -354,28 +414,30 @@ Error:
     39:
       IncorrectStateHash: UNIT
     40:
-      ClientErrorWhileProcessingBlockProposal: UNIT
+      IncorrectEffects: UNIT
     41:
-      ClientErrorWhileQueryingCertificate: UNIT
+      ClientErrorWhileProcessingBlockProposal: UNIT
     42:
-      WrongShard: UNIT
+      ClientErrorWhileQueryingCertificate: UNIT
     43:
-      InvalidDecoding: UNIT
+      WrongShard: UNIT
     44:
-      UnexpectedMessage: UNIT
+      InvalidDecoding: UNIT
     45:
+      UnexpectedMessage: UNIT
+    46:
       ClientIoError:
         STRUCT:
           - error: STR
-    46:
+    47:
       StorageIoError:
         STRUCT:
           - error: STR
-    47:
+    48:
       StorageBcsError:
         STRUCT:
           - error: STR
-    48:
+    49:
       MissingCertificate:
         STRUCT:
           - hash:
@@ -385,8 +447,8 @@ Event:
     - height:
         TYPENAME: BlockHeight
     - index: U64
-    - operation:
-        TYPENAME: Operation
+    - effect:
+        TYPENAME: Effect
 ExecutionState:
   STRUCT:
     - chain_id:
@@ -458,11 +520,11 @@ MessageGroup:
         TYPENAME: ChainId
     - height:
         TYPENAME: BlockHeight
-    - operations:
+    - effects:
         SEQ:
           TUPLE:
             - U64
-            - TYPENAME: Operation
+            - TYPENAME: Effect
 MultiOwnerManager:
   STRUCT:
     - owners:
@@ -547,13 +609,6 @@ Operation:
               TYPENAME: ChainId
           - epoch:
               TYPENAME: Epoch
-OperationId:
-  STRUCT:
-    - chain_id:
-        TYPENAME: ChainId
-    - height:
-        TYPENAME: BlockHeight
-    - index: U64
 OutboxState:
   STRUCT:
     - queue:
@@ -601,6 +656,9 @@ Value:
               TYPENAME: Block
           - round:
               TYPENAME: RoundNumber
+          - effects:
+              SEQ:
+                TYPENAME: Effect
           - state_hash:
               TYPENAME: HashValue
     1:
@@ -608,6 +666,9 @@ Value:
         STRUCT:
           - block:
               TYPENAME: Block
+          - effects:
+              SEQ:
+                TYPENAME: Effect
           - state_hash:
               TYPENAME: HashValue
 Vote:

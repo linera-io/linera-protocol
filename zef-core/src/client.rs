@@ -17,7 +17,7 @@ use zef_base::{
     committee::Committee,
     crypto::*,
     error::Error,
-    execution::{Address, Amount, Balance, ExecutionState, Operation, UserData},
+    execution::{Address, Amount, Balance, Effect, ExecutionState, Operation, UserData},
     manager::ChainManager,
     messages::*,
 };
@@ -335,8 +335,10 @@ where
         let result = communicate_with_quorum(
             &self.validator_clients,
             committee,
-            |value: &Option<Vote>| -> Option<HashValue> {
-                value.as_ref().map(|vote| vote.value.state_hash())
+            |value: &Option<Vote>| -> Option<(Vec<Effect>, HashValue)> {
+                value
+                    .as_ref()
+                    .map(|vote| vote.value.effects_and_state_hash())
             },
             |name, client| {
                 let mut updater = ValidatorUpdater {
@@ -351,7 +353,7 @@ where
             },
         )
         .await;
-        let (state_hash, votes): (Option<_>, Vec<_>) = match result {
+        let (effects_and_state_hash, votes): (Option<_>, Vec<_>) = match result {
             Ok(content) => content,
             Err(Some(Error::InactiveChain(id)))
                 if id == chain_id
@@ -375,9 +377,11 @@ where
             .collect();
         match action {
             CommunicateAction::SubmitBlockForConfirmation(proposal) => {
-                let state_hash = state_hash.expect("this action produces votes");
+                let (effects, state_hash) =
+                    effects_and_state_hash.expect("this action produces votes");
                 let value = Value::ConfirmedBlock {
                     block: proposal.content.block,
+                    effects,
                     state_hash,
                 };
                 let certificate = Certificate::new(value, signatures);
@@ -388,25 +392,36 @@ where
                 Ok(Some(certificate))
             }
             CommunicateAction::SubmitBlockForValidation(proposal) => {
-                let state_hash = state_hash.expect("this action produces votes");
+                let (effects, state_hash) =
+                    effects_and_state_hash.expect("this action produces votes");
                 let BlockAndRound { block, round } = proposal.content;
                 let value = Value::ValidatedBlock {
                     block,
                     round,
+                    effects,
                     state_hash,
                 };
                 let certificate = Certificate::new(value, signatures);
                 Ok(Some(certificate))
             }
             CommunicateAction::FinalizeBlock(validity_certificate) => {
-                let (block, state_hash) = match validity_certificate.value {
+                let (block, effects, state_hash) = match validity_certificate.value {
                     Value::ValidatedBlock {
-                        block, state_hash, ..
-                    } => (block, state_hash),
+                        block,
+                        effects,
+                        state_hash,
+                        ..
+                    } => (block, effects, state_hash),
                     _ => unreachable!(),
                 };
-                let certificate =
-                    Certificate::new(Value::ConfirmedBlock { block, state_hash }, signatures);
+                let certificate = Certificate::new(
+                    Value::ConfirmedBlock {
+                        block,
+                        effects,
+                        state_hash,
+                    },
+                    signatures,
+                );
                 Ok(Some(certificate))
             }
             CommunicateAction::AdvanceToNextBlockHeight(_) => Ok(None),
@@ -837,7 +852,7 @@ where
 
     async fn open_chain(&mut self, owner: Owner) -> Result<(ChainId, Certificate)> {
         self.prepare_chain().await?;
-        let id = ChainId::child(OperationId {
+        let id = ChainId::child(EffectId {
             chain_id: self.chain_id,
             height: self.next_block_height,
             index: 0,

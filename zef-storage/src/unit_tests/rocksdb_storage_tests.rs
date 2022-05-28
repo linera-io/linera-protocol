@@ -40,6 +40,7 @@ async fn test_rocksdb_storage_for_certificates() {
         };
         let value = Value::ConfirmedBlock {
             block,
+            effects: Vec::new(),
             state_hash: HashValue::new(&ExecutionState::new(ChainId::root(1))),
         };
         let certificate = Certificate::new(value, vec![]);

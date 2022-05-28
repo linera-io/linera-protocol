@@ -130,10 +130,14 @@ where
         &mut self,
         certificate: Certificate,
     ) -> Result<(ChainInfoResponse, Vec<CrossChainRequest>), Error> {
-        let block = certificate
-            .value
-            .confirmed_block()
-            .expect("A confirmation certificate");
+        let (block, effects, state_hash) = match &certificate.value {
+            Value::ConfirmedBlock {
+                block,
+                effects,
+                state_hash,
+            } => (block, effects.clone(), *state_hash),
+            _ => panic!("Expecting a confirmation certificate"),
+        };
         // Obtain the sender's chain.
         let sender = block.chain_id;
         // Check that the chain is active and ready for this confirmation.
@@ -172,21 +176,19 @@ where
         // Make sure temporary manager information are cleared.
         chain.state.manager.reset();
         // Execute the block.
-        let notifications = chain.execute_block(block)?;
+        let execution_result = chain.execute_block(block)?;
+        ensure!(effects == execution_result.effects, Error::IncorrectEffects);
         // Advance to next block height.
         chain.block_hash = Some(certificate.hash);
         chain.confirmed_log.push(certificate.hash);
         chain.next_block_height.try_add_assign_one()?;
         // We should always agree on the state hash.
-        ensure!(
-            chain.state_hash == certificate.value.state_hash(),
-            Error::IncorrectStateHash
-        );
+        ensure!(chain.state_hash == state_hash, Error::IncorrectStateHash);
         // Final touch on the sender's chain.
         let info = chain.make_chain_info(self.key_pair.as_ref());
         // Schedule a new cross-chain request to notify each recipient about the given
         // blocks (generally, just this one).
-        for (recipient, heights) in notifications {
+        for (recipient, heights) in execution_result.notifications {
             if heights.is_empty() {
                 // Save a few bytes in the outbox.
                 continue;
@@ -208,12 +210,13 @@ where
         &mut self,
         certificate: Certificate,
     ) -> Result<ChainInfoResponse, Error> {
-        let (block, round, state_hash) = match &certificate.value {
+        let (block, round, effects, state_hash) = match &certificate.value {
             Value::ValidatedBlock {
                 block,
                 round,
+                effects,
                 state_hash,
-            } => (block, *round, *state_hash),
+            } => (block, *round, effects.clone(), *state_hash),
             _ => panic!("Expecting a validation certificate"),
         };
         // Check that the chain is active and ready for this confirmation.
@@ -243,6 +246,7 @@ where
         }
         chain.state.manager.create_final_vote(
             block.clone(),
+            effects,
             state_hash,
             certificate,
             self.key_pair.as_ref(),
@@ -296,23 +300,23 @@ where
             // unchanged.
             return Ok(chain.make_chain_info(self.key_pair.as_ref()));
         }
-        let state_hash = {
+        let (effects, state_hash) = {
             // Execute the block on a copy of the chain state for validation.
             let mut staged = chain.clone();
             // Make sure the clear round information in the state so that it is not
             // hashed.
             staged.state.manager.reset();
-            staged.execute_block(&proposal.content.block)?;
+            let execution_result = staged.execute_block(&proposal.content.block)?;
             // Verify that the resulting chain would have no unconfirmed incoming
             // messages.
             staged.validate_incoming_messages()?;
-            staged.state_hash
+            (execution_result.effects, staged.state_hash)
         };
         // Create the vote and store it in the chain state.
         chain
             .state
             .manager
-            .create_vote(proposal, state_hash, self.key_pair.as_ref());
+            .create_vote(proposal, effects, state_hash, self.key_pair.as_ref());
         let info = chain.make_chain_info(self.key_pair.as_ref());
         self.storage.write_chain(chain).await?;
         Ok(info)
@@ -356,7 +360,7 @@ where
         if query.request_pending_messages {
             let mut message_groups = Vec::new();
             for (&sender_id, inbox) in &chain.inboxes {
-                let mut operations = Vec::new();
+                let mut effects = Vec::new();
                 let mut current_height = None;
                 for event in &inbox.received_events {
                     match current_height {
@@ -364,27 +368,27 @@ where
                             current_height = Some(event.height);
                         }
                         Some(height) if height != event.height => {
-                            // If the height changed, flush the accumulated operations
+                            // If the height changed, flush the accumulated effects
                             // into a new group.
                             message_groups.push(MessageGroup {
                                 sender_id,
                                 height,
-                                operations,
+                                effects,
                             });
-                            operations = Vec::new();
+                            effects = Vec::new();
                             current_height = Some(event.height);
                         }
                         _ => {
-                            // Otherwise, continue adding operations to the same group.
+                            // Otherwise, continue adding effects to the same group.
                         }
                     }
-                    operations.push((event.index, event.operation.clone()));
+                    effects.push((event.index, event.effect.clone()));
                 }
                 if let Some(height) = current_height {
                     message_groups.push(MessageGroup {
                         sender_id,
                         height,
-                        operations,
+                        effects,
                     });
                 }
             }
@@ -430,10 +434,14 @@ where
                     // Start by checking a few invariants. Note that we still crucially
                     // trust the worker of the sending chain to have verified and executed
                     // the blocks correctly.
-                    let block = certificate
-                        .value
-                        .confirmed_block()
-                        .ok_or(Error::InvalidCrossChainRequest)?;
+                    let (block, effects) = match &certificate.value {
+                        Value::ConfirmedBlock { block, effects, .. } => {
+                            (block.clone(), effects.clone())
+                        }
+                        _ => {
+                            return Err(Error::InvalidCrossChainRequest);
+                        }
+                    };
                     ensure!(block.chain_id == sender, Error::InvalidCrossChainRequest);
                     ensure!(height < Some(block.height), Error::InvalidCrossChainRequest);
                     ensure!(epoch <= Some(block.epoch), Error::InvalidCrossChainRequest);
@@ -443,7 +451,7 @@ where
                     if chain.receive_block(
                         block.chain_id,
                         block.height,
-                        block.operations.clone(),
+                        effects,
                         certificate.hash,
                     )? {
                         self.storage.write_certificate(certificate).await?;
