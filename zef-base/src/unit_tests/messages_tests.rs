@@ -26,6 +26,7 @@ fn test_signed_values() {
     };
     let value = Value::ConfirmedBlock {
         block,
+        effects: Vec::new(),
         state_hash: HashValue::new(&ExecutionState::new(ChainId::root(1))),
     };
 
@@ -63,6 +64,7 @@ fn test_certificates() {
     };
     let value = Value::ConfirmedBlock {
         block,
+        effects: Vec::new(),
         state_hash: HashValue::new(&ExecutionState::new(ChainId::root(1))),
     };
 
