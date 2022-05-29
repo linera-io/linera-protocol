@@ -103,7 +103,7 @@ pub enum Operation {
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub enum ChainStatus {
     ManagedBy { admin_id: ChainId, subscribed: bool },
-    Managing { subscribers: Vec<ChainId> },
+    Managing,
 }
 
 /// The effect of an operation to be performed on a remote chain.
@@ -142,6 +142,13 @@ impl ExecutionState {
             balance: Balance::default(),
         }
     }
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct ApplicationResult {
+    pub effects: Vec<Effect>,
+    pub recipients: Vec<ChainId>,
+    pub need_admin_broadcast: bool,
 }
 
 impl ExecutionState {
@@ -192,7 +199,7 @@ impl ExecutionState {
         height: BlockHeight,
         index: usize,
         operation: &Operation,
-    ) -> Result<(Vec<Effect>, Vec<ChainId>), Error> {
+    ) -> Result<ApplicationResult, Error> {
         let operation_id = EffectId {
             chain_id,
             height,
@@ -231,19 +238,24 @@ impl ExecutionState {
                     id: *id,
                     admin_id: *admin_id,
                 };
-                Ok((vec![e1, e2], vec![*id, *admin_id]))
+                let application = ApplicationResult {
+                    effects: vec![e1, e2],
+                    recipients: vec![*id, *admin_id],
+                    need_admin_broadcast: false,
+                };
+                Ok(application)
             }
             Operation::ChangeOwner { new_owner } => {
                 self.manager = ChainManager::single(*new_owner);
-                Ok((Vec::new(), Vec::new()))
+                Ok(ApplicationResult::default())
             }
             Operation::ChangeMultipleOwners { new_owners } => {
                 self.manager = ChainManager::multiple(new_owners.clone());
-                Ok((Vec::new(), Vec::new()))
+                Ok(ApplicationResult::default())
             }
             Operation::CloseChain => {
                 self.manager = ChainManager::default();
-                Ok((Vec::new(), Vec::new()))
+                Ok(ApplicationResult::default())
             }
             Operation::Transfer {
                 amount, recipient, ..
@@ -260,16 +272,18 @@ impl ExecutionState {
                     }
                 );
                 self.balance.try_sub_assign((*amount).into())?;
-                match recipient {
-                    Address::Burn => Ok((Vec::new(), Vec::new())),
-                    Address::Account(id) => Ok((
-                        vec![Effect::Transfer {
+                let application = match recipient {
+                    Address::Burn => ApplicationResult::default(),
+                    Address::Account(id) => ApplicationResult {
+                        effects: vec![Effect::Transfer {
                             amount: *amount,
                             recipient: *id,
                         }],
-                        vec![*id],
-                    )),
-                }
+                        recipients: vec![*id],
+                        need_admin_broadcast: false,
+                    },
+                };
+                Ok(application)
             }
             Operation::CreateCommittee {
                 admin_id,
@@ -282,42 +296,38 @@ impl ExecutionState {
                     *epoch == self.epoch.expect("chain is active").try_add_one()?,
                     Error::InvalidCommitteeCreation
                 );
-                let recipients = match &self.status {
-                    Some(ChainStatus::Managing { subscribers }) => subscribers.clone(),
-                    _ => return Err(Error::InvalidCommitteeCreation),
-                };
                 self.committees.insert(*epoch, committee.clone());
                 self.epoch = Some(*epoch);
-                // Notify our subscribers.
-                Ok((
-                    vec![Effect::SetCommittees {
+                let application = ApplicationResult {
+                    effects: vec![Effect::SetCommittees {
                         admin_id: *admin_id,
                         epoch: self.epoch.expect("chain is active"),
                         committees: self.committees.clone(),
                     }],
-                    recipients,
-                ))
+                    recipients: Vec::new(),
+                    // Notify our subscribers.
+                    need_admin_broadcast: true,
+                };
+                Ok(application)
             }
             Operation::RemoveCommittee { admin_id, epoch } => {
                 // We are the admin chain and want to remove a committee.
                 ensure!(*admin_id == chain_id, Error::InvalidCommitteeRemoval);
-                let recipients = match &self.status {
-                    Some(ChainStatus::Managing { subscribers, .. }) => subscribers.clone(),
-                    _ => return Err(Error::InvalidCommitteeRemoval),
-                };
                 ensure!(
                     self.committees.remove(epoch).is_some(),
                     Error::InvalidCommitteeRemoval
                 );
-                // Notify our subscribers.
-                Ok((
-                    vec![Effect::SetCommittees {
+                let application = ApplicationResult {
+                    effects: vec![Effect::SetCommittees {
                         admin_id: *admin_id,
                         epoch: self.epoch.expect("chain is active"),
                         committees: self.committees.clone(),
                     }],
-                    recipients,
-                ))
+                    recipients: Vec::new(),
+                    // Notify our subscribers.
+                    need_admin_broadcast: true,
+                };
+                Ok(application)
             }
             Operation::SubscribeToNewCommittees { id, admin_id } => {
                 ensure!(
@@ -334,48 +344,29 @@ impl ExecutionState {
                     }
                     _ => return Err(Error::InvalidSubscriptionToNewCommittees(*id)),
                 }
-                Ok((
-                    vec![Effect::SubscribeToNewCommittees {
+                let application = ApplicationResult {
+                    effects: vec![Effect::SubscribeToNewCommittees {
                         id: *id,
                         admin_id: *admin_id,
                     }],
-                    vec![*admin_id],
-                ))
+                    recipients: vec![*admin_id],
+                    need_admin_broadcast: false,
+                };
+                Ok(application)
             }
         }
     }
 
     /// Execute the recipient's side of an operation, aka a "remote effect".
     /// Effects must be executed by order of heights in the sender's chain.
-    pub(crate) fn apply_effect(
-        &mut self,
-        chain_id: ChainId,
-        effect: &Effect,
-    ) -> Result<Vec<(ChainId, Effect)>, Error> {
+    pub(crate) fn apply_effect(&mut self, chain_id: ChainId, effect: &Effect) -> Result<(), Error> {
         match effect {
             Effect::Transfer { amount, recipient } if chain_id == *recipient => {
                 self.balance = self
                     .balance
                     .try_add((*amount).into())
                     .unwrap_or_else(|_| Balance::max());
-                Ok(Vec::new())
-            }
-            Effect::SubscribeToNewCommittees { id, admin_id } if *admin_id == chain_id => {
-                // We are the admin chain and are being notified that a subchain was just created.
-                match &mut self.status {
-                    Some(ChainStatus::Managing { subscribers, .. }) => {
-                        subscribers.push(*id);
-                        Ok(vec![(
-                            *id,
-                            Effect::SetCommittees {
-                                admin_id: *admin_id,
-                                epoch: self.epoch.expect("chain is active"),
-                                committees: self.committees.clone(),
-                            },
-                        )])
-                    }
-                    _ => Err(Error::InvalidCrossChainRequest),
-                }
+                Ok(())
             }
             Effect::SetCommittees {
                 admin_id,
@@ -386,17 +377,19 @@ impl ExecutionState {
                 Some(ChainStatus::ManagedBy { admin_id: id, subscribed: s }) if *s && admin_id == id
             ) =>
             {
+                // This chain was not yet subscribed at the time earlier epochs were broadcast.
                 ensure!(
                     *epoch >= self.epoch.expect("chain is active"),
                     Error::InvalidCrossChainRequest
                 );
                 self.epoch = Some(*epoch);
                 self.committees = committees.clone();
-                Ok(Vec::new())
+                Ok(())
             }
+            Effect::OpenChain { .. } | Effect::SubscribeToNewCommittees { .. } => Ok(()),
             _ => {
                 log::error!("Skipping unexpected received effect: {effect:?}");
-                Ok(Vec::new())
+                Ok(())
             }
         }
     }

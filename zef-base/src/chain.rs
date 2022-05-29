@@ -12,7 +12,7 @@ use crate::{
     messages::*,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 
 /// The state of a chain.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -39,6 +39,8 @@ pub struct ChainState {
     pub outboxes: HashMap<ChainId, OutboxState>,
     /// Mailboxes used to receive messages indexed by their origin.
     pub inboxes: HashMap<Origin, InboxState>,
+    /// The channel to multicast new configurations (admin chain only).
+    pub admin_channel: ChannelState,
 }
 
 /// An outbox used to send messages to another chain. NOTE: Messages are implied by the
@@ -49,7 +51,7 @@ pub struct ChainState {
 pub struct OutboxState {
     /// Keep sending these certified blocks of ours until they are acknowledged by
     /// receivers. Keep the height around so that we can quickly dequeue.
-    pub queue: VecDeque<(BlockHeight, HashValue)>,
+    pub queue: VecDeque<BlockHeight>,
 }
 
 /// An inbox used to receive and execute messages from another chain.
@@ -66,6 +68,16 @@ pub struct InboxState {
     pub expected_events: VecDeque<Event>,
 }
 
+/// The state of a channel followed by subscribers.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+pub struct ChannelState {
+    /// The subscribers and whether they have received the latest update yet.
+    pub subscribers: HashMap<ChainId, bool>,
+    /// The latest block height to communicate, if any.
+    pub block_height: Option<BlockHeight>,
+}
+
 /// A message sent by some (unspecified) chain at a particular height and index.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
@@ -76,12 +88,6 @@ pub struct Event {
     pub index: usize,
     /// The effect of the event.
     pub effect: Effect,
-}
-
-#[derive(Debug, Default)]
-pub struct ExecutionResult {
-    pub effects: Vec<Effect>,
-    pub notifications: HashSet<ChainId>,
 }
 
 impl ChainState {
@@ -98,6 +104,7 @@ impl ChainState {
             received_log: Vec::new(),
             inboxes: HashMap::new(),
             outboxes: HashMap::new(),
+            admin_channel: ChannelState::default(),
         }
     }
 
@@ -109,9 +116,7 @@ impl ChainState {
         balance: Balance,
     ) -> Self {
         let status = if ChainId::from(description) == admin_id {
-            ChainStatus::Managing {
-                subscribers: Vec::new(),
-            }
+            ChainStatus::Managing
         } else {
             ChainStatus::ManagedBy {
                 admin_id,
@@ -216,17 +221,17 @@ impl ChainState {
             if !self.state.is_recipient(&effect) {
                 continue;
             }
-            // Chain creation is a special effect that can only be executed (once) in this callback.
-            if let Effect::OpenChain {
-                id,
-                owner,
-                epoch,
-                committees,
-                admin_id,
-            } = &effect
-            {
-                if id == &self.state.chain_id {
-                    // guaranteed under BFT assumptions.
+            // Chain creation and channel subscriptions are special effects that are executed (only) in this callback.
+            // For simplicity, they will still appear as incoming messages in new blocks, as the other effects.
+            match &effect {
+                Effect::OpenChain {
+                    id,
+                    owner,
+                    epoch,
+                    committees,
+                    admin_id,
+                } if id == &self.state.chain_id => {
+                    // Guaranteed under BFT assumptions.
                     assert!(self.description.is_none());
                     assert!(!self.state.manager.is_active());
                     assert!(self.state.committees.is_empty());
@@ -245,10 +250,14 @@ impl ChainState {
                     });
                     self.state.manager = ChainManager::single(*owner);
                     self.state_hash = HashValue::new(&self.state);
-                    // Proceed to scheduling the `OpenChain` effect for "execution".
-                    // Although it won't do anything, it's simpler than asking block producers
-                    // to skip this kind of incoming messages.
                 }
+                Effect::SubscribeToNewCommittees { id, admin_id }
+                    if admin_id == &self.state.chain_id =>
+                {
+                    // Request past and future messages from this channel.
+                    self.admin_channel.subscribers.insert(*id, false);
+                }
+                _ => (),
             }
             // Find if the message was executed ahead of time.
             if let Some(event) = inbox.expected_events.front() {
@@ -273,12 +282,11 @@ impl ChainState {
         Ok(true)
     }
 
-    /// Execute a new block: first the incoming messages, then the main operation. In case
-    /// of errors, `self` may not be consistent any more and should be thrown away.
-    /// Returns a map of recipients to notify about some of our blocks (usually the block
-    /// being executed).
-    pub fn execute_block(&mut self, block: &Block) -> Result<ExecutionResult, Error> {
-        let mut notifications = HashSet::new();
+    /// Execute a new block: first the incoming messages, then the main operation.
+    /// * Modifies the state of inboxes, outboxes, and channels, if needed.
+    /// * As usual, in case of errors, `self` may not be consistent any more and should be thrown away.
+    /// * Returns the list of effects caused by the block being executed.
+    pub fn execute_block(&mut self, block: &Block) -> Result<Vec<Effect>, Error> {
         let mut effects = Vec::new();
         // First, process incoming messages.
         for message_group in &block.incoming_messages {
@@ -319,30 +327,37 @@ impl ChainState {
                         });
                     }
                 }
-                // Execute the received effect. This may create more notifications
-                // about previous blocks.
-                let new_notifications = self
-                    .state
+                // Execute the received effect.
+                self.state
                     .apply_effect(self.state.chain_id, message_effect)?;
-                for (recipient, effect) in new_notifications {
-                    notifications.insert(recipient);
-                    effects.push(effect);
-                }
             }
         }
-        // Second, execute the operations in the block and remember recipients to notify.
+        // Second, execute the operations in the block and remember the recipients to notify.
         for (index, operation) in block.operations.iter().enumerate() {
-            let (new_effects, recipients) =
+            let application =
                 self.state
                     .apply_operation(block.chain_id, block.height, index, operation)?;
-            effects.extend(new_effects);
-            notifications.extend(recipients);
+            // Record the effects of the execution.
+            effects.extend(application.effects);
+            // Update the outboxes.
+            for recipient in application.recipients {
+                let queue = &mut self.outboxes.entry(recipient).or_default().queue;
+                // Schedule a message at this height if we haven't already.
+                if queue.back() != Some(&block.height) {
+                    queue.push_back(block.height);
+                }
+            }
+            // Update the channels.
+            if application.need_admin_broadcast {
+                self.admin_channel
+                    .subscribers
+                    .values_mut()
+                    .for_each(|v| *v = false);
+                self.admin_channel.block_height = Some(block.height);
+            }
         }
         // Last, recompute the state hash.
         self.state_hash = HashValue::new(&self.state);
-        Ok(ExecutionResult {
-            effects,
-            notifications,
-        })
+        Ok(effects)
     }
 }

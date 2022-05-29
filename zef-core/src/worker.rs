@@ -115,13 +115,61 @@ where
         for (&recipient, outbox) in &chain.outboxes {
             let certificates = self
                 .storage
-                .read_certificates(outbox.queue.iter().map(|(_, hash)| *hash))
+                .read_certificates(
+                    outbox
+                        .queue
+                        .iter()
+                        .map(|height| chain.confirmed_log[usize::from(*height)]),
+                )
                 .await?;
             continuation.push(CrossChainRequest::UpdateRecipient {
                 origin: Origin::Chain(chain.state.chain_id),
                 recipient,
                 certificates,
             })
+        }
+        if let Some(height) = chain.admin_channel.block_height {
+            for (&recipient, &flag) in &chain.admin_channel.subscribers {
+                if !flag {
+                    let certificate = self
+                        .storage
+                        .read_certificate(chain.confirmed_log[usize::from(height)])
+                        .await?;
+                    continuation.push(CrossChainRequest::UpdateRecipient {
+                        origin: Origin::AdminChannel(chain.state.chain_id),
+                        recipient,
+                        certificates: vec![certificate],
+                    })
+                }
+            }
+        }
+        log::trace!("{} --> {:?}", self.nickname, continuation);
+        Ok(continuation)
+    }
+
+    /// Load pending cross-chain requests for a specific recipient, limited to channels.
+    /// This is used below instead of `make_continuation` to avoid re-sending messages too
+    /// aggressively.
+    async fn make_continuation_for_subscriber(
+        &mut self,
+        chain: &ChainState,
+        recipient: ChainId,
+    ) -> Result<Vec<CrossChainRequest>, Error> {
+        let mut continuation = Vec::new();
+        if let Some(height) = chain.admin_channel.block_height {
+            if let Some(flag) = chain.admin_channel.subscribers.get(&recipient) {
+                if !flag {
+                    let certificate = self
+                        .storage
+                        .read_certificate(chain.confirmed_log[usize::from(height)])
+                        .await?;
+                    continuation.push(CrossChainRequest::UpdateRecipient {
+                        origin: Origin::AdminChannel(chain.state.chain_id),
+                        recipient,
+                        certificates: vec![certificate],
+                    })
+                }
+            }
         }
         log::trace!("{} --> {:?}", self.nickname, continuation);
         Ok(continuation)
@@ -178,22 +226,15 @@ where
         // Make sure temporary manager information are cleared.
         chain.state.manager.reset();
         // Execute the block.
-        let execution_result = chain.execute_block(block)?;
-        ensure!(effects == execution_result.effects, Error::IncorrectEffects);
+        let verified_effects = chain.execute_block(block)?;
+        ensure!(effects == verified_effects, Error::IncorrectEffects);
         // Advance to next block height.
         chain.block_hash = Some(certificate.hash);
         chain.confirmed_log.push(certificate.hash);
         chain.next_block_height.try_add_assign_one()?;
         // We should always agree on the state hash.
         ensure!(chain.state_hash == state_hash, Error::IncorrectStateHash);
-        // Final touch on the sender's chain.
         let info = chain.make_chain_info(self.key_pair.as_ref());
-        // Schedule a new cross-chain request to notify each recipient about the given
-        // blocks (generally, just this one).
-        for recipient in execution_result.notifications {
-            let queue = &mut chain.outboxes.entry(recipient).or_default().queue;
-            queue.push_back((block.height, certificate.hash));
-        }
         let continuation = self.make_continuation(&chain).await?;
         // Persist chain.
         self.storage.write_chain(chain).await?;
@@ -301,11 +342,11 @@ where
             // Make sure the clear round information in the state so that it is not
             // hashed.
             staged.state.manager.reset();
-            let execution_result = staged.execute_block(&proposal.content.block)?;
+            let effects = staged.execute_block(&proposal.content.block)?;
             // Verify that the resulting chain would have no unconfirmed incoming
             // messages.
             staged.validate_incoming_messages()?;
-            (execution_result.effects, staged.state_hash)
+            (effects, staged.state_hash)
         };
         // Create the vote and store it in the chain state.
         chain
@@ -438,7 +479,7 @@ where
                         }
                     };
                     ensure!(
-                        origin == Origin::Chain(block.chain_id),
+                        origin.sender() == block.chain_id,
                         Error::InvalidCrossChainRequest
                     );
                     ensure!(height < Some(block.height), Error::InvalidCrossChainRequest);
@@ -451,6 +492,10 @@ where
                         need_update = true;
                     }
                 }
+                // In the case of channels, `receive_block` may schedule some messages back.
+                let mut requests = self
+                    .make_continuation_for_subscriber(&chain, origin.sender())
+                    .await?;
                 if need_update {
                     if !self.allow_inactive_chains {
                         // Validator nodes are more strict than clients when it comes to
@@ -475,15 +520,18 @@ where
                     self.storage.write_chain(chain).await?;
                 }
                 if let Some(height) = height {
-                    let request = CrossChainRequest::ConfirmUpdatedRecipient {
-                        origin,
-                        recipient,
-                        height,
-                    };
-                    Ok(vec![request])
-                } else {
-                    Ok(Vec::new())
+                    // We have processed at least one certificate successfully: send back
+                    // an acknowledgment.
+                    requests.insert(
+                        0,
+                        CrossChainRequest::ConfirmUpdatedRecipient {
+                            origin,
+                            recipient,
+                            height,
+                        },
+                    );
                 }
+                Ok(requests)
             }
             CrossChainRequest::ConfirmUpdatedRecipient {
                 origin: Origin::Chain(sender),
@@ -495,7 +543,7 @@ where
                     chain.outboxes.entry(recipient)
                 {
                     let mut updated = false;
-                    while let Some((h, _)) = entry.get().queue.front() {
+                    while let Some(h) = entry.get().queue.front() {
                         if *h > height {
                             break;
                         }
@@ -506,6 +554,30 @@ where
                         if entry.get().queue.is_empty() {
                             entry.remove();
                         }
+                        self.storage.write_chain(chain).await?;
+                    }
+                }
+                Ok(Vec::new())
+            }
+            CrossChainRequest::ConfirmUpdatedRecipient {
+                origin: Origin::AdminChannel(admin),
+                recipient,
+                height,
+            } => {
+                let mut chain = self.storage.read_active_chain(admin).await?;
+                ensure!(
+                    chain.admin_channel.block_height >= Some(height),
+                    Error::InvalidCrossChainRequest
+                );
+                if chain.admin_channel.block_height > Some(height) {
+                    // This is a confirmation of an obsolete broadcast.
+                    return Ok(Vec::new());
+                }
+                if let std::collections::hash_map::Entry::Occupied(mut entry) =
+                    chain.admin_channel.subscribers.entry(recipient)
+                {
+                    if !entry.get() {
+                        *entry.get_mut() = true;
                         self.storage.write_chain(chain).await?;
                     }
                 }

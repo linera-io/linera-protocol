@@ -103,13 +103,14 @@ pub struct BlockAndRound {
 /// The origin of a message. Used to identify each inbox.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
 pub enum Origin {
+    AdminChannel(ChainId),
     Chain(ChainId),
 }
 
 impl Origin {
     pub fn sender(self) -> ChainId {
         match self {
-            Origin::Chain(id) => id,
+            Origin::Chain(id) | Origin::AdminChannel(id) => id,
         }
     }
 }
