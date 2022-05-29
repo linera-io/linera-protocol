@@ -100,11 +100,24 @@ pub struct BlockAndRound {
     pub block: Block,
     pub round: RoundNumber,
 }
+/// The origin of a message. Used to identify each inbox.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
+pub enum Origin {
+    Chain(ChainId),
+}
+
+impl Origin {
+    pub fn sender(self) -> ChainId {
+        match self {
+            Origin::Chain(id) => id,
+        }
+    }
+}
 
 /// A selection of messages sent by a block to another chain.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct MessageGroup {
-    pub sender_id: ChainId,
+    pub origin: Origin,
     pub height: BlockHeight,
     pub effects: Vec<(usize, Effect)>,
 }
@@ -271,13 +284,13 @@ pub enum CrossChainRequest {
     /// Communicate a number of confirmed blocks from the sender to the recipient.
     /// Blocks must be given by increasing heights.
     UpdateRecipient {
-        sender: ChainId,
+        origin: Origin,
         recipient: ChainId,
         certificates: Vec<Certificate>,
     },
     /// Acknowledge the height of the highest confirmed block communicated with `UpdateRecipient`.
     ConfirmUpdatedRecipient {
-        sender: ChainId,
+        origin: Origin,
         recipient: ChainId,
         height: BlockHeight,
     },
@@ -289,7 +302,7 @@ impl CrossChainRequest {
         use CrossChainRequest::*;
         match self {
             UpdateRecipient { recipient, .. } => *recipient,
-            ConfirmUpdatedRecipient { sender, .. } => *sender,
+            ConfirmUpdatedRecipient { origin, .. } => origin.sender(),
         }
     }
 }
