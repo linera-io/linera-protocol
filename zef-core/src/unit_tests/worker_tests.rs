@@ -555,7 +555,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             Amount::from(5),
             vec![
                 MessageGroup {
-                    sender_id: ChainId::root(1),
+                    origin: Origin::Chain(ChainId::root(1)),
                     height: BlockHeight::from(0),
                     effects: vec![
                         (
@@ -575,7 +575,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                     ],
                 },
                 MessageGroup {
-                    sender_id: ChainId::root(1),
+                    origin: Origin::Chain(ChainId::root(1)),
                     height: BlockHeight::from(1),
                     effects: vec![(
                         0,
@@ -602,7 +602,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             Amount::from(6),
             vec![
                 MessageGroup {
-                    sender_id: ChainId::root(1),
+                    origin: Origin::Chain(ChainId::root(1)),
                     height: BlockHeight::from(0),
                     effects: vec![
                         (
@@ -622,7 +622,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                     ],
                 },
                 MessageGroup {
-                    sender_id: ChainId::root(1),
+                    origin: Origin::Chain(ChainId::root(1)),
                     height: BlockHeight::from(1),
                     effects: vec![(
                         0,
@@ -649,7 +649,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             Amount::from(6),
             vec![
                 MessageGroup {
-                    sender_id: ChainId::root(1),
+                    origin: Origin::Chain(ChainId::root(1)),
                     height: BlockHeight::from(1),
                     effects: vec![(
                         0,
@@ -660,7 +660,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                     )],
                 },
                 MessageGroup {
-                    sender_id: ChainId::root(1),
+                    origin: Origin::Chain(ChainId::root(1)),
                     height: BlockHeight::from(0),
                     effects: vec![
                         (
@@ -696,7 +696,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             Amount::from(4),
             vec![
                 MessageGroup {
-                    sender_id: ChainId::root(1),
+                    origin: Origin::Chain(ChainId::root(1)),
                     height: BlockHeight::from(0),
                     effects: vec![(
                         0,
@@ -707,7 +707,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                     )], // missing message
                 },
                 MessageGroup {
-                    sender_id: ChainId::root(1),
+                    origin: Origin::Chain(ChainId::root(1)),
                     height: BlockHeight::from(1),
                     effects: vec![(
                         0,
@@ -733,7 +733,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             Address::Account(ChainId::root(3)),
             Amount::from(1),
             vec![MessageGroup {
-                sender_id: ChainId::root(1),
+                origin: Origin::Chain(ChainId::root(1)),
                 height: BlockHeight::from(0),
                 effects: vec![(
                     0,
@@ -784,7 +784,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             Amount::from(5),
             vec![
                 MessageGroup {
-                    sender_id: ChainId::root(1),
+                    origin: Origin::Chain(ChainId::root(1)),
                     height: BlockHeight::from(0),
                     effects: vec![(
                         1,
@@ -795,7 +795,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                     )],
                 },
                 MessageGroup {
-                    sender_id: ChainId::root(1),
+                    origin: Origin::Chain(ChainId::root(1)),
                     height: BlockHeight::from(1),
                     effects: vec![(
                         0,
@@ -1014,7 +1014,7 @@ async fn test_handle_certificate_with_anticipated_incoming_message() {
         Address::Account(ChainId::root(2)),
         Amount::from(1000),
         vec![MessageGroup {
-            sender_id: ChainId::root(3),
+            origin: Origin::Chain(ChainId::root(3)),
             height: BlockHeight::from(0),
             effects: vec![(
                 0,
@@ -1044,18 +1044,18 @@ async fn test_handle_certificate_with_anticipated_incoming_message() {
         BlockHeight::from(0),
         chain
             .inboxes
-            .get(&ChainId::root(3))
+            .get(&Origin::Chain(ChainId::root(3)))
             .unwrap()
             .next_height_to_receive
     );
     assert!(chain
         .inboxes
-        .get(&ChainId::root(3))
+        .get(&Origin::Chain(ChainId::root(3)))
         .unwrap()
         .received_events
         .is_empty(),);
     assert!(matches!(
-        chain.inboxes.get(&ChainId::root(3)).unwrap().expected_events.front().unwrap(),
+        chain.inboxes.get(&Origin::Chain(ChainId::root(3))).unwrap().expected_events.front().unwrap(),
         Event { height, index: 0, effect: Effect::Transfer { amount, .. }} if *height == BlockHeight::from(0) && *amount == Amount::from(995),
     ));
     assert_eq!(chain.confirmed_log.len(), 1);
@@ -1148,12 +1148,12 @@ async fn test_handle_certificate_receiver_equal_sender() {
         BlockHeight::from(1),
         chain
             .inboxes
-            .get(&ChainId::root(1))
+            .get(&Origin::Chain(ChainId::root(1)))
             .unwrap()
             .next_height_to_receive
     );
     assert!(matches!(
-        chain.inboxes.get(&ChainId::root(1)).unwrap().received_events.front().unwrap(),
+        chain.inboxes.get(&Origin::Chain(ChainId::root(1))).unwrap().received_events.front().unwrap(),
         Event { height, index: 0, effect: Effect::Transfer { amount, .. }} if *height == BlockHeight::from(0) && *amount == Amount::from(1),
     ));
     assert_eq!(BlockHeight::from(1), chain.next_block_height);
@@ -1183,7 +1183,7 @@ async fn test_handle_cross_chain_request() {
     );
     worker
         .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
-            sender: ChainId::root(1),
+            origin: Origin::Chain(ChainId::root(1)),
             recipient: ChainId::root(2),
             certificates: vec![certificate],
         })
@@ -1200,12 +1200,12 @@ async fn test_handle_cross_chain_request() {
         BlockHeight::from(1),
         chain
             .inboxes
-            .get(&ChainId::root(1))
+            .get(&Origin::Chain(ChainId::root(1)))
             .unwrap()
             .next_height_to_receive
     );
     assert!(matches!(
-        chain.inboxes.get(&ChainId::root(1)).unwrap().received_events.front().unwrap(),
+        chain.inboxes.get(&Origin::Chain(ChainId::root(1))).unwrap().received_events.front().unwrap(),
         Event { height, index: 0, effect: Effect::Transfer { amount, .. }} if *height == BlockHeight::from(0) && *amount == Amount::from(10),
     ));
     assert_eq!(chain.confirmed_log.len(), 0);
@@ -1230,7 +1230,7 @@ async fn test_handle_cross_chain_request_no_recipient_chain() {
     );
     assert!(worker
         .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
-            sender: ChainId::root(1),
+            origin: Origin::Chain(ChainId::root(1)),
             recipient: ChainId::root(2),
             certificates: vec![certificate],
         })
@@ -1265,7 +1265,7 @@ async fn test_handle_cross_chain_request_no_recipient_chain_with_inactive_chains
     assert!(matches!(
         worker
             .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
-                sender: ChainId::root(1),
+                origin: Origin::Chain(ChainId::root(1)),
                 recipient: ChainId::root(2),
                 certificates: vec![certificate],
             })
@@ -1329,7 +1329,7 @@ async fn test_handle_certificate_to_active_recipient() {
         Address::Account(ChainId::root(3)),
         Amount::from(1),
         vec![MessageGroup {
-            sender_id: ChainId::root(1),
+            origin: Origin::Chain(ChainId::root(1)),
             height: BlockHeight::from(0),
             effects: vec![(
                 0,
@@ -1543,7 +1543,7 @@ async fn test_chain_creation_with_committee_creation() {
     );
     assert!(!child_chain
         .inboxes
-        .get(&child_id0)
+        .get(&Origin::Chain(child_id0))
         .unwrap()
         .received_events
         .is_empty());
@@ -1565,7 +1565,7 @@ async fn test_chain_creation_with_committee_creation() {
                 epoch: Epoch::from(0),
                 chain_id: root_id,
                 incoming_messages: vec![MessageGroup {
-                    sender_id: ChainId::root(0),
+                    origin: Origin::Chain(ChainId::root(0)),
                     height: BlockHeight::from(0),
                     effects: vec![(
                         1,
@@ -1627,7 +1627,7 @@ async fn test_chain_creation_with_committee_creation() {
                 epoch: Epoch::from(1),
                 chain_id: root_id,
                 incoming_messages: vec![MessageGroup {
-                    sender_id: child_id,
+                    origin: Origin::Chain(child_id),
                     height: BlockHeight::from(0),
                     effects: vec![
                         (
@@ -1681,7 +1681,7 @@ async fn test_chain_creation_with_committee_creation() {
                 epoch: Epoch::from(0),
                 chain_id: child_id,
                 incoming_messages: vec![MessageGroup {
-                    sender_id: root_id,
+                    origin: Origin::Chain(root_id),
                     height: BlockHeight::from(2),
                     effects: vec![(
                         0,
