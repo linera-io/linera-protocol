@@ -17,9 +17,7 @@ async fn test_read_write() {
         .committees
         .insert(Epoch::from(0), Committee::make_simple(Vec::new()));
     chain.state.epoch = Some(Epoch::from(0));
-    chain.state.status = Some(ChainStatus::Managing {
-        subscribers: Vec::new(),
-    });
+    chain.state.status = Some(ChainStatus::Managing);
     chain.state.manager = ChainManager::single(Owner(PublicKey::debug(2)));
     store.write_chain(chain).await.unwrap();
     store

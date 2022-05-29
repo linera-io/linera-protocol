@@ -170,6 +170,8 @@ ChainState:
             TYPENAME: Origin
           VALUE:
             TYPENAME: InboxState
+    - admin_channel:
+        TYPENAME: ChannelState
 ChainStatus:
   ENUM:
     0:
@@ -179,11 +181,17 @@ ChainStatus:
               TYPENAME: ChainId
           - subscribed: BOOL
     1:
-      Managing:
-        STRUCT:
-          - subscribers:
-              SEQ:
-                TYPENAME: ChainId
+      Managing: UNIT
+ChannelState:
+  STRUCT:
+    - subscribers:
+        MAP:
+          KEY:
+            TYPENAME: ChainId
+          VALUE: BOOL
+    - block_height:
+        OPTION:
+          TYPENAME: BlockHeight
 Committee:
   STRUCT:
     - voting_rights:
@@ -590,6 +598,10 @@ Operation:
 Origin:
   ENUM:
     0:
+      AdminChannel:
+        NEWTYPE:
+          TYPENAME: ChainId
+    1:
       Chain:
         NEWTYPE:
           TYPENAME: ChainId
@@ -597,9 +609,7 @@ OutboxState:
   STRUCT:
     - queue:
         SEQ:
-          TUPLE:
-            - TYPENAME: BlockHeight
-            - TYPENAME: HashValue
+          TYPENAME: BlockHeight
 Owner:
   NEWTYPESTRUCT:
     TYPENAME: PublicKey
