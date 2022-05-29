@@ -167,7 +167,7 @@ ChainState:
     - inboxes:
         MAP:
           KEY:
-            TYPENAME: ChainId
+            TYPENAME: Origin
           VALUE:
             TYPENAME: InboxState
 ChainStatus:
@@ -197,8 +197,8 @@ CrossChainRequest:
     0:
       UpdateRecipient:
         STRUCT:
-          - sender:
-              TYPENAME: ChainId
+          - origin:
+              TYPENAME: Origin
           - recipient:
               TYPENAME: ChainId
           - certificates:
@@ -207,8 +207,8 @@ CrossChainRequest:
     1:
       ConfirmUpdatedRecipient:
         STRUCT:
-          - sender:
-              TYPENAME: ChainId
+          - origin:
+              TYPENAME: Origin
           - recipient:
               TYPENAME: ChainId
           - height:
@@ -362,23 +362,23 @@ Error:
     31:
       MissingCrossChainUpdate:
         STRUCT:
-          - sender_id:
-              TYPENAME: ChainId
+          - origin:
+              TYPENAME: Origin
           - height:
               TYPENAME: BlockHeight
     32:
       InvalidMessageContent:
         STRUCT:
-          - sender_id:
-              TYPENAME: ChainId
+          - origin:
+              TYPENAME: Origin
           - height:
               TYPENAME: BlockHeight
           - index: U64
     33:
       InvalidMessageOrder:
         STRUCT:
-          - sender_id:
-              TYPENAME: ChainId
+          - origin:
+              TYPENAME: Origin
           - height:
               TYPENAME: BlockHeight
           - index: U64
@@ -498,8 +498,8 @@ Message:
           TYPENAME: CrossChainRequest
 MessageGroup:
   STRUCT:
-    - sender_id:
-        TYPENAME: ChainId
+    - origin:
+        TYPENAME: Origin
     - height:
         TYPENAME: BlockHeight
     - effects:
@@ -587,6 +587,12 @@ Operation:
               TYPENAME: ChainId
           - epoch:
               TYPENAME: Epoch
+Origin:
+  ENUM:
+    0:
+      Chain:
+        NEWTYPE:
+          TYPENAME: ChainId
 OutboxState:
   STRUCT:
     - queue:

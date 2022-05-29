@@ -37,8 +37,8 @@ pub struct ChainState {
 
     /// Mailboxes used to send messages, indexed by recipient.
     pub outboxes: HashMap<ChainId, OutboxState>,
-    /// Mailboxes used to receive messages, indexed by sender.
-    pub inboxes: HashMap<ChainId, InboxState>,
+    /// Mailboxes used to receive messages indexed by their origin.
+    pub inboxes: HashMap<Origin, InboxState>,
 }
 
 /// An outbox used to send messages to another chain. NOTE: Messages are implied by the
@@ -78,6 +78,7 @@ pub struct Event {
     pub effect: Effect,
 }
 
+#[derive(Debug, Default)]
 pub struct ExecutionResult {
     pub effects: Vec<Effect>,
     pub notifications: HashSet<ChainId>,
@@ -163,11 +164,11 @@ impl ChainState {
     /// Verify that this chain is up-to-date and all the messages executed ahead of time
     /// have been properly received by now.
     pub fn validate_incoming_messages(&self) -> Result<(), Error> {
-        for (&sender_id, inbox) in &self.inboxes {
+        for (&origin, inbox) in &self.inboxes {
             ensure!(
                 inbox.expected_events.is_empty(),
                 Error::MissingCrossChainUpdate {
-                    sender_id,
+                    origin,
                     height: inbox.expected_events.front().unwrap().height,
                 }
             );
@@ -185,18 +186,18 @@ impl ChainState {
     /// received by order of heights and indices.
     pub fn receive_block(
         &mut self,
-        sender_id: ChainId,
+        origin: Origin,
         height: BlockHeight,
         effects: Vec<Effect>,
         key: HashValue,
     ) -> Result<bool, Error> {
-        let inbox = self.inboxes.entry(sender_id).or_default();
+        let inbox = self.inboxes.entry(origin).or_default();
         if height < inbox.next_height_to_receive {
             // We have already received this block.
             log::warn!(
                 "Ignoring past messages to {:?} from {:?} at height {}",
                 self.state.chain_id,
-                sender_id,
+                origin,
                 height
             );
             return Ok(false);
@@ -204,7 +205,7 @@ impl ChainState {
         log::trace!(
             "Processing new messages to {:?} from {:?} at height {}",
             self.state.chain_id,
-            sender_id,
+            origin,
             height
         );
         // Mark the block as received.
@@ -230,7 +231,7 @@ impl ChainState {
                     assert!(!self.state.manager.is_active());
                     assert!(self.state.committees.is_empty());
                     let description = ChainDescription::Child(EffectId {
-                        chain_id: sender_id,
+                        chain_id: origin.sender(),
                         height,
                         index,
                     });
@@ -283,7 +284,7 @@ impl ChainState {
         for message_group in &block.incoming_messages {
             for (message_index, message_effect) in &message_group.effects {
                 // Reconcile the effect with the received queue, or mark it as "expected".
-                let inbox = self.inboxes.entry(message_group.sender_id).or_default();
+                let inbox = self.inboxes.entry(message_group.origin).or_default();
                 match inbox.received_events.front() {
                     Some(Event {
                         height,
@@ -293,7 +294,7 @@ impl ChainState {
                         ensure!(
                             message_group.height == *height && message_index == index,
                             Error::InvalidMessageOrder {
-                                sender_id: message_group.sender_id,
+                                origin: message_group.origin,
                                 height: message_group.height,
                                 index: *message_index,
                                 expected_height: *height,
@@ -303,7 +304,7 @@ impl ChainState {
                         ensure!(
                             message_effect == effect,
                             Error::InvalidMessageContent {
-                                sender_id: message_group.sender_id,
+                                origin: message_group.origin,
                                 height: message_group.height,
                                 index: *message_index,
                             }

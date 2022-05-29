@@ -208,10 +208,9 @@ where
         &mut self,
         chain_id: ChainId,
     ) -> Result<(), Error> {
-        // Obtain chain state.
         let chain = self.store.read_chain_or_default(chain_id).await?;
-        for (sender_id, inbox) in chain.inboxes.iter() {
-            self.send_chain_information(*sender_id, inbox.next_height_to_receive)
+        for (origin, inbox) in chain.inboxes.iter() {
+            self.send_chain_information(origin.sender(), inbox.next_height_to_receive)
                 .await?;
         }
         Ok(())

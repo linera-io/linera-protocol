@@ -116,7 +116,7 @@ where
                 .read_certificates(outbox.queue.iter().map(|(_, hash)| *hash))
                 .await?;
             continuation.push(CrossChainRequest::UpdateRecipient {
-                sender: chain.state.chain_id,
+                origin: Origin::Chain(chain.state.chain_id),
                 recipient,
                 certificates,
             })
@@ -352,7 +352,7 @@ where
         }
         if query.request_pending_messages {
             let mut message_groups = Vec::new();
-            for (&sender_id, inbox) in &chain.inboxes {
+            for (&origin, inbox) in &chain.inboxes {
                 let mut effects = Vec::new();
                 let mut current_height = None;
                 for event in &inbox.received_events {
@@ -364,7 +364,7 @@ where
                             // If the height changed, flush the accumulated effects
                             // into a new group.
                             message_groups.push(MessageGroup {
-                                sender_id,
+                                origin,
                                 height,
                                 effects,
                             });
@@ -379,7 +379,7 @@ where
                 }
                 if let Some(height) = current_height {
                     message_groups.push(MessageGroup {
-                        sender_id,
+                        origin,
                         height,
                         effects,
                     });
@@ -415,7 +415,7 @@ where
         log::trace!("{} <-- {:?}", self.nickname, request);
         match request {
             CrossChainRequest::UpdateRecipient {
-                sender,
+                origin,
                 recipient,
                 certificates,
             } => {
@@ -435,18 +435,16 @@ where
                             return Err(Error::InvalidCrossChainRequest);
                         }
                     };
-                    ensure!(block.chain_id == sender, Error::InvalidCrossChainRequest);
+                    ensure!(
+                        origin == Origin::Chain(block.chain_id),
+                        Error::InvalidCrossChainRequest
+                    );
                     ensure!(height < Some(block.height), Error::InvalidCrossChainRequest);
                     ensure!(epoch <= Some(block.epoch), Error::InvalidCrossChainRequest);
                     height = Some(block.height);
                     epoch = Some(block.epoch);
                     // Update the staged chain state with the received block.
-                    if chain.receive_block(
-                        block.chain_id,
-                        block.height,
-                        effects,
-                        certificate.hash,
-                    )? {
+                    if chain.receive_block(origin, block.height, effects, certificate.hash)? {
                         self.storage.write_certificate(certificate).await?;
                         need_update = true;
                     }
@@ -476,7 +474,7 @@ where
                 }
                 if let Some(height) = height {
                     let request = CrossChainRequest::ConfirmUpdatedRecipient {
-                        sender,
+                        origin,
                         recipient,
                         height,
                     };
@@ -486,7 +484,7 @@ where
                 }
             }
             CrossChainRequest::ConfirmUpdatedRecipient {
-                sender,
+                origin: Origin::Chain(sender),
                 recipient,
                 height,
             } => {

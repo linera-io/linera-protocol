@@ -5,7 +5,7 @@
 use crate::{
     crypto::*,
     execution::Balance,
-    messages::{BlockHeight, ChainId, Epoch, RoundNumber},
+    messages::{BlockHeight, ChainId, Epoch, Origin, RoundNumber},
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -96,29 +96,26 @@ pub enum Error {
     #[error("A different block for height {0:?} was already locked at round number {1:?}")]
     HasLockedBlock(BlockHeight, RoundNumber),
     #[error(
-        "This replica has not processed any update from chain {sender_id:?} \
+        "This replica has not processed any update from {origin:?} \
         at height {height:?} yet"
     )]
-    MissingCrossChainUpdate {
-        sender_id: ChainId,
-        height: BlockHeight,
-    },
+    MissingCrossChainUpdate { origin: Origin, height: BlockHeight },
     #[error(
-        "Message in block proposal does not match received message from chain {sender_id:?} \
+        "Message in block proposal does not match received message from {origin:?} \
         at height {height:?} and index {index:?}"
     )]
     InvalidMessageContent {
-        sender_id: ChainId,
+        origin: Origin,
         height: BlockHeight,
         index: usize,
     },
     #[error(
         "Message in block proposal does not match the order of received messages from \
-        chain {sender_id:?}: was height {height:?} and index {index:?} \
+        chain {origin:?}: was height {height:?} and index {index:?} \
         instead of {expected_height:?} and {expected_index:?})"
     )]
     InvalidMessageOrder {
-        sender_id: ChainId,
+        origin: Origin,
         height: BlockHeight,
         index: usize,
         expected_height: BlockHeight,
