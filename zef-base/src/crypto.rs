@@ -269,8 +269,7 @@ impl std::fmt::Display for HashValue {
 
 impl std::fmt::Debug for Signature {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let s = hex::encode(&self.0.to_bytes()[0..8]);
-        write!(f, "{}", s)
+        write!(f, "{}", hex::encode(&self.0.to_bytes()[0..8]))
     }
 }
 
