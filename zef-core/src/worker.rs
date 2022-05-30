@@ -504,7 +504,7 @@ where
                             // Refuse to create the chain state if it is still inactive by
                             // now. Accordingly, do not send a confirmation, so that the
                             // message is retried later.
-                            log::warn!("Refusing to store inactive chain {recipient}");
+                            log::warn!("Refusing to store inactive chain {recipient:?}");
                             return Ok(Vec::new());
                         }
                         let epoch = epoch.expect("need_update implies epoch.is_some()");

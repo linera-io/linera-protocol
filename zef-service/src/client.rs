@@ -582,8 +582,7 @@ async fn main() {
         } => {
             let committee_config = CommitteeConfig::read(&committee_config_path)
                 .expect("Unable to read committee config file");
-            let mut genesis_config =
-                GenesisConfig::new(committee_config, ChainId::root(num as usize));
+            let mut genesis_config = GenesisConfig::new(committee_config, ChainId::root(0));
             for i in 0..num {
                 let description = ChainDescription::Root(i as usize);
                 // Create keys.

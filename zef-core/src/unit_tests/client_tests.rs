@@ -720,26 +720,22 @@ async fn test_change_voting_rights() {
     assert!(admin.key_pair().await.is_ok());
     assert_eq!(admin.epoch().await.unwrap(), Epoch::from(1));
 
-    // Sending money from the admin chain is not supported yet.
-    assert!(admin
-        .transfer_to_chain(Amount::from(3), ChainId::root(1), UserData(None),)
+    // Sending money from the admin chain is supported.
+    admin
+        .transfer_to_chain(Amount::from(3), ChainId::root(1), UserData(None))
         .await
-        .is_err());
-    admin.clear_pending_block().await;
+        .unwrap();
 
     // Receiver is a genesis chain so it was not subscribed to the admin automatically.
     assert_eq!(
         receiver.synchronize_balance().await.unwrap(),
-        Balance::from(0)
+        Balance::from(3)
     );
     receiver.process_inbox().await.unwrap();
     assert_eq!(receiver.epoch().await.unwrap(), Epoch::from(0));
 
     // Now subscribe explicitly.
     receiver.subscribe_to_new_committees().await.unwrap();
-    // Have the admin process the subscription
-    admin.synchronize_balance().await.unwrap();
-    admin.process_inbox().await.unwrap();
 
     // Receive the notification to migrate.
     receiver.synchronize_balance().await.unwrap();

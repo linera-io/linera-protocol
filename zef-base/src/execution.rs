@@ -260,10 +260,6 @@ impl ExecutionState {
             Operation::Transfer {
                 amount, recipient, ..
             } => {
-                ensure!(
-                    matches!(self.status, Some(ChainStatus::ManagedBy { .. })),
-                    Error::UnsupportedOperation
-                );
                 ensure!(*amount > Amount::zero(), Error::IncorrectTransferAmount);
                 ensure!(
                     self.balance >= (*amount).into(),
