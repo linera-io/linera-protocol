@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
+use std::collections::VecDeque;
 use zef_base::{chain::ChainState, crypto::*, ensure, error::Error, manager::Outcome, messages::*};
 use zef_storage::Storage;
 
@@ -85,8 +86,9 @@ where
         &mut self,
         certificate: Certificate,
     ) -> Result<ChainInfoResponse, zef_base::error::Error> {
-        let (response, mut requests) = self.handle_certificate(certificate).await?;
-        while let Some(request) = requests.pop() {
+        let (response, requests) = self.handle_certificate(certificate).await?;
+        let mut requests = VecDeque::from(requests);
+        while let Some(request) = requests.pop_front() {
             requests.extend(self.handle_cross_chain_request(request).await?);
         }
         Ok(response)
