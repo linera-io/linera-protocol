@@ -382,7 +382,10 @@ impl ExecutionState {
                 self.committees = committees.clone();
                 Ok(())
             }
-            Effect::OpenChain { .. } | Effect::SubscribeToNewCommittees { .. } => Ok(()),
+            Effect::OpenChain { .. } | Effect::SubscribeToNewCommittees { .. } => {
+                // These special effects are executed immediately when cross-chain requests are received.
+                Ok(())
+            }
             _ => {
                 log::error!("Skipping unexpected received effect: {effect:?}");
                 Ok(())
