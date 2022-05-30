@@ -1,4 +1,4 @@
-FROM debian:11
+FROM debian:11 AS builder
 
 RUN apt-get update && apt-get install -y \
     curl \
@@ -27,6 +27,15 @@ RUN mkdir /opt/zefchain && \
     git checkout main && \
     cargo build --release
 
+FROM debian:11
+
+RUN mkdir -p /opt/zefchain
+
+COPY --from=builder /opt/zefchain/target/release/server /opt/zefchain/
+COPY --from=builder /opt/zefchain/target/release/client /opt/zefchain/
+COPY --from=builder /opt/zefchain/target/release/proxy /opt/zefchain/
+COPY integration-test.sh /opt/zefchain/
+
 WORKDIR /opt/zefchain
 
-CMD cargo test
+CMD /opt/zefchain/integration-test.sh
