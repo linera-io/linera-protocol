@@ -713,6 +713,8 @@ async fn test_change_voting_rights() {
     let mut receiver = builder
         .add_initial_chain(ChainDescription::Root(1), Balance::from(0))
         .await;
+
+    // Create a new committee.
     let voting_rights = builder.initial_committee.voting_rights;
     admin.stage_new_voting_rights(voting_rights).await.unwrap();
     assert_eq!(admin.next_block_height, BlockHeight::from(1));
@@ -721,24 +723,46 @@ async fn test_change_voting_rights() {
     assert_eq!(admin.epoch().await.unwrap(), Epoch::from(1));
 
     // Sending money from the admin chain is supported.
+    let cert1 = admin
+        .transfer_to_chain(Amount::from(2), ChainId::root(1), UserData(None))
+        .await
+        .unwrap();
     admin
-        .transfer_to_chain(Amount::from(3), ChainId::root(1), UserData(None))
+        .transfer_to_chain(Amount::from(1), ChainId::root(1), UserData(None))
         .await
         .unwrap();
 
-    // Receiver is a genesis chain so it was not subscribed to the admin automatically.
+    // Receiver is still at the initial epoch. Therefore the transfer cannot go through yet.
+    assert_eq!(receiver.epoch().await.unwrap(), Epoch::from(0));
     assert_eq!(
         receiver.synchronize_balance().await.unwrap(),
-        Balance::from(3)
+        Balance::from(0)
     );
+    // Receiver is a genesis chain so the migration message is not even in the inbox yet.
     receiver.process_inbox().await.unwrap();
     assert_eq!(receiver.epoch().await.unwrap(), Epoch::from(0));
 
-    // Now subscribe explicitly.
+    // Now subscribe explicitly to migrations.
     receiver.subscribe_to_new_committees().await.unwrap();
 
     // Receive the notification to migrate.
     receiver.synchronize_balance().await.unwrap();
     receiver.process_inbox().await.unwrap();
     assert_eq!(receiver.epoch().await.unwrap(), Epoch::from(1));
+
+    // Manually receive the first transfer.
+    receiver.receive_certificate(cert1).await.unwrap();
+    assert_eq!(
+        receiver.synchronize_balance().await.unwrap(),
+        Balance::from(2)
+    );
+
+    // Poke the admin to retry the one transfer that we haven't manually received.
+    admin.process_inbox().await.unwrap();
+
+    // Finally receive the transfer.
+    assert_eq!(
+        receiver.synchronize_balance().await.unwrap(),
+        Balance::from(3)
+    );
 }
