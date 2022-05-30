@@ -213,7 +213,10 @@ where
     async fn execution_state(&mut self) -> Result<ExecutionState, Error> {
         let query = ChainInfoQuery::new(self.chain_id).with_execution_state();
         let info = self.node_client.handle_chain_info_query(query).await?.info;
-        Ok(info.requested_execution_state.expect("the queried state"))
+        let state = info
+            .requested_execution_state
+            .ok_or(Error::InvalidChainInfoResponse)?;
+        Ok(state)
     }
 
     async fn epoch(&mut self) -> Result<Epoch, anyhow::Error> {
@@ -440,7 +443,7 @@ where
                     let query = ChainInfoQuery::new(chain_id)
                         .with_received_certificates_excluding_first_nth(tracker);
                     let response = client.handle_chain_info_query(query).await?;
-                    // Response are authenticated for accountability.
+                    // Responses are authenticated for accountability.
                     response.check(name)?;
                     let mut certificates = Vec::new();
                     let mut new_tracker = tracker;

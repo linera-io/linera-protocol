@@ -35,9 +35,9 @@ pub struct ExecutionState {
 /// A recipient's address.
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Serialize, Deserialize)]
 pub enum Address {
-    // This is mainly a placeholder for future extensions.
+    /// This is mainly a placeholder for future extensions.
     Burn,
-    // We currently support only one user account per chain.
+    /// We currently support only one user account per chain.
     Account(ChainId),
 }
 
@@ -97,9 +97,9 @@ pub enum Operation {
         admin_id: ChainId,
         next_admin_height: BlockHeight,
     },
-    /// (admin chain only) Remove a committee. Once this message accepted by a chain,
-    /// blocks from the retired epoch will not be accepted until they are followed by a
-    /// block certified a recent committee.
+    /// (admin chain only) Remove a committee. Once this message is accepted by a chain,
+    /// blocks from the retired epoch will not be accepted until they are followed (hence
+    /// re-certified) by a block certified by a recent committee.
     RemoveCommittee { admin_id: ChainId, epoch: Epoch },
 }
 
@@ -391,11 +391,11 @@ impl ExecutionState {
                 committee,
                 admin_id,
             } if self.admin_id() == Ok(*admin_id) => {
-                self.committees.insert(*epoch, committee.clone());
                 ensure!(
                     *epoch > self.epoch.expect("chain is active"),
                     Error::InvalidCrossChainRequest
                 );
+                self.committees.insert(*epoch, committee.clone());
                 self.epoch = Some(*epoch);
                 if let Some(ChainStatus::ManagedBy {
                     next_admin_height, ..
