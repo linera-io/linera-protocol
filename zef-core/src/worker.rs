@@ -508,11 +508,9 @@ where
                             return Ok(Vec::new());
                         }
                         let epoch = epoch.expect("need_update implies epoch.is_some()");
-                        if epoch < chain.state.epoch.expect("chain is active")
-                            && !chain.state.committees.contains_key(&epoch)
-                        {
-                            // Refuse to create the chain state if the latest epoch is not
-                            // recognized. Epochs in the future are ok.
+                        if !chain.state.committees.contains_key(&epoch) {
+                            // Refuse to persist the chain state if the latest epoch in
+                            // the received blocks from this recipient is not recognized.
                             log::warn!("Refusing updates from untrusted epoch {epoch:?}");
                             return Ok(Vec::new());
                         }

@@ -435,7 +435,6 @@ where
     async fn find_received_certificates(&mut self) -> Result<()> {
         let chain_id = self.chain_id;
         let state = self.execution_state().await?;
-        let admin_id = state.admin_id()?;
         let committees = state.committees;
         let epoch = state.epoch.ok_or(Error::InactiveChain(chain_id))?;
         let committee = committees
@@ -463,16 +462,8 @@ where
                             .value
                             .confirmed_block()
                             .ok_or(Error::ClientErrorWhileQueryingCertificate)?;
-                        // Check that certificates  are valid w.r.t one of our trusted
+                        // Check that certificates are valid w.r.t one of our trusted
                         // committees.
-                        if block.chain_id == admin_id {
-                            // That is, unless it comes from the admin chain. We don't
-                            // have a good way to enforce the policy on the admin chain
-                            // yet because subscriptions may accepted in a later epoch.
-                            certificates.push(certificate);
-                            new_tracker += 1;
-                            continue;
-                        }
                         if block.epoch > epoch {
                             // We don't accept a certificate from a committee in the
                             // future.
@@ -762,17 +753,15 @@ where
             .clone();
         let state = self.execution_state().await?;
         if let Some(epoch) = state.epoch {
-            if block.chain_id != state.admin_id()? {
-                ensure!(
-                    block.epoch <= epoch,
-                    "Cannot accept a certificate from an unknown committee in the future. Please synchronize the local chain",
-                );
-                match state.committees.get(&block.epoch) {
-                    Some(committee) => {
-                        certificate.check(committee)?;
-                    }
-                    None => bail!("Cannot accept a certificate from a committee that was retired. Try a newer certificate from the same chain"),
+            ensure!(
+                block.epoch <= epoch,
+                "Cannot accept a certificate from an unknown committee in the future. Please synchronize the local chain",
+            );
+            match state.committees.get(&block.epoch) {
+                Some(committee) => {
+                    certificate.check(committee)?;
                 }
+                None => bail!("Cannot accept a certificate from a committee that was retired. Try a newer certificate from the same chain"),
             }
         }
         // Recover history from the network.
