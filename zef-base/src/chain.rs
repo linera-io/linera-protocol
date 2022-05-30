@@ -50,7 +50,7 @@ pub struct ChainState {
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct OutboxState {
     /// Keep sending these certified blocks of ours until they are acknowledged by
-    /// receivers. Keep the height around so that we can quickly dequeue.
+    /// receivers.
     pub queue: VecDeque<BlockHeight>,
 }
 
