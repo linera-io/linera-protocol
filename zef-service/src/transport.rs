@@ -7,7 +7,7 @@ use clap::arg_enum;
 use futures::{future, Sink, SinkExt, Stream, StreamExt, TryStreamExt};
 use log::*;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, io, net::SocketAddr, sync::Arc};
+use std::{collections::HashMap, io, net::ToSocketAddrs, sync::Arc};
 use tokio::net::{TcpListener, TcpStream, UdpSocket};
 use tokio_util::{codec::Framed, udp::UdpFramed};
 use zef_base::rpc;
@@ -75,7 +75,12 @@ impl<T> Transport for T where
 impl NetworkProtocol {
     /// Create a transport for this protocol.
     pub async fn connect(self, address: String) -> Result<impl Transport, std::io::Error> {
-        let address: SocketAddr = address.parse().expect("Invalid address to connect to");
+        let mut addresses = address
+            .to_socket_addrs()
+            .expect("Invalid address to connect to");
+        let address = addresses
+            .next()
+            .expect("Couldn't resolve address to connect to");
 
         let stream: futures::future::Either<_, _> = match self {
             NetworkProtocol::Udp => {
