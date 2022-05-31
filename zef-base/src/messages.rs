@@ -336,8 +336,8 @@ impl Value {
                 effects,
                 state_hash,
                 ..
-            } => (effects.clone(), *state_hash),
-            Value::ValidatedBlock {
+            }
+            | Value::ValidatedBlock {
                 effects,
                 state_hash,
                 ..
