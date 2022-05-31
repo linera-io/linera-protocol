@@ -183,8 +183,8 @@ impl ExecutionState {
                 match self.status.as_ref() {
                     Some(ChainStatus::ManagedBy {
                         admin_id: id,
-                        subscribed: s,
-                    }) => *s && admin_id == id,
+                        subscribed,
+                    }) => *subscribed && admin_id == id,
                     _ => false,
                 }
             }
@@ -370,7 +370,7 @@ impl ExecutionState {
                 committees,
             } if matches!(
                 &self.status,
-                Some(ChainStatus::ManagedBy { admin_id: id, subscribed: s }) if *s && admin_id == id
+                Some(ChainStatus::ManagedBy { admin_id: id, subscribed }) if *subscribed && admin_id == id
             ) =>
             {
                 // This chain was not yet subscribed at the time earlier epochs were broadcast.
