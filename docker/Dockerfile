@@ -34,8 +34,9 @@ RUN mkdir -p /opt/zefchain
 COPY --from=builder /opt/zefchain/target/release/server /opt/zefchain/
 COPY --from=builder /opt/zefchain/target/release/client /opt/zefchain/
 COPY --from=builder /opt/zefchain/target/release/proxy /opt/zefchain/
-COPY integration-test.sh /opt/zefchain/
+COPY setup.sh /opt/zefchain/
+COPY run-client.sh /opt/zefchain/
+COPY run-server.sh /opt/zefchain/
+COPY run-proxy.sh /opt/zefchain/
 
 WORKDIR /opt/zefchain
-
-CMD /opt/zefchain/integration-test.sh
