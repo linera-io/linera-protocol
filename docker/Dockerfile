@@ -27,16 +27,39 @@ RUN mkdir /opt/zefchain && \
     git checkout main && \
     cargo build --release
 
-FROM debian:11
+FROM debian:11 as setup
 
 RUN mkdir -p /opt/zefchain
 
 COPY --from=builder /opt/zefchain/target/release/server /opt/zefchain/
 COPY --from=builder /opt/zefchain/target/release/client /opt/zefchain/
-COPY --from=builder /opt/zefchain/target/release/proxy /opt/zefchain/
 COPY setup.sh /opt/zefchain/
+
+WORKDIR /opt/zefchain
+
+FROM debian:11 as client
+
+RUN mkdir -p /opt/zefchain
+
+COPY --from=builder /opt/zefchain/target/release/client /opt/zefchain/
 COPY run-client.sh /opt/zefchain/
+
+WORKDIR /opt/zefchain
+
+FROM debian:11 as server
+
+RUN mkdir -p /opt/zefchain
+
+COPY --from=builder /opt/zefchain/target/release/server /opt/zefchain/
 COPY run-server.sh /opt/zefchain/
+
+WORKDIR /opt/zefchain
+
+FROM debian:11 as proxy
+
+RUN mkdir -p /opt/zefchain
+
+COPY --from=builder /opt/zefchain/target/release/proxy /opt/zefchain/
 COPY run-proxy.sh /opt/zefchain/
 
 WORKDIR /opt/zefchain
