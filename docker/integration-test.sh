@@ -1,62 +1,74 @@
 #!/bin/bash
 
-# Create configuration files for 4 validators with 4 shards each.
-# * Private server states are stored in `server*.json`.
-# * `committee.json` is the public description of the FastPay committee.
-./server generate-all --validators \
-   server_1.json:127.0.0.1:9100:udp:127.0.0.1:9101:127.0.0.1:9102:127.0.0.1:9103:127.0.0.1:9104 \
-   server_2.json:127.0.0.1:9200:udp:127.0.0.1:9201:127.0.0.1:9202:127.0.0.1:9203:127.0.0.1:9204 \
-   server_3.json:127.0.0.1:9300:udp:127.0.0.1:9301:127.0.0.1:9302:127.0.0.1:9303:127.0.0.1:9304 \
-   server_4.json:127.0.0.1:9400:udp:127.0.0.1:9401:127.0.0.1:9402:127.0.0.1:9403:127.0.0.1:9404 \
---committee committee.json
+NUM_VALIDATORS="$1"
+NUM_SHARDS="$2"
 
-# Create configuration files for 1000 user chains.
-# * Private chain states are stored in one local wallet `wallet.json`.
-# * `genesis.json` will contain the initial balances of chains as well as the initial committee.
-./client --wallet wallet.json --genesis genesis.json create_genesis_config 1000 --initial-funding 100 --committee committee.json
+if [ -z "$NUM_VALIDATORS" ] || [ -z "$NUM_SHARDS" ]; then
+    echo "USAGE: ./integration-test.sh NUM_VALIDATORS NUM_SHARDS" >&2
+    exit 1
+fi
 
-# Start servers and create initial chains in DB
-for I in 1 2 3 4
-do
-    ./proxy server_"$I".json &
-
-    for J in $(seq 0 3)
-    do
-        ./server run --storage server_"$I"_"$J".db --server server_"$I".json --shard "$J" --genesis genesis.json &
+# Generate one volume for each validator's configuration files
+server_volumes() {
+    for server in $(seq 1 ${NUM_VALIDATORS}); do
+        echo "  server_${server}:"
     done
- done
+}
 
-LAST_PID="$!"
+# Generate server volume mounts for the setup container
+server_volumes_for_setup() {
+    for server in $(seq 1 ${NUM_VALIDATORS}); do
+        echo "      - server_${server}:/config/server_${server}"
+    done
+}
 
-# Command line prefix for client calls
-CLIENT=(./client --storage client.db --wallet wallet.json --genesis genesis.json)
+# Generate one service for each validator
+server_services() {
+    for server in $(seq 1 ${NUM_VALIDATORS}); do
+        cat << EOF
+  server_${server}:
+    build: .
+    command: ./run-server.sh ${NUM_SHARDS}
+    volumes:
+      - common:/config/common:ro
+      - server_${server}:/config/server:ro
+    depends_on:
+      - setup
+  proxy_${server}:
+    build: .
+    command: ./run-proxy.sh
+    volumes:
+      - server_${server}:/config/server:ro
+    depends_on:
+      - setup
+EOF
+    done
+}
 
-# Query balance for first and last user chain
-CHAIN1="7817752ff06b8266d77df8febf5c4b524cec096bd83dc54f989074fb94f833737ae984f32be2cee1dfab766fe2d0c726503c4d97117eb59023e9cc65a8ecd1f7"
-CHAIN2="8ec607f670dd82d6986e95815b6ba64e4aad748e6f023f8dde42439222959c0c4aa9d3af00a983deec3f1ab0e64ef27ff80a1a8e1c1990be677ef5cfb316de85"
-${CLIENT[@]} query_balance "$CHAIN1"
-${CLIENT[@]} query_balance "$CHAIN2"
+# Generate final Docker Compose configuration
+cat > docker-compose.yml << EOF
+volumes:
+  common:
+  client:
+$(server_volumes)
 
-# Transfer 10 units then 5 back
-${CLIENT[@]} transfer 10 --from "$CHAIN1" --to "$CHAIN2"
-${CLIENT[@]} transfer 5 --from "$CHAIN2" --to "$CHAIN1"
+services:
+  setup:
+    build: .
+    command: ./setup.sh ${NUM_VALIDATORS} ${NUM_SHARDS}
+    volumes:
+      - common:/config/common
+      - client:/config/client
+$(server_volumes_for_setup)
+$(server_services)
+  client:
+    build: .
+    command: ./run-client.sh
+    volumes:
+      - common:/config/common:ro
+      - client:/config/client
+    depends_on:
+      - setup
+EOF
 
-# Restart last server
-kill "$LAST_PID"
-./server run --storage server_"$I"_"$J".db --server server_"$I".json --shard "$J" --genesis genesis.json &
-
-# Query balances again
-${CLIENT[@]} query_balance "$CHAIN1"
-${CLIENT[@]} query_balance "$CHAIN2"
-
-# Launch local benchmark using all user chains
-${CLIENT[@]} benchmark --max-in-flight 50
-
-# Create derived chain
-CHAIN3="`${CLIENT[@]} open_chain --from "$CHAIN1"`"
-
-# Inspect state of derived chain
-fgrep '"chain_id":"'$CHAIN3'"' wallet.json
-
-# Query the balance of the first chain
-${CLIENT[@]} query_balance "$CHAIN1"
+docker compose up
