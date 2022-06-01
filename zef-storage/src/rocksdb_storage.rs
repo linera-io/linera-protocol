@@ -52,7 +52,11 @@ fn open_db(path: &Path) -> Result<rocksdb::DB, rocksdb::Error> {
     let cfs = match rocksdb::DB::list_cf(&rocksdb::Options::default(), path) {
         Ok(cfs) => cfs,
         // Need to declare all the potential Column Families in advance to keep RocksDB immutable
-        Err(_e) => vec![String::from("default"), String::from("ChainState"), String::from("Certificate")],
+        Err(_e) => vec![
+            String::from("default"),
+            String::from("ChainState"),
+            String::from("Certificate"),
+        ],
     };
 
     let mut v_cf: Vec<rocksdb::ColumnFamilyDescriptor> = Vec::new();
@@ -167,16 +171,15 @@ pub struct RocksdbStoreClient(Arc<RocksdbStore>);
 
 impl RocksdbStoreClient {
     pub fn new(path: PathBuf) -> Result<Self, rocksdb::Error> {
-        Ok(RocksdbStoreClient(Arc::new(RocksdbStore::new(
-            path,
-        )?)))
+        Ok(RocksdbStoreClient(Arc::new(RocksdbStore::new(path)?)))
     }
 }
 
 #[async_trait]
 impl Storage for RocksdbStoreClient {
     async fn read_chain_or_default(&mut self, id: ChainId) -> Result<ChainState, Error> {
-        Ok(self.0
+        Ok(self
+            .0
             .read(&id)
             .await?
             .unwrap_or_else(|| ChainState::new(id)))
