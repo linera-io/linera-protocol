@@ -167,20 +167,20 @@ impl RocksdbStore {
 }
 
 #[derive(Clone)]
-pub struct RocksdbStoreClient(Arc<Mutex<RocksdbStore>>);
+pub struct RocksdbStoreClient(Arc<RocksdbStore>);
 
 impl RocksdbStoreClient {
     pub fn new(path: PathBuf) -> Result<Self, rocksdb::Error> {
-        Ok(RocksdbStoreClient(Arc::new(Mutex::new(RocksdbStore::new(
+        Ok(RocksdbStoreClient(Arc::new(RocksdbStore::new(
             path,
-        )?))))
+        )?)))
     }
 }
 
 #[async_trait]
 impl Storage for RocksdbStoreClient {
     async fn read_chain_or_default(&mut self, id: ChainId) -> Result<ChainState, Error> {
-        let mut store = self.0.lock().await;
+        let mut store = self.0.clone();
         Ok(store
             .read(&id)
             .await?
@@ -188,17 +188,17 @@ impl Storage for RocksdbStoreClient {
     }
 
     async fn write_chain(&mut self, state: ChainState) -> Result<(), Error> {
-        let mut store = self.0.lock().await;
+        let mut store = self.0;
         store.write(&state.state.chain_id, &state).await
     }
 
     async fn remove_chain(&mut self, id: ChainId) -> Result<(), Error> {
-        let mut store = self.0.lock().await;
+        let mut store = self.0;
         store.remove::<_, ChainState>(&id).await
     }
 
     async fn read_certificate(&mut self, hash: HashValue) -> Result<Certificate, Error> {
-        let mut store = self.0.lock().await;
+        let mut store = self.0;
         store
             .read(&hash)
             .await?
@@ -206,7 +206,7 @@ impl Storage for RocksdbStoreClient {
     }
 
     async fn write_certificate(&mut self, certificate: Certificate) -> Result<(), Error> {
-        let mut store = self.0.lock().await;
+        let mut store = self.0;
         store.write(&certificate.hash, &certificate).await
     }
 }
