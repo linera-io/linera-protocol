@@ -1,0 +1,43 @@
+#!/bin/bash -x
+
+NUM_VALIDATORS="$1"
+NUM_SHARDS="$2"
+
+if [ -z "$NUM_VALIDATORS" ] || [ -z "$NUM_SHARDS" ]; then
+    echo "USAGE: ./setup.sh NUM_VALIDATORS NUM_SHARDS" >&2
+    exit 1
+fi
+
+# Clean up data files
+rm -rf config/*
+
+# Creare validator configuration directories and generate the command line options
+validator_options() {
+    for server in $(seq 1 ${NUM_VALIDATORS}); do
+        shards="$(seq -s':' 9101 "$(expr 9100 + ${NUM_SHARDS})" | sed -e "s/[0-9]*/zefchain-server_${server}-1:&/g")"
+        echo "server_${server}.json:zefchain-proxy_${server}-1:9100:tcp:${shards}"
+    done
+}
+
+# Create configuration files for ${NUM_VALIDATORS} validators with ${NUM_SHARDS} shards each.
+# * Private server states are stored in `server*.json`.
+# * `committee.json` is the public description of the FastPay committee.
+VALIDATORS=($(validator_options))
+./server generate-all --validators ${VALIDATORS[@]} --committee committee.json
+
+# Create configuration files for 1000 user chains.
+# * Private chain states are stored in one local wallet `wallet.json`.
+# * `genesis.json` will contain the initial balances of chains as well as the initial committee.
+./client \
+    --wallet wallet.json \
+    --genesis genesis.json \
+    create_genesis_config 1000 \
+    --initial-funding 100 \
+    --committee committee.json
+
+mv genesis.json /config/common/
+mv wallet.json /config/client/
+
+for server in $(seq 1 ${NUM_VALIDATORS}); do
+    mv "server_${server}.json" "/config/server_${server}/config.json"
+done
