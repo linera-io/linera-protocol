@@ -35,9 +35,13 @@ VALIDATORS=($(validator_options))
     --initial-funding 100 \
     --committee committee.json
 
-mv genesis.json /config/common/
-mv wallet.json /config/client/
+mkdir /config/
+mv genesis.json /config/
+mv wallet.json /config/
 
 for server in $(seq 1 ${NUM_VALIDATORS}); do
-    mv "server_${server}.json" "/config/server_${server}/config.json"
+    mv "server_${server}.json" /config/
 done
+
+# Run a HTTP server to serve the configuration files
+mini_httpd -p 8080 -d /config -D -r
