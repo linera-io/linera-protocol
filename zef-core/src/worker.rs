@@ -129,8 +129,8 @@ where
             })
         }
         if let Some(height) = chain.admin_channel.block_height {
-            for (&recipient, &flag) in &chain.admin_channel.subscribers {
-                if !flag {
+            for (&recipient, &is_up_to_date) in &chain.admin_channel.subscribers {
+                if !is_up_to_date {
                     let certificate = self
                         .storage
                         .read_certificate(chain.confirmed_log[usize::from(height)])
@@ -157,8 +157,8 @@ where
     ) -> Result<Vec<CrossChainRequest>, Error> {
         let mut continuation = Vec::new();
         if let Some(height) = chain.admin_channel.block_height {
-            if let Some(flag) = chain.admin_channel.subscribers.get(&recipient) {
-                if !flag {
+            if let Some(is_up_to_date) = chain.admin_channel.subscribers.get(&recipient) {
+                if !is_up_to_date {
                     let certificate = self
                         .storage
                         .read_certificate(chain.confirmed_log[usize::from(height)])
