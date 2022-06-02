@@ -162,7 +162,7 @@ fn make_transfer_certificate(
         previous_confirmed_block,
     );
     let effects = match recipient {
-        Address::Account(id) => vec![Effect::Transfer {
+        Address::Account(id) => vec![Effect::Credit {
             recipient: id,
             amount,
         }],
@@ -469,11 +469,11 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                 height: BlockHeight::from(0),
             },
             effects: vec![
-                Effect::Transfer {
+                Effect::Credit {
                     recipient: ChainId::root(2),
                     amount: Amount::from(1),
                 },
-                Effect::Transfer {
+                Effect::Credit {
                     recipient: ChainId::root(2),
                     amount: Amount::from(2),
                 },
@@ -508,7 +508,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                 previous_block_hash: Some(certificate0.hash),
                 height: BlockHeight::from(1),
             },
-            effects: vec![Effect::Transfer {
+            effects: vec![Effect::Credit {
                 recipient: ChainId::root(2),
                 amount: Amount::from(3),
             }],
@@ -558,14 +558,14 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                     effects: vec![
                         (
                             0,
-                            Effect::Transfer {
+                            Effect::Credit {
                                 recipient: ChainId::root(2),
                                 amount: Amount::from(1),
                             },
                         ),
                         (
                             1,
-                            Effect::Transfer {
+                            Effect::Credit {
                                 recipient: ChainId::root(2),
                                 amount: Amount::from(2),
                             },
@@ -577,7 +577,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                     height: BlockHeight::from(1),
                     effects: vec![(
                         0,
-                        Effect::Transfer {
+                        Effect::Credit {
                             recipient: ChainId::root(2),
                             amount: Amount::from(2), // wrong
                         },
@@ -605,14 +605,14 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                     effects: vec![
                         (
                             1,
-                            Effect::Transfer {
+                            Effect::Credit {
                                 recipient: ChainId::root(2),
                                 amount: Amount::from(2),
                             },
                         ),
                         (
                             0,
-                            Effect::Transfer {
+                            Effect::Credit {
                                 recipient: ChainId::root(2),
                                 amount: Amount::from(1),
                             },
@@ -624,7 +624,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                     height: BlockHeight::from(1),
                     effects: vec![(
                         0,
-                        Effect::Transfer {
+                        Effect::Credit {
                             recipient: ChainId::root(2),
                             amount: Amount::from(3),
                         },
@@ -651,7 +651,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                     height: BlockHeight::from(1),
                     effects: vec![(
                         0,
-                        Effect::Transfer {
+                        Effect::Credit {
                             recipient: ChainId::root(2),
                             amount: Amount::from(3),
                         },
@@ -663,14 +663,14 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                     effects: vec![
                         (
                             0,
-                            Effect::Transfer {
+                            Effect::Credit {
                                 recipient: ChainId::root(2),
                                 amount: Amount::from(1),
                             },
                         ),
                         (
                             1,
-                            Effect::Transfer {
+                            Effect::Credit {
                                 recipient: ChainId::root(2),
                                 amount: Amount::from(2),
                             },
@@ -698,7 +698,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                     height: BlockHeight::from(0),
                     effects: vec![(
                         0,
-                        Effect::Transfer {
+                        Effect::Credit {
                             recipient: ChainId::root(2),
                             amount: Amount::from(1),
                         },
@@ -709,7 +709,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                     height: BlockHeight::from(1),
                     effects: vec![(
                         0,
-                        Effect::Transfer {
+                        Effect::Credit {
                             recipient: ChainId::root(2),
                             amount: Amount::from(3),
                         },
@@ -735,7 +735,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                 height: BlockHeight::from(0),
                 effects: vec![(
                     0,
-                    Effect::Transfer {
+                    Effect::Credit {
                         recipient: ChainId::root(2),
                         amount: Amount::from(1),
                     },
@@ -753,7 +753,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             &worker,
             Value::ConfirmedBlock {
                 block: block_proposal.content.block,
-                effects: vec![Effect::Transfer {
+                effects: vec![Effect::Credit {
                     recipient: ChainId::root(3),
                     amount: Amount::from(1),
                 }],
@@ -786,7 +786,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                     height: BlockHeight::from(0),
                     effects: vec![(
                         1,
-                        Effect::Transfer {
+                        Effect::Credit {
                             recipient: ChainId::root(2),
                             amount: Amount::from(2),
                         },
@@ -797,7 +797,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                     height: BlockHeight::from(1),
                     effects: vec![(
                         0,
-                        Effect::Transfer {
+                        Effect::Credit {
                             recipient: ChainId::root(2),
                             amount: Amount::from(3),
                         },
@@ -1016,7 +1016,7 @@ async fn test_handle_certificate_with_anticipated_incoming_message() {
             height: BlockHeight::from(0),
             effects: vec![(
                 0,
-                Effect::Transfer {
+                Effect::Credit {
                     recipient: ChainId::root(1),
                     amount: Amount::from(995),
                 },
@@ -1054,7 +1054,7 @@ async fn test_handle_certificate_with_anticipated_incoming_message() {
         .is_empty(),);
     assert!(matches!(
         chain.inboxes.get(&Origin::Chain(ChainId::root(3))).unwrap().expected_events.front().unwrap(),
-        Event { height, index: 0, effect: Effect::Transfer { amount, .. }} if *height == BlockHeight::from(0) && *amount == Amount::from(995),
+        Event { height, index: 0, effect: Effect::Credit { amount, .. }} if *height == BlockHeight::from(0) && *amount == Amount::from(995),
     ));
     assert_eq!(chain.confirmed_log.len(), 1);
     assert_eq!(Some(certificate.hash), chain.block_hash);
@@ -1152,7 +1152,7 @@ async fn test_handle_certificate_receiver_equal_sender() {
     );
     assert!(matches!(
         chain.inboxes.get(&Origin::Chain(ChainId::root(1))).unwrap().received_events.front().unwrap(),
-        Event { height, index: 0, effect: Effect::Transfer { amount, .. }} if *height == BlockHeight::from(0) && *amount == Amount::from(1),
+        Event { height, index: 0, effect: Effect::Credit { amount, .. }} if *height == BlockHeight::from(0) && *amount == Amount::from(1),
     ));
     assert_eq!(BlockHeight::from(1), chain.next_block_height);
     assert_eq!(chain.confirmed_log.len(), 1);
@@ -1204,7 +1204,7 @@ async fn test_handle_cross_chain_request() {
     );
     assert!(matches!(
         chain.inboxes.get(&Origin::Chain(ChainId::root(1))).unwrap().received_events.front().unwrap(),
-        Event { height, index: 0, effect: Effect::Transfer { amount, .. }} if *height == BlockHeight::from(0) && *amount == Amount::from(10),
+        Event { height, index: 0, effect: Effect::Credit { amount, .. }} if *height == BlockHeight::from(0) && *amount == Amount::from(10),
     ));
     assert_eq!(chain.confirmed_log.len(), 0);
     assert_eq!(None, chain.block_hash);
@@ -1331,7 +1331,7 @@ async fn test_handle_certificate_to_active_recipient() {
             height: BlockHeight::from(0),
             effects: vec![(
                 0,
-                Effect::Transfer {
+                Effect::Credit {
                     recipient: ChainId::root(2),
                     amount: Amount::from(5),
                 },

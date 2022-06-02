@@ -109,8 +109,8 @@ pub enum ChainStatus {
 /// The effect of an operation to be performed on a remote chain.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Effect {
-    /// Transfer `amount` units of value to the recipient.
-    Transfer { recipient: ChainId, amount: Amount },
+    /// Credit `amount` units of value to the recipient.
+    Credit { recipient: ChainId, amount: Amount },
     /// Create (or activate) a new chain by installing the given authentication key.
     OpenChain {
         id: ChainId,
@@ -166,7 +166,7 @@ impl ExecutionState {
     pub(crate) fn is_recipient(&self, effect: &Effect) -> bool {
         use Effect::*;
         match effect {
-            Transfer { recipient, .. } => {
+            Credit { recipient, .. } => {
                 // We are the recipient of the transfer.
                 self.chain_id == *recipient
             }
@@ -271,7 +271,7 @@ impl ExecutionState {
                 let application = match recipient {
                     Address::Burn => ApplicationResult::default(),
                     Address::Account(id) => ApplicationResult {
-                        effects: vec![Effect::Transfer {
+                        effects: vec![Effect::Credit {
                             amount: *amount,
                             recipient: *id,
                         }],
@@ -357,7 +357,7 @@ impl ExecutionState {
     /// Effects must be executed by order of heights in the sender's chain.
     pub(crate) fn apply_effect(&mut self, chain_id: ChainId, effect: &Effect) -> Result<(), Error> {
         match effect {
-            Effect::Transfer { amount, recipient } if chain_id == *recipient => {
+            Effect::Credit { amount, recipient } if chain_id == *recipient => {
                 self.balance = self
                     .balance
                     .try_add((*amount).into())

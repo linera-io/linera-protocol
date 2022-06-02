@@ -224,7 +224,7 @@ CrossChainRequest:
 Effect:
   ENUM:
     0:
-      Transfer:
+      Credit:
         STRUCT:
           - recipient:
               TYPENAME: ChainId
