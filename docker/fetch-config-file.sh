@@ -7,6 +7,6 @@ if [ -z "$FILE" ]; then
     exit 1
 fi
 
-while ! curl -sO "http://zefchain-setup-1:8080/$FILE"; do
+while ! curl -sO "http://setup/$FILE"; do
     sleep 1
 done
