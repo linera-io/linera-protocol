@@ -1,9 +1,9 @@
-#!/bin/bash -e
+#!/bin/bash -xe
 
 ./fetch-config-file.sh genesis.json
 ./fetch-config-file.sh wallet.json
 
-sleep 5
+sleep 30
 
 # Command line prefix for client calls
 CLIENT=(./client --storage client.db --wallet wallet.json --genesis genesis.json)
