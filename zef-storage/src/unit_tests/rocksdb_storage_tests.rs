@@ -63,6 +63,7 @@ async fn test_rocksdb_persistance_across_writes() {
     };
     let value = Value::ConfirmedBlock {
         block,
+        effects: Vec::new(),
         state_hash: HashValue::new(&ExecutionState::new(ChainId::root(1))),
     };
     let certificate = Certificate::new(value, vec![]);
