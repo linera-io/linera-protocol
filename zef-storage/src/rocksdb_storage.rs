@@ -53,9 +53,9 @@ fn open_db(path: &Path) -> Result<rocksdb::DB, rocksdb::Error> {
         Ok(cfs) => cfs,
         // Need to declare all the potential Column Families in advance to keep RocksDB immutable
         Err(_e) => vec![
-            String::from("default"),
-            String::from("ChainState"),
-            String::from("Certificate"),
+            "default".to_string(),
+            serde_name::trace_name::<ChainState>().unwrap().to_string(),
+            serde_name::trace_name::<Certificate>().unwrap().to_string(),
         ],
     };
 

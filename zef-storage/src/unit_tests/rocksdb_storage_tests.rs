@@ -28,8 +28,8 @@ async fn test_rocksdb_storage_for_chains() {
 async fn test_rocksdb_storage_for_certificates() {
     let dir = tempfile::TempDir::new().unwrap();
     // Repeat read/write to catch issues with opening the DB multiple times.
+    let mut client = RocksdbStoreClient::new(dir.path().to_path_buf()).unwrap();
     for i in 0..2 {
-        let mut client = RocksdbStoreClient::new(dir.path().to_path_buf()).unwrap();
         let block = Block {
             epoch: Epoch::from(0),
             chain_id: ChainId::root(i),
@@ -54,6 +54,7 @@ async fn test_rocksdb_storage_for_certificates() {
 async fn test_rocksdb_persistance_across_writes() {
     let dir = tempfile::TempDir::new().unwrap();
     let block = Block {
+        epoch: Epoch::from(0),
         chain_id: ChainId::root(1),
         incoming_messages: Vec::new(),
         operations: vec![Operation::CloseChain],
