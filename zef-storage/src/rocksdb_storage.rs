@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::Storage;
 use async_trait::async_trait;
-use futures::lock::Mutex;
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
@@ -52,7 +51,12 @@ impl<'db> ColumnHandle<'db> {
 fn open_db(path: &Path) -> Result<rocksdb::DB, rocksdb::Error> {
     let cfs = match rocksdb::DB::list_cf(&rocksdb::Options::default(), path) {
         Ok(cfs) => cfs,
-        Err(_e) => vec![String::from("None")],
+        // Need to declare all the potential Column Families in advance to keep RocksDB immutable
+        Err(_e) => vec![
+            "default".to_string(),
+            serde_name::trace_name::<ChainState>().unwrap().to_string(),
+            serde_name::trace_name::<Certificate>().unwrap().to_string(),
+        ],
     };
 
     let mut v_cf: Vec<rocksdb::ColumnFamilyDescriptor> = Vec::new();
@@ -78,21 +82,17 @@ impl RocksdbStore {
         })
     }
 
-    fn get_db_handler(&mut self, kind: &str) -> Result<ColumnHandle<'_>, rocksdb::Error> {
-        if self.db.cf_handle(kind).is_none() {
-            self.db.create_cf(kind, &rocksdb::Options::default())?;
-        }
-
+    fn get_db_handler(&self, kind: &str) -> Result<ColumnHandle<'_>, rocksdb::Error> {
         let handle = self
             .db
             .cf_handle(kind)
-            .expect("Unable to create Rocksdb ColumnFamily");
+            .expect("Unable to access a Rocksdb ColumnFamily");
 
         Ok(ColumnHandle::new(&self.db, handle))
     }
 
     async fn read_value(
-        &mut self,
+        &self,
         kind: &str,
         key: &[u8],
     ) -> Result<std::option::Option<Vec<u8>>, rocksdb::Error> {
@@ -100,7 +100,7 @@ impl RocksdbStore {
     }
 
     async fn write_value(
-        &mut self,
+        &self,
         kind: &str,
         key: &[u8],
         value: &[u8],
@@ -108,11 +108,11 @@ impl RocksdbStore {
         self.get_db_handler(kind)?.put(key, value)
     }
 
-    async fn remove_value(&mut self, kind: &str, key: &[u8]) -> Result<(), rocksdb::Error> {
+    async fn remove_value(&self, kind: &str, key: &[u8]) -> Result<(), rocksdb::Error> {
         self.get_db_handler(kind)?.delete(key)
     }
 
-    async fn read<K, V>(&mut self, key: &K) -> Result<Option<V>, Error>
+    async fn read<K, V>(&self, key: &K) -> Result<Option<V>, Error>
     where
         K: serde::Serialize + std::fmt::Debug,
         V: serde::de::DeserializeOwned,
@@ -134,7 +134,7 @@ impl RocksdbStore {
         Ok(result)
     }
 
-    async fn write<'b, K, V>(&mut self, key: &K, value: &V) -> Result<(), Error>
+    async fn write<'b, K, V>(&self, key: &K, value: &V) -> Result<(), Error>
     where
         K: serde::Serialize + std::fmt::Debug,
         V: serde::Serialize + serde::Deserialize<'b> + std::fmt::Debug,
@@ -150,7 +150,7 @@ impl RocksdbStore {
         Ok(())
     }
 
-    async fn remove<K, V>(&mut self, key: &K) -> Result<(), Error>
+    async fn remove<K, V>(&self, key: &K) -> Result<(), Error>
     where
         K: serde::Serialize + std::fmt::Debug,
         V: serde::de::DeserializeOwned,
@@ -167,46 +167,40 @@ impl RocksdbStore {
 }
 
 #[derive(Clone)]
-pub struct RocksdbStoreClient(Arc<Mutex<RocksdbStore>>);
+pub struct RocksdbStoreClient(Arc<RocksdbStore>);
 
 impl RocksdbStoreClient {
     pub fn new(path: PathBuf) -> Result<Self, rocksdb::Error> {
-        Ok(RocksdbStoreClient(Arc::new(Mutex::new(RocksdbStore::new(
-            path,
-        )?))))
+        Ok(RocksdbStoreClient(Arc::new(RocksdbStore::new(path)?)))
     }
 }
 
 #[async_trait]
 impl Storage for RocksdbStoreClient {
     async fn read_chain_or_default(&mut self, id: ChainId) -> Result<ChainState, Error> {
-        let mut store = self.0.lock().await;
-        Ok(store
+        Ok(self
+            .0
             .read(&id)
             .await?
             .unwrap_or_else(|| ChainState::new(id)))
     }
 
     async fn write_chain(&mut self, state: ChainState) -> Result<(), Error> {
-        let mut store = self.0.lock().await;
-        store.write(&state.state.chain_id, &state).await
+        self.0.write(&state.state.chain_id, &state).await
     }
 
     async fn remove_chain(&mut self, id: ChainId) -> Result<(), Error> {
-        let mut store = self.0.lock().await;
-        store.remove::<_, ChainState>(&id).await
+        self.0.remove::<_, ChainState>(&id).await
     }
 
     async fn read_certificate(&mut self, hash: HashValue) -> Result<Certificate, Error> {
-        let mut store = self.0.lock().await;
-        store
+        self.0
             .read(&hash)
             .await?
             .ok_or(Error::MissingCertificate { hash })
     }
 
     async fn write_certificate(&mut self, certificate: Certificate) -> Result<(), Error> {
-        let mut store = self.0.lock().await;
-        store.write(&certificate.hash, &certificate).await
+        self.0.write(&certificate.hash, &certificate).await
     }
 }
