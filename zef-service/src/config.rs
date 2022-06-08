@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::transport::NetworkProtocol;
+use crate::network::ValidatorNetworkConfig;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
@@ -38,22 +38,16 @@ pub trait Export: Serialize {
     }
 }
 
+/// The (public) configuration of a validator.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ValidatorConfig {
-    pub network_protocol: NetworkProtocol,
+    /// The public key of the validator.
     pub name: ValidatorName,
-    pub host: String,
-    pub base_port: u32,
-    pub num_shards: u32,
+    /// The network configuration for the validator.
+    pub network: ValidatorNetworkConfig,
 }
 
-impl ValidatorConfig {
-    pub fn print(&self) {
-        let data = serde_json::to_string(self).unwrap();
-        println!("{}", data);
-    }
-}
-
+/// The private configuration of a validator service.
 #[derive(Serialize, Deserialize)]
 pub struct ValidatorServerConfig {
     pub validator: ValidatorConfig,
@@ -63,6 +57,7 @@ pub struct ValidatorServerConfig {
 impl Import for ValidatorServerConfig {}
 impl Export for ValidatorServerConfig {}
 
+/// The (public) configuration for all validators.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CommitteeConfig {
     pub validators: Vec<ValidatorConfig>,

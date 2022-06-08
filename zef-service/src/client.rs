@@ -85,32 +85,23 @@ impl ClientContext {
     fn make_validator_clients(&self) -> Vec<(ValidatorName, network::Client)> {
         let mut validator_clients = Vec::new();
         for config in &self.committee_config.validators {
-            let config = config.clone();
-            let client = network::Client::new(
-                config.network_protocol,
-                config.host,
-                config.base_port,
-                config.num_shards,
-                self.send_timeout,
-                self.recv_timeout,
-            );
+            let client =
+                network::Client::new(config.network.clone(), self.send_timeout, self.recv_timeout);
             validator_clients.push((config.name, client));
         }
         validator_clients
     }
 
-    fn make_validator_mass_clients(&self, max_in_flight: u64) -> Vec<(u32, network::MassClient)> {
+    fn make_validator_mass_clients(&self, max_in_flight: u64) -> Vec<network::MassClient> {
         let mut validator_clients = Vec::new();
         for config in &self.committee_config.validators {
             let client = network::MassClient::new(
-                config.network_protocol,
-                config.host.clone(),
-                config.base_port,
+                config.network.clone(),
                 self.send_timeout,
                 self.recv_timeout,
-                max_in_flight / config.num_shards as u64, // Distribute window to diff shards
+                max_in_flight / config.network.shards.len() as u64, // Distribute window to diff shards
             );
-            validator_clients.push((config.num_shards, client));
+            validator_clients.push(client);
         }
         validator_clients
     }
@@ -227,13 +218,13 @@ impl ClientContext {
         info!("Broadcasting {} {}", proposals.len(), phase);
         let validator_clients = self.make_validator_mass_clients(max_in_flight);
         let mut streams = Vec::new();
-        for (num_shards, client) in validator_clients {
+        for client in validator_clients {
             // Re-index proposals by shard for this particular validator client.
             let mut sharded_blocks = HashMap::new();
             for (chain_id, message) in &proposals {
-                let shard = network::get_shard(num_shards, *chain_id);
+                let shard_id = client.network.get_shard_id(*chain_id);
                 sharded_blocks
-                    .entry(shard)
+                    .entry(shard_id)
                     .or_insert_with(Vec::new)
                     .push(message.clone());
             }
