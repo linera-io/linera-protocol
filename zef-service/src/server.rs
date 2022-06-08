@@ -175,13 +175,6 @@ enum ServerCommands {
         shard: Option<u32>,
     },
 
-    /// Generate a new server configuration and output its public description
-    #[structopt(name = "generate")]
-    Generate {
-        #[structopt(flatten)]
-        options: ValidatorOptions,
-    },
-
     /// Act as a trusted third-party and generate all server configurations
     #[structopt(name = "generate-all")]
     GenerateAll {
@@ -261,16 +254,6 @@ async fn main() {
                 });
             }
             join_all(handles).await;
-        }
-
-        ServerCommands::Generate { options } => {
-            let path = options.server_config_path.clone();
-            let server = make_server_config(options);
-            server
-                .write(&path)
-                .expect("Unable to write server config file");
-            info!("Wrote server config file");
-            server.validator.print();
         }
 
         ServerCommands::GenerateAll {
