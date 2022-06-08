@@ -210,9 +210,6 @@ async fn main() {
             genesis_config_path,
             shard,
         } => {
-            #[cfg(feature = "benchmark")]
-            warn!("The server is running in benchmark mode: Do not use it in production");
-
             let genesis_config = GenesisConfig::read(&genesis_config_path)
                 .expect("Fail to read initial chain config");
             let server_config = ValidatorServerConfig::read(&server_config_path)
@@ -287,7 +284,6 @@ async fn main() {
                 server
                     .write(&path)
                     .expect("Unable to write server config file");
-                #[cfg(not(feature = "benchmark"))]
                 info!("Wrote server config {}", path.to_str().unwrap());
                 config_validators.push(server.validator);
             }
@@ -297,7 +293,6 @@ async fn main() {
             config
                 .write(&committee)
                 .expect("Unable to write committee description");
-            #[cfg(not(feature = "benchmark"))]
             info!("Wrote committee config {}", committee.to_str().unwrap());
         }
     }

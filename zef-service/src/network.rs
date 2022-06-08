@@ -173,16 +173,7 @@ where
             cross_chain_sender,
         };
         // Launch server for the appropriate protocol.
-        #[cfg(feature = "benchmark")]
-        {
-            let _protocol = protocol;
-            BenchmarkServer::spawn(address, state)
-        }
-
-        #[cfg(not(feature = "benchmark"))]
-        {
-            protocol.spawn_server(&address, state).await
-        }
+        protocol.spawn_server(&address, state).await
     }
 }
 
