@@ -37,10 +37,10 @@ trap 'kill $(jobs -p)' EXIT
 # * Private server states are stored in `server*.json`.
 # * `committee.json` is the public description of the FastPay committee.
 ./server generate-all --validators \
-   server_1.json:udp:127.0.0.1:9100:4 \
-   server_2.json:udp:127.0.0.1:9200:4 \
-   server_3.json:udp:127.0.0.1:9300:4 \
-   server_4.json:udp:127.0.0.1:9400:4 \
+   server_1.json:udp:127.0.0.1:9100:127.0.0.1:9101:127.0.0.1:9102:127.0.0.1:9103 \
+   server_2.json:udp:127.0.0.1:9200:127.0.0.1:9201:127.0.0.1:9202:127.0.0.1:9203 \
+   server_3.json:udp:127.0.0.1:9300:127.0.0.1:9301:127.0.0.1:9302:127.0.0.1:9303 \
+   server_4.json:udp:127.0.0.1:9400:127.0.0.1:9401:127.0.0.1:9402:127.0.0.1:9403 \
 --committee committee.json
 
 # Create configuration files for 1000 user chains.

@@ -17,6 +17,7 @@ use zef_core::worker::*;
 use zef_service::{
     config::*,
     network,
+    network::{ShardConfig, ShardId, ValidatorNetworkConfig},
     storage::{make_storage, MixedStorage},
     transport,
 };
@@ -26,28 +27,23 @@ async fn make_shard_server(
     local_ip_addr: &str,
     server_config: &ValidatorServerConfig,
     cross_chain_config: network::CrossChainConfig,
-    shard: u32,
+    shard_id: ShardId,
     storage: MixedStorage,
 ) -> network::Server<MixedStorage> {
-    // NOTE: This log entry is used to compute performance.
-    info!("Shard booted on {}", server_config.validator.host);
-    let num_shards = server_config.validator.num_shards;
+    let shard = server_config.validator.network.shard(shard_id);
+    info!("Shard booted on {}", shard.host);
     let state = WorkerState::new(
-        format!(
-            "Node {}/{} @ {}:{}",
-            shard, num_shards, local_ip_addr, server_config.validator.base_port
-        ),
+        format!("Shard {} @ {}:{}", shard_id, local_ip_addr, shard.port),
         Some(server_config.key.copy()),
         storage,
     )
     .allow_inactive_chains(false);
     network::Server::new(
-        server_config.validator.network_protocol,
+        server_config.validator.network.clone(),
         local_ip_addr.to_string(),
-        server_config.validator.base_port,
+        shard.port,
         state,
-        shard,
-        num_shards,
+        shard_id,
         cross_chain_config,
     )
 }
@@ -59,7 +55,7 @@ async fn make_servers(
     cross_chain_config: network::CrossChainConfig,
     storage: Option<&PathBuf>,
 ) -> Vec<network::Server<MixedStorage>> {
-    let num_shards = server_config.validator.num_shards;
+    let num_shards = server_config.validator.network.shards.len();
     let mut servers = Vec::new();
     for shard in 0..num_shards {
         let storage = make_storage(storage, genesis_config).await.unwrap();
@@ -87,27 +83,16 @@ struct ServerOptions {
     cmd: ServerCommands,
 }
 
-#[derive(StructOpt, Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 struct ValidatorOptions {
     /// Path to the file containing the server configuration of this Zef validator (including its secret key)
-    #[structopt(long = "server")]
     server_config_path: PathBuf,
 
-    /// Chooses a network protocol between Udp and Tcp
-    #[structopt(long, default_value = "Tcp")]
+    /// The network protocol: either Udp or Tcp
     protocol: transport::NetworkProtocol,
 
-    /// Sets the public name of the host
-    #[structopt(long)]
-    host: String,
-
-    /// Sets the base port, i.e. the port on which the server listens for the first shard
-    #[structopt(long)]
-    port: u32,
-
-    /// Number of shards for this validator
-    #[structopt(long)]
-    shards: u32,
+    /// The public name and the port of each of the shards
+    shards: Vec<ShardConfig>,
 }
 
 impl FromStr for ValidatorOptions {
@@ -116,36 +101,34 @@ impl FromStr for ValidatorOptions {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let parts: Vec<&str> = s.split(':').collect();
         ensure!(
-            parts.len() == 5,
-            "Expecting format `file.json:(udp|tcp):host:port:num-shards`"
+            parts.len() >= 4 && parts.len() % 2 == 0,
+            "Expecting format `file.json:(udp|tcp):host1:port1:...:hostN:portN`"
         );
 
         let server_config_path = Path::new(parts[0]).to_path_buf();
         let protocol = parts[1].parse().map_err(|s| anyhow!("{}", s))?;
-        let host = parts[2].to_string();
-        let port = parts[3].parse()?;
-        let shards = parts[4].parse()?;
-
+        let mut shards = Vec::new();
+        for i in 1..parts.len() / 2 {
+            let host = parts[2 * i].to_string();
+            let port = parts[2 * i + 1].parse()?;
+            shards.push(ShardConfig { host, port });
+        }
         Ok(Self {
             server_config_path,
             protocol,
-            host,
-            port,
             shards,
         })
     }
 }
 
 fn make_server_config(options: ValidatorOptions) -> ValidatorServerConfig {
+    let network = ValidatorNetworkConfig {
+        protocol: options.protocol,
+        shards: options.shards,
+    };
     let key = KeyPair::generate();
     let name = ValidatorName(key.public());
-    let validator = ValidatorConfig {
-        network_protocol: options.protocol,
-        name,
-        host: options.host,
-        base_port: options.port,
-        num_shards: options.shards,
-    };
+    let validator = ValidatorConfig { network, name };
     ValidatorServerConfig { validator, key }
 }
 
@@ -172,7 +155,7 @@ enum ServerCommands {
 
         /// Runs a specific shard (from 0 to shards-1)
         #[structopt(long)]
-        shard: Option<u32>,
+        shard: Option<usize>,
     },
 
     /// Act as a trusted third-party and generate all server configurations
@@ -287,15 +270,22 @@ mod test {
 
     #[test]
     fn test_validator_options() {
-        let options = ValidatorOptions::from_str("server.json:udp:localhost:9001:2").unwrap();
+        let options = ValidatorOptions::from_str("server.json:udp:host1:9001:host2:9002").unwrap();
         assert_eq!(
             options,
             ValidatorOptions {
                 server_config_path: "server.json".into(),
                 protocol: transport::NetworkProtocol::Udp,
-                host: "localhost".into(),
-                port: 9001,
-                shards: 2
+                shards: vec![
+                    ShardConfig {
+                        host: "host1".into(),
+                        port: 9001,
+                    },
+                    ShardConfig {
+                        host: "host2".into(),
+                        port: 9002,
+                    },
+                ],
             }
         );
     }
