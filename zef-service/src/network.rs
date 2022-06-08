@@ -4,24 +4,14 @@
 
 use crate::{codec, transport::*};
 use async_trait::async_trait;
-use zef_base::{error::*, messages::*, rpc};
-use zef_core::{node::ValidatorNode, worker::*};
-
-#[cfg(feature = "benchmark")]
-use crate::network_server::BenchmarkServer;
 use futures::{channel::mpsc, future::FutureExt, sink::SinkExt, stream::StreamExt};
 use log::*;
+use serde::{Deserialize, Serialize};
 use std::{io, time::Duration};
 use structopt::StructOpt;
 use tokio::time;
-
-/// Static shard assignment
-pub fn get_shard(num_shards: u32, chain_id: ChainId) -> u32 {
-    use std::hash::{Hash, Hasher};
-    let mut s = std::collections::hash_map::DefaultHasher::new();
-    chain_id.hash(&mut s);
-    (s.finish() % num_shards as u64) as u32
-}
+use zef_base::{error::*, messages::*, rpc};
+use zef_core::{node::ValidatorNode, worker::*};
 
 #[derive(Clone, Debug, StructOpt)]
 pub struct CrossChainConfig {
@@ -36,15 +26,47 @@ pub struct CrossChainConfig {
     retry_delay_ms: u64,
 }
 
-pub type ShardId = u32;
+pub type ShardId = usize;
+
+/// The network configuration of a shard.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ShardConfig {
+    /// The host name (e.g an IP address).
+    pub host: String,
+    /// The port.
+    pub port: u32,
+}
+
+/// The network configuration for all shards.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ValidatorNetworkConfig {
+    /// The network protocol to use for all shards.
+    pub protocol: NetworkProtocol,
+    /// The available shards. Each chain UID is mapped to a unique shard in the vector in
+    /// a static way.
+    pub shards: Vec<ShardConfig>,
+}
+
+impl ValidatorNetworkConfig {
+    /// Static shard assignment
+    pub fn get_shard_id(&self, chain_id: ChainId) -> ShardId {
+        use std::hash::{Hash, Hasher};
+        let mut s = std::collections::hash_map::DefaultHasher::new();
+        chain_id.hash(&mut s);
+        (s.finish() as ShardId) % self.shards.len()
+    }
+
+    pub fn shard(&self, shard_id: ShardId) -> &ShardConfig {
+        &self.shards[shard_id]
+    }
+}
 
 pub struct Server<Storage> {
-    network_protocol: NetworkProtocol,
-    base_address: String,
-    base_port: u32,
+    network: ValidatorNetworkConfig,
+    host: String,
+    port: u32,
     state: WorkerState<Storage>,
     shard_id: ShardId,
-    num_shards: u32,
     cross_chain_config: CrossChainConfig,
     // Stats
     packets_processed: u64,
@@ -54,29 +76,23 @@ pub struct Server<Storage> {
 impl<Storage> Server<Storage> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        network_protocol: NetworkProtocol,
-        base_address: String,
-        base_port: u32,
+        network: ValidatorNetworkConfig,
+        host: String,
+        port: u32,
         state: WorkerState<Storage>,
         shard_id: ShardId,
-        num_shards: u32,
         cross_chain_config: CrossChainConfig,
     ) -> Self {
         Self {
-            network_protocol,
-            base_address,
-            base_port,
+            network,
+            host,
+            port,
             state,
             shard_id,
-            num_shards,
             cross_chain_config,
             packets_processed: 0,
             user_errors: 0,
         }
-    }
-
-    pub(crate) fn which_shard(&self, chain_id: ChainId) -> ShardId {
-        get_shard(self.num_shards, chain_id)
     }
 
     pub fn packets_processed(&self) -> u64 {
@@ -93,23 +109,23 @@ where
     Storage: zef_storage::Storage + Clone + 'static,
 {
     async fn forward_cross_chain_queries(
-        network_protocol: NetworkProtocol,
-        base_address: String,
-        base_port: u32,
+        network: ValidatorNetworkConfig,
         cross_chain_max_retries: usize,
         cross_chain_retry_delay: Duration,
         this_shard: ShardId,
         mut receiver: mpsc::Receiver<(rpc::Message, ShardId)>,
     ) {
-        let mut pool = network_protocol
+        let mut pool = network
+            .protocol
             .make_outgoing_connection_pool()
             .await
             .expect("Initialization should not fail");
 
         let mut queries_sent = 0u64;
-        while let Some((message, shard)) = receiver.next().await {
+        while let Some((message, shard_id)) = receiver.next().await {
             // Send cross-chain query.
-            let remote_address = format!("{}:{}", base_address, base_port + shard);
+            let shard = network.shard(shard_id);
+            let remote_address = format!("{}:{}", shard.host, shard.port);
             for i in 0..cross_chain_max_retries {
                 let status = pool.send_message_to(message.clone(), &remote_address).await;
                 match status {
@@ -128,7 +144,7 @@ where
                         }
                     }
                     _ => {
-                        debug!("Sent cross-chain query: {} -> {}", this_shard, shard);
+                        debug!("Sent cross-chain query: {} -> {}", this_shard, shard_id);
                         queries_sent += 1;
                         break;
                     }
@@ -136,11 +152,8 @@ where
             }
             if queries_sent % 2000 == 0 {
                 debug!(
-                    "{}:{} (shard {}) has sent {} cross-chain queries",
-                    base_address,
-                    base_port + this_shard,
-                    this_shard,
-                    queries_sent
+                    "{} has sent {} cross-chain queries to {}:{} (shard {})",
+                    this_shard, queries_sent, shard.host, shard.port, shard_id,
                 );
             }
         }
@@ -149,25 +162,21 @@ where
     pub async fn spawn(self) -> Result<SpawnedServer, io::Error> {
         info!(
             "Listening to {} traffic on {}:{}",
-            self.network_protocol,
-            self.base_address,
-            self.base_port + self.shard_id
+            self.network.protocol, self.host, self.port
         );
-        let address = format!("{}:{}", self.base_address, self.base_port + self.shard_id);
+        let address = format!("{}:{}", self.host, self.port);
 
         let (cross_chain_sender, cross_chain_receiver) =
             mpsc::channel(self.cross_chain_config.queue_size);
         tokio::spawn(Self::forward_cross_chain_queries(
-            self.network_protocol,
-            self.base_address.clone(),
-            self.base_port,
+            self.network.clone(),
             self.cross_chain_config.max_retries,
             Duration::from_millis(self.cross_chain_config.retry_delay_ms),
             self.shard_id,
             cross_chain_receiver,
         ));
 
-        let protocol = self.network_protocol;
+        let protocol = self.network.protocol;
         let state = RunningServerState {
             server: self,
             cross_chain_sender,
@@ -236,8 +245,8 @@ where
             if self.server.packets_processed % 5000 == 0 {
                 debug!(
                     "{}:{} (shard {}) has processed {} packets",
-                    self.server.base_address,
-                    self.server.base_port + self.server.shard_id,
+                    self.server.host,
+                    self.server.port,
                     self.server.shard_id,
                     self.server.packets_processed
                 );
@@ -265,7 +274,7 @@ where
     ) -> futures::future::BoxFuture<()> {
         Box::pin(async move {
             for request in requests {
-                let shard_id = self.server.which_shard(request.target_chain_id());
+                let shard_id = self.server.network.get_shard_id(request.target_chain_id());
                 debug!(
                     "Scheduling cross-chain query: {} -> {}",
                     self.server.shard_id, shard_id
@@ -281,28 +290,19 @@ where
 
 #[derive(Clone)]
 pub struct Client {
-    network_protocol: NetworkProtocol,
-    base_address: String,
-    base_port: u32,
-    num_shards: u32,
+    network: ValidatorNetworkConfig,
     send_timeout: std::time::Duration,
     recv_timeout: std::time::Duration,
 }
 
 impl Client {
     pub fn new(
-        network_protocol: NetworkProtocol,
-        base_address: String,
-        base_port: u32,
-        num_shards: u32,
+        network: ValidatorNetworkConfig,
         send_timeout: std::time::Duration,
         recv_timeout: std::time::Duration,
     ) -> Self {
         Self {
-            network_protocol,
-            base_address,
-            base_port,
-            num_shards,
+            network,
             send_timeout,
             recv_timeout,
         }
@@ -310,11 +310,12 @@ impl Client {
 
     async fn send_recv_internal(
         &mut self,
-        shard: ShardId,
+        shard_id: ShardId,
         message: rpc::Message,
     ) -> Result<rpc::Message, codec::Error> {
-        let address = format!("{}:{}", self.base_address, self.base_port + shard);
-        let mut stream = self.network_protocol.connect(address).await?;
+        let shard = self.network.shard(shard_id);
+        let address = format!("{}:{}", shard.host, shard.port);
+        let mut stream = self.network.protocol.connect(address).await?;
         // Send message
         time::timeout(self.send_timeout, stream.send(message))
             .await
@@ -329,10 +330,10 @@ impl Client {
 
     pub async fn send_recv_info(
         &mut self,
-        shard: ShardId,
+        shard_id: ShardId,
         message: rpc::Message,
     ) -> Result<ChainInfoResponse, Error> {
-        match self.send_recv_internal(shard, message).await {
+        match self.send_recv_internal(shard_id, message).await {
             Ok(rpc::Message::ChainInfoResponse(response)) => Ok(*response),
             Ok(rpc::Message::Error(error)) => Err(*error),
             Ok(_) => Err(Error::UnexpectedMessage),
@@ -353,8 +354,8 @@ impl ValidatorNode for Client {
         &mut self,
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, Error> {
-        let shard = get_shard(self.num_shards, proposal.content.block.chain_id);
-        self.send_recv_info(shard, proposal.into()).await
+        let shard_id = self.network.get_shard_id(proposal.content.block.chain_id);
+        self.send_recv_info(shard_id, proposal.into()).await
     }
 
     /// Process a certificate.
@@ -362,8 +363,8 @@ impl ValidatorNode for Client {
         &mut self,
         certificate: Certificate,
     ) -> Result<ChainInfoResponse, Error> {
-        let shard = get_shard(self.num_shards, certificate.value.chain_id());
-        self.send_recv_info(shard, certificate.into()).await
+        let shard_id = self.network.get_shard_id(certificate.value.chain_id());
+        self.send_recv_info(shard_id, certificate.into()).await
     }
 
     /// Handle information queries for this chain.
@@ -371,16 +372,14 @@ impl ValidatorNode for Client {
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, Error> {
-        let shard = get_shard(self.num_shards, query.chain_id);
-        self.send_recv_info(shard, query.into()).await
+        let shard_id = self.network.get_shard_id(query.chain_id);
+        self.send_recv_info(shard_id, query.into()).await
     }
 }
 
 #[derive(Clone)]
 pub struct MassClient {
-    network_protocol: NetworkProtocol,
-    base_address: String,
-    base_port: u32,
+    pub network: ValidatorNetworkConfig,
     send_timeout: std::time::Duration,
     recv_timeout: std::time::Duration,
     max_in_flight: u64,
@@ -388,30 +387,27 @@ pub struct MassClient {
 
 impl MassClient {
     pub fn new(
-        network_protocol: NetworkProtocol,
-        base_address: String,
-        base_port: u32,
+        network: ValidatorNetworkConfig,
         send_timeout: std::time::Duration,
         recv_timeout: std::time::Duration,
         max_in_flight: u64,
     ) -> Self {
         Self {
-            network_protocol,
-            base_address,
-            base_port,
+            network,
             send_timeout,
             recv_timeout,
             max_in_flight,
         }
     }
 
-    async fn run_shard(
+    async fn send_to_shard(
         &self,
-        shard: u32,
+        shard_id: ShardId,
         requests: Vec<rpc::Message>,
     ) -> Result<Vec<rpc::Message>, io::Error> {
-        let address = format!("{}:{}", self.base_address, self.base_port + shard);
-        let mut stream = self.network_protocol.connect(address).await?;
+        let shard = self.network.shard(shard_id);
+        let address = format!("{}:{}", shard.host, shard.port);
+        let mut stream = self.network.protocol.connect(address).await?;
         let mut requests = requests.into_iter();
         let mut in_flight: u64 = 0;
         let mut responses = Vec::new();
@@ -469,27 +465,21 @@ impl MassClient {
         I: IntoIterator<Item = (ShardId, Vec<rpc::Message>)>,
     {
         let handles = futures::stream::FuturesUnordered::new();
-        for (shard, requests) in sharded_requests {
+        for (shard_id, requests) in sharded_requests {
             let client = self.clone();
             handles.push(
                 tokio::spawn(async move {
                     info!(
-                        "Sending {} requests to {}:{} (shard {})",
-                        client.network_protocol,
-                        client.base_address,
-                        client.base_port + shard,
-                        shard
+                        "Sending {} requests to shard {}",
+                        client.network.protocol, shard_id
                     );
                     let responses = client
-                        .run_shard(shard, requests)
+                        .send_to_shard(shard_id, requests)
                         .await
                         .unwrap_or_else(|_| Vec::new());
                     info!(
-                        "Done sending {} requests to {}:{} (shard {})",
-                        client.network_protocol,
-                        client.base_address,
-                        client.base_port + shard,
-                        shard
+                        "Done sending {} requests to shard {}",
+                        client.network.protocol, shard_id
                     );
                     responses
                 })
@@ -497,25 +487,5 @@ impl MassClient {
             );
         }
         handles
-    }
-}
-
-#[test]
-fn test_get_shards() {
-    let num_shards = 16u32;
-    let mut found = vec![false; num_shards as usize];
-    let mut left = num_shards;
-    let mut i: usize = 1;
-    loop {
-        let shard = get_shard(num_shards, ChainId::root(i)) as usize;
-        println!("found {}", shard);
-        if !found[shard] {
-            found[shard] = true;
-            left -= 1;
-            if left == 0 {
-                break;
-            }
-        }
-        i += 1;
     }
 }
