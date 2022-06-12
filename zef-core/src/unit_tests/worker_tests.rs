@@ -12,6 +12,7 @@ use zef_base::{
     error::Error,
     execution::{
         Address, Amount, Balance, ChainStatus, Effect, ExecutionState, Operation, UserData,
+        ADMIN_CHANNEL,
     },
     manager::ChainManager,
     messages::*,
@@ -1449,9 +1450,10 @@ async fn test_chain_creation_with_committee_creation() {
                     committees: committees.clone(),
                     admin_id: root_id,
                 },
-                Effect::SubscribeToNewCommittees {
+                Effect::Subscribe {
                     id: child_id0,
-                    admin_id: root_id,
+                    owner_id: root_id,
+                    channel_name: ADMIN_CHANNEL.into(),
                 },
             ],
             state_hash: HashValue::new(&ExecutionState {
@@ -1477,7 +1479,15 @@ async fn test_chain_creation_with_committee_creation() {
             Some(ChainStatus::Managing)
         ));
         // The root chain has 1 subscriber already.
-        assert_eq!(root_chain.admin_channel.subscribers.len(), 1);
+        assert_eq!(
+            root_chain
+                .channels
+                .get(ADMIN_CHANNEL)
+                .unwrap()
+                .subscribers
+                .len(),
+            1
+        );
     }
 
     // Create a committee before receiving the subscription of the new chain.
@@ -1499,9 +1509,10 @@ async fn test_chain_creation_with_committee_creation() {
                     height: BlockHeight::from(0),
                     effects: vec![(
                         1,
-                        Effect::SubscribeToNewCommittees {
+                        Effect::Subscribe {
                             id: child_id0,
-                            admin_id: root_id,
+                            owner_id: root_id,
+                            channel_name: ADMIN_CHANNEL.into(),
                         },
                     )],
                 }],
@@ -1567,9 +1578,10 @@ async fn test_chain_creation_with_committee_creation() {
                     committees: committees.clone(),
                     admin_id: root_id,
                 },
-                Effect::SubscribeToNewCommittees {
+                Effect::Subscribe {
                     id: child_id,
-                    admin_id: root_id,
+                    owner_id: root_id,
+                    channel_name: ADMIN_CHANNEL.into(),
                 },
             ],
             state_hash: HashValue::new(&ExecutionState {
@@ -1592,7 +1604,15 @@ async fn test_chain_creation_with_committee_creation() {
     {
         // The root chain has 2 subscribers.
         let root_chain = worker.storage.read_active_chain(root_id).await.unwrap();
-        assert_eq!(root_chain.admin_channel.subscribers.len(), 2);
+        assert_eq!(
+            root_chain
+                .channels
+                .get(ADMIN_CHANNEL)
+                .unwrap()
+                .subscribers
+                .len(),
+            2
+        );
     }
     {
         // The second child chain is active and has not migrated yet.
@@ -1618,7 +1638,7 @@ async fn test_chain_creation_with_committee_creation() {
                 epoch: Epoch::from(0),
                 chain_id: child_id,
                 incoming_messages: vec![MessageGroup {
-                    origin: Origin::AdminChannel(root_id),
+                    origin: Origin::Channel(root_id, ADMIN_CHANNEL.into()),
                     height: BlockHeight::from(2),
                     effects: vec![(
                         0,
