@@ -170,8 +170,11 @@ ChainState:
             TYPENAME: Origin
           VALUE:
             TYPENAME: InboxState
-    - admin_channel:
-        TYPENAME: ChannelState
+    - channels:
+        MAP:
+          KEY: STR
+          VALUE:
+            TYPENAME: ChannelState
 ChainStatus:
   ENUM:
     0:
@@ -261,12 +264,13 @@ Effect:
                 VALUE:
                   TYPENAME: Committee
     3:
-      SubscribeToNewCommittees:
+      Subscribe:
         STRUCT:
           - id:
               TYPENAME: ChainId
-          - admin_id:
+          - owner_id:
               TYPENAME: ChainId
+          - channel_name: STR
 EffectId:
   STRUCT:
     - chain_id:
@@ -598,13 +602,14 @@ Operation:
 Origin:
   ENUM:
     0:
-      AdminChannel:
-        NEWTYPE:
-          TYPENAME: ChainId
-    1:
       Chain:
         NEWTYPE:
           TYPENAME: ChainId
+    1:
+      Channel:
+        TUPLE:
+          - TYPENAME: ChainId
+          - STR
 OutboxState:
   STRUCT:
     - queue:

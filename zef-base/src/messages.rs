@@ -100,17 +100,20 @@ pub struct BlockAndRound {
     pub block: Block,
     pub round: RoundNumber,
 }
+
 /// The origin of a message. Used to identify each inbox.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Origin {
-    AdminChannel(ChainId),
+    /// The message is a direct message.
     Chain(ChainId),
+    /// The message is a channel broadcast.
+    Channel(ChainId, String),
 }
 
 impl Origin {
-    pub fn sender(self) -> ChainId {
+    pub fn sender(&self) -> ChainId {
         match self {
-            Origin::Chain(id) | Origin::AdminChannel(id) => id,
+            Origin::Chain(id) | Origin::Channel(id, _) => *id,
         }
     }
 }

@@ -7,7 +7,7 @@ use crate::{
     crypto::*,
     ensure,
     error::Error,
-    execution::{Balance, ChainStatus, Effect, ExecutionState},
+    execution::{Balance, ChainStatus, Effect, ExecutionState, ADMIN_CHANNEL},
     manager::ChainManager,
     messages::*,
 };
@@ -39,8 +39,8 @@ pub struct ChainState {
     pub outboxes: HashMap<ChainId, OutboxState>,
     /// Mailboxes used to receive messages indexed by their origin.
     pub inboxes: HashMap<Origin, InboxState>,
-    /// The channel to multicast new configurations (admin chain only).
-    pub admin_channel: ChannelState,
+    /// Channels able to multicast messages to subscribers.
+    pub channels: HashMap<String, ChannelState>,
 }
 
 /// An outbox used to send messages to another chain. NOTE: Messages are implied by the
@@ -104,7 +104,7 @@ impl ChainState {
             received_log: Vec::new(),
             inboxes: HashMap::new(),
             outboxes: HashMap::new(),
-            admin_channel: ChannelState::default(),
+            channels: HashMap::new(),
         }
     }
 
@@ -115,18 +115,20 @@ impl ChainState {
         owner: Owner,
         balance: Balance,
     ) -> Self {
-        let status = if ChainId::from(description) == admin_id {
-            ChainStatus::Managing
-        } else {
-            ChainStatus::ManagedBy {
-                admin_id,
-                subscribed: false,
-            }
-        };
         let mut chain = Self::new(description.into());
         chain.description = Some(description);
         chain.state.epoch = Some(Epoch::from(0));
-        chain.state.status = Some(status);
+        if ChainId::from(description) == admin_id {
+            chain.state.status = Some(ChainStatus::Managing);
+            chain
+                .channels
+                .insert(ADMIN_CHANNEL.into(), ChannelState::default());
+        } else {
+            chain.state.status = Some(ChainStatus::ManagedBy {
+                admin_id,
+                subscribed: false,
+            });
+        }
         chain.state.committees.insert(Epoch::from(0), committee);
         chain.state.manager = ChainManager::single(owner);
         chain.state.balance = balance;
@@ -169,11 +171,11 @@ impl ChainState {
     /// Verify that this chain is up-to-date and all the messages executed ahead of time
     /// have been properly received by now.
     pub fn validate_incoming_messages(&self) -> Result<(), Error> {
-        for (&origin, inbox) in &self.inboxes {
+        for (origin, inbox) in &self.inboxes {
             ensure!(
                 inbox.expected_events.is_empty(),
                 Error::MissingCrossChainUpdate {
-                    origin,
+                    origin: origin.clone(),
                     height: inbox.expected_events.front().unwrap().height,
                 }
             );
@@ -191,12 +193,12 @@ impl ChainState {
     /// received by order of heights and indices.
     pub fn receive_block(
         &mut self,
-        origin: Origin,
+        origin: &Origin,
         height: BlockHeight,
         effects: Vec<Effect>,
         key: HashValue,
     ) -> Result<bool, Error> {
-        let inbox = self.inboxes.entry(origin).or_default();
+        let inbox = self.inboxes.entry(origin.clone()).or_default();
         if height < inbox.next_height_to_receive {
             // We have already received this block.
             log::warn!(
@@ -251,11 +253,17 @@ impl ChainState {
                     self.state.manager = ChainManager::single(*owner);
                     self.state_hash = HashValue::new(&self.state);
                 }
-                Effect::SubscribeToNewCommittees { id, admin_id }
-                    if admin_id == &self.state.chain_id =>
-                {
+                Effect::Subscribe {
+                    id,
+                    owner_id,
+                    channel_name,
+                } if owner_id == &self.state.chain_id => {
+                    let channel = self
+                        .channels
+                        .entry(channel_name.clone())
+                        .or_insert_with(ChannelState::default);
                     // Request past and future messages from this channel.
-                    self.admin_channel.subscribers.insert(*id, false);
+                    channel.subscribers.insert(*id, false);
                 }
                 _ => (),
             }
@@ -292,7 +300,10 @@ impl ChainState {
         for message_group in &block.incoming_messages {
             for (message_index, message_effect) in &message_group.effects {
                 // Reconcile the effect with the received queue, or mark it as "expected".
-                let inbox = self.inboxes.entry(message_group.origin).or_default();
+                let inbox = self
+                    .inboxes
+                    .entry(message_group.origin.clone())
+                    .or_default();
                 match inbox.received_events.front() {
                     Some(Event {
                         height,
@@ -302,7 +313,7 @@ impl ChainState {
                         ensure!(
                             message_group.height == *height && message_index == index,
                             Error::InvalidMessageOrder {
-                                origin: message_group.origin,
+                                origin: message_group.origin.clone(),
                                 height: message_group.height,
                                 index: *message_index,
                                 expected_height: *height,
@@ -312,7 +323,7 @@ impl ChainState {
                         ensure!(
                             message_effect == effect,
                             Error::InvalidMessageContent {
-                                origin: message_group.origin,
+                                origin: message_group.origin.clone(),
                                 height: message_group.height,
                                 index: *message_index,
                             }
@@ -348,12 +359,13 @@ impl ChainState {
                 }
             }
             // Update the channels.
-            if application.need_admin_broadcast {
-                self.admin_channel
-                    .subscribers
-                    .values_mut()
-                    .for_each(|v| *v = false);
-                self.admin_channel.block_height = Some(block.height);
+            for name in application.need_channel_broadcast {
+                let channel = self
+                    .channels
+                    .entry(name)
+                    .or_insert_with(ChannelState::default);
+                channel.subscribers.values_mut().for_each(|v| *v = false);
+                channel.block_height = Some(block.height);
             }
         }
         // Last, recompute the state hash.

@@ -57,6 +57,9 @@ pub struct Balance(u128);
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]
 pub struct UserData(pub Option<[u8; 32]>);
 
+/// The name of the channel for the admin chain to broadcast reconfigurations.
+pub const ADMIN_CHANNEL: &str = "ADMIN";
+
 /// A chain operation.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Operation {
@@ -125,8 +128,12 @@ pub enum Effect {
         epoch: Epoch,
         committees: BTreeMap<Epoch, Committee>,
     },
-    /// Subscribe to future committees created by `admin_id`.
-    SubscribeToNewCommittees { id: ChainId, admin_id: ChainId },
+    /// Subscribe to a channel.
+    Subscribe {
+        id: ChainId,
+        owner_id: ChainId,
+        channel_name: String,
+    },
 }
 
 impl BcsSignable for ExecutionState {}
@@ -148,7 +155,7 @@ impl ExecutionState {
 pub(crate) struct ApplicationResult {
     pub effects: Vec<Effect>,
     pub recipients: Vec<ChainId>,
-    pub need_admin_broadcast: bool,
+    pub need_channel_broadcast: Vec<String>,
 }
 
 impl ExecutionState {
@@ -174,9 +181,9 @@ impl ExecutionState {
                 // We are the created chain.
                 self.chain_id == *id
             }
-            SubscribeToNewCommittees { admin_id, .. } => {
+            Subscribe { owner_id, .. } => {
                 // We are the admin chain.
-                self.chain_id == *admin_id
+                self.chain_id == *owner_id
             }
             SetCommittees { admin_id, .. } => {
                 // We are subscribed to this admin chain.
@@ -234,14 +241,15 @@ impl ExecutionState {
                     admin_id: *admin_id,
                     epoch: *epoch,
                 };
-                let e2 = Effect::SubscribeToNewCommittees {
+                let e2 = Effect::Subscribe {
                     id: *id,
-                    admin_id: *admin_id,
+                    owner_id: *admin_id,
+                    channel_name: ADMIN_CHANNEL.into(),
                 };
                 let application = ApplicationResult {
                     effects: vec![e1, e2],
                     recipients: vec![*id, *admin_id],
-                    need_admin_broadcast: false,
+                    need_channel_broadcast: vec![ADMIN_CHANNEL.into()],
                 };
                 Ok(application)
             }
@@ -276,7 +284,7 @@ impl ExecutionState {
                             recipient: *id,
                         }],
                         recipients: vec![*id],
-                        need_admin_broadcast: false,
+                        need_channel_broadcast: Vec::new(),
                     },
                 };
                 Ok(application)
@@ -302,7 +310,7 @@ impl ExecutionState {
                     }],
                     recipients: Vec::new(),
                     // Notify our subscribers.
-                    need_admin_broadcast: true,
+                    need_channel_broadcast: vec![ADMIN_CHANNEL.into()],
                 };
                 Ok(application)
             }
@@ -321,7 +329,7 @@ impl ExecutionState {
                     }],
                     recipients: Vec::new(),
                     // Notify our subscribers.
-                    need_admin_broadcast: true,
+                    need_channel_broadcast: vec![ADMIN_CHANNEL.into()],
                 };
                 Ok(application)
             }
@@ -341,12 +349,13 @@ impl ExecutionState {
                     _ => return Err(Error::InvalidSubscriptionToNewCommittees(*id)),
                 }
                 let application = ApplicationResult {
-                    effects: vec![Effect::SubscribeToNewCommittees {
+                    effects: vec![Effect::Subscribe {
                         id: *id,
-                        admin_id: *admin_id,
+                        owner_id: *admin_id,
+                        channel_name: ADMIN_CHANNEL.into(),
                     }],
                     recipients: vec![*admin_id],
-                    need_admin_broadcast: false,
+                    need_channel_broadcast: Vec::new(),
                 };
                 Ok(application)
             }
@@ -382,7 +391,7 @@ impl ExecutionState {
                 self.committees = committees.clone();
                 Ok(())
             }
-            Effect::OpenChain { .. } | Effect::SubscribeToNewCommittees { .. } => {
+            Effect::OpenChain { .. } | Effect::Subscribe { .. } => {
                 // These special effects are executed immediately when cross-chain requests are received.
                 Ok(())
             }

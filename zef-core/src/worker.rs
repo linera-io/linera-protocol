@@ -128,18 +128,20 @@ where
                 certificates,
             })
         }
-        if let Some(height) = chain.admin_channel.block_height {
-            for (&recipient, &is_up_to_date) in &chain.admin_channel.subscribers {
-                if !is_up_to_date {
-                    let certificate = self
-                        .storage
-                        .read_certificate(chain.confirmed_log[usize::from(height)])
-                        .await?;
-                    continuation.push(CrossChainRequest::UpdateRecipient {
-                        origin: Origin::AdminChannel(chain.state.chain_id),
-                        recipient,
-                        certificates: vec![certificate],
-                    })
+        for (name, state) in &chain.channels {
+            if let Some(height) = state.block_height {
+                for (&recipient, &is_up_to_date) in &state.subscribers {
+                    if !is_up_to_date {
+                        let certificate = self
+                            .storage
+                            .read_certificate(chain.confirmed_log[usize::from(height)])
+                            .await?;
+                        continuation.push(CrossChainRequest::UpdateRecipient {
+                            origin: Origin::Channel(chain.state.chain_id, name.into()),
+                            recipient,
+                            certificates: vec![certificate],
+                        })
+                    }
                 }
             }
         }
@@ -156,18 +158,20 @@ where
         recipient: ChainId,
     ) -> Result<Vec<CrossChainRequest>, Error> {
         let mut continuation = Vec::new();
-        if let Some(height) = chain.admin_channel.block_height {
-            if let Some(is_up_to_date) = chain.admin_channel.subscribers.get(&recipient) {
-                if !is_up_to_date {
-                    let certificate = self
-                        .storage
-                        .read_certificate(chain.confirmed_log[usize::from(height)])
-                        .await?;
-                    continuation.push(CrossChainRequest::UpdateRecipient {
-                        origin: Origin::AdminChannel(chain.state.chain_id),
-                        recipient,
-                        certificates: vec![certificate],
-                    })
+        for (name, state) in &chain.channels {
+            if let Some(height) = state.block_height {
+                if let Some(is_up_to_date) = state.subscribers.get(&recipient) {
+                    if !is_up_to_date {
+                        let certificate = self
+                            .storage
+                            .read_certificate(chain.confirmed_log[usize::from(height)])
+                            .await?;
+                        continuation.push(CrossChainRequest::UpdateRecipient {
+                            origin: Origin::Channel(chain.state.chain_id, name.clone()),
+                            recipient,
+                            certificates: vec![certificate],
+                        })
+                    }
                 }
             }
         }
@@ -395,7 +399,7 @@ where
         }
         if query.request_pending_messages {
             let mut message_groups = Vec::new();
-            for (&origin, inbox) in &chain.inboxes {
+            for (origin, inbox) in &chain.inboxes {
                 let mut effects = Vec::new();
                 let mut current_height = None;
                 for event in &inbox.received_events {
@@ -407,7 +411,7 @@ where
                             // If the height changed, flush the accumulated effects
                             // into a new group.
                             message_groups.push(MessageGroup {
-                                origin,
+                                origin: origin.clone(),
                                 height,
                                 effects,
                             });
@@ -422,7 +426,7 @@ where
                 }
                 if let Some(height) = current_height {
                     message_groups.push(MessageGroup {
-                        origin,
+                        origin: origin.clone(),
                         height,
                         effects,
                     });
@@ -487,12 +491,15 @@ where
                     height = Some(block.height);
                     epoch = Some(block.epoch);
                     // Update the staged chain state with the received block.
-                    if chain.receive_block(origin, block.height, effects, certificate.hash)? {
+                    if chain.receive_block(&origin, block.height, effects, certificate.hash)? {
                         self.storage.write_certificate(certificate).await?;
                         need_update = true;
                     }
                 }
-                // In the case of channels, `receive_block` may schedule some messages back.
+                // In the case of channels, `receive_block` may schedule some messages to
+                // be sent back to the recipient. Calling `make_continuation` is also
+                // possible but it would reschedule all pending messages indiscriminately,
+                // some of which may have just been sent out.
                 let mut requests = self
                     .make_continuation_for_subscriber(&chain, origin.sender())
                     .await?;
@@ -558,25 +565,29 @@ where
                 Ok(Vec::new())
             }
             CrossChainRequest::ConfirmUpdatedRecipient {
-                origin: Origin::AdminChannel(admin),
+                origin: Origin::Channel(admin, name),
                 recipient,
                 height,
             } => {
                 let mut chain = self.storage.read_active_chain(admin).await?;
-                ensure!(
-                    chain.admin_channel.block_height >= Some(height),
-                    Error::InvalidCrossChainRequest
-                );
-                if chain.admin_channel.block_height > Some(height) {
-                    // This is a confirmation of an obsolete broadcast.
-                    return Ok(Vec::new());
-                }
-                if let std::collections::hash_map::Entry::Occupied(mut entry) =
-                    chain.admin_channel.subscribers.entry(recipient)
+                if let std::collections::hash_map::Entry::Occupied(mut channel) =
+                    chain.channels.entry(name.clone())
                 {
-                    if !entry.get() {
-                        *entry.get_mut() = true;
-                        self.storage.write_chain(chain).await?;
+                    ensure!(
+                        channel.get().block_height >= Some(height),
+                        Error::InvalidCrossChainRequest
+                    );
+                    if channel.get().block_height > Some(height) {
+                        // This is a confirmation of an obsolete broadcast.
+                        return Ok(Vec::new());
+                    }
+                    if let std::collections::hash_map::Entry::Occupied(mut entry) =
+                        channel.get_mut().subscribers.entry(recipient)
+                    {
+                        if !entry.get() {
+                            *entry.get_mut() = true;
+                            self.storage.write_chain(chain).await?;
+                        }
                     }
                 }
                 Ok(Vec::new())
