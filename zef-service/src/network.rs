@@ -319,11 +319,9 @@ impl Client {
 
     async fn send_recv_internal(
         &mut self,
-        shard_id: ShardId,
         message: rpc::Message,
     ) -> Result<rpc::Message, codec::Error> {
-        let shard = self.network.shard(shard_id);
-        let address = format!("{}:{}", shard.host, shard.port);
+        let address = format!("{}:{}", self.network.address, self.network.port);
         let mut stream = self.network.protocol.connect(address).await?;
         // Send message
         time::timeout(self.send_timeout, stream.send(message))
@@ -339,10 +337,9 @@ impl Client {
 
     pub async fn send_recv_info(
         &mut self,
-        shard_id: ShardId,
         message: rpc::Message,
     ) -> Result<ChainInfoResponse, Error> {
-        match self.send_recv_internal(shard_id, message).await {
+        match self.send_recv_internal(message).await {
             Ok(rpc::Message::ChainInfoResponse(response)) => Ok(*response),
             Ok(rpc::Message::Error(error)) => Err(*error),
             Ok(_) => Err(Error::UnexpectedMessage),
@@ -363,8 +360,7 @@ impl ValidatorNode for Client {
         &mut self,
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, Error> {
-        let shard_id = self.network.get_shard_id(proposal.content.block.chain_id);
-        self.send_recv_info(shard_id, proposal.into()).await
+        self.send_recv_info(proposal.into()).await
     }
 
     /// Process a certificate.
@@ -372,8 +368,7 @@ impl ValidatorNode for Client {
         &mut self,
         certificate: Certificate,
     ) -> Result<ChainInfoResponse, Error> {
-        let shard_id = self.network.get_shard_id(certificate.value.chain_id());
-        self.send_recv_info(shard_id, certificate.into()).await
+        self.send_recv_info(certificate.into()).await
     }
 
     /// Handle information queries for this chain.
@@ -381,8 +376,7 @@ impl ValidatorNode for Client {
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, Error> {
-        let shard_id = self.network.get_shard_id(query.chain_id);
-        self.send_recv_info(shard_id, query.into()).await
+        self.send_recv_info(query.into()).await
     }
 }
 
