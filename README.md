@@ -51,6 +51,8 @@ trap 'kill $(jobs -p)' EXIT
 # Start servers and create initial chains in DB
 for I in 1 2 3 4
 do
+    ./proxy server_"$I".json &
+
     for J in $(seq 0 3)
     do
         ./server run --storage server_"$I"_"$J".db --server server_"$I".json --shard "$J" --genesis genesis.json &
