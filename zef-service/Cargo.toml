@@ -41,3 +41,7 @@ path = "src/client.rs"
 [[bin]]
 name = "server"
 path = "src/server.rs"
+
+[[bin]]
+name = "proxy"
+path = "src/proxy.rs"
