@@ -34,7 +34,7 @@ pub struct ShardConfig {
     /// The host name (e.g an IP address).
     pub host: String,
     /// The port.
-    pub port: u32,
+    pub port: u16,
 }
 
 /// The network configuration for all shards.
@@ -64,7 +64,7 @@ impl ValidatorNetworkConfig {
 pub struct Server<Storage> {
     network: ValidatorNetworkConfig,
     host: String,
-    port: u32,
+    port: u16,
     state: WorkerState<Storage>,
     shard_id: ShardId,
     cross_chain_config: CrossChainConfig,
@@ -78,7 +78,7 @@ impl<Storage> Server<Storage> {
     pub fn new(
         network: ValidatorNetworkConfig,
         host: String,
-        port: u32,
+        port: u16,
         state: WorkerState<Storage>,
         shard_id: ShardId,
         cross_chain_config: CrossChainConfig,
