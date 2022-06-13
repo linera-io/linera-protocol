@@ -42,6 +42,10 @@ pub struct ShardConfig {
 pub struct ValidatorNetworkConfig {
     /// The network protocol to use for all shards.
     pub protocol: NetworkProtocol,
+    /// The address of the validator (IP or hostname).
+    pub address: String,
+    /// The port the validator listens on.
+    pub port: u16,
     /// The available shards. Each chain UID is mapped to a unique shard in the vector in
     /// a static way.
     pub shards: Vec<ShardConfig>,
