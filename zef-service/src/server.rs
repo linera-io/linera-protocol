@@ -115,12 +115,17 @@ impl FromStr for ValidatorOptions {
         let address = parts[1].to_owned();
         let port = parts[2].parse()?;
         let protocol = parts[3].parse().map_err(|s| anyhow!("{}", s))?;
-        let mut shards = Vec::new();
-        for i in 2..parts.len() / 2 {
-            let host = parts[2 * i].to_string();
-            let port = parts[2 * i + 1].parse()?;
-            shards.push(ShardConfig { host, port });
-        }
+
+        let shards = parts[4..]
+            .chunks_exact(2)
+            .map(|shard_address| {
+                let host = shard_address[0].to_owned();
+                let port = shard_address[1].parse()?;
+
+                Ok(ShardConfig { host, port })
+            })
+            .collect::<Result<_, Self::Err>>()?;
+
         Ok(Self {
             server_config_path,
             protocol,
