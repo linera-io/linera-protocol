@@ -8,34 +8,35 @@ if [ -z "$NUM_VALIDATORS" ] || [ -z "$NUM_SHARDS" ]; then
     exit 1
 fi
 
-# Generate final Kubernetes description
-cat > zefchain-k8s.yml << EOF
+generate_validators() {
+    for server in $(seq 1 $NUM_VALIDATORS); do
+        cat << EOF
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: servers
+  name: server-${server}
   labels:
-    app: server
+    app: server-${server}-shards
 spec:
   clusterIP: None
   selector:
-    app: server
+    app: server-${server}-shards
 ---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: server
+  name: server-${server}-shard
 spec:
   selector:
     matchLabels:
-      app: server
-  serviceName: servers
-  replicas: ${NUM_VALIDATORS}
+      app: server-${server}-shards
+  serviceName: server-${server}
+  replicas: ${NUM_SHARDS}
   template:
     metadata:
       labels:
-        app: server
+        app: server-${server}-shards
     spec:
       terminationGracePeriodSeconds: 10
       containers:
@@ -45,10 +46,52 @@ spec:
           command: ["./run-server.sh"]
           args:
             - "${NUM_SHARDS}"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: validator-${server}
+  labels:
+    app: validator-${server}
+spec: 
+  selector:
+    app: validator-${server}
+  ports:
+    - name: zef
+      protocol: TCP
+      port: 9100
+      targetPort: zef-port
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: validator-${server}
+spec:
+  selector:
+    matchLabels:
+      app: validator-${server}
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: validator-${server}
+    spec:
+      terminationGracePeriodSeconds: 10
+      containers:
         - name: proxy
           image: zefchain-test-proxy
           imagePullPolicy: Never
+          ports:
+            - containerPort: 9100
+              name: zef-port
           command: ["./run-proxy.sh"]
+EOF
+    done
+}
+
+# Generate final Kubernetes description
+cat > zefchain-k8s.yml << EOF
+$(generate_validators)
 ---
 apiVersion: v1
 kind: Service
