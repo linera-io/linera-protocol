@@ -13,9 +13,9 @@ rm -rf config/*
 
 # Creare validator configuration directories and generate the command line options
 validator_options() {
-    for server in $(seq 0 "$(expr "${NUM_VALIDATORS}" - 1)"); do
-        shards="$(seq -s':' 9101 "$(expr 9100 + ${NUM_SHARDS})" | sed -e "s/[0-9]\\+/server-${server}.servers:&/g")"
-        echo "server_${server}.json:server-${server}.servers:9100:tcp:${shards}"
+    for server in $(seq 1 "${NUM_VALIDATORS}"); do
+        shards="$(seq -s':' 0 "$(expr "${NUM_SHARDS}" - 1)" | sed -e "s/[0-9]\\+/server-${server}-shard-&.server-${server}:9100/g")"
+        echo "server_${server}.json:validator-${server}:9100:tcp:${shards}"
     done
 }
 
@@ -39,9 +39,7 @@ mkdir /config/
 mv genesis.json /config/
 mv wallet.json /config/
 
-for server in $(seq 0 "$(expr "${NUM_VALIDATORS}" - 1)"); do
-    mv "server_${server}.json" /config/
-done
+mv server_*.json /config/
 
 # Run a HTTP server to serve the configuration files
 mini_httpd -p 8080 -d /config -D -r

@@ -1,23 +1,17 @@
 #!/bin/bash -x
 
-NUM_SHARDS="$1"
-
-if [ -z "$NUM_SHARDS" ]; then
-    echo "USAGE: ./run-server.sh NUM_SHARDS" >&2
-    exit 1
-fi
+hostname
 
 SERVER_ID="$(hostname | cut -f2 -d-)"
+SHARD_ID="$(hostname | cut -f4 -d-)"
 
 ./fetch-config-file.sh genesis.json
 ./fetch-config-file.sh "server_${SERVER_ID}.json"
 
-for shard in $(seq 0 "$(expr "${NUM_SHARDS}" - 1)"); do
-    ./server run \
-        --storage "shard_${shard}.db" \
-        --server "server_${SERVER_ID}.json" \
-        --shard "$shard" \
-        --genesis genesis.json &
-done
+./server run \
+    --storage "shard_data.db" \
+    --server "server_${SERVER_ID}.json" \
+    --shard "$SHARD_ID" \
+    --genesis genesis.json &
 
 sleep 3600
