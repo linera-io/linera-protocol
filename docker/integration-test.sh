@@ -54,6 +54,7 @@ metadata:
   labels:
     app: validator-${server}
 spec: 
+  type: LoadBalancer
   selector:
     app: validator-${server}
   ports:
