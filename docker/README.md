@@ -1,16 +1,15 @@
 # Integration test using Kubernetes
 
-To build the Docker images, I suggest to do it in a new temporary directory, because SSH keys for
-accessing GitHub need to be used when building the images. The steps to do this are:
+To build the Docker images, the `client`, `proxy` and `server` binaries have to be built and copied
+into this directory. The steps to do this are:
 
 ```
-mkdir /tmp/zefchain-docker
-cd /tmp/zefchain-docker
+cd $repo
 
-cp $repo/docker/{Dockerfile,fetch-config-file.sh,run-client.sh,run-proxy.sh,run-server.sh,setup.sh} .
+cargo build --release
+cp target/release/{client,proxy,setup} docker
 
-sed -e 's|/home/[^/]*/|/root/|g' ~/.ssh/config > ssh-config
-cp ~/.ssh/{github_rsa,known_hosts} .
+cd docker
 
 for image in client proxy server setup; do
     docker build -t "zefchain-test-$image" . --target "$image"
