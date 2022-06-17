@@ -1,0 +1,60 @@
+name: Kubernetes
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  integration-test-with-kind:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v1
+      - name: Build binaries
+        run: cargo build --release --bin client --bin proxy --bin server
+      - name: Install Kind
+        run: |
+          curl -sL -o /tmp/kind https://kind.sigs.k8s.io/dl/v0.14.0/kind-linux-amd64
+          chmod +x /tmp/kind
+          mv /tmp/kind /usr/local/bin/
+      - name: Install Kubectl
+        run: |
+          curl -sL -o /tmp/kubectl https://storage.googleapis.com/kubernetes-release/release/v1.24.1/bin/linux/amd64/kubectl
+          chmod +x /tmp/kubectl
+          mv /tmp/kubectl /usr/local/bin/
+      - name: Create cluster
+        run: kind create cluster
+      - name: Build and Load Docker images
+        run: |
+          cd docker
+
+          cp ../target/release/{client,proxy,server} .
+
+          for image in client proxy server setup; do
+              docker build -t "zefchain-test-$image" --target "$image" .
+              kind load docker-image "zefchain-test-$image"
+          done
+      - name: Deploy cluster
+        run: |
+          cd docker
+          ./integration-test.sh 4 5
+          kubectl apply -f zefchain-k8s.yml
+      - name: Wait for client test
+        run: |
+          kubectl wait --for condition=Complete --timeout 180s job/client
+      - name: Print client test logs
+        run: |
+          kubectl logs --tail 500 -l app=client
+      - name: Clean cluster
+        run: |
+          kubectl delete -f docker/zefchain-k8s.yml
+      - name: Delete cluster
+        run: kind delete cluster
