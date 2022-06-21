@@ -1,11 +1,11 @@
-[![Build Status](https://github.com/zefchain/zefchain-protocol/actions/workflows/rust.yml/badge.svg)](https://github.com/zef/zef-protocol/actions/workflows/rust.yml)
+[![Build Status](https://github.com/linera/linera-protocol/actions/workflows/rust.yml/badge.svg)](https://github.com/linera/linera-protocol/actions/workflows/rust.yml)
 [![License](https://img.shields.io/badge/license-Apache-green.svg)](LICENSE.md)
 
-# Zefchain Protocol
+# Linera
 
-This repository is dedicated to developing the Zefchain protocol.
+This repository is dedicated to developing the Linera protocol.
 
-## Quickstart with the Zef service CLI
+## Quickstart with the Linera service CLI
 
 The current code was imported from https://github.com/novifinancial/fastpay/pull/24 then
 cleaned up (e.g. removing coins and assets for now). Atomic swaps are still WIP (notably
@@ -90,6 +90,10 @@ cd ../..
 ```
 
 ## Contributing
+
+### Copyright
+
+The new code should be copyrighted by "Zefchain Labs, Inc". (This is currently still the legal entity behind the Linera project.)
 
 ### Formatting and linting
 
