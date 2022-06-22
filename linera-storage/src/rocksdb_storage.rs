@@ -11,7 +11,9 @@ use linera_base::{
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
+    any::Any,
 };
+use moka::sync::Cache;
 
 #[cfg(test)]
 #[path = "unit_tests/rocksdb_storage_tests.rs"]
@@ -22,6 +24,7 @@ mod rocksdb_storage_tests;
 pub struct RocksdbStore {
     /// RocksDB handle.
     db: rocksdb::DB,
+    cache: Cache<Vec<u8>, Arc<dyn Any + Send + Sync + 'static>>,
 }
 
 #[derive(Clone, Copy)]
@@ -75,10 +78,13 @@ fn open_db(path: &Path) -> Result<rocksdb::DB, rocksdb::Error> {
 }
 
 impl RocksdbStore {
-    pub fn new(path: PathBuf) -> Result<Self, rocksdb::Error> {
+    pub fn new(path: PathBuf, cache_size: u64) -> Result<Self, rocksdb::Error> {
         assert!(path.is_dir());
         Ok(Self {
             db: open_db(&path)?,
+            cache: Cache::<std::vec::Vec<u8>, Arc<dyn Send + Sync + Any + 'static>>::new(
+                cache_size,
+            ),
         })
     }
 
@@ -115,31 +121,47 @@ impl RocksdbStore {
     async fn read<K, V>(&self, key: &K) -> Result<Option<V>, Error>
     where
         K: serde::Serialize + std::fmt::Debug,
-        V: serde::de::DeserializeOwned,
+        V: serde::de::DeserializeOwned + Send + Clone + Sync + Any + 'static,
     {
         let key = bcs::to_bytes(&key).expect("should not fail");
-        let kind = serde_name::trace_name::<V>().expect("V must be a struct or an enum");
-        let value = self
-            .read_value(kind, &key)
-            .await
-            .map_err(|e| Error::StorageIoError {
-                error: format!("{}: {}", kind, e),
-            })?;
-        let result = match value {
-            Some(v) => Some(ron::de::from_bytes(&v).map_err(|e| Error::StorageBcsError {
-                error: format!("{}: {}", kind, e),
-            })?),
-            None => None,
+        let result = match self.cache.get(&key) {
+            Some(v) => Some(V::clone(&v.downcast().expect("wrong bytes from cache"))),
+            None => {
+                let kind = serde_name::trace_name::<V>().expect("V must be a struct or an enum");
+                let value =
+                    self.read_value(kind, &key)
+                        .await
+                        .map_err(|e| Error::StorageIoError {
+                            error: format!("{}: {}", kind, e),
+                        })?;
+                match value {
+                    Some(v) => {
+                        Some(
+                            ron::de::from_bytes::<V>(&v).map_err(|e| Error::StorageBcsError {
+                                error: format!("{}: {}", kind, e),
+                            })?,
+                        )
+                    }
+                    None => None,
+                }
+            }
         };
         Ok(result)
     }
 
     async fn write<'b, K, V>(&self, key: &K, value: &V) -> Result<(), Error>
     where
-        K: serde::Serialize + std::fmt::Debug,
-        V: serde::Serialize + serde::Deserialize<'b> + std::fmt::Debug,
+        K: serde::Serialize + std::fmt::Debug + 'static,
+        V: serde::Serialize
+            + serde::Deserialize<'b>
+            + std::fmt::Debug
+            + std::marker::Sync
+            + Send
+            + Clone
+            + 'static,
     {
         let key = bcs::to_bytes(&key).expect("should not fail");
+        self.cache.insert(key.clone(), Arc::new(value.clone()));
         let kind = serde_name::trace_name::<V>().expect("V must be a struct or an enum");
         let value = ron::to_string(&value).expect("should not fail");
         self.write_value(kind, &key, value.as_bytes())
@@ -156,6 +178,7 @@ impl RocksdbStore {
         V: serde::de::DeserializeOwned,
     {
         let key = bcs::to_bytes(&key).expect("should not fail");
+        self.cache.invalidate(&key);
         let kind = serde_name::trace_name::<V>().expect("V must be a struct or an enum");
         self.remove_value(kind, &key)
             .await
@@ -170,8 +193,10 @@ impl RocksdbStore {
 pub struct RocksdbStoreClient(Arc<RocksdbStore>);
 
 impl RocksdbStoreClient {
-    pub fn new(path: PathBuf) -> Result<Self, rocksdb::Error> {
-        Ok(RocksdbStoreClient(Arc::new(RocksdbStore::new(path)?)))
+    pub fn new(path: PathBuf, cache_size: u64) -> Result<Self, rocksdb::Error> {
+        Ok(RocksdbStoreClient(Arc::new(RocksdbStore::new(
+            path, cache_size,
+        )?)))
     }
 }
 
