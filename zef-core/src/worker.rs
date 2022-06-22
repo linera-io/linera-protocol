@@ -570,22 +570,18 @@ where
                 height,
             } => {
                 let mut chain = self.storage.read_active_chain(admin).await?;
-                if let std::collections::hash_map::Entry::Occupied(mut channel) =
-                    chain.channels.entry(name.clone())
-                {
+                if let Some(channel) = chain.channels.get_mut(&name) {
                     ensure!(
-                        channel.get().block_height >= Some(height),
+                        channel.block_height >= Some(height),
                         Error::InvalidCrossChainRequest
                     );
-                    if channel.get().block_height > Some(height) {
+                    if channel.block_height > Some(height) {
                         // This is a confirmation of an obsolete broadcast.
                         return Ok(Vec::new());
                     }
-                    if let std::collections::hash_map::Entry::Occupied(mut entry) =
-                        channel.get_mut().subscribers.entry(recipient)
-                    {
-                        if !entry.get() {
-                            *entry.get_mut() = true;
+                    if let Some(up_to_date) = channel.subscribers.get_mut(&recipient) {
+                        if !*up_to_date {
+                            *up_to_date = true;
                             self.storage.write_chain(chain).await?;
                         }
                     }
