@@ -11,7 +11,7 @@ use zef_base::{
     crypto::*,
     error::Error,
     execution::{
-        Address, Amount, Balance, ChainStatus, Effect, ExecutionState, Operation, UserData,
+        Address, Amount, Balance, ChainAdminStatus, Effect, ExecutionState, Operation, UserData,
         ADMIN_CHANNEL,
     },
     manager::ChainManager,
@@ -143,7 +143,7 @@ fn make_transfer_certificate(
     let state = ExecutionState {
         epoch: Some(Epoch::from(0)),
         chain_id,
-        status: Some(ChainStatus::ManagedBy {
+        admin_status: Some(ChainAdminStatus::ManagedBy {
             admin_id: ChainId::root(0),
             subscribed: false,
         }),
@@ -209,7 +209,7 @@ async fn test_read_chain_state_unknown_chain() {
     chain.description = Some(ChainDescription::Root(99));
     chain.state.committees.insert(Epoch(0), committee);
     chain.state.epoch = Some(Epoch(0));
-    chain.state.status = Some(ChainStatus::Managing);
+    chain.state.admin_status = Some(ChainAdminStatus::Managing);
     chain.state.manager = ChainManager::single(PublicKey::debug(4).into());
     worker.storage.write_chain(chain).await.unwrap();
     worker
@@ -482,7 +482,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             state_hash: HashValue::new(&ExecutionState {
                 epoch: Some(epoch),
                 chain_id: ChainId::root(1),
-                status: Some(ChainStatus::ManagedBy {
+                admin_status: Some(ChainAdminStatus::ManagedBy {
                     admin_id: ChainId::root(0),
                     subscribed: false,
                 }),
@@ -516,7 +516,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             state_hash: HashValue::new(&ExecutionState {
                 epoch: Some(epoch),
                 chain_id: ChainId::root(1),
-                status: Some(ChainStatus::ManagedBy {
+                admin_status: Some(ChainAdminStatus::ManagedBy {
                     admin_id: ChainId::root(0),
                     subscribed: false,
                 }),
@@ -761,7 +761,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                 state_hash: HashValue::new(&ExecutionState {
                     epoch: Some(epoch),
                     chain_id: ChainId::root(2),
-                    status: Some(ChainStatus::ManagedBy {
+                    admin_status: Some(ChainAdminStatus::ManagedBy {
                         admin_id: ChainId::root(0),
                         subscribed: false,
                     }),
@@ -1459,7 +1459,7 @@ async fn test_chain_creation_with_committee_creation() {
             state_hash: HashValue::new(&ExecutionState {
                 epoch: Some(Epoch::from(0)),
                 chain_id: root_id,
-                status: Some(ChainStatus::Managing),
+                admin_status: Some(ChainAdminStatus::Managing),
                 committees: committees.clone(),
                 manager: ChainManager::single(key_pair.public().into()),
                 balance: Balance::from(0),
@@ -1475,8 +1475,8 @@ async fn test_chain_creation_with_committee_creation() {
         assert_eq!(BlockHeight::from(1), root_chain.next_block_height);
         assert!(root_chain.outboxes.is_empty());
         assert!(matches!(
-            root_chain.state.status,
-            Some(ChainStatus::Managing)
+            root_chain.state.admin_status,
+            Some(ChainAdminStatus::Managing)
         ));
         // The root chain has 1 subscriber already.
         assert_eq!(
@@ -1533,7 +1533,7 @@ async fn test_chain_creation_with_committee_creation() {
             state_hash: HashValue::new(&ExecutionState {
                 epoch: Some(Epoch::from(1)),
                 chain_id: root_id,
-                status: Some(ChainStatus::Managing),
+                admin_status: Some(ChainAdminStatus::Managing),
                 // The root chain knows both committees at the end.
                 committees: committees2.clone(),
                 manager: ChainManager::single(key_pair.public().into()),
@@ -1587,7 +1587,7 @@ async fn test_chain_creation_with_committee_creation() {
             state_hash: HashValue::new(&ExecutionState {
                 epoch: Some(Epoch::from(0)),
                 chain_id: child_id0,
-                status: Some(ChainStatus::ManagedBy {
+                admin_status: Some(ChainAdminStatus::ManagedBy {
                     admin_id: root_id,
                     subscribed: true,
                 }),
@@ -1619,7 +1619,7 @@ async fn test_chain_creation_with_committee_creation() {
         let child_chain = worker.storage.read_active_chain(child_id).await.unwrap();
         assert_eq!(BlockHeight::from(0), child_chain.next_block_height);
         assert!(
-            matches!(child_chain.state.status, Some(ChainStatus::ManagedBy { admin_id, subscribed, .. }) if admin_id == root_id && subscribed)
+            matches!(child_chain.state.admin_status, Some(ChainAdminStatus::ManagedBy { admin_id, subscribed, .. }) if admin_id == root_id && subscribed)
         );
         assert!(!child_chain
             .inboxes
@@ -1657,7 +1657,7 @@ async fn test_chain_creation_with_committee_creation() {
             state_hash: HashValue::new(&ExecutionState {
                 epoch: Some(Epoch::from(1)),
                 chain_id: child_id,
-                status: Some(ChainStatus::ManagedBy {
+                admin_status: Some(ChainAdminStatus::ManagedBy {
                     admin_id: root_id,
                     subscribed: true,
                 }),

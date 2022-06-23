@@ -23,7 +23,7 @@ pub struct ExecutionState {
     pub epoch: Option<Epoch>,
     /// Whether our reconfigurations are managed by a "beacon" chain, or if we are it and
     /// managing other chains.
-    pub status: Option<ChainStatus>,
+    pub admin_status: Option<ChainAdminStatus>,
     /// The committees that we trust, indexed by epoch number.
     pub committees: BTreeMap<Epoch, Committee>,
     /// Manager of the chain.
@@ -104,7 +104,7 @@ pub enum Operation {
 /// The administrative status of this chain w.r.t reconfigurations.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub enum ChainStatus {
+pub enum ChainAdminStatus {
     ManagedBy { admin_id: ChainId, subscribed: bool },
     Managing,
 }
@@ -143,7 +143,7 @@ impl ExecutionState {
         Self {
             chain_id,
             epoch: None,
-            status: None,
+            admin_status: None,
             committees: BTreeMap::new(),
             manager: ChainManager::default(),
             balance: Balance::default(),
@@ -161,12 +161,12 @@ pub(crate) struct ApplicationResult {
 impl ExecutionState {
     pub fn admin_id(&self) -> Result<ChainId, Error> {
         match self
-            .status
+            .admin_status
             .as_ref()
             .ok_or(Error::InactiveChain(self.chain_id))?
         {
-            ChainStatus::ManagedBy { admin_id, .. } => Ok(*admin_id),
-            ChainStatus::Managing { .. } => Ok(self.chain_id),
+            ChainAdminStatus::ManagedBy { admin_id, .. } => Ok(*admin_id),
+            ChainAdminStatus::Managing { .. } => Ok(self.chain_id),
         }
     }
 
@@ -187,8 +187,8 @@ impl ExecutionState {
             }
             SetCommittees { admin_id, .. } => {
                 // We are subscribed to this admin chain.
-                match self.status.as_ref() {
-                    Some(ChainStatus::ManagedBy {
+                match self.admin_status.as_ref() {
+                    Some(ChainAdminStatus::ManagedBy {
                         admin_id: id,
                         subscribed,
                     }) => *subscribed && admin_id == id,
@@ -338,8 +338,8 @@ impl ExecutionState {
                     *id == chain_id || id != admin_id,
                     Error::InvalidSubscriptionToNewCommittees(*id)
                 );
-                match &mut self.status {
-                    Some(ChainStatus::ManagedBy {
+                match &mut self.admin_status {
+                    Some(ChainAdminStatus::ManagedBy {
                         admin_id: id,
                         subscribed,
                     }) if admin_id == id && !*subscribed => {
@@ -378,8 +378,8 @@ impl ExecutionState {
                 epoch,
                 committees,
             } if matches!(
-                &self.status,
-                Some(ChainStatus::ManagedBy { admin_id: id, subscribed }) if *subscribed && admin_id == id
+                &self.admin_status,
+                Some(ChainAdminStatus::ManagedBy { admin_id: id, subscribed }) if *subscribed && admin_id == id
             ) =>
             {
                 // This chain was not yet subscribed at the time earlier epochs were broadcast.

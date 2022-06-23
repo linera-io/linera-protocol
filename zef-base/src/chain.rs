@@ -7,7 +7,7 @@ use crate::{
     crypto::*,
     ensure,
     error::Error,
-    execution::{Balance, ChainStatus, Effect, ExecutionState, ADMIN_CHANNEL},
+    execution::{Balance, ChainAdminStatus, Effect, ExecutionState, ADMIN_CHANNEL},
     manager::ChainManager,
     messages::*,
 };
@@ -119,12 +119,12 @@ impl ChainState {
         chain.description = Some(description);
         chain.state.epoch = Some(Epoch::from(0));
         if ChainId::from(description) == admin_id {
-            chain.state.status = Some(ChainStatus::Managing);
+            chain.state.admin_status = Some(ChainAdminStatus::Managing);
             chain
                 .channels
                 .insert(ADMIN_CHANNEL.into(), ChannelState::default());
         } else {
-            chain.state.status = Some(ChainStatus::ManagedBy {
+            chain.state.admin_status = Some(ChainAdminStatus::ManagedBy {
                 admin_id,
                 subscribed: false,
             });
@@ -146,7 +146,7 @@ impl ChainState {
                 .state
                 .committees
                 .contains_key(self.state.epoch.as_ref().unwrap())
-            && self.state.status.is_some()
+            && self.state.admin_status.is_some()
     }
 
     pub fn make_chain_info(&self, key_pair: Option<&KeyPair>) -> ChainInfoResponse {
@@ -246,7 +246,7 @@ impl ChainState {
                     self.description = Some(description);
                     self.state.epoch = Some(*epoch);
                     self.state.committees = committees.clone();
-                    self.state.status = Some(ChainStatus::ManagedBy {
+                    self.state.admin_status = Some(ChainAdminStatus::ManagedBy {
                         admin_id: *admin_id,
                         subscribed: true,
                     });
