@@ -59,6 +59,16 @@ Certificate:
           TUPLE:
             - TYPENAME: ValidatorName
             - TYPENAME: Signature
+ChainAdminStatus:
+  ENUM:
+    0:
+      ManagedBy:
+        STRUCT:
+          - admin_id:
+              TYPENAME: ChainId
+          - subscribed: BOOL
+    1:
+      Managing: UNIT
 ChainDescription:
   ENUM:
     0:
@@ -175,16 +185,6 @@ ChainState:
           KEY: STR
           VALUE:
             TYPENAME: ChannelState
-ChainStatus:
-  ENUM:
-    0:
-      ManagedBy:
-        STRUCT:
-          - admin_id:
-              TYPENAME: ChainId
-          - subscribed: BOOL
-    1:
-      Managing: UNIT
 ChannelState:
   STRUCT:
     - subscribers:
@@ -450,9 +450,9 @@ ExecutionState:
     - epoch:
         OPTION:
           TYPENAME: Epoch
-    - status:
+    - admin_status:
         OPTION:
-          TYPENAME: ChainStatus
+          TYPENAME: ChainAdminStatus
     - committees:
         MAP:
           KEY:
