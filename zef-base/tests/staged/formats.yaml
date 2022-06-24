@@ -185,6 +185,11 @@ ChainState:
           KEY: STR
           VALUE:
             TYPENAME: ChannelState
+ChannelId:
+  STRUCT:
+    - chain_id:
+        TYPENAME: ChainId
+    - name: STR
 ChannelState:
   STRUCT:
     - subscribers:
@@ -607,9 +612,8 @@ Origin:
           TYPENAME: ChainId
     1:
       Channel:
-        TUPLE:
-          - TYPENAME: ChainId
-          - STR
+        NEWTYPE:
+          TYPENAME: ChannelId
 OutboxState:
   STRUCT:
     - queue:
