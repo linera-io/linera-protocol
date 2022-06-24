@@ -8,7 +8,7 @@ use crate::{
     ensure,
     error::Error,
     manager::ChainManager,
-    messages::{BlockHeight, ChainId, EffectId, Epoch, Owner},
+    messages::{BlockHeight, ChainId, ChannelId, EffectId, Epoch, Owner},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -24,6 +24,9 @@ pub struct ExecutionState {
     /// Whether our reconfigurations are managed by a "beacon" chain, or if we are it and
     /// managing other chains.
     pub admin_status: Option<ChainAdminStatus>,
+    /// Track the channels that we have subscribed to.
+    /// We avoid BTreeSet<String> because of a Serde/BCS limitation.
+    pub subscriptions: BTreeMap<ChannelId, ()>,
     /// The committees that we trust, indexed by epoch number.
     pub committees: BTreeMap<Epoch, Committee>,
     /// Manager of the chain.
@@ -105,7 +108,7 @@ pub enum Operation {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub enum ChainAdminStatus {
-    ManagedBy { admin_id: ChainId, subscribed: bool },
+    ManagedBy { admin_id: ChainId },
     Managing,
 }
 
@@ -144,6 +147,7 @@ impl ExecutionState {
             chain_id,
             epoch: None,
             admin_status: None,
+            subscriptions: BTreeMap::new(),
             committees: BTreeMap::new(),
             manager: ChainManager::default(),
             balance: Balance::default(),
@@ -165,7 +169,7 @@ impl ExecutionState {
             .as_ref()
             .ok_or(Error::InactiveChain(self.chain_id))?
         {
-            ChainAdminStatus::ManagedBy { admin_id, .. } => Ok(*admin_id),
+            ChainAdminStatus::ManagedBy { admin_id } => Ok(*admin_id),
             ChainAdminStatus::Managing { .. } => Ok(self.chain_id),
         }
     }
@@ -186,12 +190,9 @@ impl ExecutionState {
                 self.chain_id == *owner_id
             }
             SetCommittees { admin_id, .. } => {
-                // We are subscribed to this admin chain.
+                // We are managed by this admin chain.
                 match self.admin_status.as_ref() {
-                    Some(ChainAdminStatus::ManagedBy {
-                        admin_id: id,
-                        subscribed,
-                    }) => *subscribed && admin_id == id,
+                    Some(ChainAdminStatus::ManagedBy { admin_id: id }) => admin_id == id,
                     _ => false,
                 }
             }
@@ -338,16 +339,23 @@ impl ExecutionState {
                     *id == chain_id || id != admin_id,
                     Error::InvalidSubscriptionToNewCommittees(*id)
                 );
-                match &mut self.admin_status {
+                ensure!(
+                    matches!(&self.admin_status,
                     Some(ChainAdminStatus::ManagedBy {
                         admin_id: id,
-                        subscribed,
-                    }) if admin_id == id && !*subscribed => {
-                        // Flip the value to prevent multiple subscriptions.
-                        *subscribed = true;
-                    }
-                    _ => return Err(Error::InvalidSubscriptionToNewCommittees(*id)),
-                }
+                    }) if admin_id == id),
+                    Error::InvalidSubscriptionToNewCommittees(*id)
+                );
+                let channel_id = ChannelId {
+                    chain_id: *admin_id,
+                    name: ADMIN_CHANNEL.into(),
+                };
+                ensure!(
+                    !self.subscriptions.contains_key(&channel_id),
+                    Error::InvalidSubscriptionToNewCommittees(*id)
+                );
+                // Flip the value to prevent multiple subscriptions.
+                self.subscriptions.insert(channel_id, ());
                 let application = ApplicationResult {
                     effects: vec![Effect::Subscribe {
                         id: *id,
@@ -379,7 +387,7 @@ impl ExecutionState {
                 committees,
             } if matches!(
                 &self.admin_status,
-                Some(ChainAdminStatus::ManagedBy { admin_id: id, subscribed }) if *subscribed && admin_id == id
+                Some(ChainAdminStatus::ManagedBy { admin_id: id }) if admin_id == id
             ) =>
             {
                 // This chain was not yet subscribed at the time earlier epochs were broadcast.

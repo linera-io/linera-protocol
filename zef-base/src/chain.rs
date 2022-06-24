@@ -124,10 +124,7 @@ impl ChainState {
                 .channels
                 .insert(ADMIN_CHANNEL.into(), ChannelState::default());
         } else {
-            chain.state.admin_status = Some(ChainAdminStatus::ManagedBy {
-                admin_id,
-                subscribed: false,
-            });
+            chain.state.admin_status = Some(ChainAdminStatus::ManagedBy { admin_id });
         }
         chain.state.committees.insert(Epoch::from(0), committee);
         chain.state.manager = ChainManager::single(owner);
@@ -248,8 +245,14 @@ impl ChainState {
                     self.state.committees = committees.clone();
                     self.state.admin_status = Some(ChainAdminStatus::ManagedBy {
                         admin_id: *admin_id,
-                        subscribed: true,
                     });
+                    self.state.subscriptions.insert(
+                        ChannelId {
+                            chain_id: *admin_id,
+                            name: ADMIN_CHANNEL.into(),
+                        },
+                        (),
+                    );
                     self.state.manager = ChainManager::single(*owner);
                     self.state_hash = HashValue::new(&self.state);
                 }
