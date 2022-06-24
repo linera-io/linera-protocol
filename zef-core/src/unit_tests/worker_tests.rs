@@ -145,8 +145,8 @@ fn make_transfer_certificate(
         chain_id,
         admin_status: Some(ChainAdminStatus::ManagedBy {
             admin_id: ChainId::root(0),
-            subscribed: false,
         }),
+        subscriptions: BTreeMap::new(),
         committees: [(Epoch::from(0), committee.clone())].into_iter().collect(),
         manager: ChainManager::single(key_pair.public().into()),
         balance,
@@ -484,8 +484,8 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                 chain_id: ChainId::root(1),
                 admin_status: Some(ChainAdminStatus::ManagedBy {
                     admin_id: ChainId::root(0),
-                    subscribed: false,
                 }),
+                subscriptions: BTreeMap::new(),
                 committees: [(epoch, committee.clone())].into_iter().collect(),
                 manager: ChainManager::single(sender_key_pair.public().into()),
                 balance: Balance::from(3),
@@ -518,8 +518,8 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                 chain_id: ChainId::root(1),
                 admin_status: Some(ChainAdminStatus::ManagedBy {
                     admin_id: ChainId::root(0),
-                    subscribed: false,
                 }),
+                subscriptions: BTreeMap::new(),
                 committees: [(epoch, committee.clone())].into_iter().collect(),
                 manager: ChainManager::single(sender_key_pair.public().into()),
                 balance: Balance::from(0),
@@ -763,8 +763,8 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                     chain_id: ChainId::root(2),
                     admin_status: Some(ChainAdminStatus::ManagedBy {
                         admin_id: ChainId::root(0),
-                        subscribed: false,
                     }),
+                    subscriptions: BTreeMap::new(),
                     committees: [(epoch, committee.clone())].into_iter().collect(),
                     manager: ChainManager::single(recipient_key_pair.public().into()),
                     balance: Balance::from(0),
@@ -1460,6 +1460,7 @@ async fn test_chain_creation_with_committee_creation() {
                 epoch: Some(Epoch::from(0)),
                 chain_id: root_id,
                 admin_status: Some(ChainAdminStatus::Managing),
+                subscriptions: BTreeMap::new(),
                 committees: committees.clone(),
                 manager: ChainManager::single(key_pair.public().into()),
                 balance: Balance::from(0),
@@ -1534,6 +1535,7 @@ async fn test_chain_creation_with_committee_creation() {
                 epoch: Some(Epoch::from(1)),
                 chain_id: root_id,
                 admin_status: Some(ChainAdminStatus::Managing),
+                subscriptions: BTreeMap::new(),
                 // The root chain knows both committees at the end.
                 committees: committees2.clone(),
                 manager: ChainManager::single(key_pair.public().into()),
@@ -1587,10 +1589,16 @@ async fn test_chain_creation_with_committee_creation() {
             state_hash: HashValue::new(&ExecutionState {
                 epoch: Some(Epoch::from(0)),
                 chain_id: child_id0,
-                admin_status: Some(ChainAdminStatus::ManagedBy {
-                    admin_id: root_id,
-                    subscribed: true,
-                }),
+                admin_status: Some(ChainAdminStatus::ManagedBy { admin_id: root_id }),
+                subscriptions: [(
+                    ChannelId {
+                        chain_id: root_id,
+                        name: ADMIN_CHANNEL.into(),
+                    },
+                    (),
+                )]
+                .into_iter()
+                .collect(),
                 committees: committees.clone(),
                 manager: ChainManager::single(key_pair.public().into()),
                 balance: Balance::from(0),
@@ -1619,8 +1627,9 @@ async fn test_chain_creation_with_committee_creation() {
         let child_chain = worker.storage.read_active_chain(child_id).await.unwrap();
         assert_eq!(BlockHeight::from(0), child_chain.next_block_height);
         assert!(
-            matches!(child_chain.state.admin_status, Some(ChainAdminStatus::ManagedBy { admin_id, subscribed, .. }) if admin_id == root_id && subscribed)
+            matches!(child_chain.state.admin_status, Some(ChainAdminStatus::ManagedBy { admin_id }) if admin_id == root_id)
         );
+        assert_eq!(child_chain.state.subscriptions.len(), 1);
         assert!(!child_chain
             .inboxes
             .get(&Origin::Chain(child_id0))
@@ -1660,10 +1669,16 @@ async fn test_chain_creation_with_committee_creation() {
             state_hash: HashValue::new(&ExecutionState {
                 epoch: Some(Epoch::from(1)),
                 chain_id: child_id,
-                admin_status: Some(ChainAdminStatus::ManagedBy {
-                    admin_id: root_id,
-                    subscribed: true,
-                }),
+                admin_status: Some(ChainAdminStatus::ManagedBy { admin_id: root_id }),
+                subscriptions: [(
+                    ChannelId {
+                        chain_id: root_id,
+                        name: ADMIN_CHANNEL.into(),
+                    },
+                    (),
+                )]
+                .into_iter()
+                .collect(),
                 // Finally the child knows about both committees.
                 committees: committees2.clone(),
                 manager: ChainManager::single(key_pair.public().into()),
