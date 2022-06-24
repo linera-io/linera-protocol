@@ -136,8 +136,12 @@ where
                             .storage
                             .read_certificate(chain.confirmed_log[usize::from(height)])
                             .await?;
+                        let origin = Origin::Channel(ChannelId {
+                            chain_id: chain.state.chain_id,
+                            name: name.into(),
+                        });
                         continuation.push(CrossChainRequest::UpdateRecipient {
-                            origin: Origin::Channel(chain.state.chain_id, name.into()),
+                            origin,
                             recipient,
                             certificates: vec![certificate],
                         })
@@ -166,8 +170,12 @@ where
                             .storage
                             .read_certificate(chain.confirmed_log[usize::from(height)])
                             .await?;
+                        let origin = Origin::Channel(ChannelId {
+                            chain_id: chain.state.chain_id,
+                            name: name.into(),
+                        });
                         continuation.push(CrossChainRequest::UpdateRecipient {
-                            origin: Origin::Channel(chain.state.chain_id, name.clone()),
+                            origin,
                             recipient,
                             certificates: vec![certificate],
                         })
@@ -565,12 +573,12 @@ where
                 Ok(Vec::new())
             }
             CrossChainRequest::ConfirmUpdatedRecipient {
-                origin: Origin::Channel(admin, name),
+                origin: Origin::Channel(channel_id),
                 recipient,
                 height,
             } => {
-                let mut chain = self.storage.read_active_chain(admin).await?;
-                if let Some(channel) = chain.channels.get_mut(&name) {
+                let mut chain = self.storage.read_active_chain(channel_id.chain_id).await?;
+                if let Some(channel) = chain.channels.get_mut(&channel_id.name) {
                     ensure!(
                         channel.block_height >= Some(height),
                         Error::InvalidCrossChainRequest

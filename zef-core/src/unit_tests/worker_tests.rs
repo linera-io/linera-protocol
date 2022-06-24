@@ -1638,7 +1638,10 @@ async fn test_chain_creation_with_committee_creation() {
                 epoch: Epoch::from(0),
                 chain_id: child_id,
                 incoming_messages: vec![MessageGroup {
-                    origin: Origin::Channel(root_id, ADMIN_CHANNEL.into()),
+                    origin: Origin::Channel(ChannelId {
+                        chain_id: root_id,
+                        name: ADMIN_CHANNEL.into(),
+                    }),
                     height: BlockHeight::from(2),
                     effects: vec![(
                         0,
