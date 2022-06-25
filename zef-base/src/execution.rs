@@ -97,7 +97,7 @@ pub enum Operation {
     },
     /// Subscribe to future committees created by `admin_id`. Same as OpenChain but useful
     /// for root chains (other than admin_id) created in the genesis config.
-    SubscribeToNewCommittees { id: ChainId, admin_id: ChainId },
+    SubscribeToNewCommittees { admin_id: ChainId },
     /// (admin chain only) Remove a committee. Once this message is accepted by a chain,
     /// blocks from the retired epoch will not be accepted until they are followed (hence
     /// re-certified) by a block certified by a recent committee.
@@ -334,17 +334,18 @@ impl ExecutionState {
                 };
                 Ok(application)
             }
-            Operation::SubscribeToNewCommittees { id, admin_id } => {
+            Operation::SubscribeToNewCommittees { admin_id } => {
+                // We should not subscribe to ourself in this case.
                 ensure!(
-                    *id == chain_id || id != admin_id,
-                    Error::InvalidSubscriptionToNewCommittees(*id)
+                    chain_id != *admin_id,
+                    Error::InvalidSubscriptionToNewCommittees(chain_id)
                 );
                 ensure!(
                     matches!(&self.admin_status,
                     Some(ChainAdminStatus::ManagedBy {
                         admin_id: id,
                     }) if admin_id == id),
-                    Error::InvalidSubscriptionToNewCommittees(*id)
+                    Error::InvalidSubscriptionToNewCommittees(chain_id)
                 );
                 let channel_id = ChannelId {
                     chain_id: *admin_id,
@@ -352,13 +353,13 @@ impl ExecutionState {
                 };
                 ensure!(
                     !self.subscriptions.contains_key(&channel_id),
-                    Error::InvalidSubscriptionToNewCommittees(*id)
+                    Error::InvalidSubscriptionToNewCommittees(chain_id)
                 );
                 // Flip the value to prevent multiple subscriptions.
                 self.subscriptions.insert(channel_id, ());
                 let application = ApplicationResult {
                     effects: vec![Effect::Subscribe {
-                        id: *id,
+                        id: chain_id,
                         owner_id: *admin_id,
                         channel_name: ADMIN_CHANNEL.into(),
                     }],

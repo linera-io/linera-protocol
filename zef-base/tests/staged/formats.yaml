@@ -605,8 +605,6 @@ Operation:
     6:
       SubscribeToNewCommittees:
         STRUCT:
-          - id:
-              TYPENAME: ChainId
           - admin_id:
               TYPENAME: ChainId
     7:
