@@ -1401,8 +1401,10 @@ async fn test_chain_creation_with_committee_creation() {
                 },
                 Effect::Subscribe {
                     id: child_id0,
-                    owner_id: root_id,
-                    channel_name: ADMIN_CHANNEL.into(),
+                    channel: ChannelId {
+                        chain_id: root_id,
+                        name: ADMIN_CHANNEL.into(),
+                    },
                 },
             ],
             state_hash: HashValue::new(&ExecutionState {
@@ -1461,8 +1463,10 @@ async fn test_chain_creation_with_committee_creation() {
                         1,
                         Effect::Subscribe {
                             id: child_id0,
-                            owner_id: root_id,
-                            channel_name: ADMIN_CHANNEL.into(),
+                            channel: ChannelId {
+                                chain_id: root_id,
+                                name: ADMIN_CHANNEL.into(),
+                            },
                         },
                     )],
                 }],
@@ -1531,8 +1535,10 @@ async fn test_chain_creation_with_committee_creation() {
                 },
                 Effect::Subscribe {
                     id: child_id,
-                    owner_id: root_id,
-                    channel_name: ADMIN_CHANNEL.into(),
+                    channel: ChannelId {
+                        chain_id: root_id,
+                        name: ADMIN_CHANNEL.into(),
+                    },
                 },
             ],
             state_hash: HashValue::new(&ExecutionState {
