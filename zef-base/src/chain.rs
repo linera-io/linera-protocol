@@ -270,26 +270,18 @@ impl ChainState {
                     self.state.manager = ChainManager::single(*owner);
                     self.state_hash = HashValue::new(&self.state);
                 }
-                Effect::Subscribe {
-                    id,
-                    owner_id,
-                    channel_name,
-                } if owner_id == &self.state.chain_id => {
+                Effect::Subscribe { id, channel } if channel.chain_id == self.state.chain_id => {
                     let channel = self
                         .channels
-                        .entry(channel_name.clone())
+                        .entry(channel.name.clone())
                         .or_insert_with(ChannelState::default);
                     // Request past and future messages from this channel.
                     channel.subscribers.insert(*id, false);
                 }
-                Effect::Unsubscribe {
-                    id,
-                    owner_id,
-                    channel_name,
-                } if owner_id == &self.state.chain_id => {
+                Effect::Unsubscribe { id, channel } if channel.chain_id == self.state.chain_id => {
                     let channel = self
                         .channels
-                        .entry(channel_name.clone())
+                        .entry(channel.name.clone())
                         .or_insert_with(ChannelState::default);
                     // Remove subscriber.
                     channel.subscribers.remove(id);
@@ -428,16 +420,8 @@ impl ChainState {
             // When we unsubscribe from a channel, the corresponding inbox must be flushed
             // immediately so that we don't accept incoming messages until we subscribe again.
             for effect in &application.effects {
-                if let Effect::Unsubscribe {
-                    owner_id,
-                    channel_name,
-                    ..
-                } = effect
-                {
-                    let origin = Origin::Channel(ChannelId {
-                        chain_id: *owner_id,
-                        name: channel_name.clone(),
-                    });
+                if let Effect::Unsubscribe { channel, .. } = effect {
+                    let origin = Origin::Channel(channel.clone());
                     self.inboxes.remove(&origin);
                 }
             }

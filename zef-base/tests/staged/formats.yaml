@@ -272,17 +272,15 @@ Effect:
         STRUCT:
           - id:
               TYPENAME: ChainId
-          - owner_id:
-              TYPENAME: ChainId
-          - channel_name: STR
+          - channel:
+              TYPENAME: ChannelId
     4:
       Unsubscribe:
         STRUCT:
           - id:
               TYPENAME: ChainId
-          - owner_id:
-              TYPENAME: ChainId
-          - channel_name: STR
+          - channel:
+              TYPENAME: ChannelId
 EffectId:
   STRUCT:
     - chain_id:

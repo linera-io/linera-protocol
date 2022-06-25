@@ -135,17 +135,9 @@ pub enum Effect {
         committees: BTreeMap<Epoch, Committee>,
     },
     /// Subscribe to a channel.
-    Subscribe {
-        id: ChainId,
-        owner_id: ChainId,
-        channel_name: String,
-    },
+    Subscribe { id: ChainId, channel: ChannelId },
     /// Unsubscribe to a channel.
-    Unsubscribe {
-        id: ChainId,
-        owner_id: ChainId,
-        channel_name: String,
-    },
+    Unsubscribe { id: ChainId, channel: ChannelId },
 }
 
 impl BcsSignable for ExecutionState {}
@@ -194,9 +186,9 @@ impl ExecutionState {
                 // We are the created chain.
                 self.chain_id == *id
             }
-            Subscribe { owner_id, .. } | Unsubscribe { owner_id, .. } => {
+            Subscribe { channel, .. } | Unsubscribe { channel, .. } => {
                 // We are the owner of the channel.
-                self.chain_id == *owner_id
+                self.chain_id == channel.chain_id
             }
             SetCommittees { admin_id, .. } => {
                 // We are managed by this admin chain.
@@ -253,8 +245,10 @@ impl ExecutionState {
                 };
                 let e2 = Effect::Subscribe {
                     id: *id,
-                    owner_id: *admin_id,
-                    channel_name: ADMIN_CHANNEL.into(),
+                    channel: ChannelId {
+                        chain_id: *admin_id,
+                        name: ADMIN_CHANNEL.into(),
+                    },
                 };
                 let application = ApplicationResult {
                     effects: vec![e1, e2],
@@ -278,12 +272,11 @@ impl ExecutionState {
                 let mut effects = Vec::new();
                 let mut recipients = Vec::new();
                 for (channel, ()) in subscriptions {
+                    recipients.push(channel.chain_id);
                     effects.push(Effect::Unsubscribe {
                         id: chain_id,
-                        owner_id: channel.chain_id,
-                        channel_name: channel.name,
+                        channel,
                     });
-                    recipients.push(channel.chain_id);
                 }
                 let application = ApplicationResult {
                     effects,
@@ -385,8 +378,10 @@ impl ExecutionState {
                 let application = ApplicationResult {
                     effects: vec![Effect::Subscribe {
                         id: chain_id,
-                        owner_id: *admin_id,
-                        channel_name: ADMIN_CHANNEL.into(),
+                        channel: ChannelId {
+                            chain_id: *admin_id,
+                            name: ADMIN_CHANNEL.into(),
+                        },
                     }],
                     recipients: vec![*admin_id],
                     need_channel_broadcast: Vec::new(),
@@ -406,8 +401,10 @@ impl ExecutionState {
                 let application = ApplicationResult {
                     effects: vec![Effect::Unsubscribe {
                         id: chain_id,
-                        owner_id: *admin_id,
-                        channel_name: ADMIN_CHANNEL.into(),
+                        channel: ChannelId {
+                            chain_id: *admin_id,
+                            name: ADMIN_CHANNEL.into(),
+                        },
                     }],
                     recipients: vec![*admin_id],
                     need_channel_broadcast: Vec::new(),
