@@ -275,6 +275,14 @@ Effect:
           - owner_id:
               TYPENAME: ChainId
           - channel_name: STR
+    4:
+      Unsubscribe:
+        STRUCT:
+          - id:
+              TYPENAME: ChainId
+          - owner_id:
+              TYPENAME: ChainId
+          - channel_name: STR
 EffectId:
   STRUCT:
     - chain_id:
@@ -361,28 +369,32 @@ Error:
         NEWTYPE:
           TYPENAME: ChainId
     26:
-      InvalidCommittees: UNIT
+      InvalidUnsubscriptionToNewCommittees:
+        NEWTYPE:
+          TYPENAME: ChainId
     27:
-      InvalidCommitteeCreation: UNIT
+      InvalidCommittees: UNIT
     28:
-      InvalidCommitteeRemoval: UNIT
+      InvalidCommitteeCreation: UNIT
     29:
+      InvalidCommitteeRemoval: UNIT
+    30:
       InsufficientRound:
         NEWTYPE:
           TYPENAME: RoundNumber
-    30:
+    31:
       HasLockedBlock:
         TUPLE:
           - TYPENAME: BlockHeight
           - TYPENAME: RoundNumber
-    31:
+    32:
       MissingCrossChainUpdate:
         STRUCT:
           - origin:
               TYPENAME: Origin
           - height:
               TYPENAME: BlockHeight
-    32:
+    33:
       InvalidMessageContent:
         STRUCT:
           - origin:
@@ -390,7 +402,7 @@ Error:
           - height:
               TYPENAME: BlockHeight
           - index: U64
-    33:
+    34:
       InvalidMessage:
         STRUCT:
           - origin:
@@ -401,7 +413,7 @@ Error:
           - expected_height:
               TYPENAME: BlockHeight
           - expected_index: U64
-    34:
+    35:
       InvalidMessageOrder:
         STRUCT:
           - origin:
@@ -409,41 +421,41 @@ Error:
           - height:
               TYPENAME: BlockHeight
           - index: U64
-    35:
-      CertificateNotFound: UNIT
     36:
-      InvalidCrossChainRequest: UNIT
+      CertificateNotFound: UNIT
     37:
-      InvalidBlockProposal: UNIT
+      InvalidCrossChainRequest: UNIT
     38:
-      InvalidBlockChaining: UNIT
+      InvalidBlockProposal: UNIT
     39:
-      IncorrectStateHash: UNIT
+      InvalidBlockChaining: UNIT
     40:
-      IncorrectEffects: UNIT
+      IncorrectStateHash: UNIT
     41:
-      ClientErrorWhileProcessingBlockProposal: UNIT
+      IncorrectEffects: UNIT
     42:
-      ClientErrorWhileQueryingCertificate: UNIT
+      ClientErrorWhileProcessingBlockProposal: UNIT
     43:
-      WrongShard: UNIT
+      ClientErrorWhileQueryingCertificate: UNIT
     44:
-      InvalidDecoding: UNIT
+      WrongShard: UNIT
     45:
-      UnexpectedMessage: UNIT
+      InvalidDecoding: UNIT
     46:
+      UnexpectedMessage: UNIT
+    47:
       ClientIoError:
         STRUCT:
           - error: STR
-    47:
+    48:
       StorageIoError:
         STRUCT:
           - error: STR
-    48:
+    49:
       StorageBcsError:
         STRUCT:
           - error: STR
-    49:
+    50:
       MissingCertificate:
         STRUCT:
           - hash:
@@ -608,6 +620,11 @@ Operation:
           - admin_id:
               TYPENAME: ChainId
     7:
+      UnsubscribeToNewCommittees:
+        STRUCT:
+          - admin_id:
+              TYPENAME: ChainId
+    8:
       RemoveCommittee:
         STRUCT:
           - admin_id:

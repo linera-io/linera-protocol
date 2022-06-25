@@ -282,6 +282,18 @@ impl ChainState {
                     // Request past and future messages from this channel.
                     channel.subscribers.insert(*id, false);
                 }
+                Effect::Unsubscribe {
+                    id,
+                    owner_id,
+                    channel_name,
+                } if owner_id == &self.state.chain_id => {
+                    let channel = self
+                        .channels
+                        .entry(channel_name.clone())
+                        .or_insert_with(ChannelState::default);
+                    // Remove subscriber.
+                    channel.subscribers.remove(id);
+                }
                 _ => (),
             }
             // Find if the message was executed ahead of time.
@@ -413,6 +425,22 @@ impl ChainState {
             let application =
                 self.state
                     .apply_operation(block.chain_id, block.height, index, operation)?;
+            // When we unsubscribe from a channel, the corresponding inbox must be flushed
+            // immediately so that we don't accept incoming messages until we subscribe again.
+            for effect in &application.effects {
+                if let Effect::Unsubscribe {
+                    owner_id,
+                    channel_name,
+                    ..
+                } = effect
+                {
+                    let origin = Origin::Channel(ChannelId {
+                        chain_id: *owner_id,
+                        name: channel_name.clone(),
+                    });
+                    self.inboxes.remove(&origin);
+                }
+            }
             // Record the effects of the execution.
             effects.extend(application.effects);
             // Update the outboxes.
