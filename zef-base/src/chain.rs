@@ -275,7 +275,7 @@ impl ChainState {
                 if height == event.height && index == event.index && effect == event.effect {
                     // We already executed this message. Remove it from the queue.
                     inbox.expected_events.pop_front();
-                    return Ok(true);
+                    continue;
                 }
                 // Should be unreachable under BFT assumptions.
                 panic!(
@@ -301,12 +301,13 @@ impl ChainState {
         let mut effects = Vec::new();
         // First, process incoming messages.
         for message_group in &block.incoming_messages {
+            let inbox = self
+                .inboxes
+                .entry(message_group.origin.clone())
+                .or_default();
+
             for (message_index, message_effect) in &message_group.effects {
                 // Reconcile the effect with the received queue, or mark it as "expected".
-                let inbox = self
-                    .inboxes
-                    .entry(message_group.origin.clone())
-                    .or_default();
                 match inbox.received_events.front() {
                     Some(Event {
                         height,
