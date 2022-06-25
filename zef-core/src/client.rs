@@ -930,10 +930,7 @@ where
             epoch: self.epoch().await?,
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
-            operations: vec![Operation::SubscribeToNewCommittees {
-                id: self.chain_id,
-                admin_id,
-            }],
+            operations: vec![Operation::SubscribeToNewCommittees { admin_id }],
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
         };
