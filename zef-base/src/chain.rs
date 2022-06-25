@@ -195,6 +195,19 @@ impl ChainState {
         effects: Vec<Effect>,
         key: HashValue,
     ) -> Result<bool, Error> {
+        if let Origin::Channel(channel) = origin {
+            if !self.state.subscriptions.contains_key(channel) {
+                // Refuse messages from channels that we are currently not subscribed to.
+                // This is important for other validators to be synchronizable.
+                log::warn!(
+                    "Ignoring message to {} from unsubscribed channel {:?} at height {}",
+                    self.state.chain_id,
+                    channel,
+                    height
+                );
+                return Ok(false);
+            }
+        }
         let inbox = self.inboxes.entry(origin.clone()).or_default();
         if height < inbox.next_height_to_receive {
             // We have already received this block.
