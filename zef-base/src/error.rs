@@ -114,12 +114,21 @@ pub enum Error {
         chain {origin:?}: was height {height:?} and index {index:?} \
         instead of {expected_height:?} and {expected_index:?})"
     )]
-    InvalidMessageOrder {
+    InvalidMessage {
         origin: Origin,
         height: BlockHeight,
         index: usize,
         expected_height: BlockHeight,
         expected_index: usize,
+    },
+    #[error(
+        "The given incoming message from {origin:?} at height {height:?} and \
+         index {index:?} is out of order"
+    )]
+    InvalidMessageOrder {
+        origin: Origin,
+        height: BlockHeight,
+        index: usize,
     },
 
     // Other server-side errors

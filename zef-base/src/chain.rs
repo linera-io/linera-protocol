@@ -217,6 +217,7 @@ impl ChainState {
         self.received_log.push(key);
 
         for (index, effect) in effects.into_iter().enumerate() {
+            // Skip events that have provably no effect on this recipient.
             if !self.state.is_recipient(&effect) {
                 continue;
             }
@@ -271,26 +272,55 @@ impl ChainState {
                 _ => (),
             }
             // Find if the message was executed ahead of time.
-            if let Some(event) = inbox.expected_events.front() {
-                if height == event.height && index == event.index && effect == event.effect {
-                    // We already executed this message. Remove it from the queue.
-                    inbox.expected_events.pop_front();
-                    continue;
+            match inbox.expected_events.front() {
+                Some(event) => {
+                    if height == event.height && index == event.index {
+                        // We already executed this message by anticipation. Remove it from the queue.
+                        assert_eq!(effect, event.effect, "Unexpected effect in certified block");
+                        inbox.expected_events.pop_front();
+                    } else {
+                        // The receiver has already executed a later event from the same
+                        // sender ahead of time so we should skip this one.
+                        assert!(
+                            (height, index) < (event.height, event.index),
+                            "Unexpected event order in certified block"
+                        );
+                    }
                 }
-                // Should be unreachable under BFT assumptions.
-                panic!(
-                    "Given the confirmed blocks that we have seen, \
-                        we were expecting a different message to come first."
-                );
+                None => {
+                    // Otherwise, schedule the message for execution.
+                    inbox.received_events.push_back(Event {
+                        height,
+                        index,
+                        effect,
+                    });
+                }
             }
-            // Otherwise, schedule the message for execution.
-            inbox.received_events.push_back(Event {
-                height,
-                index,
-                effect,
-            });
         }
         Ok(true)
+    }
+
+    /// Verify that the incoming_messages are in the right order. This matters for inbox
+    /// invariants, notably the fact that inbox.expected_events is sorted.
+    fn check_incoming_messages(&self, messages: &[MessageGroup]) -> Result<(), Error> {
+        let mut next_messages: HashMap<Origin, (BlockHeight, usize)> = HashMap::new();
+        for message_group in messages {
+            let next_message = next_messages
+                .entry(message_group.origin.clone())
+                .or_default();
+            for (message_index, _) in &message_group.effects {
+                ensure!(
+                    (message_group.height, *message_index) >= *next_message,
+                    Error::InvalidMessageOrder {
+                        origin: message_group.origin.clone(),
+                        height: message_group.height,
+                        index: *message_index,
+                    }
+                );
+                *next_message = (message_group.height, *message_index + 1);
+            }
+        }
+        Ok(())
     }
 
     /// Execute a new block: first the incoming messages, then the main operation.
@@ -300,6 +330,8 @@ impl ChainState {
     pub fn execute_block(&mut self, block: &Block) -> Result<Vec<Effect>, Error> {
         let mut effects = Vec::new();
         // First, process incoming messages.
+        self.check_incoming_messages(&block.incoming_messages)?;
+
         for message_group in &block.incoming_messages {
             let inbox = self
                 .inboxes
@@ -307,7 +339,23 @@ impl ChainState {
                 .or_default();
 
             for (message_index, message_effect) in &message_group.effects {
-                // Reconcile the effect with the received queue, or mark it as "expected".
+                // Receivers are allowed to skip events from the received queue.
+                while let Some(Event {
+                    height,
+                    index,
+                    effect: _,
+                }) = inbox.received_events.front()
+                {
+                    if *height > message_group.height
+                        || (*height == message_group.height && index >= message_index)
+                    {
+                        break;
+                    }
+                    assert!((*height, index) < (message_group.height, message_index));
+                    let event = inbox.received_events.pop_front().unwrap();
+                    log::trace!("Skipping received event: {:?}", event);
+                }
+                // Reconcile the event with the received queue, or mark it as "expected".
                 match inbox.received_events.front() {
                     Some(Event {
                         height,
@@ -316,7 +364,7 @@ impl ChainState {
                     }) => {
                         ensure!(
                             message_group.height == *height && message_index == index,
-                            Error::InvalidMessageOrder {
+                            Error::InvalidMessage {
                                 origin: message_group.origin.clone(),
                                 height: message_group.height,
                                 index: *message_index,
