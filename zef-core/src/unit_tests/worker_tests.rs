@@ -692,44 +692,6 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             ChainId::root(2),
             &recipient_key_pair,
             Address::Account(ChainId::root(3)),
-            Amount::from(4),
-            vec![
-                MessageGroup {
-                    origin: Origin::Chain(ChainId::root(1)),
-                    height: BlockHeight::from(0),
-                    effects: vec![(
-                        0,
-                        Effect::Credit {
-                            recipient: ChainId::root(2),
-                            amount: Amount::from(1),
-                        },
-                    )], // missing message
-                },
-                MessageGroup {
-                    origin: Origin::Chain(ChainId::root(1)),
-                    height: BlockHeight::from(1),
-                    effects: vec![(
-                        0,
-                        Effect::Credit {
-                            recipient: ChainId::root(2),
-                            amount: Amount::from(3),
-                        },
-                    )],
-                },
-            ],
-            None,
-        );
-        // Cannot skip messages.
-        assert!(matches!(
-            worker.handle_block_proposal(block_proposal).await,
-            Err(Error::InvalidMessageOrder { .. })
-        ));
-    }
-    {
-        let block_proposal = make_transfer_block_proposal(
-            ChainId::root(2),
-            &recipient_key_pair,
-            Address::Account(ChainId::root(3)),
             Amount::from(1),
             vec![MessageGroup {
                 origin: Origin::Chain(ChainId::root(1)),
@@ -775,36 +737,23 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             .handle_certificate(certificate.clone())
             .await
             .unwrap();
-        // Then receive the last two messages.
+        // Then skip the second message and receive the last one.
         let block_proposal = make_transfer_block_proposal(
             ChainId::root(2),
             &recipient_key_pair,
             Address::Account(ChainId::root(3)),
-            Amount::from(5),
-            vec![
-                MessageGroup {
-                    origin: Origin::Chain(ChainId::root(1)),
-                    height: BlockHeight::from(0),
-                    effects: vec![(
-                        1,
-                        Effect::Credit {
-                            recipient: ChainId::root(2),
-                            amount: Amount::from(2),
-                        },
-                    )],
-                },
-                MessageGroup {
-                    origin: Origin::Chain(ChainId::root(1)),
-                    height: BlockHeight::from(1),
-                    effects: vec![(
-                        0,
-                        Effect::Credit {
-                            recipient: ChainId::root(2),
-                            amount: Amount::from(3),
-                        },
-                    )],
-                },
-            ],
+            Amount::from(3),
+            vec![MessageGroup {
+                origin: Origin::Chain(ChainId::root(1)),
+                height: BlockHeight::from(1),
+                effects: vec![(
+                    0,
+                    Effect::Credit {
+                        recipient: ChainId::root(2),
+                        amount: Amount::from(3),
+                    },
+                )],
+            }],
             Some(&certificate),
         );
         worker
