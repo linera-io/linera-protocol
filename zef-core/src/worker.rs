@@ -551,7 +551,7 @@ where
                 recipient,
                 height,
             } => {
-                let mut chain = self.storage.read_active_chain(sender).await?;
+                let mut chain = self.storage.read_chain_or_default(sender).await?;
                 if let std::collections::hash_map::Entry::Occupied(mut entry) =
                     chain.outboxes.entry(recipient)
                 {
@@ -577,7 +577,10 @@ where
                 recipient,
                 height,
             } => {
-                let mut chain = self.storage.read_active_chain(channel_id.chain_id).await?;
+                let mut chain = self
+                    .storage
+                    .read_chain_or_default(channel_id.chain_id)
+                    .await?;
                 if let Some(channel) = chain.channels.get_mut(&channel_id.name) {
                     ensure!(
                         channel.block_height >= Some(height),

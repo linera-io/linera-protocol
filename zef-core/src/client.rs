@@ -71,8 +71,12 @@ pub trait ChainClient {
     async fn process_inbox(&mut self) -> Result<Certificate>;
 
     /// Start listening to the admin chain for new committees. (This is only useful for
-    /// other genesis chains.)
+    /// other genesis chains or for testing.)
     async fn subscribe_to_new_committees(&mut self) -> Result<Certificate>;
+
+    /// Stop listening to the admin chain for new committees. (This is only useful for
+    /// testing.)
+    async fn unsubscribe_to_new_committees(&mut self) -> Result<Certificate>;
 
     /// Deprecate all the configurations of voting rights but the last one (admin chains
     /// only). Currently, each individual chain is still entitled to wait before accepting
@@ -931,6 +935,23 @@ where
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
             operations: vec![Operation::SubscribeToNewCommittees { admin_id }],
+            previous_block_hash: self.block_hash,
+            height: self.next_block_height,
+        };
+        let certificate = self
+            .propose_block(block, /* with_confirmation */ true)
+            .await?;
+        Ok(certificate)
+    }
+
+    async fn unsubscribe_to_new_committees(&mut self) -> Result<Certificate> {
+        self.prepare_chain().await?;
+        let admin_id = self.execution_state().await?.admin_id()?;
+        let block = Block {
+            epoch: self.epoch().await?,
+            chain_id: self.chain_id,
+            incoming_messages: self.pending_messages().await?,
+            operations: vec![Operation::UnsubscribeToNewCommittees { admin_id }],
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
         };

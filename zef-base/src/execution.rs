@@ -98,6 +98,9 @@ pub enum Operation {
     /// Subscribe to future committees created by `admin_id`. Same as OpenChain but useful
     /// for root chains (other than admin_id) created in the genesis config.
     SubscribeToNewCommittees { admin_id: ChainId },
+    /// Unsubscribe to future committees created by `admin_id`. (This is not really useful
+    /// and only meant for testing.)
+    UnsubscribeToNewCommittees { admin_id: ChainId },
     /// (admin chain only) Remove a committee. Once this message is accepted by a chain,
     /// blocks from the retired epoch will not be accepted until they are followed (hence
     /// re-certified) by a block certified by a recent committee.
@@ -133,6 +136,12 @@ pub enum Effect {
     },
     /// Subscribe to a channel.
     Subscribe {
+        id: ChainId,
+        owner_id: ChainId,
+        channel_name: String,
+    },
+    /// Unsubscribe to a channel.
+    Unsubscribe {
         id: ChainId,
         owner_id: ChainId,
         channel_name: String,
@@ -185,8 +194,8 @@ impl ExecutionState {
                 // We are the created chain.
                 self.chain_id == *id
             }
-            Subscribe { owner_id, .. } => {
-                // We are the admin chain.
+            Subscribe { owner_id, .. } | Unsubscribe { owner_id, .. } => {
+                // We are the owner of the channel.
                 self.chain_id == *owner_id
             }
             SetCommittees { admin_id, .. } => {
@@ -264,7 +273,24 @@ impl ExecutionState {
             }
             Operation::CloseChain => {
                 self.manager = ChainManager::default();
-                Ok(ApplicationResult::default())
+                // Unsubscribe to all channels.
+                let subscriptions = std::mem::take(&mut self.subscriptions);
+                let mut effects = Vec::new();
+                let mut recipients = Vec::new();
+                for (channel, ()) in subscriptions {
+                    effects.push(Effect::Unsubscribe {
+                        id: chain_id,
+                        owner_id: channel.chain_id,
+                        channel_name: channel.name,
+                    });
+                    recipients.push(channel.chain_id);
+                }
+                let application = ApplicationResult {
+                    effects,
+                    recipients,
+                    need_channel_broadcast: Vec::new(),
+                };
+                Ok(application)
             }
             Operation::Transfer {
                 amount, recipient, ..
@@ -355,10 +381,30 @@ impl ExecutionState {
                     !self.subscriptions.contains_key(&channel_id),
                     Error::InvalidSubscriptionToNewCommittees(chain_id)
                 );
-                // Flip the value to prevent multiple subscriptions.
                 self.subscriptions.insert(channel_id, ());
                 let application = ApplicationResult {
                     effects: vec![Effect::Subscribe {
+                        id: chain_id,
+                        owner_id: *admin_id,
+                        channel_name: ADMIN_CHANNEL.into(),
+                    }],
+                    recipients: vec![*admin_id],
+                    need_channel_broadcast: Vec::new(),
+                };
+                Ok(application)
+            }
+            Operation::UnsubscribeToNewCommittees { admin_id } => {
+                let channel_id = ChannelId {
+                    chain_id: *admin_id,
+                    name: ADMIN_CHANNEL.into(),
+                };
+                ensure!(
+                    self.subscriptions.contains_key(&channel_id),
+                    Error::InvalidUnsubscriptionToNewCommittees(chain_id)
+                );
+                self.subscriptions.remove(&channel_id);
+                let application = ApplicationResult {
+                    effects: vec![Effect::Unsubscribe {
                         id: chain_id,
                         owner_id: *admin_id,
                         channel_name: ADMIN_CHANNEL.into(),
@@ -400,7 +446,7 @@ impl ExecutionState {
                 self.committees = committees.clone();
                 Ok(())
             }
-            Effect::OpenChain { .. } | Effect::Subscribe { .. } => {
+            Effect::OpenChain { .. } | Effect::Subscribe { .. } | Effect::Unsubscribe { .. } => {
                 // These special effects are executed immediately when cross-chain requests are received.
                 Ok(())
             }
