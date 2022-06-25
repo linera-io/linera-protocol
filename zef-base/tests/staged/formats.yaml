@@ -391,7 +391,7 @@ Error:
               TYPENAME: BlockHeight
           - index: U64
     33:
-      InvalidMessageOrder:
+      InvalidMessage:
         STRUCT:
           - origin:
               TYPENAME: Origin
@@ -402,40 +402,48 @@ Error:
               TYPENAME: BlockHeight
           - expected_index: U64
     34:
-      CertificateNotFound: UNIT
+      InvalidMessageOrder:
+        STRUCT:
+          - origin:
+              TYPENAME: Origin
+          - height:
+              TYPENAME: BlockHeight
+          - index: U64
     35:
-      InvalidCrossChainRequest: UNIT
+      CertificateNotFound: UNIT
     36:
-      InvalidBlockProposal: UNIT
+      InvalidCrossChainRequest: UNIT
     37:
-      InvalidBlockChaining: UNIT
+      InvalidBlockProposal: UNIT
     38:
-      IncorrectStateHash: UNIT
+      InvalidBlockChaining: UNIT
     39:
-      IncorrectEffects: UNIT
+      IncorrectStateHash: UNIT
     40:
-      ClientErrorWhileProcessingBlockProposal: UNIT
+      IncorrectEffects: UNIT
     41:
-      ClientErrorWhileQueryingCertificate: UNIT
+      ClientErrorWhileProcessingBlockProposal: UNIT
     42:
-      WrongShard: UNIT
+      ClientErrorWhileQueryingCertificate: UNIT
     43:
-      InvalidDecoding: UNIT
+      WrongShard: UNIT
     44:
-      UnexpectedMessage: UNIT
+      InvalidDecoding: UNIT
     45:
+      UnexpectedMessage: UNIT
+    46:
       ClientIoError:
         STRUCT:
           - error: STR
-    46:
+    47:
       StorageIoError:
         STRUCT:
           - error: STR
-    47:
+    48:
       StorageBcsError:
         STRUCT:
           - error: STR
-    48:
+    49:
       MissingCertificate:
         STRUCT:
           - hash:
