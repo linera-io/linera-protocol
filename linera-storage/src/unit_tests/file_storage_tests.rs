@@ -13,7 +13,7 @@ async fn test_file_storage_for_chains() {
     let mut client = FileStoreClient::new(dir.path().to_path_buf());
     let id = ChainId::root(1);
     {
-        let mut chain = client.read_chain_or_default(id).await.unwrap();
+        let mut chain = ChainState::clone(client.read_chain_or_default(id).await.unwrap().as_ref());
         assert_eq!(chain.next_block_height, BlockHeight(0));
         chain.next_block_height = BlockHeight(3);
         client.write_chain(chain).await.unwrap();

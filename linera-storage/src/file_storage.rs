@@ -72,7 +72,7 @@ impl FileStore {
         Ok(())
     }
 
-    async fn read<K, V>(&self, key: &K) -> Result<Option<V>, Error>
+    async fn read<K, V>(&self, key: &K) -> Result<Option<Arc<V>>, Error>
     where
         K: serde::Serialize,
         V: serde::de::DeserializeOwned,
@@ -86,9 +86,13 @@ impl FileStore {
                 error: format!("{}: {}", kind, e),
             })?;
         let result = match value {
-            Some(v) => Some(ron::de::from_bytes(&v).map_err(|e| Error::StorageBcsError {
-                error: format!("{}: {}", kind, e),
-            })?),
+            Some(v) => Some(
+                ron::de::from_bytes(&v)
+                    .map_err(|e| Error::StorageBcsError {
+                        error: format!("{}: {}", kind, e),
+                    })
+                    .map(Arc::new)?,
+            ),
             None => None,
         };
         Ok(result)
@@ -138,12 +142,12 @@ impl FileStoreClient {
 
 #[async_trait]
 impl Storage for FileStoreClient {
-    async fn read_chain_or_default(&mut self, id: ChainId) -> Result<ChainState, Error> {
+    async fn read_chain_or_default(&mut self, id: ChainId) -> Result<Arc<ChainState>, Error> {
         let store = self.0.lock().await;
         Ok(store
             .read(&id)
             .await?
-            .unwrap_or_else(|| ChainState::new(id)))
+            .unwrap_or_else(|| Arc::new(ChainState::new(id))))
     }
 
     async fn write_chain(&mut self, state: ChainState) -> Result<(), Error> {
@@ -156,7 +160,7 @@ impl Storage for FileStoreClient {
         store.remove::<_, ChainState>(&id).await
     }
 
-    async fn read_certificate(&mut self, hash: HashValue) -> Result<Certificate, Error> {
+    async fn read_certificate(&mut self, hash: HashValue) -> Result<Arc<Certificate>, Error> {
         let store = self.0.lock().await;
         store
             .read(&hash)
