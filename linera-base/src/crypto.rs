@@ -329,7 +329,7 @@ impl HashValue {
     pub fn as_bytes(
         &self,
     ) -> &generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Digest>::OutputSize> {
-        self.0.as_ref().try_into().expect("unexpected size")
+        &self.0
     }
 }
 
