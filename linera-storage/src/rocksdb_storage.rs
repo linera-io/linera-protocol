@@ -209,9 +209,6 @@ impl Storage for RocksdbStoreClient {
     }
 
     async fn write_chain(&mut self, state: ChainState) -> Result<(), Error> {
-        let mycache = Cache::<ChainId, ChainState>::new(10);
-
-        mycache.insert(state.state.chain_id, state.clone());
         self.0.write(&state.state.chain_id, &state).await
     }
 
