@@ -4,11 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-aws-sdk-sqs = "0.4.1"
-aws-sdk-s3 = "0.4.1"
-aws-config = "0.4.1"
-aws-types = "0.4.1"
-aws-smithy-http = "0.34.1"
+aws-sdk-sqs = "0.14.0"
+aws-sdk-s3 = "0.14.0"
+aws-config = "0.14.0"
+aws-types = "0.14.0"
+aws-smithy-http = "0.44.0"
 tokio = { version = "1", features = ["full"] }
 tracing-subscriber = "0.2"
 http = "0.2"
