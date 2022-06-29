@@ -22,8 +22,8 @@ mod memory_storage_tests;
 /// Vanilla in-memory key-value store.
 #[derive(Debug, Clone, Default)]
 pub struct InMemoryStore {
-    chains: HashMap<ChainId, Arc<ChainState>>,
-    certificates: HashMap<HashValue, Arc<Certificate>>,
+    chains: HashMap<ChainId, ChainState>,
+    certificates: HashMap<HashValue, Certificate>,
 }
 
 /// The corresponding vanilla client.
@@ -40,7 +40,7 @@ impl InMemoryStoreClient {
 
 #[async_trait]
 impl Storage for InMemoryStoreClient {
-    async fn read_chain_or_default(&mut self, id: ChainId) -> Result<Arc<ChainState>, Error> {
+    async fn read_chain_or_default(&mut self, id: ChainId) -> Result<ChainState, Error> {
         let store = self.0.clone();
         let chain = store
             .lock()
@@ -48,7 +48,7 @@ impl Storage for InMemoryStoreClient {
             .chains
             .get(&id)
             .cloned()
-            .unwrap_or_else(|| Arc::new(ChainState::new(id)));
+            .unwrap_or_else(|| ChainState::new(id));
         Ok(chain)
     }
 
@@ -58,7 +58,7 @@ impl Storage for InMemoryStoreClient {
             .lock()
             .await
             .chains
-            .insert(value.state.chain_id, Arc::new(value));
+            .insert(value.state.chain_id, value);
         Ok(())
     }
 
@@ -68,7 +68,7 @@ impl Storage for InMemoryStoreClient {
         Ok(())
     }
 
-    async fn read_certificate(&mut self, hash: HashValue) -> Result<Arc<Certificate>, Error> {
+    async fn read_certificate(&mut self, hash: HashValue) -> Result<Certificate, Error> {
         let store = self.0.clone();
         let value = store.lock().await.certificates.get(&hash).cloned();
         value.ok_or(Error::MissingCertificate { hash })
@@ -76,11 +76,7 @@ impl Storage for InMemoryStoreClient {
 
     async fn write_certificate(&mut self, value: Certificate) -> Result<(), Error> {
         let store = self.0.clone();
-        store
-            .lock()
-            .await
-            .certificates
-            .insert(value.hash, Arc::new(value));
+        store.lock().await.certificates.insert(value.hash, value);
         Ok(())
     }
 }

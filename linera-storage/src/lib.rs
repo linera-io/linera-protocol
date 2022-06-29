@@ -12,7 +12,7 @@ pub use rocksdb_storage::*;
 use async_trait::async_trait;
 use dyn_clone::DynClone;
 use futures::future;
-use std::{ops::DerefMut, sync::Arc};
+use std::ops::DerefMut;
 use zef_base::{
     chain::ChainState,
     crypto::HashValue,
@@ -27,24 +27,24 @@ use std::ops::DerefMut;
 /// * Reads should be optimized to hit a local cache.
 #[async_trait]
 pub trait Storage: DynClone + Send + Sync {
-    async fn read_active_chain(&mut self, id: ChainId) -> Result<Arc<ChainState>, Error> {
+    async fn read_active_chain(&mut self, id: ChainId) -> Result<ChainState, Error> {
         let chain = self.read_chain_or_default(id).await?;
         ensure!(chain.is_active(), Error::InactiveChain(id));
         Ok(chain)
     }
 
-    async fn read_chain_or_default(&mut self, chain_id: ChainId) -> Result<Arc<ChainState>, Error>;
+    async fn read_chain_or_default(&mut self, chain_id: ChainId) -> Result<ChainState, Error>;
 
     async fn write_chain(&mut self, state: ChainState) -> Result<(), Error>;
 
     async fn remove_chain(&mut self, chain_id: ChainId) -> Result<(), Error>;
 
-    async fn read_certificate(&mut self, hash: HashValue) -> Result<Arc<Certificate>, Error>;
+    async fn read_certificate(&mut self, hash: HashValue) -> Result<Certificate, Error>;
 
     async fn read_certificates<I: Iterator<Item = HashValue> + Send>(
         &self,
         keys: I,
-    ) -> Result<Vec<Arc<Certificate>>, Error>
+    ) -> Result<Vec<Certificate>, Error>
     where
         Self: Clone + Send + 'static,
     {
@@ -70,7 +70,7 @@ dyn_clone::clone_trait_object!(Storage);
 
 #[async_trait]
 impl Storage for Box<dyn Storage> {
-    async fn read_chain_or_default(&mut self, id: ChainId) -> Result<Arc<ChainState>, Error> {
+    async fn read_chain_or_default(&mut self, id: ChainId) -> Result<ChainState, Error> {
         self.deref_mut().read_chain_or_default(id).await
     }
 
@@ -82,7 +82,7 @@ impl Storage for Box<dyn Storage> {
         self.deref_mut().remove_chain(id).await
     }
 
-    async fn read_certificate(&mut self, hash: HashValue) -> Result<Arc<Certificate>, Error> {
+    async fn read_certificate(&mut self, hash: HashValue) -> Result<Certificate, Error> {
         self.deref_mut().read_certificate(hash).await
     }
 
