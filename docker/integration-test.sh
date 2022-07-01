@@ -61,7 +61,7 @@ spec:
     - name: zef
       protocol: TCP
       port: 9100
-      targetPort: zef-port
+      targetPort: linera-port
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -84,7 +84,7 @@ spec:
           imagePullPolicy: Never
           ports:
             - containerPort: 9100
-              name: zef-port
+              name: linera-port
           command: ["./run-proxy.sh"]
 EOF
     done
