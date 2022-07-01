@@ -1,4 +1,4 @@
-[![Build Status](https://github.com/linera/linera-protocol/actions/workflows/rust.yml/badge.svg)](https://github.com/linera/linera-protocol/actions/workflows/rust.yml)
+[![Build Status](https://github.com/linera-io/linera-protocol/actions/workflows/rust.yml/badge.svg)](https://github.com/linera-io/linera-protocol/actions/workflows/rust.yml)
 [![License](https://img.shields.io/badge/license-Apache-green.svg)](LICENSE.md)
 
 # Linera
@@ -118,4 +118,4 @@ Probably the file [`linera-core/tests/staged/formats.yaml`](linera-core/tests/st
 outdated. In the most case (but not always sadly), this can be fixed by running
 [`linera-core/generate-format.sh`](linera-core/generate-format.sh).
 
-See https://github.com/novifinancial/serde-reflection for more context.
+See https://github.com/zefchain/serde-reflection for more context.
