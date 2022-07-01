@@ -1,6 +1,6 @@
 # Reconfiguration
 
-This goal of this milestone is to support changes in the set of Zefchain validators.
+This goal of this milestone is to support changes in the set of Linera validators.
 
 ## Requirements
 

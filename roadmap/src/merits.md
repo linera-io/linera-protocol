@@ -1,4 +1,4 @@
-# Merits of the Zefchain Protocol
+# Merits of the Linera Protocol
 
 **NOTE: This discussion is somewhat outdated.**
 

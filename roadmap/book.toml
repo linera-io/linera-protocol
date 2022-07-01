@@ -3,4 +3,4 @@ authors = ["Mathieu Baudet"]
 language = "en"
 multilingual = false
 src = "src"
-title = "Zefchain Initial Roadmap"
+title = "Linera Initial Roadmap"

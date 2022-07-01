@@ -28,8 +28,8 @@ We also aim at fully supporting crashes and restarts of workers.
     - Active workers should renew their leases regularly and ahead of time to avoid downtime due to network latency.
     - The validity of a lease should be considered with a safety margin to allow for small discrepancies between clocks in the system.
 
-* Zefchain deployments can be easily rolled on at least one cloud provider (e.g. AWS + docker swarm)
+* Linera deployments can be easily rolled on at least one cloud provider (e.g. AWS + docker swarm)
 
 * Worker metrics are collected for testing, debugging and auto-scaling purposes.
 
-* Zefchain clients can be rolled out to generate arbitrary large traffic.
+* Linera clients can be rolled out to generate arbitrary large traffic.
