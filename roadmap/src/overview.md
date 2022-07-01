@@ -52,7 +52,7 @@ Our expertise:
 
 ## Current Target Product
 
-The current MVP under consideration (aka *the Zefchain protocol*) includes
+The current MVP under consideration (aka *the Linera protocol*) includes
 
 * a **layer-1 infrastructure ("blockchain")** secured by Delegated Proof-of-Stake with its
   own crypto-currency,
@@ -69,7 +69,7 @@ The current codebase corresponds to the public research prototype
 simplifications and cleanups:
 
 * Off-chain coins (transparent and opaque) presented in the [CCS'22
-  submission](https://zefchain.com/papers/zef.pdf) and the corresponding cryptographic
+  submission](https://linera.io/papers/zef.pdf) and the corresponding cryptographic
   libraries were removed.
 
 * FastPay was renamed consistently into "Zef".

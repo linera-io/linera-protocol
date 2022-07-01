@@ -86,7 +86,7 @@ This results in the following proposal:
 
 Current state:
 
-* A Zef "chain" can be seen as a (small) blockchain regularly extended with a
+* A Linera "chain" can be seen as a (small) blockchain regularly extended with a
   new (block of) transaction(s).
 
 * New blocks may be picked by a single owner (original design of FastPay/Zef) or decided
