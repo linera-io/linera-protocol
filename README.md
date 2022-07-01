@@ -121,9 +121,9 @@ cargo fmt +nightly
 
 ### Dealing with test failures `test_format` after code changes
 
-Getting an error with the test in [`zef-core/tests/format.rs`](zef-core/tests/format.rs) ?
-Probably the file [`zef-core/tests/staged/formats.yaml`](zef-core/tests/staged/formats.yaml) (recording message formats) is
+Getting an error with the test in [`linera-core/tests/format.rs`](linera-core/tests/format.rs) ?
+Probably the file [`linera-core/tests/staged/formats.yaml`](linera-core/tests/staged/formats.yaml) (recording message formats) is
 outdated. In the most case (but not always sadly), this can be fixed by running
-[`zef-core/generate-format.sh`](zef-core/generate-format.sh).
+[`linera-core/generate-format.sh`](linera-core/generate-format.sh).
 
 See https://github.com/novifinancial/serde-reflection for more context.
