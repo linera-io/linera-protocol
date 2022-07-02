@@ -113,9 +113,9 @@ cargo fmt +nightly
 
 ### Dealing with test failures `test_format` after code changes
 
-Getting an error with the test in [`linera-core/tests/format.rs`](linera-core/tests/format.rs) ?
-Probably the file [`linera-core/tests/staged/formats.yaml`](linera-core/tests/staged/formats.yaml) (recording message formats) is
+Getting an error with the test in [`linera-base/tests/format.rs`](linera-base/tests/format.rs) ?
+Probably the file [`linera-base/tests/staged/formats.yaml`](linera-base/tests/staged/formats.yaml) (recording message formats) is
 outdated. In the most case (but not always sadly), this can be fixed by running
-[`linera-core/generate-format.sh`](linera-core/generate-format.sh).
+[`linera-base/generate-format.sh`](linera-base/generate-format.sh).
 
 See https://github.com/zefchain/serde-reflection for more context.
