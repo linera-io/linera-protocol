@@ -10,7 +10,7 @@ use crate::{
 use anyhow::{anyhow, bail, ensure, Result};
 use async_trait::async_trait;
 use linera_base::{
-    committee::Committee,
+    committee::{Committee, ValidatorState},
     crypto::*,
     error::Error,
     execution::{Address, Amount, Balance, Effect, ExecutionState, Operation, UserData},
@@ -61,10 +61,10 @@ pub trait ChainClient {
     /// Close the chain (and lose everything in it!!).
     async fn close_chain(&mut self) -> Result<Certificate>;
 
-    /// Create a new committee (admin chains only).
-    async fn stage_new_voting_rights(
+    /// Create a new committee and start using it (admin chains only).
+    async fn stage_new_committee(
         &mut self,
-        voting_rights: BTreeMap<ValidatorName, usize>,
+        validators: BTreeMap<ValidatorName, ValidatorState>,
     ) -> Result<Certificate>;
 
     /// Create an empty block to process all incoming messages.
@@ -82,7 +82,7 @@ pub trait ChainClient {
     /// only). Currently, each individual chain is still entitled to wait before accepting
     /// this command. However, it is expected that deprecated validators stop functioning
     /// shortly after such command is issued.
-    async fn finalize_voting_rights(&mut self) -> Result<Certificate>;
+    async fn finalize_committee(&mut self) -> Result<Certificate>;
 
     /// Send money to a chain.
     /// Do not check balance. (This may block the client)
@@ -886,12 +886,12 @@ where
         Ok(certificate)
     }
 
-    async fn stage_new_voting_rights(
+    async fn stage_new_committee(
         &mut self,
-        voting_rights: BTreeMap<ValidatorName, usize>,
+        validators: BTreeMap<ValidatorName, ValidatorState>,
     ) -> Result<Certificate> {
         self.prepare_chain().await?;
-        let committee = Committee::new(voting_rights);
+        let committee = Committee::new(validators);
         let epoch = self.epoch().await?;
         let block = Block {
             epoch,
@@ -961,7 +961,7 @@ where
         Ok(certificate)
     }
 
-    async fn finalize_voting_rights(&mut self) -> Result<Certificate> {
+    async fn finalize_committee(&mut self) -> Result<Certificate> {
         self.prepare_chain().await?;
         let state = self.execution_state().await?;
         let admin_id = state.admin_id()?;

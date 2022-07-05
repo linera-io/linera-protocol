@@ -88,14 +88,14 @@ struct ValidatorOptions {
     /// Path to the file containing the server configuration of this Zef validator (including its secret key)
     server_config_path: PathBuf,
 
-    /// The network protocol: either Udp or Tcp
-    protocol: transport::NetworkProtocol,
-
     /// The host of the validator (IP address or hostname)
     host: String,
 
     /// The port of the validator
     port: u16,
+
+    /// The network protocol for shards: either Udp or Tcp
+    protocol: transport::NetworkProtocol,
 
     /// The public name and the port of each of the shards
     shards: Vec<ShardConfig>,
@@ -138,7 +138,6 @@ impl FromStr for ValidatorOptions {
 
 fn make_server_config(options: ValidatorOptions) -> ValidatorServerConfig {
     let network = ValidatorPublicNetworkConfig {
-        protocol: transport::NetworkProtocol::Tcp,
         host: options.host,
         port: options.port,
     };

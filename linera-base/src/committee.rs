@@ -6,34 +6,66 @@ use crate::messages::ValidatorName;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+/// Public state of validator.
+#[derive(Eq, PartialEq, Hash, Clone, Debug, Default, Serialize, Deserialize)]
+pub struct ValidatorState {
+    /// The network address (in a string format understood by the networking layer).
+    pub network_address: String,
+    /// The voting power.
+    pub votes: usize,
+}
+
 /// A set of validators (identified by their public keys) and their voting rights.
 #[derive(Eq, PartialEq, Hash, Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Committee {
-    /// The voting rights.
-    pub voting_rights: BTreeMap<ValidatorName, usize>,
+    /// The validators in the committee.
+    pub validators: BTreeMap<ValidatorName, ValidatorState>,
     /// The sum of all voting rights.
     pub total_votes: usize,
 }
 
 impl Committee {
-    pub fn new(voting_rights: BTreeMap<ValidatorName, usize>) -> Self {
-        let total_votes = voting_rights.iter().fold(0, |sum, (_, votes)| sum + *votes);
+    pub fn new(validators: BTreeMap<ValidatorName, ValidatorState>) -> Self {
+        let total_votes = validators
+            .iter()
+            .fold(0, |sum, (_, state)| sum + state.votes);
         Committee {
-            voting_rights,
+            validators,
             total_votes,
         }
     }
 
+    /// For testing
     pub fn make_simple(keys: Vec<ValidatorName>) -> Self {
         let total_votes = keys.len();
         Committee {
-            voting_rights: keys.into_iter().map(|k| (k, 1)).collect(),
+            validators: keys
+                .into_iter()
+                .map(|k| {
+                    (
+                        k,
+                        ValidatorState {
+                            network_address: k.to_string(),
+                            votes: 1,
+                        },
+                    )
+                })
+                .collect(),
             total_votes,
         }
     }
 
     pub fn weight(&self, author: &ValidatorName) -> usize {
-        *self.voting_rights.get(author).unwrap_or(&0)
+        match self.validators.get(author) {
+            Some(state) => state.votes,
+            None => 0,
+        }
+    }
+
+    pub fn network_address(&self, author: &ValidatorName) -> Option<&str> {
+        self.validators
+            .get(author)
+            .map(|state| state.network_address.as_ref())
     }
 
     pub fn quorum_threshold(&self) -> usize {

@@ -50,12 +50,28 @@ pub struct ValidatorInternalNetworkConfig {
 /// The public network configuration for a validator.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ValidatorPublicNetworkConfig {
-    /// The network protocol to use.
-    pub protocol: NetworkProtocol,
     /// The host name of the validator (IP or hostname).
     pub host: String,
     /// The port the validator listens on.
     pub port: u16,
+}
+
+impl std::fmt::Display for ValidatorPublicNetworkConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}", self.host, self.port)
+    }
+}
+
+impl std::str::FromStr for ValidatorPublicNetworkConfig {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let parts: Vec<&str> = s.split(':').collect();
+        anyhow::ensure!(parts.len() == 2, "Expecting format `host:port`");
+        let host = parts[0].to_owned();
+        let port = parts[1].parse()?;
+        Ok(ValidatorPublicNetworkConfig { host, port })
+    }
 }
 
 impl ValidatorInternalNetworkConfig {
@@ -329,7 +345,7 @@ impl Client {
         message: rpc::Message,
     ) -> Result<rpc::Message, codec::Error> {
         let address = format!("{}:{}", self.network.host, self.network.port);
-        let mut stream = self.network.protocol.connect(address).await?;
+        let mut stream = NetworkProtocol::Tcp.connect(address).await?;
         // Send message
         time::timeout(self.send_timeout, stream.send(message))
             .await
@@ -412,7 +428,7 @@ impl MassClient {
 
     pub async fn send(&self, requests: Vec<rpc::Message>) -> Result<Vec<rpc::Message>, io::Error> {
         let address = format!("{}:{}", self.network.host, self.network.port);
-        let mut stream = self.network.protocol.connect(address).await?;
+        let mut stream = NetworkProtocol::Tcp.connect(address).await?;
         let mut requests = requests.into_iter();
         let mut in_flight: u64 = 0;
         let mut responses = Vec::new();

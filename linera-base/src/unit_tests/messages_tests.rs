@@ -4,7 +4,6 @@
 
 use super::*;
 use crate::execution::{Address, Amount, ExecutionState, Operation, UserData};
-use std::collections::BTreeMap;
 
 #[test]
 fn test_signed_values() {
@@ -45,10 +44,7 @@ fn test_certificates() {
     let name1 = ValidatorName(key1.public());
     let name2 = ValidatorName(key2.public());
 
-    let mut validators = BTreeMap::new();
-    validators.insert(name1, /* voting right */ 1);
-    validators.insert(name2, /* voting right */ 1);
-    let committee = Committee::new(validators);
+    let committee = Committee::make_simple(vec![name1, name2]);
 
     let block = Block {
         epoch: Epoch::from(0),

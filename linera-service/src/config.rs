@@ -5,7 +5,7 @@
 use crate::network::{ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig};
 use linera_base::{
     chain::ChainState,
-    committee::Committee,
+    committee::{Committee, ValidatorState},
     crypto::*,
     execution::Balance,
     messages::{BlockHeight, ChainDescription, ChainId, Owner, ValidatorName},
@@ -69,15 +69,20 @@ impl Export for CommitteeConfig {}
 
 impl CommitteeConfig {
     pub fn into_committee(self) -> Committee {
-        Committee::new(self.voting_rights())
-    }
-
-    fn voting_rights(&self) -> BTreeMap<ValidatorName, usize> {
-        let mut map = BTreeMap::new();
-        for validator in &self.validators {
-            map.insert(validator.name, 1);
-        }
-        map
+        let validators = self
+            .validators
+            .into_iter()
+            .map(|v| {
+                (
+                    v.name,
+                    ValidatorState {
+                        network_address: v.network.to_string(),
+                        votes: 1,
+                    },
+                )
+            })
+            .collect();
+        Committee::new(validators)
     }
 }
 
