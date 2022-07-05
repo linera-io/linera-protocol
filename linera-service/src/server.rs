@@ -11,7 +11,7 @@ use linera_core::worker::*;
 use linera_service::{
     config::*,
     network,
-    network::{ShardConfig, ShardId, ValidatorNetworkConfig},
+    network::{ShardConfig, ShardId, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig},
     storage::{make_storage, MixedStorage},
     transport,
 };
@@ -30,7 +30,7 @@ async fn make_shard_server(
     shard_id: ShardId,
     storage: MixedStorage,
 ) -> network::Server<MixedStorage> {
-    let shard = server_config.validator.network.shard(shard_id);
+    let shard = server_config.internal_network.shard(shard_id);
     info!("Shard booted on {}", shard.host);
     let state = WorkerState::new(
         format!("Shard {} @ {}:{}", shard_id, local_ip_addr, shard.port),
@@ -39,7 +39,7 @@ async fn make_shard_server(
     )
     .allow_inactive_chains(false);
     network::Server::new(
-        server_config.validator.network.clone(),
+        server_config.internal_network.clone(),
         local_ip_addr.to_string(),
         shard.port,
         state,
@@ -55,7 +55,7 @@ async fn make_servers(
     cross_chain_config: network::CrossChainConfig,
     storage: Option<&PathBuf>,
 ) -> Vec<network::Server<MixedStorage>> {
-    let num_shards = server_config.validator.network.shards.len();
+    let num_shards = server_config.internal_network.shards.len();
     let mut servers = Vec::new();
     for shard in 0..num_shards {
         let storage = make_storage(storage, genesis_config).await.unwrap();
@@ -91,8 +91,8 @@ struct ValidatorOptions {
     /// The network protocol: either Udp or Tcp
     protocol: transport::NetworkProtocol,
 
-    /// The address of the validator (IP address or hostname)
-    address: String,
+    /// The host of the validator (IP address or hostname)
+    host: String,
 
     /// The port of the validator
     port: u16,
@@ -112,7 +112,7 @@ impl FromStr for ValidatorOptions {
         );
 
         let server_config_path = Path::new(parts[0]).to_path_buf();
-        let address = parts[1].to_owned();
+        let host = parts[1].to_owned();
         let port = parts[2].parse()?;
         let protocol = parts[3].parse().map_err(|s| anyhow!("{}", s))?;
 
@@ -129,7 +129,7 @@ impl FromStr for ValidatorOptions {
         Ok(Self {
             server_config_path,
             protocol,
-            address,
+            host,
             port,
             shards,
         })
@@ -137,16 +137,23 @@ impl FromStr for ValidatorOptions {
 }
 
 fn make_server_config(options: ValidatorOptions) -> ValidatorServerConfig {
-    let network = ValidatorNetworkConfig {
-        protocol: options.protocol,
-        address: options.address,
+    let network = ValidatorPublicNetworkConfig {
+        protocol: transport::NetworkProtocol::Tcp,
+        host: options.host,
         port: options.port,
+    };
+    let internal_network = ValidatorInternalNetworkConfig {
+        protocol: options.protocol,
         shards: options.shards,
     };
     let key = KeyPair::generate();
     let name = ValidatorName(key.public());
     let validator = ValidatorConfig { network, name };
-    ValidatorServerConfig { validator, key }
+    ValidatorServerConfig {
+        validator,
+        key,
+        internal_network,
+    }
 }
 
 #[derive(StructOpt)]
@@ -294,7 +301,7 @@ mod test {
             ValidatorOptions {
                 server_config_path: "server.json".into(),
                 protocol: transport::NetworkProtocol::Udp,
-                address: "host".into(),
+                host: "host".into(),
                 port: 9000,
                 shards: vec![
                     ShardConfig {

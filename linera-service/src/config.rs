@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::network::ValidatorNetworkConfig;
+use crate::network::{ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig};
 use linera_base::{
     chain::ChainState,
     committee::Committee,
@@ -38,13 +38,13 @@ pub trait Export: Serialize {
     }
 }
 
-/// The (public) configuration of a validator.
+/// The public configuration of a validator.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ValidatorConfig {
     /// The public key of the validator.
     pub name: ValidatorName,
     /// The network configuration for the validator.
-    pub network: ValidatorNetworkConfig,
+    pub network: ValidatorPublicNetworkConfig,
 }
 
 /// The private configuration of a validator service.
@@ -52,6 +52,7 @@ pub struct ValidatorConfig {
 pub struct ValidatorServerConfig {
     pub validator: ValidatorConfig,
     pub key: KeyPair,
+    pub internal_network: ValidatorInternalNetworkConfig,
 }
 
 impl Import for ValidatorServerConfig {}
