@@ -4,7 +4,7 @@
 
 use crate::{codec, transport::*};
 use async_trait::async_trait;
-use futures::{channel::mpsc, future::FutureExt, sink::SinkExt, stream::StreamExt};
+use futures::{channel::mpsc, sink::SinkExt, stream::StreamExt};
 use linera_base::{error::*, messages::*, rpc};
 use linera_core::{node::ValidatorNode, worker::*};
 use log::*;
@@ -39,19 +39,26 @@ pub struct ShardConfig {
 
 /// The network configuration for all shards.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ValidatorNetworkConfig {
+pub struct ValidatorInternalNetworkConfig {
     /// The network protocol to use for all shards.
     pub protocol: NetworkProtocol,
-    /// The address of the validator (IP or hostname).
-    pub address: String,
-    /// The port the validator listens on.
-    pub port: u16,
     /// The available shards. Each chain UID is mapped to a unique shard in the vector in
     /// a static way.
     pub shards: Vec<ShardConfig>,
 }
 
-impl ValidatorNetworkConfig {
+/// The public network configuration for a validator.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ValidatorPublicNetworkConfig {
+    /// The network protocol to use.
+    pub protocol: NetworkProtocol,
+    /// The host name of the validator (IP or hostname).
+    pub host: String,
+    /// The port the validator listens on.
+    pub port: u16,
+}
+
+impl ValidatorInternalNetworkConfig {
     /// Static shard assignment
     pub fn get_shard_id(&self, chain_id: ChainId) -> ShardId {
         use std::hash::{Hash, Hasher};
@@ -71,7 +78,7 @@ impl ValidatorNetworkConfig {
 }
 
 pub struct Server<Storage> {
-    network: ValidatorNetworkConfig,
+    network: ValidatorInternalNetworkConfig,
     host: String,
     port: u16,
     state: WorkerState<Storage>,
@@ -85,7 +92,7 @@ pub struct Server<Storage> {
 impl<Storage> Server<Storage> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        network: ValidatorNetworkConfig,
+        network: ValidatorInternalNetworkConfig,
         host: String,
         port: u16,
         state: WorkerState<Storage>,
@@ -118,7 +125,7 @@ where
     Storage: linera_storage::Storage + Clone + 'static,
 {
     async fn forward_cross_chain_queries(
-        network: ValidatorNetworkConfig,
+        network: ValidatorInternalNetworkConfig,
         cross_chain_max_retries: usize,
         cross_chain_retry_delay: Duration,
         this_shard: ShardId,
@@ -299,14 +306,14 @@ where
 
 #[derive(Clone)]
 pub struct Client {
-    network: ValidatorNetworkConfig,
+    network: ValidatorPublicNetworkConfig,
     send_timeout: std::time::Duration,
     recv_timeout: std::time::Duration,
 }
 
 impl Client {
     pub fn new(
-        network: ValidatorNetworkConfig,
+        network: ValidatorPublicNetworkConfig,
         send_timeout: std::time::Duration,
         recv_timeout: std::time::Duration,
     ) -> Self {
@@ -321,7 +328,7 @@ impl Client {
         &mut self,
         message: rpc::Message,
     ) -> Result<rpc::Message, codec::Error> {
-        let address = format!("{}:{}", self.network.address, self.network.port);
+        let address = format!("{}:{}", self.network.host, self.network.port);
         let mut stream = self.network.protocol.connect(address).await?;
         // Send message
         time::timeout(self.send_timeout, stream.send(message))
@@ -382,7 +389,7 @@ impl ValidatorNode for Client {
 
 #[derive(Clone)]
 pub struct MassClient {
-    pub network: ValidatorNetworkConfig,
+    pub network: ValidatorPublicNetworkConfig,
     send_timeout: std::time::Duration,
     recv_timeout: std::time::Duration,
     max_in_flight: u64,
@@ -390,7 +397,7 @@ pub struct MassClient {
 
 impl MassClient {
     pub fn new(
-        network: ValidatorNetworkConfig,
+        network: ValidatorPublicNetworkConfig,
         send_timeout: std::time::Duration,
         recv_timeout: std::time::Duration,
         max_in_flight: u64,
@@ -403,13 +410,8 @@ impl MassClient {
         }
     }
 
-    async fn send_to_shard(
-        &self,
-        shard_id: ShardId,
-        requests: Vec<rpc::Message>,
-    ) -> Result<Vec<rpc::Message>, io::Error> {
-        let shard = self.network.shard(shard_id);
-        let address = format!("{}:{}", shard.host, shard.port);
+    pub async fn send(&self, requests: Vec<rpc::Message>) -> Result<Vec<rpc::Message>, io::Error> {
+        let address = format!("{}:{}", self.network.host, self.network.port);
         let mut stream = self.network.protocol.connect(address).await?;
         let mut requests = requests.into_iter();
         let mut in_flight: u64 = 0;
@@ -457,38 +459,5 @@ impl MassClient {
                 }
             }
         }
-    }
-
-    /// Spin off one task for each shard based on this validator client.
-    pub fn run<I>(
-        &self,
-        sharded_requests: I,
-    ) -> impl futures::stream::Stream<Item = Vec<rpc::Message>>
-    where
-        I: IntoIterator<Item = (ShardId, Vec<rpc::Message>)>,
-    {
-        let handles = futures::stream::FuturesUnordered::new();
-        for (shard_id, requests) in sharded_requests {
-            let client = self.clone();
-            handles.push(
-                tokio::spawn(async move {
-                    info!(
-                        "Sending {} requests to shard {}",
-                        client.network.protocol, shard_id
-                    );
-                    let responses = client
-                        .send_to_shard(shard_id, requests)
-                        .await
-                        .unwrap_or_else(|_| Vec::new());
-                    info!(
-                        "Done sending {} requests to shard {}",
-                        client.network.protocol, shard_id
-                    );
-                    responses
-                })
-                .then(|x| async { x.unwrap_or_else(|_| Vec::new()) }),
-            );
-        }
-        handles
     }
 }

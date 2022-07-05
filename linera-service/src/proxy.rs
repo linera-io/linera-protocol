@@ -3,7 +3,7 @@ use futures::{future::BoxFuture, FutureExt, SinkExt, StreamExt};
 use linera_base::rpc;
 use linera_service::{
     config::{Import, ValidatorServerConfig},
-    network::{ShardConfig, ValidatorNetworkConfig},
+    network::{ShardConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig},
     transport::{MessageHandler, NetworkProtocol},
 };
 use std::path::PathBuf;
@@ -21,13 +21,14 @@ pub struct ProxyOptions {
 }
 
 pub struct Proxy {
-    config: ValidatorNetworkConfig,
+    public_config: ValidatorPublicNetworkConfig,
+    internal_config: ValidatorInternalNetworkConfig,
 }
 
 impl MessageHandler for Proxy {
     fn handle_message(&mut self, message: rpc::Message) -> BoxFuture<Option<rpc::Message>> {
         let shard = self.select_shard_for(&message);
-        let protocol = self.config.protocol;
+        let protocol = self.internal_config.protocol;
 
         async move {
             if let Some(shard) = shard {
@@ -48,9 +49,9 @@ impl MessageHandler for Proxy {
 
 impl Proxy {
     async fn run(self) -> Result<()> {
-        let address = format!("0.0.0.0:{}", self.config.port);
+        let address = format!("0.0.0.0:{}", self.public_config.port);
 
-        self.config
+        self.public_config
             .protocol
             .spawn_server(&address, self)
             .await?
@@ -74,7 +75,7 @@ impl Proxy {
             }
         };
 
-        Some(self.config.get_shard_for(chain_id).clone())
+        Some(self.internal_config.get_shard_for(chain_id).clone())
     }
 
     async fn try_proxy_message(
@@ -100,7 +101,8 @@ async fn main() -> Result<()> {
     let config = ValidatorServerConfig::read(&options.config_path)?;
 
     let handler = Proxy {
-        config: config.validator.network,
+        public_config: config.validator.network,
+        internal_config: config.internal_network,
     };
 
     if let Err(error) = handler.run().await {

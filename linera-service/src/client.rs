@@ -4,7 +4,6 @@
 
 #![deny(warnings)]
 
-use futures::stream::StreamExt;
 use linera_base::{
     crypto::*,
     execution::{Address, Amount, Balance, Operation, UserData},
@@ -99,7 +98,7 @@ impl ClientContext {
                 config.network.clone(),
                 self.send_timeout,
                 self.recv_timeout,
-                max_in_flight / config.network.shards.len() as u64, // Distribute window to diff shards
+                max_in_flight,
             );
             validator_clients.push(client);
         }
@@ -130,10 +129,7 @@ impl ClientContext {
     }
 
     /// Make one block proposal per chain, up to `max_proposals` blocks.
-    fn make_benchmark_block_proposals(
-        &mut self,
-        max_proposals: usize,
-    ) -> Vec<(ChainId, rpc::Message)> {
+    fn make_benchmark_block_proposals(&mut self, max_proposals: usize) -> Vec<rpc::Message> {
         let mut proposals = Vec::new();
         let mut next_recipient = self.wallet_state.last_chain().unwrap().chain_id;
         for chain in self.wallet_state.chains_mut() {
@@ -161,7 +157,7 @@ impl ClientContext {
                 },
                 key_pair,
             );
-            proposals.push((chain.chain_id, proposal.into()));
+            proposals.push(proposal.into());
             if proposals.len() >= max_proposals {
                 break;
             }
@@ -212,25 +208,26 @@ impl ClientContext {
         &self,
         phase: &'static str,
         max_in_flight: u64,
-        proposals: Vec<(ChainId, rpc::Message)>,
+        proposals: Vec<rpc::Message>,
     ) -> Vec<rpc::Message> {
         let time_start = Instant::now();
         info!("Broadcasting {} {}", proposals.len(), phase);
-        let validator_clients = self.make_validator_mass_clients(max_in_flight);
-        let mut streams = Vec::new();
-        for client in validator_clients {
-            // Re-index proposals by shard for this particular validator client.
-            let mut sharded_blocks = HashMap::new();
-            for (chain_id, message) in &proposals {
-                let shard_id = client.network.get_shard_id(*chain_id);
-                sharded_blocks
-                    .entry(shard_id)
-                    .or_insert_with(Vec::new)
-                    .push(message.clone());
-            }
-            streams.push(client.run(sharded_blocks));
+        let mut handles = Vec::new();
+        for client in self.make_validator_mass_clients(max_in_flight) {
+            let proposals = proposals.clone();
+            handles.push(tokio::spawn(async move {
+                info!("Sending {} requests", proposals.len(),);
+                let responses = client.send(proposals).await.unwrap_or_else(|_| Vec::new());
+                info!("Done sending requests",);
+                responses
+            }));
         }
-        let responses = futures::stream::select_all(streams).concat().await;
+        let responses = futures::future::join_all(handles)
+            .await
+            .into_iter()
+            .flatten()
+            .flatten()
+            .collect::<Vec<rpc::Message>>();
         let time_elapsed = time_start.elapsed();
         warn!(
             "Received {} responses in {} ms.",
@@ -535,11 +532,7 @@ async fn main() {
             let certificates = context.make_benchmark_certificates_from_votes(votes);
             let messages = certificates
                 .iter()
-                .map(|certificate| {
-                    let id = certificate.value.confirmed_block().unwrap().chain_id;
-                    let message = certificate.clone().into();
-                    (id, message)
-                })
+                .map(|certificate| certificate.clone().into())
                 .collect();
             let responses = context
                 .mass_broadcast("certificates", max_in_flight, messages)
