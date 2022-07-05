@@ -201,11 +201,12 @@ ChannelState:
           TYPENAME: BlockHeight
 Committee:
   STRUCT:
-    - voting_rights:
+    - validators:
         MAP:
           KEY:
             TYPENAME: ValidatorName
-          VALUE: U64
+          VALUE:
+            TYPENAME: ValidatorState
     - total_votes: U64
 CrossChainRequest:
   ENUM:
@@ -675,6 +676,10 @@ UserData:
 ValidatorName:
   NEWTYPESTRUCT:
     TYPENAME: PublicKey
+ValidatorState:
+  STRUCT:
+    - network_address: STR
+    - votes: U64
 Value:
   ENUM:
     0:

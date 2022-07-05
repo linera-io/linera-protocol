@@ -23,9 +23,7 @@ use test_log::test;
 /// and the (non-sharded, in-memory) "worker" that we can interact with.
 fn init_worker(allow_inactive_chains: bool) -> (Committee, WorkerState<InMemoryStoreClient>) {
     let key_pair = KeyPair::generate();
-    let mut validators = BTreeMap::new();
-    validators.insert(ValidatorName(key_pair.public()), /* voting right */ 1);
-    let committee = Committee::new(validators);
+    let committee = Committee::make_simple(vec![ValidatorName(key_pair.public())]);
     let client = InMemoryStoreClient::default();
     let worker = WorkerState::new("Single validator node".to_string(), Some(key_pair), client)
         .allow_inactive_chains(allow_inactive_chains);

@@ -18,7 +18,7 @@ use linera_base::{
 };
 use linera_storage::{InMemoryStoreClient, Storage};
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{HashMap, HashSet},
     sync::Arc,
 };
 use test_log::test;
@@ -97,13 +97,14 @@ struct TestBuilder {
 impl TestBuilder {
     fn new(count: usize, with_faulty_validators: usize) -> Self {
         let mut key_pairs = Vec::new();
-        let mut voting_rights = BTreeMap::new();
+        let mut validators = Vec::new();
         for _ in 0..count {
             let key_pair = KeyPair::generate();
-            voting_rights.insert(ValidatorName(key_pair.public()), 1);
+            let name = ValidatorName(key_pair.public());
+            validators.push(name);
             key_pairs.push(key_pair);
         }
-        let initial_committee = Committee::new(voting_rights);
+        let initial_committee = Committee::make_simple(validators);
         let mut validator_clients = Vec::new();
         let mut validator_stores = HashMap::new();
         let mut faulty_validators = HashSet::new();
@@ -715,8 +716,8 @@ async fn test_change_voting_rights() {
         .await;
 
     // Create a new committee.
-    let voting_rights = builder.initial_committee.voting_rights;
-    admin.stage_new_voting_rights(voting_rights).await.unwrap();
+    let validators = builder.initial_committee.validators;
+    admin.stage_new_committee(validators).await.unwrap();
     assert_eq!(admin.next_block_height, BlockHeight::from(1));
     assert!(admin.pending_block.is_none());
     assert!(admin.key_pair().await.is_ok());
