@@ -539,6 +539,14 @@ impl std::fmt::Display for ValidatorName {
     }
 }
 
+impl std::str::FromStr for ValidatorName {
+    type Err = PublicKeyFromStrError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(ValidatorName(PublicKey::from_str(s)?))
+    }
+}
+
 impl BlockHeight {
     #[inline]
     pub fn max() -> Self {

@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    client::{ChainClient, ChainClientState, CommunicateAction},
+    client::{ChainClient, ChainClientState, CommunicateAction, ValidatorNodeProvider},
     node::ValidatorNode,
     worker::{ValidatorWorker, WorkerState},
 };
@@ -18,7 +18,8 @@ use linera_base::{
 };
 use linera_storage::{InMemoryStoreClient, Storage};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
+    str::FromStr,
     sync::Arc,
 };
 use test_log::test;
@@ -75,6 +76,23 @@ impl LocalValidatorClient {
     fn new(is_faulty: bool, state: WorkerState<InMemoryStoreClient>) -> Self {
         let validator = LocalValidator { is_faulty, state };
         Self(Arc::new(Mutex::new(validator)))
+    }
+}
+
+struct NodeProvider(BTreeMap<ValidatorName, LocalValidatorClient>);
+
+impl ValidatorNodeProvider for NodeProvider {
+    type Node = LocalValidatorClient;
+
+    fn make_node(&self, address: &str) -> Result<Self::Node, Error> {
+        let name = ValidatorName::from_str(address).unwrap();
+        let node = self
+            .0
+            .get(&name)
+            .ok_or_else(|| Error::CannotResolveValidatorAddress {
+                address: address.to_string(),
+            })?;
+        Ok(node.clone())
     }
 }
 
@@ -141,7 +159,7 @@ impl TestBuilder {
         &mut self,
         description: ChainDescription,
         balance: Balance,
-    ) -> ChainClientState<LocalValidatorClient, InMemoryStoreClient> {
+    ) -> ChainClientState<NodeProvider, InMemoryStoreClient> {
         let key_pair = KeyPair::generate();
         let owner = Owner(key_pair.public());
         let chain = ChainState::create(
@@ -180,15 +198,16 @@ impl TestBuilder {
         key_pair: KeyPair,
         block_hash: Option<HashValue>,
         block_height: BlockHeight,
-    ) -> ChainClientState<LocalValidatorClient, InMemoryStoreClient> {
+    ) -> ChainClientState<NodeProvider, InMemoryStoreClient> {
         // Note that new clients are only given the genesis store: they must figure out
         // the rest by asking validators.
         let store = self.genesis_store.copy().await;
         self.chain_client_stores.push(store.clone());
+        let provider = NodeProvider(self.validator_clients.iter().cloned().collect());
         ChainClientState::new(
             chain_id,
             vec![key_pair],
-            self.validator_clients.clone(),
+            provider,
             store,
             block_hash,
             block_height,

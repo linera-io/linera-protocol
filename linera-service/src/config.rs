@@ -10,7 +10,10 @@ use linera_base::{
     execution::Balance,
     messages::{BlockHeight, ChainDescription, ChainId, Owner, ValidatorName},
 };
-use linera_core::{client::ChainClientState, node::ValidatorNode};
+use linera_core::{
+    client::{ChainClientState, ValidatorNodeProvider},
+    node::ValidatorNode,
+};
 use linera_storage::Storage;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
@@ -146,9 +149,10 @@ impl WalletState {
         self.chains.values_mut()
     }
 
-    pub async fn update_from_state<A, S>(&mut self, state: &mut ChainClientState<A, S>)
+    pub async fn update_from_state<P, S>(&mut self, state: &mut ChainClientState<P, S>)
     where
-        A: ValidatorNode + Send + Sync + 'static + Clone,
+        P: ValidatorNodeProvider + Send + 'static,
+        P::Node: ValidatorNode + Send + Sync + 'static + Clone,
         S: Storage + Clone + 'static,
     {
         let chain = self

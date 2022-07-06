@@ -6,6 +6,7 @@
 
 use linera_base::{
     crypto::*,
+    error::Error,
     execution::{Address, Amount, Balance, Operation, UserData},
     messages::*,
     rpc,
@@ -15,12 +16,15 @@ use linera_core::{
     node::{LocalNodeClient, ValidatorNode},
     worker::WorkerState,
 };
-use linera_service::{config::*, network, storage::MixedStorage};
+use linera_service::{
+    config::*, network, network::ValidatorPublicNetworkConfig, storage::MixedStorage,
+};
 use linera_storage::{InMemoryStoreClient, Storage};
 use log::*;
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
+    str::FromStr,
     time::{Duration, Instant},
 };
 use structopt::StructOpt;
@@ -36,7 +40,36 @@ struct ClientContext {
     cross_chain_retries: usize,
 }
 
+struct NodeProvider {
+    send_timeout: Duration,
+    recv_timeout: Duration,
+}
+
+impl ValidatorNodeProvider for NodeProvider {
+    type Node = network::Client;
+
+    fn make_node(&self, address: &str) -> Result<Self::Node, Error> {
+        let network = ValidatorPublicNetworkConfig::from_str(address).map_err(|_| {
+            Error::CannotResolveValidatorAddress {
+                address: address.to_string(),
+            }
+        })?;
+        Ok(network::Client::new(
+            network,
+            self.send_timeout,
+            self.recv_timeout,
+        ))
+    }
+}
+
 impl ClientContext {
+    fn node_provider(&self) -> NodeProvider {
+        NodeProvider {
+            send_timeout: self.send_timeout,
+            recv_timeout: self.recv_timeout,
+        }
+    }
+
     async fn from_options(options: &ClientOptions) -> Self {
         let wallet_state_path = options.wallet_state_path.clone();
         let wallet_state =
@@ -81,16 +114,6 @@ impl ClientContext {
         }
     }
 
-    fn make_validator_clients(&self) -> Vec<(ValidatorName, network::Client)> {
-        let mut validator_clients = Vec::new();
-        for config in &self.committee_config.validators {
-            let client =
-                network::Client::new(config.network.clone(), self.send_timeout, self.recv_timeout);
-            validator_clients.push((config.name, client));
-        }
-        validator_clients
-    }
-
     fn make_validator_mass_clients(&self, max_in_flight: u64) -> Vec<network::MassClient> {
         let mut validator_clients = Vec::new();
         for config in &self.committee_config.validators {
@@ -105,12 +128,8 @@ impl ClientContext {
         validator_clients
     }
 
-    fn make_chain_client(
-        &self,
-        chain_id: ChainId,
-    ) -> ChainClientState<network::Client, MixedStorage> {
+    fn make_chain_client(&self, chain_id: ChainId) -> ChainClientState<NodeProvider, MixedStorage> {
         let chain = self.wallet_state.get(chain_id).expect("Unknown chain");
-        let validator_clients = self.make_validator_clients();
         ChainClientState::new(
             chain_id,
             chain
@@ -119,7 +138,7 @@ impl ClientContext {
                 .map(|kp| kp.copy())
                 .into_iter()
                 .collect(),
-            validator_clients,
+            self.node_provider(),
             self.storage_client.clone(),
             chain.block_hash,
             chain.next_block_height,
@@ -249,9 +268,10 @@ impl ClientContext {
         info!("Saved user chain states");
     }
 
-    async fn update_wallet_from_client<A, S>(&mut self, state: &mut ChainClientState<A, S>)
+    async fn update_wallet_from_client<P, S>(&mut self, state: &mut ChainClientState<P, S>)
     where
-        A: ValidatorNode + Send + Sync + 'static + Clone,
+        P: ValidatorNodeProvider + Send + 'static,
+        P::Node: ValidatorNode + Send + Sync + 'static + Clone,
         S: Storage + Clone + 'static,
     {
         self.wallet_state.update_from_state(state).await
