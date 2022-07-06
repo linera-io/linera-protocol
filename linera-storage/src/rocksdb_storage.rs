@@ -2,18 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::Storage;
 use async_trait::async_trait;
-use core::fmt::Debug;
+use linera_base::{
+    chain::ChainState,
+    crypto::HashValue,
+    error::Error,
+    messages::{Certificate, ChainId},
+};
 use moka::sync::Cache;
 use std::{
     any::Any,
     path::{Path, PathBuf},
     sync::Arc,
-};
-use zef_base::{
-    chain::ChainState,
-    crypto::HashValue,
-    error::Error,
-    messages::{Certificate, ChainId},
 };
 
 #[cfg(test)]
@@ -25,7 +24,7 @@ mod rocksdb_storage_tests;
 pub struct RocksdbStore {
     /// RocksDB handle.
     db: rocksdb::DB,
-    cache: Cache<std::vec::Vec<u8>, Arc<dyn Send + Sync + Any + 'static>>,
+    cache: Cache<Vec<u8>, Arc<dyn Any + Send + Sync + 'static>>,
 }
 
 #[derive(Clone, Copy)]
@@ -83,7 +82,9 @@ impl RocksdbStore {
         assert!(path.is_dir());
         Ok(Self {
             db: open_db(&path)?,
-            cache: Cache::<std::vec::Vec<u8>, Arc<dyn Send + Sync + Any + 'static>>::new(10_000),
+            cache: Cache::<std::vec::Vec<u8>, Arc<dyn Send + Sync + Any + 'static>>::new(
+                cache_size,
+            ),
         })
     }
 
@@ -148,15 +149,16 @@ impl RocksdbStore {
         Ok(result)
     }
 
-    async fn write<'b, K: 'static, V: 'static>(&self, key: &K, value: &V) -> Result<(), Error>
+    async fn write<'b, K, V>(&self, key: &K, value: &V) -> Result<(), Error>
     where
-        K: serde::Serialize + std::fmt::Debug + std::fmt::Debug,
+        K: serde::Serialize + std::fmt::Debug + 'static,
         V: serde::Serialize
             + serde::Deserialize<'b>
             + std::fmt::Debug
             + std::marker::Sync
             + Send
-            + Clone,
+            + Clone
+            + 'static,
     {
         let key = bcs::to_bytes(&key).expect("should not fail");
         self.cache.insert(key.clone(), Arc::new(value.clone()));

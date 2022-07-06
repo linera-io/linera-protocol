@@ -12,8 +12,7 @@ pub use rocksdb_storage::*;
 use async_trait::async_trait;
 use dyn_clone::DynClone;
 use futures::future;
-use std::ops::DerefMut;
-use zef_base::{
+use linera_base::{
     chain::ChainState,
     crypto::HashValue,
     ensure,
