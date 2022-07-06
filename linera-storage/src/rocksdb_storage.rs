@@ -136,11 +136,12 @@ impl RocksdbStore {
                         })?;
                 match value {
                     Some(v) => {
-                        Some(
+                        let from_db =
                             ron::de::from_bytes::<V>(&v).map_err(|e| Error::StorageBcsError {
                                 error: format!("{}: {}", kind, e),
-                            })?,
-                        )
+                            })?;
+                        self.cache.insert(key.clone(), Arc::new(from_db.clone()));
+                        Some(from_db)
                     }
                     None => None,
                 }
