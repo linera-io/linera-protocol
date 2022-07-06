@@ -455,6 +455,10 @@ Error:
         STRUCT:
           - error: STR
     50:
+      CannotResolveValidatorAddress:
+        STRUCT:
+          - address: STR
+    51:
       MissingCertificate:
         STRUCT:
           - hash:

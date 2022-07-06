@@ -175,6 +175,24 @@ impl ExecutionState {
         }
     }
 
+    pub fn find_committee_for_new_chain<'a>(&self, effects: &'a [Effect]) -> Option<&'a Committee> {
+        assert!(self.epoch.is_none());
+        for effect in effects {
+            if let Effect::OpenChain {
+                id,
+                epoch,
+                committees,
+                ..
+            } = effect
+            {
+                if self.chain_id == *id {
+                    return committees.get(epoch);
+                }
+            }
+        }
+        None
+    }
+
     pub(crate) fn is_recipient(&self, effect: &Effect) -> bool {
         use Effect::*;
         match effect {

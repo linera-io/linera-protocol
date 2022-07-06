@@ -150,7 +150,7 @@ pub enum Error {
     // Client errors
     #[error("Client failed to obtain a valid response to the block proposal")]
     ClientErrorWhileProcessingBlockProposal,
-    #[error("Client failed to obtain a valid response to the certificate request")]
+    #[error("Client failed to obtain the requested certificate(s)")]
     ClientErrorWhileQueryingCertificate,
 
     // Networking and sharding
@@ -166,6 +166,8 @@ pub enum Error {
     StorageIoError { error: String },
     #[error("Storage (de)serialization error: {error:?}.")]
     StorageBcsError { error: String },
+    #[error("Failed to resolve validator address: {address:?}.")]
+    CannotResolveValidatorAddress { address: String },
 
     // Storage
     #[error("Missing certificate: {hash:?}")]

@@ -107,14 +107,21 @@ pub trait ChainClient {
     async fn local_balance(&mut self) -> Result<Balance>;
 }
 
+/// Turn an address into a validator node (local node or client to a remote node).
+pub trait ValidatorNodeProvider {
+    type Node;
+
+    fn make_node(&self, address: &str) -> Result<Self::Node, Error>;
+}
+
 /// Reference implementation of the `ChainClient` trait using many instances of some
 /// `ValidatorNode` implementation for communication, and a client to some (local)
 /// storage.
-pub struct ChainClientState<ValidatorNode, StorageClient> {
+pub struct ChainClientState<ValidatorNodeProvider, StorageClient> {
     /// The off-chain chain id.
     chain_id: ChainId,
     /// How to talk to the validators.
-    validator_clients: Vec<(ValidatorName, ValidatorNode)>,
+    validator_node_provider: ValidatorNodeProvider,
     /// Latest block hash, if any.
     block_hash: Option<HashValue>,
     /// Sequence number that we plan to use for the next block.
@@ -138,12 +145,12 @@ pub struct ChainClientState<ValidatorNode, StorageClient> {
     node_client: LocalNodeClient<StorageClient>,
 }
 
-impl<A, S> ChainClientState<A, S> {
+impl<P, S> ChainClientState<P, S> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         chain_id: ChainId,
         known_key_pairs: Vec<KeyPair>,
-        validator_clients: Vec<(ValidatorName, A)>,
+        validator_node_provider: P,
         storage_client: S,
         block_hash: Option<HashValue>,
         next_block_height: BlockHeight,
@@ -159,7 +166,7 @@ impl<A, S> ChainClientState<A, S> {
         let node_client = LocalNodeClient::new(state);
         Self {
             chain_id,
-            validator_clients,
+            validator_node_provider,
             block_hash,
             next_block_height,
             next_round: RoundNumber::default(),
@@ -189,9 +196,10 @@ impl<A, S> ChainClientState<A, S> {
     }
 }
 
-impl<A, S> ChainClientState<A, S>
+impl<P, S> ChainClientState<P, S>
 where
-    A: ValidatorNode + Send + Sync + 'static + Clone,
+    P: ValidatorNodeProvider,
+    P::Node: ValidatorNode + Send + Sync + 'static + Clone,
     S: Storage + Clone + 'static,
 {
     async fn chain_info(&mut self) -> Result<ChainInfo, Error> {
@@ -212,6 +220,28 @@ where
             .committees
             .remove(&state.epoch.ok_or(Error::InactiveChain(self.chain_id))?)
             .ok_or(Error::InactiveChain(self.chain_id))
+    }
+
+    async fn validator_nodes(&mut self) -> Result<Vec<(ValidatorName, P::Node)>, Error> {
+        match self.committee().await {
+            Ok(committee) => self.make_validator_nodes(&committee),
+            Err(Error::InactiveChain(_)) => Ok(Vec::new()),
+            Err(e) => Err(e),
+        }
+    }
+
+    fn make_validator_nodes(
+        &self,
+        committee: &Committee,
+    ) -> Result<Vec<(ValidatorName, P::Node)>, Error> {
+        let mut nodes = Vec::new();
+        for (name, validator) in &committee.validators {
+            let node = self
+                .validator_node_provider
+                .make_node(&validator.network_address)?;
+            nodes.push((*name, node));
+        }
+        Ok(nodes)
     }
 
     async fn execution_state(&mut self) -> Result<ExecutionState, Error> {
@@ -276,9 +306,10 @@ where
     }
 }
 
-impl<A, S> ChainClientState<A, S>
+impl<P, S> ChainClientState<P, S>
 where
-    A: ValidatorNode + Send + Sync + 'static + Clone,
+    P: ValidatorNodeProvider + Send + 'static,
+    P::Node: ValidatorNode + Send + Sync + 'static + Clone,
     S: Storage + Clone + 'static,
 {
     /// Prepare the chain for the next operation.
@@ -286,13 +317,10 @@ where
         // Verify that our local storage contains enough history compared to the
         // expected block height. Otherwise, download the missing history from the
         // network.
+        let nodes = self.validator_nodes().await?;
         let mut info = self
             .node_client
-            .download_certificates(
-                self.validator_clients.clone(),
-                self.chain_id,
-                self.next_block_height,
-            )
+            .download_certificates(nodes, self.chain_id, self.next_block_height)
             .await?;
         if info.next_block_height == self.next_block_height {
             // Check that our local node has the expected block hash.
@@ -305,9 +333,10 @@ where
             // For multi-owner chains, we could be missing recent certificates created by
             // other owners. Further synchronize blocks from the network. This is a
             // best-effort that depends on network conditions.
+            let nodes = self.validator_nodes().await?;
             info = self
                 .node_client
-                .synchronize_chain_state(self.validator_clients.clone(), self.chain_id)
+                .synchronize_chain_state(nodes, self.chain_id)
                 .await?;
         }
         // Update chain information tracked by the client.
@@ -332,8 +361,9 @@ where
         let storage_client = self.node_client.storage_client().await;
         let cross_chain_delay = self.cross_chain_delay;
         let cross_chain_retries = self.cross_chain_retries;
+        let nodes = self.make_validator_nodes(committee)?;
         let result = communicate_with_quorum(
-            &self.validator_clients,
+            &nodes,
             committee,
             |value: &Option<Vote>| -> Option<(Vec<Effect>, HashValue)> {
                 value
@@ -444,9 +474,10 @@ where
         let committee = committees
             .get(&epoch)
             .ok_or(Error::InactiveChain(chain_id))?;
+        let nodes = self.make_validator_nodes(committee)?;
         let trackers = self.received_certificate_trackers.clone();
         let result = communicate_with_quorum(
-            &self.validator_clients,
+            &nodes,
             committee,
             |_| (),
             |name, mut client| {
@@ -465,7 +496,7 @@ where
                         let block = certificate
                             .value
                             .confirmed_block()
-                            .ok_or(Error::ClientErrorWhileQueryingCertificate)?;
+                            .ok_or(Error::InvalidChainInfoResponse)?;
                         // Check that certificates are valid w.r.t one of our trusted
                         // committees.
                         if block.epoch > epoch {
@@ -683,9 +714,10 @@ where
 }
 
 #[async_trait]
-impl<A, S> ChainClient for ChainClientState<A, S>
+impl<P, S> ChainClient for ChainClientState<P, S>
 where
-    A: ValidatorNode + Send + Sync + Clone + 'static,
+    P: ValidatorNodeProvider + Send + 'static,
+    P::Node: ValidatorNode + Send + Sync + 'static + Clone,
     S: Storage + Clone + 'static,
 {
     async fn local_balance(&mut self) -> Result<Balance> {
@@ -755,30 +787,43 @@ where
             .confirmed_block()
             .ok_or_else(|| anyhow!("Was expecting a confirmed chain operation"))?
             .clone();
+        let (effects, _) = certificate.value.effects_and_state_hash();
         let state = self.execution_state().await?;
-        if let Some(epoch) = state.epoch {
-            ensure!(
-                block.epoch <= epoch,
-                "Cannot accept a certificate from an unknown committee in the future. Please synchronize the local chain",
-            );
-            match state.committees.get(&block.epoch) {
-                Some(committee) => {
-                    certificate.check(committee)?;
-                }
-                None => bail!("Cannot accept a certificate from a committee that was retired. Try a newer certificate from the same chain"),
+        let current_committee = match state.epoch {
+            Some(epoch) => {
+                // The client's main chain (aka "recipient") is active.
+                ensure!(
+                    block.epoch <= epoch,
+                    "Cannot accept a certificate from an unknown committee in the future. Please synchronize the local chain",
+                );
+                state.committees.get(&block.epoch).ok_or_else(|| anyhow!("Cannot accept a certificate from a committee that was retired. Try a newer certificate from the same origin"))?
             }
-        }
-        // Recover history from the network.
+            None => {
+                // The main chain is inactive. This certificate must contain out chain
+                // creation command. Let find out what the committee is.
+                state
+                    .find_committee_for_new_chain(&effects)
+                    .ok_or_else(|| {
+                        anyhow!(
+                            "A creation certificate must be provided first before using the client"
+                        )
+                    })?
+            }
+        };
+        certificate.check(current_committee)?;
+        // Recover history from the network. We assume that the committee that signed the
+        // certificate is still active.
+        let nodes = self.make_validator_nodes(current_committee)?;
         self.node_client
-            .download_certificates(self.validator_clients.clone(), block.chain_id, block.height)
+            .download_certificates(nodes, block.chain_id, block.height)
             .await?;
         // Process the received operation.
         self.process_certificate(certificate).await?;
         // Make sure a quorum of validators (according to our committee) are up-to-date
         // for data availability.
-        let committee = self.committee().await?;
+        let new_committee = self.committee().await?;
         self.communicate_chain_updates(
-            &committee,
+            &new_committee,
             block.chain_id,
             CommunicateAction::AdvanceToNextBlockHeight(block.height.try_add_one()?),
         )
