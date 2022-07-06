@@ -1,19 +1,11 @@
-[![Build Status](https://github.com/zefchain/zefchain-protocol/actions/workflows/rust.yml/badge.svg)](https://github.com/zef/zef-protocol/actions/workflows/rust.yml)
+[![Build Status](https://github.com/linera-io/linera-protocol/actions/workflows/rust.yml/badge.svg)](https://github.com/linera-io/linera-protocol/actions/workflows/rust.yml)
 [![License](https://img.shields.io/badge/license-Apache-green.svg)](LICENSE.md)
 
-# Zefchain Protocol
+# Linera
 
-This repository is dedicated to developing the Zefchain protocol.
+This repository is dedicated to developing the Linera protocol.
 
-## Browse roadmap locally
-
-```
-cargo install mdbook
-mdbook serve roadmap
-```
-Then open URL as instructed.
-
-## Quickstart with the Zef service CLI
+## Quickstart with the Linera service CLI
 
 The current code was imported from https://github.com/novifinancial/fastpay/pull/24 then
 cleaned up (e.g. removing coins and assets for now). Atomic swaps are still WIP (notably
@@ -37,10 +29,10 @@ trap 'kill $(jobs -p)' EXIT
 # * Private server states are stored in `server*.json`.
 # * `committee.json` is the public description of the FastPay committee.
 ./server generate-all --validators \
-   server_1.json:udp:127.0.0.1:9100:4 \
-   server_2.json:udp:127.0.0.1:9200:4 \
-   server_3.json:udp:127.0.0.1:9300:4 \
-   server_4.json:udp:127.0.0.1:9400:4 \
+   server_1.json:127.0.0.1:9100:udp:127.0.0.1:9101:127.0.0.1:9102:127.0.0.1:9103:127.0.0.1:9104 \
+   server_2.json:127.0.0.1:9200:udp:127.0.0.1:9201:127.0.0.1:9202:127.0.0.1:9203:127.0.0.1:9204 \
+   server_3.json:127.0.0.1:9300:udp:127.0.0.1:9301:127.0.0.1:9302:127.0.0.1:9303:127.0.0.1:9304 \
+   server_4.json:127.0.0.1:9400:udp:127.0.0.1:9401:127.0.0.1:9402:127.0.0.1:9403:127.0.0.1:9404 \
 --committee committee.json
 
 # Create configuration files for 1000 user chains.
@@ -51,6 +43,8 @@ trap 'kill $(jobs -p)' EXIT
 # Start servers and create initial chains in DB
 for I in 1 2 3 4
 do
+    ./proxy server_"$I".json &
+
     for J in $(seq 0 3)
     do
         ./server run --storage server_"$I"_"$J".db --server server_"$I".json --shard "$J" --genesis genesis.json &
@@ -97,6 +91,10 @@ cd ../..
 
 ## Contributing
 
+### Copyright
+
+The new code should be copyrighted by "Zefchain Labs, Inc". (This is currently still the legal entity behind the Linera project.)
+
 ### Formatting and linting
 
 Make sure to fix the lint errors reported by
@@ -115,9 +113,9 @@ cargo fmt +nightly
 
 ### Dealing with test failures `test_format` after code changes
 
-Getting an error with the test in [`zef-core/tests/format.rs`](zef-core/tests/format.rs) ?
-Probably the file [`zef-core/tests/staged/formats.yaml`](zef-core/tests/staged/formats.yaml) (recording message formats) is
+Getting an error with the test in [`linera-base/tests/format.rs`](linera-base/tests/format.rs) ?
+Probably the file [`linera-base/tests/staged/formats.yaml`](linera-base/tests/staged/formats.yaml) (recording message formats) is
 outdated. In the most case (but not always sadly), this can be fixed by running
-[`zef-core/generate-format.sh`](zef-core/generate-format.sh).
+[`linera-base/generate-format.sh`](linera-base/generate-format.sh).
 
-See https://github.com/novifinancial/serde-reflection for more context.
+See https://github.com/zefchain/serde-reflection for more context.
