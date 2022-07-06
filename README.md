@@ -28,7 +28,7 @@ trap 'kill $(jobs -p)' EXIT
 # Create configuration files for 4 validators with 4 shards each.
 # * Private server states are stored in `server*.json`.
 # * `committee.json` is the public description of the FastPay committee.
-./server generate-all --validators \
+./server generate --validators \
    server_1.json:127.0.0.1:9100:udp:127.0.0.1:9101:127.0.0.1:9102:127.0.0.1:9103:127.0.0.1:9104 \
    server_2.json:127.0.0.1:9200:udp:127.0.0.1:9201:127.0.0.1:9202:127.0.0.1:9203:127.0.0.1:9204 \
    server_3.json:127.0.0.1:9300:udp:127.0.0.1:9301:127.0.0.1:9302:127.0.0.1:9303:127.0.0.1:9304 \

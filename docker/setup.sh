@@ -23,7 +23,7 @@ validator_options() {
 # * Private server states are stored in `server*.json`.
 # * `committee.json` is the public description of the FastPay committee.
 VALIDATORS=($(validator_options))
-./server generate-all --validators ${VALIDATORS[@]} --committee committee.json
+./server generate --validators ${VALIDATORS[@]} --committee committee.json
 
 # Create configuration files for 1000 user chains.
 # * Private chain states are stored in one local wallet `wallet.json`.
