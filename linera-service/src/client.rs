@@ -74,8 +74,7 @@ impl ClientContext {
         let wallet_state_path = options.wallet_state_path.clone();
         let wallet_state =
             WalletState::read_or_create(&wallet_state_path).expect("Unable to read user chains");
-        let (storage_client, committee_config): (MixedStorage, CommitteeConfig) = match options.cmd
-        {
+        let (storage_client, committee_config): (MixedStorage, _) = match options.cmd {
             ClientCommands::CreateGenesisConfig { .. } => {
                 // This is a placeholder to avoid create a DB on disk at this point.
                 (

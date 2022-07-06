@@ -182,15 +182,15 @@ enum ServerCommands {
     },
 
     /// Act as a trusted third-party and generate all server configurations
-    #[structopt(name = "generate-all")]
-    GenerateAll {
+    #[structopt(name = "generate")]
+    Generate {
         /// Configuration of each validator in the committee encoded as `(Udp|Tcp):host:port:num-shards`
         #[structopt(long)]
         validators: Vec<ValidatorOptions>,
 
         /// Path where to write the description of the Zef committee
         #[structopt(long)]
-        committee: PathBuf,
+        committee: Option<PathBuf>,
     },
 }
 
@@ -262,7 +262,7 @@ async fn main() {
             join_all(handles).await;
         }
 
-        ServerCommands::GenerateAll {
+        ServerCommands::Generate {
             validators,
             committee,
         } => {
@@ -276,13 +276,15 @@ async fn main() {
                 info!("Wrote server config {}", path.to_str().unwrap());
                 config_validators.push(server.validator);
             }
-            let config = CommitteeConfig {
-                validators: config_validators,
-            };
-            config
-                .write(&committee)
-                .expect("Unable to write committee description");
-            info!("Wrote committee config {}", committee.to_str().unwrap());
+            if let Some(committee) = committee {
+                let config = CommitteeConfig {
+                    validators: config_validators,
+                };
+                config
+                    .write(&committee)
+                    .expect("Unable to write committee description");
+                info!("Wrote committee config {}", committee.to_str().unwrap());
+            }
         }
     }
 }
