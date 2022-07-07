@@ -479,7 +479,10 @@ where
                             // Refuse to create the chain state if it is still inactive by
                             // now. Accordingly, do not send a confirmation, so that the
                             // message is retried later.
-                            log::warn!("Refusing to store inactive chain {recipient:?}");
+                            log::warn!(
+                                "{}: refusing to store inactive chain {recipient:?}",
+                                self.nickname
+                            );
                             return Ok(Vec::new());
                         }
                     }
