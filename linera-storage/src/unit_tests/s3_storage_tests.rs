@@ -1,3 +1,4 @@
+use super::{S3Storage, BUCKET};
 use anyhow::{Context, Error};
 use aws_sdk_s3::Endpoint;
 use aws_types::SdkConfig;
@@ -89,6 +90,24 @@ impl LocalStackTestContext {
 
         Ok(())
     }
+}
+
+/// Test if the necessary buckets are created if needed.
+#[tokio::test]
+#[ignore]
+async fn buckets_are_created() -> Result<(), Error> {
+    let localstack = LocalStackTestContext::new().await?;
+    let client = aws_sdk_s3::Client::from_conf(localstack.config());
+
+    let initial_buckets = list_buckets(&client).await?;
+    assert!(!initial_buckets.contains(&BUCKET.to_owned()));
+
+    let _storage = S3Storage::from_config(localstack.config()).await?;
+
+    let buckets = list_buckets(&client).await?;
+    assert!(buckets.contains(&BUCKET.to_owned()));
+
+    Ok(())
 }
 
 /// Helper function to list the names of buckets registered on S3.
