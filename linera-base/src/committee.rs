@@ -12,7 +12,7 @@ pub struct ValidatorState {
     /// The network address (in a string format understood by the networking layer).
     pub network_address: String,
     /// The voting power.
-    pub votes: usize,
+    pub votes: u64,
 }
 
 /// A set of validators (identified by their public keys) and their voting rights.
@@ -21,7 +21,7 @@ pub struct Committee {
     /// The validators in the committee.
     pub validators: BTreeMap<ValidatorName, ValidatorState>,
     /// The sum of all voting rights.
-    pub total_votes: usize,
+    pub total_votes: u64,
 }
 
 impl Committee {
@@ -37,7 +37,7 @@ impl Committee {
 
     /// For testing
     pub fn make_simple(keys: Vec<ValidatorName>) -> Self {
-        let total_votes = keys.len();
+        let total_votes = keys.len() as u64;
         Committee {
             validators: keys
                 .into_iter()
@@ -55,7 +55,7 @@ impl Committee {
         }
     }
 
-    pub fn weight(&self, author: &ValidatorName) -> usize {
+    pub fn weight(&self, author: &ValidatorName) -> u64 {
         match self.validators.get(author) {
             Some(state) => state.votes,
             None => 0,
@@ -68,20 +68,20 @@ impl Committee {
             .map(|state| state.network_address.as_ref())
     }
 
-    pub fn quorum_threshold(&self) -> usize {
+    pub fn quorum_threshold(&self) -> u64 {
         // If N = 3f + 1 + k (0 <= k < 3)
         // then (2 N + 3) / 3 = 2f + 1 + (2k + 2)/3 = 2f + 1 + k = N - f
         2 * self.total_votes / 3 + 1
     }
 
-    pub fn validity_threshold(&self) -> usize {
+    pub fn validity_threshold(&self) -> u64 {
         // If N = 3f + 1 + k (0 <= k < 3)
         // then (N + 2) / 3 = f + 1 + k/3 = f + 1
         (self.total_votes + 2) / 3
     }
 
     /// Find the highest value than is supported by a certain subset of validators.
-    pub fn get_lower_bound<V>(&self, threshold: usize, mut values: Vec<(ValidatorName, V)>) -> V
+    pub fn get_lower_bound<V>(&self, threshold: u64, mut values: Vec<(ValidatorName, V)>) -> V
     where
         V: Default + std::cmp::Ord,
     {

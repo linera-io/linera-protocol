@@ -415,7 +415,7 @@ impl ChainInfoResponse {
 
 pub struct SignatureAggregator<'a> {
     committee: &'a Committee,
-    weight: usize,
+    weight: u64,
     used_validators: HashSet<ValidatorName>,
     partial: Certificate,
 }
