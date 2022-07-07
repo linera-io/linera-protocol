@@ -5,6 +5,7 @@
 #![deny(warnings)]
 
 use linera_base::{
+    committee::ValidatorState,
     crypto::*,
     error::Error,
     execution::{Address, Amount, Balance, Operation, UserData},
@@ -76,14 +77,14 @@ impl ClientContext {
         let wallet_state =
             WalletState::read_or_create(&wallet_state_path).expect("Unable to read user chains");
         let (storage_client, committee_config, admin_id): (MixedStorage, _, _) = match options.cmd {
-            ClientCommands::CreateGenesisConfig { .. } => {
-                // The first two values are placeholders. We don't want to create a DB on disk at this point.
+            ClientCommands::CreateGenesisConfig { admin_root, .. } => {
+                // This is a placeholder to avoid create a DB on disk at this point.
                 (
                     Box::new(InMemoryStoreClient::default()),
                     CommitteeConfig {
                         validators: Vec::new(),
                     },
-                    ChainId::root(0),
+                    ChainId::root(admin_root),
                 )
             }
             _ => {
@@ -312,6 +313,36 @@ impl ClientContext {
             chain.next_block_height = info.next_block_height;
         }
     }
+
+    async fn ensure_admin_subscription(&mut self) -> Vec<Certificate> {
+        let mut certificates = Vec::new();
+        for chain_id in self.wallet_state.chain_ids() {
+            let mut client_state = self.make_chain_client(chain_id);
+            if let Ok(cert) = client_state.subscribe_to_new_committees().await {
+                info!(
+                    "Subscribed {:?} to the admin chain {:?}",
+                    chain_id, self.admin_id
+                );
+                certificates.push(cert);
+                self.update_wallet_from_client(&mut client_state).await;
+            }
+        }
+        certificates
+    }
+
+    async fn push_to_all_chains(&mut self, certificate: &Certificate) {
+        for chain_id in self.wallet_state.chain_ids() {
+            let mut client_state = self.make_chain_client(chain_id);
+            client_state
+                .receive_certificate(certificate.clone())
+                .await
+                .unwrap();
+            client_state.process_inbox().await.unwrap();
+            let epochs = client_state.epochs().await.unwrap();
+            info!("{:?} accepts epochs {:?}", chain_id, epochs);
+            self.update_wallet_from_client(&mut client_state).await;
+        }
+    }
 }
 
 fn deserialize_response(response: rpc::Message) -> Option<ChainInfoResponse> {
@@ -419,6 +450,37 @@ enum ClientCommands {
         chain_id: ChainId,
     },
 
+    /// Show the current set of validators for a chain.
+    #[structopt(name = "query_validators")]
+    QueryValidators {
+        /// Chain id (defaults to admin chain)
+        chain_id: Option<ChainId>,
+    },
+
+    /// Add or modify a validator (admin only)
+    #[structopt(name = "set_validator")]
+    SetValidator {
+        /// The public key of the validator.
+        #[structopt(long = "name")]
+        name: ValidatorName,
+
+        /// Address
+        #[structopt(long = "address")]
+        network_address: String,
+
+        /// Voting power
+        #[structopt(long = "votes", default_value = "1")]
+        votes: u64,
+    },
+
+    /// Remove a validator (admin only)
+    #[structopt(name = "remove_validator")]
+    RemoveValidator {
+        /// The public key of the validator.
+        #[structopt(long = "name")]
+        name: ValidatorName,
+    },
+
     /// Send one transfer per chain in bulk mode
     #[structopt(name = "benchmark")]
     Benchmark {
@@ -437,6 +499,10 @@ enum ClientCommands {
         /// Sets the file describing the public configurations of all validators
         #[structopt(long = "committee")]
         committee_config_path: PathBuf,
+
+        /// Index of the admin chain in the genesis config
+        #[structopt(long, default_value = "0")]
+        admin_root: usize,
 
         /// Known initial balance of the chain
         #[structopt(long, default_value = "0")]
@@ -531,6 +597,70 @@ async fn main() {
             context.save_chains();
         }
 
+        QueryValidators { chain_id } => {
+            let mut client_state = context.make_chain_client(chain_id.unwrap_or(context.admin_id));
+            info!("Starting operation to query validators");
+            let time_start = Instant::now();
+            let committee = client_state.committee().await.unwrap();
+            let time_total = time_start.elapsed().as_micros();
+            info!("Validators obtained after {} us", time_total);
+            info!("{:?}", committee.validators);
+            context.update_wallet_from_client(&mut client_state).await;
+            context.save_chains();
+        }
+
+        cmd @ (SetValidator { .. } | RemoveValidator { .. }) => {
+            info!("Starting operations to change validator set");
+            let time_start = Instant::now();
+
+            // Make sure genesis chains are subscribed to the admin chain.
+            let certificates = context.ensure_admin_subscription().await;
+            let mut admin_state = context.make_chain_client(context.admin_id);
+            for cert in certificates {
+                admin_state.receive_certificate(cert).await.unwrap();
+            }
+
+            // Create the new committee.
+            let committee = admin_state.committee().await.unwrap();
+            let mut validators = committee.validators;
+            match cmd {
+                SetValidator {
+                    name,
+                    network_address,
+                    votes,
+                } => {
+                    validators.insert(
+                        name,
+                        ValidatorState {
+                            network_address,
+                            votes,
+                        },
+                    );
+                }
+                RemoveValidator { name } => {
+                    if validators.remove(&name).is_none() {
+                        warn!("Skipping removal of nonexistent validator");
+                        return;
+                    }
+                }
+                _ => unreachable!(),
+            }
+            let certificate = admin_state.stage_new_committee(validators).await.unwrap();
+            context.update_wallet_from_client(&mut admin_state).await;
+            info!("{:?}", certificate);
+            context.push_to_all_chains(&certificate).await;
+
+            // Remove the old committee.
+            let certificate = admin_state.finalize_committee().await.unwrap();
+            context.update_wallet_from_client(&mut admin_state).await;
+            info!("{:?}", certificate);
+            context.push_to_all_chains(&certificate).await;
+
+            let time_total = time_start.elapsed().as_micros();
+            info!("Operations confirmed after {} us", time_total);
+            context.save_chains();
+        }
+
         Benchmark {
             max_in_flight,
             max_proposals,
@@ -585,12 +715,14 @@ async fn main() {
 
         CreateGenesisConfig {
             committee_config_path,
+            admin_root,
             initial_funding,
             num,
         } => {
             let committee_config = CommitteeConfig::read(&committee_config_path)
                 .expect("Unable to read committee config file");
-            let mut genesis_config = GenesisConfig::new(committee_config, context.admin_id);
+            let mut genesis_config =
+                GenesisConfig::new(committee_config, ChainId::root(admin_root));
             for i in 0..num {
                 let description = ChainDescription::Root(i as usize);
                 // Create keys.

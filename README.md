@@ -34,10 +34,10 @@ trap 'kill $(jobs -p)' EXIT
    server_4.json:127.0.0.1:9400:udp:127.0.0.1:9401:127.0.0.1:9402:127.0.0.1:9403:127.0.0.1:9404 \
 --committee committee.json
 
-# Create configuration files for 1000 user chains.
+# Create configuration files for 10 user chains.
 # * Private chain states are stored in one local wallet `wallet.json`.
 # * `genesis.json` will contain the initial balances of chains as well as the initial committee.
-./client --wallet wallet.json --genesis genesis.json create_genesis_config 1000 --initial-funding 100 --committee committee.json
+./client --wallet wallet.json --genesis genesis.json create_genesis_config 10 --initial-funding 10 --committee committee.json
 
 # Start servers and create initial chains in DB
 for I in 1 2 3 4
@@ -55,9 +55,11 @@ LAST_PID="$!"
 # Command line prefix for client calls
 CLIENT=(./client --storage client.db --wallet wallet.json --genesis genesis.json)
 
+${CLIENT[@]} query_validators
+
 # Query balance for first and last user chain
 CHAIN1="7817752ff06b8266d77df8febf5c4b524cec096bd83dc54f989074fb94f833737ae984f32be2cee1dfab766fe2d0c726503c4d97117eb59023e9cc65a8ecd1f7"
-CHAIN2="8ec607f670dd82d6986e95815b6ba64e4aad748e6f023f8dde42439222959c0c4aa9d3af00a983deec3f1ab0e64ef27ff80a1a8e1c1990be677ef5cfb316de85"
+CHAIN2="16377ac9ccb009cf58898bf3ffd3bf293aad12f31c0dfa798b819deece9e57a5730146a399c812d3fc551f4290b15dc08f3f1527b06252284b4b89327caaffad"
 ${CLIENT[@]} query_balance "$CHAIN1"
 ${CLIENT[@]} query_balance "$CHAIN2"
 
@@ -84,6 +86,41 @@ fgrep '"chain_id":"'$CHAIN3'"' wallet.json
 
 # Query the balance of the first chain
 ${CLIENT[@]} query_balance "$CHAIN1"
+
+# Create two more validators
+NAME5=$(./server generate --validators \
+   server_5.json:127.0.0.1:9500:udp:127.0.0.1:9501:127.0.0.1:9502:127.0.0.1:9503:127.0.0.1:9504)
+
+NAME6=$(./server generate --validators \
+   server_6.json:127.0.0.1:9600:udp:127.0.0.1:9601:127.0.0.1:9602:127.0.0.1:9603:127.0.0.1:9604)
+
+# Start the corresponding services
+for I in 6 5
+do
+    ./proxy server_"$I".json &
+
+    # hack!
+    PID5="$!"
+
+    for J in $(seq 0 3)
+    do
+        ./server run --storage server_"$I"_"$J".db --server server_"$I".json --shard "$J" --genesis genesis.json &
+    done
+done
+
+${CLIENT[@]} set_validator --name "$NAME5" --address 127.0.0.1:9500 --votes 100
+
+${CLIENT[@]} query_balance "$CHAIN1"
+${CLIENT[@]} query_validators
+${CLIENT[@]} query_validators "$CHAIN1"
+
+${CLIENT[@]} set_validator --name "$NAME6" --address 127.0.0.1:9600 --votes 1
+${CLIENT[@]} remove_validator --name "$NAME5"
+kill "$PID5"
+
+${CLIENT[@]} query_balance "$CHAIN1"
+${CLIENT[@]} query_validators
+${CLIENT[@]} query_validators "$CHAIN1"
 
 cd ../..
 ```

@@ -274,6 +274,7 @@ async fn main() {
                     .write(&path)
                     .expect("Unable to write server config file");
                 info!("Wrote server config {}", path.to_str().unwrap());
+                println!("{}", server.validator.name);
                 config_validators.push(server.validator);
             }
             if let Some(committee) = committee {
