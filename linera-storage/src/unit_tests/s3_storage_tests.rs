@@ -7,7 +7,7 @@ use linera_base::{
     chain::ChainState,
     crypto::HashValue,
     execution::{ExecutionState, Operation},
-    messages::{Block, BlockHeight, Certificate, ChainId, Epoch, Value},
+    messages::{Block, BlockHeight, Certificate, ChainDescription, ChainId, Epoch, Value},
 };
 use std::env;
 use tokio::sync::{Mutex, MutexGuard};
@@ -157,6 +157,22 @@ async fn certificate_storage_round_trip() -> Result<(), Error> {
     let stored_certificate = storage.read_certificate(certificate.hash).await?;
 
     assert_eq!(certificate, stored_certificate);
+
+    Ok(())
+}
+
+/// Test if retrieving inexistent certificates fails.
+#[tokio::test]
+#[ignore]
+async fn retrieval_of_inexistent_certificate() -> Result<(), Error> {
+    let certificate_hash = HashValue::new(&ChainDescription::Root(123));
+
+    let localstack = LocalStackTestContext::new().await?;
+    let mut storage = S3Storage::from_config(localstack.config()).await?;
+
+    let result = storage.read_certificate(certificate_hash).await;
+
+    assert!(result.is_err());
 
     Ok(())
 }
