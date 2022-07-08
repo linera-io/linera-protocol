@@ -27,3 +27,7 @@ rocksdb = "0.18.0"
 moka = "0.8"
 
 linera-base = { path = "../linera-base" }
+
+[dev-dependencies]
+anyhow = "1.0.57"
+http = "0.2"
