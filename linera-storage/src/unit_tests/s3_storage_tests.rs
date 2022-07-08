@@ -217,3 +217,27 @@ async fn retrieval_of_inexistent_chain_state() -> Result<(), Error> {
 
     Ok(())
 }
+
+/// Test if chain states are stored and retrieved correctly.
+#[tokio::test]
+#[ignore]
+async fn removal_of_chain_state() -> Result<(), Error> {
+    let chain_id = ChainId::root(9);
+    let chain_state = ChainState {
+        next_block_height: BlockHeight(300),
+        ..ChainState::new(chain_id)
+    };
+
+    let localstack = LocalStackTestContext::new().await?;
+    let mut storage = S3Storage::from_config(localstack.config()).await?;
+
+    storage.write_chain(chain_state).await?;
+    storage.remove_chain(chain_id).await?;
+
+    let retrieved_chain_state = storage.read_chain_or_default(chain_id).await?;
+    let expected_chain_state = ChainState::new(chain_id);
+
+    assert_eq!(retrieved_chain_state, expected_chain_state);
+
+    Ok(())
+}
