@@ -32,11 +32,15 @@ impl LocalStackTestContext {
         let endpoint = Self::load_endpoint()?;
         let _guard = LOCALSTACK_GUARD.lock().await;
 
-        Ok(LocalStackTestContext {
+        let context = LocalStackTestContext {
             base_config,
             endpoint,
             _guard,
-        })
+        };
+
+        context.clear().await?;
+
+        Ok(context)
     }
 
     /// Creates an [`Endpoint`] using the configuration in the [`LOCALSTACK_ENDPOINT`] environment
@@ -61,4 +65,41 @@ impl LocalStackTestContext {
             .endpoint_resolver(self.endpoint.clone())
             .build()
     }
+
+    /// Remove all buckets from the LocalStack S3 storage.
+    async fn clear(&self) -> Result<(), Error> {
+        let client = aws_sdk_s3::Client::from_conf(self.config());
+
+        for bucket in list_buckets(&client).await? {
+            let objects = client.list_objects().bucket(&bucket).send().await?;
+
+            for object in objects.contents().into_iter().flatten() {
+                if let Some(key) = object.key.as_ref() {
+                    client
+                        .delete_object()
+                        .bucket(&bucket)
+                        .key(key)
+                        .send()
+                        .await?;
+                }
+            }
+
+            client.delete_bucket().bucket(bucket).send().await?;
+        }
+
+        Ok(())
+    }
+}
+
+/// Helper function to list the names of buckets registered on S3.
+async fn list_buckets(client: &aws_sdk_s3::Client) -> Result<Vec<String>, Error> {
+    Ok(client
+        .list_buckets()
+        .send()
+        .await?
+        .buckets
+        .expect("List of buckets was not returned")
+        .into_iter()
+        .filter_map(|bucket| bucket.name)
+        .collect())
 }
