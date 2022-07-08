@@ -200,3 +200,20 @@ async fn chain_storage_round_trip() -> Result<(), Error> {
 
     Ok(())
 }
+
+/// Test if retrieving inexistent chain states creates new [`ChainState`] instances.
+#[tokio::test]
+#[ignore]
+async fn retrieval_of_inexistent_chain_state() -> Result<(), Error> {
+    let chain_id = ChainId::root(5);
+
+    let localstack = LocalStackTestContext::new().await?;
+    let mut storage = S3Storage::from_config(localstack.config()).await?;
+
+    let chain_state = storage.read_chain_or_default(chain_id).await?;
+    let expected_chain_state = ChainState::new(chain_id);
+
+    assert_eq!(chain_state, expected_chain_state);
+
+    Ok(())
+}
