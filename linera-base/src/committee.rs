@@ -26,16 +26,14 @@ pub struct Committee {
 
 impl Committee {
     pub fn new(validators: BTreeMap<ValidatorName, ValidatorState>) -> Self {
-        let total_votes = validators
-            .iter()
-            .fold(0, |sum, (_, state)| sum + state.votes);
+        let total_votes = validators.values().fold(0, |sum, state| sum + state.votes);
         Committee {
             validators,
             total_votes,
         }
     }
 
-    /// For testing
+    #[cfg(any(test, feature = "test"))]
     pub fn make_simple(keys: Vec<ValidatorName>) -> Self {
         let total_votes = keys.len() as u64;
         Committee {

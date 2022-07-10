@@ -234,9 +234,9 @@ impl ClientContext {
         for client in self.make_validator_mass_clients(max_in_flight) {
             let proposals = proposals.clone();
             handles.push(tokio::spawn(async move {
-                info!("Sending {} requests", proposals.len(),);
-                let responses = client.send(proposals).await.unwrap_or_else(|_| Vec::new());
-                info!("Done sending requests",);
+                info!("Sending {} requests", proposals.len());
+                let responses = client.send(proposals).await.unwrap_or_default();
+                info!("Done sending requests");
                 responses
             }));
         }
