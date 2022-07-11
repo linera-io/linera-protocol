@@ -21,9 +21,8 @@ pub struct ExecutionState {
     pub chain_id: ChainId,
     /// The number identifying the current configuration.
     pub epoch: Option<Epoch>,
-    /// Whether our reconfigurations are managed by a "beacon" chain, or if we are it and
-    /// managing other chains.
-    pub admin_status: Option<ChainAdminStatus>,
+    /// The admin of the chain.
+    pub admin_id: Option<ChainId>,
     /// Track the channels that we have subscribed to.
     /// We avoid BTreeSet<String> because of a Serde/BCS limitation.
     pub subscriptions: BTreeMap<ChannelId, ()>,
@@ -107,14 +106,6 @@ pub enum Operation {
     RemoveCommittee { admin_id: ChainId, epoch: Epoch },
 }
 
-/// The administrative status of this chain w.r.t reconfigurations.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub enum ChainAdminStatus {
-    ManagedBy { admin_id: ChainId },
-    Managing,
-}
-
 /// The effect of an operation to be performed on a remote chain.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Effect {
@@ -147,7 +138,7 @@ impl ExecutionState {
         Self {
             chain_id,
             epoch: None,
-            admin_status: None,
+            admin_id: None,
             subscriptions: BTreeMap::new(),
             committees: BTreeMap::new(),
             manager: ChainManager::default(),
@@ -164,17 +155,6 @@ pub(crate) struct ApplicationResult {
 }
 
 impl ExecutionState {
-    pub fn admin_id(&self) -> Result<ChainId, Error> {
-        match self
-            .admin_status
-            .as_ref()
-            .ok_or(Error::InactiveChain(self.chain_id))?
-        {
-            ChainAdminStatus::ManagedBy { admin_id } => Ok(*admin_id),
-            ChainAdminStatus::Managing { .. } => Ok(self.chain_id),
-        }
-    }
-
     pub fn find_committee_for_new_chain<'a>(&self, effects: &'a [Effect]) -> Option<&'a Committee> {
         assert!(self.epoch.is_none());
         for effect in effects {
@@ -210,10 +190,7 @@ impl ExecutionState {
             }
             SetCommittees { admin_id, .. } => {
                 // We are managed by this admin chain.
-                match self.admin_status.as_ref() {
-                    Some(ChainAdminStatus::ManagedBy { admin_id: id }) => admin_id == id,
-                    _ => false,
-                }
+                self.chain_id != *admin_id && self.admin_id.as_ref() == Some(admin_id)
             }
         }
     }
@@ -227,6 +204,7 @@ impl ExecutionState {
         index: usize,
         operation: &Operation,
     ) -> Result<ApplicationResult, Error> {
+        assert_eq!(chain_id, self.chain_id);
         let operation_id = EffectId {
             chain_id,
             height,
@@ -243,7 +221,7 @@ impl ExecutionState {
                 let expected_id = ChainId::child(operation_id);
                 ensure!(id == &expected_id, Error::InvalidNewChainId(*id));
                 ensure!(
-                    self.admin_id() == Ok(*admin_id),
+                    self.admin_id.as_ref() == Some(admin_id),
                     Error::InvalidNewChainAdminId(*id)
                 );
                 ensure!(&self.committees == committees, Error::InvalidCommittees);
@@ -378,10 +356,7 @@ impl ExecutionState {
                     Error::InvalidSubscriptionToNewCommittees(chain_id)
                 );
                 ensure!(
-                    matches!(&self.admin_status,
-                    Some(ChainAdminStatus::ManagedBy {
-                        admin_id: id,
-                    }) if admin_id == id),
+                    self.admin_id.as_ref() == Some(admin_id),
                     Error::InvalidSubscriptionToNewCommittees(chain_id)
                 );
                 let channel_id = ChannelId {
@@ -447,11 +422,7 @@ impl ExecutionState {
                 admin_id,
                 epoch,
                 committees,
-            } if matches!(
-                &self.admin_status,
-                Some(ChainAdminStatus::ManagedBy { admin_id: id }) if admin_id == id
-            ) =>
-            {
+            } if self.admin_id.as_ref() == Some(admin_id) => {
                 // This chain was not yet subscribed at the time earlier epochs were broadcast.
                 ensure!(
                     *epoch >= self.epoch.expect("chain is active"),
