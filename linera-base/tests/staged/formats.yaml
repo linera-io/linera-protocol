@@ -59,15 +59,6 @@ Certificate:
           TUPLE:
             - TYPENAME: ValidatorName
             - TYPENAME: Signature
-ChainAdminStatus:
-  ENUM:
-    0:
-      ManagedBy:
-        STRUCT:
-          - admin_id:
-              TYPENAME: ChainId
-    1:
-      Managing: UNIT
 ChainDescription:
   ENUM:
     0:
@@ -477,9 +468,9 @@ ExecutionState:
     - epoch:
         OPTION:
           TYPENAME: Epoch
-    - admin_status:
+    - admin_id:
         OPTION:
-          TYPENAME: ChainAdminStatus
+          TYPENAME: ChainId
     - subscriptions:
         MAP:
           KEY:

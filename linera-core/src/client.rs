@@ -898,7 +898,7 @@ where
             index: 0,
         });
         let state = self.execution_state().await?;
-        let admin_id = state.admin_id()?;
+        let admin_id = state.admin_id.ok_or(Error::InactiveChain(self.chain_id))?;
         let committees = state.committees;
         let epoch = state.epoch.ok_or(Error::InactiveChain(self.chain_id))?;
         let block = Block {
@@ -980,7 +980,11 @@ where
 
     async fn subscribe_to_new_committees(&mut self) -> Result<Certificate> {
         self.prepare_chain().await?;
-        let admin_id = self.execution_state().await?.admin_id()?;
+        let admin_id = self
+            .execution_state()
+            .await?
+            .admin_id
+            .ok_or(Error::InactiveChain(self.chain_id))?;
         let block = Block {
             epoch: self.epoch().await?,
             chain_id: self.chain_id,
@@ -997,7 +1001,11 @@ where
 
     async fn unsubscribe_to_new_committees(&mut self) -> Result<Certificate> {
         self.prepare_chain().await?;
-        let admin_id = self.execution_state().await?.admin_id()?;
+        let admin_id = self
+            .execution_state()
+            .await?
+            .admin_id
+            .ok_or(Error::InactiveChain(self.chain_id))?;
         let block = Block {
             epoch: self.epoch().await?,
             chain_id: self.chain_id,
@@ -1015,7 +1023,7 @@ where
     async fn finalize_committee(&mut self) -> Result<Certificate> {
         self.prepare_chain().await?;
         let state = self.execution_state().await?;
-        let admin_id = state.admin_id()?;
+        let admin_id = state.admin_id.ok_or(Error::InactiveChain(self.chain_id))?;
         let current_epoch = state.epoch.ok_or(Error::InactiveChain(self.chain_id))?;
         let operations = state
             .committees

@@ -9,8 +9,7 @@ use linera_base::{
     crypto::*,
     error::Error,
     execution::{
-        Address, Amount, Balance, ChainAdminStatus, Effect, ExecutionState, Operation, UserData,
-        ADMIN_CHANNEL,
+        Address, Amount, Balance, Effect, ExecutionState, Operation, UserData, ADMIN_CHANNEL,
     },
     manager::ChainManager,
     messages::*,
@@ -141,9 +140,7 @@ fn make_transfer_certificate(
     let state = ExecutionState {
         epoch: Some(Epoch::from(0)),
         chain_id,
-        admin_status: Some(ChainAdminStatus::ManagedBy {
-            admin_id: ChainId::root(0),
-        }),
+        admin_id: Some(ChainId::root(0)),
         subscriptions: BTreeMap::new(),
         committees: [(Epoch::from(0), committee.clone())].into_iter().collect(),
         manager: ChainManager::single(key_pair.public().into()),
@@ -207,7 +204,7 @@ async fn test_read_chain_state_unknown_chain() {
     chain.description = Some(ChainDescription::Root(99));
     chain.state.committees.insert(Epoch(0), committee);
     chain.state.epoch = Some(Epoch(0));
-    chain.state.admin_status = Some(ChainAdminStatus::Managing);
+    chain.state.admin_id = Some(ChainId::root(1));
     chain.state.manager = ChainManager::single(PublicKey::debug(4).into());
     worker.storage.write_chain(chain).await.unwrap();
     worker
@@ -480,9 +477,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             state_hash: HashValue::new(&ExecutionState {
                 epoch: Some(epoch),
                 chain_id: ChainId::root(1),
-                admin_status: Some(ChainAdminStatus::ManagedBy {
-                    admin_id: ChainId::root(0),
-                }),
+                admin_id: Some(ChainId::root(0)),
                 subscriptions: BTreeMap::new(),
                 committees: [(epoch, committee.clone())].into_iter().collect(),
                 manager: ChainManager::single(sender_key_pair.public().into()),
@@ -514,9 +509,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             state_hash: HashValue::new(&ExecutionState {
                 epoch: Some(epoch),
                 chain_id: ChainId::root(1),
-                admin_status: Some(ChainAdminStatus::ManagedBy {
-                    admin_id: ChainId::root(0),
-                }),
+                admin_id: Some(ChainId::root(0)),
                 subscriptions: BTreeMap::new(),
                 committees: [(epoch, committee.clone())].into_iter().collect(),
                 manager: ChainManager::single(sender_key_pair.public().into()),
@@ -721,9 +714,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                 state_hash: HashValue::new(&ExecutionState {
                     epoch: Some(epoch),
                     chain_id: ChainId::root(2),
-                    admin_status: Some(ChainAdminStatus::ManagedBy {
-                        admin_id: ChainId::root(0),
-                    }),
+                    admin_id: Some(ChainId::root(0)),
                     subscriptions: BTreeMap::new(),
                     committees: [(epoch, committee.clone())].into_iter().collect(),
                     manager: ChainManager::single(recipient_key_pair.public().into()),
@@ -1408,7 +1399,7 @@ async fn test_chain_creation_with_committee_creation() {
             state_hash: HashValue::new(&ExecutionState {
                 epoch: Some(Epoch::from(0)),
                 chain_id: root_id,
-                admin_status: Some(ChainAdminStatus::Managing),
+                admin_id: Some(root_id),
                 subscriptions: BTreeMap::new(),
                 committees: committees.clone(),
                 manager: ChainManager::single(key_pair.public().into()),
@@ -1424,10 +1415,7 @@ async fn test_chain_creation_with_committee_creation() {
         let root_chain = worker.storage.read_active_chain(root_id).await.unwrap();
         assert_eq!(BlockHeight::from(1), root_chain.next_block_height);
         assert!(root_chain.outboxes.is_empty());
-        assert!(matches!(
-            root_chain.state.admin_status,
-            Some(ChainAdminStatus::Managing)
-        ));
+        assert_eq!(root_chain.state.admin_id, Some(root_id));
         // The root chain has 1 subscriber already.
         assert_eq!(
             root_chain
@@ -1485,7 +1473,7 @@ async fn test_chain_creation_with_committee_creation() {
             state_hash: HashValue::new(&ExecutionState {
                 epoch: Some(Epoch::from(1)),
                 chain_id: root_id,
-                admin_status: Some(ChainAdminStatus::Managing),
+                admin_id: Some(root_id),
                 subscriptions: BTreeMap::new(),
                 // The root chain knows both committees at the end.
                 committees: committees2.clone(),
@@ -1542,7 +1530,7 @@ async fn test_chain_creation_with_committee_creation() {
             state_hash: HashValue::new(&ExecutionState {
                 epoch: Some(Epoch::from(0)),
                 chain_id: child_id0,
-                admin_status: Some(ChainAdminStatus::ManagedBy { admin_id: root_id }),
+                admin_id: Some(root_id),
                 subscriptions: [(
                     ChannelId {
                         chain_id: root_id,
@@ -1579,9 +1567,7 @@ async fn test_chain_creation_with_committee_creation() {
         // The second child chain is active and has not migrated yet.
         let child_chain = worker.storage.read_active_chain(child_id).await.unwrap();
         assert_eq!(BlockHeight::from(0), child_chain.next_block_height);
-        assert!(
-            matches!(child_chain.state.admin_status, Some(ChainAdminStatus::ManagedBy { admin_id }) if admin_id == root_id)
-        );
+        assert_eq!(child_chain.state.admin_id, Some(root_id));
         assert_eq!(child_chain.state.subscriptions.len(), 1);
         assert!(!child_chain
             .inboxes
@@ -1622,7 +1608,7 @@ async fn test_chain_creation_with_committee_creation() {
             state_hash: HashValue::new(&ExecutionState {
                 epoch: Some(Epoch::from(1)),
                 chain_id: child_id,
-                admin_status: Some(ChainAdminStatus::ManagedBy { admin_id: root_id }),
+                admin_id: Some(root_id),
                 subscriptions: [(
                     ChannelId {
                         chain_id: root_id,

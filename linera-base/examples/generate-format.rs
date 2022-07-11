@@ -27,7 +27,6 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<error::Error>(&samples)?;
     tracer.trace_type::<rpc::Message>(&samples)?;
     tracer.trace_type::<chain::ChainState>(&samples)?;
-    tracer.trace_type::<execution::ChainAdminStatus>(&samples)?;
     tracer.registry()
 }
 
