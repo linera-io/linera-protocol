@@ -1,6 +1,5 @@
 [workspace]
 members = [
-        "aws-test",
         "linera-base",
         "linera-core",
         "linera-service",
