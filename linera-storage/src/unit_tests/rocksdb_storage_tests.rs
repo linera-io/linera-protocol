@@ -10,7 +10,7 @@ use linera_base::{
 #[tokio::test]
 async fn test_rocksdb_storage_for_chains() {
     let dir = tempfile::TempDir::new().unwrap();
-    let mut client = RocksdbStoreClient::new(dir.path().to_path_buf()).unwrap();
+    let mut client = RocksdbStoreClient::new(dir.path().to_path_buf(), 1).unwrap();
     let id = ChainId::root(1);
     {
         let mut chain = client.read_chain_or_default(id).await.unwrap();
@@ -28,7 +28,7 @@ async fn test_rocksdb_storage_for_chains() {
 async fn test_rocksdb_storage_for_certificates() {
     let dir = tempfile::TempDir::new().unwrap();
     // Repeat read/write to catch issues with opening the DB multiple times.
-    let mut client = RocksdbStoreClient::new(dir.path().to_path_buf()).unwrap();
+    let mut client = RocksdbStoreClient::new(dir.path().to_path_buf(), 1).unwrap();
     for i in 0..2 {
         let block = Block {
             epoch: Epoch::from(0),
@@ -69,7 +69,7 @@ async fn test_rocksdb_persistance_across_writes() {
     let certificate = Certificate::new(value, vec![]);
 
     {
-        let mut client1 = RocksdbStoreClient::new(dir.path().to_path_buf()).unwrap();
+        let mut client1 = RocksdbStoreClient::new(dir.path().to_path_buf(), 1).unwrap();
         client1
             .write_certificate(certificate.clone())
             .await
@@ -77,7 +77,7 @@ async fn test_rocksdb_persistance_across_writes() {
     }
 
     {
-        let mut client2 = RocksdbStoreClient::new(dir.path().to_path_buf()).unwrap();
+        let mut client2 = RocksdbStoreClient::new(dir.path().to_path_buf(), 1).unwrap();
         let read_certificate = client2.read_certificate(certificate.hash).await.unwrap();
         assert_eq!(read_certificate.hash, certificate.hash);
     }
