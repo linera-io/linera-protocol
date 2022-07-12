@@ -151,41 +151,6 @@ where
                 }
             }
         }
-        log::trace!("{} --> {:?}", self.nickname, continuation);
-        Ok(continuation)
-    }
-
-    /// Load pending cross-chain requests for a specific recipient, limited to channels.
-    /// This is used below instead of `make_continuation` to avoid re-sending messages too
-    /// aggressively.
-    async fn make_continuation_for_subscriber(
-        &mut self,
-        chain: &ChainState,
-        recipient: ChainId,
-    ) -> Result<Vec<CrossChainRequest>, Error> {
-        let mut continuation = Vec::new();
-        for (name, state) in &chain.channels {
-            if let Some(height) = state.block_height {
-                if let Some(is_up_to_date) = state.subscribers.get(&recipient) {
-                    if !is_up_to_date {
-                        let certificate = self
-                            .storage
-                            .read_certificate(chain.confirmed_log[usize::from(height)])
-                            .await?;
-                        let origin = Origin::Channel(ChannelId {
-                            chain_id: chain.state.chain_id,
-                            name: name.into(),
-                        });
-                        continuation.push(CrossChainRequest::UpdateRecipient {
-                            origin,
-                            recipient,
-                            certificates: vec![certificate],
-                        })
-                    }
-                }
-            }
-        }
-        log::trace!("{} --> {:?}", self.nickname, continuation);
         Ok(continuation)
     }
 
@@ -506,13 +471,6 @@ where
                         need_update = true;
                     }
                 }
-                // In the case of channels, `receive_block` may schedule some messages to
-                // be sent back to the recipient. Calling `make_continuation` is also
-                // possible but it would reschedule all pending messages indiscriminately,
-                // some of which may have just been sent out.
-                let mut requests = self
-                    .make_continuation_for_subscriber(&chain, origin.sender())
-                    .await?;
                 if need_update {
                     if !self.allow_inactive_chains {
                         // Validator nodes are more strict than clients when it comes to
@@ -527,19 +485,18 @@ where
                     }
                     self.storage.write_chain(chain).await?;
                 }
-                if let Some(height) = height {
-                    // We have processed at least one certificate successfully: send back
-                    // an acknowledgment.
-                    requests.insert(
-                        0,
-                        CrossChainRequest::ConfirmUpdatedRecipient {
+                match height {
+                    Some(height) => {
+                        // We have processed at least one certificate successfully: send back
+                        // an acknowledgment.
+                        Ok(vec![CrossChainRequest::ConfirmUpdatedRecipient {
                             origin,
                             recipient,
                             height,
-                        },
-                    );
+                        }])
+                    }
+                    None => Ok(Vec::new()),
                 }
-                Ok(requests)
             }
             CrossChainRequest::ConfirmUpdatedRecipient {
                 origin: Origin::Chain(sender),

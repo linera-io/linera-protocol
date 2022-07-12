@@ -151,6 +151,8 @@ impl ExecutionState {
 pub(crate) struct ApplicationResult {
     pub effects: Vec<Effect>,
     pub recipients: Vec<ChainId>,
+    pub subscribe: Option<(String, ChainId)>,
+    pub unsubscribe: Option<(String, ChainId)>,
     pub need_channel_broadcast: Vec<String>,
 }
 
@@ -229,6 +231,8 @@ impl ExecutionState {
                 let application = ApplicationResult {
                     effects: vec![e1, e2],
                     recipients: vec![*id, *admin_id],
+                    subscribe: None,
+                    unsubscribe: None,
                     need_channel_broadcast: vec![ADMIN_CHANNEL.into()],
                 };
                 Ok(application)
@@ -257,6 +261,8 @@ impl ExecutionState {
                 let application = ApplicationResult {
                     effects,
                     recipients,
+                    subscribe: None,
+                    unsubscribe: None,
                     need_channel_broadcast: Vec::new(),
                 };
                 Ok(application)
@@ -280,6 +286,8 @@ impl ExecutionState {
                             recipient: *id,
                         }],
                         recipients: vec![*id],
+                        subscribe: None,
+                        unsubscribe: None,
                         need_channel_broadcast: Vec::new(),
                     },
                 };
@@ -309,6 +317,8 @@ impl ExecutionState {
                         committees: self.committees.clone(),
                     }],
                     recipients: Vec::new(),
+                    subscribe: None,
+                    unsubscribe: None,
                     // Notify our subscribers.
                     need_channel_broadcast: vec![ADMIN_CHANNEL.into()],
                 };
@@ -332,6 +342,8 @@ impl ExecutionState {
                         committees: self.committees.clone(),
                     }],
                     recipients: Vec::new(),
+                    subscribe: None,
+                    unsubscribe: None,
                     // Notify our subscribers.
                     need_channel_broadcast: vec![ADMIN_CHANNEL.into()],
                 };
@@ -365,6 +377,8 @@ impl ExecutionState {
                         },
                     }],
                     recipients: vec![*admin_id],
+                    subscribe: None,
+                    unsubscribe: None,
                     need_channel_broadcast: Vec::new(),
                 };
                 Ok(application)
@@ -388,6 +402,8 @@ impl ExecutionState {
                         },
                     }],
                     recipients: vec![*admin_id],
+                    subscribe: None,
+                    unsubscribe: None,
                     need_channel_broadcast: Vec::new(),
                 };
                 Ok(application)
@@ -397,14 +413,14 @@ impl ExecutionState {
 
     /// Execute the recipient's side of an operation, aka a "remote effect".
     /// Effects must be executed by order of heights in the sender's chain.
-    pub(crate) fn apply_effect(&mut self, effect: &Effect) -> Result<(), Error> {
+    pub(crate) fn apply_effect(&mut self, effect: &Effect) -> Result<ApplicationResult, Error> {
         match effect {
             Effect::Credit { amount, recipient } if self.chain_id == *recipient => {
                 self.balance = self
                     .balance
                     .try_add((*amount).into())
                     .unwrap_or_else(|_| Balance::max());
-                Ok(())
+                Ok(ApplicationResult::default())
             }
             Effect::SetCommittees {
                 admin_id,
@@ -418,15 +434,35 @@ impl ExecutionState {
                 );
                 self.epoch = Some(*epoch);
                 self.committees = committees.clone();
-                Ok(())
+                Ok(ApplicationResult::default())
             }
-            Effect::OpenChain { .. } | Effect::Subscribe { .. } | Effect::Unsubscribe { .. } => {
+            Effect::Subscribe { id, channel } if channel.chain_id == self.chain_id => {
+                let application = ApplicationResult {
+                    effects: Vec::new(),
+                    recipients: vec![*id], // Notify the subscriber about this block.
+                    subscribe: Some((channel.name.clone(), *id)),
+                    unsubscribe: None,
+                    need_channel_broadcast: Vec::new(),
+                };
+                Ok(application)
+            }
+            Effect::Unsubscribe { id, channel } if channel.chain_id == self.chain_id => {
+                let application = ApplicationResult {
+                    effects: Vec::new(),
+                    recipients: vec![*id], // Notify the subscriber.
+                    subscribe: None,
+                    unsubscribe: Some((channel.name.clone(), *id)),
+                    need_channel_broadcast: Vec::new(),
+                };
+                Ok(application)
+            }
+            Effect::OpenChain { .. } => {
                 // These special effects are executed immediately when cross-chain requests are received.
-                Ok(())
+                Ok(ApplicationResult::default())
             }
             _ => {
                 log::error!("Skipping unexpected received effect: {effect:?}");
-                Ok(())
+                Ok(ApplicationResult::default())
             }
         }
     }
