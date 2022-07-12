@@ -133,6 +133,8 @@ pub struct ChainClientState<ValidatorNodeProvider, StorageClient> {
     pending_block: Option<Block>,
     /// Known key pairs from present and past identities.
     known_key_pairs: BTreeMap<Owner, KeyPair>,
+    /// The id of the admin chain.
+    admin_id: ChainId,
 
     /// Support synchronization of received certificates.
     received_certificate_trackers: HashMap<ValidatorName, usize>,
@@ -152,6 +154,7 @@ impl<P, S> ChainClientState<P, S> {
         known_key_pairs: Vec<KeyPair>,
         validator_node_provider: P,
         storage_client: S,
+        admin_id: ChainId,
         block_hash: Option<HashValue>,
         next_block_height: BlockHeight,
         cross_chain_delay: Duration,
@@ -172,6 +175,7 @@ impl<P, S> ChainClientState<P, S> {
             next_round: RoundNumber::default(),
             pending_block: None,
             known_key_pairs,
+            admin_id,
             received_certificate_trackers: HashMap::new(),
             cross_chain_delay,
             cross_chain_retries,
@@ -220,6 +224,20 @@ where
             .committees
             .remove(&state.epoch.ok_or(Error::InactiveChain(self.chain_id))?)
             .ok_or(Error::InactiveChain(self.chain_id))
+    }
+
+    async fn known_committees(&mut self) -> Result<(BTreeMap<Epoch, Committee>, Epoch), Error> {
+        let local_state = self.execution_state().await?;
+        let mut committees = local_state.committees;
+        let mut max_epoch = local_state.epoch.unwrap_or_default();
+        let query = ChainInfoQuery::new(self.admin_id).with_execution_state();
+        let info = self.node_client.handle_chain_info_query(query).await?.info;
+        let admin_state = info
+            .requested_execution_state
+            .ok_or(Error::InvalidChainInfoResponse)?;
+        committees.extend(admin_state.committees);
+        max_epoch = std::cmp::max(max_epoch, admin_state.epoch.unwrap_or_default());
+        Ok((committees, max_epoch))
     }
 
     async fn validator_nodes(&mut self) -> Result<Vec<(ValidatorName, P::Node)>, Error> {
@@ -467,18 +485,17 @@ where
     /// However, this should be the case whenever a sender's chain is still in use and
     /// is regularly upgraded to new committees.
     async fn find_received_certificates(&mut self) -> Result<()> {
+        let (committees, max_epoch) = self.known_committees().await?;
         let chain_id = self.chain_id;
         let state = self.execution_state().await?;
-        let committees = state.committees;
-        let epoch = state.epoch.ok_or(Error::InactiveChain(chain_id))?;
-        let committee = committees
-            .get(&epoch)
+        let local_committee = committees
+            .get(&state.epoch.ok_or(Error::InactiveChain(chain_id))?)
             .ok_or(Error::InactiveChain(chain_id))?;
-        let nodes = self.make_validator_nodes(committee)?;
+        let nodes = self.make_validator_nodes(local_committee)?;
         let trackers = self.received_certificate_trackers.clone();
         let result = communicate_with_quorum(
             &nodes,
-            committee,
+            local_committee,
             |_| (),
             |name, mut client| {
                 let tracker = *trackers.get(&name).unwrap_or(&0);
@@ -499,7 +516,7 @@ where
                             .ok_or(Error::InvalidChainInfoResponse)?;
                         // Check that certificates are valid w.r.t one of our trusted
                         // committees.
-                        if block.epoch > epoch {
+                        if block.epoch > max_epoch {
                             // We don't accept a certificate from a committee in the
                             // future.
                             log::warn!(
@@ -787,49 +804,33 @@ where
             .confirmed_block()
             .ok_or_else(|| anyhow!("Was expecting a confirmed chain operation"))?
             .clone();
-        let (effects, _) = certificate.value.effects_and_state_hash();
-        let state = self.execution_state().await?;
-        let current_committee = match state.epoch {
-            Some(epoch) => {
-                // The client's main chain (aka "recipient") is active.
-                ensure!(
-                    block.epoch <= epoch,
-                    "Cannot accept a certificate from an unknown committee in the future. \
-                    Please synchronize the local chain",
-                );
-                state.committees.get(&block.epoch).ok_or_else(|| {
-                    anyhow!(
-                        "Cannot accept a certificate from a committee that was retired. \
-                        Try a newer certificate from the same origin"
-                    )
-                })?
-            }
-            None => {
-                // The main chain is inactive. This certificate must contain a chain
-                // creation command. Let's find out what the committee is from this certificate.
-                state
-                    .find_committee_for_new_chain(&effects)
-                    .ok_or_else(|| {
-                        anyhow!(
-                            "A creation certificate must be provided first before using the client"
-                        )
-                    })?
-            }
-        };
-        certificate.check(current_committee)?;
+        // Verify the certificate before doing any expensive networking.
+        let (committees, max_epoch) = self.known_committees().await?;
+        ensure!(
+            block.epoch <= max_epoch,
+            "Cannot accept a certificate from an unknown committee in the future. \
+             Please synchronize the local view of the admin chain",
+        );
+        let remote_committee = committees.get(&block.epoch).ok_or_else(|| {
+            anyhow!(
+                "Cannot accept a certificate from a committee that was retired. \
+                 Try a newer certificate from the same origin"
+            )
+        })?;
+        certificate.check(remote_committee)?;
         // Recover history from the network. We assume that the committee that signed the
         // certificate is still active.
-        let nodes = self.make_validator_nodes(current_committee)?;
+        let nodes = self.make_validator_nodes(remote_committee)?;
         self.node_client
             .download_certificates(nodes, block.chain_id, block.height)
             .await?;
         // Process the received operation.
         self.process_certificate(certificate).await?;
-        // Make sure a quorum of validators (according to our committee) are up-to-date
+        // Make sure a quorum of validators (according to our new local committee) are up-to-date
         // for data availability.
-        let new_committee = self.committee().await?;
+        let local_committee = self.committee().await?;
         self.communicate_chain_updates(
-            &new_committee,
+            &local_committee,
             block.chain_id,
             CommunicateAction::AdvanceToNextBlockHeight(block.height.try_add_one()?),
         )
@@ -980,16 +981,13 @@ where
 
     async fn subscribe_to_new_committees(&mut self) -> Result<Certificate> {
         self.prepare_chain().await?;
-        let admin_id = self
-            .execution_state()
-            .await?
-            .admin_id
-            .ok_or(Error::InactiveChain(self.chain_id))?;
         let block = Block {
             epoch: self.epoch().await?,
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
-            operations: vec![Operation::SubscribeToNewCommittees { admin_id }],
+            operations: vec![Operation::SubscribeToNewCommittees {
+                admin_id: self.admin_id,
+            }],
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
         };
@@ -1001,16 +999,13 @@ where
 
     async fn unsubscribe_to_new_committees(&mut self) -> Result<Certificate> {
         self.prepare_chain().await?;
-        let admin_id = self
-            .execution_state()
-            .await?
-            .admin_id
-            .ok_or(Error::InactiveChain(self.chain_id))?;
         let block = Block {
             epoch: self.epoch().await?,
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
-            operations: vec![Operation::UnsubscribeToNewCommittees { admin_id }],
+            operations: vec![Operation::UnsubscribeToNewCommittees {
+                admin_id: self.admin_id,
+            }],
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
         };
@@ -1023,7 +1018,6 @@ where
     async fn finalize_committee(&mut self) -> Result<Certificate> {
         self.prepare_chain().await?;
         let state = self.execution_state().await?;
-        let admin_id = state.admin_id.ok_or(Error::InactiveChain(self.chain_id))?;
         let current_epoch = state.epoch.ok_or(Error::InactiveChain(self.chain_id))?;
         let operations = state
             .committees
@@ -1031,7 +1025,7 @@ where
             .filter_map(|epoch| {
                 if *epoch != current_epoch {
                     Some(Operation::RemoveCommittee {
-                        admin_id,
+                        admin_id: self.admin_id,
                         epoch: *epoch,
                     })
                 } else {
