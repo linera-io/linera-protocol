@@ -524,13 +524,6 @@ where
                             log::warn!("Refusing to store inactive chain {recipient:?}");
                             return Ok(Vec::new());
                         }
-                        let epoch = epoch.expect("need_update implies epoch.is_some()");
-                        if !chain.state.committees.contains_key(&epoch) {
-                            // Refuse to persist the chain state if the latest epoch in
-                            // the received blocks from this recipient is not recognized.
-                            log::warn!("Refusing updates from untrusted epoch {epoch:?}");
-                            return Ok(Vec::new());
-                        }
                     }
                     self.storage.write_chain(chain).await?;
                 }

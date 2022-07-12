@@ -765,12 +765,15 @@ async fn test_change_voting_rights() {
         .await
         .unwrap();
 
-    // Receiver is still at the initial epoch. Therefore the transfer cannot go through yet.
+    // Receiver is still at the initial epoch, but we can receive transfers from future
+    // epochs AFTER synchronizing the client with the admin chain.
+    assert!(receiver.receive_certificate(cert1).await.is_err());
     assert_eq!(receiver.epoch().await.unwrap(), Epoch::from(0));
     assert_eq!(
         receiver.synchronize_balance().await.unwrap(),
-        Balance::from(0)
+        Balance::from(3)
     );
+
     // Receiver is a genesis chain so the migration message is not even in the inbox yet.
     receiver.process_inbox().await.unwrap();
     assert_eq!(receiver.epoch().await.unwrap(), Epoch::from(0));
@@ -782,20 +785,4 @@ async fn test_change_voting_rights() {
     receiver.synchronize_balance().await.unwrap();
     receiver.process_inbox().await.unwrap();
     assert_eq!(receiver.epoch().await.unwrap(), Epoch::from(1));
-
-    // Manually receive the first transfer.
-    receiver.receive_certificate(cert1).await.unwrap();
-    assert_eq!(
-        receiver.synchronize_balance().await.unwrap(),
-        Balance::from(2)
-    );
-
-    // Poke the admin to retry the one transfer that we haven't manually received.
-    admin.process_inbox().await.unwrap();
-
-    // Finally receive the transfer.
-    assert_eq!(
-        receiver.synchronize_balance().await.unwrap(),
-        Balance::from(3)
-    );
 }
