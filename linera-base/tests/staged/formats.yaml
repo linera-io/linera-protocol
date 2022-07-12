@@ -273,6 +273,11 @@ Effect:
               TYPENAME: ChainId
           - channel:
               TYPENAME: ChannelId
+    5:
+      Notify:
+        STRUCT:
+          - id:
+              TYPENAME: ChainId
 EffectId:
   STRUCT:
     - chain_id:

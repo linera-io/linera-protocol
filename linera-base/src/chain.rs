@@ -209,11 +209,13 @@ impl ChainState {
         inbox.next_height_to_receive = height.try_add_one()?;
         self.received_log.push(key);
 
+        let mut is_recipient = false;
         for (index, effect) in effects.into_iter().enumerate() {
             // Skip events that have provably no effect on this recipient.
             if !self.state.is_recipient(&effect) {
                 continue;
             }
+            is_recipient = true;
             // Chain creation effects are special and executed (only) in this callback.
             // For simplicity, they will still appear in the received messages.
             match &effect {
@@ -276,6 +278,11 @@ impl ChainState {
                 }
             }
         }
+        debug_assert!(
+            is_recipient,
+            "The block received by {:?} from {:?} at height {:?} was entirely ignored. This should not happen",
+            self.state.chain_id, origin, height
+        );
         Ok(true)
     }
 

@@ -129,6 +129,8 @@ pub enum Effect {
     Subscribe { id: ChainId, channel: ChannelId },
     /// Unsubscribe to a channel.
     Unsubscribe { id: ChainId, channel: ChannelId },
+    /// Does nothing. Used to debug the intended recipients of a block.
+    Notify { id: ChainId },
 }
 
 impl BcsSignable for ExecutionState {}
@@ -176,6 +178,7 @@ impl ExecutionState {
                 // We are managed by this admin chain.
                 self.chain_id != *admin_id && self.admin_id.as_ref() == Some(admin_id)
             }
+            Notify { id } => self.chain_id == *id,
         }
     }
 
@@ -437,9 +440,11 @@ impl ExecutionState {
                 Ok(ApplicationResult::default())
             }
             Effect::Subscribe { id, channel } if channel.chain_id == self.chain_id => {
+                // Notify the subscriber about this block, so that it is included in the
+                // receive_log of the subscriber and correctly synchronized.
                 let application = ApplicationResult {
-                    effects: Vec::new(),
-                    recipients: vec![*id], // Notify the subscriber about this block.
+                    effects: vec![Effect::Notify { id: *id }],
+                    recipients: vec![*id],
                     subscribe: Some((channel.name.clone(), *id)),
                     unsubscribe: None,
                     need_channel_broadcast: Vec::new(),
@@ -456,8 +461,9 @@ impl ExecutionState {
                 };
                 Ok(application)
             }
+            Effect::Notify { .. } => Ok(ApplicationResult::default()),
             Effect::OpenChain { .. } => {
-                // These special effects are executed immediately when cross-chain requests are received.
+                // This special effect is executed immediately when cross-chain requests are received.
                 Ok(ApplicationResult::default())
             }
             _ => {
