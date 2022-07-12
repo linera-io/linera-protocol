@@ -531,13 +531,20 @@ where
     /// However, this should be the case whenever a sender's chain is still in use and
     /// is regularly upgraded to new committees.
     async fn find_received_certificates(&mut self) -> Result<()> {
-        let (committees, max_epoch) = self.known_committees().await?;
+        // Use network information from the local chain.
         let chain_id = self.chain_id;
         let state = self.execution_state().await?;
-        let local_committee = committees
+        let local_committee = state
+            .committees
             .get(&state.epoch.ok_or(Error::InactiveChain(chain_id))?)
             .ok_or(Error::InactiveChain(chain_id))?;
         let nodes = self.make_validator_nodes(local_committee)?;
+        // Use committess from the admin chain.
+        self.node_client
+            .synchronize_chain_state(nodes.clone(), self.admin_id)
+            .await?;
+        let (committees, max_epoch) = self.known_committees().await?;
+        // Proceed to downloading received certificates.
         let trackers = self.received_certificate_trackers.clone();
         let result = communicate_with_quorum(
             &nodes,
