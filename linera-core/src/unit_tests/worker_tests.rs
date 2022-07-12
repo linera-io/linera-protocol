@@ -1465,11 +1465,14 @@ async fn test_chain_creation_with_committee_creation() {
                 previous_block_hash: Some(certificate0.hash),
                 height: BlockHeight::from(1),
             },
-            effects: vec![Effect::SetCommittees {
-                admin_id: root_id,
-                epoch: Epoch::from(1),
-                committees: committees2.clone(),
-            }],
+            effects: vec![
+                Effect::Notify { id: child_id0 },
+                Effect::SetCommittees {
+                    admin_id: root_id,
+                    epoch: Epoch::from(1),
+                    committees: committees2.clone(),
+                },
+            ],
             state_hash: HashValue::new(&ExecutionState {
                 epoch: Some(Epoch::from(1)),
                 chain_id: root_id,
