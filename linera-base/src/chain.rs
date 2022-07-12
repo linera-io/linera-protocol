@@ -336,6 +336,7 @@ impl ChainState {
     /// * As usual, in case of errors, `self` may not be consistent any more and should be thrown away.
     /// * Returns the list of effects caused by the block being executed.
     pub fn execute_block(&mut self, block: &Block) -> Result<Vec<Effect>, Error> {
+        assert_eq!(block.chain_id, self.state.chain_id);
         let mut effects = Vec::new();
         // First, process incoming messages.
         self.check_incoming_messages(&block.incoming_messages)?;
@@ -399,15 +400,12 @@ impl ChainState {
                     }
                 }
                 // Execute the received effect.
-                self.state
-                    .apply_effect(self.state.chain_id, message_effect)?;
+                self.state.apply_effect(message_effect)?;
             }
         }
         // Second, execute the operations in the block and remember the recipients to notify.
         for (index, operation) in block.operations.iter().enumerate() {
-            let application =
-                self.state
-                    .apply_operation(block.chain_id, block.height, index, operation)?;
+            let application = self.state.apply_operation(block.height, index, operation)?;
             // When we unsubscribe from a channel, the corresponding inbox must be flushed
             // immediately so that we don't accept incoming messages until we subscribe again.
             for effect in &application.effects {

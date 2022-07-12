@@ -199,14 +199,12 @@ impl ExecutionState {
     /// Return a list of recipients who need to be notified.
     pub(crate) fn apply_operation(
         &mut self,
-        chain_id: ChainId,
         height: BlockHeight,
         index: usize,
         operation: &Operation,
     ) -> Result<ApplicationResult, Error> {
-        assert_eq!(chain_id, self.chain_id);
         let operation_id = EffectId {
-            chain_id,
+            chain_id: self.chain_id,
             height,
             index,
         };
@@ -270,7 +268,7 @@ impl ExecutionState {
                 for (channel, ()) in subscriptions {
                     recipients.push(channel.chain_id);
                     effects.push(Effect::Unsubscribe {
-                        id: chain_id,
+                        id: self.chain_id,
                         channel,
                     });
                 }
@@ -311,7 +309,11 @@ impl ExecutionState {
                 committee,
             } => {
                 // We are the admin chain and want to create a committee.
-                ensure!(*admin_id == chain_id, Error::InvalidCommitteeCreation);
+                ensure!(*admin_id == self.chain_id, Error::InvalidCommitteeCreation);
+                ensure!(
+                    Some(admin_id) == self.admin_id.as_ref(),
+                    Error::InvalidCommitteeCreation
+                );
                 ensure!(
                     *epoch == self.epoch.expect("chain is active").try_add_one()?,
                     Error::InvalidCommitteeCreation
@@ -332,7 +334,11 @@ impl ExecutionState {
             }
             Operation::RemoveCommittee { admin_id, epoch } => {
                 // We are the admin chain and want to remove a committee.
-                ensure!(*admin_id == chain_id, Error::InvalidCommitteeRemoval);
+                ensure!(*admin_id == self.chain_id, Error::InvalidCommitteeCreation);
+                ensure!(
+                    Some(admin_id) == self.admin_id.as_ref(),
+                    Error::InvalidCommitteeCreation
+                );
                 ensure!(
                     self.committees.remove(epoch).is_some(),
                     Error::InvalidCommitteeRemoval
@@ -352,12 +358,12 @@ impl ExecutionState {
             Operation::SubscribeToNewCommittees { admin_id } => {
                 // We should not subscribe to ourself in this case.
                 ensure!(
-                    chain_id != *admin_id,
-                    Error::InvalidSubscriptionToNewCommittees(chain_id)
+                    self.chain_id != *admin_id,
+                    Error::InvalidSubscriptionToNewCommittees(self.chain_id)
                 );
                 ensure!(
                     self.admin_id.as_ref() == Some(admin_id),
-                    Error::InvalidSubscriptionToNewCommittees(chain_id)
+                    Error::InvalidSubscriptionToNewCommittees(self.chain_id)
                 );
                 let channel_id = ChannelId {
                     chain_id: *admin_id,
@@ -365,12 +371,12 @@ impl ExecutionState {
                 };
                 ensure!(
                     !self.subscriptions.contains_key(&channel_id),
-                    Error::InvalidSubscriptionToNewCommittees(chain_id)
+                    Error::InvalidSubscriptionToNewCommittees(self.chain_id)
                 );
                 self.subscriptions.insert(channel_id, ());
                 let application = ApplicationResult {
                     effects: vec![Effect::Subscribe {
-                        id: chain_id,
+                        id: self.chain_id,
                         channel: ChannelId {
                             chain_id: *admin_id,
                             name: ADMIN_CHANNEL.into(),
@@ -388,12 +394,12 @@ impl ExecutionState {
                 };
                 ensure!(
                     self.subscriptions.contains_key(&channel_id),
-                    Error::InvalidUnsubscriptionToNewCommittees(chain_id)
+                    Error::InvalidUnsubscriptionToNewCommittees(self.chain_id)
                 );
                 self.subscriptions.remove(&channel_id);
                 let application = ApplicationResult {
                     effects: vec![Effect::Unsubscribe {
-                        id: chain_id,
+                        id: self.chain_id,
                         channel: ChannelId {
                             chain_id: *admin_id,
                             name: ADMIN_CHANNEL.into(),
@@ -409,9 +415,9 @@ impl ExecutionState {
 
     /// Execute the recipient's side of an operation, aka a "remote effect".
     /// Effects must be executed by order of heights in the sender's chain.
-    pub(crate) fn apply_effect(&mut self, chain_id: ChainId, effect: &Effect) -> Result<(), Error> {
+    pub(crate) fn apply_effect(&mut self, effect: &Effect) -> Result<(), Error> {
         match effect {
-            Effect::Credit { amount, recipient } if chain_id == *recipient => {
+            Effect::Credit { amount, recipient } if self.chain_id == *recipient => {
                 self.balance = self
                     .balance
                     .try_add((*amount).into())
