@@ -476,6 +476,52 @@ where
         }
     }
 
+    async fn receive_certificate_internal(
+        &mut self,
+        certificate: Certificate,
+        already_checked: bool,
+    ) -> Result<()> {
+        let block = certificate
+            .value
+            .confirmed_block()
+            .ok_or_else(|| anyhow!("Was expecting a confirmed chain operation"))?
+            .clone();
+        // Verify the certificate before doing any expensive networking.
+        let (committees, max_epoch) = self.known_committees().await?;
+        ensure!(
+            block.epoch <= max_epoch,
+            "Cannot accept a certificate from an unknown committee in the future. \
+             Please synchronize the local view of the admin chain",
+        );
+        let remote_committee = committees.get(&block.epoch).ok_or_else(|| {
+            anyhow!(
+                "Cannot accept a certificate from a committee that was retired. \
+                 Try a newer certificate from the same origin"
+            )
+        })?;
+        if !already_checked {
+            certificate.check(remote_committee)?;
+        }
+        // Recover history from the network. We assume that the committee that signed the
+        // certificate is still active.
+        let nodes = self.make_validator_nodes(remote_committee)?;
+        self.node_client
+            .download_certificates(nodes, block.chain_id, block.height)
+            .await?;
+        // Process the received operation.
+        self.process_certificate(certificate).await?;
+        // Make sure a quorum of validators (according to our new local committee) are up-to-date
+        // for data availability.
+        let local_committee = self.committee().await?;
+        self.communicate_chain_updates(
+            &local_committee,
+            block.chain_id,
+            CommunicateAction::AdvanceToNextBlockHeight(block.height.try_add_one()?),
+        )
+        .await?;
+        Ok(())
+    }
+
     /// Attempt to download new received certificates.
     ///
     /// This is a best effort: it will only find certificates that have been confirmed
@@ -571,7 +617,13 @@ where
             // Process received certificates.
             for certificate in certificates {
                 let hash = certificate.hash;
-                if let Err(e) = self.receive_certificate(certificate.clone()).await {
+                if let Err(e) = self
+                    .receive_certificate_internal(
+                        certificate.clone(),
+                        /* already checked */ true,
+                    )
+                    .await
+                {
                     log::warn!("Received invalid certificate {hash} from {name}: {e}");
                     // Do not update the validator's tracker in case of error.
                     // Move on to the next validator.
@@ -799,43 +851,8 @@ where
     }
 
     async fn receive_certificate(&mut self, certificate: Certificate) -> Result<()> {
-        let block = certificate
-            .value
-            .confirmed_block()
-            .ok_or_else(|| anyhow!("Was expecting a confirmed chain operation"))?
-            .clone();
-        // Verify the certificate before doing any expensive networking.
-        let (committees, max_epoch) = self.known_committees().await?;
-        ensure!(
-            block.epoch <= max_epoch,
-            "Cannot accept a certificate from an unknown committee in the future. \
-             Please synchronize the local view of the admin chain",
-        );
-        let remote_committee = committees.get(&block.epoch).ok_or_else(|| {
-            anyhow!(
-                "Cannot accept a certificate from a committee that was retired. \
-                 Try a newer certificate from the same origin"
-            )
-        })?;
-        certificate.check(remote_committee)?;
-        // Recover history from the network. We assume that the committee that signed the
-        // certificate is still active.
-        let nodes = self.make_validator_nodes(remote_committee)?;
-        self.node_client
-            .download_certificates(nodes, block.chain_id, block.height)
-            .await?;
-        // Process the received operation.
-        self.process_certificate(certificate).await?;
-        // Make sure a quorum of validators (according to our new local committee) are up-to-date
-        // for data availability.
-        let local_committee = self.committee().await?;
-        self.communicate_chain_updates(
-            &local_committee,
-            block.chain_id,
-            CommunicateAction::AdvanceToNextBlockHeight(block.height.try_add_one()?),
-        )
-        .await?;
-        Ok(())
+        self.receive_certificate_internal(certificate, /* already checked */ false)
+            .await
     }
 
     async fn rotate_key_pair(&mut self, key_pair: KeyPair) -> Result<Certificate> {
