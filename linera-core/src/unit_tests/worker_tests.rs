@@ -1416,7 +1416,7 @@ async fn test_chain_creation_with_committee_creation() {
         assert_eq!(BlockHeight::from(1), root_chain.next_block_height);
         assert!(root_chain.outboxes.is_empty());
         assert_eq!(root_chain.state.admin_id, Some(root_id));
-        // The root chain has 1 subscriber already.
+        // The root chain has no subscribers yet.
         assert_eq!(
             root_chain
                 .channels
@@ -1424,7 +1424,7 @@ async fn test_chain_creation_with_committee_creation() {
                 .unwrap()
                 .subscribers
                 .len(),
-            1
+            0
         );
     }
 
@@ -1551,7 +1551,7 @@ async fn test_chain_creation_with_committee_creation() {
         .await
         .unwrap();
     {
-        // The root chain has 2 subscribers.
+        // The root chain has 1 subscribers.
         let root_chain = worker.storage.read_active_chain(root_id).await.unwrap();
         assert_eq!(
             root_chain
@@ -1560,7 +1560,7 @@ async fn test_chain_creation_with_committee_creation() {
                 .unwrap()
                 .subscribers
                 .len(),
-            2
+            1
         );
     }
     {

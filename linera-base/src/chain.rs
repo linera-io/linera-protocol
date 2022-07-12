@@ -7,7 +7,7 @@ use crate::{
     crypto::*,
     ensure,
     error::Error,
-    execution::{Balance, Effect, ExecutionState, ADMIN_CHANNEL},
+    execution::{ApplicationResult, Balance, Effect, ExecutionState, ADMIN_CHANNEL},
     manager::ChainManager,
     messages::*,
 };
@@ -188,19 +188,6 @@ impl ChainState {
         effects: Vec<Effect>,
         key: HashValue,
     ) -> Result<bool, Error> {
-        if let Origin::Channel(channel) = origin {
-            if !self.state.subscriptions.contains_key(channel) {
-                // Refuse messages from channels that we are currently not subscribed to.
-                // This is important for other validators to be synchronizable.
-                log::warn!(
-                    "Ignoring message to {} from unsubscribed channel {:?} at height {}",
-                    self.state.chain_id,
-                    channel,
-                    height
-                );
-                return Ok(false);
-            }
-        }
         let inbox = self.inboxes.entry(origin.clone()).or_default();
         if height < inbox.next_height_to_receive {
             // We have already received this block.
@@ -227,8 +214,8 @@ impl ChainState {
             if !self.state.is_recipient(&effect) {
                 continue;
             }
-            // Chain creation and channel subscriptions are special effects that are executed (only) in this callback.
-            // For simplicity, they will still appear as incoming messages in new blocks, as the other effects.
+            // Chain creation effects are special and executed (only) in this callback.
+            // For simplicity, they will still appear in the received messages.
             match &effect {
                 Effect::OpenChain {
                     id,
@@ -260,22 +247,6 @@ impl ChainState {
                     );
                     self.state.manager = ChainManager::single(*owner);
                     self.state_hash = HashValue::new(&self.state);
-                }
-                Effect::Subscribe { id, channel } if channel.chain_id == self.state.chain_id => {
-                    let channel = self
-                        .channels
-                        .entry(channel.name.clone())
-                        .or_insert_with(ChannelState::default);
-                    // Request past and future messages from this channel.
-                    channel.subscribers.insert(*id, false);
-                }
-                Effect::Unsubscribe { id, channel } if channel.chain_id == self.state.chain_id => {
-                    let channel = self
-                        .channels
-                        .entry(channel.name.clone())
-                        .or_insert_with(ChannelState::default);
-                    // Remove subscriber.
-                    channel.subscribers.remove(id);
                 }
                 _ => (),
             }
@@ -346,7 +317,6 @@ impl ChainState {
                 .inboxes
                 .entry(message_group.origin.clone())
                 .or_default();
-
             for (message_index, message_effect) in &message_group.effects {
                 // Receivers are allowed to skip events from the received queue.
                 while let Some(Event {
@@ -400,42 +370,64 @@ impl ChainState {
                     }
                 }
                 // Execute the received effect.
-                self.state.apply_effect(message_effect)?;
+                let application = self.state.apply_effect(message_effect)?;
+                Self::process_application_result(
+                    &mut self.outboxes,
+                    &mut self.channels,
+                    &mut effects,
+                    block.height,
+                    application,
+                );
             }
         }
         // Second, execute the operations in the block and remember the recipients to notify.
         for (index, operation) in block.operations.iter().enumerate() {
             let application = self.state.apply_operation(block.height, index, operation)?;
-            // When we unsubscribe from a channel, the corresponding inbox must be flushed
-            // immediately so that we don't accept incoming messages until we subscribe again.
-            for effect in &application.effects {
-                if let Effect::Unsubscribe { channel, .. } = effect {
-                    let origin = Origin::Channel(channel.clone());
-                    self.inboxes.remove(&origin);
-                }
-            }
-            // Record the effects of the execution.
-            effects.extend(application.effects);
-            // Update the outboxes.
-            for recipient in application.recipients {
-                let queue = &mut self.outboxes.entry(recipient).or_default().queue;
-                // Schedule a message at this height if we haven't already.
-                if queue.back() != Some(&block.height) {
-                    queue.push_back(block.height);
-                }
-            }
-            // Update the channels.
-            for name in application.need_channel_broadcast {
-                let channel = self
-                    .channels
-                    .entry(name)
-                    .or_insert_with(ChannelState::default);
-                channel.subscribers.values_mut().for_each(|v| *v = false);
-                channel.block_height = Some(block.height);
-            }
+            Self::process_application_result(
+                &mut self.outboxes,
+                &mut self.channels,
+                &mut effects,
+                block.height,
+                application,
+            );
         }
         // Last, recompute the state hash.
         self.state_hash = HashValue::new(&self.state);
         Ok(effects)
+    }
+
+    fn process_application_result(
+        outboxes: &mut HashMap<ChainId, OutboxState>,
+        channels: &mut HashMap<String, ChannelState>,
+        effects: &mut Vec<Effect>,
+        height: BlockHeight,
+        application: ApplicationResult,
+    ) {
+        // Record the effects of the execution.
+        effects.extend(application.effects);
+        // Update the outboxes.
+        for recipient in application.recipients {
+            let queue = &mut outboxes.entry(recipient).or_default().queue;
+            // Schedule a message at this height if we haven't already.
+            if queue.back() != Some(&height) {
+                queue.push_back(height);
+            }
+        }
+        // Update the channels.
+        if let Some((name, id)) = application.unsubscribe {
+            let channel = channels.entry(name).or_insert_with(ChannelState::default);
+            // Request past and future messages from this channel.
+            channel.subscribers.remove(&id);
+        }
+        for name in application.need_channel_broadcast {
+            let channel = channels.entry(name).or_insert_with(ChannelState::default);
+            channel.subscribers.values_mut().for_each(|v| *v = false);
+            channel.block_height = Some(height);
+        }
+        if let Some((name, id)) = application.subscribe {
+            let channel = channels.entry(name).or_insert_with(ChannelState::default);
+            // Request past and future messages from this channel.
+            channel.subscribers.insert(id, false);
+        }
     }
 }
