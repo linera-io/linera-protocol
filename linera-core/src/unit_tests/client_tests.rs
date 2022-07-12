@@ -209,6 +209,7 @@ impl TestBuilder {
             vec![key_pair],
             provider,
             store,
+            self.admin_id,
             block_hash,
             block_height,
             std::time::Duration::from_millis(500),
@@ -403,6 +404,10 @@ async fn test_share_ownership() {
 #[test(tokio::test)]
 async fn test_open_chain_then_close_it() {
     let mut builder = TestBuilder::new(4, 1);
+    // New chains use the admin chain to verify their creation certificate.
+    builder
+        .add_initial_chain(ChainDescription::Root(0), Balance::from(0))
+        .await;
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await;
@@ -429,6 +434,10 @@ async fn test_open_chain_then_close_it() {
 #[test(tokio::test)]
 async fn test_transfer_then_open_chain() {
     let mut builder = TestBuilder::new(4, 1);
+    // New chains use the admin chain to verify their creation certificate.
+    builder
+        .add_initial_chain(ChainDescription::Root(0), Balance::from(0))
+        .await;
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await;
@@ -479,6 +488,10 @@ async fn test_transfer_then_open_chain() {
 #[test(tokio::test)]
 async fn test_open_chain_then_transfer() {
     let mut builder = TestBuilder::new(4, 1);
+    // New chains use the admin chain to verify their creation certificate.
+    builder
+        .add_initial_chain(ChainDescription::Root(0), Balance::from(0))
+        .await;
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await;

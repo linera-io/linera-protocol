@@ -31,6 +31,7 @@ use structopt::StructOpt;
 
 struct ClientContext {
     committee_config: CommitteeConfig,
+    admin_id: ChainId,
     wallet_state_path: PathBuf,
     wallet_state: WalletState,
     storage_client: MixedStorage,
@@ -74,14 +75,15 @@ impl ClientContext {
         let wallet_state_path = options.wallet_state_path.clone();
         let wallet_state =
             WalletState::read_or_create(&wallet_state_path).expect("Unable to read user chains");
-        let (storage_client, committee_config): (MixedStorage, _) = match options.cmd {
+        let (storage_client, committee_config, admin_id): (MixedStorage, _, _) = match options.cmd {
             ClientCommands::CreateGenesisConfig { .. } => {
-                // This is a placeholder to avoid create a DB on disk at this point.
+                // The first two values are placeholders. We don't want to create a DB on disk at this point.
                 (
                     Box::new(InMemoryStoreClient::default()),
                     CommitteeConfig {
                         validators: Vec::new(),
                     },
+                    ChainId::root(0),
                 )
             }
             _ => {
@@ -94,7 +96,7 @@ impl ClientContext {
                 )
                 .await
                 .unwrap();
-                (storage, genesis_config.committee)
+                (storage, genesis_config.committee, genesis_config.admin_id)
             }
         };
         let send_timeout = Duration::from_micros(options.send_timeout_us);
@@ -103,6 +105,7 @@ impl ClientContext {
 
         ClientContext {
             committee_config,
+            admin_id,
             wallet_state_path,
             wallet_state,
             storage_client,
@@ -139,6 +142,7 @@ impl ClientContext {
                 .collect(),
             self.node_provider(),
             self.storage_client.clone(),
+            self.admin_id,
             chain.block_hash,
             chain.next_block_height,
             self.cross_chain_delay,
@@ -585,7 +589,7 @@ async fn main() {
         } => {
             let committee_config = CommitteeConfig::read(&committee_config_path)
                 .expect("Unable to read committee config file");
-            let mut genesis_config = GenesisConfig::new(committee_config, ChainId::root(0));
+            let mut genesis_config = GenesisConfig::new(committee_config, context.admin_id);
             for i in 0..num {
                 let description = ChainDescription::Root(i as usize);
                 // Create keys.
