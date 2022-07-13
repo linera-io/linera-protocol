@@ -218,7 +218,12 @@ where
         Ok(response.info.requested_pending_messages)
     }
 
-    async fn committee(&mut self) -> Result<Committee, Error> {
+    pub async fn epochs(&mut self) -> Result<Vec<Epoch>, Error> {
+        let state = self.execution_state().await?;
+        Ok(state.committees.into_keys().collect())
+    }
+
+    pub async fn committee(&mut self) -> Result<Committee, Error> {
         let mut state = self.execution_state().await?;
         state
             .committees
@@ -554,7 +559,7 @@ where
                 let tracker = *trackers.get(&name).unwrap_or(&0);
                 let committees = committees.clone();
                 Box::pin(async move {
-                    // Retrieve new received certificates from this validator.
+                    // Retrieve newly received certificates from this validator.
                     let query = ChainInfoQuery::new(chain_id)
                         .with_received_certificates_excluding_first_nth(tracker);
                     let response = client.handle_chain_info_query(query).await?;
@@ -576,9 +581,9 @@ where
                                 "Postponing received certificate from future epoch {:?}",
                                 block.epoch
                             );
-                            // Stop the synchronization here. Do not incrememt the tracker
-                            // so that the certificate can still be downloaded later, once
-                            // our committee was updated.
+                            // Stop the synchronization here. Do not increment the tracker
+                            // further so that this certificate can still be downloaded
+                            // later, once our committee is updated.
                             break;
                         }
                         match committees.get(&block.epoch) {
@@ -720,7 +725,11 @@ where
             },
             key_pair,
         );
-        // Send the query.
+        // Try to execute the block locally first.
+        self.node_client
+            .handle_block_proposal(proposal.clone())
+            .await?;
+        // Send the query to validators.
         let committee = self.committee().await?;
         let final_certificate = match self.chain_info().await?.manager {
             ChainManager::Multi(_) => {
