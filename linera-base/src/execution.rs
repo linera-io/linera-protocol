@@ -236,7 +236,7 @@ impl ExecutionState {
                     recipients: vec![*id, *admin_id],
                     subscribe: None,
                     unsubscribe: None,
-                    need_channel_broadcast: vec![ADMIN_CHANNEL.into()],
+                    need_channel_broadcast: Vec::new(),
                 };
                 Ok(application)
             }
@@ -453,7 +453,7 @@ impl ExecutionState {
             }
             Effect::Unsubscribe { id, channel } if channel.chain_id == self.chain_id => {
                 let application = ApplicationResult {
-                    effects: Vec::new(),
+                    effects: vec![Effect::Notify { id: *id }],
                     recipients: vec![*id], // Notify the subscriber.
                     subscribe: None,
                     unsubscribe: Some((channel.name.clone(), *id)),
