@@ -209,13 +209,14 @@ impl ChainState {
         inbox.next_height_to_receive = height.try_add_one()?;
         self.received_log.push(key);
 
-        let mut is_recipient = false;
+        let mut was_a_recipient = false;
         for (index, effect) in effects.into_iter().enumerate() {
-            // Skip events that have provably no effect on this recipient.
-            if !self.state.is_recipient(&effect) {
+            // Skip events that do not belong to this origin OR have no effect on this
+            // recipient.
+            if !self.state.is_recipient(origin, &effect) {
                 continue;
             }
-            is_recipient = true;
+            was_a_recipient = true;
             // Chain creation effects are special and executed (only) in this callback.
             // For simplicity, they will still appear in the received messages.
             match &effect {
@@ -279,7 +280,7 @@ impl ChainState {
             }
         }
         debug_assert!(
-            is_recipient,
+            was_a_recipient,
             "The block received by {:?} from {:?} at height {:?} was entirely ignored. This should not happen",
             self.state.chain_id, origin, height
         );
@@ -339,7 +340,12 @@ impl ChainState {
                     }
                     assert!((*height, index) < (message_group.height, message_index));
                     let event = inbox.received_events.pop_front().unwrap();
-                    log::trace!("Skipping received event: {:?}", event);
+                    log::trace!(
+                        "Chain {:?} is skipping received event from {:?}: {:?}",
+                        self.state.chain_id,
+                        message_group.origin,
+                        event
+                    );
                 }
                 // Reconcile the event with the received queue, or mark it as "expected".
                 match inbox.received_events.front() {
