@@ -333,10 +333,10 @@ impl ExecutionState {
             }
             Operation::RemoveCommittee { admin_id, epoch } => {
                 // We are the admin chain and want to remove a committee.
-                ensure!(*admin_id == self.chain_id, Error::InvalidCommitteeCreation);
+                ensure!(*admin_id == self.chain_id, Error::InvalidCommitteeRemoval);
                 ensure!(
                     Some(admin_id) == self.admin_id.as_ref(),
-                    Error::InvalidCommitteeCreation
+                    Error::InvalidCommitteeRemoval
                 );
                 ensure!(
                     self.committees.remove(epoch).is_some(),
