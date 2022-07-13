@@ -1417,15 +1417,7 @@ async fn test_chain_creation_with_committee_creation() {
         assert!(root_chain.outboxes.is_empty());
         assert_eq!(root_chain.state.admin_id, Some(root_id));
         // The root chain has no subscribers yet.
-        assert_eq!(
-            root_chain
-                .channels
-                .get(ADMIN_CHANNEL)
-                .unwrap()
-                .subscribers
-                .len(),
-            0
-        );
+        assert!(root_chain.channels.get(ADMIN_CHANNEL).is_none());
     }
 
     // Create a committee before receiving the subscription of the new chain.
