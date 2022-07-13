@@ -53,7 +53,7 @@ do
 LAST_PID="$!"
 
 # Command line prefix for client calls
-CLIENT=(./client --storage client.db --wallet wallet.json --genesis genesis.json)
+CLIENT=(./client --storage client.db --wallet wallet.json --genesis genesis.json --max-pending-messages 10000)
 
 ${CLIENT[@]} query_validators
 
