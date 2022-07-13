@@ -36,6 +36,7 @@ struct ClientContext {
     wallet_state_path: PathBuf,
     wallet_state: WalletState,
     storage_client: MixedStorage,
+    max_pending_messages: usize,
     send_timeout: Duration,
     recv_timeout: Duration,
     cross_chain_delay: Duration,
@@ -110,6 +111,7 @@ impl ClientContext {
             wallet_state_path,
             wallet_state,
             storage_client,
+            max_pending_messages: options.max_pending_messages,
             send_timeout,
             recv_timeout,
             cross_chain_delay,
@@ -144,6 +146,7 @@ impl ClientContext {
             self.node_provider(),
             self.storage_client.clone(),
             self.admin_id,
+            self.max_pending_messages,
             chain.block_hash,
             chain.next_block_height,
             self.cross_chain_delay,
@@ -392,6 +395,9 @@ struct ClientOptions {
     #[structopt(long, default_value = "10")]
     cross_chain_retries: usize,
 
+    #[structopt(long, default_value = "10")]
+    max_pending_messages: usize,
+
     /// Subcommands.
     #[structopt(subcommand)]
     cmd: ClientCommands,
@@ -619,6 +625,14 @@ async fn main() {
             for cert in certificates {
                 admin_state.receive_certificate(cert).await.unwrap();
             }
+            let n = admin_state
+                .process_inbox()
+                .await
+                .unwrap()
+                .into_iter()
+                .map(|c| c.value.effects_and_state_hash().0.len())
+                .sum::<usize>();
+            log::info!("Subscribed {} chains to new committees", n);
 
             // Create the new committee.
             let committee = admin_state.committee().await.unwrap();

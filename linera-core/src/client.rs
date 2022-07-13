@@ -67,8 +67,8 @@ pub trait ChainClient {
         validators: BTreeMap<ValidatorName, ValidatorState>,
     ) -> Result<Certificate>;
 
-    /// Create an empty block to process all incoming messages.
-    async fn process_inbox(&mut self) -> Result<Certificate>;
+    /// Create an empty block to process all incoming messages. This may require several blocks.
+    async fn process_inbox(&mut self) -> Result<Vec<Certificate>>;
 
     /// Start listening to the admin chain for new committees. (This is only useful for
     /// other genesis chains or for testing.)
@@ -136,6 +136,8 @@ pub struct ChainClientState<ValidatorNodeProvider, StorageClient> {
     /// The id of the admin chain.
     admin_id: ChainId,
 
+    /// Maximum number of pending messages processed at a time in a block.
+    max_pending_messages: usize,
     /// Support synchronization of received certificates.
     received_certificate_trackers: HashMap<ValidatorName, usize>,
     /// How much time to wait between attempts when we wait for a cross-chain update.
@@ -155,6 +157,7 @@ impl<P, S> ChainClientState<P, S> {
         validator_node_provider: P,
         storage_client: S,
         admin_id: ChainId,
+        max_pending_messages: usize,
         block_hash: Option<HashValue>,
         next_block_height: BlockHeight,
         cross_chain_delay: Duration,
@@ -176,6 +179,7 @@ impl<P, S> ChainClientState<P, S> {
             pending_block: None,
             known_key_pairs,
             admin_id,
+            max_pending_messages,
             received_certificate_trackers: HashMap::new(),
             cross_chain_delay,
             cross_chain_retries,
@@ -215,7 +219,16 @@ where
     async fn pending_messages(&mut self) -> Result<Vec<MessageGroup>, Error> {
         let query = ChainInfoQuery::new(self.chain_id).with_pending_messages();
         let response = self.node_client.handle_chain_info_query(query).await?;
-        Ok(response.info.requested_pending_messages)
+        let mut pending_messages = response.info.requested_pending_messages;
+        if pending_messages.len() > self.max_pending_messages {
+            log::warn!(
+                "Limiting block from {} to {} incoming messages",
+                pending_messages.len(),
+                self.max_pending_messages
+            );
+            pending_messages.truncate(self.max_pending_messages);
+        }
+        Ok(pending_messages)
     }
 
     pub async fn epochs(&mut self) -> Result<Vec<Epoch>, Error> {
@@ -996,20 +1009,28 @@ where
         Ok(certificate)
     }
 
-    async fn process_inbox(&mut self) -> Result<Certificate> {
+    async fn process_inbox(&mut self) -> Result<Vec<Certificate>> {
         self.prepare_chain().await?;
-        let block = Block {
-            epoch: self.epoch().await?,
-            chain_id: self.chain_id,
-            incoming_messages: self.pending_messages().await?,
-            operations: Vec::new(),
-            previous_block_hash: self.block_hash,
-            height: self.next_block_height,
-        };
-        let certificate = self
-            .propose_block(block, /* with_confirmation */ true)
-            .await?;
-        Ok(certificate)
+        let mut certificates = Vec::new();
+        loop {
+            let incoming_messages = self.pending_messages().await?;
+            if incoming_messages.is_empty() {
+                break;
+            }
+            let block = Block {
+                epoch: self.epoch().await?,
+                chain_id: self.chain_id,
+                incoming_messages,
+                operations: Vec::new(),
+                previous_block_hash: self.block_hash,
+                height: self.next_block_height,
+            };
+            let certificate = self
+                .propose_block(block, /* with_confirmation */ true)
+                .await?;
+            certificates.push(certificate);
+        }
+        Ok(certificates)
     }
 
     async fn subscribe_to_new_committees(&mut self) -> Result<Certificate> {

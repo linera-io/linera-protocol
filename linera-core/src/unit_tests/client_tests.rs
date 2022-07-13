@@ -210,6 +210,7 @@ impl TestBuilder {
             provider,
             store,
             self.admin_id,
+            10,
             block_hash,
             block_height,
             std::time::Duration::from_millis(500),
