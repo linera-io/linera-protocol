@@ -4,7 +4,7 @@
 
 use crate::worker::{ValidatorWorker, WorkerState};
 use linera_base::{
-    chain::{ChainState, Event},
+    chain::{ChainState, Event, InboxState},
     committee::Committee,
     crypto::*,
     error::Error,
@@ -15,7 +15,7 @@ use linera_base::{
     messages::*,
 };
 use linera_storage::{InMemoryStoreClient, Storage};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use test_log::test;
 
 /// Instantiate the protocol with a single validator. Returns the corresponding committee
@@ -1350,60 +1350,61 @@ async fn test_chain_creation_with_committee_creation() {
     let (committee, mut worker) = init_worker_with_chains(vec![(
         ChainDescription::Root(0),
         key_pair.public(),
-        Balance::from(0),
+        Balance::from(2),
     )])
     .await;
-    let root_id = ChainId::root(0);
+    let mut committees = BTreeMap::new();
+    committees.insert(Epoch::from(0), committee.clone());
+    let admin_id = ChainId::root(0);
+    let admin_channel = ChannelId {
+        chain_id: admin_id,
+        name: ADMIN_CHANNEL.into(),
+    };
     // Have the root create a new chain.
-    let child_id0 = ChainId::child(EffectId {
-        chain_id: root_id,
+    let child_id = ChainId::child(EffectId {
+        chain_id: admin_id,
         height: BlockHeight::from(0),
         index: 0,
     });
-    let mut committees = BTreeMap::new();
-    committees.insert(Epoch::from(0), committee.clone());
     let certificate0 = make_certificate(
         &committee,
         &worker,
         Value::ConfirmedBlock {
             block: Block {
                 epoch: Epoch::from(0),
-                chain_id: root_id,
+                chain_id: admin_id,
                 incoming_messages: Vec::new(),
                 operations: vec![Operation::OpenChain {
-                    id: child_id0,
+                    id: child_id,
                     owner: key_pair.public().into(),
                     epoch: Epoch::from(0),
                     committees: committees.clone(),
-                    admin_id: root_id,
+                    admin_id,
                 }],
                 previous_block_hash: None,
                 height: BlockHeight::from(0),
             },
             effects: vec![
                 Effect::OpenChain {
-                    id: child_id0,
+                    id: child_id,
                     owner: key_pair.public().into(),
                     epoch: Epoch::from(0),
                     committees: committees.clone(),
-                    admin_id: root_id,
+                    admin_id,
                 },
                 Effect::Subscribe {
-                    id: child_id0,
-                    channel: ChannelId {
-                        chain_id: root_id,
-                        name: ADMIN_CHANNEL.into(),
-                    },
+                    id: child_id,
+                    channel: admin_channel.clone(),
                 },
             ],
             state_hash: HashValue::new(&ExecutionState {
                 epoch: Some(Epoch::from(0)),
-                chain_id: root_id,
-                admin_id: Some(root_id),
+                chain_id: admin_id,
+                admin_id: Some(admin_id),
                 subscriptions: BTreeMap::new(),
                 committees: committees.clone(),
                 manager: ChainManager::single(key_pair.public().into()),
-                balance: Balance::from(0),
+                balance: Balance::from(2),
             }),
         },
     );
@@ -1412,15 +1413,16 @@ async fn test_chain_creation_with_committee_creation() {
         .await
         .unwrap();
     {
-        let root_chain = worker.storage.read_active_chain(root_id).await.unwrap();
+        let root_chain = worker.storage.read_active_chain(admin_id).await.unwrap();
+        root_chain.validate_incoming_messages().unwrap();
         assert_eq!(BlockHeight::from(1), root_chain.next_block_height);
         assert!(root_chain.outboxes.is_empty());
-        assert_eq!(root_chain.state.admin_id, Some(root_id));
+        assert_eq!(root_chain.state.admin_id, Some(admin_id));
         // The root chain has no subscribers yet.
         assert!(root_chain.channels.get(ADMIN_CHANNEL).is_none());
     }
 
-    // Create a committee before receiving the subscription of the new chain.
+    // Create a new committee and transfer money before accepting the subscription.
     let committees2: BTreeMap<_, _> = [
         (Epoch::from(0), committee.clone()),
         (Epoch::from(1), committee.clone()),
@@ -1433,42 +1435,38 @@ async fn test_chain_creation_with_committee_creation() {
         Value::ConfirmedBlock {
             block: Block {
                 epoch: Epoch::from(0),
-                chain_id: root_id,
-                incoming_messages: vec![MessageGroup {
-                    origin: Origin::Chain(ChainId::root(0)),
-                    height: BlockHeight::from(0),
-                    effects: vec![(
-                        1,
-                        Effect::Subscribe {
-                            id: child_id0,
-                            channel: ChannelId {
-                                chain_id: root_id,
-                                name: ADMIN_CHANNEL.into(),
-                            },
-                        },
-                    )],
-                }],
-                // Create the new committee.
-                operations: vec![Operation::CreateCommittee {
-                    admin_id: root_id,
-                    epoch: Epoch::from(1),
-                    committee: committee.clone(),
-                }],
+                chain_id: admin_id,
+                incoming_messages: Vec::new(),
+                operations: vec![
+                    Operation::CreateCommittee {
+                        admin_id,
+                        epoch: Epoch::from(1),
+                        committee: committee.clone(),
+                    },
+                    Operation::Transfer {
+                        recipient: Address::Account(child_id),
+                        amount: Amount::from(2),
+                        user_data: UserData::default(),
+                    },
+                ],
                 previous_block_hash: Some(certificate0.hash),
                 height: BlockHeight::from(1),
             },
             effects: vec![
-                Effect::Notify { id: child_id0 },
                 Effect::SetCommittees {
-                    admin_id: root_id,
+                    admin_id,
                     epoch: Epoch::from(1),
                     committees: committees2.clone(),
+                },
+                Effect::Credit {
+                    recipient: child_id,
+                    amount: Amount::from(2),
                 },
             ],
             state_hash: HashValue::new(&ExecutionState {
                 epoch: Some(Epoch::from(1)),
-                chain_id: root_id,
-                admin_id: Some(root_id),
+                chain_id: admin_id,
+                admin_id: Some(admin_id),
                 subscriptions: BTreeMap::new(),
                 // The root chain knows both committees at the end.
                 committees: committees2.clone(),
@@ -1482,72 +1480,50 @@ async fn test_chain_creation_with_committee_creation() {
         .await
         .unwrap();
 
-    // Let the derived chain create another chain before migrating to the new committee.
-    let child_id = ChainId::child(EffectId {
-        chain_id: child_id0,
-        height: BlockHeight::from(0),
-        index: 0,
-    });
-    let certificate00 = make_certificate(
+    // Have the admin chain accept the subscription now.
+    let certificate2 = make_certificate(
         &committee,
         &worker,
         Value::ConfirmedBlock {
             block: Block {
-                epoch: Epoch::from(0),
-                chain_id: child_id0,
-                incoming_messages: Vec::new(),
-                operations: vec![Operation::OpenChain {
-                    id: child_id,
-                    owner: key_pair.public().into(),
-                    epoch: Epoch::from(0),
-                    committees: committees.clone(),
-                    admin_id: root_id,
+                epoch: Epoch::from(1),
+                chain_id: admin_id,
+                incoming_messages: vec![MessageGroup {
+                    origin: Origin::Chain(admin_id),
+                    height: BlockHeight::from(0),
+                    effects: vec![(
+                        1,
+                        Effect::Subscribe {
+                            id: child_id,
+                            channel: admin_channel.clone(),
+                        },
+                    )],
                 }],
-                previous_block_hash: None,
-                height: BlockHeight::from(0),
+                operations: Vec::new(),
+                previous_block_hash: Some(certificate1.hash),
+                height: BlockHeight::from(2),
             },
-            effects: vec![
-                Effect::OpenChain {
-                    id: child_id,
-                    owner: key_pair.public().into(),
-                    epoch: Epoch::from(0),
-                    committees: committees.clone(),
-                    admin_id: root_id,
-                },
-                Effect::Subscribe {
-                    id: child_id,
-                    channel: ChannelId {
-                        chain_id: root_id,
-                        name: ADMIN_CHANNEL.into(),
-                    },
-                },
-            ],
+            effects: vec![Effect::Notify { id: child_id }],
             state_hash: HashValue::new(&ExecutionState {
-                epoch: Some(Epoch::from(0)),
-                chain_id: child_id0,
-                admin_id: Some(root_id),
-                subscriptions: [(
-                    ChannelId {
-                        chain_id: root_id,
-                        name: ADMIN_CHANNEL.into(),
-                    },
-                    (),
-                )]
-                .into_iter()
-                .collect(),
-                committees: committees.clone(),
+                epoch: Some(Epoch::from(1)),
+                chain_id: admin_id,
+                admin_id: Some(admin_id),
+                subscriptions: BTreeMap::new(),
+                // The root chain knows both committees at the end.
+                committees: committees2.clone(),
                 manager: ChainManager::single(key_pair.public().into()),
                 balance: Balance::from(0),
             }),
         },
     );
     worker
-        .fully_handle_certificate(certificate00.clone())
+        .fully_handle_certificate(certificate2.clone())
         .await
         .unwrap();
     {
         // The root chain has 1 subscribers.
-        let root_chain = worker.storage.read_active_chain(root_id).await.unwrap();
+        let root_chain = worker.storage.read_active_chain(admin_id).await.unwrap();
+        root_chain.validate_incoming_messages().unwrap();
         assert_eq!(
             root_chain
                 .channels
@@ -1559,42 +1535,96 @@ async fn test_chain_creation_with_committee_creation() {
         );
     }
     {
-        // The second child chain is active and has not migrated yet.
+        // The child is active and has not migrated yet.
         let child_chain = worker.storage.read_active_chain(child_id).await.unwrap();
         assert_eq!(BlockHeight::from(0), child_chain.next_block_height);
-        assert_eq!(child_chain.state.admin_id, Some(root_id));
+        assert_eq!(child_chain.state.admin_id, Some(admin_id));
         assert_eq!(child_chain.state.subscriptions.len(), 1);
-        assert!(!child_chain
+        child_chain.validate_incoming_messages().unwrap();
+        matches!(
+            child_chain
+                .inboxes
+                .get(&Origin::Chain(admin_id))
+                .unwrap()
+                .received_events
+                .iter()
+                .cloned()
+                .collect::<Vec<_>>()[..],
+            [
+                Event {
+                    effect: Effect::OpenChain { .. },
+                    ..
+                },
+                Event {
+                    effect: Effect::Credit { .. },
+                    ..
+                },
+                Event {
+                    effect: Effect::Notify { .. },
+                    ..
+                }
+            ]
+        );
+        matches!(
+            child_chain
+                .inboxes
+                .get(&Origin::Channel(admin_channel.clone()))
+                .unwrap()
+                .received_events
+                .iter()
+                .cloned()
+                .collect::<Vec<_>>()[..],
+            [Event {
+                effect: Effect::SetCommittees { .. },
+                ..
+            },]
+        );
+        assert!(child_chain
             .inboxes
-            .get(&Origin::Chain(child_id0))
+            .get(&Origin::Channel(admin_channel.clone()))
             .unwrap()
-            .received_events
+            .expected_events
             .is_empty());
         assert_eq!(child_chain.state.committees.len(), 1);
     }
-    // Make the child receive the pending notification from root.
-    let certificate000 = make_certificate(
+    // Make the child receive the pending messages.
+    let certificate3 = make_certificate(
         &committee,
         &worker,
         Value::ConfirmedBlock {
             block: Block {
                 epoch: Epoch::from(0),
                 chain_id: child_id,
-                incoming_messages: vec![MessageGroup {
-                    origin: Origin::Channel(ChannelId {
-                        chain_id: root_id,
-                        name: ADMIN_CHANNEL.into(),
-                    }),
-                    height: BlockHeight::from(2),
-                    effects: vec![(
-                        0,
-                        Effect::SetCommittees {
-                            admin_id: root_id,
-                            epoch: Epoch::from(1),
-                            committees: committees2.clone(),
-                        },
-                    )],
-                }],
+                incoming_messages: vec![
+                    MessageGroup {
+                        origin: Origin::Channel(admin_channel.clone()),
+                        height: BlockHeight::from(1),
+                        effects: vec![(
+                            0,
+                            Effect::SetCommittees {
+                                admin_id,
+                                epoch: Epoch::from(1),
+                                committees: committees2.clone(),
+                            },
+                        )],
+                    },
+                    MessageGroup {
+                        origin: Origin::Chain(admin_id),
+                        height: BlockHeight::from(1),
+                        effects: vec![(
+                            1,
+                            Effect::Credit {
+                                recipient: child_id,
+                                amount: Amount::from(2),
+                            },
+                        )],
+                    },
+                    MessageGroup {
+                        origin: Origin::Chain(admin_id),
+                        height: BlockHeight::from(2),
+                        effects: vec![(0, Effect::Notify { id: child_id })],
+                    },
+                ],
                 operations: Vec::new(),
                 previous_block_hash: None,
                 height: BlockHeight::from(0),
@@ -1603,25 +1633,49 @@ async fn test_chain_creation_with_committee_creation() {
             state_hash: HashValue::new(&ExecutionState {
                 epoch: Some(Epoch::from(1)),
                 chain_id: child_id,
-                admin_id: Some(root_id),
+                admin_id: Some(admin_id),
                 subscriptions: [(
                     ChannelId {
-                        chain_id: root_id,
+                        chain_id: admin_id,
                         name: ADMIN_CHANNEL.into(),
                     },
                     (),
                 )]
                 .into_iter()
                 .collect(),
-                // Finally the child knows about both committees.
+                // Finally the child knows about both committees and has the money.
                 committees: committees2.clone(),
                 manager: ChainManager::single(key_pair.public().into()),
-                balance: Balance::from(0),
+                balance: Balance::from(2),
             }),
         },
     );
-    worker
-        .fully_handle_certificate(certificate000)
-        .await
-        .unwrap();
+    worker.fully_handle_certificate(certificate3).await.unwrap();
+    {
+        let child_chain = worker.storage.read_active_chain(child_id).await.unwrap();
+        assert_eq!(BlockHeight::from(1), child_chain.next_block_height);
+        assert_eq!(child_chain.state.admin_id, Some(admin_id));
+        assert_eq!(child_chain.state.subscriptions.len(), 1);
+        assert_eq!(child_chain.state.committees.len(), 2);
+        child_chain.validate_incoming_messages().unwrap();
+        assert_eq!(
+            child_chain.inboxes.get(&Origin::Chain(admin_id)).unwrap(),
+            &InboxState {
+                next_height_to_receive: BlockHeight(3),
+                received_events: VecDeque::new(),
+                expected_events: VecDeque::new()
+            }
+        );
+        assert_eq!(
+            child_chain
+                .inboxes
+                .get(&Origin::Channel(admin_channel.clone()))
+                .unwrap(),
+            &InboxState {
+                next_height_to_receive: BlockHeight(2),
+                received_events: VecDeque::new(),
+                expected_events: VecDeque::new()
+            }
+        );
+    }
 }
