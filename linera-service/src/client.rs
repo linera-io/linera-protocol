@@ -452,8 +452,9 @@ async fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let options = ClientOptions::from_args();
     let mut context = ClientContext::from_options(&options).await;
+    use ClientCommands::*;
     match options.cmd {
-        ClientCommands::Transfer {
+        Transfer {
             sender,
             recipient,
             amount,
@@ -472,7 +473,7 @@ async fn main() {
             context.save_chains();
         }
 
-        ClientCommands::OpenChain { sender, owner } => {
+        OpenChain { sender, owner } => {
             let mut client_state = context.make_chain_client(sender);
             let (new_owner, key_pair) = match owner {
                 Some(key) => (key, None),
@@ -494,7 +495,7 @@ async fn main() {
             context.save_chains();
         }
 
-        ClientCommands::CloseChain { sender } => {
+        CloseChain { sender } => {
             let mut client_state = context.make_chain_client(sender);
             info!("Starting operation to close the chain");
             let time_start = Instant::now();
@@ -506,7 +507,7 @@ async fn main() {
             context.save_chains();
         }
 
-        ClientCommands::QueryBalance { chain_id } => {
+        QueryBalance { chain_id } => {
             let mut client_state = context.make_chain_client(chain_id);
             info!("Starting query for the local balance");
             let time_start = Instant::now();
@@ -518,7 +519,7 @@ async fn main() {
             context.save_chains();
         }
 
-        ClientCommands::SynchronizeBalance { chain_id } => {
+        SynchronizeBalance { chain_id } => {
             let mut client_state = context.make_chain_client(chain_id);
             info!("Synchronize chain information");
             let time_start = Instant::now();
@@ -530,7 +531,7 @@ async fn main() {
             context.save_chains();
         }
 
-        ClientCommands::Benchmark {
+        Benchmark {
             max_in_flight,
             max_proposals,
         } => {
@@ -582,7 +583,7 @@ async fn main() {
             context.save_chains();
         }
 
-        ClientCommands::CreateGenesisConfig {
+        CreateGenesisConfig {
             committee_config_path,
             initial_funding,
             num,
