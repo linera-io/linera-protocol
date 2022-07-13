@@ -138,7 +138,7 @@ impl WalletState {
     }
 
     pub fn chain_ids(&self) -> Vec<ChainId> {
-        self.chains.keys().cloned().collect()
+        self.chains.keys().copied().collect()
     }
 
     pub fn num_chains(&self) -> usize {
