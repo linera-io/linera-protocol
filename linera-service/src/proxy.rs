@@ -20,6 +20,7 @@ pub struct ProxyOptions {
     config_path: PathBuf,
 }
 
+#[derive(Clone)]
 pub struct Proxy {
     public_config: ValidatorPublicNetworkConfig,
     internal_config: ValidatorInternalNetworkConfig,
