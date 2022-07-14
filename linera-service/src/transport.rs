@@ -8,7 +8,7 @@ use futures::{future, Sink, SinkExt, Stream, StreamExt, TryStreamExt};
 use linera_base::rpc;
 use log::*;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, io, net::ToSocketAddrs, sync::Arc};
+use std::{collections::HashMap, io, net::ToSocketAddrs};
 use tokio::net::{TcpListener, TcpStream, UdpSocket};
 use tokio_util::{codec::Framed, udp::UdpFramed};
 
@@ -264,7 +264,6 @@ impl NetworkProtocol {
     where
         S: MessageHandler + Send + 'static,
     {
-        let guarded_state = Arc::new(futures::lock::Mutex::new(state));
         loop {
             let (socket, _) = match future::select(exit_future, Box::pin(listener.accept())).await {
                 future::Either::Left(_) => break,
@@ -273,7 +272,7 @@ impl NetworkProtocol {
                     value?
                 }
             };
-            let guarded_state = guarded_state.clone();
+            let mut handler = state.clone();
             tokio::spawn(async move {
                 let mut transport = Framed::new(socket, Codec);
                 while let Some(maybe_message) = transport.next().await {
@@ -294,7 +293,7 @@ impl NetworkProtocol {
                         }
                     };
 
-                    if let Some(reply) = guarded_state.lock().await.handle_message(message).await {
+                    if let Some(reply) = handler.handle_message(message).await {
                         if let Err(error) = transport.send(reply).await {
                             error!("Failed to send query response: {}", error);
                         }
