@@ -7,7 +7,7 @@ use linera_base::{
     chain::ChainState, crypto::*, ensure, error::Error, manager::Outcome, messages::*,
 };
 use linera_storage::Storage;
-use std::collections::VecDeque;
+use std::{collections::VecDeque, sync::Arc};
 
 #[cfg(test)]
 #[path = "unit_tests/worker_tests.rs"]
@@ -47,12 +47,13 @@ pub trait ValidatorWorker {
 }
 
 /// State of a worker in a validator or a local node.
+#[derive(Clone)]
 pub struct WorkerState<StorageClient> {
     /// A name used for logging
     nickname: String,
     /// The signature key pair of the validator. The key may be missing for replicas
     /// without voting rights (possibly with a partial view of chains).
-    key_pair: Option<KeyPair>,
+    key_pair: Option<Arc<KeyPair>>,
     /// Access to local persistent storage.
     storage: StorageClient,
     /// Whether inactive chains are allowed in storage.
@@ -63,7 +64,7 @@ impl<Client> WorkerState<Client> {
     pub fn new(nickname: String, key_pair: Option<KeyPair>, storage: Client) -> Self {
         WorkerState {
             nickname,
-            key_pair,
+            key_pair: key_pair.map(Arc::new),
             storage,
             allow_inactive_chains: false,
         }
@@ -110,7 +111,7 @@ where
 
     /// Get a reference to the [`KeyPair`], if available.
     fn key_pair(&self) -> Option<&KeyPair> {
-        self.key_pair.as_ref()
+        self.key_pair.as_ref().map(Arc::as_ref)
     }
 
     /// Load pending cross-chain requests.
