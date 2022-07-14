@@ -8,8 +8,7 @@ This repository is dedicated to developing the Linera protocol.
 ## Quickstart with the Linera service CLI
 
 The current code was imported from https://github.com/novifinancial/fastpay/pull/24 then
-cleaned up (e.g. removing coins and assets for now). Atomic swaps are still WIP (notably
-the client and CLI code is missing).
+cleaned up (e.g. removing coins and assets for now).
 
 The following script can be run with `cargo test`.
 
