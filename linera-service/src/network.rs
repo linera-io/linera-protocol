@@ -93,6 +93,7 @@ impl ValidatorInternalNetworkConfig {
     }
 }
 
+#[derive(Clone)]
 pub struct Server<Storage> {
     network: ValidatorInternalNetworkConfig,
     host: String,
@@ -218,6 +219,7 @@ where
     }
 }
 
+#[derive(Clone)]
 struct RunningServerState<Storage> {
     server: Server<Storage>,
     cross_chain_sender: mpsc::Sender<(rpc::Message, ShardId)>,
