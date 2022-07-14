@@ -108,6 +108,11 @@ where
         Ok(info)
     }
 
+    /// Get a reference to the [`KeyPair`], if available.
+    fn key_pair(&self) -> Option<&KeyPair> {
+        self.key_pair.as_ref()
+    }
+
     /// Load pending cross-chain requests.
     async fn make_continuation(
         &mut self,
@@ -178,7 +183,7 @@ where
         }
         if chain.next_block_height > block.height {
             // Block was already confirmed.
-            let info = chain.make_chain_info(self.key_pair.as_ref());
+            let info = chain.make_chain_info(self.key_pair());
             let continuation = self.make_continuation(&chain).await?;
             return Ok((info, continuation));
         }
@@ -213,7 +218,7 @@ where
         chain.next_block_height.try_add_assign_one()?;
         // We should always agree on the state hash.
         ensure!(chain.state_hash == state_hash, Error::IncorrectStateHash);
-        let info = chain.make_chain_info(self.key_pair.as_ref());
+        let info = chain.make_chain_info(self.key_pair());
         let continuation = self.make_continuation(&chain).await?;
         // Persist chain.
         self.storage.write_chain(chain).await?;
@@ -257,16 +262,16 @@ where
         {
             // If we just processed the same pending block, return the chain info
             // unchanged.
-            return Ok(chain.make_chain_info(self.key_pair.as_ref()));
+            return Ok(chain.make_chain_info(self.key_pair()));
         }
         chain.state.manager.create_final_vote(
             block.clone(),
             effects,
             state_hash,
             certificate,
-            self.key_pair.as_ref(),
+            self.key_pair(),
         );
-        let info = chain.make_chain_info(self.key_pair.as_ref());
+        let info = chain.make_chain_info(self.key_pair());
         self.storage.write_chain(chain).await?;
         Ok(info)
     }
@@ -313,7 +318,7 @@ where
         {
             // If we just processed the same pending block, return the chain info
             // unchanged.
-            return Ok(chain.make_chain_info(self.key_pair.as_ref()));
+            return Ok(chain.make_chain_info(self.key_pair()));
         }
         let (effects, state_hash) = {
             // Execute the block on a copy of the chain state for validation.
@@ -331,8 +336,8 @@ where
         chain
             .state
             .manager
-            .create_vote(proposal, effects, state_hash, self.key_pair.as_ref());
-        let info = chain.make_chain_info(self.key_pair.as_ref());
+            .create_vote(proposal, effects, state_hash, self.key_pair());
+        let info = chain.make_chain_info(self.key_pair());
         self.storage.write_chain(chain).await?;
         Ok(info)
     }
@@ -425,7 +430,7 @@ where
             let certs = self.storage.read_certificates(keys).await?;
             info.requested_received_certificates = certs;
         }
-        let response = ChainInfoResponse::new(info, self.key_pair.as_ref());
+        let response = ChainInfoResponse::new(info, self.key_pair());
         log::trace!("{} --> {:?}", self.nickname, response);
         Ok(response)
     }
