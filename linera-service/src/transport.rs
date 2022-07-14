@@ -34,7 +34,11 @@ pub trait ConnectionPool: Send {
 }
 
 /// The handler required to create a service.
-pub trait MessageHandler {
+///
+/// The implementation needs to implement [`Clone`] because a seed instance is used to generate
+/// cloned instances, where each cloned instance handles a single request. Multiple cloned instances
+/// may exist at the same time and handle separate requests concurrently.
+pub trait MessageHandler: Clone {
     fn handle_message(&mut self, message: rpc::Message) -> future::BoxFuture<Option<rpc::Message>>;
 }
 
