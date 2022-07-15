@@ -2,7 +2,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{codec, transport::*};
+use crate::{
+    chain_guards::{ChainGuard, ChainGuards},
+    codec,
+    transport::*,
+};
 use async_trait::async_trait;
 use futures::{channel::mpsc, sink::SinkExt, stream::StreamExt};
 use linera_base::{error::*, messages::*, rpc};
@@ -213,6 +217,7 @@ where
         let state = RunningServerState {
             server: self,
             cross_chain_sender,
+            chain_guards: ChainGuards::default(),
         };
         // Launch server for the appropriate protocol.
         protocol.spawn_server(&address, state).await
@@ -221,6 +226,7 @@ where
 
 #[derive(Clone)]
 struct RunningServerState<Storage> {
+    chain_guards: ChainGuards,
     server: Server<Storage>,
     cross_chain_sender: mpsc::Sender<(rpc::Message, ShardId)>,
 }
@@ -234,6 +240,7 @@ where
         message: rpc::Message,
     ) -> futures::future::BoxFuture<Option<rpc::Message>> {
         Box::pin(async move {
+            let _guard = self.obtain_chain_guard_for(&message).await;
             let reply = match message {
                 rpc::Message::BlockProposal(message) => self
                     .server
@@ -302,6 +309,11 @@ impl<Storage> RunningServerState<Storage>
 where
     Storage: Send,
 {
+    async fn obtain_chain_guard_for(&mut self, message: &rpc::Message) -> Option<ChainGuard> {
+        let chain_id = message.target_chain_id()?;
+        Some(self.chain_guards.guard(chain_id).await)
+    }
+
     fn handle_continuation(
         &mut self,
         requests: Vec<CrossChainRequest>,
