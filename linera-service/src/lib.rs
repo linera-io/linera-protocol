@@ -4,6 +4,7 @@
 
 #![deny(warnings)]
 
+mod chain_guards;
 mod codec;
 pub mod config;
 pub mod network;
