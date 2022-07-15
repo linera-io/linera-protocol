@@ -1,12 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-mod file_storage;
 mod memory_storage;
 mod rocksdb_storage;
 mod s3_storage;
 
-pub use file_storage::*;
 pub use memory_storage::*;
 pub use rocksdb_storage::*;
 pub use s3_storage::*;
