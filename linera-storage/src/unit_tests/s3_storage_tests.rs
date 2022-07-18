@@ -1,16 +1,19 @@
-use super::{S3Storage, BUCKET};
-use crate::Storage;
 use anyhow::{Context, Error};
 use aws_sdk_s3::Endpoint;
 use aws_types::SdkConfig;
-use linera_base::{
-    chain::ChainState,
-    crypto::HashValue,
-    execution::{ExecutionState, Operation},
-    messages::{Block, BlockHeight, Certificate, ChainDescription, ChainId, Epoch, Value},
-};
 use std::env;
 use tokio::sync::{Mutex, MutexGuard};
+#[cfg(test)]
+use {
+    super::{S3Storage, BUCKET},
+    crate::Storage,
+    linera_base::{
+        chain::ChainState,
+        crypto::HashValue,
+        execution::{ExecutionState, Operation},
+        messages::{Block, BlockHeight, Certificate, ChainDescription, ChainId, Epoch, Value},
+    },
+};
 
 /// A static lock to prevent multiple tests from using the same LocalStack instance at the same
 /// time.
@@ -20,7 +23,7 @@ static LOCALSTACK_GUARD: Mutex<()> = Mutex::const_new(());
 const LOCALSTACK_ENDPOINT: &str = "LOCALSTACK_ENDPOINT";
 
 /// A type to help tests that need a LocalStack instance.
-struct LocalStackTestContext {
+pub struct LocalStackTestContext {
     base_config: SdkConfig,
     endpoint: Endpoint,
     _guard: MutexGuard<'static, ()>,
