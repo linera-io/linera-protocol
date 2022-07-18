@@ -261,9 +261,13 @@ where
         let query = ChainInfoQuery::new(chain_id).with_sent_certificates_in_range(range);
         let info = match client.handle_chain_info_query(query).await {
             Ok(response) if response.check(name).is_ok() => response.info,
-            _ => {
+            Ok(_) => {
+                log::warn!("Ignoring invalid response from validator");
                 // Give up on this validator.
-                log::warn!("Ignoring validator response");
+                return Ok(());
+            }
+            Err(err) => {
+                log::warn!("Ignoring error from validator: {}", err);
                 return Ok(());
             }
         };
