@@ -12,7 +12,7 @@ use linera_service::{
     config::*,
     network,
     network::{ShardConfig, ShardId, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig},
-    storage::{make_storage, MixedStorage},
+    storage::{MixedStorage, StorageConfig},
     transport,
 };
 use log::*;
@@ -53,12 +53,12 @@ async fn make_servers(
     server_config: &ValidatorServerConfig,
     genesis_config: &GenesisConfig,
     cross_chain_config: network::CrossChainConfig,
-    storage: Option<&PathBuf>,
+    storage_config: &StorageConfig,
 ) -> Vec<network::Server<MixedStorage>> {
     let num_shards = server_config.internal_network.shards.len();
     let mut servers = Vec::new();
     for shard in 0..num_shards {
-        let storage = make_storage(storage, genesis_config).await.unwrap();
+        let storage = storage_config.make_storage(genesis_config).await.unwrap();
         let server = make_shard_server(
             local_ip_addr,
             server_config,
@@ -165,8 +165,8 @@ enum ServerCommands {
         server_config_path: PathBuf,
 
         /// Optional directory containing the on-disk database
-        #[structopt(long = "storage")]
-        storage_path: Option<PathBuf>,
+        #[structopt(long = "storage", default_value = "memory")]
+        storage_config: StorageConfig,
 
         /// Configuration for cross-chain requests
         #[structopt(flatten)]
@@ -204,7 +204,7 @@ async fn main() {
     match options.cmd {
         ServerCommands::Run {
             server_config_path,
-            storage_path,
+            storage_config,
             cross_chain_config,
             genesis_config_path,
             shard,
@@ -218,9 +218,7 @@ async fn main() {
             let servers = match shard {
                 Some(shard) => {
                     info!("Running shard number {}", shard);
-                    let storage = make_storage(storage_path.as_ref(), &genesis_config)
-                        .await
-                        .unwrap();
+                    let storage = storage_config.make_storage(&genesis_config).await.unwrap();
                     let server = make_shard_server(
                         "0.0.0.0", // Allow local IP address to be different from the public one.
                         &server_config,
@@ -238,7 +236,7 @@ async fn main() {
                         &server_config,
                         &genesis_config,
                         cross_chain_config,
-                        storage_path.as_ref(),
+                        &storage_config,
                     )
                     .await
                 }

@@ -9,7 +9,7 @@ SHARD_ID="$(hostname | cut -f4 -d-)"
 ./fetch-config-file.sh "server_${SERVER_ID}.json"
 
 ./server run \
-    --storage "shard_data.db" \
+    --storage "rocksdb:shard_data.db" \
     --server "server_${SERVER_ID}.json" \
     --shard "$SHARD_ID" \
     --genesis genesis.json &
