@@ -374,7 +374,7 @@ struct ClientOptions {
     #[structopt(long = "wallet")]
     wallet_state_path: PathBuf,
 
-    /// Optional directory for the file storage of chain public states.
+    /// Storage configuration for the blockchain history.
     #[structopt(long = "storage", default_value = "memory")]
     storage_config: StorageConfig,
 
