@@ -22,6 +22,24 @@ pub enum Message {
     CrossChainRequest(Box<CrossChainRequest>),
 }
 
+impl Message {
+    /// Obtain the [`ChainId`] of the chain targeted by this message, if there is one.
+    ///
+    /// Only inbound messages have target chains.
+    pub fn target_chain_id(&self) -> Option<ChainId> {
+        let chain_id = match self {
+            Message::BlockProposal(proposal) => proposal.content.block.chain_id,
+            Message::Certificate(certificate) => certificate.value.chain_id(),
+            Message::ChainInfoQuery(query) => query.chain_id,
+            Message::CrossChainRequest(request) => request.target_chain_id(),
+            Message::Vote(_) | Message::Error(_) | Message::ChainInfoResponse(_) => {
+                return None;
+            }
+        };
+        Some(chain_id)
+    }
+}
+
 impl From<BlockProposal> for Message {
     fn from(block_proposal: BlockProposal) -> Self {
         Message::BlockProposal(Box::new(block_proposal))
