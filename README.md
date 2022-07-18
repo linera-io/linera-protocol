@@ -46,14 +46,14 @@ do
 
     for J in $(seq 0 3)
     do
-        ./server run --storage server_"$I"_"$J".db --server server_"$I".json --shard "$J" --genesis genesis.json &
+        ./server run --storage rocksdb:server_"$I"_"$J".db --server server_"$I".json --shard "$J" --genesis genesis.json &
     done
  done
 
 LAST_PID="$!"
 
 # Command line prefix for client calls
-CLIENT=(./client --storage client.db --wallet wallet.json --genesis genesis.json --max-pending-messages 10000)
+CLIENT=(./client --storage rocksdb:client.db --wallet wallet.json --genesis genesis.json --max-pending-messages 10000)
 
 ${CLIENT[@]} query_validators
 
@@ -69,7 +69,7 @@ ${CLIENT[@]} transfer 5 --from "$CHAIN2" --to "$CHAIN1"
 
 # Restart last server
 kill "$LAST_PID"
-./server run --storage server_"$I"_"$J".db --server server_"$I".json --shard "$J" --genesis genesis.json &
+./server run --storage rocksdb:server_"$I"_"$J".db --server server_"$I".json --shard "$J" --genesis genesis.json &
 
 # Query balances again
 ${CLIENT[@]} query_balance "$CHAIN1"
@@ -104,7 +104,7 @@ do
 
     for J in $(seq 0 3)
     do
-        ./server run --storage server_"$I"_"$J".db --server server_"$I".json --shard "$J" --genesis genesis.json &
+        ./server run --storage rocksdb:server_"$I"_"$J".db --server server_"$I".json --shard "$J" --genesis genesis.json &
     done
 done
 

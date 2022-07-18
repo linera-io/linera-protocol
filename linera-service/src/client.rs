@@ -18,7 +18,10 @@ use linera_core::{
     worker::WorkerState,
 };
 use linera_service::{
-    config::*, network, network::ValidatorPublicNetworkConfig, storage::MixedStorage,
+    config::*,
+    network,
+    network::ValidatorPublicNetworkConfig,
+    storage::{MixedStorage, StorageConfig},
 };
 use linera_storage::{InMemoryStoreClient, Storage};
 use log::*;
@@ -92,12 +95,11 @@ impl ClientContext {
                 // Every other command uses the real chain storage.
                 let genesis_config = GenesisConfig::read(&options.genesis_config_path)
                     .expect("Fail to read initial chain config");
-                let storage = linera_service::storage::make_storage(
-                    options.storage_path.as_ref(),
-                    &genesis_config,
-                )
-                .await
-                .unwrap();
+                let storage = options
+                    .storage_config
+                    .make_storage(&genesis_config)
+                    .await
+                    .unwrap();
                 (storage, genesis_config.committee, genesis_config.admin_id)
             }
         };
@@ -373,8 +375,8 @@ struct ClientOptions {
     wallet_state_path: PathBuf,
 
     /// Optional directory for the file storage of chain public states.
-    #[structopt(long = "storage")]
-    storage_path: Option<PathBuf>,
+    #[structopt(long = "storage", default_value = "memory")]
+    storage_config: StorageConfig,
 
     /// Optional path to the file describing the initial user chains (aka genesis state)
     #[structopt(long = "genesis")]
