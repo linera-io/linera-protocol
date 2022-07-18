@@ -442,8 +442,8 @@ where
                 certificates,
             } => {
                 let mut chain = self.storage.read_chain_or_default(recipient).await?;
-                let mut height = None;
-                let mut epoch = None;
+                let mut last_height = None;
+                let mut last_epoch = None;
                 let mut need_update = false;
                 for certificate in certificates {
                     // Start by checking a few invariants. Note that we still crucially
@@ -461,10 +461,16 @@ where
                         origin.sender() == block.chain_id,
                         Error::InvalidCrossChainRequest
                     );
-                    ensure!(height < Some(block.height), Error::InvalidCrossChainRequest);
-                    ensure!(epoch <= Some(block.epoch), Error::InvalidCrossChainRequest);
-                    height = Some(block.height);
-                    epoch = Some(block.epoch);
+                    ensure!(
+                        last_height < Some(block.height),
+                        Error::InvalidCrossChainRequest
+                    );
+                    ensure!(
+                        last_epoch <= Some(block.epoch),
+                        Error::InvalidCrossChainRequest
+                    );
+                    last_height = Some(block.height);
+                    last_epoch = Some(block.epoch);
                     // Update the staged chain state with the received block.
                     if chain.receive_block(&origin, block.height, effects, certificate.hash)? {
                         self.storage.write_certificate(certificate).await?;
@@ -488,7 +494,7 @@ where
                     }
                     self.storage.write_chain(chain).await?;
                 }
-                match height {
+                match last_height {
                     Some(height) => {
                         // We have processed at least one certificate successfully: send back
                         // an acknowledgment.
