@@ -57,6 +57,9 @@ CLIENT=(./client --storage rocksdb:client.db --wallet wallet.json --genesis gene
 
 ${CLIENT[@]} query_validators
 
+# Give some time for server startup
+sleep 1
+
 # Query balance for first and last user chain
 CHAIN1="7817752ff06b8266d77df8febf5c4b524cec096bd83dc54f989074fb94f833737ae984f32be2cee1dfab766fe2d0c726503c4d97117eb59023e9cc65a8ecd1f7"
 CHAIN2="16377ac9ccb009cf58898bf3ffd3bf293aad12f31c0dfa798b819deece9e57a5730146a399c812d3fc551f4290b15dc08f3f1527b06252284b4b89327caaffad"
@@ -70,6 +73,8 @@ ${CLIENT[@]} transfer 5 --from "$CHAIN2" --to "$CHAIN1"
 # Restart last server
 kill "$LAST_PID"
 ./server run --storage rocksdb:server_"$I"_"$J".db --server server_"$I".json --shard "$J" --genesis genesis.json &
+
+sleep 1
 
 # Query balances again
 ${CLIENT[@]} query_balance "$CHAIN1"
