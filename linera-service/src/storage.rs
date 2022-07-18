@@ -2,14 +2,29 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::config::GenesisConfig;
-use linera_storage::{InMemoryStoreClient, RocksdbStoreClient, Storage};
+use anyhow::format_err;
+use clap::arg_enum;
+use linera_storage::{InMemoryStoreClient, RocksdbStoreClient, S3Storage, Storage};
 use std::{path::PathBuf, str::FromStr};
 
 /// The description of a storage implementation.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
+#[cfg_attr(any(test), derive(Eq, PartialEq))]
 pub enum StorageConfig {
     InMemory,
     Rocksdb { path: PathBuf },
+    S3 { config: S3Config },
+}
+
+arg_enum! {
+
+#[derive(Debug)]
+#[cfg_attr(any(test), derive(Eq, PartialEq))]
+pub enum S3Config {
+    Env,
+    LocalStack,
+}
+
 }
 
 pub type MixedStorage = Box<dyn Storage>;
@@ -37,6 +52,17 @@ impl StorageConfig {
                 config.initialize_store(&mut client).await?;
                 Box::new(client)
             }
+            S3 { config } => {
+                let client = match config {
+                    S3Config::Env => S3Storage::new().await?,
+                    S3Config::LocalStack => {
+                        let localstack = linera_storage::LocalStackTestContext::new().await?;
+                        let config = localstack.config();
+                        S3Storage::from_config(config).await?
+                    }
+                };
+                Box::new(client)
+            }
         };
         Ok(client)
     }
@@ -44,6 +70,7 @@ impl StorageConfig {
 
 const MEMORY: &str = "memory";
 const ROCKSDB: &str = "rocksdb:";
+const S3: &str = "s3:";
 
 impl FromStr for StorageConfig {
     type Err = anyhow::Error;
@@ -57,7 +84,12 @@ impl FromStr for StorageConfig {
                 path: s.to_string().into(),
             });
         }
-        Err(anyhow::format_err!("Incorrect storage description"))
+        if let Some(s) = input.strip_prefix(S3) {
+            return Ok(Self::S3 {
+                config: s.parse().map_err(|s| format_err!("{}", s))?,
+            });
+        }
+        Err(format_err!("Incorrect storage description"))
     }
 }
 
@@ -71,6 +103,12 @@ fn test_storage_config_from_str() {
         StorageConfig::from_str("rocksdb:foo.db").unwrap(),
         StorageConfig::Rocksdb {
             path: "foo.db".into()
+        }
+    );
+    assert_eq!(
+        StorageConfig::from_str("s3:localstack").unwrap(),
+        StorageConfig::S3 {
+            config: S3Config::LocalStack
         }
     );
     assert!(StorageConfig::from_str("memory_").is_err());
