@@ -164,8 +164,8 @@ enum ServerCommands {
         #[structopt(long = "server")]
         server_config_path: PathBuf,
 
-        /// Optional directory containing the on-disk database
-        #[structopt(long = "storage", default_value = "memory")]
+        /// Storage configuration for the blockchain history and security states.
+        #[structopt(long = "storage")]
         storage_config: StorageConfig,
 
         /// Configuration for cross-chain requests
