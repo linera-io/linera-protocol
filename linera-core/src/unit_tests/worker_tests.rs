@@ -1679,3 +1679,261 @@ async fn test_chain_creation_with_committee_creation() {
         );
     }
 }
+
+#[test(tokio::test)]
+async fn test_transfers_and_committee_creation() {
+    let key_pair0 = KeyPair::generate();
+    let key_pair1 = KeyPair::generate();
+    let (committee, mut worker) = init_worker_with_chains(vec![
+        (
+            ChainDescription::Root(0),
+            key_pair0.public(),
+            Balance::from(0),
+        ),
+        (
+            ChainDescription::Root(1),
+            key_pair1.public(),
+            Balance::from(3),
+        ),
+    ])
+    .await;
+    let mut committees = BTreeMap::new();
+    committees.insert(Epoch::from(0), committee.clone());
+    let admin_id = ChainId::root(0);
+    let user_id = ChainId::root(1);
+
+    // Have the user chain start a transfer to the admin chain.
+    let certificate0 = make_certificate(
+        &committee,
+        &worker,
+        Value::ConfirmedBlock {
+            block: Block {
+                epoch: Epoch::from(0),
+                chain_id: user_id,
+                incoming_messages: Vec::new(),
+                operations: vec![Operation::Transfer {
+                    recipient: Address::Account(admin_id),
+                    amount: Amount::from(1),
+                    user_data: UserData::default(),
+                }],
+                previous_block_hash: None,
+                height: BlockHeight::from(0),
+            },
+            effects: vec![Effect::Credit {
+                recipient: admin_id,
+                amount: Amount::from(1),
+            }],
+            state_hash: HashValue::new(&ExecutionState {
+                epoch: Some(Epoch::from(0)),
+                chain_id: user_id,
+                admin_id: Some(admin_id),
+                subscriptions: BTreeMap::new(),
+                committees: committees.clone(),
+                manager: ChainManager::single(key_pair1.public().into()),
+                balance: Balance::from(2),
+            }),
+        },
+    );
+    // Have the admin chain create a new epoch without retiring the old one.
+    let committees2: BTreeMap<_, _> = [
+        (Epoch::from(0), committee.clone()),
+        (Epoch::from(1), committee.clone()),
+    ]
+    .into_iter()
+    .collect();
+    let certificate1 = make_certificate(
+        &committee,
+        &worker,
+        Value::ConfirmedBlock {
+            block: Block {
+                epoch: Epoch::from(0),
+                chain_id: admin_id,
+                incoming_messages: Vec::new(),
+                operations: vec![Operation::CreateCommittee {
+                    admin_id,
+                    epoch: Epoch::from(1),
+                    committee: committee.clone(),
+                }],
+                previous_block_hash: None,
+                height: BlockHeight::from(0),
+            },
+            effects: vec![Effect::SetCommittees {
+                admin_id,
+                epoch: Epoch::from(1),
+                committees: committees2.clone(),
+            }],
+            state_hash: HashValue::new(&ExecutionState {
+                epoch: Some(Epoch::from(1)),
+                chain_id: admin_id,
+                admin_id: Some(admin_id),
+                subscriptions: BTreeMap::new(),
+                committees: committees2.clone(),
+                manager: ChainManager::single(key_pair0.public().into()),
+                balance: Balance::from(0),
+            }),
+        },
+    );
+    worker
+        .fully_handle_certificate(certificate1.clone())
+        .await
+        .unwrap();
+
+    // Try to execute the transfer.
+    worker
+        .fully_handle_certificate(certificate0.clone())
+        .await
+        .unwrap();
+
+    // The transfer was started..
+    let user_chain = worker.storage.read_active_chain(user_id).await.unwrap();
+    assert_eq!(BlockHeight::from(1), user_chain.next_block_height);
+    assert_eq!(user_chain.state.balance, Balance::from(2));
+    assert_eq!(user_chain.state.epoch, Some(Epoch::from(0)));
+
+    // .. and the message has gone through.
+    let admin_chain = worker.storage.read_active_chain(admin_id).await.unwrap();
+    assert_eq!(admin_chain.inboxes.len(), 1);
+    matches!(
+        admin_chain
+            .inboxes
+            .get(&Origin::Chain(user_id))
+            .unwrap()
+            .received_events
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>()[..],
+        [Event {
+            effect: Effect::Credit { .. },
+            ..
+        },]
+    );
+}
+
+#[test(tokio::test)]
+async fn test_transfers_and_committee_removal() {
+    let key_pair0 = KeyPair::generate();
+    let key_pair1 = KeyPair::generate();
+    let (committee, mut worker) = init_worker_with_chains(vec![
+        (
+            ChainDescription::Root(0),
+            key_pair0.public(),
+            Balance::from(0),
+        ),
+        (
+            ChainDescription::Root(1),
+            key_pair1.public(),
+            Balance::from(3),
+        ),
+    ])
+    .await;
+    let mut committees = BTreeMap::new();
+    committees.insert(Epoch::from(0), committee.clone());
+    let admin_id = ChainId::root(0);
+    let user_id = ChainId::root(1);
+
+    // Have the user chain start a transfer to the admin chain.
+    let certificate0 = make_certificate(
+        &committee,
+        &worker,
+        Value::ConfirmedBlock {
+            block: Block {
+                epoch: Epoch::from(0),
+                chain_id: user_id,
+                incoming_messages: Vec::new(),
+                operations: vec![Operation::Transfer {
+                    recipient: Address::Account(admin_id),
+                    amount: Amount::from(1),
+                    user_data: UserData::default(),
+                }],
+                previous_block_hash: None,
+                height: BlockHeight::from(0),
+            },
+            effects: vec![Effect::Credit {
+                recipient: admin_id,
+                amount: Amount::from(1),
+            }],
+            state_hash: HashValue::new(&ExecutionState {
+                epoch: Some(Epoch::from(0)),
+                chain_id: user_id,
+                admin_id: Some(admin_id),
+                subscriptions: BTreeMap::new(),
+                committees: committees.clone(),
+                manager: ChainManager::single(key_pair1.public().into()),
+                balance: Balance::from(2),
+            }),
+        },
+    );
+    // Have the admin chain create a new epoch and retire the old one immediately.
+    let committees2: BTreeMap<_, _> = [
+        (Epoch::from(0), committee.clone()),
+        (Epoch::from(1), committee.clone()),
+    ]
+    .into_iter()
+    .collect();
+    let committees3: BTreeMap<_, _> = [(Epoch::from(1), committee.clone())].into_iter().collect();
+    let certificate1 = make_certificate(
+        &committee,
+        &worker,
+        Value::ConfirmedBlock {
+            block: Block {
+                epoch: Epoch::from(0),
+                chain_id: admin_id,
+                incoming_messages: Vec::new(),
+                operations: vec![
+                    Operation::CreateCommittee {
+                        admin_id,
+                        epoch: Epoch::from(1),
+                        committee: committee.clone(),
+                    },
+                    Operation::RemoveCommittee {
+                        admin_id,
+                        epoch: Epoch::from(0),
+                    },
+                ],
+                previous_block_hash: None,
+                height: BlockHeight::from(0),
+            },
+            effects: vec![
+                Effect::SetCommittees {
+                    admin_id,
+                    epoch: Epoch::from(1),
+                    committees: committees2.clone(),
+                },
+                Effect::SetCommittees {
+                    admin_id,
+                    epoch: Epoch::from(1),
+                    committees: committees3.clone(),
+                },
+            ],
+            state_hash: HashValue::new(&ExecutionState {
+                epoch: Some(Epoch::from(1)),
+                chain_id: admin_id,
+                admin_id: Some(admin_id),
+                subscriptions: BTreeMap::new(),
+                committees: committees3.clone(),
+                manager: ChainManager::single(key_pair0.public().into()),
+                balance: Balance::from(0),
+            }),
+        },
+    );
+    worker
+        .fully_handle_certificate(certificate1.clone())
+        .await
+        .unwrap();
+
+    // Try to execute the transfer.
+    worker
+        .fully_handle_certificate(certificate0.clone())
+        .await
+        .unwrap();
+
+    // The transfer was started..
+    let user_chain = worker.storage.read_active_chain(user_id).await.unwrap();
+    assert_eq!(BlockHeight::from(1), user_chain.next_block_height);
+    assert_eq!(user_chain.state.balance, Balance::from(2));
+    assert_eq!(user_chain.state.epoch, Some(Epoch::from(0)));
+
+    // .. but the message hasn't gone through.
+    let admin_chain = worker.storage.read_active_chain(admin_id).await.unwrap();
+    assert!(admin_chain.inboxes.is_empty());
+}

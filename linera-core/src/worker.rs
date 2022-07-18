@@ -491,6 +491,16 @@ where
                             );
                             return Ok(Vec::new());
                         }
+                        let epoch = last_epoch.expect("need_update implies epoch.is_some()");
+                        if Some(epoch) < chain.state.epoch
+                            && !chain.state.committees.contains_key(&epoch)
+                        {
+                            // Refuse to persist the chain state if the latest epoch in
+                            // the received blocks from this recipient is not recognized
+                            // any more by the receiving chain. (Future epochs are ok.)
+                            log::warn!("Refusing updates from untrusted epoch {epoch:?}");
+                            return Ok(Vec::new());
+                        }
                     }
                     self.storage.write_chain(chain).await?;
                 }
