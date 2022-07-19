@@ -19,6 +19,7 @@ dyn-clone = "1.0.4"
 either = "1.6.1"
 futures = "0.3.17"
 hex = "0.4.3"
+http = "0.2.7"
 ron = "0.7"
 serde = { version = "1.0.130", features = ["derive"] }
 serde-name = "0.2.0"
@@ -34,4 +35,3 @@ linera-base = { path = "../linera-base" }
 
 [dev-dependencies]
 anyhow = "1.0.57"
-

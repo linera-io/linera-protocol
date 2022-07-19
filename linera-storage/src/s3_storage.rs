@@ -1,6 +1,7 @@
 use crate::Storage;
 use async_trait::async_trait;
-use aws_sdk_s3::{error::CreateBucketError, types::SdkError, Client};
+use aws_sdk_s3::{error::CreateBucketError, types::SdkError, Client, Endpoint};
+use http::uri::InvalidUri;
 use linera_base::{
     chain::ChainState,
     crypto::HashValue,
@@ -8,7 +9,7 @@ use linera_base::{
     messages::{Certificate, ChainId},
 };
 use serde::{de::DeserializeOwned, Serialize};
-use std::fmt::Display;
+use std::{env, fmt::Display};
 use thiserror::Error;
 
 #[cfg(any(test, feature = "test"))]
@@ -23,6 +24,9 @@ const CERTIFICATE_PREFIX: &str = "certificates";
 
 /// Chain prefix for stored chain states.
 const CHAIN_PREFIX: &str = "chains";
+
+/// Name of the environment variable with the address to a LocalStack instance.
+const LOCALSTACK_ENDPOINT: &str = "LOCALSTACK_ENDPOINT";
 
 /// Storage layer that uses Amazon S3.
 #[derive(Clone, Debug)]
@@ -54,6 +58,20 @@ impl S3Storage {
         s3_storage.try_create_bucket().await?;
 
         Ok(s3_storage)
+    }
+
+    /// Create a new [`S3Storage`] instance using a LocalStack endpoint.
+    ///
+    /// Requires a [`LOCALSTACK_ENDPOINT`] environment variable with the endpoint address to connect
+    /// to the LocalStack instance. Creates the necessary buckets if they don't yet exist.
+    pub async fn with_localstack() -> Result<Self, LocalStackError> {
+        let endpoint_address = env::var(LOCALSTACK_ENDPOINT)?.parse()?;
+        let base_config = aws_config::load_from_env().await;
+        let config = aws_sdk_s3::config::Builder::from(&base_config)
+            .endpoint_resolver(Endpoint::immutable(endpoint_address))
+            .build();
+
+        Ok(S3Storage::from_config(config).await.map_err(Box::new)?)
     }
 
     /// Tries to create a bucket for storing the data.
@@ -212,4 +230,17 @@ impl S3StorageError {
             })
         )
     }
+}
+
+/// Failure to create an [`S3Storage`] using a LocalStack configuration.
+#[derive(Debug, Error)]
+pub enum LocalStackError {
+    #[error("Missing LocalStack endpoint address in {LOCALSTACK_ENDPOINT:?} environment variable")]
+    MissingEndpoint(#[from] env::VarError),
+
+    #[error("LocalStack endpoint address is not a valid URI")]
+    InvalidUri(#[from] InvalidUri),
+
+    #[error(transparent)]
+    CreateBucket(#[from] Box<SdkError<CreateBucketError>>),
 }
