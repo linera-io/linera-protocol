@@ -742,9 +742,9 @@ async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
 async fn test_change_voting_rights() {
     let mut builder = TestBuilder::new(4, 1);
     let mut admin = builder
-        .add_initial_chain(ChainDescription::Root(0), Balance::from(4))
+        .add_initial_chain(ChainDescription::Root(0), Balance::from(3))
         .await;
-    let mut receiver = builder
+    let mut user = builder
         .add_initial_chain(ChainDescription::Root(1), Balance::from(0))
         .await;
 
@@ -757,7 +757,7 @@ async fn test_change_voting_rights() {
     assert_eq!(admin.epoch().await.unwrap(), Epoch::from(1));
 
     // Sending money from the admin chain is supported.
-    let cert1 = admin
+    let cert = admin
         .transfer_to_chain(Amount::from(2), ChainId::root(1), UserData(None))
         .await
         .unwrap();
@@ -766,26 +766,44 @@ async fn test_change_voting_rights() {
         .await
         .unwrap();
 
-    // Receiver is still at the initial epoch, but we can receive transfers from future
+    // User is still at the initial epoch, but we can receive transfers from future
     // epochs AFTER synchronizing the client with the admin chain.
-    assert!(receiver.receive_certificate(cert1).await.is_err());
-    assert_eq!(receiver.epoch().await.unwrap(), Epoch::from(0));
-    assert_eq!(
-        receiver.synchronize_balance().await.unwrap(),
-        Balance::from(3)
-    );
+    assert!(user.receive_certificate(cert).await.is_err());
+    assert_eq!(user.epoch().await.unwrap(), Epoch::from(0));
+    assert_eq!(user.synchronize_balance().await.unwrap(), Balance::from(3));
 
-    // Receiver is a genesis chain so the migration message is not even in the inbox yet.
-    receiver.process_inbox().await.unwrap();
-    assert_eq!(receiver.epoch().await.unwrap(), Epoch::from(0));
+    // User is a genesis chain so the migration message is not even in the inbox yet.
+    user.process_inbox().await.unwrap();
+    assert_eq!(user.epoch().await.unwrap(), Epoch::from(0));
 
     // Now subscribe explicitly to migrations.
-    let cert = receiver.subscribe_to_new_committees().await.unwrap();
+    let cert = user.subscribe_to_new_committees().await.unwrap();
     admin.receive_certificate(cert).await.unwrap();
     admin.process_inbox().await.unwrap();
 
-    // Receive the notification to migrate.
-    receiver.synchronize_balance().await.unwrap();
-    receiver.process_inbox().await.unwrap();
-    assert_eq!(receiver.epoch().await.unwrap(), Epoch::from(1));
+    // Have the admin chain deprecate the previous epoch.
+    admin.finalize_committee().await.unwrap();
+
+    // Try to make a transfer back to the admin chain.
+    let cert = user
+        .transfer_to_chain(Amount::from(2), ChainId::root(0), UserData(None))
+        .await
+        .unwrap();
+    assert!(admin.receive_certificate(cert).await.is_err());
+    // Transfer is blocked because the epoch #0 has been retired by admin.
+    assert_eq!(admin.synchronize_balance().await.unwrap(), Balance::from(0));
+
+    // Have the user receive the notification to migrate to epoch #1.
+    user.synchronize_balance().await.unwrap();
+    user.process_inbox().await.unwrap();
+    assert_eq!(user.epoch().await.unwrap(), Epoch::from(1));
+
+    // Try again to make a transfer back to the admin chain.
+    let cert = user
+        .transfer_to_chain(Amount::from(1), ChainId::root(0), UserData(None))
+        .await
+        .unwrap();
+    admin.receive_certificate(cert).await.unwrap();
+    // Transfer goes through and the previous one as well thanks to block chaining.
+    assert_eq!(admin.synchronize_balance().await.unwrap(), Balance::from(3));
 }
