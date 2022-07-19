@@ -178,7 +178,7 @@ impl Storage for S3Storage {
     }
 
     async fn write_chain(&mut self, state: ChainState) -> Result<(), Error> {
-        self.put_object(CHAIN_PREFIX, state.state.chain_id, state)
+        self.put_object(CHAIN_PREFIX, state.state().chain_id, state)
             .await
             .map_err(S3StorageError::into_base_error)
     }

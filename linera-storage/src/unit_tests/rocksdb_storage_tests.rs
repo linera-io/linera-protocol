@@ -14,13 +14,13 @@ async fn test_rocksdb_storage_for_chains() {
     let id = ChainId::root(1);
     {
         let mut chain = client.read_chain_or_default(id).await.unwrap();
-        assert_eq!(chain.next_block_height, BlockHeight(0));
-        chain.next_block_height = BlockHeight(3);
+        assert_eq!(chain.next_block_height(), BlockHeight(0));
+        *chain.next_block_height_mut() = BlockHeight(3);
         client.write_chain(chain).await.unwrap();
     }
     {
         let chain = client.read_chain_or_default(id).await.unwrap();
-        assert_eq!(chain.next_block_height, BlockHeight(3));
+        assert_eq!(chain.next_block_height(), BlockHeight(3));
     }
 }
 

@@ -186,10 +186,8 @@ async fn retrieval_of_inexistent_certificate() -> Result<(), Error> {
 #[ignore]
 async fn chain_storage_round_trip() -> Result<(), Error> {
     let chain_id = ChainId::root(1);
-    let chain_state = ChainState {
-        next_block_height: BlockHeight(100),
-        ..ChainState::new(chain_id)
-    };
+    let mut chain_state = ChainState::new(chain_id);
+    *chain_state.next_block_height_mut() = BlockHeight(100);
 
     let localstack = LocalStackTestContext::new().await?;
     let (mut storage, _) = S3Storage::from_config(localstack.config()).await?;
@@ -197,7 +195,7 @@ async fn chain_storage_round_trip() -> Result<(), Error> {
     storage.write_chain(chain_state.clone()).await?;
 
     let stored_chain_state = storage
-        .read_chain_or_default(chain_state.state.chain_id)
+        .read_chain_or_default(chain_state.state().chain_id)
         .await?;
 
     assert_eq!(chain_state, stored_chain_state);
@@ -227,10 +225,8 @@ async fn retrieval_of_inexistent_chain_state() -> Result<(), Error> {
 #[ignore]
 async fn removal_of_chain_state() -> Result<(), Error> {
     let chain_id = ChainId::root(9);
-    let chain_state = ChainState {
-        next_block_height: BlockHeight(300),
-        ..ChainState::new(chain_id)
-    };
+    let mut chain_state = ChainState::new(chain_id);
+    *chain_state.next_block_height_mut() = BlockHeight(300);
 
     let localstack = LocalStackTestContext::new().await?;
     let (mut storage, _) = S3Storage::from_config(localstack.config()).await?;

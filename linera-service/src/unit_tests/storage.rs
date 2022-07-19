@@ -49,7 +49,7 @@ async fn s3_storage_is_initialized() -> Result<(), anyhow::Error> {
         async fn run(self, mut storage: S) -> Result<Self::Output, anyhow::Error> {
             for expected_chain_state in self.expected_chain_states {
                 let chain_state = storage
-                    .read_chain_or_default(expected_chain_state.state.chain_id)
+                    .read_chain_or_default(expected_chain_state.state().chain_id)
                     .await?;
                 assert_eq!(chain_state, expected_chain_state);
             }
@@ -103,7 +103,7 @@ async fn s3_storage_is_not_reinitialized() -> Result<(), anyhow::Error> {
     let conflicting_balance = Balance::zero();
 
     conflicting_chain.2 = conflicting_balance;
-    conflicting_chain_state.state.balance = conflicting_balance;
+    conflicting_chain_state.state_mut().balance = conflicting_balance;
 
     second_genesis_config.chains.push(conflicting_chain);
     second_expected_chain_states.push(conflicting_chain_state);
@@ -123,7 +123,7 @@ async fn s3_storage_is_not_reinitialized() -> Result<(), anyhow::Error> {
             // Check that the chains from the first configuration still exist.
             for expected_chain_state in self.first_expected_chain_states {
                 let chain_state = storage
-                    .read_chain_or_default(expected_chain_state.state.chain_id)
+                    .read_chain_or_default(expected_chain_state.state().chain_id)
                     .await?;
 
                 assert_eq!(chain_state, expected_chain_state);
@@ -132,7 +132,7 @@ async fn s3_storage_is_not_reinitialized() -> Result<(), anyhow::Error> {
             // Check that the chains from the second configuration were not added.
             for unexpected_chain_state in self.second_expected_chain_states {
                 let chain_state = storage
-                    .read_chain_or_default(unexpected_chain_state.state.chain_id)
+                    .read_chain_or_default(unexpected_chain_state.state().chain_id)
                     .await?;
 
                 assert_ne!(chain_state, unexpected_chain_state);

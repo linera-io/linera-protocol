@@ -187,19 +187,19 @@ where
         let sender = block.chain_id;
         // Check that the chain is active and ready for this confirmation.
         let mut chain = self.storage.read_active_chain(sender).await?;
-        if chain.next_block_height < block.height {
+        if chain.next_block_height() < block.height {
             return Err(Error::MissingEarlierBlocks {
-                current_block_height: chain.next_block_height,
+                current_block_height: chain.next_block_height(),
             });
         }
-        if chain.next_block_height > block.height {
+        if chain.next_block_height() > block.height {
             // Block was already confirmed.
             let info = chain.make_chain_info(self.key_pair());
             let continuation = self.make_continuation(&chain).await?;
             return Ok((info, continuation));
         }
-        // Verify the certificate. Returns a catch-all error to make client code more robust.
-        let epoch = chain.state.epoch.expect("chain is active");
+        // Obtain the current committee for the chain.
+        let epoch = chain.state().epoch.expect("chain is active");
         ensure!(
             block.epoch == epoch,
             Error::InvalidEpoch {
@@ -207,28 +207,33 @@ where
                 epoch: block.epoch,
             }
         );
-        let committee = chain.state.committees.get(&epoch).expect("chain is active");
+        let committee = chain
+            .state()
+            .committees
+            .get(&epoch)
+            .expect("chain is active");
+        // Verify the certificate. Returns a catch-all error to make client code more robust.
         certificate
             .check(committee)
             .map_err(|_| Error::InvalidCertificate)?;
         // This should always be true for valid certificates.
         ensure!(
-            chain.block_hash == block.previous_block_hash,
+            chain.block_hash() == block.previous_block_hash,
             Error::InvalidBlockChaining
         );
         // Persist certificate.
         self.storage.write_certificate(certificate.clone()).await?;
         // Make sure temporary manager information are cleared.
-        chain.state.manager.reset();
+        chain.state_mut().manager.reset();
         // Execute the block.
         let verified_effects = chain.execute_block(block)?;
         ensure!(effects == verified_effects, Error::IncorrectEffects);
         // Advance to next block height.
-        chain.block_hash = Some(certificate.hash);
+        *chain.block_hash_mut() = Some(certificate.hash);
         chain.confirmed_log.push(certificate.hash);
-        chain.next_block_height.try_add_assign_one()?;
+        chain.next_block_height_mut().try_add_assign_one()?;
         // We should always agree on the state hash.
-        ensure!(chain.state_hash == state_hash, Error::IncorrectStateHash);
+        ensure!(chain.state_hash() == state_hash, Error::IncorrectStateHash);
         let info = chain.make_chain_info(self.key_pair());
         let continuation = self.make_continuation(&chain).await?;
         // Persist chain.
@@ -253,7 +258,7 @@ where
         // Check that the chain is active and ready for this confirmation.
         let mut chain = self.storage.read_active_chain(block.chain_id).await?;
         // Verify the certificate. Returns a catch-all error to make client code more robust.
-        let epoch = chain.state.epoch.expect("chain is active");
+        let epoch = chain.state().epoch.expect("chain is active");
         ensure!(
             block.epoch == epoch,
             Error::InvalidEpoch {
@@ -261,21 +266,25 @@ where
                 epoch: block.epoch,
             }
         );
-        let committee = chain.state.committees.get(&epoch).expect("chain is active");
+        let committee = chain
+            .state()
+            .committees
+            .get(&epoch)
+            .expect("chain is active");
         certificate
             .check(committee)
             .map_err(|_| Error::InvalidCertificate)?;
         if chain
-            .state
+            .state()
             .manager
-            .check_validated_block(chain.next_block_height, block, round)?
+            .check_validated_block(chain.next_block_height(), block, round)?
             == Outcome::Skip
         {
             // If we just processed the same pending block, return the chain info
             // unchanged.
             return Ok(chain.make_chain_info(self.key_pair()));
         }
-        chain.state.manager.create_final_vote(
+        chain.state_mut().manager.create_final_vote(
             block.clone(),
             effects,
             state_hash,
@@ -302,7 +311,7 @@ where
         let sender = proposal.content.block.chain_id;
         let mut chain = self.storage.read_active_chain(sender).await?;
         // Check the epoch.
-        let epoch = chain.state.epoch.expect("chain is active");
+        let epoch = chain.state().epoch.expect("chain is active");
         ensure!(
             proposal.content.block.epoch == epoch,
             Error::InvalidEpoch {
@@ -312,7 +321,7 @@ where
         );
         // Check authentication of the block.
         ensure!(
-            chain.state.manager.has_owner(&proposal.owner),
+            chain.state().manager.has_owner(&proposal.owner),
             Error::InvalidOwner
         );
         proposal
@@ -320,9 +329,9 @@ where
             .check(&proposal.content, proposal.owner.0)?;
         // Check if the chain is ready for this new block proposal.
         // This should always pass for nodes without voting key.
-        if chain.state.manager.check_proposed_block(
-            chain.block_hash,
-            chain.next_block_height,
+        if chain.state().manager.check_proposed_block(
+            chain.block_hash(),
+            chain.next_block_height(),
             &proposal.content.block,
             proposal.content.round,
         )? == Outcome::Skip
@@ -336,16 +345,16 @@ where
             let mut staged = chain.clone();
             // Make sure the clear round information in the state so that it is not
             // hashed.
-            staged.state.manager.reset();
+            staged.state_mut().manager.reset();
             let effects = staged.execute_block(&proposal.content.block)?;
             // Verify that the resulting chain would have no unconfirmed incoming
             // messages.
             staged.validate_incoming_messages()?;
-            (effects, staged.state_hash)
+            (effects, staged.state_hash())
         };
         // Create the vote and store it in the chain state.
         chain
-            .state
+            .state_mut()
             .manager
             .create_vote(proposal, effects, state_hash, self.key_pair());
         let info = chain.make_chain_info(self.key_pair());
@@ -380,11 +389,11 @@ where
         let chain = self.storage.read_chain_or_default(query.chain_id).await?;
         let mut info = chain.make_chain_info(None).info;
         if query.request_execution_state {
-            info.requested_execution_state = Some(chain.state);
+            info.requested_execution_state = Some(chain.state().clone());
         }
         if let Some(next_block_height) = query.test_next_block_height {
             ensure!(
-                chain.next_block_height == next_block_height,
+                chain.next_block_height() == next_block_height,
                 Error::UnexpectedBlockHeight
             );
         }
@@ -508,8 +517,8 @@ where
                             return Ok(Vec::new());
                         }
                         let epoch = last_epoch.expect("need_update implies epoch.is_some()");
-                        if Some(epoch) < chain.state.epoch
-                            && !chain.state.committees.contains_key(&epoch)
+                        if Some(epoch) < chain.state().epoch
+                            && !chain.state().committees.contains_key(&epoch)
                         {
                             // Refuse to persist the chain state if the latest epoch in
                             // the received blocks from this recipient is not recognized

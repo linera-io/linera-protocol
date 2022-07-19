@@ -168,14 +168,14 @@ where
                     response.check(self.name)?;
                     // Obtain the chain description from our local node.
                     let chain = self.store.read_chain_or_default(chain_id).await?;
-                    match chain.description {
+                    match chain.description() {
                         Some(ChainDescription::Child(EffectId {
                             chain_id: parent_id,
                             height,
                             index: _,
                         })) => {
                             jobs.push((chain_id, BlockHeight::from(0), target_block_height, true));
-                            chain_id = parent_id;
+                            chain_id = *parent_id;
                             target_block_height = height.try_add_one()?;
                         }
                         _ => {

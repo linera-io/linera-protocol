@@ -10,6 +10,7 @@ test = ["test-strategy", "proptest"]
 [dependencies]
 bcs = "0.1.3"
 bincode = "1.3.3"
+getset = "0.1.2"
 generic-array = { version = "0.14.4", features = ["serde"] }
 hex = "0.4.3"
 log = "0.4.14"

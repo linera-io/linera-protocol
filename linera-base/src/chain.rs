@@ -11,23 +11,29 @@ use crate::{
     manager::ChainManager,
     messages::*,
 };
+use getset::{CopyGetters, Getters, MutGetters};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 
 /// The state of a chain.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, CopyGetters, Getters, MutGetters)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct ChainState {
     /// How the chain was created. May be unknown for inactive chains.
-    pub description: Option<ChainDescription>,
+    #[getset(get = "pub", get_mut = "pub")]
+    description: Option<ChainDescription>,
     /// Execution state.
-    pub state: ExecutionState,
+    #[getset(get = "pub", get_mut = "pub")]
+    state: ExecutionState,
     /// Hash of the execution state.
-    pub state_hash: HashValue,
+    #[getset(get_copy = "pub", get_mut = "pub")]
+    state_hash: HashValue,
     /// Hash of the latest certified block in this chain, if any.
-    pub block_hash: Option<HashValue>,
+    #[getset(get_copy = "pub", get_mut = "pub")]
+    block_hash: Option<HashValue>,
     /// Sequence number tracking blocks.
-    pub next_block_height: BlockHeight,
+    #[getset(get_copy = "pub", get_mut = "pub")]
+    next_block_height: BlockHeight,
 
     /// Hashes of all certified blocks for this sender.
     /// This ends with `block_hash` and has length `usize::from(next_block_height)`.
