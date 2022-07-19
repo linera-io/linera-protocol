@@ -55,11 +55,7 @@ impl StorageConfig {
             S3 { config } => {
                 let client = match config {
                     S3Config::Env => S3Storage::new().await?,
-                    S3Config::LocalStack => {
-                        let localstack = linera_storage::LocalStackTestContext::new().await?;
-                        let config = localstack.config();
-                        S3Storage::from_config(config).await?
-                    }
+                    S3Config::LocalStack => S3Storage::with_localstack().await?,
                 };
                 Box::new(client)
             }
