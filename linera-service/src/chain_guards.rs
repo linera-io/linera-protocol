@@ -12,6 +12,10 @@ use linera_base::messages::ChainId;
 use std::sync::{Arc, Weak};
 use tokio::sync::{Mutex, OwnedMutexGuard};
 
+#[cfg(test)]
+#[path = "unit_tests/chain_guards.rs"]
+mod unit_tests;
+
 /// The internal map type.
 ///
 /// Every chain ID is mapped to a weak reference to an asynchronous [`Mutex`].
