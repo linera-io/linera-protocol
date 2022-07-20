@@ -21,6 +21,18 @@ async fn guard_can_be_obtained_later_again() {
     assert!(guards.guard(chain_id).now_or_never().is_some());
 }
 
+/// Test if two tasks obtaining a guard for the same chain obtain them sequentially.
+#[tokio::test(start_paused = true)]
+async fn prevents_concurrent_access_to_the_same_chain() {
+    let chain_id = ChainId::root(0);
+
+    let access = ConcurrentAccessTest::default()
+        .spawn_two_tasks_to_obtain_guards_for(chain_id, chain_id)
+        .await;
+
+    assert_eq!(access, Access::Sequential);
+}
+
 /// Test helper for running two tasks to obtain chain guards.
 #[derive(Clone)]
 pub struct ConcurrentAccessTest {
