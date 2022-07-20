@@ -128,12 +128,11 @@ where
     ) -> Result<CrossChainRequest, Error> {
         let certificates = self
             .storage
-            .read_certificates(
-                outbox
-                    .queue
-                    .iter()
-                    .map(|height| chain.confirmed_log[usize::from(*height)]),
-            )
+            .read_certificates(outbox.queue.iter().map(|height| {
+                chain
+                    .confirmed_key(usize::from(*height))
+                    .expect("key should exist")
+            }))
             .await?;
         Ok(CrossChainRequest::UpdateRecipient {
             origin,
@@ -230,7 +229,7 @@ where
         ensure!(effects == verified_effects, Error::IncorrectEffects);
         // Advance to next block height.
         *chain.block_hash_mut() = Some(certificate.hash);
-        chain.confirmed_log.push(certificate.hash);
+        chain.add_confirmed_key(certificate.hash);
         chain.next_block_height_mut().try_add_assign_one()?;
         // We should always agree on the state hash.
         ensure!(chain.state_hash() == state_hash, Error::IncorrectStateHash);
@@ -435,7 +434,8 @@ where
             info.requested_pending_messages = message_groups;
         }
         if let Some(range) = query.request_sent_certificates_in_range {
-            let keys = chain.confirmed_log[..]
+            let keys = chain
+                .confirmed_keys(..)
                 .iter()
                 .skip(range.start.into())
                 .cloned();
@@ -446,7 +446,7 @@ where
             info.requested_sent_certificates = certs;
         }
         if let Some(idx) = query.request_received_certificates_excluding_first_nth {
-            let keys = chain.received_log[..].iter().skip(idx).cloned();
+            let keys = chain.received_keys(..).iter().skip(idx).cloned();
             let certs = self.storage.read_certificates(keys).await?;
             info.requested_received_certificates = certs;
         }

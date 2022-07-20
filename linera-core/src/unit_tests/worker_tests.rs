@@ -995,7 +995,7 @@ async fn test_handle_certificate_with_anticipated_incoming_message() {
         chain.inboxes.get(&Origin::Chain(ChainId::root(3))).unwrap().expected_events.front().unwrap(),
         Event { height, index: 0, effect: Effect::Credit { amount, .. }} if *height == BlockHeight::from(0) && *amount == Amount::from(995),
     ));
-    assert_eq!(chain.confirmed_log.len(), 1);
+    assert_eq!(chain.confirmed_keys(..).len(), 1);
     assert_eq!(Some(certificate.hash), chain.block_hash());
     worker
         .storage
@@ -1043,7 +1043,7 @@ async fn test_handle_certificate_receiver_balance_overflow() {
         .unwrap();
     assert_eq!(Balance::from(0), new_sender_chain.state().balance);
     assert_eq!(BlockHeight::from(1), new_sender_chain.next_block_height());
-    assert_eq!(new_sender_chain.confirmed_log.len(), 1);
+    assert_eq!(new_sender_chain.confirmed_keys(..).len(), 1);
     assert_eq!(Some(certificate.hash), new_sender_chain.block_hash());
     let new_recipient_chain = worker
         .storage
@@ -1094,7 +1094,7 @@ async fn test_handle_certificate_receiver_equal_sender() {
         Event { height, index: 0, effect: Effect::Credit { amount, .. }} if *height == BlockHeight::from(0) && *amount == Amount::from(1),
     ));
     assert_eq!(BlockHeight::from(1), chain.next_block_height());
-    assert_eq!(chain.confirmed_log.len(), 1);
+    assert_eq!(chain.confirmed_keys(..).len(), 1);
     assert_eq!(Some(certificate.hash), chain.block_hash());
 }
 
@@ -1145,9 +1145,9 @@ async fn test_handle_cross_chain_request() {
         chain.inboxes.get(&Origin::Chain(ChainId::root(1))).unwrap().received_events.front().unwrap(),
         Event { height, index: 0, effect: Effect::Credit { amount, .. }} if *height == BlockHeight::from(0) && *amount == Amount::from(10),
     ));
-    assert_eq!(chain.confirmed_log.len(), 0);
+    assert_eq!(chain.confirmed_keys(..).len(), 0);
     assert_eq!(None, chain.block_hash());
-    assert_eq!(chain.received_log.len(), 1);
+    assert_eq!(chain.received_keys(..).len(), 1);
 }
 
 #[test(tokio::test)]
@@ -1296,9 +1296,9 @@ async fn test_handle_certificate_to_active_recipient() {
         .state()
         .manager
         .has_owner(&recipient_key_pair.public().into()));
-    assert_eq!(recipient_chain.confirmed_log.len(), 1);
+    assert_eq!(recipient_chain.confirmed_keys(..).len(), 1);
     assert_eq!(recipient_chain.block_hash(), Some(certificate.hash));
-    assert_eq!(recipient_chain.received_log.len(), 1);
+    assert_eq!(recipient_chain.received_keys(..).len(), 1);
 
     let query =
         ChainInfoQuery::new(ChainId::root(2)).with_received_certificates_excluding_first_nth(0);

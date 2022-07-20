@@ -37,9 +37,9 @@ pub struct ChainState {
 
     /// Hashes of all certified blocks for this sender.
     /// This ends with `block_hash` and has length `usize::from(next_block_height)`.
-    pub confirmed_log: Vec<HashValue>,
+    confirmed_log: Vec<HashValue>,
     /// Hashes of all certified blocks known as a receiver (local ordering).
-    pub received_log: Vec<HashValue>,
+    received_log: Vec<HashValue>,
 
     /// Mailboxes used to send messages, indexed by recipient.
     pub outboxes: HashMap<ChainId, OutboxState>,
@@ -137,6 +137,30 @@ impl ChainState {
 
     pub fn chain_id(&self) -> ChainId {
         self.state.chain_id
+    }
+
+    pub fn confirmed_key(&self, index: usize) -> Option<HashValue> {
+        self.confirmed_log.get(index).copied()
+    }
+
+    pub fn confirmed_keys<R: std::slice::SliceIndex<[HashValue]>>(&self, range: R) -> &R::Output {
+        &self.confirmed_log[range]
+    }
+
+    pub fn add_confirmed_key(&mut self, key: HashValue) {
+        self.confirmed_log.push(key)
+    }
+
+    pub fn received_key(&self, index: usize) -> Option<HashValue> {
+        self.received_log.get(index).copied()
+    }
+
+    pub fn received_keys<R: std::slice::SliceIndex<[HashValue]>>(&self, range: R) -> &R::Output {
+        &self.received_log[range]
+    }
+
+    pub fn add_received_key(&mut self, key: HashValue) {
+        self.received_log.push(key)
     }
 
     pub fn mark_messages_as_received(

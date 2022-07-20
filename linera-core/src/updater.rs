@@ -194,10 +194,9 @@ where
             // Send the requested certificates in order.
             for number in usize::from(initial_block_height)..usize::from(target_block_height) {
                 let key = chain
-                    .confirmed_log
-                    .get(number)
+                    .confirmed_key(number)
                     .expect("certificate should be known locally");
-                let cert = self.store.read_certificate(*key).await?;
+                let cert = self.store.read_certificate(key).await?;
                 self.send_certificate(cert, retryable).await?;
             }
         }
