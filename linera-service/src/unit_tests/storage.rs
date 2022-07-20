@@ -49,7 +49,7 @@ async fn s3_storage_is_initialized() -> Result<(), anyhow::Error> {
         async fn run(self, mut storage: S) -> Result<Self::Output, anyhow::Error> {
             for expected_chain_state in self.expected_chain_states {
                 let chain_state = storage
-                    .read_chain_or_default(expected_chain_state.state().chain_id)
+                    .read_chain_or_default(expected_chain_state.chain_id())
                     .await?;
                 assert_eq!(chain_state, expected_chain_state);
             }
