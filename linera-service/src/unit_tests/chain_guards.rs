@@ -33,6 +33,16 @@ async fn prevents_concurrent_access_to_the_same_chain() {
     assert_eq!(access, Access::Sequential);
 }
 
+/// Test if two tasks obtaining a guard for different chains obtain them concurrently.
+#[tokio::test(start_paused = true)]
+async fn allows_concurrent_access_to_different_chains() {
+    let access = ConcurrentAccessTest::default()
+        .spawn_two_tasks_to_obtain_guards_for(ChainId::root(0), ChainId::root(1))
+        .await;
+
+    assert_eq!(access, Access::Concurrent);
+}
+
 /// Test helper for running two tasks to obtain chain guards.
 #[derive(Clone)]
 pub struct ConcurrentAccessTest {
