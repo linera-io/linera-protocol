@@ -152,10 +152,10 @@ ChainState:
           TYPENAME: HashValue
     - next_block_height:
         TYPENAME: BlockHeight
-    - confirmed_log:
+    - confirmed_keys:
         SEQ:
           TYPENAME: HashValue
-    - received_log:
+    - received_keys:
         SEQ:
           TYPENAME: HashValue
     - outboxes:

@@ -35,11 +35,11 @@ pub struct ChainState {
     #[getset(get_copy = "pub", get_mut = "pub")]
     next_block_height: BlockHeight,
 
-    /// Hashes of all certified blocks for this sender.
+    /// Hashes of all certified blocks (aka "key") for this sender.
     /// This ends with `block_hash` and has length `usize::from(next_block_height)`.
-    confirmed_log: Vec<HashValue>,
+    confirmed_keys: Vec<HashValue>,
     /// Hashes of all certified blocks known as a receiver (local ordering).
-    received_log: Vec<HashValue>,
+    received_keys: Vec<HashValue>,
 
     /// Mailboxes used to send messages, indexed by recipient.
     #[getset(get = "pub")]
@@ -111,8 +111,8 @@ impl ChainState {
             state_hash,
             block_hash: None,
             next_block_height: BlockHeight::default(),
-            confirmed_log: Vec::new(),
-            received_log: Vec::new(),
+            confirmed_keys: Vec::new(),
+            received_keys: Vec::new(),
             inboxes: HashMap::new(),
             outboxes: HashMap::new(),
             channels: HashMap::new(),
@@ -143,27 +143,27 @@ impl ChainState {
     }
 
     pub fn confirmed_key(&self, index: usize) -> Option<HashValue> {
-        self.confirmed_log.get(index).copied()
+        self.confirmed_keys.get(index).copied()
     }
 
     pub fn confirmed_keys<R: std::slice::SliceIndex<[HashValue]>>(&self, range: R) -> &R::Output {
-        &self.confirmed_log[range]
+        &self.confirmed_keys[range]
     }
 
     pub fn add_confirmed_key(&mut self, key: HashValue) {
-        self.confirmed_log.push(key)
+        self.confirmed_keys.push(key)
     }
 
     pub fn received_key(&self, index: usize) -> Option<HashValue> {
-        self.received_log.get(index).copied()
+        self.received_keys.get(index).copied()
     }
 
     pub fn received_keys<R: std::slice::SliceIndex<[HashValue]>>(&self, range: R) -> &R::Output {
-        &self.received_log[range]
+        &self.received_keys[range]
     }
 
     pub fn add_received_key(&mut self, key: HashValue) {
-        self.received_log.push(key)
+        self.received_keys.push(key)
     }
 
     pub fn mark_messages_as_received(
@@ -250,7 +250,7 @@ impl ChainState {
             requested_execution_state: None,
             requested_pending_messages: Vec::new(),
             requested_sent_certificates: Vec::new(),
-            count_received_certificates: self.received_log.len(),
+            count_received_certificates: self.received_keys.len(),
             requested_received_certificates: Vec::new(),
         };
         ChainInfoResponse::new(info, key_pair)
@@ -305,7 +305,7 @@ impl ChainState {
         );
         // Mark the block as received.
         inbox.next_height_to_receive = height.try_add_one()?;
-        self.received_log.push(key);
+        self.received_keys.push(key);
 
         let mut was_a_recipient = false;
         for (index, effect) in effects.into_iter().enumerate() {
