@@ -72,9 +72,11 @@ pub struct InboxState {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct ChannelState {
-    /// The subscribers and whether they have received the latest update yet.
-    pub subscribers: HashMap<ChainId, bool>,
-    /// The latest block height to communicate, if any.
+    /// The current subscribers.
+    pub subscribers: HashMap<ChainId, ()>,
+    /// The messages waiting to be delivered to present and past subscribers.
+    pub outboxes: HashMap<ChainId, OutboxState>,
+    /// The latest block height, if any, to be sent to future subscribers.
     pub block_height: Option<BlockHeight>,
 }
 
@@ -125,6 +127,69 @@ impl ChainState {
         chain.state_hash = HashValue::new(&chain.state);
         assert!(chain.is_active());
         chain
+    }
+
+    pub fn chain_id(&self) -> ChainId {
+        self.state.chain_id
+    }
+
+    pub fn mark_messages_as_received(
+        outboxes: &mut HashMap<ChainId, OutboxState>,
+        origin: &Origin,
+        recipient: ChainId,
+        height: BlockHeight,
+    ) -> bool {
+        let mut updated = false;
+        match outboxes.entry(recipient) {
+            std::collections::hash_map::Entry::Occupied(mut entry) => {
+                updated = entry.get_mut().mark_messages_as_received(height);
+                if updated && entry.get().queue.is_empty() {
+                    entry.remove();
+                }
+            }
+            _ => {
+                log::warn!(
+                    "All messages were already marked as received in the outbox {:?} to {:?}",
+                    origin,
+                    recipient
+                );
+            }
+        }
+        updated
+    }
+
+    pub fn mark_outbox_messages_as_received(
+        &mut self,
+        recipient: ChainId,
+        height: BlockHeight,
+    ) -> bool {
+        let origin = Origin::Chain(self.chain_id());
+        Self::mark_messages_as_received(&mut self.outboxes, &origin, recipient, height)
+    }
+
+    pub fn mark_channel_messages_as_received(
+        &mut self,
+        name: &str,
+        recipient: ChainId,
+        height: BlockHeight,
+    ) -> bool {
+        let origin = Origin::Channel(ChannelId {
+            chain_id: self.chain_id(),
+            name: name.to_string(),
+        });
+        let channel = match self.channels.get_mut(name) {
+            Some(channel) => channel,
+            None => {
+                panic!(
+                    "Trying to mark messages as received for a non-existing channel {:?} {} to {:?} at height {}",
+                    self.chain_id(),
+                    name,
+                    recipient,
+                    height,
+                );
+            }
+        };
+        Self::mark_messages_as_received(&mut channel.outboxes, &origin, recipient, height)
     }
 
     /// Invariant for the states of active chains.
@@ -418,29 +483,63 @@ impl ChainState {
     ) {
         // Record the effects of the execution.
         effects.extend(application.effects);
-        // Update the outboxes.
+        // Update the (regular) outboxes.
         for recipient in application.recipients {
-            let queue = &mut outboxes.entry(recipient).or_default().queue;
-            // Schedule a message at this height if we haven't already.
-            if queue.back() != Some(&height) {
-                queue.push_back(height);
-            }
+            let outbox = outboxes.entry(recipient).or_default();
+            outbox.schedule_message(height);
         }
         // Update the channels.
         if let Some((name, id)) = application.unsubscribe {
             let channel = channels.entry(name).or_insert_with(ChannelState::default);
-            // Request past and future messages from this channel.
+            // Remove subscriber. Do not remove the channel outbox yet.
             channel.subscribers.remove(&id);
         }
         for name in application.need_channel_broadcast {
             let channel = channels.entry(name).or_insert_with(ChannelState::default);
-            channel.subscribers.values_mut().for_each(|v| *v = false);
+            for recipient in channel.subscribers.keys() {
+                let outbox = channel.outboxes.entry(*recipient).or_default();
+                outbox.schedule_message(height);
+            }
             channel.block_height = Some(height);
         }
         if let Some((name, id)) = application.subscribe {
             let channel = channels.entry(name).or_insert_with(ChannelState::default);
-            // Request past and future messages from this channel.
-            channel.subscribers.insert(id, false);
+            // Add subscriber.
+            if channel.subscribers.insert(id, ()).is_none() {
+                // Send the latest message if any.
+                if let Some(latest_height) = channel.block_height {
+                    let outbox = channel.outboxes.entry(id).or_default();
+                    outbox.schedule_message(latest_height);
+                }
+            }
         }
+    }
+}
+
+impl OutboxState {
+    /// Schedule a message at the given height if we haven't already.
+    pub fn schedule_message(&mut self, height: BlockHeight) {
+        if self.queue.back() != Some(&height) {
+            assert!(
+                self.queue.back() < Some(&height),
+                "Trying to schedule height {} after a message at height {}",
+                height,
+                self.queue.back().unwrap()
+            );
+            self.queue.push_back(height);
+        }
+    }
+
+    /// Mark all messages as received up to the given height.
+    pub fn mark_messages_as_received(&mut self, height: BlockHeight) -> bool {
+        let mut updated = false;
+        while let Some(h) = self.queue.front() {
+            if *h > height {
+                break;
+            }
+            self.queue.pop_front().unwrap();
+            updated = true;
+        }
+        updated
     }
 }
