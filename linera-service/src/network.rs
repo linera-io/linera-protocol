@@ -17,6 +17,10 @@ use std::{io, time::Duration};
 use structopt::StructOpt;
 use tokio::time;
 
+#[cfg(test)]
+#[path = "unit_tests/network.rs"]
+mod unit_tests;
+
 #[derive(Clone, Debug, StructOpt)]
 pub struct CrossChainConfig {
     /// Number of cross-chains messages allowed before blocking the main server loop
