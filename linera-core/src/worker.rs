@@ -147,14 +147,14 @@ where
         chain: &ChainState,
     ) -> Result<Vec<CrossChainRequest>, Error> {
         let mut continuation = Vec::new();
-        for (&recipient, outbox) in &chain.outboxes {
+        for (&recipient, outbox) in chain.outboxes() {
             let origin = Origin::Chain(chain.chain_id());
             let request = self
                 .make_cross_chain_request(chain, origin, recipient, outbox)
                 .await?;
             continuation.push(request);
         }
-        for (name, channel) in &chain.channels {
+        for (name, channel) in chain.channels() {
             for (&recipient, outbox) in &channel.outboxes {
                 let origin = Origin::Channel(ChannelId {
                     chain_id: chain.chain_id(),
@@ -398,7 +398,7 @@ where
         }
         if query.request_pending_messages {
             let mut message_groups = Vec::new();
-            for (origin, inbox) in &chain.inboxes {
+            for (origin, inbox) in chain.inboxes() {
                 let mut effects = Vec::new();
                 let mut current_height = None;
                 for event in &inbox.received_events {
@@ -523,6 +523,8 @@ where
                             // Refuse to persist the chain state if the latest epoch in
                             // the received blocks from this recipient is not recognized
                             // any more by the receiving chain. (Future epochs are ok.)
+                            // Note that we are not trying to remove certificates that we
+                            // have already persisted.
                             log::warn!("Refusing updates from untrusted epoch {epoch:?}");
                             return Ok(Vec::new());
                         }

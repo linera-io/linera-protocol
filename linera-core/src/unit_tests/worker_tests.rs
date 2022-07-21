@@ -980,19 +980,19 @@ async fn test_handle_certificate_with_anticipated_incoming_message() {
     assert_eq!(
         BlockHeight::from(0),
         chain
-            .inboxes
+            .inboxes()
             .get(&Origin::Chain(ChainId::root(3)))
             .unwrap()
             .next_height_to_receive
     );
     assert!(chain
-        .inboxes
+        .inboxes()
         .get(&Origin::Chain(ChainId::root(3)))
         .unwrap()
         .received_events
         .is_empty(),);
     assert!(matches!(
-        chain.inboxes.get(&Origin::Chain(ChainId::root(3))).unwrap().expected_events.front().unwrap(),
+        chain.inboxes().get(&Origin::Chain(ChainId::root(3))).unwrap().expected_events.front().unwrap(),
         Event { height, index: 0, effect: Effect::Credit { amount, .. }} if *height == BlockHeight::from(0) && *amount == Amount::from(995),
     ));
     assert_eq!(chain.confirmed_keys(..).len(), 1);
@@ -1084,13 +1084,13 @@ async fn test_handle_certificate_receiver_equal_sender() {
     assert_eq!(
         BlockHeight::from(1),
         chain
-            .inboxes
+            .inboxes()
             .get(&Origin::Chain(ChainId::root(1)))
             .unwrap()
             .next_height_to_receive
     );
     assert!(matches!(
-        chain.inboxes.get(&Origin::Chain(ChainId::root(1))).unwrap().received_events.front().unwrap(),
+        chain.inboxes().get(&Origin::Chain(ChainId::root(1))).unwrap().received_events.front().unwrap(),
         Event { height, index: 0, effect: Effect::Credit { amount, .. }} if *height == BlockHeight::from(0) && *amount == Amount::from(1),
     ));
     assert_eq!(BlockHeight::from(1), chain.next_block_height());
@@ -1136,13 +1136,13 @@ async fn test_handle_cross_chain_request() {
     assert_eq!(
         BlockHeight::from(1),
         chain
-            .inboxes
+            .inboxes()
             .get(&Origin::Chain(ChainId::root(1)))
             .unwrap()
             .next_height_to_receive
     );
     assert!(matches!(
-        chain.inboxes.get(&Origin::Chain(ChainId::root(1))).unwrap().received_events.front().unwrap(),
+        chain.inboxes().get(&Origin::Chain(ChainId::root(1))).unwrap().received_events.front().unwrap(),
         Event { height, index: 0, effect: Effect::Credit { amount, .. }} if *height == BlockHeight::from(0) && *amount == Amount::from(10),
     ));
     assert_eq!(chain.confirmed_keys(..).len(), 0);
@@ -1180,7 +1180,7 @@ async fn test_handle_cross_chain_request_no_recipient_chain() {
         .await
         .unwrap();
     // The target chain did not receive the message
-    assert!(chain.inboxes.is_empty());
+    assert!(chain.inboxes().is_empty());
 }
 
 #[test(tokio::test)]
@@ -1216,7 +1216,7 @@ async fn test_handle_cross_chain_request_no_recipient_chain_with_inactive_chains
         .read_chain_or_default(ChainId::root(2))
         .await
         .unwrap();
-    assert!(!chain.inboxes.is_empty());
+    assert!(!chain.inboxes().is_empty());
 }
 
 #[test(tokio::test)]
@@ -1416,10 +1416,10 @@ async fn test_chain_creation_with_committee_creation() {
         let admin_chain = worker.storage.read_active_chain(admin_id).await.unwrap();
         admin_chain.validate_incoming_messages().unwrap();
         assert_eq!(BlockHeight::from(1), admin_chain.next_block_height());
-        assert!(admin_chain.outboxes.is_empty());
+        assert!(admin_chain.outboxes().is_empty());
         assert_eq!(admin_chain.state().admin_id, Some(admin_id));
         // The root chain has no subscribers yet.
-        assert!(admin_chain.channels.get(ADMIN_CHANNEL).is_none());
+        assert!(admin_chain.channels().get(ADMIN_CHANNEL).is_none());
     }
 
     // Create a new committee and transfer money before accepting the subscription.
@@ -1526,7 +1526,7 @@ async fn test_chain_creation_with_committee_creation() {
         admin_chain.validate_incoming_messages().unwrap();
         assert_eq!(
             admin_chain
-                .channels
+                .channels()
                 .get(ADMIN_CHANNEL)
                 .unwrap()
                 .subscribers
@@ -1543,7 +1543,7 @@ async fn test_chain_creation_with_committee_creation() {
         user_chain.validate_incoming_messages().unwrap();
         matches!(
             user_chain
-                .inboxes
+                .inboxes()
                 .get(&Origin::Chain(admin_id))
                 .unwrap()
                 .received_events
@@ -1567,7 +1567,7 @@ async fn test_chain_creation_with_committee_creation() {
         );
         matches!(
             user_chain
-                .inboxes
+                .inboxes()
                 .get(&Origin::Channel(admin_channel.clone()))
                 .unwrap()
                 .received_events
@@ -1580,7 +1580,7 @@ async fn test_chain_creation_with_committee_creation() {
             },]
         );
         assert!(user_chain
-            .inboxes
+            .inboxes()
             .get(&Origin::Channel(admin_channel.clone()))
             .unwrap()
             .expected_events
@@ -1659,7 +1659,7 @@ async fn test_chain_creation_with_committee_creation() {
         assert_eq!(user_chain.state().committees.len(), 2);
         user_chain.validate_incoming_messages().unwrap();
         assert_eq!(
-            user_chain.inboxes.get(&Origin::Chain(admin_id)).unwrap(),
+            user_chain.inboxes().get(&Origin::Chain(admin_id)).unwrap(),
             &InboxState {
                 next_height_to_receive: BlockHeight(3),
                 received_events: VecDeque::new(),
@@ -1668,7 +1668,7 @@ async fn test_chain_creation_with_committee_creation() {
         );
         assert_eq!(
             user_chain
-                .inboxes
+                .inboxes()
                 .get(&Origin::Channel(admin_channel.clone()))
                 .unwrap(),
             &InboxState {
@@ -1792,10 +1792,10 @@ async fn test_transfers_and_committee_creation() {
 
     // .. and the message has gone through.
     let admin_chain = worker.storage.read_active_chain(admin_id).await.unwrap();
-    assert_eq!(admin_chain.inboxes.len(), 1);
+    assert_eq!(admin_chain.inboxes().len(), 1);
     matches!(
         admin_chain
-            .inboxes
+            .inboxes()
             .get(&Origin::Chain(user_id))
             .unwrap()
             .received_events
@@ -1935,5 +1935,5 @@ async fn test_transfers_and_committee_removal() {
 
     // .. but the message hasn't gone through.
     let admin_chain = worker.storage.read_active_chain(admin_id).await.unwrap();
-    assert!(admin_chain.inboxes.is_empty());
+    assert!(admin_chain.inboxes().is_empty());
 }

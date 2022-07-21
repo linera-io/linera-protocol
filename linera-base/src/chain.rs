@@ -42,11 +42,14 @@ pub struct ChainState {
     received_log: Vec<HashValue>,
 
     /// Mailboxes used to send messages, indexed by recipient.
-    pub outboxes: HashMap<ChainId, OutboxState>,
+    #[getset(get = "pub")]
+    outboxes: HashMap<ChainId, OutboxState>,
     /// Mailboxes used to receive messages indexed by their origin.
-    pub inboxes: HashMap<Origin, InboxState>,
+    #[getset(get = "pub")]
+    inboxes: HashMap<Origin, InboxState>,
     /// Channels able to multicast messages to subscribers.
-    pub channels: HashMap<String, ChannelState>,
+    #[getset(get = "pub")]
+    channels: HashMap<String, ChannelState>,
 }
 
 /// An outbox used to send messages to another chain. NOTE: Messages are implied by the

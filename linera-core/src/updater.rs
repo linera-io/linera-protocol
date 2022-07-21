@@ -208,7 +208,7 @@ where
         chain_id: ChainId,
     ) -> Result<(), Error> {
         let chain = self.store.read_chain_or_default(chain_id).await?;
-        for (origin, inbox) in chain.inboxes.iter() {
+        for (origin, inbox) in chain.inboxes() {
             self.send_chain_information(origin.sender(), inbox.next_height_to_receive)
                 .await?;
         }
