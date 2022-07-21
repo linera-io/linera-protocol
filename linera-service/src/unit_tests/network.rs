@@ -37,6 +37,27 @@ async fn messages_for_different_chains_are_handled_concurrently() {
     assert!(result.is_ok());
 }
 
+/// Test if messages for the same chain are handled sequentially.
+///
+/// Check if handling two messages for the same chain using the [`DelayedEmptyStorage`] (which
+/// forces each request to last for at least the specified delay) takes _more_ than twice the delay.
+/// If that's the case, then one of the messages had to wait until handling the other one was
+/// finished.
+#[tokio::test(start_paused = true)]
+async fn messages_for_the_same_chain_are_handled_sequentially() {
+    let delay = Duration::from_secs(10);
+    let server = create_dummy_server(delay);
+
+    let chain_id = ChainId::root(0);
+    let result = timeout(
+        delay * 2,
+        send_two_concurrent_requests_for(chain_id, chain_id, server),
+    )
+    .await;
+
+    assert!(result.is_err());
+}
+
 /// Create a dummy instance of [`RunningServerState`] using a dummy [`Storage`] implementation that
 /// just delays chain read requests by `delay`.
 fn create_dummy_server(delay: Duration) -> RunningServerState<DelayedEmptyStorage> {
