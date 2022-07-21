@@ -186,7 +186,13 @@ ChannelState:
         MAP:
           KEY:
             TYPENAME: ChainId
-          VALUE: BOOL
+          VALUE: UNIT
+    - outboxes:
+        MAP:
+          KEY:
+            TYPENAME: ChainId
+          VALUE:
+            TYPENAME: OutboxState
     - block_height:
         OPTION:
           TYPENAME: BlockHeight
