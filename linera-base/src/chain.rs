@@ -52,9 +52,7 @@ pub struct ChainState {
     channels: HashMap<String, ChannelState>,
 }
 
-/// An outbox used to send messages to another chain. NOTE: Messages are implied by the
-/// execution of blocks, so currently we just send the certified blocks over and let the
-/// receivers figure out what was the message for them.
+/// An outbox used to send messages to another chain.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct OutboxState {
