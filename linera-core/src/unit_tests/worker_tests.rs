@@ -11,7 +11,7 @@ use linera_base::{
     execution::{
         Address, Amount, Balance, Effect, ExecutionState, Operation, UserData, ADMIN_CHANNEL,
     },
-    manager::ChainManager,
+    manager::BlockManager,
     messages::*,
 };
 use linera_storage::{InMemoryStoreClient, Storage};
@@ -143,7 +143,7 @@ fn make_transfer_certificate(
         admin_id: Some(ChainId::root(0)),
         subscriptions: BTreeMap::new(),
         committees: [(Epoch::from(0), committee.clone())].into_iter().collect(),
-        manager: ChainManager::single(key_pair.public().into()),
+        manager: BlockManager::single(key_pair.public().into()),
         balance,
     };
     let block = make_block(
@@ -205,7 +205,7 @@ async fn test_read_chain_state_unknown_chain() {
     chain.state_mut().committees.insert(Epoch(0), committee);
     chain.state_mut().epoch = Some(Epoch(0));
     chain.state_mut().admin_id = Some(ChainId::root(1));
-    chain.state_mut().manager = ChainManager::single(PublicKey::debug(4).into());
+    chain.state_mut().manager = BlockManager::single(PublicKey::debug(4).into());
     worker.storage.write_chain(chain).await.unwrap();
     worker
         .storage
@@ -480,7 +480,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                 admin_id: Some(ChainId::root(0)),
                 subscriptions: BTreeMap::new(),
                 committees: [(epoch, committee.clone())].into_iter().collect(),
-                manager: ChainManager::single(sender_key_pair.public().into()),
+                manager: BlockManager::single(sender_key_pair.public().into()),
                 balance: Balance::from(3),
             }),
         },
@@ -512,7 +512,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                 admin_id: Some(ChainId::root(0)),
                 subscriptions: BTreeMap::new(),
                 committees: [(epoch, committee.clone())].into_iter().collect(),
-                manager: ChainManager::single(sender_key_pair.public().into()),
+                manager: BlockManager::single(sender_key_pair.public().into()),
                 balance: Balance::from(0),
             }),
         },
@@ -717,7 +717,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                     admin_id: Some(ChainId::root(0)),
                     subscriptions: BTreeMap::new(),
                     committees: [(epoch, committee.clone())].into_iter().collect(),
-                    manager: ChainManager::single(recipient_key_pair.public().into()),
+                    manager: BlockManager::single(recipient_key_pair.public().into()),
                     balance: Balance::from(0),
                 }),
             },
@@ -1403,7 +1403,7 @@ async fn test_chain_creation_with_committee_creation() {
                 admin_id: Some(admin_id),
                 subscriptions: BTreeMap::new(),
                 committees: committees.clone(),
-                manager: ChainManager::single(key_pair.public().into()),
+                manager: BlockManager::single(key_pair.public().into()),
                 balance: Balance::from(2),
             }),
         },
@@ -1470,7 +1470,7 @@ async fn test_chain_creation_with_committee_creation() {
                 subscriptions: BTreeMap::new(),
                 // The root chain knows both committees at the end.
                 committees: committees2.clone(),
-                manager: ChainManager::single(key_pair.public().into()),
+                manager: BlockManager::single(key_pair.public().into()),
                 balance: Balance::from(0),
             }),
         },
@@ -1511,7 +1511,7 @@ async fn test_chain_creation_with_committee_creation() {
                 subscriptions: BTreeMap::new(),
                 // The root chain knows both committees at the end.
                 committees: committees2.clone(),
-                manager: ChainManager::single(key_pair.public().into()),
+                manager: BlockManager::single(key_pair.public().into()),
                 balance: Balance::from(0),
             }),
         },
@@ -1645,7 +1645,7 @@ async fn test_chain_creation_with_committee_creation() {
                 .collect(),
                 // Finally the child knows about both committees and has the money.
                 committees: committees2.clone(),
-                manager: ChainManager::single(key_pair.public().into()),
+                manager: BlockManager::single(key_pair.public().into()),
                 balance: Balance::from(2),
             }),
         },
@@ -1729,7 +1729,7 @@ async fn test_transfers_and_committee_creation() {
                 admin_id: Some(admin_id),
                 subscriptions: BTreeMap::new(),
                 committees: committees.clone(),
-                manager: ChainManager::single(key_pair1.public().into()),
+                manager: BlockManager::single(key_pair1.public().into()),
                 balance: Balance::from(2),
             }),
         },
@@ -1768,7 +1768,7 @@ async fn test_transfers_and_committee_creation() {
                 admin_id: Some(admin_id),
                 subscriptions: BTreeMap::new(),
                 committees: committees2.clone(),
-                manager: ChainManager::single(key_pair0.public().into()),
+                manager: BlockManager::single(key_pair0.public().into()),
                 balance: Balance::from(0),
             }),
         },
@@ -1858,7 +1858,7 @@ async fn test_transfers_and_committee_removal() {
                 admin_id: Some(admin_id),
                 subscriptions: BTreeMap::new(),
                 committees: committees.clone(),
-                manager: ChainManager::single(key_pair1.public().into()),
+                manager: BlockManager::single(key_pair1.public().into()),
                 balance: Balance::from(2),
             }),
         },
@@ -1911,7 +1911,7 @@ async fn test_transfers_and_committee_removal() {
                 admin_id: Some(admin_id),
                 subscriptions: BTreeMap::new(),
                 committees: committees3.clone(),
-                manager: ChainManager::single(key_pair0.public().into()),
+                manager: BlockManager::single(key_pair0.public().into()),
                 balance: Balance::from(0),
             }),
         },

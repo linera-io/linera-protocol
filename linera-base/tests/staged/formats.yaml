@@ -42,6 +42,18 @@ BlockHeightRange:
         TYPENAME: BlockHeight
     - limit:
         OPTION: U64
+BlockManager:
+  ENUM:
+    0:
+      None: UNIT
+    1:
+      Single:
+        NEWTYPE:
+          TYPENAME: SingleOwnerManager
+    2:
+      Multi:
+        NEWTYPE:
+          TYPENAME: MultiOwnerManager
 BlockProposal:
   STRUCT:
     - content:
@@ -82,7 +94,7 @@ ChainInfo:
         OPTION:
           TYPENAME: ChainDescription
     - manager:
-        TYPENAME: ChainManager
+        TYPENAME: BlockManager
     - balance:
         TYPENAME: Balance
     - block_hash:
@@ -126,18 +138,6 @@ ChainInfoResponse:
     - signature:
         OPTION:
           TYPENAME: Signature
-ChainManager:
-  ENUM:
-    0:
-      None: UNIT
-    1:
-      Single:
-        NEWTYPE:
-          TYPENAME: SingleOwnerManager
-    2:
-      Multi:
-        NEWTYPE:
-          TYPENAME: MultiOwnerManager
 ChainState:
   STRUCT:
     - description:
@@ -494,7 +494,7 @@ ExecutionState:
           VALUE:
             TYPENAME: Committee
     - manager:
-        TYPENAME: ChainManager
+        TYPENAME: BlockManager
     - balance:
         TYPENAME: Balance
 HashValue:

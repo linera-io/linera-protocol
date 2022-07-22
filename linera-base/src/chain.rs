@@ -8,7 +8,7 @@ use crate::{
     ensure,
     error::Error,
     execution::{ApplicationResult, Balance, Effect, ExecutionState, ADMIN_CHANNEL},
-    manager::ChainManager,
+    manager::BlockManager,
     messages::*,
 };
 use getset::{CopyGetters, Getters};
@@ -134,7 +134,7 @@ impl ChainState {
         chain.state.epoch = Some(Epoch::from(0));
         chain.state.admin_id = Some(admin_id);
         chain.state.committees.insert(Epoch::from(0), committee);
-        chain.state.manager = ChainManager::single(owner);
+        chain.state.manager = BlockManager::single(owner);
         chain.state.balance = balance;
         chain.state_hash = HashValue::new(&chain.state);
         assert!(chain.is_active());
@@ -387,7 +387,7 @@ impl ChainState {
                         },
                         (),
                     );
-                    self.state.manager = ChainManager::single(*owner);
+                    self.state.manager = BlockManager::single(*owner);
                     self.state_hash = HashValue::new(&self.state);
                 }
                 _ => (),

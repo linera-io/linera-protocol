@@ -8,7 +8,7 @@ use crate::{
     ensure,
     error::Error,
     execution::{Balance, Effect, ExecutionState, Operation},
-    manager::ChainManager,
+    manager::BlockManager,
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, str::FromStr};
@@ -259,7 +259,7 @@ pub struct ChainInfo {
     /// The chain description.
     pub description: Option<ChainDescription>,
     /// The state of the chain authentication.
-    pub manager: ChainManager,
+    pub manager: BlockManager,
     /// The current balance.
     pub balance: Balance,
     /// The last block hash, if any.

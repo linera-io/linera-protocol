@@ -15,7 +15,7 @@ async fn test_read_write() {
         .insert(Epoch::from(0), Committee::make_simple(Vec::new()));
     chain.state_mut().epoch = Some(Epoch::from(0));
     chain.state_mut().admin_id = Some(ChainId::root(0));
-    chain.state_mut().manager = ChainManager::single(Owner(PublicKey::debug(2)));
+    chain.state_mut().manager = BlockManager::single(Owner(PublicKey::debug(2)));
     store.write_chain(chain).await.unwrap();
     store
         .clone()

@@ -7,7 +7,7 @@ use crate::{
     crypto::*,
     ensure,
     error::Error,
-    manager::ChainManager,
+    manager::BlockManager,
     messages::{BlockHeight, ChainId, ChannelId, EffectId, Epoch, Origin, Owner},
 };
 use serde::{Deserialize, Serialize};
@@ -29,7 +29,7 @@ pub struct ExecutionState {
     /// The committees that we trust, indexed by epoch number.
     pub committees: BTreeMap<Epoch, Committee>,
     /// Manager of the chain.
-    pub manager: ChainManager,
+    pub manager: BlockManager,
     /// Balance of the chain.
     pub balance: Balance,
 }
@@ -143,7 +143,7 @@ impl ExecutionState {
             admin_id: None,
             subscriptions: BTreeMap::new(),
             committees: BTreeMap::new(),
-            manager: ChainManager::default(),
+            manager: BlockManager::default(),
             balance: Balance::default(),
         }
     }
@@ -245,15 +245,15 @@ impl ExecutionState {
                 Ok(application)
             }
             Operation::ChangeOwner { new_owner } => {
-                self.manager = ChainManager::single(*new_owner);
+                self.manager = BlockManager::single(*new_owner);
                 Ok(ApplicationResult::default())
             }
             Operation::ChangeMultipleOwners { new_owners } => {
-                self.manager = ChainManager::multiple(new_owners.clone());
+                self.manager = BlockManager::multiple(new_owners.clone());
                 Ok(ApplicationResult::default())
             }
             Operation::CloseChain => {
-                self.manager = ChainManager::default();
+                self.manager = BlockManager::default();
                 // Unsubscribe to all channels.
                 let subscriptions = std::mem::take(&mut self.subscriptions);
                 let mut effects = Vec::new();

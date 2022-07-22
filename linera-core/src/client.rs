@@ -14,7 +14,7 @@ use linera_base::{
     crypto::*,
     error::Error,
     execution::{Address, Amount, Balance, Effect, ExecutionState, Operation, UserData},
-    manager::ChainManager,
+    manager::BlockManager,
     messages::*,
 };
 use linera_storage::Storage;
@@ -299,7 +299,7 @@ where
 
     async fn identity(&mut self) -> Result<Owner, anyhow::Error> {
         match self.chain_info().await?.manager {
-            ChainManager::Single(m) => {
+            BlockManager::Single(m) => {
                 if !self.known_key_pairs.contains_key(&m.owner) {
                     bail!(
                         "No key available to interact with single-owner chain {}",
@@ -308,7 +308,7 @@ where
                 }
                 Ok(m.owner)
             }
-            ChainManager::Multi(m) => {
+            BlockManager::Multi(m) => {
                 let mut identities = Vec::new();
                 for (owner, ()) in &m.owners {
                     if self.known_key_pairs.contains_key(owner) {
@@ -329,7 +329,7 @@ where
                 }
                 Ok(identities.pop().unwrap())
             }
-            ChainManager::None => Err(Error::InactiveChain(self.chain_id).into()),
+            BlockManager::None => Err(Error::InactiveChain(self.chain_id).into()),
         }
     }
 
@@ -365,7 +365,7 @@ where
                 Error::InvalidBlockChaining
             );
         }
-        if matches!(info.manager, ChainManager::Multi(_)) {
+        if matches!(info.manager, BlockManager::Multi(_)) {
             // For multi-owner chains, we could be missing recent certificates created by
             // other owners. Further synchronize blocks from the network. This is a
             // best-effort that depends on network conditions.
@@ -745,7 +745,7 @@ where
         // Send the query to validators.
         let committee = self.committee().await?;
         let final_certificate = match self.chain_info().await?.manager {
-            ChainManager::Multi(_) => {
+            BlockManager::Multi(_) => {
                 // Need two-round trips.
                 let certificate = self
                     .communicate_chain_updates(
@@ -767,7 +767,7 @@ where
                 .await?
                 .expect("a certificate")
             }
-            ChainManager::Single(_) => {
+            BlockManager::Single(_) => {
                 // Only one round-trip is needed
                 self.communicate_chain_updates(
                     &committee,
@@ -777,7 +777,7 @@ where
                 .await?
                 .expect("a certificate")
             }
-            ChainManager::None => unreachable!("chain is active"),
+            BlockManager::None => unreachable!("chain is active"),
         };
         // By now the block should be final.
         ensure!(

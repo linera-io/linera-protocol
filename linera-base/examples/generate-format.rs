@@ -22,7 +22,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<messages::Value>(&samples)?;
     tracer.trace_type::<messages::Origin>(&samples)?;
     tracer.trace_type::<messages::ChainDescription>(&samples)?;
-    tracer.trace_type::<manager::ChainManager>(&samples)?;
+    tracer.trace_type::<manager::BlockManager>(&samples)?;
     tracer.trace_type::<messages::CrossChainRequest>(&samples)?;
     tracer.trace_type::<error::Error>(&samples)?;
     tracer.trace_type::<rpc::Message>(&samples)?;

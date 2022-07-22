@@ -8,7 +8,7 @@ use std::collections::HashMap;
 /// How to produce new blocks.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub enum ChainManager {
+pub enum BlockManager {
     /// The chain is not active. (No blocks can be created)
     None,
     /// The chain is managed by a single owner.
@@ -49,9 +49,9 @@ pub enum Outcome {
     Skip,
 }
 
-impl Default for ChainManager {
+impl Default for BlockManager {
     fn default() -> Self {
-        ChainManager::None
+        BlockManager::None
     }
 }
 
@@ -92,24 +92,24 @@ impl MultiOwnerManager {
     }
 }
 
-impl ChainManager {
+impl BlockManager {
     pub fn single(owner: Owner) -> Self {
-        ChainManager::Single(Box::new(SingleOwnerManager::new(owner)))
+        BlockManager::Single(Box::new(SingleOwnerManager::new(owner)))
     }
 
     pub fn multiple(owners: Vec<Owner>) -> Self {
-        ChainManager::Multi(Box::new(MultiOwnerManager::new(
+        BlockManager::Multi(Box::new(MultiOwnerManager::new(
             owners.into_iter().map(|o| (o, ())).collect(),
         )))
     }
 
     pub fn reset(&mut self) {
         match self {
-            ChainManager::None => (),
-            ChainManager::Single(manager) => {
+            BlockManager::None => (),
+            BlockManager::Single(manager) => {
                 *manager = Box::new(SingleOwnerManager::new(manager.owner));
             }
-            ChainManager::Multi(manager) => {
+            BlockManager::Multi(manager) => {
                 let owners = std::mem::take(&mut manager.owners);
                 *manager = Box::new(MultiOwnerManager::new(owners));
             }
@@ -117,20 +117,20 @@ impl ChainManager {
     }
 
     pub fn is_active(&self) -> bool {
-        !matches!(self, ChainManager::None)
+        !matches!(self, BlockManager::None)
     }
 
     pub fn has_owner(&self, owner: &Owner) -> bool {
         match self {
-            ChainManager::Single(manager) => manager.owner == *owner,
-            ChainManager::Multi(manager) => manager.owners.contains_key(owner),
-            ChainManager::None => false,
+            BlockManager::Single(manager) => manager.owner == *owner,
+            BlockManager::Multi(manager) => manager.owners.contains_key(owner),
+            BlockManager::None => false,
         }
     }
 
     pub fn next_round(&self) -> RoundNumber {
         match self {
-            ChainManager::Multi(m) => {
+            BlockManager::Multi(m) => {
                 let round = m.round();
                 round.try_add_one().unwrap_or(round)
             }
@@ -140,8 +140,8 @@ impl ChainManager {
 
     pub fn pending(&self) -> Option<&Vote> {
         match self {
-            ChainManager::Single(manager) => manager.pending.as_ref(),
-            ChainManager::Multi(manager) => manager.pending.as_ref(),
+            BlockManager::Single(manager) => manager.pending.as_ref(),
+            BlockManager::Multi(manager) => manager.pending.as_ref(),
             _ => None,
         }
     }
@@ -167,7 +167,7 @@ impl ChainManager {
             Error::UnexpectedBlockHeight
         );
         match self {
-            ChainManager::Single(manager) => {
+            BlockManager::Single(manager) => {
                 ensure!(
                     new_round == RoundNumber::default(),
                     Error::InvalidBlockProposal
@@ -187,7 +187,7 @@ impl ChainManager {
                 }
                 Ok(Outcome::Accept)
             }
-            ChainManager::Multi(manager) => {
+            BlockManager::Multi(manager) => {
                 if let Some(proposal) = &manager.proposed {
                     if proposal.content.block == *new_block && proposal.content.round == new_round {
                         return Ok(Outcome::Skip);
@@ -229,7 +229,7 @@ impl ChainManager {
             return Ok(Outcome::Skip);
         }
         match self {
-            ChainManager::Multi(manager) => {
+            BlockManager::Multi(manager) => {
                 if let Some(vote) = &manager.pending {
                     match &vote.value {
                         Value::ConfirmedBlock { block, .. } if block == new_block => {
@@ -263,7 +263,7 @@ impl ChainManager {
         key_pair: Option<&KeyPair>,
     ) {
         match self {
-            ChainManager::Single(manager) => {
+            BlockManager::Single(manager) => {
                 if let Some(key_pair) = key_pair {
                     // Vote to confirm.
                     let BlockAndRound { block, .. } = proposal.content;
@@ -276,7 +276,7 @@ impl ChainManager {
                     manager.pending = Some(vote);
                 }
             }
-            ChainManager::Multi(manager) => {
+            BlockManager::Multi(manager) => {
                 // Record the proposed block. This is important to keep track of rounds
                 // for non-voting nodes.
                 manager.proposed = Some(proposal.clone());
@@ -306,7 +306,7 @@ impl ChainManager {
         key_pair: Option<&KeyPair>,
     ) {
         match self {
-            ChainManager::Multi(manager) => {
+            BlockManager::Multi(manager) => {
                 // Record validity certificate. This is important to keep track of rounds
                 // for non-voting nodes.
                 manager.locked = Some(certificate);

@@ -5,7 +5,7 @@
 use crate::worker::{ValidatorWorker, WorkerState};
 use async_trait::async_trait;
 use futures::lock::Mutex;
-use linera_base::{error::Error, manager::ChainManager, messages::*};
+use linera_base::{error::Error, manager::BlockManager, messages::*};
 use linera_storage::Storage;
 use rand::prelude::SliceRandom;
 use std::sync::Arc;
@@ -278,7 +278,7 @@ where
         {
             return Ok(());
         };
-        if let ChainManager::Multi(manager) = info.manager {
+        if let BlockManager::Multi(manager) = info.manager {
             if let Some(proposal) = manager.proposed {
                 if proposal.content.block.chain_id == chain_id {
                     let owner = proposal.owner;

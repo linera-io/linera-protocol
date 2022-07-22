@@ -13,7 +13,7 @@ use linera_base::{
 use std::{collections::HashMap, sync::Arc};
 
 #[cfg(test)]
-use linera_base::{committee::Committee, crypto::PublicKey, manager::ChainManager};
+use linera_base::{committee::Committee, crypto::PublicKey, manager::BlockManager};
 
 #[cfg(test)]
 #[path = "unit_tests/memory_storage_tests.rs"]
