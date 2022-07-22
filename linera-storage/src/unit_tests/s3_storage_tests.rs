@@ -5,7 +5,7 @@ use std::env;
 use tokio::sync::{Mutex, MutexGuard};
 #[cfg(test)]
 use {
-    super::{S3Storage, BUCKET},
+    super::{BucketStatus, S3Storage, BUCKET},
     crate::Storage,
     linera_base::{
         chain::ChainState,
@@ -112,10 +112,11 @@ async fn buckets_are_created() -> Result<(), Error> {
     let initial_buckets = list_buckets(&client).await?;
     assert!(!initial_buckets.contains(&BUCKET.to_owned()));
 
-    let _storage = S3Storage::from_config(localstack.config()).await?;
+    let (_storage, bucket_status) = S3Storage::from_config(localstack.config()).await?;
 
     let buckets = list_buckets(&client).await?;
     assert!(buckets.contains(&BUCKET.to_owned()));
+    assert_eq!(bucket_status, BucketStatus::New);
 
     Ok(())
 }
@@ -153,7 +154,7 @@ async fn certificate_storage_round_trip() -> Result<(), Error> {
     let certificate = Certificate::new(value, vec![]);
 
     let localstack = LocalStackTestContext::new().await?;
-    let mut storage = S3Storage::from_config(localstack.config()).await?;
+    let (mut storage, _) = S3Storage::from_config(localstack.config()).await?;
 
     storage.write_certificate(certificate.clone()).await?;
 
@@ -171,7 +172,7 @@ async fn retrieval_of_inexistent_certificate() -> Result<(), Error> {
     let certificate_hash = HashValue::new(&ChainDescription::Root(123));
 
     let localstack = LocalStackTestContext::new().await?;
-    let mut storage = S3Storage::from_config(localstack.config()).await?;
+    let (mut storage, _) = S3Storage::from_config(localstack.config()).await?;
 
     let result = storage.read_certificate(certificate_hash).await;
 
@@ -191,7 +192,7 @@ async fn chain_storage_round_trip() -> Result<(), Error> {
     };
 
     let localstack = LocalStackTestContext::new().await?;
-    let mut storage = S3Storage::from_config(localstack.config()).await?;
+    let (mut storage, _) = S3Storage::from_config(localstack.config()).await?;
 
     storage.write_chain(chain_state.clone()).await?;
 
@@ -211,7 +212,7 @@ async fn retrieval_of_inexistent_chain_state() -> Result<(), Error> {
     let chain_id = ChainId::root(5);
 
     let localstack = LocalStackTestContext::new().await?;
-    let mut storage = S3Storage::from_config(localstack.config()).await?;
+    let (mut storage, _) = S3Storage::from_config(localstack.config()).await?;
 
     let chain_state = storage.read_chain_or_default(chain_id).await?;
     let expected_chain_state = ChainState::new(chain_id);
@@ -232,7 +233,7 @@ async fn removal_of_chain_state() -> Result<(), Error> {
     };
 
     let localstack = LocalStackTestContext::new().await?;
-    let mut storage = S3Storage::from_config(localstack.config()).await?;
+    let (mut storage, _) = S3Storage::from_config(localstack.config()).await?;
 
     storage.write_chain(chain_state).await?;
     storage.remove_chain(chain_id).await?;

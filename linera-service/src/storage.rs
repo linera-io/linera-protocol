@@ -53,7 +53,7 @@ impl StorageConfig {
                 Box::new(client)
             }
             S3 { config } => {
-                let client = match config {
+                let (client, _bucket_status) = match config {
                     S3Config::Env => S3Storage::new().await?,
                     S3Config::LocalStack => S3Storage::with_localstack().await?,
                 };
