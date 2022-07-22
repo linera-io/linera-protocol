@@ -190,6 +190,15 @@ impl Storage for S3Storage {
     }
 }
 
+/// Status of the bucket at the time of creation of an [`S3Storage`] instance.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BucketStatus {
+    /// Bucket was created during the construction of the [`S3Storage`] instance.
+    New,
+    /// Bucket already existed when the [`S3Storage`] instance was created.
+    Existing,
+}
+
 /// Errors that can occur when using [`S3Storage`].
 #[derive(Debug, Error)]
 pub enum S3StorageError {
