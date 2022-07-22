@@ -11,28 +11,28 @@ use crate::{
     manager::ChainManager,
     messages::*,
 };
-use getset::{CopyGetters, Getters, MutGetters};
+use getset::{CopyGetters, Getters};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 
 /// The state of a chain.
-#[derive(Debug, Clone, Serialize, Deserialize, CopyGetters, Getters, MutGetters)]
+#[derive(Debug, Clone, Serialize, Deserialize, CopyGetters, Getters)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct ChainState {
     /// How the chain was created. May be unknown for inactive chains.
-    #[getset(get = "pub", get_mut = "pub")]
+    #[getset(get = "pub")]
     description: Option<ChainDescription>,
     /// Execution state.
-    #[getset(get = "pub", get_mut = "pub")]
+    #[getset(get = "pub")]
     state: ExecutionState,
     /// Hash of the execution state.
-    #[getset(get_copy = "pub", get_mut = "pub")]
+    #[getset(get_copy = "pub")]
     state_hash: HashValue,
     /// Hash of the latest certified block in this chain, if any.
-    #[getset(get_copy = "pub", get_mut = "pub")]
+    #[getset(get_copy = "pub")]
     block_hash: Option<HashValue>,
     /// Sequence number tracking blocks.
-    #[getset(get_copy = "pub", get_mut = "pub")]
+    #[getset(get_copy = "pub")]
     next_block_height: BlockHeight,
 
     /// Hashes of all certified blocks (aka "key") for this sender.
@@ -50,6 +50,10 @@ pub struct ChainState {
     /// Channels able to multicast messages to subscribers.
     #[getset(get = "pub")]
     channels: HashMap<String, ChannelState>,
+
+    /// Whether the state has been modified since the last read.
+    #[serde(skip)]
+    modified: bool,
 }
 
 /// An outbox used to send messages to another chain.
@@ -114,6 +118,7 @@ impl ChainState {
             inboxes: HashMap::new(),
             outboxes: HashMap::new(),
             channels: HashMap::new(),
+            modified: false,
         }
     }
 
@@ -140,6 +145,31 @@ impl ChainState {
         self.state.chain_id
     }
 
+    pub fn description_mut(&mut self) -> &mut Option<ChainDescription> {
+        self.modified = true;
+        &mut self.description
+    }
+
+    pub fn state_mut(&mut self) -> &mut ExecutionState {
+        self.modified = true;
+        &mut self.state
+    }
+
+    pub fn state_hash_mut(&mut self) -> &mut HashValue {
+        self.modified = true;
+        &mut self.state_hash
+    }
+
+    pub fn block_hash_mut(&mut self) -> &mut Option<HashValue> {
+        self.modified = true;
+        &mut self.block_hash
+    }
+
+    pub fn next_block_height_mut(&mut self) -> &mut BlockHeight {
+        self.modified = true;
+        &mut self.next_block_height
+    }
+
     pub fn confirmed_key(&self, index: usize) -> Option<HashValue> {
         self.confirmed_keys.get(index).copied()
     }
@@ -149,6 +179,7 @@ impl ChainState {
     }
 
     pub fn add_confirmed_key(&mut self, key: HashValue) {
+        self.modified = true;
         self.confirmed_keys.push(key)
     }
 
@@ -161,10 +192,11 @@ impl ChainState {
     }
 
     pub fn add_received_key(&mut self, key: HashValue) {
+        self.modified = true;
         self.received_keys.push(key)
     }
 
-    pub fn mark_messages_as_received(
+    fn mark_messages_as_received(
         outboxes: &mut HashMap<ChainId, OutboxState>,
         origin: &Origin,
         recipient: ChainId,
@@ -195,7 +227,12 @@ impl ChainState {
         height: BlockHeight,
     ) -> bool {
         let origin = Origin::Chain(self.chain_id());
-        Self::mark_messages_as_received(&mut self.outboxes, &origin, recipient, height)
+        let updated =
+            Self::mark_messages_as_received(&mut self.outboxes, &origin, recipient, height);
+        if updated {
+            self.modified = true;
+        }
+        updated
     }
 
     pub fn mark_channel_messages_as_received(
@@ -220,7 +257,12 @@ impl ChainState {
                 );
             }
         };
-        Self::mark_messages_as_received(&mut channel.outboxes, &origin, recipient, height)
+        let updated =
+            Self::mark_messages_as_received(&mut channel.outboxes, &origin, recipient, height);
+        if updated {
+            self.modified = true;
+        }
+        updated
     }
 
     /// Invariant for the states of active chains.
@@ -303,6 +345,7 @@ impl ChainState {
         );
         // Mark the block as received.
         inbox.next_height_to_receive = height.try_add_one()?;
+        self.modified = true;
         self.received_keys.push(key);
 
         let mut was_a_recipient = false;
@@ -502,6 +545,7 @@ impl ChainState {
         }
         // Last, recompute the state hash.
         self.state_hash = HashValue::new(&self.state);
+        self.modified = true;
         Ok(effects)
     }
 
