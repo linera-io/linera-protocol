@@ -4,7 +4,7 @@
 use crate::config::GenesisConfig;
 use anyhow::format_err;
 use clap::arg_enum;
-use linera_storage::{InMemoryStoreClient, RocksdbStoreClient, S3Storage, Storage};
+use linera_storage::{BucketStatus, InMemoryStoreClient, RocksdbStoreClient, S3Storage, Storage};
 use std::{path::PathBuf, str::FromStr};
 
 /// The description of a storage implementation.
@@ -52,11 +52,14 @@ impl StorageConfig {
                 config.initialize_store(&mut client).await?;
                 Box::new(client)
             }
-            S3 { config } => {
-                let (client, _bucket_status) = match config {
+            S3 { config: s3_config } => {
+                let (mut client, bucket_status) = match s3_config {
                     S3Config::Env => S3Storage::new().await?,
                     S3Config::LocalStack => S3Storage::with_localstack().await?,
                 };
+                if bucket_status == BucketStatus::New {
+                    config.initialize_store(&mut client).await?;
+                }
                 Box::new(client)
             }
         };
