@@ -43,7 +43,7 @@ async fn s3_storage_is_initialized() -> Result<(), anyhow::Error> {
     #[async_trait]
     impl<S> Runnable<S> for Job
     where
-        S: Storage + 'static,
+        S: Storage + Send + 'static,
     {
         type Output = ();
         async fn run(self, mut storage: S) -> Result<Self::Output, anyhow::Error> {
@@ -116,7 +116,7 @@ async fn s3_storage_is_not_reinitialized() -> Result<(), anyhow::Error> {
     #[async_trait]
     impl<S> Runnable<S> for Job
     where
-        S: Storage + 'static,
+        S: Storage + Send + 'static,
     {
         type Output = ();
         async fn run(self, mut storage: S) -> Result<Self::Output, anyhow::Error> {

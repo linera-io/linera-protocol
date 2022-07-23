@@ -38,7 +38,7 @@ impl ServerContext {
         storage: S,
     ) -> network::Server<S>
     where
-        S: Storage + Clone + 'static,
+        S: Storage + Clone + Send + Sync + 'static,
     {
         let shard = self.server_config.internal_network.shard(shard_id);
         info!("Shard booted on {}", shard.host);
@@ -60,7 +60,7 @@ impl ServerContext {
 
     async fn make_servers<S>(&self, local_ip_addr: &str, storage: S) -> Vec<network::Server<S>>
     where
-        S: Storage + Clone + 'static,
+        S: Storage + Clone + Send + Sync + 'static,
     {
         let num_shards = self.server_config.internal_network.shards.len();
         let mut servers = Vec::new();
@@ -77,7 +77,7 @@ impl ServerContext {
 #[async_trait]
 impl<S> Runnable<S> for ServerContext
 where
-    S: Storage + Clone + 'static,
+    S: Storage + Clone + Send + Sync + 'static,
 {
     type Output = ();
 

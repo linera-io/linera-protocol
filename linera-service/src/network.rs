@@ -147,7 +147,7 @@ impl<Storage> Server<Storage> {
 
 impl<Storage> Server<Storage>
 where
-    Storage: linera_storage::Storage + Clone + 'static,
+    Storage: linera_storage::Storage + Clone + Send + Sync + 'static,
 {
     async fn forward_cross_chain_queries(
         network: ValidatorInternalNetworkConfig,
@@ -237,7 +237,7 @@ struct RunningServerState<Storage> {
 
 impl<Storage> MessageHandler for RunningServerState<Storage>
 where
-    Storage: linera_storage::Storage + Clone + 'static,
+    Storage: linera_storage::Storage + Clone + Send + Sync + 'static,
 {
     fn handle_message(
         &mut self,
