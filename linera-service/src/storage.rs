@@ -7,6 +7,10 @@ use clap::arg_enum;
 use linera_storage::{BucketStatus, InMemoryStoreClient, RocksdbStoreClient, S3Storage, Storage};
 use std::{path::PathBuf, str::FromStr};
 
+#[cfg(test)]
+#[path = "unit_tests/storage.rs"]
+mod unit_tests;
+
 /// The description of a storage implementation.
 #[derive(Debug)]
 #[cfg_attr(any(test), derive(Eq, PartialEq))]
