@@ -62,7 +62,7 @@ impl Import for ValidatorServerConfig {}
 impl Export for ValidatorServerConfig {}
 
 /// The (public) configuration for all validators.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Default, Clone, Deserialize, Serialize)]
 pub struct CommitteeConfig {
     pub validators: Vec<ValidatorConfig>,
 }
@@ -195,7 +195,7 @@ impl WalletState {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct GenesisConfig {
     pub committee: CommitteeConfig,
     pub admin_id: ChainId,

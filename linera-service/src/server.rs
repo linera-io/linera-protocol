@@ -5,6 +5,7 @@
 #![deny(warnings)]
 
 use anyhow::{anyhow, ensure};
+use async_trait::async_trait;
 use futures::future::join_all;
 use linera_base::{crypto::*, messages::ValidatorName};
 use linera_core::worker::*;
@@ -12,9 +13,10 @@ use linera_service::{
     config::*,
     network,
     network::{ShardConfig, ShardId, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig},
-    storage::{MixedStorage, StorageConfig},
+    storage::{Runnable, StorageConfig},
     transport,
 };
+use linera_storage::Storage;
 use log::*;
 use std::{
     path::{Path, PathBuf},
@@ -22,54 +24,106 @@ use std::{
 };
 use structopt::StructOpt;
 
-#[allow(clippy::too_many_arguments)]
-async fn make_shard_server(
-    local_ip_addr: &str,
-    server_config: &ValidatorServerConfig,
+struct ServerContext {
+    server_config: ValidatorServerConfig,
     cross_chain_config: network::CrossChainConfig,
-    shard_id: ShardId,
-    storage: MixedStorage,
-) -> network::Server<MixedStorage> {
-    let shard = server_config.internal_network.shard(shard_id);
-    info!("Shard booted on {}", shard.host);
-    let state = WorkerState::new(
-        format!("Shard {} @ {}:{}", shard_id, local_ip_addr, shard.port),
-        Some(server_config.key.copy()),
-        storage,
-    )
-    .allow_inactive_chains(false);
-    network::Server::new(
-        server_config.internal_network.clone(),
-        local_ip_addr.to_string(),
-        shard.port,
-        state,
-        shard_id,
-        cross_chain_config,
-    )
+    shard: Option<usize>,
 }
 
-async fn make_servers(
-    local_ip_addr: &str,
-    server_config: &ValidatorServerConfig,
-    genesis_config: &GenesisConfig,
-    cross_chain_config: network::CrossChainConfig,
-    storage_config: &StorageConfig,
-) -> Vec<network::Server<MixedStorage>> {
-    let num_shards = server_config.internal_network.shards.len();
-    let mut servers = Vec::new();
-    for shard in 0..num_shards {
-        let storage = storage_config.make_storage(genesis_config).await.unwrap();
-        let server = make_shard_server(
-            local_ip_addr,
-            server_config,
-            cross_chain_config.clone(),
-            shard,
+impl ServerContext {
+    async fn make_shard_server<S>(
+        &self,
+        local_ip_addr: &str,
+        shard_id: ShardId,
+        storage: S,
+    ) -> network::Server<S>
+    where
+        S: Storage + Clone + 'static,
+    {
+        let shard = self.server_config.internal_network.shard(shard_id);
+        info!("Shard booted on {}", shard.host);
+        let state = WorkerState::new(
+            format!("Shard {} @ {}:{}", shard_id, local_ip_addr, shard.port),
+            Some(self.server_config.key.copy()),
             storage,
         )
-        .await;
-        servers.push(server)
+        .allow_inactive_chains(false);
+        network::Server::new(
+            self.server_config.internal_network.clone(),
+            local_ip_addr.to_string(),
+            shard.port,
+            state,
+            shard_id,
+            self.cross_chain_config.clone(),
+        )
     }
-    servers
+
+    async fn make_servers<S>(&self, local_ip_addr: &str, storage: S) -> Vec<network::Server<S>>
+    where
+        S: Storage + Clone + 'static,
+    {
+        let num_shards = self.server_config.internal_network.shards.len();
+        let mut servers = Vec::new();
+        for shard in 0..num_shards {
+            let server = self
+                .make_shard_server(local_ip_addr, shard, storage.clone())
+                .await;
+            servers.push(server)
+        }
+        servers
+    }
+}
+
+#[async_trait]
+impl<S> Runnable<S> for ServerContext
+where
+    S: Storage + Clone + 'static,
+{
+    type Output = ();
+
+    async fn run(self, storage: S) -> Result<(), anyhow::Error> {
+        // Run the server
+        let servers = match self.shard {
+            Some(shard) => {
+                info!("Running shard number {}", shard);
+
+                let server = self
+                    .make_shard_server(
+                        "0.0.0.0", // Allow local IP address to be different from the public one.
+                        shard, storage,
+                    )
+                    .await;
+                vec![server]
+            }
+            None => {
+                info!("Running all shards");
+                self.make_servers(
+                    "0.0.0.0", // Allow local IP address to be different from the public one.
+                    storage,
+                )
+                .await
+            }
+        };
+
+        let mut handles = Vec::new();
+        for server in servers {
+            handles.push(async move {
+                let spawned_server = match server.spawn().await {
+                    Ok(server) => server,
+                    Err(err) => {
+                        error!("Failed to start server: {}", err);
+                        return;
+                    }
+                };
+                if let Err(err) = spawned_server.join().await {
+                    error!("Server ended with an error: {}", err);
+                }
+            });
+        }
+        join_all(handles).await;
+
+        Ok(())
+    }
 }
 
 #[derive(StructOpt)]
@@ -80,7 +134,7 @@ async fn make_servers(
 struct ServerOptions {
     /// Subcommands. Acceptable values are run and generate.
     #[structopt(subcommand)]
-    cmd: ServerCommands,
+    command: ServerCommands,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -201,7 +255,7 @@ async fn main() {
         .init();
     let options = ServerOptions::from_args();
 
-    match options.cmd {
+    match options.command {
         ServerCommands::Run {
             server_config_path,
             storage_config,
@@ -213,51 +267,15 @@ async fn main() {
                 .expect("Fail to read initial chain config");
             let server_config = ValidatorServerConfig::read(&server_config_path)
                 .expect("Fail to read server config");
-
-            // Run the server
-            let servers = match shard {
-                Some(shard) => {
-                    info!("Running shard number {}", shard);
-                    let storage = storage_config.make_storage(&genesis_config).await.unwrap();
-                    let server = make_shard_server(
-                        "0.0.0.0", // Allow local IP address to be different from the public one.
-                        &server_config,
-                        cross_chain_config,
-                        shard,
-                        storage,
-                    )
-                    .await;
-                    vec![server]
-                }
-                None => {
-                    info!("Running all shards");
-                    make_servers(
-                        "0.0.0.0", // Allow local IP address to be different from the public one.
-                        &server_config,
-                        &genesis_config,
-                        cross_chain_config,
-                        &storage_config,
-                    )
-                    .await
-                }
+            let job = ServerContext {
+                server_config,
+                cross_chain_config,
+                shard,
             };
-
-            let mut handles = Vec::new();
-            for server in servers {
-                handles.push(async move {
-                    let spawned_server = match server.spawn().await {
-                        Ok(server) => server,
-                        Err(err) => {
-                            error!("Failed to start server: {}", err);
-                            return;
-                        }
-                    };
-                    if let Err(err) = spawned_server.join().await {
-                        error!("Server ended with an error: {}", err);
-                    }
-                });
-            }
-            join_all(handles).await;
+            storage_config
+                .run_with_storage(&genesis_config, job)
+                .await
+                .unwrap();
         }
 
         ServerCommands::Generate {
