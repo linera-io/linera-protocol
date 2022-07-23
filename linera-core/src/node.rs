@@ -43,7 +43,7 @@ pub struct LocalNodeClient<S>(Arc<Mutex<LocalNode<S>>>);
 #[async_trait]
 impl<S> ValidatorNode for LocalNodeClient<S>
 where
-    S: Storage + Clone + 'static,
+    S: Storage + Clone + Send + Sync + 'static,
 {
     async fn handle_block_proposal(
         &mut self,
@@ -97,7 +97,7 @@ where
 
 impl<S> LocalNodeClient<S>
 where
-    S: Storage + Clone + 'static,
+    S: Storage + Clone + Send + Sync + 'static,
 {
     pub(crate) async fn stage_block_execution(
         &self,

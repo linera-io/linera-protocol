@@ -26,7 +26,7 @@ use linera_base::{
 /// * Writes should be blocking until they are completed.
 /// * Reads should be optimized to hit a local cache.
 #[async_trait]
-pub trait Storage: Send + Sync {
+pub trait Storage {
     async fn read_active_chain(&mut self, id: ChainId) -> Result<ChainState, Error> {
         let chain = self.read_chain_or_default(id).await?;
         ensure!(chain.is_active(), Error::InactiveChain(id));
@@ -46,7 +46,7 @@ pub trait Storage: Send + Sync {
         keys: I,
     ) -> Result<Vec<Certificate>, Error>
     where
-        Self: Clone + 'static,
+        Self: Clone + Send + 'static,
     {
         let mut tasks = Vec::new();
         for key in keys {

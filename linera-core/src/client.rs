@@ -208,7 +208,7 @@ impl<P, S> ChainClientState<P, S>
 where
     P: ValidatorNodeProvider,
     P::Node: ValidatorNode + Send + Sync + 'static + Clone,
-    S: Storage + Clone + 'static,
+    S: Storage + Clone + Send + Sync + 'static,
 {
     async fn chain_info(&mut self) -> Result<ChainInfo, Error> {
         let query = ChainInfoQuery::new(self.chain_id);
@@ -346,7 +346,7 @@ impl<P, S> ChainClientState<P, S>
 where
     P: ValidatorNodeProvider + Send + 'static,
     P::Node: ValidatorNode + Send + Sync + 'static + Clone,
-    S: Storage + Clone + 'static,
+    S: Storage + Clone + Send + Sync + 'static,
 {
     /// Prepare the chain for the next operation.
     async fn prepare_chain(&mut self) -> Result<(), Error> {
@@ -816,7 +816,7 @@ impl<P, S> ChainClient for ChainClientState<P, S>
 where
     P: ValidatorNodeProvider + Send + 'static,
     P::Node: ValidatorNode + Send + Sync + 'static + Clone,
-    S: Storage + Clone + 'static,
+    S: Storage + Clone + Send + Sync + 'static,
 {
     async fn local_balance(&mut self) -> Result<Balance> {
         ensure!(

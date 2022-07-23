@@ -82,7 +82,7 @@ impl<Client> WorkerState<Client> {
 
 impl<Client> WorkerState<Client>
 where
-    Client: Storage + Clone + 'static,
+    Client: Storage + Clone + Send + Sync + 'static,
 {
     // NOTE: This only works for non-sharded workers!
     pub(crate) async fn fully_handle_certificate(
@@ -281,7 +281,7 @@ where
 #[async_trait]
 impl<Client> ValidatorWorker for WorkerState<Client>
 where
-    Client: Storage + Clone + 'static,
+    Client: Storage + Clone + Send + Sync + 'static,
 {
     async fn handle_block_proposal(
         &mut self,

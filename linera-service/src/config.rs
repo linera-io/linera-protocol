@@ -157,7 +157,7 @@ impl WalletState {
     where
         P: ValidatorNodeProvider + Send + 'static,
         P::Node: ValidatorNode + Send + Sync + 'static + Clone,
-        S: Storage + Clone + 'static,
+        S: Storage + Clone + Send + Sync + 'static,
     {
         let chain = self
             .chains
