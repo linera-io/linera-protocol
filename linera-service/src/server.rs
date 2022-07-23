@@ -134,7 +134,7 @@ where
 struct ServerOptions {
     /// Subcommands. Acceptable values are run and generate.
     #[structopt(subcommand)]
-    command: ServerCommands,
+    command: ServerCommand,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -210,7 +210,7 @@ fn make_server_config(options: ValidatorOptions) -> ValidatorServerConfig {
 }
 
 #[derive(StructOpt)]
-enum ServerCommands {
+enum ServerCommand {
     /// Runs a service for each shard of the Zef validator")
     #[structopt(name = "run")]
     Run {
@@ -256,7 +256,7 @@ async fn main() {
     let options = ServerOptions::from_args();
 
     match options.command {
-        ServerCommands::Run {
+        ServerCommand::Run {
             server_config_path,
             storage_config,
             cross_chain_config,
@@ -278,7 +278,7 @@ async fn main() {
                 .unwrap();
         }
 
-        ServerCommands::Generate {
+        ServerCommand::Generate {
             validators,
             committee,
         } => {

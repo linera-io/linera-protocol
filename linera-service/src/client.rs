@@ -83,11 +83,8 @@ impl ClientContext {
             ClientCommand::CreateGenesisConfig { admin_root, .. } => {
                 GenesisConfig::new(CommitteeConfig::default(), ChainId::root(admin_root))
             }
-            _ => {
-                // Every other command uses the real chain storage.
-                GenesisConfig::read(&options.genesis_config_path)
-                    .expect("Fail to read initial chain config")
-            }
+            _ => GenesisConfig::read(&options.genesis_config_path)
+                .expect("Fail to read initial chain config"),
         };
         let send_timeout = Duration::from_micros(options.send_timeout_us);
         let recv_timeout = Duration::from_micros(options.recv_timeout_us);
