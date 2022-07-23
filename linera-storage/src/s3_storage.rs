@@ -1,6 +1,6 @@
 use crate::Storage;
 use async_trait::async_trait;
-use aws_sdk_s3::{error::CreateBucketError, types::SdkError, Client, Endpoint};
+use aws_sdk_s3::{types::SdkError, Client, Endpoint};
 use http::uri::InvalidUri;
 use linera_base::{
     chain::ChainState,
@@ -40,7 +40,7 @@ impl S3Storage {
     /// Loads any necessary configuration from environment variables, and creates the necessary
     /// buckets if they don't yet exist, reporting a [`BucketStatus`] to indicate if the bucket was
     /// created or if it already exists.
-    pub async fn new() -> Result<(Self, BucketStatus), SdkError<CreateBucketError>> {
+    pub async fn new() -> Result<(Self, BucketStatus), S3StorageError> {
         let config = aws_config::load_from_env().await;
 
         S3Storage::from_config(&config).await
@@ -52,12 +52,12 @@ impl S3Storage {
     /// indicate if the bucket was created or if it already exists.
     pub async fn from_config(
         config: impl Into<aws_sdk_s3::Config>,
-    ) -> Result<(Self, BucketStatus), SdkError<CreateBucketError>> {
+    ) -> Result<(Self, BucketStatus), S3StorageError> {
         let s3_storage = S3Storage {
             client: Client::from_conf(config.into()),
         };
 
-        let bucket_status = s3_storage.try_create_bucket().await?;
+        let bucket_status = s3_storage.create_bucket_if_needed().await?;
 
         Ok((s3_storage, bucket_status))
     }
@@ -77,18 +77,23 @@ impl S3Storage {
         Ok(S3Storage::from_config(config).await.map_err(Box::new)?)
     }
 
-    /// Tries to create a bucket for storing the data.
-    ///
-    /// Will not fail if it already exists.
+    /// Checks if the bucket already exists and tries to create it if it doesn't.
     ///
     /// Returns a [`BucketStatus`] to indicate if it created the bucket or if already exists.
-    async fn try_create_bucket(&self) -> Result<BucketStatus, SdkError<CreateBucketError>> {
-        match self.client.create_bucket().bucket(BUCKET).send().await {
-            Ok(_) => Ok(BucketStatus::New),
-            Err(SdkError::ServiceError { err, .. }) if err.is_bucket_already_exists() => {
-                Ok(BucketStatus::Existing)
+    async fn create_bucket_if_needed(&self) -> Result<BucketStatus, S3StorageError> {
+        match self
+            .client
+            .get_bucket_location()
+            .bucket(BUCKET)
+            .send()
+            .await
+        {
+            Ok(_) => Ok(BucketStatus::Existing),
+            Err(SdkError::ServiceError { err, .. }) if err.code() == Some("NoSuchBucket") => {
+                self.client.create_bucket().bucket(BUCKET).send().await?;
+                Ok(BucketStatus::New)
             }
-            Err(error) => Err(error),
+            Err(error) => Err(error.into()),
         }
     }
 
@@ -210,6 +215,12 @@ pub enum BucketStatus {
 #[derive(Debug, Error)]
 pub enum S3StorageError {
     #[error(transparent)]
+    CheckIfBucketExists(#[from] SdkError<aws_sdk_s3::error::GetBucketLocationError>),
+
+    #[error(transparent)]
+    CreateBucket(#[from] SdkError<aws_sdk_s3::error::CreateBucketError>),
+
+    #[error(transparent)]
     Get(#[from] SdkError<aws_sdk_s3::error::GetObjectError>),
 
     #[error(transparent)]
@@ -258,5 +269,5 @@ pub enum LocalStackError {
     InvalidUri(#[from] InvalidUri),
 
     #[error(transparent)]
-    CreateBucket(#[from] Box<SdkError<CreateBucketError>>),
+    InitializeBucket(#[from] Box<S3StorageError>),
 }
