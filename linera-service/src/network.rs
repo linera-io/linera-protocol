@@ -11,6 +11,7 @@ use async_trait::async_trait;
 use futures::{channel::mpsc, sink::SinkExt, stream::StreamExt};
 use linera_base::{error::*, messages::*, rpc};
 use linera_core::{node::ValidatorNode, worker::*};
+use linera_storage::Storage;
 use log::*;
 use serde::{Deserialize, Serialize};
 use std::{io, time::Duration};
@@ -102,11 +103,11 @@ impl ValidatorInternalNetworkConfig {
 }
 
 #[derive(Clone)]
-pub struct Server<Storage> {
+pub struct Server<S> {
     network: ValidatorInternalNetworkConfig,
     host: String,
     port: u16,
-    state: WorkerState<Storage>,
+    state: WorkerState<S>,
     shard_id: ShardId,
     cross_chain_config: CrossChainConfig,
     // Stats
@@ -114,13 +115,13 @@ pub struct Server<Storage> {
     user_errors: u64,
 }
 
-impl<Storage> Server<Storage> {
+impl<S> Server<S> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         network: ValidatorInternalNetworkConfig,
         host: String,
         port: u16,
-        state: WorkerState<Storage>,
+        state: WorkerState<S>,
         shard_id: ShardId,
         cross_chain_config: CrossChainConfig,
     ) -> Self {
@@ -145,9 +146,9 @@ impl<Storage> Server<Storage> {
     }
 }
 
-impl<Storage> Server<Storage>
+impl<S> Server<S>
 where
-    Storage: linera_storage::Storage + Clone + Send + Sync + 'static,
+    S: Storage + Clone + Send + Sync + 'static,
 {
     async fn forward_cross_chain_queries(
         network: ValidatorInternalNetworkConfig,
@@ -229,15 +230,15 @@ where
 }
 
 #[derive(Clone)]
-struct RunningServerState<Storage> {
+struct RunningServerState<S> {
     chain_guards: ChainGuards,
-    server: Server<Storage>,
+    server: Server<S>,
     cross_chain_sender: mpsc::Sender<(rpc::Message, ShardId)>,
 }
 
-impl<Storage> MessageHandler for RunningServerState<Storage>
+impl<S> MessageHandler for RunningServerState<S>
 where
-    Storage: linera_storage::Storage + Clone + Send + Sync + 'static,
+    S: Storage + Clone + Send + Sync + 'static,
 {
     fn handle_message(
         &mut self,
@@ -309,9 +310,9 @@ where
     }
 }
 
-impl<Storage> RunningServerState<Storage>
+impl<S> RunningServerState<S>
 where
-    Storage: Send,
+    S: Send,
 {
     async fn obtain_chain_guard_for(&mut self, message: &rpc::Message) -> Option<ChainGuard> {
         let chain_id = message.target_chain_id()?;
