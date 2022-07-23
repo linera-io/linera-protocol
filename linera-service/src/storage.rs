@@ -3,8 +3,9 @@
 
 use crate::config::GenesisConfig;
 use anyhow::format_err;
+use async_trait::async_trait;
 use clap::arg_enum;
-use linera_storage::{BucketStatus, InMemoryStoreClient, RocksdbStoreClient, S3Storage, Storage};
+use linera_storage::{BucketStatus, InMemoryStoreClient, RocksdbStoreClient, S3Storage};
 use std::{path::PathBuf, str::FromStr};
 
 #[cfg(test)]
@@ -31,30 +32,41 @@ pub enum S3Config {
 
 }
 
-pub type MixedStorage = Box<dyn Storage>;
+#[async_trait]
+pub trait Runnable<Storage> {
+    type Output;
+
+    async fn run(self, storage: Storage) -> Result<Self::Output, anyhow::Error>;
+}
 
 impl StorageConfig {
-    pub async fn make_storage(
+    pub async fn run_with_storage<Job, Output>(
         &self,
         config: &GenesisConfig,
-    ) -> Result<MixedStorage, anyhow::Error> {
+        job: Job,
+    ) -> Result<Output, anyhow::Error>
+    where
+        Job: Runnable<InMemoryStoreClient, Output = Output>
+            + Runnable<RocksdbStoreClient, Output = Output>
+            + Runnable<S3Storage, Output = Output>,
+    {
         use StorageConfig::*;
-        let client: MixedStorage = match self {
+        match self {
             InMemory => {
                 let mut client = InMemoryStoreClient::default();
                 config.initialize_store(&mut client).await?;
-                Box::new(client)
+                job.run(client).await
             }
             Rocksdb { path } if path.is_dir() => {
                 log::warn!("Using existing database {:?}", path);
                 let client = RocksdbStoreClient::new(path.clone(), 10000)?;
-                Box::new(client)
+                job.run(client).await
             }
             Rocksdb { path } => {
                 std::fs::create_dir_all(path)?;
                 let mut client = RocksdbStoreClient::new(path.clone(), 10000)?;
                 config.initialize_store(&mut client).await?;
-                Box::new(client)
+                job.run(client).await
             }
             S3 { config: s3_config } => {
                 let (mut client, bucket_status) = match s3_config {
@@ -64,10 +76,9 @@ impl StorageConfig {
                 if bucket_status == BucketStatus::New {
                     config.initialize_store(&mut client).await?;
                 }
-                Box::new(client)
+                job.run(client).await
             }
-        };
-        Ok(client)
+        }
     }
 }
 

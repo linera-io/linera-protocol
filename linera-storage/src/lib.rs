@@ -13,7 +13,6 @@ pub use s3_storage::*;
 pub use s3_storage::s3_storage_tests::LocalStackTestContext;
 
 use async_trait::async_trait;
-use dyn_clone::DynClone;
 use futures::future;
 use linera_base::{
     chain::ChainState,
@@ -22,13 +21,12 @@ use linera_base::{
     error::Error,
     messages::{Certificate, ChainId},
 };
-use std::ops::DerefMut;
 
 /// How to communicate with a persistent storage.
 /// * Writes should be blocking until they are completed.
 /// * Reads should be optimized to hit a local cache.
 #[async_trait]
-pub trait Storage: DynClone + Send + Sync {
+pub trait Storage: Send + Sync {
     async fn read_active_chain(&mut self, id: ChainId) -> Result<ChainState, Error> {
         let chain = self.read_chain_or_default(id).await?;
         ensure!(chain.is_active(), Error::InactiveChain(id));
@@ -48,7 +46,7 @@ pub trait Storage: DynClone + Send + Sync {
         keys: I,
     ) -> Result<Vec<Certificate>, Error>
     where
-        Self: Clone + Send + 'static,
+        Self: Clone + 'static,
     {
         let mut tasks = Vec::new();
         for key in keys {
@@ -66,29 +64,4 @@ pub trait Storage: DynClone + Send + Sync {
     }
 
     async fn write_certificate(&mut self, certificate: Certificate) -> Result<(), Error>;
-}
-
-dyn_clone::clone_trait_object!(Storage);
-
-#[async_trait]
-impl Storage for Box<dyn Storage> {
-    async fn read_chain_or_default(&mut self, id: ChainId) -> Result<ChainState, Error> {
-        self.deref_mut().read_chain_or_default(id).await
-    }
-
-    async fn write_chain(&mut self, value: ChainState) -> Result<(), Error> {
-        self.deref_mut().write_chain(value).await
-    }
-
-    async fn remove_chain(&mut self, id: ChainId) -> Result<(), Error> {
-        self.deref_mut().remove_chain(id).await
-    }
-
-    async fn read_certificate(&mut self, hash: HashValue) -> Result<Certificate, Error> {
-        self.deref_mut().read_certificate(hash).await
-    }
-
-    async fn write_certificate(&mut self, value: Certificate) -> Result<(), Error> {
-        self.deref_mut().write_certificate(value).await
-    }
 }

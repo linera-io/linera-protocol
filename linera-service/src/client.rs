@@ -4,6 +4,7 @@
 
 #![deny(warnings)]
 
+use async_trait::async_trait;
 use linera_base::{
     committee::ValidatorState,
     crypto::*,
@@ -21,9 +22,9 @@ use linera_service::{
     config::*,
     network,
     network::ValidatorPublicNetworkConfig,
-    storage::{MixedStorage, StorageConfig},
+    storage::{Runnable, StorageConfig},
 };
-use linera_storage::{InMemoryStoreClient, Storage};
+use linera_storage::Storage;
 use log::*;
 use std::{
     collections::{HashMap, HashSet},
@@ -34,11 +35,9 @@ use std::{
 use structopt::StructOpt;
 
 struct ClientContext {
-    committee_config: CommitteeConfig,
-    admin_id: ChainId,
+    genesis_config: GenesisConfig,
     wallet_state_path: PathBuf,
     wallet_state: WalletState,
-    storage_client: MixedStorage,
     max_pending_messages: usize,
     send_timeout: Duration,
     recv_timeout: Duration,
@@ -80,27 +79,14 @@ impl ClientContext {
         let wallet_state_path = options.wallet_state_path.clone();
         let wallet_state =
             WalletState::read_or_create(&wallet_state_path).expect("Unable to read user chains");
-        let (storage_client, committee_config, admin_id): (MixedStorage, _, _) = match options.cmd {
-            ClientCommands::CreateGenesisConfig { admin_root, .. } => {
-                // This is a placeholder to avoid create a DB on disk at this point.
-                (
-                    Box::new(InMemoryStoreClient::default()),
-                    CommitteeConfig {
-                        validators: Vec::new(),
-                    },
-                    ChainId::root(admin_root),
-                )
+        let genesis_config = match options.command {
+            ClientCommand::CreateGenesisConfig { admin_root, .. } => {
+                GenesisConfig::new(CommitteeConfig::default(), ChainId::root(admin_root))
             }
             _ => {
                 // Every other command uses the real chain storage.
-                let genesis_config = GenesisConfig::read(&options.genesis_config_path)
-                    .expect("Fail to read initial chain config");
-                let storage = options
-                    .storage_config
-                    .make_storage(&genesis_config)
-                    .await
-                    .unwrap();
-                (storage, genesis_config.committee, genesis_config.admin_id)
+                GenesisConfig::read(&options.genesis_config_path)
+                    .expect("Fail to read initial chain config")
             }
         };
         let send_timeout = Duration::from_micros(options.send_timeout_us);
@@ -108,11 +94,9 @@ impl ClientContext {
         let cross_chain_delay = Duration::from_micros(options.cross_chain_delay_ms);
 
         ClientContext {
-            committee_config,
-            admin_id,
+            genesis_config,
             wallet_state_path,
             wallet_state,
-            storage_client,
             max_pending_messages: options.max_pending_messages,
             send_timeout,
             recv_timeout,
@@ -123,7 +107,7 @@ impl ClientContext {
 
     fn make_validator_mass_clients(&self, max_in_flight: u64) -> Vec<network::MassClient> {
         let mut validator_clients = Vec::new();
-        for config in &self.committee_config.validators {
+        for config in &self.genesis_config.committee.validators {
             let client = network::MassClient::new(
                 config.network.clone(),
                 self.send_timeout,
@@ -135,7 +119,11 @@ impl ClientContext {
         validator_clients
     }
 
-    fn make_chain_client(&self, chain_id: ChainId) -> ChainClientState<NodeProvider, MixedStorage> {
+    fn make_chain_client<S>(
+        &self,
+        storage: S,
+        chain_id: ChainId,
+    ) -> ChainClientState<NodeProvider, S> {
         let chain = self.wallet_state.get(chain_id).expect("Unknown chain");
         ChainClientState::new(
             chain_id,
@@ -146,8 +134,8 @@ impl ClientContext {
                 .into_iter()
                 .collect(),
             self.node_provider(),
-            self.storage_client.clone(),
-            self.admin_id,
+            storage,
+            self.genesis_config.admin_id,
             self.max_pending_messages,
             chain.block_hash,
             chain.next_block_height,
@@ -196,7 +184,7 @@ impl ClientContext {
 
     /// Try to aggregate votes into certificates.
     fn make_benchmark_certificates_from_votes(&self, votes: Vec<Vote>) -> Vec<Certificate> {
-        let committee = self.committee_config.clone().into_committee();
+        let committee = self.genesis_config.committee.clone().into_committee();
         let mut aggregators = HashMap::new();
         let mut certificates = Vec::new();
         let mut done_senders = HashSet::new();
@@ -296,14 +284,16 @@ impl ClientContext {
         });
     }
 
-    async fn update_wallet_from_certificates(&mut self, certificates: Vec<Certificate>) {
+    async fn update_wallet_from_certificates<S>(
+        &mut self,
+        storage: S,
+        certificates: Vec<Certificate>,
+    ) where
+        S: Storage + Clone + 'static,
+    {
         // First instantiate a local node on top of storage.
-        let worker = WorkerState::new(
-            "Temporary client node".to_string(),
-            None,
-            self.storage_client.clone(),
-        )
-        .allow_inactive_chains(true);
+        let worker = WorkerState::new("Temporary client node".to_string(), None, storage)
+            .allow_inactive_chains(true);
         let mut node = LocalNodeClient::new(worker);
         // Second replay the certificates locally.
         for certificate in certificates {
@@ -319,14 +309,17 @@ impl ClientContext {
         }
     }
 
-    async fn ensure_admin_subscription(&mut self) -> Vec<Certificate> {
+    async fn ensure_admin_subscription<S>(&mut self, storage: &S) -> Vec<Certificate>
+    where
+        S: Storage + Clone + 'static,
+    {
         let mut certificates = Vec::new();
         for chain_id in self.wallet_state.chain_ids() {
-            let mut client_state = self.make_chain_client(chain_id);
+            let mut client_state = self.make_chain_client(storage.clone(), chain_id);
             if let Ok(cert) = client_state.subscribe_to_new_committees().await {
                 info!(
                     "Subscribed {:?} to the admin chain {:?}",
-                    chain_id, self.admin_id
+                    chain_id, self.genesis_config.admin_id,
                 );
                 certificates.push(cert);
                 self.update_wallet_from_client(&mut client_state).await;
@@ -335,9 +328,12 @@ impl ClientContext {
         certificates
     }
 
-    async fn push_to_all_chains(&mut self, certificate: &Certificate) {
+    async fn push_to_all_chains<S>(&mut self, storage: &S, certificate: &Certificate)
+    where
+        S: Storage + Clone + 'static,
+    {
         for chain_id in self.wallet_state.chain_ids() {
-            let mut client_state = self.make_chain_client(chain_id);
+            let mut client_state = self.make_chain_client(storage.clone(), chain_id);
             client_state
                 .receive_certificate(certificate.clone())
                 .await
@@ -400,13 +396,13 @@ struct ClientOptions {
     #[structopt(long, default_value = "10")]
     max_pending_messages: usize,
 
-    /// Subcommands.
+    /// Subcommand.
     #[structopt(subcommand)]
-    cmd: ClientCommands,
+    command: ClientCommand,
 }
 
 #[derive(StructOpt)]
-enum ClientCommands {
+enum ClientCommand {
     /// Transfer funds
     #[structopt(name = "transfer")]
     Transfer {
@@ -521,215 +517,238 @@ enum ClientCommands {
     },
 }
 
-#[tokio::main]
-async fn main() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
-    let options = ClientOptions::from_args();
-    let mut context = ClientContext::from_options(&options).await;
-    use ClientCommands::*;
-    match options.cmd {
-        Transfer {
-            sender,
-            recipient,
-            amount,
-        } => {
-            let mut client_state = context.make_chain_client(sender);
-            info!("Starting transfer");
-            let time_start = Instant::now();
-            let certificate = client_state
-                .transfer_to_chain(amount, recipient, UserData::default())
-                .await
-                .unwrap();
-            let time_total = time_start.elapsed().as_micros();
-            info!("Operation confirmed after {} us", time_total);
-            info!("{:?}", certificate);
-            context.update_wallet_from_client(&mut client_state).await;
-            context.save_chains();
-        }
+struct Job(ClientContext, ClientCommand);
 
-        OpenChain { sender, owner } => {
-            let mut client_state = context.make_chain_client(sender);
-            let (new_owner, key_pair) = match owner {
-                Some(key) => (key, None),
-                None => {
-                    let key_pair = KeyPair::generate();
-                    (Owner(key_pair.public()), Some(key_pair))
-                }
-            };
-            info!("Starting operation to open a new chain");
-            let time_start = Instant::now();
-            let (id, certificate) = client_state.open_chain(new_owner).await.unwrap();
-            let time_total = time_start.elapsed().as_micros();
-            info!("Operation confirmed after {} us", time_total);
-            info!("{:?}", certificate);
-            context.update_wallet_from_client(&mut client_state).await;
-            context.update_wallet_for_new_chain(id, key_pair);
-            // Print the new chain id(s) on stdout for the scripting purposes.
-            println!("{}", id);
-            context.save_chains();
-        }
+#[async_trait]
+impl<S> Runnable<S> for Job
+where
+    S: Storage + Clone + 'static,
+{
+    type Output = ();
 
-        CloseChain { sender } => {
-            let mut client_state = context.make_chain_client(sender);
-            info!("Starting operation to close the chain");
-            let time_start = Instant::now();
-            let certificate = client_state.close_chain().await.unwrap();
-            let time_total = time_start.elapsed().as_micros();
-            info!("Operation confirmed after {} us", time_total);
-            info!("{:?}", certificate);
-            context.update_wallet_from_client(&mut client_state).await;
-            context.save_chains();
-        }
-
-        QueryBalance { chain_id } => {
-            let mut client_state = context.make_chain_client(chain_id);
-            info!("Starting query for the local balance");
-            let time_start = Instant::now();
-            let balance = client_state.local_balance().await.unwrap();
-            let time_total = time_start.elapsed().as_micros();
-            info!("Local balance obtained after {} us", time_total);
-            println!("{}", balance);
-            context.update_wallet_from_client(&mut client_state).await;
-            context.save_chains();
-        }
-
-        SynchronizeBalance { chain_id } => {
-            let mut client_state = context.make_chain_client(chain_id);
-            info!("Synchronize chain information");
-            let time_start = Instant::now();
-            let balance = client_state.synchronize_balance().await.unwrap();
-            let time_total = time_start.elapsed().as_micros();
-            info!("Chain balance synchronized after {} us", time_total);
-            println!("{}", balance);
-            context.update_wallet_from_client(&mut client_state).await;
-            context.save_chains();
-        }
-
-        QueryValidators { chain_id } => {
-            let mut client_state = context.make_chain_client(chain_id.unwrap_or(context.admin_id));
-            info!("Starting operation to query validators");
-            let time_start = Instant::now();
-            let committee = client_state.committee().await.unwrap();
-            let time_total = time_start.elapsed().as_micros();
-            info!("Validators obtained after {} us", time_total);
-            info!("{:?}", committee.validators);
-            context.update_wallet_from_client(&mut client_state).await;
-            context.save_chains();
-        }
-
-        cmd @ (SetValidator { .. } | RemoveValidator { .. }) => {
-            info!("Starting operations to change validator set");
-            let time_start = Instant::now();
-
-            // Make sure genesis chains are subscribed to the admin chain.
-            let certificates = context.ensure_admin_subscription().await;
-            let mut admin_state = context.make_chain_client(context.admin_id);
-            for cert in certificates {
-                admin_state.receive_certificate(cert).await.unwrap();
+    async fn run(self, storage: S) -> Result<(), anyhow::Error> {
+        let Job(mut context, command) = self;
+        use ClientCommand::*;
+        match command {
+            Transfer {
+                sender,
+                recipient,
+                amount,
+            } => {
+                let mut client_state = context.make_chain_client(storage, sender);
+                info!("Starting transfer");
+                let time_start = Instant::now();
+                let certificate = client_state
+                    .transfer_to_chain(amount, recipient, UserData::default())
+                    .await
+                    .unwrap();
+                let time_total = time_start.elapsed().as_micros();
+                info!("Operation confirmed after {} us", time_total);
+                info!("{:?}", certificate);
+                context.update_wallet_from_client(&mut client_state).await;
+                context.save_chains();
             }
-            let n = admin_state
-                .process_inbox()
-                .await
-                .unwrap()
-                .into_iter()
-                .map(|c| c.value.effects_and_state_hash().0.len())
-                .sum::<usize>();
-            log::info!("Subscribed {} chains to new committees", n);
 
-            // Create the new committee.
-            let committee = admin_state.committee().await.unwrap();
-            let mut validators = committee.validators;
-            match cmd {
-                SetValidator {
-                    name,
-                    network_address,
-                    votes,
-                } => {
-                    validators.insert(
-                        name,
-                        ValidatorState {
-                            network_address,
-                            votes,
-                        },
-                    );
-                }
-                RemoveValidator { name } => {
-                    if validators.remove(&name).is_none() {
-                        warn!("Skipping removal of nonexistent validator");
-                        return;
+            OpenChain { sender, owner } => {
+                let mut client_state = context.make_chain_client(storage, sender);
+                let (new_owner, key_pair) = match owner {
+                    Some(key) => (key, None),
+                    None => {
+                        let key_pair = KeyPair::generate();
+                        (Owner(key_pair.public()), Some(key_pair))
                     }
-                }
-                _ => unreachable!(),
+                };
+                info!("Starting operation to open a new chain");
+                let time_start = Instant::now();
+                let (id, certificate) = client_state.open_chain(new_owner).await.unwrap();
+                let time_total = time_start.elapsed().as_micros();
+                info!("Operation confirmed after {} us", time_total);
+                info!("{:?}", certificate);
+                context.update_wallet_from_client(&mut client_state).await;
+                context.update_wallet_for_new_chain(id, key_pair);
+                // Print the new chain id(s) on stdout for the scripting purposes.
+                println!("{}", id);
+                context.save_chains();
             }
-            let certificate = admin_state.stage_new_committee(validators).await.unwrap();
-            context.update_wallet_from_client(&mut admin_state).await;
-            info!("{:?}", certificate);
-            context.push_to_all_chains(&certificate).await;
 
-            // Remove the old committee.
-            let certificate = admin_state.finalize_committee().await.unwrap();
-            context.update_wallet_from_client(&mut admin_state).await;
-            info!("{:?}", certificate);
-            context.push_to_all_chains(&certificate).await;
+            CloseChain { sender } => {
+                let mut client_state = context.make_chain_client(storage, sender);
+                info!("Starting operation to close the chain");
+                let time_start = Instant::now();
+                let certificate = client_state.close_chain().await.unwrap();
+                let time_total = time_start.elapsed().as_micros();
+                info!("Operation confirmed after {} us", time_total);
+                info!("{:?}", certificate);
+                context.update_wallet_from_client(&mut client_state).await;
+                context.save_chains();
+            }
 
-            let time_total = time_start.elapsed().as_micros();
-            info!("Operations confirmed after {} us", time_total);
-            context.save_chains();
-        }
+            QueryBalance { chain_id } => {
+                let mut client_state = context.make_chain_client(storage, chain_id);
+                info!("Starting query for the local balance");
+                let time_start = Instant::now();
+                let balance = client_state.local_balance().await.unwrap();
+                let time_total = time_start.elapsed().as_micros();
+                info!("Local balance obtained after {} us", time_total);
+                println!("{}", balance);
+                context.update_wallet_from_client(&mut client_state).await;
+                context.save_chains();
+            }
 
-        Benchmark {
-            max_in_flight,
-            max_proposals,
-        } => {
-            // For this command, we create proposals and gather certificates without using
-            // the client library. We update the wallet storage at the end using a local node.
-            let max_proposals = max_proposals.unwrap_or_else(|| context.wallet_state.num_chains());
-            warn!("Starting benchmark phase 1 (block proposals)");
-            let proposals = context.make_benchmark_block_proposals(max_proposals);
-            let responses = context
-                .mass_broadcast("block proposals", max_in_flight, proposals)
-                .await;
-            let votes: Vec<_> = responses
-                .into_iter()
-                .filter_map(|message| {
-                    deserialize_response(message)
-                        .and_then(|response| response.info.manager.pending().cloned())
-                })
-                .collect();
-            warn!("Received {} valid votes.", votes.len());
+            SynchronizeBalance { chain_id } => {
+                let mut client_state = context.make_chain_client(storage, chain_id);
+                info!("Synchronize chain information");
+                let time_start = Instant::now();
+                let balance = client_state.synchronize_balance().await.unwrap();
+                let time_total = time_start.elapsed().as_micros();
+                info!("Chain balance synchronized after {} us", time_total);
+                println!("{}", balance);
+                context.update_wallet_from_client(&mut client_state).await;
+                context.save_chains();
+            }
 
-            warn!("Starting benchmark phase 2 (certified blocks)");
-            let certificates = context.make_benchmark_certificates_from_votes(votes);
-            let messages = certificates
-                .iter()
-                .map(|certificate| certificate.clone().into())
-                .collect();
-            let responses = context
-                .mass_broadcast("certificates", max_in_flight, messages)
-                .await;
-            let mut confirmed = HashSet::new();
-            let num_valid =
-                responses
+            QueryValidators { chain_id } => {
+                let mut client_state = context.make_chain_client(
+                    storage,
+                    chain_id.unwrap_or(context.genesis_config.admin_id),
+                );
+                info!("Starting operation to query validators");
+                let time_start = Instant::now();
+                let committee = client_state.committee().await.unwrap();
+                let time_total = time_start.elapsed().as_micros();
+                info!("Validators obtained after {} us", time_total);
+                info!("{:?}", committee.validators);
+                context.update_wallet_from_client(&mut client_state).await;
+                context.save_chains();
+            }
+
+            command @ (SetValidator { .. } | RemoveValidator { .. }) => {
+                info!("Starting operations to change validator set");
+                let time_start = Instant::now();
+
+                // Make sure genesis chains are subscribed to the admin chain.
+                let certificates = context.ensure_admin_subscription(&storage).await;
+                let mut admin_state =
+                    context.make_chain_client(storage.clone(), context.genesis_config.admin_id);
+                for cert in certificates {
+                    admin_state.receive_certificate(cert).await.unwrap();
+                }
+                let n = admin_state
+                    .process_inbox()
+                    .await
+                    .unwrap()
                     .into_iter()
-                    .fold(0, |acc, message| match deserialize_response(message) {
+                    .map(|c| c.value.effects_and_state_hash().0.len())
+                    .sum::<usize>();
+                log::info!("Subscribed {} chains to new committees", n);
+
+                // Create the new committee.
+                let committee = admin_state.committee().await.unwrap();
+                let mut validators = committee.validators;
+                match command {
+                    SetValidator {
+                        name,
+                        network_address,
+                        votes,
+                    } => {
+                        validators.insert(
+                            name,
+                            ValidatorState {
+                                network_address,
+                                votes,
+                            },
+                        );
+                    }
+                    RemoveValidator { name } => {
+                        if validators.remove(&name).is_none() {
+                            warn!("Skipping removal of nonexistent validator");
+                            return Ok(());
+                        }
+                    }
+                    _ => unreachable!(),
+                }
+                let certificate = admin_state.stage_new_committee(validators).await.unwrap();
+                context.update_wallet_from_client(&mut admin_state).await;
+                info!("{:?}", certificate);
+                context.push_to_all_chains(&storage, &certificate).await;
+
+                // Remove the old committee.
+                let certificate = admin_state.finalize_committee().await.unwrap();
+                context.update_wallet_from_client(&mut admin_state).await;
+                info!("{:?}", certificate);
+                context.push_to_all_chains(&storage, &certificate).await;
+
+                let time_total = time_start.elapsed().as_micros();
+                info!("Operations confirmed after {} us", time_total);
+                context.save_chains();
+            }
+
+            Benchmark {
+                max_in_flight,
+                max_proposals,
+            } => {
+                // For this command, we create proposals and gather certificates without using
+                // the client library. We update the wallet storage at the end using a local node.
+                let max_proposals =
+                    max_proposals.unwrap_or_else(|| context.wallet_state.num_chains());
+                warn!("Starting benchmark phase 1 (block proposals)");
+                let proposals = context.make_benchmark_block_proposals(max_proposals);
+                let responses = context
+                    .mass_broadcast("block proposals", max_in_flight, proposals)
+                    .await;
+                let votes: Vec<_> = responses
+                    .into_iter()
+                    .filter_map(|message| {
+                        deserialize_response(message)
+                            .and_then(|response| response.info.manager.pending().cloned())
+                    })
+                    .collect();
+                warn!("Received {} valid votes.", votes.len());
+
+                warn!("Starting benchmark phase 2 (certified blocks)");
+                let certificates = context.make_benchmark_certificates_from_votes(votes);
+                let messages = certificates
+                    .iter()
+                    .map(|certificate| certificate.clone().into())
+                    .collect();
+                let responses = context
+                    .mass_broadcast("certificates", max_in_flight, messages)
+                    .await;
+                let mut confirmed = HashSet::new();
+                let num_valid = responses.into_iter().fold(0, |acc, message| {
+                    match deserialize_response(message) {
                         Some(response) => {
                             confirmed.insert(response.info.chain_id);
                             acc + 1
                         }
                         None => acc,
-                    });
-            warn!(
-                "Received {} valid certificates for {} block proposals.",
-                num_valid,
-                confirmed.len()
-            );
+                    }
+                });
+                warn!(
+                    "Received {} valid certificates for {} block proposals.",
+                    num_valid,
+                    confirmed.len()
+                );
 
-            warn!("Updating local state of user chains");
-            context.update_wallet_from_certificates(certificates).await;
-            context.save_chains();
+                warn!("Updating local state of user chains");
+                context
+                    .update_wallet_from_certificates(storage, certificates)
+                    .await;
+                context.save_chains();
+            }
+            CreateGenesisConfig { .. } => unreachable!(),
         }
+        Ok(())
+    }
+}
 
-        CreateGenesisConfig {
+#[tokio::main]
+async fn main() {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    let options = ClientOptions::from_args();
+    let mut context = ClientContext::from_options(&options).await;
+    match options.command {
+        ClientCommand::CreateGenesisConfig {
             committee_config_path,
             admin_root,
             initial_funding,
@@ -754,6 +773,14 @@ async fn main() {
             }
             context.save_chains();
             genesis_config.write(&options.genesis_config_path).unwrap();
+        }
+        command => {
+            let genesis_config = context.genesis_config.clone();
+            options
+                .storage_config
+                .run_with_storage(&genesis_config, Job(context, command))
+                .await
+                .unwrap()
         }
     }
 }
