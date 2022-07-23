@@ -8,7 +8,7 @@ use crate::{
 use async_trait::async_trait;
 use futures::channel::mpsc;
 use linera_base::{
-    chain::ChainState,
+    chain::{ChainState, ChainView},
     crypto::HashValue,
     error::Error,
     messages::{Certificate, ChainId, ChainInfoQuery},
@@ -133,12 +133,23 @@ pub struct DelayedEmptyStorage {
 
 #[async_trait]
 impl Storage for DelayedEmptyStorage {
-    async fn read_chain_or_default(&mut self, chain_id: ChainId) -> Result<ChainState, Error> {
+    type Base = ChainState;
+
+    async fn read_chain_or_default(&mut self, id: ChainId) -> Result<ChainView<Self::Base>, Error> {
         sleep(self.delay).await;
-        Ok(ChainState::new(chain_id))
+        Ok(ChainState::new(id).into())
     }
 
-    async fn write_chain(&mut self, _: ChainState) -> Result<(), Error> {
+    #[cfg(any(test, feature = "test"))]
+    async fn export_chain_state(&mut self, id: ChainId) -> Result<Option<ChainState>, Error> {
+        Ok(ChainState::new(id).into())
+    }
+
+    async fn write_chain(&mut self, _: ChainView<Self::Base>) -> Result<(), Error> {
+        Ok(())
+    }
+
+    async fn reset_view(&mut self, _: &mut ChainView<Self::Base>) -> Result<(), Error> {
         Ok(())
     }
 

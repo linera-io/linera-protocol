@@ -9,7 +9,6 @@ use crate::{
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use linera_base::{
-    chain::ChainState,
     committee::Committee,
     crypto::*,
     error::Error,
@@ -162,31 +161,45 @@ impl TestBuilder {
     ) -> ChainClientState<NodeProvider, InMemoryStoreClient> {
         let key_pair = KeyPair::generate();
         let owner = Owner(key_pair.public());
-        let chain = ChainState::create(
-            self.initial_committee.clone(),
-            self.admin_id,
-            description,
-            owner,
-            balance,
-        );
-        let chain_bad = ChainState::create(
-            self.initial_committee.clone(),
-            self.admin_id,
-            description,
-            owner,
-            Balance::from(0),
-        );
         // Create genesis chain in all the existing stores.
-        self.genesis_store.write_chain(chain.clone()).await.unwrap();
+        self.genesis_store
+            .initialize_chain(
+                self.initial_committee.clone(),
+                self.admin_id,
+                description,
+                owner,
+                balance,
+            )
+            .await
+            .unwrap();
         for (name, store) in self.validator_stores.iter_mut() {
-            if self.faulty_validators.contains(name) {
-                store.write_chain(chain_bad.clone()).await.unwrap();
+            let this_balance = if self.faulty_validators.contains(name) {
+                Balance::from(0)
             } else {
-                store.write_chain(chain.clone()).await.unwrap();
-            }
+                balance
+            };
+            store
+                .initialize_chain(
+                    self.initial_committee.clone(),
+                    self.admin_id,
+                    description,
+                    owner,
+                    this_balance,
+                )
+                .await
+                .unwrap();
         }
         for store in self.chain_client_stores.iter_mut() {
-            store.write_chain(chain.clone()).await.unwrap();
+            store
+                .initialize_chain(
+                    self.initial_committee.clone(),
+                    self.admin_id,
+                    description,
+                    owner,
+                    balance,
+                )
+                .await
+                .unwrap();
         }
         self.make_client(description.into(), key_pair, None, BlockHeight::from(0))
             .await

@@ -4,7 +4,7 @@
 
 use crate::worker::{ValidatorWorker, WorkerState};
 use linera_base::{
-    chain::{ChainState, Event, InboxState},
+    chain::{Event, InboxState},
     committee::Committee,
     crypto::*,
     error::Error,
@@ -35,14 +35,17 @@ async fn init_worker_with_chains<I: IntoIterator<Item = (ChainDescription, Publi
 ) -> (Committee, WorkerState<InMemoryStoreClient>) {
     let (committee, mut worker) = init_worker(/* allow_inactive_chains */ false);
     for (description, pubk, balance) in balances {
-        let chain = ChainState::create(
-            committee.clone(),
-            ChainId::root(0),
-            description,
-            pubk.into(),
-            balance,
-        );
-        worker.storage.write_chain(chain).await.unwrap();
+        worker
+            .storage
+            .initialize_chain(
+                committee.clone(),
+                ChainId::root(0),
+                description,
+                pubk.into(),
+                balance,
+            )
+            .await
+            .unwrap();
     }
     (committee, worker)
 }

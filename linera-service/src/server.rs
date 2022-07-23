@@ -76,6 +76,7 @@ impl ServerContext {
 impl<S> Runnable<S> for ServerContext
 where
     S: Storage + Clone + Send + Sync + 'static,
+    S::Base: Send + Sync + 'static,
 {
     type Output = ();
 

@@ -3,11 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    committee::Committee,
     crypto::*,
     ensure,
     error::Error,
-    execution::{ApplicationResult, Balance, Effect, ExecutionState, ADMIN_CHANNEL},
+    execution::{ApplicationResult, Effect, ExecutionState, ADMIN_CHANNEL},
     manager::BlockManager,
     messages::*,
 };
@@ -15,10 +14,41 @@ use getset::{CopyGetters, Getters};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 
-/// The state of a chain.
-#[derive(Debug, Clone, Serialize, Deserialize, CopyGetters, Getters)]
+/// The state of a chain as a serializable value.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct ChainState {
+    /// How the chain was created. May be unknown for inactive chains.
+    pub description: Option<ChainDescription>,
+    /// Execution state.
+    pub state: ExecutionState,
+    /// Hash of the execution state.
+    pub state_hash: HashValue,
+    /// Hash of the latest certified block in this chain, if any.
+    pub block_hash: Option<HashValue>,
+    /// Sequence number tracking blocks.
+    pub next_block_height: BlockHeight,
+
+    /// Hashes of all certified blocks (aka "key") for this sender.
+    /// This ends with `block_hash` and has length `usize::from(next_block_height)`.
+    pub confirmed_keys: Vec<HashValue>,
+    /// Hashes of all certified blocks known as a receiver (local ordering).
+    pub received_keys: Vec<HashValue>,
+
+    /// Mailboxes used to send messages, indexed by recipient.
+    pub outboxes: HashMap<ChainId, OutboxState>,
+    /// Mailboxes used to receive messages indexed by their origin.
+    pub inboxes: HashMap<Origin, InboxState>,
+    /// Channels able to multicast messages to subscribers.
+    pub channels: HashMap<String, ChannelState>,
+}
+
+/// A structure describing updates to the state of a chain.
+#[derive(Debug, CopyGetters, Getters)]
+pub struct ChainView<T> {
+    /// A lock on the original data underlying the view.
+    base: T,
+
     /// How the chain was created. May be unknown for inactive chains.
     #[getset(get = "pub")]
     description: Option<ChainDescription>,
@@ -52,7 +82,7 @@ pub struct ChainState {
     channels: HashMap<String, ChannelState>,
 
     /// Whether the state has been modified since the last read.
-    #[serde(skip)]
+    #[getset(get = "pub")]
     modified: bool,
 }
 
@@ -118,29 +148,86 @@ impl ChainState {
             inboxes: HashMap::new(),
             outboxes: HashMap::new(),
             channels: HashMap::new(),
-            modified: false,
         }
     }
 
-    pub fn create(
-        committee: Committee,
-        admin_id: ChainId,
-        description: ChainDescription,
-        owner: Owner,
-        balance: Balance,
-    ) -> Self {
-        let mut chain = Self::new(description.into());
-        chain.description = Some(description);
-        chain.state.epoch = Some(Epoch::from(0));
-        chain.state.admin_id = Some(admin_id);
-        chain.state.committees.insert(Epoch::from(0), committee);
-        chain.state.manager = BlockManager::single(owner);
-        chain.state.balance = balance;
-        chain.state_hash = HashValue::new(&chain.state);
-        assert!(chain.is_active());
-        chain
+    pub fn chain_id(&self) -> ChainId {
+        self.state.chain_id
+    }
+}
+
+impl From<ChainState> for ChainView<ChainState> {
+    fn from(base: ChainState) -> Self {
+        let value = &base;
+        let description = value.description;
+        let state = value.state.clone();
+        let state_hash = value.state_hash;
+        let block_hash = value.block_hash;
+        let next_block_height = value.next_block_height;
+        let confirmed_keys = value.confirmed_keys.clone();
+        let received_keys = value.received_keys.clone();
+        let inboxes = value.inboxes.clone();
+        let outboxes = value.outboxes.clone();
+        let channels = value.channels.clone();
+
+        Self {
+            base,
+            description,
+            state,
+            state_hash,
+            block_hash,
+            next_block_height,
+            confirmed_keys,
+            received_keys,
+            inboxes,
+            outboxes,
+            channels,
+            modified: false,
+        }
+    }
+}
+
+impl ChainView<ChainState> {
+    #[cfg(any(test, feature = "test"))]
+    pub fn chain_state(&self) -> &ChainState {
+        &self.base
     }
 
+    pub fn reset(&mut self) {
+        if self.modified {
+            let value = &self.base;
+            self.description = value.description;
+            self.state = value.state.clone();
+            self.state_hash = value.state_hash;
+            self.block_hash = value.block_hash;
+            self.next_block_height = value.next_block_height;
+            self.confirmed_keys = value.confirmed_keys.clone();
+            self.received_keys = value.received_keys.clone();
+            self.inboxes = value.inboxes.clone();
+            self.outboxes = value.outboxes.clone();
+            self.channels = value.channels.clone();
+        }
+    }
+
+    pub fn save(mut self) -> ChainState {
+        if self.modified {
+            let value = &mut self.base;
+            value.description = self.description;
+            value.state = self.state;
+            value.state_hash = self.state_hash;
+            value.block_hash = self.block_hash;
+            value.next_block_height = self.next_block_height;
+            value.confirmed_keys = self.confirmed_keys;
+            value.received_keys = self.received_keys;
+            value.inboxes = self.inboxes;
+            value.outboxes = self.outboxes;
+            value.channels = self.channels;
+        }
+        self.base
+    }
+}
+
+impl<T> ChainView<T> {
     pub fn chain_id(&self) -> ChainId {
         self.state.chain_id
     }
@@ -309,11 +396,6 @@ impl ChainState {
             );
         }
         Ok(())
-    }
-
-    /// Whether an invalid operation for this block can become valid later.
-    pub fn is_retriable_validation_error(error: &Error) -> bool {
-        matches!(error, Error::MissingCrossChainUpdate { .. })
     }
 
     /// Schedule operations to be executed as a recipient, unless this block was already

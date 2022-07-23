@@ -5,7 +5,8 @@ use linera_base::{
     chain::ChainState,
     crypto::KeyPair,
     execution::Balance,
-    messages::{ChainDescription, ChainId},
+    manager::BlockManager,
+    messages::{ChainDescription, ChainId, Epoch},
 };
 use linera_storage::{LocalStackTestContext, Storage};
 
@@ -49,8 +50,9 @@ async fn s3_storage_is_initialized() -> Result<(), anyhow::Error> {
         async fn run(self, mut storage: S) -> Result<Self::Output, anyhow::Error> {
             for expected_chain_state in self.expected_chain_states {
                 let chain_state = storage
-                    .read_chain_or_default(expected_chain_state.chain_id())
-                    .await?;
+                    .export_chain_state(expected_chain_state.chain_id())
+                    .await?
+                    .unwrap();
                 assert_eq!(chain_state, expected_chain_state);
             }
             Ok(())
@@ -103,7 +105,7 @@ async fn s3_storage_is_not_reinitialized() -> Result<(), anyhow::Error> {
     let conflicting_balance = Balance::zero();
 
     conflicting_chain.2 = conflicting_balance;
-    conflicting_chain_state.state_mut().balance = conflicting_balance;
+    conflicting_chain_state.state.balance = conflicting_balance;
 
     second_genesis_config.chains.push(conflicting_chain);
     second_expected_chain_states.push(conflicting_chain_state);
@@ -123,8 +125,9 @@ async fn s3_storage_is_not_reinitialized() -> Result<(), anyhow::Error> {
             // Check that the chains from the first configuration still exist.
             for expected_chain_state in self.first_expected_chain_states {
                 let chain_state = storage
-                    .read_chain_or_default(expected_chain_state.state().chain_id)
-                    .await?;
+                    .export_chain_state(expected_chain_state.state.chain_id)
+                    .await?
+                    .unwrap();
 
                 assert_eq!(chain_state, expected_chain_state);
             }
@@ -132,8 +135,9 @@ async fn s3_storage_is_not_reinitialized() -> Result<(), anyhow::Error> {
             // Check that the chains from the second configuration were not added.
             for unexpected_chain_state in self.second_expected_chain_states {
                 let chain_state = storage
-                    .read_chain_or_default(unexpected_chain_state.state().chain_id)
-                    .await?;
+                    .export_chain_state(unexpected_chain_state.state.chain_id)
+                    .await?
+                    .unwrap();
 
                 assert_ne!(chain_state, unexpected_chain_state);
             }
@@ -176,13 +180,16 @@ where
     let expected_chain_states: Vec<_> = chains
         .iter()
         .map(|(description, owner, balance)| {
-            ChainState::create(
-                committee.clone().into_committee(),
-                admin_id,
-                *description,
-                *owner,
-                *balance,
-            )
+            let mut chain_state = ChainState::new((*description).into());
+            chain_state
+                .state
+                .committees
+                .insert(Epoch::from(0), committee.clone().into_committee());
+            chain_state.state.admin_id = Some(admin_id);
+            chain_state.description = Some(*description);
+            chain_state.state.manager = BlockManager::single(*owner);
+            chain_state.state.balance = *balance;
+            chain_state
         })
         .collect();
 

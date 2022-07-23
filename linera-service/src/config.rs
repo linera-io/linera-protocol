@@ -4,7 +4,6 @@
 
 use crate::network::{ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig};
 use linera_base::{
-    chain::ChainState,
     committee::{Committee, ValidatorState},
     crypto::*,
     execution::Balance,
@@ -158,6 +157,7 @@ impl WalletState {
         P: ValidatorNodeProvider + Send + 'static,
         P::Node: ValidatorNode + Send + Sync + 'static + Clone,
         S: Storage + Clone + Send + Sync + 'static,
+        S::Base: Send + Sync + 'static,
     {
         let chain = self
             .chains
@@ -216,17 +216,19 @@ impl GenesisConfig {
 
     pub async fn initialize_store<S>(&self, store: &mut S) -> Result<(), anyhow::Error>
     where
-        S: Storage + Clone + 'static,
+        S: Storage + Clone + Send + Sync + 'static,
+        S::Base: Send + Sync + 'static,
     {
         for (description, owner, balance) in &self.chains {
-            let chain = ChainState::create(
-                self.committee.clone().into_committee(),
-                self.admin_id,
-                *description,
-                *owner,
-                *balance,
-            );
-            store.write_chain(chain.clone()).await?;
+            store
+                .initialize_chain(
+                    self.committee.clone().into_committee(),
+                    self.admin_id,
+                    *description,
+                    *owner,
+                    *balance,
+                )
+                .await?;
         }
         Ok(())
     }

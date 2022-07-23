@@ -15,11 +15,14 @@ pub use s3_storage::s3_storage_tests::LocalStackTestContext;
 use async_trait::async_trait;
 use futures::future;
 use linera_base::{
-    chain::ChainState,
+    chain::{ChainState, ChainView},
+    committee::Committee,
     crypto::HashValue,
     ensure,
     error::Error,
-    messages::{Certificate, ChainId},
+    execution::Balance,
+    manager::BlockManager,
+    messages::{Certificate, ChainDescription, ChainId, Epoch, Owner},
 };
 
 /// How to communicate with a persistent storage.
@@ -27,15 +30,16 @@ use linera_base::{
 /// * Reads should be optimized to hit a local cache.
 #[async_trait]
 pub trait Storage {
-    async fn read_active_chain(&mut self, id: ChainId) -> Result<ChainState, Error> {
-        let chain = self.read_chain_or_default(id).await?;
-        ensure!(chain.is_active(), Error::InactiveChain(id));
-        Ok(chain)
-    }
+    type Base;
 
-    async fn read_chain_or_default(&mut self, chain_id: ChainId) -> Result<ChainState, Error>;
+    async fn read_chain_or_default(
+        &mut self,
+        chain_id: ChainId,
+    ) -> Result<ChainView<Self::Base>, Error>;
 
-    async fn write_chain(&mut self, state: ChainState) -> Result<(), Error>;
+    async fn reset_view(&mut self, view: &mut ChainView<Self::Base>) -> Result<(), Error>;
+
+    async fn write_chain(&mut self, view: ChainView<Self::Base>) -> Result<(), Error>;
 
     async fn remove_chain(&mut self, chain_id: ChainId) -> Result<(), Error>;
 
@@ -64,4 +68,39 @@ pub trait Storage {
     }
 
     async fn write_certificate(&mut self, certificate: Certificate) -> Result<(), Error>;
+
+    #[cfg(any(test, feature = "test"))]
+    async fn export_chain_state(&mut self, id: ChainId) -> Result<Option<ChainState>, Error>;
+
+    async fn read_active_chain(&mut self, id: ChainId) -> Result<ChainView<Self::Base>, Error> {
+        let view = self.read_chain_or_default(id).await?;
+        ensure!(view.is_active(), Error::InactiveChain(id));
+        Ok(view)
+    }
+
+    async fn initialize_chain(
+        &mut self,
+        committee: Committee,
+        admin_id: ChainId,
+        description: ChainDescription,
+        owner: Owner,
+        balance: Balance,
+    ) -> Result<(), Error>
+    where
+        Self: Clone + Send + 'static,
+        Self::Base: Send,
+    {
+        let chain_id = description.into();
+        let mut view = self.read_chain_or_default(chain_id).await?;
+        *view.description_mut() = Some(description);
+        view.state_mut().epoch = Some(Epoch::from(0));
+        view.state_mut().admin_id = Some(admin_id);
+        view.state_mut()
+            .committees
+            .insert(Epoch::from(0), committee);
+        view.state_mut().manager = BlockManager::single(owner);
+        view.state_mut().balance = balance;
+        *view.state_hash_mut() = HashValue::new(view.state());
+        self.write_chain(view).await
+    }
 }

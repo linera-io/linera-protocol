@@ -149,6 +149,7 @@ impl<S> Server<S> {
 impl<S> Server<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
+    S::Base: Send + Sync + 'static,
 {
     async fn forward_cross_chain_queries(
         network: ValidatorInternalNetworkConfig,
@@ -239,6 +240,7 @@ struct RunningServerState<S> {
 impl<S> MessageHandler for RunningServerState<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
+    S::Base: Send + Sync + 'static,
 {
     fn handle_message(
         &mut self,

@@ -3,7 +3,7 @@
 use crate::Storage;
 use async_trait::async_trait;
 use linera_base::{
-    chain::ChainState,
+    chain::{ChainState, ChainView},
     crypto::HashValue,
     error::Error,
     messages::{Certificate, ChainId},
@@ -203,15 +203,29 @@ impl RocksdbStoreClient {
 
 #[async_trait]
 impl Storage for RocksdbStoreClient {
-    async fn read_chain_or_default(&mut self, id: ChainId) -> Result<ChainState, Error> {
-        Ok(self
+    type Base = ChainState;
+
+    async fn read_chain_or_default(&mut self, id: ChainId) -> Result<ChainView<Self::Base>, Error> {
+        let state = self
             .0
             .read(&id)
             .await?
-            .unwrap_or_else(|| ChainState::new(id)))
+            .unwrap_or_else(|| ChainState::new(id));
+        Ok(state.into())
     }
 
-    async fn write_chain(&mut self, state: ChainState) -> Result<(), Error> {
+    #[cfg(any(test, feature = "test"))]
+    async fn export_chain_state(&mut self, id: ChainId) -> Result<Option<ChainState>, Error> {
+        self.0.read(&id).await
+    }
+
+    async fn reset_view(&mut self, view: &mut ChainView<Self::Base>) -> Result<(), Error> {
+        view.reset();
+        Ok(())
+    }
+
+    async fn write_chain(&mut self, view: ChainView<Self::Base>) -> Result<(), Error> {
+        let state = view.save();
         self.0.write(&state.chain_id(), &state).await
     }
 

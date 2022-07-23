@@ -159,7 +159,6 @@ async fn certificate_storage_round_trip() -> Result<(), Error> {
     storage.write_certificate(certificate.clone()).await?;
 
     let stored_certificate = storage.read_certificate(certificate.hash).await?;
-
     assert_eq!(certificate, stored_certificate);
 
     Ok(())
@@ -175,7 +174,6 @@ async fn retrieval_of_inexistent_certificate() -> Result<(), Error> {
     let (mut storage, _) = S3Storage::from_config(localstack.config()).await?;
 
     let result = storage.read_certificate(certificate_hash).await;
-
     assert!(result.is_err());
 
     Ok(())
@@ -185,25 +183,25 @@ async fn retrieval_of_inexistent_certificate() -> Result<(), Error> {
 #[tokio::test]
 #[ignore]
 async fn chain_storage_round_trip() -> Result<(), Error> {
-    let chain_id = ChainId::root(1);
-    let mut chain_state = ChainState::new(chain_id);
-    *chain_state.next_block_height_mut() = BlockHeight(100);
-
     let localstack = LocalStackTestContext::new().await?;
     let (mut storage, _) = S3Storage::from_config(localstack.config()).await?;
 
-    storage.write_chain(chain_state.clone()).await?;
+    let chain_id = ChainId::root(1);
+    let mut view = storage.read_chain_or_default(chain_id).await?;
+    *view.next_block_height_mut() = BlockHeight(100);
+    storage.write_chain(view).await?;
 
-    let stored_chain_state = storage
-        .read_chain_or_default(chain_state.chain_id())
-        .await?;
-
-    assert_eq!(chain_state, stored_chain_state);
+    let stored_view = storage.read_chain_or_default(chain_id).await?;
+    let expected_state = ChainState {
+        next_block_height: BlockHeight(100),
+        ..ChainState::new(chain_id)
+    };
+    assert_eq!(stored_view.chain_state(), &expected_state);
 
     Ok(())
 }
 
-/// Test if retrieving inexistent chain states creates new [`ChainState`] instances.
+/// Test if retrieving inexistent chain states creates new [`ChainView`] instances.
 #[tokio::test]
 #[ignore]
 async fn retrieval_of_inexistent_chain_state() -> Result<(), Error> {
@@ -212,11 +210,9 @@ async fn retrieval_of_inexistent_chain_state() -> Result<(), Error> {
     let localstack = LocalStackTestContext::new().await?;
     let (mut storage, _) = S3Storage::from_config(localstack.config()).await?;
 
-    let chain_state = storage.read_chain_or_default(chain_id).await?;
-    let expected_chain_state = ChainState::new(chain_id);
-
-    assert_eq!(chain_state, expected_chain_state);
-
+    let view = storage.read_chain_or_default(chain_id).await?;
+    let expected_state = ChainState::new(chain_id);
+    assert_eq!(view.chain_state(), &expected_state);
     Ok(())
 }
 
@@ -224,20 +220,19 @@ async fn retrieval_of_inexistent_chain_state() -> Result<(), Error> {
 #[tokio::test]
 #[ignore]
 async fn removal_of_chain_state() -> Result<(), Error> {
-    let chain_id = ChainId::root(9);
-    let mut chain_state = ChainState::new(chain_id);
-    *chain_state.next_block_height_mut() = BlockHeight(300);
-
     let localstack = LocalStackTestContext::new().await?;
     let (mut storage, _) = S3Storage::from_config(localstack.config()).await?;
 
-    storage.write_chain(chain_state).await?;
+    let chain_id = ChainId::root(9);
+    let mut view = storage.read_chain_or_default(chain_id).await?;
+    *view.next_block_height_mut() = BlockHeight(300);
+
+    storage.write_chain(view).await?;
     storage.remove_chain(chain_id).await?;
 
-    let retrieved_chain_state = storage.read_chain_or_default(chain_id).await?;
-    let expected_chain_state = ChainState::new(chain_id);
-
-    assert_eq!(retrieved_chain_state, expected_chain_state);
+    let retrieved_view = storage.read_chain_or_default(chain_id).await?;
+    let expected_state = ChainState::new(chain_id);
+    assert_eq!(retrieved_view.chain_state(), &expected_state);
 
     Ok(())
 }

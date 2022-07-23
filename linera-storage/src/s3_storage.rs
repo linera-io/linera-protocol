@@ -1,9 +1,12 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::Storage;
 use async_trait::async_trait;
 use aws_sdk_s3::{types::SdkError, Client, Endpoint};
 use http::uri::InvalidUri;
 use linera_base::{
-    chain::ChainState,
+    chain::{ChainState, ChainView},
     crypto::HashValue,
     error::Error,
     messages::{Certificate, ChainId},
@@ -128,13 +131,13 @@ impl S3Storage {
         &mut self,
         prefix: &str,
         key: impl Display,
-        object: Object,
+        object: &Object,
     ) -> Result<(), S3StorageError>
     where
         Object: Serialize,
     {
         let bytes = Vec::from(
-            ron::to_string(&object)
+            ron::to_string(object)
                 .expect("Object serialization failed")
                 .as_bytes(),
         );
@@ -169,16 +172,36 @@ impl S3Storage {
 
 #[async_trait]
 impl Storage for S3Storage {
-    async fn read_chain_or_default(&mut self, chain_id: ChainId) -> Result<ChainState, Error> {
-        match self.get_object(CHAIN_PREFIX, chain_id).await {
-            Ok(chain_state) => Ok(chain_state),
-            Err(error) if error.is_no_such_key() => Ok(ChainState::new(chain_id)),
-            Err(error) => Err(error.into_base_error()),
-        }
+    type Base = ChainState;
+
+    async fn read_chain_or_default(&mut self, id: ChainId) -> Result<ChainView<Self::Base>, Error> {
+        let state = match self.get_object(CHAIN_PREFIX, id).await {
+            Ok(chain_state) => chain_state,
+            Err(error) if error.is_no_such_key() => ChainState::new(id),
+            Err(error) => {
+                return Err(error.into_base_error());
+            }
+        };
+        Ok(state.into())
     }
 
-    async fn write_chain(&mut self, state: ChainState) -> Result<(), Error> {
-        self.put_object(CHAIN_PREFIX, state.chain_id(), state)
+    #[cfg(any(test, feature = "test"))]
+    async fn export_chain_state(&mut self, id: ChainId) -> Result<Option<ChainState>, Error> {
+        let state = self
+            .get_object(CHAIN_PREFIX, id)
+            .await
+            .map_err(S3StorageError::into_base_error)?;
+        Ok(state)
+    }
+
+    async fn reset_view(&mut self, view: &mut ChainView<Self::Base>) -> Result<(), Error> {
+        view.reset();
+        Ok(())
+    }
+
+    async fn write_chain(&mut self, view: ChainView<Self::Base>) -> Result<(), Error> {
+        let state = view.save();
+        self.put_object(CHAIN_PREFIX, state.chain_id(), &state)
             .await
             .map_err(S3StorageError::into_base_error)
     }
@@ -196,7 +219,7 @@ impl Storage for S3Storage {
     }
 
     async fn write_certificate(&mut self, certificate: Certificate) -> Result<(), Error> {
-        self.put_object(CERTIFICATE_PREFIX, certificate.hash, certificate)
+        self.put_object(CERTIFICATE_PREFIX, certificate.hash, &certificate)
             .await
             .map_err(S3StorageError::into_base_error)
     }

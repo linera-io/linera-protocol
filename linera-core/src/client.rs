@@ -209,6 +209,7 @@ where
     P: ValidatorNodeProvider,
     P::Node: ValidatorNode + Send + Sync + 'static + Clone,
     S: Storage + Clone + Send + Sync + 'static,
+    S::Base: Send + Sync + 'static,
 {
     async fn chain_info(&mut self) -> Result<ChainInfo, Error> {
         let query = ChainInfoQuery::new(self.chain_id);
@@ -347,6 +348,7 @@ where
     P: ValidatorNodeProvider + Send + 'static,
     P::Node: ValidatorNode + Send + Sync + 'static + Clone,
     S: Storage + Clone + Send + Sync + 'static,
+    S::Base: Send + Sync + 'static,
 {
     /// Prepare the chain for the next operation.
     async fn prepare_chain(&mut self) -> Result<(), Error> {
@@ -817,6 +819,7 @@ where
     P: ValidatorNodeProvider + Send + 'static,
     P::Node: ValidatorNode + Send + Sync + 'static + Clone,
     S: Storage + Clone + Send + Sync + 'static,
+    S::Base: Send + Sync + 'static,
 {
     async fn local_balance(&mut self) -> Result<Balance> {
         ensure!(

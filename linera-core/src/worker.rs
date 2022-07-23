@@ -4,7 +4,7 @@
 
 use async_trait::async_trait;
 use linera_base::{
-    chain::{ChainState, OutboxState},
+    chain::{ChainView, OutboxState},
     crypto::*,
     ensure,
     error::Error,
@@ -88,6 +88,7 @@ impl<Client> WorkerState<Client> {
 impl<Client> WorkerState<Client>
 where
     Client: Storage + Clone + Send + Sync + 'static,
+    Client::Base: Send + Sync + 'static,
 {
     // NOTE: This only works for non-sharded workers!
     pub(crate) async fn fully_handle_certificate(
@@ -121,7 +122,7 @@ where
 
     async fn make_cross_chain_request(
         &mut self,
-        chain: &ChainState,
+        chain: &ChainView<Client::Base>,
         origin: Origin,
         recipient: ChainId,
         outbox: &OutboxState,
@@ -144,7 +145,7 @@ where
     /// Load pending cross-chain requests.
     async fn make_continuation(
         &mut self,
-        chain: &ChainState,
+        chain: &ChainView<Client::Base>,
     ) -> Result<Vec<CrossChainRequest>, Error> {
         let mut continuation = Vec::new();
         for (&recipient, outbox) in chain.outboxes() {
@@ -300,6 +301,7 @@ where
 impl<Client> ValidatorWorker for WorkerState<Client>
 where
     Client: Storage + Clone + Send + Sync + 'static,
+    Client::Base: Send + Sync + 'static,
 {
     async fn handle_block_proposal(
         &mut self,
@@ -340,16 +342,18 @@ where
             return Ok(chain.make_chain_info(self.key_pair()));
         }
         let (effects, state_hash) = {
-            // Execute the block on a copy of the chain state for validation.
-            let mut staged = chain.clone();
+            // Execute the block for validation then reset the chain view.
+            assert!(!chain.modified(), "Previous changes would be lost");
             // Make sure the clear round information in the state so that it is not
             // hashed.
-            staged.state_mut().manager.reset();
-            let effects = staged.execute_block(&proposal.content.block)?;
+            chain.state_mut().manager.reset();
+            let effects = chain.execute_block(&proposal.content.block)?;
             // Verify that the resulting chain would have no unconfirmed incoming
             // messages.
-            staged.validate_incoming_messages()?;
-            (effects, staged.state_hash())
+            chain.validate_incoming_messages()?;
+            let state_hash = chain.state_hash();
+            self.storage.reset_view(&mut chain).await?;
+            (effects, state_hash)
         };
         // Create the vote and store it in the chain state.
         chain

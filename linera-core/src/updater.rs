@@ -4,7 +4,7 @@
 
 use crate::node::ValidatorNode;
 use futures::{future, StreamExt};
-use linera_base::{chain::ChainState, committee::Committee, error::Error, messages::*};
+use linera_base::{committee::Committee, error::Error, messages::*};
 use linera_storage::Storage;
 use std::{collections::HashMap, hash::Hash, time::Duration};
 
@@ -240,7 +240,7 @@ where
                 let result = self.send_block_proposal(proposal.clone()).await;
                 let info = match result {
                     Ok(info) => info,
-                    Err(e) if ChainState::is_retriable_validation_error(&e) => {
+                    Err(e) if e.is_retriable_validation_error() => {
                         // Some received certificates may be missing for this validator
                         // (e.g. to make the balance sufficient) so we are going to
                         // synchronize them now.
