@@ -33,10 +33,10 @@ pub enum S3Config {
 }
 
 #[async_trait]
-pub trait Runnable<Storage> {
+pub trait Runnable<S> {
     type Output;
 
-    async fn run(self, storage: Storage) -> Result<Self::Output, anyhow::Error>;
+    async fn run(self, storage: S) -> Result<Self::Output, anyhow::Error>;
 }
 
 impl StorageConfig {
