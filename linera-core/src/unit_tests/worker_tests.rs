@@ -199,17 +199,19 @@ async fn test_read_chain_state_unknown_chain() {
         .read_active_chain(unknown_chain_id)
         .await
         .is_err());
-    let mut chain = worker
-        .storage
-        .read_chain_or_default(unknown_chain_id)
-        .await
-        .unwrap();
-    *chain.description_mut() = Some(ChainDescription::Root(99));
-    chain.state_mut().committees.insert(Epoch(0), committee);
-    chain.state_mut().epoch = Some(Epoch(0));
-    chain.state_mut().admin_id = Some(ChainId::root(1));
-    chain.state_mut().manager = BlockManager::single(PublicKey::debug(4).into());
-    worker.storage.write_chain(chain).await.unwrap();
+    {
+        let mut chain = worker
+            .storage
+            .read_chain_or_default(unknown_chain_id)
+            .await
+            .unwrap();
+        *chain.description_mut() = Some(ChainDescription::Root(99));
+        chain.state_mut().committees.insert(Epoch(0), committee);
+        chain.state_mut().epoch = Some(Epoch(0));
+        chain.state_mut().admin_id = Some(ChainId::root(1));
+        chain.state_mut().manager = BlockManager::single(PublicKey::debug(4).into());
+        worker.storage.write_chain(chain).await.unwrap();
+    }
     worker
         .storage
         .read_active_chain(unknown_chain_id)
@@ -973,6 +975,7 @@ async fn test_handle_certificate_with_anticipated_incoming_message() {
         .fully_handle_certificate(certificate.clone())
         .await
         .unwrap();
+
     let chain = worker
         .storage
         .read_active_chain(ChainId::root(1))
@@ -1000,6 +1003,7 @@ async fn test_handle_certificate_with_anticipated_incoming_message() {
     ));
     assert_eq!(chain.confirmed_keys(..).len(), 1);
     assert_eq!(Some(certificate.hash), chain.block_hash());
+
     worker
         .storage
         .read_active_chain(ChainId::root(2))
@@ -1039,6 +1043,7 @@ async fn test_handle_certificate_receiver_balance_overflow() {
         .fully_handle_certificate(certificate.clone())
         .await
         .unwrap();
+
     let new_sender_chain = worker
         .storage
         .read_active_chain(ChainId::root(1))
@@ -1078,6 +1083,7 @@ async fn test_handle_certificate_receiver_equal_sender() {
         .fully_handle_certificate(certificate.clone())
         .await
         .unwrap();
+
     let chain = worker
         .storage
         .read_active_chain(ChainId::root(1))
@@ -1129,6 +1135,7 @@ async fn test_handle_cross_chain_request() {
         })
         .await
         .unwrap();
+
     let chain = worker
         .storage
         .read_active_chain(ChainId::root(2))
@@ -1177,6 +1184,7 @@ async fn test_handle_cross_chain_request_no_recipient_chain() {
         .await
         .unwrap()
         .is_empty());
+
     let chain = worker
         .storage
         .read_chain_or_default(ChainId::root(2))
@@ -1214,6 +1222,7 @@ async fn test_handle_cross_chain_request_no_recipient_chain_with_inactive_chains
             .as_slice(),
         &[CrossChainRequest::ConfirmUpdatedRecipient { .. }]
     ));
+
     let chain = worker
         .storage
         .read_chain_or_default(ChainId::root(2))
@@ -1289,19 +1298,21 @@ async fn test_handle_certificate_to_active_recipient() {
         .await
         .unwrap();
 
-    let recipient_chain = worker
-        .storage
-        .read_active_chain(ChainId::root(2))
-        .await
-        .unwrap();
-    assert_eq!(recipient_chain.state().balance, Balance::from(4));
-    assert!(recipient_chain
-        .state()
-        .manager
-        .has_owner(&recipient_key_pair.public().into()));
-    assert_eq!(recipient_chain.confirmed_keys(..).len(), 1);
-    assert_eq!(recipient_chain.block_hash(), Some(certificate.hash));
-    assert_eq!(recipient_chain.received_keys(..).len(), 1);
+    {
+        let recipient_chain = worker
+            .storage
+            .read_active_chain(ChainId::root(2))
+            .await
+            .unwrap();
+        assert_eq!(recipient_chain.state().balance, Balance::from(4));
+        assert!(recipient_chain
+            .state()
+            .manager
+            .has_owner(&recipient_key_pair.public().into()));
+        assert_eq!(recipient_chain.confirmed_keys(..).len(), 1);
+        assert_eq!(recipient_chain.block_hash(), Some(certificate.hash));
+        assert_eq!(recipient_chain.received_keys(..).len(), 1);
+    }
 
     let query =
         ChainInfoQuery::new(ChainId::root(2)).with_received_certificates_excluding_first_nth(0);
@@ -1654,33 +1665,32 @@ async fn test_chain_creation_with_committee_creation() {
         },
     );
     worker.fully_handle_certificate(certificate3).await.unwrap();
-    {
-        let user_chain = worker.storage.read_active_chain(user_id).await.unwrap();
-        assert_eq!(BlockHeight::from(1), user_chain.next_block_height());
-        assert_eq!(user_chain.state().admin_id, Some(admin_id));
-        assert_eq!(user_chain.state().subscriptions.len(), 1);
-        assert_eq!(user_chain.state().committees.len(), 2);
-        user_chain.validate_incoming_messages().unwrap();
-        assert_eq!(
-            user_chain.inboxes().get(&Origin::Chain(admin_id)).unwrap(),
-            &InboxState {
-                next_height_to_receive: BlockHeight(3),
-                received_events: VecDeque::new(),
-                expected_events: VecDeque::new()
-            }
-        );
-        assert_eq!(
-            user_chain
-                .inboxes()
-                .get(&Origin::Channel(admin_channel.clone()))
-                .unwrap(),
-            &InboxState {
-                next_height_to_receive: BlockHeight(2),
-                received_events: VecDeque::new(),
-                expected_events: VecDeque::new()
-            }
-        );
-    }
+
+    let user_chain = worker.storage.read_active_chain(user_id).await.unwrap();
+    assert_eq!(BlockHeight::from(1), user_chain.next_block_height());
+    assert_eq!(user_chain.state().admin_id, Some(admin_id));
+    assert_eq!(user_chain.state().subscriptions.len(), 1);
+    assert_eq!(user_chain.state().committees.len(), 2);
+    user_chain.validate_incoming_messages().unwrap();
+    assert_eq!(
+        user_chain.inboxes().get(&Origin::Chain(admin_id)).unwrap(),
+        &InboxState {
+            next_height_to_receive: BlockHeight(3),
+            received_events: VecDeque::new(),
+            expected_events: VecDeque::new()
+        }
+    );
+    assert_eq!(
+        user_chain
+            .inboxes()
+            .get(&Origin::Channel(admin_channel.clone()))
+            .unwrap(),
+        &InboxState {
+            next_height_to_receive: BlockHeight(2),
+            received_events: VecDeque::new(),
+            expected_events: VecDeque::new()
+        }
+    );
 }
 
 #[test(tokio::test)]

@@ -12,7 +12,11 @@ use crate::{
 };
 use getset::{CopyGetters, Getters};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, VecDeque};
+use std::{
+    collections::{HashMap, VecDeque},
+    ops::{Deref, DerefMut},
+};
+use tokio::sync::OwnedMutexGuard;
 
 /// The state of a chain as a serializable value.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -187,6 +191,37 @@ impl From<ChainState> for ChainView<ChainState> {
     }
 }
 
+impl From<OwnedMutexGuard<ChainState>> for ChainView<OwnedMutexGuard<ChainState>> {
+    fn from(base: OwnedMutexGuard<ChainState>) -> Self {
+        let value = base.deref();
+        let description = value.description;
+        let state = value.state.clone();
+        let state_hash = value.state_hash;
+        let block_hash = value.block_hash;
+        let next_block_height = value.next_block_height;
+        let confirmed_keys = value.confirmed_keys.clone();
+        let received_keys = value.received_keys.clone();
+        let inboxes = value.inboxes.clone();
+        let outboxes = value.outboxes.clone();
+        let channels = value.channels.clone();
+
+        Self {
+            base,
+            description,
+            state,
+            state_hash,
+            block_hash,
+            next_block_height,
+            confirmed_keys,
+            received_keys,
+            inboxes,
+            outboxes,
+            channels,
+            modified: false,
+        }
+    }
+}
+
 impl ChainView<ChainState> {
     #[cfg(any(test, feature = "test"))]
     pub fn chain_state(&self) -> &ChainState {
@@ -212,6 +247,46 @@ impl ChainView<ChainState> {
     pub fn save(mut self) -> ChainState {
         if self.modified {
             let value = &mut self.base;
+            value.description = self.description;
+            value.state = self.state;
+            value.state_hash = self.state_hash;
+            value.block_hash = self.block_hash;
+            value.next_block_height = self.next_block_height;
+            value.confirmed_keys = self.confirmed_keys;
+            value.received_keys = self.received_keys;
+            value.inboxes = self.inboxes;
+            value.outboxes = self.outboxes;
+            value.channels = self.channels;
+        }
+        self.base
+    }
+}
+
+impl ChainView<OwnedMutexGuard<ChainState>> {
+    #[cfg(any(test, feature = "test"))]
+    pub fn chain_state(&self) -> &ChainState {
+        self.base.deref()
+    }
+
+    pub fn reset(&mut self) {
+        if self.modified {
+            let value = self.base.deref();
+            self.description = value.description;
+            self.state = value.state.clone();
+            self.state_hash = value.state_hash;
+            self.block_hash = value.block_hash;
+            self.next_block_height = value.next_block_height;
+            self.confirmed_keys = value.confirmed_keys.clone();
+            self.received_keys = value.received_keys.clone();
+            self.inboxes = value.inboxes.clone();
+            self.outboxes = value.outboxes.clone();
+            self.channels = value.channels.clone();
+        }
+    }
+
+    pub fn save(mut self) -> OwnedMutexGuard<ChainState> {
+        if self.modified {
+            let value = self.base.deref_mut();
             value.description = self.description;
             value.state = self.state;
             value.state_hash = self.state_hash;

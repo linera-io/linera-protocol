@@ -3,6 +3,7 @@
 
 use crate::Storage;
 use async_trait::async_trait;
+use futures::future::join_all;
 use linera_base::{
     chain::{ChainState, ChainView},
     crypto::HashValue,
@@ -10,7 +11,7 @@ use linera_base::{
     messages::{Certificate, ChainId},
 };
 use std::{collections::HashMap, sync::Arc};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, OwnedMutexGuard};
 
 #[cfg(test)]
 use linera_base::{committee::Committee, crypto::PublicKey, manager::BlockManager};
@@ -22,7 +23,7 @@ mod memory_storage_tests;
 /// Vanilla in-memory key-value store.
 #[derive(Debug, Clone, Default)]
 pub struct InMemoryStore {
-    chains: HashMap<ChainId, Arc<ChainState>>,
+    chains: HashMap<ChainId, Arc<Mutex<ChainState>>>,
     certificates: HashMap<HashValue, Certificate>,
 }
 
@@ -35,7 +36,11 @@ impl InMemoryStoreClient {
     pub async fn copy(&self) -> Self {
         let store = self.0.clone();
         let store = store.lock().await;
-        let chains = store.chains.clone();
+        let futures = store
+            .chains
+            .iter()
+            .map(|(id, state)| async { (*id, Arc::new(Mutex::new(state.lock().await.clone()))) });
+        let chains = join_all(futures).await.into_iter().collect();
         let certificates = store.certificates.clone();
         let store = InMemoryStore {
             chains,
@@ -47,19 +52,17 @@ impl InMemoryStoreClient {
 
 #[async_trait]
 impl Storage for InMemoryStoreClient {
-    type Base = ChainState;
+    type Base = OwnedMutexGuard<ChainState>;
 
     async fn read_chain_or_default(&mut self, id: ChainId) -> Result<ChainView<Self::Base>, Error> {
         let store = self.0.clone();
+        let mut store = store.lock().await;
         let chain = store
-            .lock()
-            .await
             .chains
             .entry(id)
-            .or_insert_with(|| Arc::new(ChainState::new(id)))
-            .as_ref()
-            .clone();
-        Ok(chain.into())
+            .or_insert_with(|| Arc::new(Mutex::new(ChainState::new(id))));
+        log::trace!("Acquiring lock on {:?}", id);
+        Ok(chain.clone().lock_owned().await.into())
     }
 
     async fn reset_view(&mut self, view: &mut ChainView<Self::Base>) -> Result<(), Error> {
@@ -68,13 +71,7 @@ impl Storage for InMemoryStoreClient {
     }
 
     async fn write_chain(&mut self, view: ChainView<Self::Base>) -> Result<(), Error> {
-        let store = self.0.clone();
-        let state = view.save();
-        store
-            .lock()
-            .await
-            .chains
-            .insert(state.chain_id(), Arc::new(state));
+        view.save();
         Ok(())
     }
 
@@ -87,8 +84,14 @@ impl Storage for InMemoryStoreClient {
     #[cfg(any(test, feature = "test"))]
     async fn export_chain_state(&mut self, id: ChainId) -> Result<Option<ChainState>, Error> {
         let store = self.0.clone();
-        let chain = store.lock().await.chains.get(&id).map(Arc::as_ref).cloned();
-        Ok(chain)
+        let store = store.lock().await;
+        match store.chains.get(&id) {
+            Some(chain) => {
+                let state = chain.clone().lock_owned().await.clone();
+                Ok(Some(state))
+            }
+            None => Ok(None),
+        }
     }
 
     async fn read_certificate(&mut self, hash: HashValue) -> Result<Certificate, Error> {

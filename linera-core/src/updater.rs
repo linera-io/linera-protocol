@@ -167,15 +167,19 @@ where
                 Ok(response) => {
                     response.check(self.name)?;
                     // Obtain the chain description from our local node.
-                    let chain = self.store.read_chain_or_default(chain_id).await?;
-                    match chain.description() {
+                    let description = *self
+                        .store
+                        .read_chain_or_default(chain_id)
+                        .await?
+                        .description();
+                    match description {
                         Some(ChainDescription::Child(EffectId {
                             chain_id: parent_id,
                             height,
                             index: _,
                         })) => {
                             jobs.push((chain_id, BlockHeight::from(0), target_block_height, true));
-                            chain_id = *parent_id;
+                            chain_id = parent_id;
                             target_block_height = height.try_add_one()?;
                         }
                         _ => {
@@ -190,14 +194,19 @@ where
             jobs.into_iter().rev()
         {
             // Obtain chain state.
-            let chain = self.store.read_chain_or_default(chain_id).await?;
-            // Send the requested certificates in order.
-            for number in usize::from(initial_block_height)..usize::from(target_block_height) {
-                let key = chain
-                    .confirmed_key(number)
-                    .expect("certificate should be known locally");
-                let cert = self.store.read_certificate(key).await?;
-                self.send_certificate(cert, retryable).await?;
+            let range = usize::from(initial_block_height)..usize::from(target_block_height);
+            if !range.is_empty() {
+                let confirmed_keys = self
+                    .store
+                    .read_chain_or_default(chain_id)
+                    .await?
+                    .confirmed_keys(range)
+                    .to_vec();
+                // Send the requested certificates in order.
+                for key in confirmed_keys {
+                    let cert = self.store.read_certificate(key).await?;
+                    self.send_certificate(cert, retryable).await?;
+                }
             }
         }
         Ok(())
@@ -207,8 +216,13 @@ where
         &mut self,
         chain_id: ChainId,
     ) -> Result<(), Error> {
-        let chain = self.store.read_chain_or_default(chain_id).await?;
-        for (origin, inbox) in chain.inboxes() {
+        let inboxes = self
+            .store
+            .read_chain_or_default(chain_id)
+            .await?
+            .inboxes()
+            .clone();
+        for (origin, inbox) in inboxes {
             self.send_chain_information(origin.sender(), inbox.next_height_to_receive)
                 .await?;
         }
