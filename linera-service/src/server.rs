@@ -63,14 +63,12 @@ impl ServerContext {
         S: Storage + Clone + Send + Sync + 'static,
     {
         let num_shards = self.server_config.internal_network.shards.len();
-        let mut servers = Vec::new();
-        for shard in 0..num_shards {
-            let server = self
-                .make_shard_server(local_ip_addr, shard, storage.clone())
-                .await;
-            servers.push(server)
-        }
-        servers
+        join_all(
+            (0..num_shards)
+                .into_iter()
+                .map(|shard| self.make_shard_server(local_ip_addr, shard, storage.clone())),
+        )
+        .await
     }
 }
 
@@ -82,26 +80,17 @@ where
     type Output = ();
 
     async fn run(self, storage: S) -> Result<(), anyhow::Error> {
+        // Allow local IP address to be different from the public one.
+        let listen_address = "0.0.0.0";
         // Run the server
         let servers = match self.shard {
             Some(shard) => {
                 info!("Running shard number {}", shard);
-
-                let server = self
-                    .make_shard_server(
-                        "0.0.0.0", // Allow local IP address to be different from the public one.
-                        shard, storage,
-                    )
-                    .await;
-                vec![server]
+                vec![self.make_shard_server(listen_address, shard, storage).await]
             }
             None => {
                 info!("Running all shards");
-                self.make_servers(
-                    "0.0.0.0", // Allow local IP address to be different from the public one.
-                    storage,
-                )
-                .await
+                self.make_servers(listen_address, storage).await
             }
         };
 
