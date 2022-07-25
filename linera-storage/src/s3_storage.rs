@@ -33,6 +33,7 @@ const LOCALSTACK_ENDPOINT: &str = "LOCALSTACK_ENDPOINT";
 #[derive(Clone, Debug)]
 pub struct S3Storage {
     client: Client,
+    bucket: BucketName,
 }
 
 impl S3Storage {
@@ -56,6 +57,7 @@ impl S3Storage {
     ) -> Result<(Self, BucketStatus), S3StorageError> {
         let s3_storage = S3Storage {
             client: Client::from_conf(config.into()),
+            bucket: BucketName(BUCKET.to_owned()),
         };
 
         let bucket_status = s3_storage.create_bucket_if_needed().await?;
@@ -85,13 +87,17 @@ impl S3Storage {
         match self
             .client
             .get_bucket_location()
-            .bucket(BUCKET)
+            .bucket(self.bucket.as_ref())
             .send()
             .await
         {
             Ok(_) => Ok(BucketStatus::Existing),
             Err(SdkError::ServiceError { err, .. }) if err.code() == Some("NoSuchBucket") => {
-                self.client.create_bucket().bucket(BUCKET).send().await?;
+                self.client
+                    .create_bucket()
+                    .bucket(self.bucket.as_ref())
+                    .send()
+                    .await?;
                 Ok(BucketStatus::New)
             }
             Err(error) => Err(error.into()),
@@ -112,7 +118,7 @@ impl S3Storage {
         let response = self
             .client
             .get_object()
-            .bucket(BUCKET)
+            .bucket(self.bucket.as_ref())
             .key(format!("{prefix}-{key}"))
             .send()
             .await?;
@@ -142,7 +148,7 @@ impl S3Storage {
 
         self.client
             .put_object()
-            .bucket(BUCKET)
+            .bucket(self.bucket.as_ref())
             .key(format!("{prefix}-{key}"))
             .body(bytes.into())
             .send()
@@ -159,7 +165,7 @@ impl S3Storage {
     ) -> Result<(), S3StorageError> {
         self.client
             .delete_object()
-            .bucket(BUCKET)
+            .bucket(self.bucket.as_ref())
             .key(format!("{prefix}-{key}"))
             .send()
             .await?;
