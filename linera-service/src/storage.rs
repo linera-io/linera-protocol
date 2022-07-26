@@ -147,4 +147,8 @@ fn test_storage_config_from_str() {
     assert!(StorageConfig::from_str("rocksdb_foo.db").is_err());
     assert!(StorageConfig::from_str("s3:env").is_err());
     assert!(StorageConfig::from_str("s3:env:").is_err());
+    assert!(StorageConfig::from_str("s3:env:no").is_err());
+    assert!(StorageConfig::from_str("s3:env:-invalid").is_err());
+    assert!(StorageConfig::from_str("s3:env:invalid.").is_err());
+    assert!(StorageConfig::from_str("s3:env:Invalid").is_err());
 }
