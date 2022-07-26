@@ -1,3 +1,4 @@
+use super::S3Storage;
 use anyhow::{Context, Error};
 use aws_sdk_s3::Endpoint;
 use aws_types::SdkConfig;
@@ -5,7 +6,7 @@ use std::env;
 use tokio::sync::{Mutex, MutexGuard};
 #[cfg(test)]
 use {
-    super::{BucketStatus, S3Storage, BUCKET},
+    super::{BucketName, BucketStatus},
     crate::Storage,
     linera_base::{
         chain::ChainState,
@@ -75,6 +76,12 @@ impl LocalStackTestContext {
         aws_sdk_s3::config::Builder::from(&self.base_config)
             .endpoint_resolver(self.endpoint.clone())
             .build()
+    }
+
+    /// Create a new [`S3Storage`] instance, using a LocalStack instance.
+    pub async fn create_s3_storage(&self) -> Result<S3Storage, Error> {
+        let (storage, _) = S3Storage::from_config(self.config()).await?;
+        Ok(storage)
     }
 
     /// Remove all buckets from the LocalStack S3 storage.
