@@ -92,6 +92,57 @@ async fn s3_storage_is_not_reinitialized() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+/// Test if two S3 storages using separate bucket do not have overlapping chains.
+///
+/// Create two [`S3Storage`] instances, and initialize them with separate [`GenesisConfig`]s. Check
+/// that the chain states are only present in their respective [`S3Storage`] instances.
+#[tokio::test]
+#[ignore]
+async fn s3_storage_buckets_are_independent() -> Result<(), anyhow::Error> {
+    let _localstack = LocalStackTestContext::new().await?;
+
+    // Prepare a first genesis configuration for the first storage.
+    let first_storage_config = StorageConfig::S3 {
+        config: S3Config::LocalStack,
+        bucket: "first".parse().expect("Invalid bucket name"),
+    };
+
+    let (first_genesis_config, first_expected_chain_states) =
+        mock_genesis_config_and_chain_states([31, 9]);
+
+    // Prepare a second genesis configuration to recreate the storage.
+    let second_storage_config = StorageConfig::S3 {
+        config: S3Config::LocalStack,
+        bucket: "second".parse().expect("Invalid bucket name"),
+    };
+
+    let (second_genesis_config, second_expected_chain_states) =
+        mock_genesis_config_and_chain_states([2, 16]);
+
+    // Check that the storages are isolated.
+    first_storage_config
+        .run_with_storage(
+            &first_genesis_config,
+            CheckChains {
+                presence: first_expected_chain_states.clone(),
+                abscence: second_expected_chain_states.clone(),
+            },
+        )
+        .await?;
+
+    second_storage_config
+        .run_with_storage(
+            &second_genesis_config,
+            CheckChains {
+                presence: second_expected_chain_states,
+                abscence: first_expected_chain_states,
+            },
+        )
+        .await?;
+
+    Ok(())
+}
+
 /// A runnable job that does nothing.
 struct Skip;
 
