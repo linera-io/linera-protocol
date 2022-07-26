@@ -33,6 +33,7 @@ async fn s3_storage_is_initialized() -> Result<(), anyhow::Error> {
 
     let storage_config = StorageConfig::S3 {
         config: S3Config::LocalStack,
+        bucket: "linera".parse().expect("Invalid bucket name"),
     };
 
     let (genesis_config, expected_chain_states) = mock_genesis_config_and_chain_states([7, 10]);
@@ -83,6 +84,7 @@ async fn s3_storage_is_not_reinitialized() -> Result<(), anyhow::Error> {
 
     let storage_config = StorageConfig::S3 {
         config: S3Config::LocalStack,
+        bucket: "linera".parse().expect("Invalid bucket name"),
     };
 
     // Create the storage with a mock genesis configuration, and drop it immediately.

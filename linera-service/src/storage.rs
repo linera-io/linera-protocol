@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::config::GenesisConfig;
-use anyhow::format_err;
+use anyhow::{anyhow, format_err};
 use async_trait::async_trait;
 use clap::arg_enum;
-use linera_storage::{BucketStatus, InMemoryStoreClient, RocksdbStoreClient, S3Storage};
+use linera_storage::{
+    BucketName, BucketStatus, InMemoryStoreClient, RocksdbStoreClient, S3Storage,
+};
 use std::{path::PathBuf, str::FromStr};
 
 #[cfg(test)]
@@ -17,8 +19,13 @@ mod unit_tests;
 #[cfg_attr(any(test), derive(Eq, PartialEq))]
 pub enum StorageConfig {
     InMemory,
-    Rocksdb { path: PathBuf },
-    S3 { config: S3Config },
+    Rocksdb {
+        path: PathBuf,
+    },
+    S3 {
+        bucket: BucketName,
+        config: S3Config,
+    },
 }
 
 arg_enum! {
@@ -68,7 +75,9 @@ impl StorageConfig {
                 config.initialize_store(&mut client).await?;
                 job.run(client).await
             }
-            S3 { config: s3_config } => {
+            S3 {
+                config: s3_config, ..
+            } => {
                 let (mut client, bucket_status) = match s3_config {
                     S3Config::Env => S3Storage::new().await?,
                     S3Config::LocalStack => S3Storage::with_localstack().await?,
@@ -99,8 +108,16 @@ impl FromStr for StorageConfig {
             });
         }
         if let Some(s) = input.strip_prefix(S3) {
+            let mut endpoint_and_bucket = s.splitn(2, ':');
+            let endpoint = endpoint_and_bucket
+                .next()
+                .ok_or_else(|| anyhow!("Missing S3 endpoint: s3:[env|localstack]:BUCKET"))?;
+            let bucket = endpoint_and_bucket
+                .next()
+                .ok_or_else(|| anyhow!("Missing S3 bucket name: s3:{endpoint}:BUCKET"))?;
             return Ok(Self::S3 {
-                config: s.parse().map_err(|s| format_err!("{}", s))?,
+                config: endpoint.parse().map_err(|s| format_err!("{}", s))?,
+                bucket: bucket.parse().map_err(|s| format_err!("{}", s))?,
             });
         }
         Err(format_err!("Incorrect storage description"))
@@ -120,9 +137,10 @@ fn test_storage_config_from_str() {
         }
     );
     assert_eq!(
-        StorageConfig::from_str("s3:localstack").unwrap(),
+        StorageConfig::from_str("s3:localstack:bucket").unwrap(),
         StorageConfig::S3 {
-            config: S3Config::LocalStack
+            config: S3Config::LocalStack,
+            bucket: "bucket".parse().unwrap(),
         }
     );
     assert!(StorageConfig::from_str("memory_").is_err());
