@@ -161,7 +161,7 @@ async fn certificate_storage_round_trip() -> Result<(), Error> {
     let certificate = Certificate::new(value, vec![]);
 
     let localstack = LocalStackTestContext::new().await?;
-    let (mut storage, _) = S3Storage::from_config(localstack.config()).await?;
+    let mut storage = localstack.create_s3_storage().await?;
 
     storage.write_certificate(certificate.clone()).await?;
 
@@ -179,7 +179,7 @@ async fn retrieval_of_inexistent_certificate() -> Result<(), Error> {
     let certificate_hash = HashValue::new(&ChainDescription::Root(123));
 
     let localstack = LocalStackTestContext::new().await?;
-    let (mut storage, _) = S3Storage::from_config(localstack.config()).await?;
+    let mut storage = localstack.create_s3_storage().await?;
 
     let result = storage.read_certificate(certificate_hash).await;
 
@@ -199,7 +199,7 @@ async fn chain_storage_round_trip() -> Result<(), Error> {
     };
 
     let localstack = LocalStackTestContext::new().await?;
-    let (mut storage, _) = S3Storage::from_config(localstack.config()).await?;
+    let mut storage = localstack.create_s3_storage().await?;
 
     storage.write_chain(chain_state.clone()).await?;
 
@@ -219,7 +219,7 @@ async fn retrieval_of_inexistent_chain_state() -> Result<(), Error> {
     let chain_id = ChainId::root(5);
 
     let localstack = LocalStackTestContext::new().await?;
-    let (mut storage, _) = S3Storage::from_config(localstack.config()).await?;
+    let mut storage = localstack.create_s3_storage().await?;
 
     let chain_state = storage.read_chain_or_default(chain_id).await?;
     let expected_chain_state = ChainState::new(chain_id);
@@ -240,7 +240,7 @@ async fn removal_of_chain_state() -> Result<(), Error> {
     };
 
     let localstack = LocalStackTestContext::new().await?;
-    let (mut storage, _) = S3Storage::from_config(localstack.config()).await?;
+    let mut storage = localstack.create_s3_storage().await?;
 
     storage.write_chain(chain_state).await?;
     storage.remove_chain(chain_id).await?;
