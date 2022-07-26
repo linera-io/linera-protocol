@@ -131,6 +131,33 @@ async fn bucket_is_created() -> Result<(), Error> {
     Ok(())
 }
 
+/// Test if two independent buckets for two separate storages are created.
+#[tokio::test]
+#[ignore]
+async fn separate_buckets_are_created() -> Result<(), Error> {
+    let localstack = LocalStackTestContext::new().await?;
+    let client = aws_sdk_s3::Client::from_conf(localstack.config());
+    let first_bucket: BucketName = "first".parse().expect("Invalid bucket name");
+    let second_bucket: BucketName = "second".parse().expect("Invalid bucket name");
+
+    let initial_buckets = list_buckets(&client).await?;
+    assert!(!initial_buckets.contains(first_bucket.as_ref()));
+    assert!(!initial_buckets.contains(second_bucket.as_ref()));
+
+    let (_storage, first_bucket_status) =
+        S3Storage::from_config(localstack.config(), first_bucket.clone()).await?;
+    let (_storage, second_bucket_status) =
+        S3Storage::from_config(localstack.config(), second_bucket.clone()).await?;
+
+    let buckets = list_buckets(&client).await?;
+    assert!(buckets.contains(first_bucket.as_ref()));
+    assert!(buckets.contains(second_bucket.as_ref()));
+    assert_eq!(first_bucket_status, BucketStatus::New);
+    assert_eq!(second_bucket_status, BucketStatus::New);
+
+    Ok(())
+}
+
 /// Helper function to list the names of buckets registered on S3.
 async fn list_buckets(client: &aws_sdk_s3::Client) -> Result<Vec<String>, Error> {
     Ok(client
