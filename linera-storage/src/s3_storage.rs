@@ -5,11 +5,12 @@ use http::uri::InvalidUri;
 use linera_base::{
     chain::ChainState,
     crypto::HashValue,
+    ensure,
     error::Error,
     messages::{Certificate, ChainId},
 };
 use serde::{de::DeserializeOwned, Serialize};
-use std::{env, fmt::Display};
+use std::{env, fmt::Display, net::IpAddr, str::FromStr};
 use thiserror::Error;
 
 #[cfg(any(test, feature = "test"))]
@@ -209,6 +210,98 @@ pub enum BucketStatus {
     New,
     /// Bucket already existed when the [`S3Storage`] instance was created.
     Existing,
+}
+
+/// An AWS Bucket name.
+///
+/// AWS Bucket names must follow some specific [naming
+/// rules](https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucketnamingrules.html).
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BucketName(String);
+
+impl FromStr for BucketName {
+    type Err = InvalidBucketName;
+
+    fn from_str(string: &str) -> Result<Self, Self::Err> {
+        use InvalidBucketName::*;
+        ensure!(string.len() >= 3, TooShort);
+        ensure!(string.len() <= 63, TooLong);
+        ensure!(!string.starts_with("xn--"), ForbiddenPrefix);
+        ensure!(!string.ends_with("-s3alias"), ForbiddenSuffix);
+        ensure!(IpAddr::from_str(string).is_err(), IpAmbiguity);
+        ensure!(
+            Self::start_and_end_of(string).all(Self::is_ascii_lowercase_or_digit),
+            InvalidStartOrEnd
+        );
+        ensure!(
+            string.chars().all(Self::is_valid_bucket_name_character),
+            InvalidCharacter
+        );
+
+        Ok(BucketName(string.to_owned()))
+    }
+}
+
+impl BucketName {
+    /// Check if a `character` is an ASCII lower case letter or a digit (`[a-z0-9]`).
+    fn is_ascii_lowercase_or_digit(character: char) -> bool {
+        character.is_ascii_lowercase() || character.is_ascii_digit()
+    }
+
+    /// Check if a `character` is a valid bucket name character (`[-.a-z0-9]`).
+    fn is_valid_bucket_name_character(character: char) -> bool {
+        Self::is_ascii_lowercase_or_digit(character) || character == '-' || character == '.'
+    }
+
+    /// Extract the first and last characters of `string`, returning them as an iterator.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the string is empty.
+    fn start_and_end_of(string: &str) -> impl Iterator<Item = char> {
+        [
+            string
+                .chars()
+                .next()
+                .expect("Check for empty string should come first"),
+            string
+                .chars()
+                .last()
+                .expect("Check for empty string should come first"),
+        ]
+        .into_iter()
+    }
+}
+
+impl AsRef<String> for BucketName {
+    fn as_ref(&self) -> &String {
+        &self.0
+    }
+}
+
+/// Error when validating a bucket name.
+#[derive(Debug, Error)]
+pub enum InvalidBucketName {
+    #[error("Bucket name must have at least 3 characters")]
+    TooShort,
+
+    #[error("Bucket name must be at most 63 characters")]
+    TooLong,
+
+    #[error("Bucket name must not start with \"xn--\"")]
+    ForbiddenPrefix,
+
+    #[error("Bucket name must not end with \"-s3alias\"")]
+    ForbiddenSuffix,
+
+    #[error("Bucket name must not be formatted as an IP address")]
+    IpAmbiguity,
+
+    #[error("Bucket name must start and end with a number or a lower case letter")]
+    InvalidStartOrEnd,
+
+    #[error("Bucket name must only contain lowercase letters, numbers, periods and hyphens")]
+    InvalidCharacter,
 }
 
 /// Errors that can occur when using [`S3Storage`].
