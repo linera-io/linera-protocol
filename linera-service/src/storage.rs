@@ -76,11 +76,12 @@ impl StorageConfig {
                 job.run(client).await
             }
             S3 {
-                config: s3_config, ..
+                config: s3_config,
+                bucket,
             } => {
                 let (mut client, bucket_status) = match s3_config {
-                    S3Config::Env => S3Storage::new().await?,
-                    S3Config::LocalStack => S3Storage::with_localstack().await?,
+                    S3Config::Env => S3Storage::new(bucket.clone()).await?,
+                    S3Config::LocalStack => S3Storage::with_localstack(bucket.clone()).await?,
                 };
                 if bucket_status == BucketStatus::New {
                     config.initialize_store(&mut client).await?;

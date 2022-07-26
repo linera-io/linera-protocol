@@ -80,7 +80,8 @@ impl LocalStackTestContext {
 
     /// Create a new [`S3Storage`] instance, using a LocalStack instance.
     pub async fn create_s3_storage(&self) -> Result<S3Storage, Error> {
-        let (storage, _) = S3Storage::from_config(self.config()).await?;
+        let bucket = "linera".parse().context("Invalid S3 bucket name")?;
+        let (storage, _) = S3Storage::from_config(self.config(), bucket).await?;
         Ok(storage)
     }
 
@@ -115,14 +116,16 @@ impl LocalStackTestContext {
 async fn buckets_are_created() -> Result<(), Error> {
     let localstack = LocalStackTestContext::new().await?;
     let client = aws_sdk_s3::Client::from_conf(localstack.config());
+    let bucket: BucketName = "linera".parse().expect("Invalid bucket name");
 
     let initial_buckets = list_buckets(&client).await?;
-    assert!(!initial_buckets.contains(&BUCKET.to_owned()));
+    assert!(!initial_buckets.contains(bucket.as_ref()));
 
-    let (_storage, bucket_status) = S3Storage::from_config(localstack.config()).await?;
+    let (_storage, bucket_status) =
+        S3Storage::from_config(localstack.config(), bucket.clone()).await?;
 
     let buckets = list_buckets(&client).await?;
-    assert!(buckets.contains(&BUCKET.to_owned()));
+    assert!(buckets.contains(bucket.as_ref()));
     assert_eq!(bucket_status, BucketStatus::New);
 
     Ok(())

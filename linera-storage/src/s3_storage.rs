@@ -17,9 +17,6 @@ use thiserror::Error;
 #[path = "unit_tests/s3_storage_tests.rs"]
 pub mod s3_storage_tests;
 
-/// Bucket ID to use for storing the data.
-const BUCKET: &str = "linera";
-
 /// Key prefix for stored certificates.
 const CERTIFICATE_PREFIX: &str = "certificates";
 
@@ -42,10 +39,10 @@ impl S3Storage {
     /// Loads any necessary configuration from environment variables, and creates the necessary
     /// buckets if they don't yet exist, reporting a [`BucketStatus`] to indicate if the bucket was
     /// created or if it already exists.
-    pub async fn new() -> Result<(Self, BucketStatus), S3StorageError> {
+    pub async fn new(bucket: BucketName) -> Result<(Self, BucketStatus), S3StorageError> {
         let config = aws_config::load_from_env().await;
 
-        S3Storage::from_config(&config).await
+        S3Storage::from_config(&config, bucket).await
     }
 
     /// Create a new [`S3Storage`] instance using the provided `config` parameters.
@@ -54,10 +51,11 @@ impl S3Storage {
     /// indicate if the bucket was created or if it already exists.
     pub async fn from_config(
         config: impl Into<aws_sdk_s3::Config>,
+        bucket: BucketName,
     ) -> Result<(Self, BucketStatus), S3StorageError> {
         let s3_storage = S3Storage {
             client: Client::from_conf(config.into()),
-            bucket: BucketName(BUCKET.to_owned()),
+            bucket,
         };
 
         let bucket_status = s3_storage.create_bucket_if_needed().await?;
@@ -70,14 +68,18 @@ impl S3Storage {
     /// Requires a [`LOCALSTACK_ENDPOINT`] environment variable with the endpoint address to connect
     /// to the LocalStack instance. Creates the necessary buckets if they don't yet exist,
     /// reporting a [`BucketStatus`] to indicate if the bucket was created or if it already exists.
-    pub async fn with_localstack() -> Result<(Self, BucketStatus), LocalStackError> {
+    pub async fn with_localstack(
+        bucket: BucketName,
+    ) -> Result<(Self, BucketStatus), LocalStackError> {
         let endpoint_address = env::var(LOCALSTACK_ENDPOINT)?.parse()?;
         let base_config = aws_config::load_from_env().await;
         let config = aws_sdk_s3::config::Builder::from(&base_config)
             .endpoint_resolver(Endpoint::immutable(endpoint_address))
             .build();
 
-        Ok(S3Storage::from_config(config).await.map_err(Box::new)?)
+        Ok(S3Storage::from_config(config, bucket)
+            .await
+            .map_err(Box::new)?)
     }
 
     /// Checks if the bucket already exists and tries to create it if it doesn't.
