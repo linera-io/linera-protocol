@@ -195,7 +195,7 @@ impl WalletState {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GenesisConfig {
     pub committee: CommitteeConfig,
     pub admin_id: ChainId,
