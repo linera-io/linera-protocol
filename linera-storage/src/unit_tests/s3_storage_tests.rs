@@ -110,10 +110,10 @@ impl LocalStackTestContext {
     }
 }
 
-/// Test if the necessary buckets are created if needed.
+/// Test if the bucket for the storage is created when needed.
 #[tokio::test]
 #[ignore]
-async fn buckets_are_created() -> Result<(), Error> {
+async fn bucket_is_created() -> Result<(), Error> {
     let localstack = LocalStackTestContext::new().await?;
     let client = aws_sdk_s3::Client::from_conf(localstack.config());
     let bucket: BucketName = "linera".parse().expect("Invalid bucket name");
