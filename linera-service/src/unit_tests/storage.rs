@@ -25,34 +25,16 @@ async fn s3_storage_is_initialized() -> Result<(), anyhow::Error> {
 
     let (genesis_config, expected_chain_states) = mock_genesis_config_and_chain_states([7, 10]);
 
-    struct Job {
-        expected_chain_states: Vec<ChainState>,
-    }
-    #[async_trait]
-    impl<S> Runnable<S> for Job
-    where
-        S: Storage + Send + 'static,
-    {
-        type Output = ();
-        async fn run(self, mut storage: S) -> Result<Self::Output, anyhow::Error> {
-            for expected_chain_state in self.expected_chain_states {
-                let chain_state = storage
-                    .read_chain_or_default(expected_chain_state.state.chain_id)
-                    .await?;
-                assert_eq!(chain_state, expected_chain_state);
-            }
-            Ok(())
-        }
-    }
-
     storage_config
         .run_with_storage(
             &genesis_config,
-            Job {
-                expected_chain_states,
+            CheckChains {
+                presence: expected_chain_states,
+                abscence: vec![],
             },
         )
         .await?;
+
     Ok(())
 }
 
@@ -97,48 +79,16 @@ async fn s3_storage_is_not_reinitialized() -> Result<(), anyhow::Error> {
     second_genesis_config.chains.push(conflicting_chain);
     second_expected_chain_states.push(conflicting_chain_state);
 
-    // Recreate the storage using the second genesis configuration.
-    struct Job {
-        first_expected_chain_states: Vec<ChainState>,
-        second_expected_chain_states: Vec<ChainState>,
-    }
-    #[async_trait]
-    impl<S> Runnable<S> for Job
-    where
-        S: Storage + Send + 'static,
-    {
-        type Output = ();
-        async fn run(self, mut storage: S) -> Result<Self::Output, anyhow::Error> {
-            // Check that the chains from the first configuration still exist.
-            for expected_chain_state in self.first_expected_chain_states {
-                let chain_state = storage
-                    .read_chain_or_default(expected_chain_state.state.chain_id)
-                    .await?;
-
-                assert_eq!(chain_state, expected_chain_state);
-            }
-
-            // Check that the chains from the second configuration were not added.
-            for unexpected_chain_state in self.second_expected_chain_states {
-                let chain_state = storage
-                    .read_chain_or_default(unexpected_chain_state.state.chain_id)
-                    .await?;
-
-                assert_ne!(chain_state, unexpected_chain_state);
-            }
-            Ok(())
-        }
-    }
-
     storage_config
         .run_with_storage(
             &second_genesis_config,
-            Job {
-                first_expected_chain_states,
-                second_expected_chain_states,
+            CheckChains {
+                presence: first_expected_chain_states,
+                abscence: second_expected_chain_states,
             },
         )
         .await?;
+
     Ok(())
 }
 
@@ -151,7 +101,42 @@ where
     S: Send + 'static,
 {
     type Output = ();
+
     async fn run(self, _: S) -> Result<Self::Output, anyhow::Error> {
+        Ok(())
+    }
+}
+
+/// A runnable job to check for the presence and/or abscence of chain states.
+struct CheckChains {
+    presence: Vec<ChainState>,
+    abscence: Vec<ChainState>,
+}
+
+#[async_trait]
+impl<S> Runnable<S> for CheckChains
+where
+    S: Storage + Send + 'static,
+{
+    type Output = ();
+
+    async fn run(self, mut storage: S) -> Result<Self::Output, anyhow::Error> {
+        for expected_chain_state in &self.presence {
+            let chain_state = storage
+                .read_chain_or_default(expected_chain_state.state.chain_id)
+                .await?;
+
+            assert_eq!(&chain_state, expected_chain_state);
+        }
+
+        for unexpected_chain_state in &self.abscence {
+            let chain_state = storage
+                .read_chain_or_default(unexpected_chain_state.state.chain_id)
+                .await?;
+
+            assert_ne!(&chain_state, unexpected_chain_state);
+        }
+
         Ok(())
     }
 }
