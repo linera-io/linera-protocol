@@ -9,19 +9,6 @@ use linera_base::{
 };
 use linera_storage::{LocalStackTestContext, Storage};
 
-// A runnable job that does nothing.
-struct Skip;
-#[async_trait]
-impl<S> Runnable<S> for Skip
-where
-    S: Send + 'static,
-{
-    type Output = ();
-    async fn run(self, _: S) -> Result<Self::Output, anyhow::Error> {
-        Ok(())
-    }
-}
-
 /// Test if an empty S3 storage is properly initialized by [`StorageConfig::run_with_storage`].
 ///
 /// Check that the chain states resulting from a mock [`GenesisConfig`] are stored in the S3
@@ -153,6 +140,20 @@ async fn s3_storage_is_not_reinitialized() -> Result<(), anyhow::Error> {
         )
         .await?;
     Ok(())
+}
+
+/// A runnable job that does nothing.
+struct Skip;
+
+#[async_trait]
+impl<S> Runnable<S> for Skip
+where
+    S: Send + 'static,
+{
+    type Output = ();
+    async fn run(self, _: S) -> Result<Self::Output, anyhow::Error> {
+        Ok(())
+    }
 }
 
 /// Create a mock [`GenesisConfig`] and the expected [`ChainState`]s that should be created by it.
