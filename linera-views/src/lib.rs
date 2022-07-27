@@ -14,6 +14,9 @@ pub mod memory;
 /// Helper definitions for Rocksdb storage.
 pub mod rocksdb;
 
+/// Helper definitions for DynamoDB storage.
+pub mod dynamo_db;
+
 /// Module to supporting hashing.
 pub mod hash;
 
