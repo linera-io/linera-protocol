@@ -4,6 +4,7 @@ members = [
         "linera-core",
         "linera-service",
         "linera-storage",
+        "linera-views",
 ]
 
 [profile.release]
