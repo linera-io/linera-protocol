@@ -16,3 +16,4 @@ linera-base = { path = "../linera-base" }
 
 [dev-dependencies]
 anyhow = "1.0.57"
+getset = "0.1.2"
