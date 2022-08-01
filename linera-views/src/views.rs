@@ -358,40 +358,44 @@ where
 /// A view that supports accessing a collection of views of the same kind, indexed by a
 /// key.
 #[derive(Debug, Clone)]
-pub struct CollectionView<C, I, K, W> {
+pub struct CollectionView<C, I, W> {
     context: C,
-    key: CollectionKey<I, K>,
+    key: CollectionKey<I, W>,
     active_views: HashMap<I, W>,
 }
 
-declare_key!(CollectionKey<I, K>, "The address of a [`CollectionView`]");
+declare_key!(CollectionKey<I, W>, "The address of a [`CollectionView`]");
 
 /// The context operations supporting [`AppendOnlyLogView`].
-pub trait CollectionOperations<I, K>: Context + Clone {
-    fn entry(&mut self, key: &CollectionKey<I, K>, index: &I) -> K;
+pub trait CollectionOperations<I, W>: Context + Clone
+where
+    W: View<Self>,
+{
+    fn entry(&mut self, key: &CollectionKey<I, W>, index: &I) -> W::Key;
 }
 
-impl<C, I, K> CollectionOperations<I, K> for C
+impl<C, I, W> CollectionOperations<I, W> for C
 where
     C: Context + Clone,
     I: serde::Serialize,
-    K: From<Vec<u8>>,
+    W: View<Self>,
+    W::Key: From<Vec<u8>>,
 {
-    fn entry(&mut self, key: &CollectionKey<I, K>, index: &I) -> K {
+    fn entry(&mut self, key: &CollectionKey<I, W>, index: &I) -> W::Key {
         let bytes = self.derive_key_bytes(&key.bytes, index);
         bytes.into()
     }
 }
 
 #[async_trait]
-impl<C, I, W> View<C> for CollectionView<C, I, W::Key, W>
+impl<C, I, W> View<C> for CollectionView<C, I, W>
 where
-    C: CollectionOperations<I, W::Key> + Send,
+    C: CollectionOperations<I, W> + Send,
     I: Send,
     W: View<C> + Send,
     W::Key: Send,
 {
-    type Key = CollectionKey<I, W::Key>;
+    type Key = CollectionKey<I, W>;
 
     async fn load(context: C, key: Self::Key) -> Result<Self, C::Error> {
         Ok(Self {
@@ -414,9 +418,9 @@ where
     }
 }
 
-impl<C, I, W> CollectionView<C, I, W::Key, W>
+impl<C, I, W> CollectionView<C, I, W>
 where
-    C: CollectionOperations<I, W::Key> + Send,
+    C: CollectionOperations<I, W> + Send,
     I: Eq + Hash + Sync + Clone + serde::Serialize,
     W: View<C>,
     W::Key: From<Vec<u8>>,

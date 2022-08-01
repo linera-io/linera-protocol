@@ -5,8 +5,8 @@ use async_trait::async_trait;
 use linera_views::{
     memory::{EntryMap, InMemoryContext},
     views::{
-        AppendOnlyLogKey, AppendOnlyLogOperations, AppendOnlyLogView, CollectionOperations,
-        CollectionView, Context, MapOperations, MapView, RegisterOperations, RegisterView, View,
+        AppendOnlyLogOperations, AppendOnlyLogView, CollectionOperations, CollectionView, Context,
+        MapOperations, MapView, RegisterOperations, RegisterView, View,
     },
 };
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
@@ -18,7 +18,7 @@ pub struct StateView<C> {
     pub x2: RegisterView<C, u32>,
     pub log: AppendOnlyLogView<C, u32>,
     pub map: MapView<C, String, usize>,
-    pub collection: CollectionView<C, String, AppendOnlyLogKey<u32>, AppendOnlyLogView<C, u32>>,
+    pub collection: CollectionView<C, String, AppendOnlyLogView<C, u32>>,
 }
 
 impl<C> StateView<C>
@@ -31,7 +31,7 @@ where
         + RegisterOperations<u32>
         + AppendOnlyLogOperations<u32>
         + MapOperations<String, usize>
-        + CollectionOperations<String, AppendOnlyLogKey<u32>>,
+        + CollectionOperations<String, AppendOnlyLogView<C, u32>>,
 {
     pub fn reset(&mut self) {
         self.x1.reset();
@@ -68,7 +68,7 @@ pub trait StateStore: Store<usize, View = StateView<<Self as StateStore>::C>> {
         + RegisterOperations<u32>
         + AppendOnlyLogOperations<u32>
         + MapOperations<String, usize>
-        + CollectionOperations<String, AppendOnlyLogKey<u32>>;
+        + CollectionOperations<String, AppendOnlyLogView<Self::C, u32>>;
 }
 
 #[derive(Default)]
