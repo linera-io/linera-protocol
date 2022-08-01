@@ -20,8 +20,8 @@ pub trait Context {
     /// How to create derived keys. By default, we concatenate the BCS-serialization of
     /// the index on top of the base key.
     ///
-    /// We assume that the type of the index is implied by the base key so that each key
-    /// is non ambiguous sequence.
+    /// By default, we assume that only one type `I` is possible for the index after a given base key.
+    /// Otherwise, the type of `I` should be also serialized to make the encoding non-ambiguous.
     fn derive_key_bytes<I: serde::Serialize>(
         &mut self,
         base_key_bytes: &[u8],
