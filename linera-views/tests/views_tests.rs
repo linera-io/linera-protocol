@@ -16,8 +16,6 @@ use tokio::sync::Mutex;
 #[derive(Getters, MutGetters)]
 pub struct StateView<C> {
     #[getset(get = "pub", get_mut = "pub")]
-    id: usize,
-    #[getset(get = "pub", get_mut = "pub")]
     x1: RegisterView<C, u64>,
     #[getset(get = "pub", get_mut = "pub")]
     x2: RegisterView<C, u32>,
@@ -29,7 +27,8 @@ pub struct StateView<C> {
     collection: CollectionView<C, String, AppendOnlyLogView<C, u32>>,
 }
 
-impl<C> StateView<C>
+#[async_trait]
+impl<C> View<C> for StateView<C>
 where
     C: Context
         + Send
@@ -41,7 +40,24 @@ where
         + MapOperations<String, usize>
         + CollectionOperations<String, AppendOnlyLogView<C, u32>>,
 {
-    pub fn reset(&mut self) {
+    type Key = ();
+
+    async fn load(context: C, _key: Self::Key) -> Result<Self, C::Error> {
+        let x1 = RegisterView::load(context.clone(), vec![0].into()).await?;
+        let x2 = RegisterView::load(context.clone(), vec![1].into()).await?;
+        let log = AppendOnlyLogView::load(context.clone(), vec![2].into()).await?;
+        let map = MapView::load(context.clone(), vec![3].into()).await?;
+        let collection = CollectionView::load(context, vec![4].into()).await?;
+        Ok(Self {
+            x1,
+            x2,
+            log,
+            map,
+            collection,
+        })
+    }
+
+    fn reset(&mut self) {
         self.x1.reset();
         self.x2.reset();
         self.log.reset();
@@ -49,7 +65,7 @@ where
         self.collection.reset();
     }
 
-    pub async fn commit(self) -> Result<(), C::Error> {
+    async fn commit(self) -> Result<(), C::Error> {
         self.x1.commit().await?;
         self.x2.commit().await?;
         self.log.commit().await?;
@@ -86,24 +102,6 @@ pub struct InMemoryTestStore {
 
 pub type InMemoryStateView = StateView<InMemoryContext>;
 
-impl InMemoryStateView {
-    async fn load(id: usize, context: InMemoryContext) -> Result<Self, std::convert::Infallible> {
-        let x1 = RegisterView::load(context.clone(), vec![0].into()).await?;
-        let x2 = RegisterView::load(context.clone(), vec![1].into()).await?;
-        let log = AppendOnlyLogView::load(context.clone(), vec![2].into()).await?;
-        let map = MapView::load(context.clone(), vec![3].into()).await?;
-        let collection = CollectionView::load(context, vec![4].into()).await?;
-        Ok(Self {
-            id,
-            x1,
-            x2,
-            log,
-            map,
-            collection,
-        })
-    }
-}
-
 #[async_trait]
 impl Store<usize> for InMemoryTestStore {
     type View = InMemoryStateView;
@@ -116,7 +114,7 @@ impl Store<usize> for InMemoryTestStore {
             .or_insert_with(|| Arc::new(Mutex::new(HashMap::new())));
         log::trace!("Acquiring lock on {:?}", id);
         let context = InMemoryContext::new(state.clone().lock_owned().await);
-        Self::View::load(id, context).await
+        Self::View::load(context, ()).await
     }
 }
 
