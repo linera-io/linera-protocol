@@ -8,7 +8,6 @@ use std::{
     collections::{hash_map, HashMap},
     fmt::Debug,
     hash::Hash,
-    marker::PhantomData,
 };
 
 /// The context in which a view is operated. Typically, this includes the client to
@@ -56,35 +55,129 @@ pub trait View<C: Context>: Sized {
 pub trait Key: From<Vec<u8>> + AsRef<[u8]> {}
 
 /// Create a new type of key implementing the trait Key.
+#[macro_export]
 macro_rules! declare_key {
-    ($name:ident < $( $param:ident ),+ >, $doc:literal) => {
+    ($name:ident < $( $param:ident ),* >, $doc:literal) => {
 
 #[doc = $doc]
 #[derive(Debug, Clone)]
-pub struct $name< $( $param ),+ > {
+pub struct $name< $( $param ),* > {
     bytes: Vec<u8>,
     #[allow(unused_parens)]
-    _marker: PhantomData<( $( $param ),+ )>,
+    _marker: std::marker::PhantomData<( $( $param ),* )>,
 }
 
-impl< $( $param ),+ > From<Vec<u8>> for $name< $( $param ),+ > {
+impl< $( $param ),* > From<Vec<u8>> for $name< $( $param ),* > {
     fn from(bytes: Vec<u8>) -> Self {
         Self {
             bytes,
-            _marker: PhantomData,
+            _marker: std::marker::PhantomData,
         }
     }
 }
 
-impl< $( $param ),+ > AsRef<[u8]> for $name< $( $param ),+ >
+impl< $( $param ),* > From<&[u8]> for $name< $( $param ),* > {
+    fn from(bytes: &[u8]) -> Self {
+        Self {
+            bytes: bytes.to_vec(),
+            _marker: std::marker::PhantomData,
+        }
+    }
+}
+
+impl< $( $param ),* > AsRef<[u8]> for $name< $( $param ),* >
 {
     fn as_ref(&self) -> &[u8] {
         &self.bytes
     }
 }
 
-impl< $( $param ),+ > Key for $name< $( $param ),+ > {}
+impl< $( $param ),* > $crate::views::Key for $name< $( $param ),* > {}
 
+    };
+
+    ($name:ident, $doc:literal) => {
+
+#[doc = $doc]
+#[derive(Debug, Clone)]
+pub struct $name {
+    bytes: Vec<u8>,
+}
+
+impl From<Vec<u8>> for $name {
+    fn from(bytes: Vec<u8>) -> Self {
+        Self {
+            bytes,
+        }
+    }
+}
+
+impl From<&[u8]> for $name {
+    fn from(bytes: &[u8]) -> Self {
+        Self {
+            bytes: bytes.to_vec(),
+        }
+    }
+}
+
+impl AsRef<[u8]> for $name
+{
+    fn as_ref(&self) -> &[u8] {
+        &self.bytes
+    }
+}
+
+impl $crate::views::Key for $name {}
+
+    }
+}
+pub use declare_key;
+
+/// A view that adds a prefix to all the keys of the contained view.
+#[derive(Debug, Clone)]
+pub struct ScopedView<const INDEX: u64, W> {
+    view: W,
+}
+
+impl<W, const INDEX: u64> std::ops::Deref for ScopedView<INDEX, W> {
+    type Target = W;
+
+    fn deref(&self) -> &W {
+        &self.view
+    }
+}
+
+impl<W, const INDEX: u64> std::ops::DerefMut for ScopedView<INDEX, W> {
+    fn deref_mut(&mut self) -> &mut W {
+        &mut self.view
+    }
+}
+
+declare_key!(ScopedKey<W>, "The address of a [`ScopedView`]");
+
+#[async_trait]
+impl<C, W, const INDEX: u64> View<C> for ScopedView<INDEX, W>
+where
+    C: Context + Send + 'static,
+    W: View<C> + Send,
+    W::Key: Key + Send,
+{
+    type Key = ScopedKey<W>;
+
+    async fn load(context: C, key: Self::Key) -> Result<Self, C::Error> {
+        let mut bytes = INDEX.to_le_bytes().to_vec();
+        bytes.extend_from_slice(key.as_ref());
+        let view_key = bytes.into();
+        let view = W::load(context, view_key).await?;
+        Ok(Self { view })
+    }
+
+    async fn commit(mut self) -> Result<(), C::Error> {
+        self.view.commit().await
+    }
+
+    fn reset(&mut self) {
+        self.view.reset();
     }
 }
 
