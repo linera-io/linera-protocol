@@ -6,8 +6,9 @@ use getset::{Getters, MutGetters};
 use linera_views::{
     memory::{EntryMap, InMemoryContext},
     views::{
-        AppendOnlyLogOperations, AppendOnlyLogView, CollectionOperations, CollectionView, Context,
-        MapOperations, MapView, RegisterOperations, RegisterView, View,
+        declare_key, AppendOnlyLogOperations, AppendOnlyLogView, CollectionOperations,
+        CollectionView, Context, MapOperations, MapView, RegisterOperations, RegisterView,
+        ScopedView, View,
     },
 };
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
@@ -16,16 +17,18 @@ use tokio::sync::Mutex;
 #[derive(Getters, MutGetters)]
 pub struct StateView<C> {
     #[getset(get = "pub", get_mut = "pub")]
-    x1: RegisterView<C, u64>,
+    x1: ScopedView<0, RegisterView<C, u64>>,
     #[getset(get = "pub", get_mut = "pub")]
-    x2: RegisterView<C, u32>,
+    x2: ScopedView<1, RegisterView<C, u32>>,
     #[getset(get = "pub", get_mut = "pub")]
-    log: AppendOnlyLogView<C, u32>,
+    log: ScopedView<2, AppendOnlyLogView<C, u32>>,
     #[getset(get = "pub", get_mut = "pub")]
-    map: MapView<C, String, usize>,
+    map: ScopedView<3, MapView<C, String, usize>>,
     #[getset(get = "pub", get_mut = "pub")]
-    collection: CollectionView<C, String, AppendOnlyLogView<C, u32>>,
+    collection: ScopedView<4, CollectionView<C, String, AppendOnlyLogView<C, u32>>>,
 }
+
+declare_key!(StateKey, "The address of a [`StateView`]");
 
 #[async_trait]
 impl<C> View<C> for StateView<C>
@@ -34,20 +37,21 @@ where
         + Send
         + Sync
         + Clone
+        + 'static
         + RegisterOperations<u64>
         + RegisterOperations<u32>
         + AppendOnlyLogOperations<u32>
         + MapOperations<String, usize>
         + CollectionOperations<String, AppendOnlyLogView<C, u32>>,
 {
-    type Key = ();
+    type Key = StateKey;
 
-    async fn load(context: C, _key: Self::Key) -> Result<Self, C::Error> {
-        let x1 = RegisterView::load(context.clone(), vec![0].into()).await?;
-        let x2 = RegisterView::load(context.clone(), vec![1].into()).await?;
-        let log = AppendOnlyLogView::load(context.clone(), vec![2].into()).await?;
-        let map = MapView::load(context.clone(), vec![3].into()).await?;
-        let collection = CollectionView::load(context, vec![4].into()).await?;
+    async fn load(context: C, key: Self::Key) -> Result<Self, C::Error> {
+        let x1 = ScopedView::load(context.clone(), key.as_ref().into()).await?;
+        let x2 = ScopedView::load(context.clone(), key.as_ref().into()).await?;
+        let log = ScopedView::load(context.clone(), key.as_ref().into()).await?;
+        let map = ScopedView::load(context.clone(), key.as_ref().into()).await?;
+        let collection = ScopedView::load(context.clone(), key.as_ref().into()).await?;
         Ok(Self {
             x1,
             x2,
@@ -88,6 +92,7 @@ pub trait StateStore: Store<usize, View = StateView<<Self as StateStore>::C>> {
         + Send
         + Sync
         + Clone
+        + 'static
         + RegisterOperations<u64>
         + RegisterOperations<u32>
         + AppendOnlyLogOperations<u32>
@@ -114,7 +119,7 @@ impl Store<usize> for InMemoryTestStore {
             .or_insert_with(|| Arc::new(Mutex::new(HashMap::new())));
         log::trace!("Acquiring lock on {:?}", id);
         let context = InMemoryContext::new(state.clone().lock_owned().await);
-        Self::View::load(context, ()).await
+        Self::View::load(context, Vec::new().into()).await
     }
 }
 
