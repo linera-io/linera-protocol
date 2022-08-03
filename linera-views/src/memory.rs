@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::views::{
-    AppendOnlyLogKey, AppendOnlyLogOperations, CollectionKey, Context, Key, MapKey, MapOperations,
-    RegisterKey, RegisterOperations,
+    AppendOnlyLogOperations, CollectionOperations, Context, MapOperations, RegisterOperations,
 };
 use async_trait::async_trait;
 use std::{
@@ -14,7 +13,10 @@ use tokio::sync::{OwnedMutexGuard, RwLock};
 
 /// A context that stores all values in memory.
 #[derive(Clone, Debug)]
-pub struct InMemoryContext(Arc<RwLock<OwnedMutexGuard<EntryMap>>>);
+pub struct InMemoryContext {
+    map: Arc<RwLock<OwnedMutexGuard<EntryMap>>>,
+    base_key: Vec<u8>,
+}
 
 /// A Rust value stored in memory.
 pub type Entry = Box<dyn Any + Send + Sync + 'static>;
@@ -24,57 +26,56 @@ pub type EntryMap = HashMap<Vec<u8>, Entry>;
 
 impl InMemoryContext {
     pub fn new(guard: OwnedMutexGuard<EntryMap>) -> Self {
-        Self(Arc::new(RwLock::new(guard)))
+        Self {
+            map: Arc::new(RwLock::new(guard)),
+            base_key: Vec::new(),
+        }
     }
-}
 
-impl Context for InMemoryContext {
-    type Error = Infallible;
-}
-
-/// Helper trait to create views on memory data.
-#[async_trait]
-pub trait InMemoryKey: Key {
-    /// The encoding of the data in memory
-    type Value: Default + Send + Sync + 'static;
-
-    async fn with_ref<F: Send, V>(&self, context: &InMemoryContext, f: F) -> V
+    async fn with_ref<F, T, V>(&self, f: F) -> V
     where
-        F: FnOnce(Option<&Self::Value>) -> V,
+        F: Send + FnOnce(Option<&T>) -> V,
+        T: 'static,
     {
-        let base = context.0.read().await;
-        match base.get(self.as_ref()) {
+        let map = self.map.read().await;
+        match map.get(&self.base_key) {
             None => f(None),
             Some(blob) => {
                 let value = blob
-                    .downcast_ref::<Self::Value>()
-                    .expect("downcast to &Value should not fail");
+                    .downcast_ref::<T>()
+                    .expect("downcast to &T should not fail");
                 f(Some(value))
             }
         }
     }
 
-    async fn with_mut<F: Send, V>(&self, context: &InMemoryContext, f: F) -> V
+    async fn with_mut<F, T, V>(&self, f: F) -> V
     where
-        F: FnOnce(&mut Self::Value) -> V,
+        F: Send + FnOnce(&mut T) -> V,
+        T: Default + Send + Sync + 'static,
     {
-        let mut base = context.0.write().await;
-        let blob = base
-            .entry(self.as_ref().to_vec())
-            .or_insert_with(|| Box::new(Self::Value::default()));
+        let mut map = self.map.write().await;
+        let blob = map
+            .entry(self.base_key.clone())
+            .or_insert_with(|| Box::new(T::default()));
         let value = blob
-            .downcast_mut::<Self::Value>()
-            .expect("downcast to &mut Value should not fail");
+            .downcast_mut::<T>()
+            .expect("downcast to &mut T should not fail");
         f(value)
     }
 }
 
-#[async_trait]
-impl<T> InMemoryKey for RegisterKey<T>
-where
-    T: Default + Send + Sync + 'static,
-{
-    type Value = T;
+impl Context for InMemoryContext {
+    type Error = Infallible;
+
+    fn clone_with_scope<I: serde::Serialize>(&self, index: &I) -> Self {
+        let mut base_key = self.base_key.clone();
+        bcs::serialize_into(&mut base_key, index).unwrap();
+        Self {
+            map: self.map.clone(),
+            base_key,
+        }
+    }
 }
 
 #[async_trait]
@@ -82,25 +83,17 @@ impl<T> RegisterOperations<T> for InMemoryContext
 where
     T: Default + Clone + Send + Sync + 'static,
 {
-    async fn get(&mut self, key: &RegisterKey<T>) -> Result<T, Infallible> {
-        Ok(key
-            .with_ref(self, |value| value.cloned().unwrap_or_default())
+    async fn get(&mut self) -> Result<T, Infallible> {
+        Ok(self
+            .with_ref(|value: Option<&T>| value.cloned().unwrap_or_default())
             .await)
     }
 
-    async fn set(&mut self, key: &RegisterKey<T>, value: T) -> Result<(), Infallible> {
-        let mut base = self.0.write().await;
-        base.insert(key.as_ref().to_vec(), Box::new(value));
+    async fn set(&mut self, value: T) -> Result<(), Infallible> {
+        let mut map = self.map.write().await;
+        map.insert(self.base_key.clone(), Box::new(value));
         Ok(())
     }
-}
-
-#[async_trait]
-impl<T> InMemoryKey for AppendOnlyLogKey<T>
-where
-    T: Send + Sync + 'static,
-{
-    type Value = Vec<T>;
 }
 
 #[async_trait]
@@ -108,47 +101,30 @@ impl<T> AppendOnlyLogOperations<T> for InMemoryContext
 where
     T: Clone + Send + Sync + 'static,
 {
-    async fn count(&mut self, key: &AppendOnlyLogKey<T>) -> Result<usize, Infallible> {
-        Ok(key
-            .with_ref(self, |slice| match slice {
+    async fn count(&mut self) -> Result<usize, Infallible> {
+        Ok(self
+            .with_ref(|v: Option<&Vec<T>>| match v {
                 None => 0,
                 Some(s) => s.len(),
             })
             .await)
     }
 
-    async fn read(
-        &mut self,
-        key: &AppendOnlyLogKey<T>,
-        range: std::ops::Range<usize>,
-    ) -> Result<Vec<T>, Infallible> {
-        Ok(key
-            .with_ref(self, |slice| match slice {
+    async fn read(&mut self, range: std::ops::Range<usize>) -> Result<Vec<T>, Infallible> {
+        Ok(self
+            .with_ref(|v: Option<&Vec<T>>| match v {
                 None => Vec::new(),
                 Some(s) => s[range].to_vec(),
             })
             .await)
     }
 
-    async fn append(
-        &mut self,
-        key: &AppendOnlyLogKey<T>,
-        mut values: Vec<T>,
-    ) -> Result<(), Infallible> {
+    async fn append(&mut self, mut values: Vec<T>) -> Result<(), Infallible> {
         if !values.is_empty() {
-            key.with_mut(self, |v| v.append(&mut values)).await;
+            self.with_mut(|v: &mut Vec<T>| v.append(&mut values)).await;
         }
         Ok(())
     }
-}
-
-#[async_trait]
-impl<K, V> InMemoryKey for MapKey<K, V>
-where
-    K: Send + Sync + 'static,
-    V: Send + Sync + 'static,
-{
-    type Value = HashMap<K, V>;
 }
 
 #[async_trait]
@@ -157,29 +133,29 @@ where
     K: Eq + Hash + Send + Sync + 'static,
     V: Clone + Send + Sync + 'static,
 {
-    async fn get<K2>(&mut self, key: &MapKey<K, V>, index: &K2) -> Result<Option<V>, Infallible>
+    async fn get<K2>(&mut self, index: &K2) -> Result<Option<V>, Infallible>
     where
         K: Borrow<K2>,
         K2: Eq + Hash + Sync + ?Sized,
     {
-        Ok(key
-            .with_ref(self, |m| match m {
+        Ok(self
+            .with_ref(|m: Option<&HashMap<K, V>>| match m {
                 None => None,
                 Some(m) => m.get(index).cloned(),
             })
             .await)
     }
 
-    async fn insert(&mut self, key: &MapKey<K, V>, index: K, value: V) -> Result<(), Infallible> {
-        key.with_mut(self, |m| {
+    async fn insert(&mut self, index: K, value: V) -> Result<(), Infallible> {
+        self.with_mut(|m: &mut HashMap<K, V>| {
             m.insert(index, value);
         })
         .await;
         Ok(())
     }
 
-    async fn remove(&mut self, key: &MapKey<K, V>, index: K) -> Result<(), Infallible> {
-        key.with_mut(self, |m| {
+    async fn remove(&mut self, index: K) -> Result<(), Infallible> {
+        self.with_mut(|m: &mut HashMap<K, V>| {
             m.remove(&index);
         })
         .await;
@@ -187,7 +163,4 @@ where
     }
 }
 
-#[async_trait]
-impl<I, K> InMemoryKey for CollectionKey<I, K> {
-    type Value = (); // Not storing anything at the root of the collection
-}
+impl<K, V> CollectionOperations<K, V> for InMemoryContext {}

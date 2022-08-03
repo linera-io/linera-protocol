@@ -16,31 +16,17 @@ pub trait Context {
     /// The error type in use.
     type Error: Debug;
 
-    /// How to create derived keys. By default, we concatenate the BCS-serialization of
-    /// the index on top of the base key.
-    ///
-    /// By default, we assume that only one type `I` is possible for the index after a given base key.
-    /// Otherwise, the type of `I` should be also serialized to make the encoding non-ambiguous.
-    fn derive_key_bytes<I: serde::Serialize>(
-        &mut self,
-        base_key_bytes: &[u8],
-        index: &I,
-    ) -> Vec<u8> {
-        let mut bytes = base_key_bytes.to_vec();
-        bcs::serialize_into(&mut bytes, index).unwrap();
-        bytes
-    }
+    /// Clone the context and advance the (otherwise implicit) base key for all read/write
+    /// operations.
+    fn clone_with_scope<I: serde::Serialize>(&self, index: &I) -> Self;
 }
 
 /// A view gives an exclusive access to read and write the data stored at an underlying
 /// address in storage.
 #[async_trait]
 pub trait View<C: Context>: Sized {
-    /// The base address of the view.
-    type Key;
-
     /// Create a view or a subview.
-    async fn load(context: C, key: Self::Key) -> Result<Self, C::Error>;
+    async fn load(context: C) -> Result<Self, C::Error>;
 
     /// Discard all pending changes. After that `commit` should have no effect to storage.
     fn reset(&mut self);
@@ -49,89 +35,6 @@ pub trait View<C: Context>: Sized {
     /// calling `commit`, staged changes are simply lost.
     async fn commit(self) -> Result<(), C::Error>;
 }
-
-/// Common traits for addresses. We typically wrap the bytes of a key in a dedicated
-/// structure to enforce the schema.
-pub trait Key: From<Vec<u8>> + AsRef<[u8]> {}
-
-/// Create a new type of key implementing the trait Key.
-#[macro_export]
-macro_rules! declare_key {
-    ($name:ident < $( $param:ident ),* >, $doc:literal) => {
-
-#[doc = $doc]
-#[derive(Debug, Clone)]
-pub struct $name< $( $param ),* > {
-    bytes: Vec<u8>,
-    #[allow(unused_parens)]
-    _marker: std::marker::PhantomData<( $( $param ),* )>,
-}
-
-impl< $( $param ),* > From<Vec<u8>> for $name< $( $param ),* > {
-    fn from(bytes: Vec<u8>) -> Self {
-        Self {
-            bytes,
-            _marker: std::marker::PhantomData,
-        }
-    }
-}
-
-impl< $( $param ),* > From<&[u8]> for $name< $( $param ),* > {
-    fn from(bytes: &[u8]) -> Self {
-        Self {
-            bytes: bytes.to_vec(),
-            _marker: std::marker::PhantomData,
-        }
-    }
-}
-
-impl< $( $param ),* > AsRef<[u8]> for $name< $( $param ),* >
-{
-    fn as_ref(&self) -> &[u8] {
-        &self.bytes
-    }
-}
-
-impl< $( $param ),* > $crate::views::Key for $name< $( $param ),* > {}
-
-    };
-
-    ($name:ident, $doc:literal) => {
-
-#[doc = $doc]
-#[derive(Debug, Clone)]
-pub struct $name {
-    bytes: Vec<u8>,
-}
-
-impl From<Vec<u8>> for $name {
-    fn from(bytes: Vec<u8>) -> Self {
-        Self {
-            bytes,
-        }
-    }
-}
-
-impl From<&[u8]> for $name {
-    fn from(bytes: &[u8]) -> Self {
-        Self {
-            bytes: bytes.to_vec(),
-        }
-    }
-}
-
-impl AsRef<[u8]> for $name
-{
-    fn as_ref(&self) -> &[u8] {
-        &self.bytes
-    }
-}
-
-impl $crate::views::Key for $name {}
-
-    }
-}
-pub use declare_key;
 
 /// A view that adds a prefix to all the keys of the contained view.
 #[derive(Debug, Clone)]
@@ -153,22 +56,14 @@ impl<W, const INDEX: u64> std::ops::DerefMut for ScopedView<INDEX, W> {
     }
 }
 
-declare_key!(ScopedKey<W>, "The address of a [`ScopedView`]");
-
 #[async_trait]
 impl<C, W, const INDEX: u64> View<C> for ScopedView<INDEX, W>
 where
-    C: Context + Send + 'static,
+    C: Context + Send + Sync + 'static,
     W: View<C> + Send,
-    W::Key: Key + Send,
 {
-    type Key = ScopedKey<W>;
-
-    async fn load(context: C, key: Self::Key) -> Result<Self, C::Error> {
-        let mut bytes = INDEX.to_le_bytes().to_vec();
-        bytes.extend_from_slice(key.as_ref());
-        let view_key = bytes.into();
-        let view = W::load(context, view_key).await?;
+    async fn load(context: C) -> Result<Self, C::Error> {
+        let view = W::load(context.clone_with_scope(&INDEX)).await?;
         Ok(Self { view })
     }
 
@@ -185,19 +80,16 @@ where
 #[derive(Debug, Clone)]
 pub struct RegisterView<C, T> {
     context: C,
-    key: RegisterKey<T>,
     old_value: T,
     new_value: Option<T>,
 }
 
-declare_key!(RegisterKey<T>, "The address of a [`RegisterView`]");
-
 /// The context operations supporting [`RegisterView`].
 #[async_trait]
 pub trait RegisterOperations<T>: Context {
-    async fn get(&mut self, key: &RegisterKey<T>) -> Result<T, Self::Error>;
+    async fn get(&mut self) -> Result<T, Self::Error>;
 
-    async fn set(&mut self, key: &RegisterKey<T>, value: T) -> Result<(), Self::Error>;
+    async fn set(&mut self, value: T) -> Result<(), Self::Error>;
 }
 
 #[async_trait]
@@ -206,13 +98,10 @@ where
     C: RegisterOperations<T> + Send + Sync,
     T: Send + Sync,
 {
-    type Key = RegisterKey<T>;
-
-    async fn load(mut context: C, key: Self::Key) -> Result<Self, C::Error> {
-        let old_value = context.get(&key).await?;
+    async fn load(mut context: C) -> Result<Self, C::Error> {
+        let old_value = context.get().await?;
         Ok(Self {
             context,
-            key,
             old_value,
             new_value: None,
         })
@@ -220,7 +109,7 @@ where
 
     async fn commit(mut self) -> Result<(), C::Error> {
         if let Some(value) = self.new_value {
-            self.context.set(&self.key, value).await?;
+            self.context.set(value).await?;
         }
         Ok(())
     }
@@ -249,32 +138,18 @@ impl<C, T> RegisterView<C, T> {
 #[derive(Debug, Clone)]
 pub struct AppendOnlyLogView<C, T> {
     context: C,
-    key: AppendOnlyLogKey<T>,
     old_count: usize,
     new_values: Vec<T>,
 }
 
-declare_key!(
-    AppendOnlyLogKey<T>,
-    "The address of a [`AppendOnlyLogView`]"
-);
-
 /// The context operations supporting [`AppendOnlyLogView`].
 #[async_trait]
 pub trait AppendOnlyLogOperations<T>: Context {
-    async fn count(&mut self, key: &AppendOnlyLogKey<T>) -> Result<usize, Self::Error>;
+    async fn count(&mut self) -> Result<usize, Self::Error>;
 
-    async fn read(
-        &mut self,
-        key: &AppendOnlyLogKey<T>,
-        range: std::ops::Range<usize>,
-    ) -> Result<Vec<T>, Self::Error>;
+    async fn read(&mut self, range: std::ops::Range<usize>) -> Result<Vec<T>, Self::Error>;
 
-    async fn append(
-        &mut self,
-        key: &AppendOnlyLogKey<T>,
-        values: Vec<T>,
-    ) -> Result<(), Self::Error>;
+    async fn append(&mut self, values: Vec<T>) -> Result<(), Self::Error>;
 }
 
 #[async_trait]
@@ -283,13 +158,10 @@ where
     C: AppendOnlyLogOperations<T> + Send + Sync,
     T: Send + Sync + Clone,
 {
-    type Key = AppendOnlyLogKey<T>;
-
-    async fn load(mut context: C, key: Self::Key) -> Result<Self, C::Error> {
-        let old_count = context.count(&key).await?;
+    async fn load(mut context: C) -> Result<Self, C::Error> {
+        let old_count = context.count().await?;
         Ok(Self {
             context,
-            key,
             old_count,
             new_values: Vec::new(),
         })
@@ -297,7 +169,7 @@ where
 
     async fn commit(mut self) -> Result<(), C::Error> {
         if !self.new_values.is_empty() {
-            self.context.append(&self.key, self.new_values).await?;
+            self.context.append(self.new_values).await?;
         }
         Ok(())
     }
@@ -336,13 +208,9 @@ where
         values.reserve(range.end - range.start);
         if range.start < self.old_count {
             if range.end <= self.old_count {
-                values.extend(self.context.read(&self.key, range.start..range.end).await?);
+                values.extend(self.context.read(range.start..range.end).await?);
             } else {
-                values.extend(
-                    self.context
-                        .read(&self.key, range.start..self.old_count)
-                        .await?,
-                );
+                values.extend(self.context.read(range.start..self.old_count).await?);
                 values.extend(self.new_values[0..(range.end - self.old_count)].to_vec());
             }
         } else {
@@ -359,23 +227,20 @@ where
 #[derive(Debug, Clone)]
 pub struct MapView<C, K, V> {
     context: C,
-    key: MapKey<K, V>,
     updates: HashMap<K, Option<V>>,
 }
-
-declare_key!(MapKey<K, V>, "The address of a [`MapView`]");
 
 /// The context operations supporting [`MapView`].
 #[async_trait]
 pub trait MapOperations<K, V>: Context {
-    async fn get<T>(&mut self, key: &MapKey<K, V>, index: &T) -> Result<Option<V>, Self::Error>
+    async fn get<T>(&mut self, index: &T) -> Result<Option<V>, Self::Error>
     where
         K: Borrow<T>,
         T: Eq + Hash + Sync + ?Sized;
 
-    async fn insert(&mut self, key: &MapKey<K, V>, index: K, value: V) -> Result<(), Self::Error>;
+    async fn insert(&mut self, index: K, value: V) -> Result<(), Self::Error>;
 
-    async fn remove(&mut self, key: &MapKey<K, V>, index: K) -> Result<(), Self::Error>;
+    async fn remove(&mut self, index: K) -> Result<(), Self::Error>;
 }
 
 #[async_trait]
@@ -385,12 +250,9 @@ where
     K: Eq + Hash + Send + Sync,
     V: Clone + Send + Sync,
 {
-    type Key = MapKey<K, V>;
-
-    async fn load(context: C, key: Self::Key) -> Result<Self, C::Error> {
+    async fn load(context: C) -> Result<Self, C::Error> {
         Ok(Self {
             context,
-            key,
             updates: HashMap::new(),
         })
     }
@@ -399,10 +261,10 @@ where
         for (index, update) in self.updates {
             match update {
                 None => {
-                    self.context.remove(&self.key, index).await?;
+                    self.context.remove(index).await?;
                 }
                 Some(value) => {
-                    self.context.insert(&self.key, index, value).await?;
+                    self.context.insert(index, value).await?;
                 }
             }
         }
@@ -435,7 +297,7 @@ where
     K: Eq + Hash + Sync,
     V: Clone,
 {
-    /// Read the value at hte given postition, if any.
+    /// Read the value at the given postition, if any.
     pub async fn get<T>(&mut self, index: &T) -> Result<Option<V>, C::Error>
     where
         K: Borrow<T>,
@@ -444,7 +306,7 @@ where
         if let Some(update) = self.updates.get(index) {
             return Ok(update.as_ref().cloned());
         }
-        self.context.get(&self.key, index).await
+        self.context.get(index).await
     }
 }
 
@@ -453,32 +315,11 @@ where
 #[derive(Debug, Clone)]
 pub struct CollectionView<C, I, W> {
     context: C,
-    key: CollectionKey<I, W>,
     active_views: HashMap<I, W>,
 }
 
-declare_key!(CollectionKey<I, W>, "The address of a [`CollectionView`]");
-
-/// The context operations supporting [`AppendOnlyLogView`].
-pub trait CollectionOperations<I, W>: Context + Clone
-where
-    W: View<Self>,
-{
-    fn entry(&mut self, key: &CollectionKey<I, W>, index: &I) -> W::Key;
-}
-
-impl<C, I, W> CollectionOperations<I, W> for C
-where
-    C: Context + Clone,
-    I: serde::Serialize,
-    W: View<Self>,
-    W::Key: From<Vec<u8>>,
-{
-    fn entry(&mut self, key: &CollectionKey<I, W>, index: &I) -> W::Key {
-        let bytes = self.derive_key_bytes(&key.bytes, index);
-        bytes.into()
-    }
-}
+/// The context operations supporting [`CollectionView`].
+pub trait CollectionOperations<I, W>: Context {}
 
 #[async_trait]
 impl<C, I, W> View<C> for CollectionView<C, I, W>
@@ -486,14 +327,10 @@ where
     C: CollectionOperations<I, W> + Send,
     I: Send,
     W: View<C> + Send,
-    W::Key: Send,
 {
-    type Key = CollectionKey<I, W>;
-
-    async fn load(context: C, key: Self::Key) -> Result<Self, C::Error> {
+    async fn load(context: C) -> Result<Self, C::Error> {
         Ok(Self {
             context,
-            key,
             active_views: HashMap::new(),
         })
     }
@@ -516,15 +353,14 @@ where
     C: CollectionOperations<I, W> + Send,
     I: Eq + Hash + Sync + Clone + serde::Serialize,
     W: View<C>,
-    W::Key: From<Vec<u8>>,
 {
     /// Obtain a subview to access the data at the given index in the collection.
     pub async fn view(&mut self, index: I) -> Result<&mut W, C::Error> {
         match self.active_views.entry(index.clone()) {
             hash_map::Entry::Occupied(e) => Ok(e.into_mut()),
             hash_map::Entry::Vacant(e) => {
-                let inner_key = self.context.entry(&self.key, &index);
-                let view = W::load(self.context.clone(), inner_key).await?;
+                let context = self.context.clone_with_scope(&index);
+                let view = W::load(context).await?;
                 Ok(e.insert(view))
             }
         }

@@ -6,9 +6,8 @@ use getset::{Getters, MutGetters};
 use linera_views::{
     memory::{EntryMap, InMemoryContext},
     views::{
-        declare_key, AppendOnlyLogOperations, AppendOnlyLogView, CollectionOperations,
-        CollectionView, Context, MapOperations, MapView, RegisterOperations, RegisterView,
-        ScopedView, View,
+        AppendOnlyLogOperations, AppendOnlyLogView, CollectionOperations, CollectionView, Context,
+        MapOperations, MapView, RegisterOperations, RegisterView, ScopedView, View,
     },
 };
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
@@ -28,8 +27,6 @@ pub struct StateView<C> {
     collection: ScopedView<4, CollectionView<C, String, AppendOnlyLogView<C, u32>>>,
 }
 
-declare_key!(StateKey, "The address of a [`StateView`]");
-
 #[async_trait]
 impl<C> View<C> for StateView<C>
 where
@@ -44,14 +41,12 @@ where
         + MapOperations<String, usize>
         + CollectionOperations<String, AppendOnlyLogView<C, u32>>,
 {
-    type Key = StateKey;
-
-    async fn load(context: C, key: Self::Key) -> Result<Self, C::Error> {
-        let x1 = ScopedView::load(context.clone(), key.as_ref().into()).await?;
-        let x2 = ScopedView::load(context.clone(), key.as_ref().into()).await?;
-        let log = ScopedView::load(context.clone(), key.as_ref().into()).await?;
-        let map = ScopedView::load(context.clone(), key.as_ref().into()).await?;
-        let collection = ScopedView::load(context.clone(), key.as_ref().into()).await?;
+    async fn load(context: C) -> Result<Self, C::Error> {
+        let x1 = ScopedView::load(context.clone()).await?;
+        let x2 = ScopedView::load(context.clone()).await?;
+        let log = ScopedView::load(context.clone()).await?;
+        let map = ScopedView::load(context.clone()).await?;
+        let collection = ScopedView::load(context).await?;
         Ok(Self {
             x1,
             x2,
@@ -119,7 +114,7 @@ impl Store<usize> for InMemoryTestStore {
             .or_insert_with(|| Arc::new(Mutex::new(HashMap::new())));
         log::trace!("Acquiring lock on {:?}", id);
         let context = InMemoryContext::new(state.clone().lock_owned().await);
-        Self::View::load(context, Vec::new().into()).await
+        Self::View::load(context).await
     }
 }
 
