@@ -7,7 +7,8 @@ use linera_views::{
     memory::{EntryMap, InMemoryContext},
     views::{
         AppendOnlyLogOperations, AppendOnlyLogView, CollectionOperations, CollectionView, Context,
-        MapOperations, MapView, RegisterOperations, RegisterView, ScopedView, View,
+        MapOperations, MapView, RegisterOperations, RegisterView, ScopedOperations, ScopedView,
+        View,
     },
 };
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
@@ -39,7 +40,8 @@ where
         + RegisterOperations<u32>
         + AppendOnlyLogOperations<u32>
         + MapOperations<String, usize>
-        + CollectionOperations<String, AppendOnlyLogView<C, u32>>,
+        + CollectionOperations<String>
+        + ScopedOperations,
 {
     async fn load(context: C) -> Result<Self, C::Error> {
         let x1 = ScopedView::load(context.clone()).await?;
@@ -92,7 +94,8 @@ pub trait StateStore: Store<usize, View = StateView<<Self as StateStore>::C>> {
         + RegisterOperations<u32>
         + AppendOnlyLogOperations<u32>
         + MapOperations<String, usize>
-        + CollectionOperations<String, AppendOnlyLogView<Self::C, u32>>;
+        + CollectionOperations<String>
+        + ScopedOperations;
 }
 
 #[derive(Default)]
@@ -142,14 +145,18 @@ where
         {
             let subview = view
                 .collection_mut()
-                .view("hola".to_string())
+                .load_entry("hola".to_string())
                 .await
                 .unwrap();
             subview.push(17);
             subview.push(18);
         }
         {
-            let subview = view.collection.view("hola".to_string()).await.unwrap();
+            let subview = view
+                .collection
+                .load_entry("hola".to_string())
+                .await
+                .unwrap();
             assert_eq!(subview.read(0..10).await.unwrap(), vec![17, 18]);
         }
     }
@@ -160,7 +167,11 @@ where
         assert_eq!(view.log_mut().read(0..10).await.unwrap(), vec![]);
         assert_eq!(view.map_mut().get("Hello").await.unwrap(), None);
         {
-            let subview = view.collection.view("hola".to_string()).await.unwrap();
+            let subview = view
+                .collection
+                .load_entry("hola".to_string())
+                .await
+                .unwrap();
             assert_eq!(subview.read(0..10).await.unwrap(), vec![]);
         }
         view.x1_mut().set(1);
@@ -169,7 +180,11 @@ where
         view.map_mut().insert("Hi".to_string(), 2);
         view.map_mut().remove("Hi".to_string());
         {
-            let subview = view.collection.view("hola".to_string()).await.unwrap();
+            let subview = view
+                .collection
+                .load_entry("hola".to_string())
+                .await
+                .unwrap();
             subview.push(17);
             subview.push(18);
         }
@@ -185,7 +200,7 @@ where
         {
             let subview = view
                 .collection_mut()
-                .view("hola".to_string())
+                .load_entry("hola".to_string())
                 .await
                 .unwrap();
             assert_eq!(subview.read(0..10).await.unwrap(), vec![17, 18]);
