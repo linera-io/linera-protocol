@@ -1,0 +1,14 @@
+[package]
+name = "linera-execution"
+version = "0.1.0"
+authors = ["Linera <contact@linera.io>"]
+edition = "2021"
+
+[dependencies]
+async-trait = "0.1.52"
+log = "0.4.14"
+serde = { version = "1.0.130", features = ["derive"] }
+thiserror = "1.0.31"
+
+linera-base = { path = "../linera-base" }
+linera-views = { path = "../linera-views" }

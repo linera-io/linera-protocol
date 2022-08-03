@@ -104,6 +104,11 @@ pub enum Operation {
     /// blocks from the retired epoch will not be accepted until they are followed (hence
     /// re-certified) by a block certified by a recent committee.
     RemoveCommittee { admin_id: ChainId, epoch: Epoch },
+    /// Application specific operation.
+    ApplicationSpecific {
+        application_id: EffectId,
+        data: Vec<u8>,
+    },
 }
 
 /// The effect of an operation to be performed on a remote chain.
@@ -131,6 +136,24 @@ pub enum Effect {
     Unsubscribe { id: ChainId, channel: ChannelId },
     /// Does nothing. Used to debug the intended recipients of a block.
     Notify { id: ChainId },
+    /// Application specific effect.
+    ApplicationSpecific {
+        application_id: EffectId,
+        data: Vec<u8>,
+    },
+}
+
+impl Effect {
+    /// Create an application specific effect.
+    pub fn application_specific<T: Serialize>(
+        application_id: EffectId,
+        data: &T,
+    ) -> Result<Self, bincode::Error> {
+        Ok(Effect::ApplicationSpecific {
+            application_id,
+            data: bincode::serialize(data)?,
+        })
+    }
 }
 
 impl BcsSignable for ExecutionState {}
@@ -150,8 +173,9 @@ impl ExecutionState {
 }
 
 #[derive(Debug, Default)]
-pub(crate) struct ApplicationResult {
+pub struct ApplicationResult {
     pub effects: Vec<Effect>,
+    pub operations: Vec<Operation>,
     pub recipients: Vec<ChainId>,
     pub subscribe: Option<(String, ChainId)>,
     pub unsubscribe: Option<(String, ChainId)>,
@@ -237,6 +261,7 @@ impl ExecutionState {
                 };
                 let application = ApplicationResult {
                     effects: vec![e1, e2],
+                    operations: vec![],
                     recipients: vec![*id, *admin_id],
                     subscribe: None,
                     unsubscribe: None,
@@ -267,6 +292,7 @@ impl ExecutionState {
                 }
                 let application = ApplicationResult {
                     effects,
+                    operations: vec![],
                     recipients,
                     subscribe: None,
                     unsubscribe: None,
@@ -292,6 +318,7 @@ impl ExecutionState {
                             amount: *amount,
                             recipient: *id,
                         }],
+                        operations: vec![],
                         recipients: vec![*id],
                         subscribe: None,
                         unsubscribe: None,
@@ -323,6 +350,7 @@ impl ExecutionState {
                         epoch: self.epoch.expect("chain is active"),
                         committees: self.committees.clone(),
                     }],
+                    operations: vec![],
                     recipients: Vec::new(),
                     subscribe: None,
                     unsubscribe: None,
@@ -348,6 +376,7 @@ impl ExecutionState {
                         epoch: self.epoch.expect("chain is active"),
                         committees: self.committees.clone(),
                     }],
+                    operations: vec![],
                     recipients: Vec::new(),
                     subscribe: None,
                     unsubscribe: None,
@@ -383,6 +412,7 @@ impl ExecutionState {
                             name: ADMIN_CHANNEL.into(),
                         },
                     }],
+                    operations: vec![],
                     recipients: vec![*admin_id],
                     subscribe: None,
                     unsubscribe: None,
@@ -408,6 +438,7 @@ impl ExecutionState {
                             name: ADMIN_CHANNEL.into(),
                         },
                     }],
+                    operations: vec![],
                     recipients: vec![*admin_id],
                     subscribe: None,
                     unsubscribe: None,
@@ -415,6 +446,7 @@ impl ExecutionState {
                 };
                 Ok(application)
             }
+            Operation::ApplicationSpecific { .. } => todo!(),
         }
     }
 
@@ -448,6 +480,7 @@ impl ExecutionState {
                 // receive_log of the subscriber and correctly synchronized.
                 let application = ApplicationResult {
                     effects: vec![Effect::Notify { id: *id }],
+                    operations: vec![],
                     recipients: vec![*id],
                     subscribe: Some((channel.name.clone(), *id)),
                     unsubscribe: None,
@@ -458,6 +491,7 @@ impl ExecutionState {
             Effect::Unsubscribe { id, channel } if channel.chain_id == self.chain_id => {
                 let application = ApplicationResult {
                     effects: vec![Effect::Notify { id: *id }],
+                    operations: vec![],
                     recipients: vec![*id], // Notify the subscriber.
                     subscribe: None,
                     unsubscribe: Some((channel.name.clone(), *id)),
@@ -602,5 +636,11 @@ impl From<u64> for Amount {
 impl From<u128> for Balance {
     fn from(value: u128) -> Self {
         Balance(value)
+    }
+}
+
+impl From<Balance> for u128 {
+    fn from(balance: Balance) -> Self {
+        balance.0
     }
 }
