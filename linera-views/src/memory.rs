@@ -3,6 +3,7 @@
 
 use crate::views::{
     AppendOnlyLogOperations, CollectionOperations, Context, MapOperations, RegisterOperations,
+    ScopedOperations,
 };
 use async_trait::async_trait;
 use std::{
@@ -30,6 +31,12 @@ impl InMemoryContext {
             map: Arc::new(RwLock::new(guard)),
             base_key: Vec::new(),
         }
+    }
+
+    fn derive_key<I: serde::Serialize>(&self, index: &I) -> Vec<u8> {
+        let mut key = self.base_key.clone();
+        bcs::serialize_into(&mut key, index).unwrap();
+        key
     }
 
     async fn with_ref<F, T, V>(&self, f: F) -> V
@@ -67,13 +74,14 @@ impl InMemoryContext {
 
 impl Context for InMemoryContext {
     type Error = Infallible;
+}
 
-    fn clone_with_scope<I: serde::Serialize>(&self, index: &I) -> Self {
-        let mut base_key = self.base_key.clone();
-        bcs::serialize_into(&mut base_key, index).unwrap();
+#[async_trait]
+impl ScopedOperations for InMemoryContext {
+    fn clone_with_scope(&self, index: u64) -> Self {
         Self {
             map: self.map.clone(),
-            base_key,
+            base_key: self.derive_key(&index),
         }
     }
 }
@@ -163,4 +171,15 @@ where
     }
 }
 
-impl<K, V> CollectionOperations<K, V> for InMemoryContext {}
+#[async_trait]
+impl<I> CollectionOperations<I> for InMemoryContext
+where
+    I: serde::Serialize + Send + Sync,
+{
+    fn clone_with_scope(&self, index: &I) -> Self {
+        Self {
+            map: self.map.clone(),
+            base_key: self.derive_key(index),
+        }
+    }
+}

@@ -11,14 +11,10 @@ use std::{
 };
 
 /// The context in which a view is operated. Typically, this includes the client to
-/// connect to the database.
+/// connect to the database and the address of the current entry.
 pub trait Context {
     /// The error type in use.
     type Error: Debug;
-
-    /// Clone the context and advance the (otherwise implicit) base key for all read/write
-    /// operations.
-    fn clone_with_scope<I: serde::Serialize>(&self, index: &I) -> Self;
 }
 
 /// A view gives an exclusive access to read and write the data stored at an underlying
@@ -56,14 +52,20 @@ impl<W, const INDEX: u64> std::ops::DerefMut for ScopedView<INDEX, W> {
     }
 }
 
+pub trait ScopedOperations: Context {
+    /// Clone the context and advance the (otherwise implicit) base key for all read/write
+    /// operations.
+    fn clone_with_scope(&self, index: u64) -> Self;
+}
+
 #[async_trait]
 impl<C, W, const INDEX: u64> View<C> for ScopedView<INDEX, W>
 where
-    C: Context + Send + Sync + 'static,
+    C: Context + Send + Sync + ScopedOperations + 'static,
     W: View<C> + Send,
 {
     async fn load(context: C) -> Result<Self, C::Error> {
-        let view = W::load(context.clone_with_scope(&INDEX)).await?;
+        let view = W::load(context.clone_with_scope(INDEX)).await?;
         Ok(Self { view })
     }
 
@@ -175,7 +177,7 @@ where
     }
 
     fn reset(&mut self) {
-        self.new_values = Vec::new();
+        self.new_values.clear();
     }
 }
 
@@ -272,7 +274,7 @@ where
     }
 
     fn reset(&mut self) {
-        self.updates = HashMap::new();
+        self.updates.clear();
     }
 }
 
@@ -319,13 +321,18 @@ pub struct CollectionView<C, I, W> {
 }
 
 /// The context operations supporting [`CollectionView`].
-pub trait CollectionOperations<I, W>: Context {}
+#[async_trait]
+pub trait CollectionOperations<I>: Context {
+    /// Clone the context and advance the (otherwise implicit) base key for all read/write
+    /// operations.
+    fn clone_with_scope(&self, index: &I) -> Self;
+}
 
 #[async_trait]
 impl<C, I, W> View<C> for CollectionView<C, I, W>
 where
-    C: CollectionOperations<I, W> + Send,
-    I: Send,
+    C: CollectionOperations<I> + Send,
+    I: Send + Sync,
     W: View<C> + Send,
 {
     async fn load(context: C) -> Result<Self, C::Error> {
@@ -339,23 +346,22 @@ where
         for view in self.active_views.into_values() {
             view.commit().await?;
         }
-        // TODO: clean up empty entries
         Ok(())
     }
 
     fn reset(&mut self) {
-        self.active_views = HashMap::new();
+        self.active_views.clear();
     }
 }
 
 impl<C, I, W> CollectionView<C, I, W>
 where
-    C: CollectionOperations<I, W> + Send,
-    I: Eq + Hash + Sync + Clone + serde::Serialize,
+    C: CollectionOperations<I> + Send,
+    I: Eq + Hash + Sync + Clone + Send + serde::Serialize,
     W: View<C>,
 {
-    /// Obtain a subview to access the data at the given index in the collection.
-    pub async fn view(&mut self, index: I) -> Result<&mut W, C::Error> {
+    /// Obtain a subview for the data at the given index in the collection.
+    pub async fn load_entry(&mut self, index: I) -> Result<&mut W, C::Error> {
         match self.active_views.entry(index.clone()) {
             hash_map::Entry::Occupied(e) => Ok(e.into_mut()),
             hash_map::Entry::Vacant(e) => {
