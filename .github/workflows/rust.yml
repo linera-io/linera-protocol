@@ -23,9 +23,9 @@ jobs:
         rustup component add clippy --toolchain 1.60.0-x86_64-unknown-linux-gnu
         echo 'RUSTFLAGS=-D warnings' >> $GITHUB_ENV
     - name: Build
-      run: cargo build
+      run: cargo build --locked
     - name: Run tests
-      run: cargo test
+      run: cargo test --locked
     - name: Clippy
       run: cargo clippy --all-targets
     - name: Rustfmt
