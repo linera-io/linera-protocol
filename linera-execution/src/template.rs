@@ -2,10 +2,10 @@ use crate::{ExecutionContext, SmartContract};
 use async_trait::async_trait;
 use linera_base::execution::ApplicationResult;
 
-pub struct NonFungibleToken;
+pub struct Template;
 
 #[async_trait]
-impl<C: Send> SmartContract<C> for NonFungibleToken {
+impl<C: Send> SmartContract<C> for Template {
     type Parameters = ();
     type Operation = ();
     type Effect = ();
