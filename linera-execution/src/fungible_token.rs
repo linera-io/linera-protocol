@@ -122,7 +122,7 @@ impl FungibleToken {
             amount > Amount::zero(),
             TransferError::IncorrectTransferAmount
         );
-        let mut balance = RegisterView::<_, u128>::load(storage.clone(), vec![].into())
+        let mut balance = RegisterView::<_, u128>::load(storage.clone())
             .await
             .map_err(TransferError::storage_error)?;
         let current_balance = Balance::from(*balance.get());
@@ -158,7 +158,7 @@ impl FungibleToken {
     where
         S: RegisterOperations<u128> + Clone + Send + Sync,
     {
-        let mut balance = RegisterView::<_, u128>::load(storage.clone(), vec![].into()).await?;
+        let mut balance = RegisterView::<_, u128>::load(storage.clone()).await?;
         let new_value = Balance::from(*balance.get())
             .try_add(amount.into())
             .unwrap_or_else(|_| Balance::max());
@@ -171,7 +171,7 @@ impl FungibleToken {
     where
         S: RegisterOperations<u128> + Clone + Send + Sync,
     {
-        let balance = RegisterView::<_, u128>::load(storage.clone(), vec![].into()).await?;
+        let balance = RegisterView::<_, u128>::load(storage.clone()).await?;
         Ok(Balance::from(*balance.get()))
     }
 }

@@ -109,7 +109,7 @@ impl NonFungibleToken {
     where
         S: RegisterOperations<bool> + Clone + Send + Sync,
     {
-        let mut ownership = RegisterView::<_, bool>::load(storage.clone(), vec![].into())
+        let mut ownership = RegisterView::<_, bool>::load(storage.clone())
             .await
             .map_err(TransferError::storage_error)?;
         let is_current_owner = *ownership.get();
@@ -137,7 +137,7 @@ impl NonFungibleToken {
     where
         S: RegisterOperations<bool> + Clone + Send + Sync,
     {
-        let mut ownership = RegisterView::<_, bool>::load(storage.clone(), vec![].into()).await?;
+        let mut ownership = RegisterView::<_, bool>::load(storage.clone()).await?;
         ownership.set(true);
         ownership.commit().await?;
         Ok(ApplicationResult::default())
@@ -147,7 +147,7 @@ impl NonFungibleToken {
     where
         S: RegisterOperations<bool> + Clone + Send + Sync,
     {
-        let ownership = RegisterView::<_, bool>::load(storage.clone(), vec![].into()).await?;
+        let ownership = RegisterView::<_, bool>::load(storage.clone()).await?;
         Ok(*ownership.get())
     }
 }
