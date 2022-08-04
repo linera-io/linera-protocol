@@ -36,6 +36,7 @@ where
         execution: &ExecutionContext,
         storage: &mut C,
         operation: Self::Operation,
+        sender: Option<ExecutionContext>,
     ) -> Result<ApplicationResult, ExecutionError> {
         match operation {
             Operation::Transfer { recipient } => Self::transfer(recipient, execution, storage)

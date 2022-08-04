@@ -23,6 +23,7 @@ impl<C: Send> SmartContract<C> for NonFungibleToken {
         execution: &ExecutionContext,
         storage: &mut C,
         operation: Self::Operation,
+        sender: Option<ExecutionContext>,
     ) -> Result<ApplicationResult, ExecutionError> {
         todo!()
     }
