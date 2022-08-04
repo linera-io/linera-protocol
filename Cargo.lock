@@ -1316,9 +1316,9 @@ dependencies = [
  "bcs",
  "futures",
  "getset",
- "linera-base",
  "log",
  "serde",
+ "thiserror",
  "tokio",
 ]
 

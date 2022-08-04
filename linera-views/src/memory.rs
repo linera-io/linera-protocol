@@ -3,12 +3,18 @@
 
 use crate::views::{
     AppendOnlyLogOperations, CollectionOperations, Context, MapOperations, RegisterOperations,
-    ScopedOperations,
+    ScopedOperations, ViewError,
 };
 use async_trait::async_trait;
 use std::{
-    any::Any, borrow::Borrow, cmp::Eq, collections::HashMap, convert::Infallible, fmt::Debug,
-    hash::Hash, sync::Arc,
+    any::Any,
+    borrow::Borrow,
+    cmp::Eq,
+    collections::{BTreeMap, HashMap},
+    fmt::Debug,
+    hash::Hash,
+    ops::Bound,
+    sync::Arc,
 };
 use tokio::sync::{OwnedMutexGuard, RwLock};
 
@@ -23,7 +29,7 @@ pub struct InMemoryContext {
 pub type Entry = Box<dyn Any + Send + Sync + 'static>;
 
 /// A map of Rust values indexed by their keys.
-pub type EntryMap = HashMap<Vec<u8>, Entry>;
+pub type EntryMap = BTreeMap<Vec<u8>, Entry>;
 
 impl InMemoryContext {
     pub fn new(guard: OwnedMutexGuard<EntryMap>) -> Self {
@@ -72,8 +78,15 @@ impl InMemoryContext {
     }
 }
 
+#[async_trait]
 impl Context for InMemoryContext {
-    type Error = Infallible;
+    type Error = ViewError;
+
+    async fn erase(&mut self) -> Result<(), Self::Error> {
+        let mut map = self.map.write().await;
+        map.remove(&self.base_key);
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -91,13 +104,13 @@ impl<T> RegisterOperations<T> for InMemoryContext
 where
     T: Default + Clone + Send + Sync + 'static,
 {
-    async fn get(&mut self) -> Result<T, Infallible> {
+    async fn get(&mut self) -> Result<T, ViewError> {
         Ok(self
             .with_ref(|value: Option<&T>| value.cloned().unwrap_or_default())
             .await)
     }
 
-    async fn set(&mut self, value: T) -> Result<(), Infallible> {
+    async fn set(&mut self, value: T) -> Result<(), ViewError> {
         let mut map = self.map.write().await;
         map.insert(self.base_key.clone(), Box::new(value));
         Ok(())
@@ -109,7 +122,7 @@ impl<T> AppendOnlyLogOperations<T> for InMemoryContext
 where
     T: Clone + Send + Sync + 'static,
 {
-    async fn count(&mut self) -> Result<usize, Infallible> {
+    async fn count(&mut self) -> Result<usize, ViewError> {
         Ok(self
             .with_ref(|v: Option<&Vec<T>>| match v {
                 None => 0,
@@ -118,7 +131,7 @@ where
             .await)
     }
 
-    async fn read(&mut self, range: std::ops::Range<usize>) -> Result<Vec<T>, Infallible> {
+    async fn read(&mut self, range: std::ops::Range<usize>) -> Result<Vec<T>, ViewError> {
         Ok(self
             .with_ref(|v: Option<&Vec<T>>| match v {
                 None => Vec::new(),
@@ -127,7 +140,7 @@ where
             .await)
     }
 
-    async fn append(&mut self, mut values: Vec<T>) -> Result<(), Infallible> {
+    async fn append(&mut self, mut values: Vec<T>) -> Result<(), ViewError> {
         if !values.is_empty() {
             self.with_mut(|v: &mut Vec<T>| v.append(&mut values)).await;
         }
@@ -141,7 +154,7 @@ where
     K: Eq + Hash + Send + Sync + 'static,
     V: Clone + Send + Sync + 'static,
 {
-    async fn get<K2>(&mut self, index: &K2) -> Result<Option<V>, Infallible>
+    async fn get<K2>(&mut self, index: &K2) -> Result<Option<V>, ViewError>
     where
         K: Borrow<K2>,
         K2: Eq + Hash + Sync + ?Sized,
@@ -154,7 +167,7 @@ where
             .await)
     }
 
-    async fn insert(&mut self, index: K, value: V) -> Result<(), Infallible> {
+    async fn insert(&mut self, index: K, value: V) -> Result<(), ViewError> {
         self.with_mut(|m: &mut HashMap<K, V>| {
             m.insert(index, value);
         })
@@ -162,7 +175,7 @@ where
         Ok(())
     }
 
-    async fn remove(&mut self, index: K) -> Result<(), Infallible> {
+    async fn remove(&mut self, index: K) -> Result<(), ViewError> {
         self.with_mut(|m: &mut HashMap<K, V>| {
             m.remove(&index);
         })
@@ -174,12 +187,21 @@ where
 #[async_trait]
 impl<I> CollectionOperations<I> for InMemoryContext
 where
-    I: serde::Serialize + Send + Sync,
+    I: serde::Serialize + serde::de::DeserializeOwned + Send + Sync,
 {
     fn clone_with_scope(&self, index: &I) -> Self {
         Self {
             map: self.map.clone(),
             base_key: self.derive_key(index),
         }
+    }
+
+    async fn indices(&mut self) -> Result<Vec<I>, Self::Error> {
+        let map = self.map.read().await;
+        Ok(map
+            .range::<Vec<u8>, _>((Bound::Excluded(&self.base_key), Bound::Unbounded))
+            .take_while(|(k, _)| k.starts_with(&self.base_key))
+            .map(|(k, _)| bcs::from_bytes(k).expect("deserialization should succeed"))
+            .collect())
     }
 }
