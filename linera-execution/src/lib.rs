@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use linera_base::{
     execution::ApplicationResult,
-    messages::{ChainId, EffectId},
+    messages::{Block, ChainId, EffectId},
 };
 use thiserror::Error;
 
@@ -39,6 +39,18 @@ pub trait SmartContract<C: Send> {
         storage: &mut C,
         query: Self::Query,
     ) -> Result<Self::Response, ExecutionError>;
+}
+
+#[async_trait]
+pub trait BlockValidatorSmartContract<C: Send> {
+    type Command;
+
+    async fn validate_block(
+        execution: &ExecutionContext,
+        storage: &mut C,
+        block: &Block,
+        command: Self::Command,
+    ) -> Result<(), ExecutionError>;
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
