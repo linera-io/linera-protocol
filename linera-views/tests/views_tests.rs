@@ -8,10 +8,14 @@ use linera_views::{
     views::{
         AppendOnlyLogOperations, AppendOnlyLogView, CollectionOperations, CollectionView, Context,
         MapOperations, MapView, RegisterOperations, RegisterView, ScopedOperations, ScopedView,
-        View,
+        View, ViewError,
     },
 };
-use std::{collections::HashMap, fmt::Debug, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashMap},
+    fmt::Debug,
+    sync::Arc,
+};
 use tokio::sync::Mutex;
 
 #[derive(Getters, MutGetters)]
@@ -74,6 +78,15 @@ where
         self.collection.commit().await?;
         Ok(())
     }
+
+    async fn delete(self) -> Result<(), C::Error> {
+        self.x1.delete().await?;
+        self.x2.delete().await?;
+        self.log.delete().await?;
+        self.map.delete().await?;
+        self.collection.delete().await?;
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -108,13 +121,13 @@ pub type InMemoryStateView = StateView<InMemoryContext>;
 #[async_trait]
 impl Store<usize> for InMemoryTestStore {
     type View = InMemoryStateView;
-    type Error = std::convert::Infallible;
+    type Error = ViewError;
 
     async fn load(&mut self, id: usize) -> Result<Self::View, Self::Error> {
         let state = self
             .states
             .entry(id)
-            .or_insert_with(|| Arc::new(Mutex::new(HashMap::new())));
+            .or_insert_with(|| Arc::new(Mutex::new(BTreeMap::new())));
         log::trace!("Acquiring lock on {:?}", id);
         let context = InMemoryContext::new(state.clone().lock_owned().await);
         Self::View::load(context).await
@@ -126,7 +139,7 @@ impl StateStore for InMemoryTestStore {
 }
 
 #[cfg(test)]
-async fn test_store<S>(mut store: S)
+async fn test_store<S>(store: &mut S)
 where
     S: StateStore,
 {
@@ -205,10 +218,28 @@ where
                 .unwrap();
             assert_eq!(subview.read(0..10).await.unwrap(), vec![17, 18]);
         }
+        view.collection_mut().remove_entry("hola".to_string());
+        view.commit().await.unwrap();
+    }
+    {
+        let mut view = store.load(1).await.unwrap();
+        {
+            let subview = view
+                .collection_mut()
+                .load_entry("hola".to_string())
+                .await
+                .unwrap();
+            assert_eq!(subview.read(0..10).await.unwrap(), vec![]);
+        }
+        view.delete().await.unwrap();
     }
 }
 
 #[tokio::test]
 async fn test_traits() {
-    test_store(InMemoryTestStore::default()).await;
+    let mut store = InMemoryTestStore::default();
+    test_store(&mut store).await;
+    assert_eq!(store.states.len(), 1);
+    let entry = store.states.get(&1).unwrap().clone();
+    assert!(entry.lock().await.is_empty());
 }

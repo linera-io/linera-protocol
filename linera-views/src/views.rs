@@ -9,12 +9,17 @@ use std::{
     fmt::Debug,
     hash::Hash,
 };
+use thiserror::Error;
 
 /// The context in which a view is operated. Typically, this includes the client to
 /// connect to the database and the address of the current entry.
+#[async_trait]
 pub trait Context {
     /// The error type in use.
-    type Error: Debug;
+    type Error: Debug + Send + From<ViewError>;
+
+    /// Erase the current entry from storage.
+    async fn erase(&mut self) -> Result<(), Self::Error>;
 }
 
 /// A view gives an exclusive access to read and write the data stored at an underlying
@@ -30,6 +35,16 @@ pub trait View<C: Context>: Sized {
     /// Persist changes to storage. This consumes the view. If the view is dropped without
     /// calling `commit`, staged changes are simply lost.
     async fn commit(self) -> Result<(), C::Error>;
+
+    /// Instead of persisting changes, clear all the data that belong to this view and its
+    /// subviews.
+    async fn delete(self) -> Result<(), C::Error>;
+}
+
+#[derive(Error, Debug)]
+pub enum ViewError {
+    #[error("the entry with key {0} was removed thus cannot be loaded any more")]
+    RemovedEntry(String),
 }
 
 /// A view that adds a prefix to all the keys of the contained view.
@@ -69,12 +84,16 @@ where
         Ok(Self { view })
     }
 
+    fn reset(&mut self) {
+        self.view.reset();
+    }
+
     async fn commit(mut self) -> Result<(), C::Error> {
         self.view.commit().await
     }
 
-    fn reset(&mut self) {
-        self.view.reset();
+    async fn delete(self) -> Result<(), C::Error> {
+        self.view.delete().await
     }
 }
 
@@ -82,8 +101,8 @@ where
 #[derive(Debug, Clone)]
 pub struct RegisterView<C, T> {
     context: C,
-    old_value: T,
-    new_value: Option<T>,
+    stored_value: T,
+    update: Option<T>,
 }
 
 /// The context operations supporting [`RegisterView`].
@@ -101,38 +120,42 @@ where
     T: Send + Sync,
 {
     async fn load(mut context: C) -> Result<Self, C::Error> {
-        let old_value = context.get().await?;
+        let stored_value = context.get().await?;
         Ok(Self {
             context,
-            old_value,
-            new_value: None,
+            stored_value,
+            update: None,
         })
     }
 
+    fn reset(&mut self) {
+        self.update = None
+    }
+
     async fn commit(mut self) -> Result<(), C::Error> {
-        if let Some(value) = self.new_value {
+        if let Some(value) = self.update {
             self.context.set(value).await?;
         }
         Ok(())
     }
 
-    fn reset(&mut self) {
-        self.new_value = None;
+    async fn delete(mut self) -> Result<(), C::Error> {
+        self.context.erase().await
     }
 }
 
 impl<C, T> RegisterView<C, T> {
     /// Read the value in the register.
     pub fn get(&self) -> &T {
-        match &self.new_value {
+        match &self.update {
+            None => &self.stored_value,
             Some(value) => value,
-            None => &self.old_value,
         }
     }
 
     /// Set the value in the register.
     pub fn set(&mut self, value: T) {
-        self.new_value = Some(value);
+        self.update = Some(value);
     }
 }
 
@@ -140,7 +163,7 @@ impl<C, T> RegisterView<C, T> {
 #[derive(Debug, Clone)]
 pub struct AppendOnlyLogView<C, T> {
     context: C,
-    old_count: usize,
+    stored_count: usize,
     new_values: Vec<T>,
 }
 
@@ -161,12 +184,16 @@ where
     T: Send + Sync + Clone,
 {
     async fn load(mut context: C) -> Result<Self, C::Error> {
-        let old_count = context.count().await?;
+        let stored_count = context.count().await?;
         Ok(Self {
             context,
-            old_count,
+            stored_count,
             new_values: Vec::new(),
         })
+    }
+
+    fn reset(&mut self) {
+        self.new_values.clear();
     }
 
     async fn commit(mut self) -> Result<(), C::Error> {
@@ -176,8 +203,8 @@ where
         Ok(())
     }
 
-    fn reset(&mut self) {
-        self.new_values.clear();
+    async fn delete(mut self) -> Result<(), C::Error> {
+        self.context.erase().await
     }
 }
 
@@ -189,7 +216,7 @@ impl<C, T> AppendOnlyLogView<C, T> {
 
     /// Read the size of the log.
     pub fn count(&self) -> usize {
-        self.old_count + self.new_values.len()
+        self.stored_count + self.new_values.len()
     }
 }
 
@@ -208,16 +235,16 @@ where
         }
         let mut values = Vec::new();
         values.reserve(range.end - range.start);
-        if range.start < self.old_count {
-            if range.end <= self.old_count {
+        if range.start < self.stored_count {
+            if range.end <= self.stored_count {
                 values.extend(self.context.read(range.start..range.end).await?);
             } else {
-                values.extend(self.context.read(range.start..self.old_count).await?);
-                values.extend(self.new_values[0..(range.end - self.old_count)].to_vec());
+                values.extend(self.context.read(range.start..self.stored_count).await?);
+                values.extend(self.new_values[0..(range.end - self.stored_count)].to_vec());
             }
         } else {
             values.extend(
-                self.new_values[(range.start - self.old_count)..(range.end - self.old_count)]
+                self.new_values[(range.start - self.stored_count)..(range.end - self.stored_count)]
                     .to_vec(),
             );
         }
@@ -225,7 +252,7 @@ where
     }
 }
 
-/// A view that supports inserting and removing individual values indexed by their keys.
+/// A view that supports inserting and removing values indexed by a key.
 #[derive(Debug, Clone)]
 pub struct MapView<C, K, V> {
     context: C,
@@ -259,6 +286,10 @@ where
         })
     }
 
+    fn reset(&mut self) {
+        self.updates.clear();
+    }
+
     async fn commit(mut self) -> Result<(), C::Error> {
         for (index, update) in self.updates {
             match update {
@@ -273,8 +304,8 @@ where
         Ok(())
     }
 
-    fn reset(&mut self) {
-        self.updates.clear();
+    async fn delete(mut self) -> Result<(), C::Error> {
+        self.context.erase().await
     }
 }
 
@@ -299,7 +330,7 @@ where
     K: Eq + Hash + Sync,
     V: Clone,
 {
-    /// Read the value at the given postition, if any.
+    /// Read the value at the given position, if any.
     pub async fn get<T>(&mut self, index: &T) -> Result<Option<V>, C::Error>
     where
         K: Borrow<T>,
@@ -317,7 +348,7 @@ where
 #[derive(Debug, Clone)]
 pub struct CollectionView<C, I, W> {
     context: C,
-    active_views: HashMap<I, W>,
+    updates: HashMap<I, Option<W>>,
 }
 
 /// The context operations supporting [`CollectionView`].
@@ -326,6 +357,9 @@ pub trait CollectionOperations<I>: Context {
     /// Clone the context and advance the (otherwise implicit) base key for all read/write
     /// operations.
     fn clone_with_scope(&self, index: &I) -> Self;
+
+    /// Return the list of indices in the collection.
+    async fn indices(&mut self) -> Result<Vec<I>, Self::Error>;
 }
 
 #[async_trait]
@@ -338,37 +372,65 @@ where
     async fn load(context: C) -> Result<Self, C::Error> {
         Ok(Self {
             context,
-            active_views: HashMap::new(),
+            updates: HashMap::new(),
         })
     }
 
+    fn reset(&mut self) {
+        self.updates.clear();
+    }
+
     async fn commit(mut self) -> Result<(), C::Error> {
-        for view in self.active_views.into_values() {
-            view.commit().await?;
+        for (index, update) in self.updates {
+            match update {
+                Some(view) => view.commit().await?,
+                None => {
+                    let context = self.context.clone_with_scope(&index);
+                    let view = W::load(context).await?;
+                    view.delete().await?;
+                }
+            }
         }
         Ok(())
     }
 
-    fn reset(&mut self) {
-        self.active_views.clear();
+    async fn delete(mut self) -> Result<(), C::Error> {
+        for index in self.context.indices().await? {
+            let context = self.context.clone_with_scope(&index);
+            let view = W::load(context).await?;
+            view.delete().await?;
+        }
+        Ok(())
     }
 }
 
 impl<C, I, W> CollectionView<C, I, W>
 where
     C: CollectionOperations<I> + Send,
-    I: Eq + Hash + Sync + Clone + Send + serde::Serialize,
+    I: Eq + Hash + Sync + Clone + Send + Debug,
     W: View<C>,
 {
-    /// Obtain a subview for the data at the given index in the collection.
+    /// Obtain a subview for the data at the given index in the collection. Return an
+    /// error if `remove_entry` was used earlier on this index from the same [`CollectionView`].
     pub async fn load_entry(&mut self, index: I) -> Result<&mut W, C::Error> {
-        match self.active_views.entry(index.clone()) {
-            hash_map::Entry::Occupied(e) => Ok(e.into_mut()),
+        match self.updates.entry(index.clone()) {
+            hash_map::Entry::Occupied(e) => match e.into_mut() {
+                Some(view) => Ok(view),
+                None => Err(C::Error::from(ViewError::RemovedEntry(format!(
+                    "{:?}",
+                    index
+                )))),
+            },
             hash_map::Entry::Vacant(e) => {
                 let context = self.context.clone_with_scope(&index);
                 let view = W::load(context).await?;
-                Ok(e.insert(view))
+                Ok(e.insert(Some(view)).as_mut().unwrap())
             }
         }
+    }
+
+    /// Mark the entry so that it is removed in the next commit.
+    pub fn remove_entry(&mut self, index: I) {
+        self.updates.insert(index, None);
     }
 }
