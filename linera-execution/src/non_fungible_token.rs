@@ -1,4 +1,4 @@
-use crate::{ExecutionContext, SmartContract};
+use crate::{ExecutionContext, ExecutionError, SmartContract};
 use async_trait::async_trait;
 use linera_base::{ensure, execution::ApplicationResult, messages::ChainId};
 use linera_views::views::{RegisterOperations, RegisterView, View};
@@ -21,29 +21,26 @@ where
     async fn instantiate(
         execution: &ExecutionContext,
         initial_owner: Self::Parameters,
-    ) -> ApplicationResult {
-        ApplicationResult {
+    ) -> Result<ApplicationResult, ExecutionError> {
+        Ok(ApplicationResult {
             effects: vec![Effect::Receive.to_system_effect(execution)],
             operations: vec![],
             recipients: vec![initial_owner.0],
             subscribe: None,
             unsubscribe: None,
             need_channel_broadcast: Vec::new(),
-        }
+        })
     }
 
     async fn apply_operation(
         execution: &ExecutionContext,
         storage: &mut C,
         operation: Self::Operation,
-    ) -> ApplicationResult {
+    ) -> Result<ApplicationResult, ExecutionError> {
         match operation {
             Operation::Transfer { recipient } => Self::transfer(recipient, execution, storage)
                 .await
-                .unwrap_or_else(|error| {
-                    log::error!("{error}");
-                    ApplicationResult::default()
-                }),
+                .map_err(ExecutionError::storage),
         }
     }
 
@@ -51,12 +48,11 @@ where
         _execution: &ExecutionContext,
         storage: &mut C,
         effect: Self::Effect,
-    ) -> ApplicationResult {
+    ) -> Result<ApplicationResult, ExecutionError> {
         match effect {
-            Effect::Receive => Self::receive(storage).await.unwrap_or_else(|_| {
-                log::error!("Failed to store received token");
-                ApplicationResult::default()
-            }),
+            Effect::Receive => Self::receive(storage)
+                .await
+                .map_err(ExecutionError::storage),
         }
     }
 
@@ -64,14 +60,12 @@ where
         _execution: &ExecutionContext,
         storage: &mut C,
         query: Self::Query,
-    ) -> Self::Response {
+    ) -> Result<Self::Response, ExecutionError> {
         match query {
-            Query::HasToken => {
-                QueryResponse::HasToken(Self::has_token(storage).await.unwrap_or_else(|_| {
-                    log::error!("Failed to query token ownership");
-                    false
-                }))
-            }
+            Query::HasToken => Self::has_token(storage)
+                .await
+                .map(QueryResponse::HasToken)
+                .map_err(ExecutionError::storage),
         }
     }
 }
@@ -117,14 +111,14 @@ impl NonFungibleToken {
     {
         let mut ownership = RegisterView::<_, bool>::load(storage.clone(), vec![].into())
             .await
-            .map_err(|_| TransferError::StorageError)?;
+            .map_err(TransferError::storage_error)?;
         let is_current_owner = *ownership.get();
         ensure!(is_current_owner, TransferError::NotCurrentOwner);
         ownership.set(false);
         ownership
             .commit()
             .await
-            .map_err(|_| TransferError::StorageError)?;
+            .map_err(TransferError::storage_error)?;
         let application = match recipient {
             None => ApplicationResult::default(),
             Some(recipient) => ApplicationResult {
@@ -164,5 +158,24 @@ pub enum TransferError {
     NotCurrentOwner,
 
     #[error("Failed to load or store balance")]
-    StorageError,
+    StorageError { message: String },
+}
+
+impl TransferError {
+    pub fn storage_error(storage_error: impl std::error::Error) -> Self {
+        TransferError::StorageError {
+            message: storage_error.to_string(),
+        }
+    }
+}
+
+impl From<TransferError> for ExecutionError {
+    fn from(transfer_error: TransferError) -> ExecutionError {
+        match transfer_error {
+            TransferError::StorageError { message } => ExecutionError::Storage { message },
+            other_error => ExecutionError::Custom {
+                message: other_error.to_string(),
+            },
+        }
+    }
 }

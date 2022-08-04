@@ -15,7 +15,7 @@ impl<C: Send> SmartContract<C> for NonFungibleToken {
     async fn instantiate(
         execution: &ExecutionContext,
         parameters: Self::Parameters,
-    ) -> ApplicationResult {
+    ) -> Result<ApplicationResult, ExecutionError> {
         todo!()
     }
 
@@ -23,7 +23,7 @@ impl<C: Send> SmartContract<C> for NonFungibleToken {
         execution: &ExecutionContext,
         storage: &mut C,
         operation: Self::Operation,
-    ) -> ApplicationResult {
+    ) -> Result<ApplicationResult, ExecutionError> {
         todo!()
     }
 
@@ -31,7 +31,7 @@ impl<C: Send> SmartContract<C> for NonFungibleToken {
         execution: &ExecutionContext,
         storage: &mut C,
         effect: Self::Effect,
-    ) -> ApplicationResult {
+    ) -> Result<ApplicationResult, ExecutionError> {
         todo!()
     }
 
@@ -39,7 +39,7 @@ impl<C: Send> SmartContract<C> for NonFungibleToken {
         execution: &ExecutionContext,
         storage: &mut C,
         query: Self::Query,
-    ) -> Self::Response {
+    ) -> Result<Self::Response, ExecutionError> {
         todo!()
     }
 }

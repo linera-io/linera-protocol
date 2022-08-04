@@ -6,6 +6,7 @@ use std::{
     borrow::Borrow,
     cmp::Eq,
     collections::{hash_map, HashMap},
+    error::Error,
     fmt::Debug,
     hash::Hash,
 };
@@ -14,7 +15,7 @@ use std::{
 /// connect to the database.
 pub trait Context {
     /// The error type in use.
-    type Error: Debug;
+    type Error: Error;
 
     /// Clone the context and advance the (otherwise implicit) base key for all read/write
     /// operations.
