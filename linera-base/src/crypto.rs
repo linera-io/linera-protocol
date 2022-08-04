@@ -314,6 +314,8 @@ where
     }
 }
 
+impl BcsSignable for Vec<u8> {}
+
 impl HashValue {
     pub fn new<T>(value: &T) -> Self
     where

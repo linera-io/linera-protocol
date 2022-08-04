@@ -5,6 +5,7 @@ use linera_base::{
 };
 use thiserror::Error;
 
+mod escrow;
 mod fungible_token;
 mod non_fungible_token;
 
@@ -73,6 +74,12 @@ impl ExecutionError {
     pub fn storage(error: impl std::error::Error) -> Self {
         ExecutionError::Storage {
             message: error.to_string(),
+        }
+    }
+
+    pub fn custom(message: impl Into<String>) -> Self {
+        ExecutionError::Custom {
+            message: message.into(),
         }
     }
 }
