@@ -66,6 +66,14 @@ where
         self.collection.reset();
     }
 
+    fn delete(&mut self) {
+        self.x1.delete();
+        self.x2.delete();
+        self.log.delete();
+        self.map.delete();
+        self.collection.delete();
+    }
+
     async fn commit(self) -> Result<(), C::Error> {
         self.x1.commit().await?;
         self.x2.commit().await?;
@@ -126,7 +134,7 @@ impl StateStore for InMemoryTestStore {
 }
 
 #[cfg(test)]
-async fn test_store<S>(mut store: S)
+async fn test_store<S>(store: &mut S)
 where
     S: StateStore,
 {
@@ -204,11 +212,30 @@ where
                 .await
                 .unwrap();
             assert_eq!(subview.read(0..10).await.unwrap(), vec![17, 18]);
+            subview.delete();
         }
+        view.commit().await.unwrap();
+    }
+    {
+        let mut view = store.load(1).await.unwrap();
+        {
+            let subview = view
+                .collection_mut()
+                .load_entry("hola".to_string())
+                .await
+                .unwrap();
+            assert_eq!(subview.read(0..10).await.unwrap(), vec![]);
+        }
+        view.delete();
+        view.commit().await.unwrap();
     }
 }
 
 #[tokio::test]
 async fn test_traits() {
-    test_store(InMemoryTestStore::default()).await;
+    let mut store = InMemoryTestStore::default();
+    test_store(&mut store).await;
+    assert_eq!(store.states.len(), 1);
+    let entry = store.states.get(&1).unwrap().clone();
+    assert!(entry.lock().await.is_empty());
 }

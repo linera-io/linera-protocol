@@ -12,9 +12,13 @@ use std::{
 
 /// The context in which a view is operated. Typically, this includes the client to
 /// connect to the database and the address of the current entry.
+#[async_trait]
 pub trait Context {
     /// The error type in use.
     type Error: Debug;
+
+    /// Erase the current entry from storage.
+    async fn erase(&mut self) -> Result<(), Self::Error>;
 }
 
 /// A view gives an exclusive access to read and write the data stored at an underlying
@@ -26,6 +30,10 @@ pub trait View<C: Context>: Sized {
 
     /// Discard all pending changes. After that `commit` should have no effect to storage.
     fn reset(&mut self);
+
+    /// Clear all the data that belong to this view and its subviews. Subsequent read will
+    /// return default values.
+    fn delete(&mut self);
 
     /// Persist changes to storage. This consumes the view. If the view is dropped without
     /// calling `commit`, staged changes are simply lost.
@@ -76,20 +84,31 @@ where
     fn reset(&mut self) {
         self.view.reset();
     }
+
+    fn delete(&mut self) {
+        self.view.delete();
+    }
 }
 
 /// A view that supports modifying a single value of type `T`.
 #[derive(Debug, Clone)]
 pub struct RegisterView<C, T> {
     context: C,
-    old_value: T,
-    new_value: Option<T>,
+    stored_value: T,
+    update: ValueUpdate<T>,
+}
+
+#[derive(Debug, Clone)]
+enum ValueUpdate<T> {
+    Keep,
+    Set(T),
+    Erase(T), // Store the default value so that we can return it by reference.
 }
 
 /// The context operations supporting [`RegisterView`].
 #[async_trait]
 pub trait RegisterOperations<T>: Context {
-    async fn get(&mut self) -> Result<T, Self::Error>;
+    async fn get(&mut self) -> Result<Option<T>, Self::Error>;
 
     async fn set(&mut self, value: T) -> Result<(), Self::Error>;
 }
@@ -98,41 +117,52 @@ pub trait RegisterOperations<T>: Context {
 impl<C, T> View<C> for RegisterView<C, T>
 where
     C: RegisterOperations<T> + Send + Sync,
-    T: Send + Sync,
+    T: Default + Send + Sync,
 {
     async fn load(mut context: C) -> Result<Self, C::Error> {
-        let old_value = context.get().await?;
+        let stored_value = context.get().await?.unwrap_or_default();
         Ok(Self {
             context,
-            old_value,
-            new_value: None,
+            stored_value,
+            update: ValueUpdate::Keep,
         })
     }
 
     async fn commit(mut self) -> Result<(), C::Error> {
-        if let Some(value) = self.new_value {
-            self.context.set(value).await?;
+        match self.update {
+            ValueUpdate::Keep => (),
+            ValueUpdate::Set(value) => {
+                self.context.set(value).await?;
+            }
+            ValueUpdate::Erase(_) => {
+                self.context.erase().await?;
+            }
         }
         Ok(())
     }
 
     fn reset(&mut self) {
-        self.new_value = None;
+        self.update = ValueUpdate::Keep;
+    }
+
+    fn delete(&mut self) {
+        self.update = ValueUpdate::Erase(T::default());
     }
 }
 
 impl<C, T> RegisterView<C, T> {
     /// Read the value in the register.
     pub fn get(&self) -> &T {
-        match &self.new_value {
-            Some(value) => value,
-            None => &self.old_value,
+        match &self.update {
+            ValueUpdate::Keep => &self.stored_value,
+            ValueUpdate::Set(value) => value,
+            ValueUpdate::Erase(default_value) => default_value,
         }
     }
 
     /// Set the value in the register.
     pub fn set(&mut self, value: T) {
-        self.new_value = Some(value);
+        self.update = ValueUpdate::Set(value);
     }
 }
 
@@ -140,8 +170,9 @@ impl<C, T> RegisterView<C, T> {
 #[derive(Debug, Clone)]
 pub struct AppendOnlyLogView<C, T> {
     context: C,
-    old_count: usize,
+    stored_count: usize,
     new_values: Vec<T>,
+    deleted: bool,
 }
 
 /// The context operations supporting [`AppendOnlyLogView`].
@@ -161,15 +192,19 @@ where
     T: Send + Sync + Clone,
 {
     async fn load(mut context: C) -> Result<Self, C::Error> {
-        let old_count = context.count().await?;
+        let stored_count = context.count().await?;
         Ok(Self {
             context,
-            old_count,
+            stored_count,
             new_values: Vec::new(),
+            deleted: false,
         })
     }
 
     async fn commit(mut self) -> Result<(), C::Error> {
+        if self.deleted {
+            self.context.erase().await?;
+        }
         if !self.new_values.is_empty() {
             self.context.append(self.new_values).await?;
         }
@@ -177,6 +212,12 @@ where
     }
 
     fn reset(&mut self) {
+        self.deleted = false;
+        self.new_values.clear();
+    }
+
+    fn delete(&mut self) {
+        self.deleted = true;
         self.new_values.clear();
     }
 }
@@ -189,7 +230,11 @@ impl<C, T> AppendOnlyLogView<C, T> {
 
     /// Read the size of the log.
     pub fn count(&self) -> usize {
-        self.old_count + self.new_values.len()
+        if self.deleted {
+            self.new_values.len()
+        } else {
+            self.stored_count + self.new_values.len()
+        }
     }
 }
 
@@ -206,18 +251,21 @@ where
         if range.start >= range.end {
             return Ok(Vec::new());
         }
+        if self.deleted {
+            return Ok(self.new_values[range].to_vec());
+        }
         let mut values = Vec::new();
         values.reserve(range.end - range.start);
-        if range.start < self.old_count {
-            if range.end <= self.old_count {
+        if range.start < self.stored_count {
+            if range.end <= self.stored_count {
                 values.extend(self.context.read(range.start..range.end).await?);
             } else {
-                values.extend(self.context.read(range.start..self.old_count).await?);
-                values.extend(self.new_values[0..(range.end - self.old_count)].to_vec());
+                values.extend(self.context.read(range.start..self.stored_count).await?);
+                values.extend(self.new_values[0..(range.end - self.stored_count)].to_vec());
             }
         } else {
             values.extend(
-                self.new_values[(range.start - self.old_count)..(range.end - self.old_count)]
+                self.new_values[(range.start - self.stored_count)..(range.end - self.stored_count)]
                     .to_vec(),
             );
         }
@@ -225,11 +273,12 @@ where
     }
 }
 
-/// A view that supports inserting and removing individual values indexed by their keys.
+/// A view that supports inserting and removing values indexed by a key.
 #[derive(Debug, Clone)]
 pub struct MapView<C, K, V> {
     context: C,
     updates: HashMap<K, Option<V>>,
+    deleted: bool,
 }
 
 /// The context operations supporting [`MapView`].
@@ -256,10 +305,14 @@ where
         Ok(Self {
             context,
             updates: HashMap::new(),
+            deleted: false,
         })
     }
 
     async fn commit(mut self) -> Result<(), C::Error> {
+        if self.deleted {
+            self.context.erase().await?;
+        }
         for (index, update) in self.updates {
             match update {
                 None => {
@@ -275,6 +328,12 @@ where
 
     fn reset(&mut self) {
         self.updates.clear();
+        self.deleted = false;
+    }
+
+    fn delete(&mut self) {
+        self.updates.clear();
+        self.deleted = true;
     }
 }
 
@@ -299,7 +358,7 @@ where
     K: Eq + Hash + Sync,
     V: Clone,
 {
-    /// Read the value at the given postition, if any.
+    /// Read the value at the given position, if any.
     pub async fn get<T>(&mut self, index: &T) -> Result<Option<V>, C::Error>
     where
         K: Borrow<T>,
@@ -318,6 +377,7 @@ where
 pub struct CollectionView<C, I, W> {
     context: C,
     active_views: HashMap<I, W>,
+    deleted: bool,
 }
 
 /// The context operations supporting [`CollectionView`].
@@ -339,10 +399,14 @@ where
         Ok(Self {
             context,
             active_views: HashMap::new(),
+            deleted: false,
         })
     }
 
     async fn commit(mut self) -> Result<(), C::Error> {
+        if self.deleted {
+            self.context.erase().await?;
+        }
         for view in self.active_views.into_values() {
             view.commit().await?;
         }
@@ -350,7 +414,15 @@ where
     }
 
     fn reset(&mut self) {
+        self.deleted = false;
         self.active_views.clear();
+    }
+
+    fn delete(&mut self) {
+        for view in self.active_views.values_mut() {
+            view.delete();
+        }
+        self.deleted = true;
     }
 }
 

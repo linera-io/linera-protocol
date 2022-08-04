@@ -72,8 +72,15 @@ impl InMemoryContext {
     }
 }
 
+#[async_trait]
 impl Context for InMemoryContext {
     type Error = Infallible;
+
+    async fn erase(&mut self) -> Result<(), Self::Error> {
+        let mut map = self.map.write().await;
+        map.remove(&self.base_key);
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -89,12 +96,10 @@ impl ScopedOperations for InMemoryContext {
 #[async_trait]
 impl<T> RegisterOperations<T> for InMemoryContext
 where
-    T: Default + Clone + Send + Sync + 'static,
+    T: Clone + Send + Sync + 'static,
 {
-    async fn get(&mut self) -> Result<T, Infallible> {
-        Ok(self
-            .with_ref(|value: Option<&T>| value.cloned().unwrap_or_default())
-            .await)
+    async fn get(&mut self) -> Result<Option<T>, Infallible> {
+        Ok(self.with_ref(|value: Option<&T>| value.cloned()).await)
     }
 
     async fn set(&mut self, value: T) -> Result<(), Infallible> {
