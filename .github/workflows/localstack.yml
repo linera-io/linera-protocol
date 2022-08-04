@@ -18,7 +18,7 @@ jobs:
       run: |
         rustup toolchain install 1.60.0-x86_64-unknown-linux-gnu
     - name: Build
-      run: cargo build
+      run: cargo build --locked
     - name: Setup LocalStack
       run: |
         docker run --rm -d --name localstack -p 4566:4566/tcp localstack/localstack
@@ -28,4 +28,4 @@ jobs:
         AWS_ACCESS_KEY_ID: test
         AWS_SECRET_ACCESS_KEY: test
         LOCALSTACK_ENDPOINT: http://localhost:4566
-      run: cargo test -- --ignored s3
+      run: cargo test --locked -- --ignored s3
