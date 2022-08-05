@@ -55,10 +55,19 @@ pub trait BlockValidatorSmartContract<C: Send> {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TemplateId(EffectId);
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ApplicationId(EffectId);
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ContractShard(ChainId);
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ExecutionContext {
-    contract_id: EffectId,
-    application_id: EffectId,
-    account: ChainId,
+    template_id: TemplateId,
+    application_id: ApplicationId,
+    shard: ContractShard,
 }
 
 #[derive(Debug, Error)]

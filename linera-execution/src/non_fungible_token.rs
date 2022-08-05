@@ -86,7 +86,7 @@ pub enum Effect {
 
 impl Effect {
     pub fn to_system_effect(&self, context: &ExecutionContext) -> linera_base::execution::Effect {
-        linera_base::execution::Effect::application_specific(context.application_id, self)
+        linera_base::execution::Effect::application_specific(context.application_id.0, self)
             .expect("Receive effect is serializable")
     }
 }
