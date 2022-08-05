@@ -3,6 +3,7 @@
 
 use super::*;
 use linera_base::{
+    chain::ROOT,
     execution::{ExecutionState, Operation},
     messages::*,
 };
@@ -34,7 +35,7 @@ async fn test_rocksdb_storage_for_certificates() {
             epoch: Epoch::from(0),
             chain_id: ChainId::root(i),
             incoming_messages: Vec::new(),
-            operations: vec![Operation::CloseChain],
+            operations: vec![(ROOT, Operation::CloseChain)],
             previous_block_hash: None,
             height: BlockHeight::default(),
         };
@@ -57,7 +58,7 @@ async fn test_rocksdb_persistance_across_writes() {
         epoch: Epoch::from(0),
         chain_id: ChainId::root(1),
         incoming_messages: Vec::new(),
-        operations: vec![Operation::CloseChain],
+        operations: vec![(ROOT, Operation::CloseChain)],
         previous_block_hash: None,
         height: BlockHeight::default(),
     };

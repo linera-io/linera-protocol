@@ -4,7 +4,7 @@
 
 use crate::worker::{ValidatorWorker, WorkerState};
 use linera_base::{
-    chain::{ChainState, Event, InboxState},
+    chain::{ChainState, Event, InboxState, ROOT},
     committee::Committee,
     crypto::*,
     error::Error,
@@ -78,7 +78,7 @@ fn make_block(
         epoch,
         chain_id,
         incoming_messages,
-        operations,
+        operations: operations.into_iter().map(|op| (ROOT, op)).collect(),
         previous_block_hash,
         height,
     }
@@ -158,10 +158,13 @@ fn make_transfer_certificate(
         previous_confirmed_block,
     );
     let effects = match recipient {
-        Address::Account(id) => vec![Effect::Credit {
-            recipient: id,
-            amount,
-        }],
+        Address::Account(id) => vec![(
+            ROOT,
+            Effect::Credit {
+                recipient: id,
+                amount,
+            },
+        )],
         Address::Burn => Vec::new(),
     };
     let state_hash = HashValue::new(&state);
@@ -450,29 +453,41 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                 chain_id: ChainId::root(1),
                 incoming_messages: Vec::new(),
                 operations: vec![
-                    Operation::Transfer {
-                        recipient,
-                        amount: Amount::from(1),
-                        user_data: UserData::default(),
-                    },
-                    Operation::Transfer {
-                        recipient,
-                        amount: Amount::from(2),
-                        user_data: UserData::default(),
-                    },
+                    (
+                        ROOT,
+                        Operation::Transfer {
+                            recipient,
+                            amount: Amount::from(1),
+                            user_data: UserData::default(),
+                        },
+                    ),
+                    (
+                        ROOT,
+                        Operation::Transfer {
+                            recipient,
+                            amount: Amount::from(2),
+                            user_data: UserData::default(),
+                        },
+                    ),
                 ],
                 previous_block_hash: None,
                 height: BlockHeight::from(0),
             },
             effects: vec![
-                Effect::Credit {
-                    recipient: ChainId::root(2),
-                    amount: Amount::from(1),
-                },
-                Effect::Credit {
-                    recipient: ChainId::root(2),
-                    amount: Amount::from(2),
-                },
+                (
+                    ROOT,
+                    Effect::Credit {
+                        recipient: ChainId::root(2),
+                        amount: Amount::from(1),
+                    },
+                ),
+                (
+                    ROOT,
+                    Effect::Credit {
+                        recipient: ChainId::root(2),
+                        amount: Amount::from(2),
+                    },
+                ),
             ],
             state_hash: HashValue::new(&ExecutionState {
                 epoch: Some(epoch),
@@ -494,18 +509,24 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                 epoch,
                 chain_id: ChainId::root(1),
                 incoming_messages: Vec::new(),
-                operations: vec![Operation::Transfer {
-                    recipient,
-                    amount: Amount::from(3),
-                    user_data: UserData::default(),
-                }],
+                operations: vec![(
+                    ROOT,
+                    Operation::Transfer {
+                        recipient,
+                        amount: Amount::from(3),
+                        user_data: UserData::default(),
+                    },
+                )],
                 previous_block_hash: Some(certificate0.hash),
                 height: BlockHeight::from(1),
             },
-            effects: vec![Effect::Credit {
-                recipient: ChainId::root(2),
-                amount: Amount::from(3),
-            }],
+            effects: vec![(
+                ROOT,
+                Effect::Credit {
+                    recipient: ChainId::root(2),
+                    amount: Amount::from(3),
+                },
+            )],
             state_hash: HashValue::new(&ExecutionState {
                 epoch: Some(epoch),
                 chain_id: ChainId::root(1),
@@ -545,6 +566,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             Amount::from(5),
             vec![
                 MessageGroup {
+                    application_id: ROOT,
                     origin: Origin::Chain(ChainId::root(1)),
                     height: BlockHeight::from(0),
                     effects: vec![
@@ -565,6 +587,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                     ],
                 },
                 MessageGroup {
+                    application_id: ROOT,
                     origin: Origin::Chain(ChainId::root(1)),
                     height: BlockHeight::from(1),
                     effects: vec![(
@@ -592,6 +615,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             Amount::from(6),
             vec![
                 MessageGroup {
+                    application_id: ROOT,
                     origin: Origin::Chain(ChainId::root(1)),
                     height: BlockHeight::from(0),
                     effects: vec![
@@ -612,6 +636,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                     ],
                 },
                 MessageGroup {
+                    application_id: ROOT,
                     origin: Origin::Chain(ChainId::root(1)),
                     height: BlockHeight::from(1),
                     effects: vec![(
@@ -639,6 +664,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             Amount::from(6),
             vec![
                 MessageGroup {
+                    application_id: ROOT,
                     origin: Origin::Chain(ChainId::root(1)),
                     height: BlockHeight::from(1),
                     effects: vec![(
@@ -650,6 +676,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                     )],
                 },
                 MessageGroup {
+                    application_id: ROOT,
                     origin: Origin::Chain(ChainId::root(1)),
                     height: BlockHeight::from(0),
                     effects: vec![
@@ -685,6 +712,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             Address::Account(ChainId::root(3)),
             Amount::from(1),
             vec![MessageGroup {
+                application_id: ROOT,
                 origin: Origin::Chain(ChainId::root(1)),
                 height: BlockHeight::from(0),
                 effects: vec![(
@@ -707,10 +735,13 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             &worker,
             Value::ConfirmedBlock {
                 block: block_proposal.content.block,
-                effects: vec![Effect::Credit {
-                    recipient: ChainId::root(3),
-                    amount: Amount::from(1),
-                }],
+                effects: vec![(
+                    ROOT,
+                    Effect::Credit {
+                        recipient: ChainId::root(3),
+                        amount: Amount::from(1),
+                    },
+                )],
                 state_hash: HashValue::new(&ExecutionState {
                     epoch: Some(epoch),
                     chain_id: ChainId::root(2),
@@ -733,6 +764,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             Address::Account(ChainId::root(3)),
             Amount::from(3),
             vec![MessageGroup {
+                application_id: ROOT,
                 origin: Origin::Chain(ChainId::root(1)),
                 height: BlockHeight::from(1),
                 effects: vec![(
@@ -951,6 +983,7 @@ async fn test_handle_certificate_with_anticipated_incoming_message() {
         Address::Account(ChainId::root(2)),
         Amount::from(1000),
         vec![MessageGroup {
+            application_id: ROOT,
             origin: Origin::Chain(ChainId::root(3)),
             height: BlockHeight::from(0),
             effects: vec![(
@@ -981,18 +1014,18 @@ async fn test_handle_certificate_with_anticipated_incoming_message() {
         BlockHeight::from(0),
         chain
             .inboxes
-            .get(&Origin::Chain(ChainId::root(3)))
+            .get(&(ROOT, Origin::Chain(ChainId::root(3))))
             .unwrap()
             .next_height_to_receive
     );
     assert!(chain
         .inboxes
-        .get(&Origin::Chain(ChainId::root(3)))
+        .get(&(ROOT, Origin::Chain(ChainId::root(3))))
         .unwrap()
         .received_events
         .is_empty(),);
     assert!(matches!(
-        chain.inboxes.get(&Origin::Chain(ChainId::root(3))).unwrap().expected_events.front().unwrap(),
+        chain.inboxes.get(&(ROOT, Origin::Chain(ChainId::root(3)))).unwrap().expected_events.front().unwrap(),
         Event { height, index: 0, effect: Effect::Credit { amount, .. }} if *height == BlockHeight::from(0) && *amount == Amount::from(995),
     ));
     assert_eq!(chain.confirmed_log.len(), 1);
@@ -1085,12 +1118,12 @@ async fn test_handle_certificate_receiver_equal_sender() {
         BlockHeight::from(1),
         chain
             .inboxes
-            .get(&Origin::Chain(ChainId::root(1)))
+            .get(&(ROOT, Origin::Chain(ChainId::root(1))))
             .unwrap()
             .next_height_to_receive
     );
     assert!(matches!(
-        chain.inboxes.get(&Origin::Chain(ChainId::root(1))).unwrap().received_events.front().unwrap(),
+        chain.inboxes.get(&(ROOT, Origin::Chain(ChainId::root(1)))).unwrap().received_events.front().unwrap(),
         Event { height, index: 0, effect: Effect::Credit { amount, .. }} if *height == BlockHeight::from(0) && *amount == Amount::from(1),
     ));
     assert_eq!(BlockHeight::from(1), chain.next_block_height);
@@ -1120,6 +1153,7 @@ async fn test_handle_cross_chain_request() {
     );
     worker
         .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
+            application_id: ROOT,
             origin: Origin::Chain(ChainId::root(1)),
             recipient: ChainId::root(2),
             certificates: vec![certificate],
@@ -1137,12 +1171,12 @@ async fn test_handle_cross_chain_request() {
         BlockHeight::from(1),
         chain
             .inboxes
-            .get(&Origin::Chain(ChainId::root(1)))
+            .get(&(ROOT, Origin::Chain(ChainId::root(1))))
             .unwrap()
             .next_height_to_receive
     );
     assert!(matches!(
-        chain.inboxes.get(&Origin::Chain(ChainId::root(1))).unwrap().received_events.front().unwrap(),
+        chain.inboxes.get(&(ROOT, Origin::Chain(ChainId::root(1)))).unwrap().received_events.front().unwrap(),
         Event { height, index: 0, effect: Effect::Credit { amount, .. }} if *height == BlockHeight::from(0) && *amount == Amount::from(10),
     ));
     assert_eq!(chain.confirmed_log.len(), 0);
@@ -1167,6 +1201,7 @@ async fn test_handle_cross_chain_request_no_recipient_chain() {
     );
     assert!(worker
         .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
+            application_id: ROOT,
             origin: Origin::Chain(ChainId::root(1)),
             recipient: ChainId::root(2),
             certificates: vec![certificate],
@@ -1202,6 +1237,7 @@ async fn test_handle_cross_chain_request_no_recipient_chain_with_inactive_chains
     assert!(matches!(
         worker
             .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
+                application_id: ROOT,
                 origin: Origin::Chain(ChainId::root(1)),
                 recipient: ChainId::root(2),
                 certificates: vec![certificate],
@@ -1266,6 +1302,7 @@ async fn test_handle_certificate_to_active_recipient() {
         Address::Account(ChainId::root(3)),
         Amount::from(1),
         vec![MessageGroup {
+            application_id: ROOT,
             origin: Origin::Chain(ChainId::root(1)),
             height: BlockHeight::from(0),
             effects: vec![(
@@ -1308,7 +1345,7 @@ async fn test_handle_certificate_to_active_recipient() {
             .value
             .confirmed_block()
             .unwrap()
-            .operations[..], [Operation::Transfer { amount, .. }] if amount == Amount::from(5)));
+            .operations[..], [(_, Operation::Transfer { amount, .. })] if amount == Amount::from(5)));
 }
 
 #[test(tokio::test)]
@@ -1374,28 +1411,37 @@ async fn test_chain_creation_with_committee_creation() {
                 epoch: Epoch::from(0),
                 chain_id: admin_id,
                 incoming_messages: Vec::new(),
-                operations: vec![Operation::OpenChain {
-                    id: user_id,
-                    owner: key_pair.public().into(),
-                    epoch: Epoch::from(0),
-                    committees: committees.clone(),
-                    admin_id,
-                }],
+                operations: vec![(
+                    ROOT,
+                    Operation::OpenChain {
+                        id: user_id,
+                        owner: key_pair.public().into(),
+                        epoch: Epoch::from(0),
+                        committees: committees.clone(),
+                        admin_id,
+                    },
+                )],
                 previous_block_hash: None,
                 height: BlockHeight::from(0),
             },
             effects: vec![
-                Effect::OpenChain {
-                    id: user_id,
-                    owner: key_pair.public().into(),
-                    epoch: Epoch::from(0),
-                    committees: committees.clone(),
-                    admin_id,
-                },
-                Effect::Subscribe {
-                    id: user_id,
-                    channel: admin_channel.clone(),
-                },
+                (
+                    ROOT,
+                    Effect::OpenChain {
+                        id: user_id,
+                        owner: key_pair.public().into(),
+                        epoch: Epoch::from(0),
+                        committees: committees.clone(),
+                        admin_id,
+                    },
+                ),
+                (
+                    ROOT,
+                    Effect::Subscribe {
+                        id: user_id,
+                        channel: admin_channel.clone(),
+                    },
+                ),
             ],
             state_hash: HashValue::new(&ExecutionState {
                 epoch: Some(Epoch::from(0)),
@@ -1419,7 +1465,10 @@ async fn test_chain_creation_with_committee_creation() {
         assert!(admin_chain.outboxes.is_empty());
         assert_eq!(admin_chain.state.admin_id, Some(admin_id));
         // The root chain has no subscribers yet.
-        assert!(admin_chain.channels.get(ADMIN_CHANNEL).is_none());
+        assert!(admin_chain
+            .channels
+            .get(&(ROOT, ADMIN_CHANNEL.to_string()))
+            .is_none());
     }
 
     // Create a new committee and transfer money before accepting the subscription.
@@ -1438,30 +1487,42 @@ async fn test_chain_creation_with_committee_creation() {
                 chain_id: admin_id,
                 incoming_messages: Vec::new(),
                 operations: vec![
-                    Operation::CreateCommittee {
-                        admin_id,
-                        epoch: Epoch::from(1),
-                        committee: committee.clone(),
-                    },
-                    Operation::Transfer {
-                        recipient: Address::Account(user_id),
-                        amount: Amount::from(2),
-                        user_data: UserData::default(),
-                    },
+                    (
+                        ROOT,
+                        Operation::CreateCommittee {
+                            admin_id,
+                            epoch: Epoch::from(1),
+                            committee: committee.clone(),
+                        },
+                    ),
+                    (
+                        ROOT,
+                        Operation::Transfer {
+                            recipient: Address::Account(user_id),
+                            amount: Amount::from(2),
+                            user_data: UserData::default(),
+                        },
+                    ),
                 ],
                 previous_block_hash: Some(certificate0.hash),
                 height: BlockHeight::from(1),
             },
             effects: vec![
-                Effect::SetCommittees {
-                    admin_id,
-                    epoch: Epoch::from(1),
-                    committees: committees2.clone(),
-                },
-                Effect::Credit {
-                    recipient: user_id,
-                    amount: Amount::from(2),
-                },
+                (
+                    ROOT,
+                    Effect::SetCommittees {
+                        admin_id,
+                        epoch: Epoch::from(1),
+                        committees: committees2.clone(),
+                    },
+                ),
+                (
+                    ROOT,
+                    Effect::Credit {
+                        recipient: user_id,
+                        amount: Amount::from(2),
+                    },
+                ),
             ],
             state_hash: HashValue::new(&ExecutionState {
                 epoch: Some(Epoch::from(1)),
@@ -1489,6 +1550,7 @@ async fn test_chain_creation_with_committee_creation() {
                 epoch: Epoch::from(1),
                 chain_id: admin_id,
                 incoming_messages: vec![MessageGroup {
+                    application_id: ROOT,
                     origin: Origin::Chain(admin_id),
                     height: BlockHeight::from(0),
                     effects: vec![(
@@ -1503,7 +1565,7 @@ async fn test_chain_creation_with_committee_creation() {
                 previous_block_hash: Some(certificate1.hash),
                 height: BlockHeight::from(2),
             },
-            effects: vec![Effect::Notify { id: user_id }],
+            effects: vec![(ROOT, Effect::Notify { id: user_id })],
             state_hash: HashValue::new(&ExecutionState {
                 epoch: Some(Epoch::from(1)),
                 chain_id: admin_id,
@@ -1527,7 +1589,7 @@ async fn test_chain_creation_with_committee_creation() {
         assert_eq!(
             admin_chain
                 .channels
-                .get(ADMIN_CHANNEL)
+                .get(&(ROOT, ADMIN_CHANNEL.to_string()))
                 .unwrap()
                 .subscribers
                 .len(),
@@ -1544,7 +1606,7 @@ async fn test_chain_creation_with_committee_creation() {
         matches!(
             user_chain
                 .inboxes
-                .get(&Origin::Chain(admin_id))
+                .get(&(ROOT, Origin::Chain(admin_id)))
                 .unwrap()
                 .received_events
                 .iter()
@@ -1568,7 +1630,7 @@ async fn test_chain_creation_with_committee_creation() {
         matches!(
             user_chain
                 .inboxes
-                .get(&Origin::Channel(admin_channel.clone()))
+                .get(&(ROOT, Origin::Channel(admin_channel.clone())))
                 .unwrap()
                 .received_events
                 .iter()
@@ -1581,7 +1643,7 @@ async fn test_chain_creation_with_committee_creation() {
         );
         assert!(user_chain
             .inboxes
-            .get(&Origin::Channel(admin_channel.clone()))
+            .get(&(ROOT, Origin::Channel(admin_channel.clone())))
             .unwrap()
             .expected_events
             .is_empty());
@@ -1597,6 +1659,7 @@ async fn test_chain_creation_with_committee_creation() {
                 chain_id: user_id,
                 incoming_messages: vec![
                     MessageGroup {
+                        application_id: ROOT,
                         origin: Origin::Channel(admin_channel.clone()),
                         height: BlockHeight::from(1),
                         effects: vec![(
@@ -1609,6 +1672,7 @@ async fn test_chain_creation_with_committee_creation() {
                         )],
                     },
                     MessageGroup {
+                        application_id: ROOT,
                         origin: Origin::Chain(admin_id),
                         height: BlockHeight::from(1),
                         effects: vec![(
@@ -1620,6 +1684,7 @@ async fn test_chain_creation_with_committee_creation() {
                         )],
                     },
                     MessageGroup {
+                        application_id: ROOT,
                         origin: Origin::Chain(admin_id),
                         height: BlockHeight::from(2),
                         effects: vec![(0, Effect::Notify { id: user_id })],
@@ -1659,7 +1724,10 @@ async fn test_chain_creation_with_committee_creation() {
         assert_eq!(user_chain.state.committees.len(), 2);
         user_chain.validate_incoming_messages().unwrap();
         assert_eq!(
-            user_chain.inboxes.get(&Origin::Chain(admin_id)).unwrap(),
+            user_chain
+                .inboxes
+                .get(&(ROOT, Origin::Chain(admin_id)))
+                .unwrap(),
             &InboxState {
                 next_height_to_receive: BlockHeight(3),
                 received_events: VecDeque::new(),
@@ -1669,7 +1737,7 @@ async fn test_chain_creation_with_committee_creation() {
         assert_eq!(
             user_chain
                 .inboxes
-                .get(&Origin::Channel(admin_channel.clone()))
+                .get(&(ROOT, Origin::Channel(admin_channel.clone())))
                 .unwrap(),
             &InboxState {
                 next_height_to_receive: BlockHeight(2),
@@ -1711,18 +1779,24 @@ async fn test_transfers_and_committee_creation() {
                 epoch: Epoch::from(0),
                 chain_id: user_id,
                 incoming_messages: Vec::new(),
-                operations: vec![Operation::Transfer {
-                    recipient: Address::Account(admin_id),
-                    amount: Amount::from(1),
-                    user_data: UserData::default(),
-                }],
+                operations: vec![(
+                    ROOT,
+                    Operation::Transfer {
+                        recipient: Address::Account(admin_id),
+                        amount: Amount::from(1),
+                        user_data: UserData::default(),
+                    },
+                )],
                 previous_block_hash: None,
                 height: BlockHeight::from(0),
             },
-            effects: vec![Effect::Credit {
-                recipient: admin_id,
-                amount: Amount::from(1),
-            }],
+            effects: vec![(
+                ROOT,
+                Effect::Credit {
+                    recipient: admin_id,
+                    amount: Amount::from(1),
+                },
+            )],
             state_hash: HashValue::new(&ExecutionState {
                 epoch: Some(Epoch::from(0)),
                 chain_id: user_id,
@@ -1749,19 +1823,25 @@ async fn test_transfers_and_committee_creation() {
                 epoch: Epoch::from(0),
                 chain_id: admin_id,
                 incoming_messages: Vec::new(),
-                operations: vec![Operation::CreateCommittee {
-                    admin_id,
-                    epoch: Epoch::from(1),
-                    committee: committee.clone(),
-                }],
+                operations: vec![(
+                    ROOT,
+                    Operation::CreateCommittee {
+                        admin_id,
+                        epoch: Epoch::from(1),
+                        committee: committee.clone(),
+                    },
+                )],
                 previous_block_hash: None,
                 height: BlockHeight::from(0),
             },
-            effects: vec![Effect::SetCommittees {
-                admin_id,
-                epoch: Epoch::from(1),
-                committees: committees2.clone(),
-            }],
+            effects: vec![(
+                ROOT,
+                Effect::SetCommittees {
+                    admin_id,
+                    epoch: Epoch::from(1),
+                    committees: committees2.clone(),
+                },
+            )],
             state_hash: HashValue::new(&ExecutionState {
                 epoch: Some(Epoch::from(1)),
                 chain_id: admin_id,
@@ -1796,7 +1876,7 @@ async fn test_transfers_and_committee_creation() {
     matches!(
         admin_chain
             .inboxes
-            .get(&Origin::Chain(user_id))
+            .get(&(ROOT, Origin::Chain(user_id)))
             .unwrap()
             .received_events
             .iter()
@@ -1840,18 +1920,24 @@ async fn test_transfers_and_committee_removal() {
                 epoch: Epoch::from(0),
                 chain_id: user_id,
                 incoming_messages: Vec::new(),
-                operations: vec![Operation::Transfer {
-                    recipient: Address::Account(admin_id),
-                    amount: Amount::from(1),
-                    user_data: UserData::default(),
-                }],
+                operations: vec![(
+                    ROOT,
+                    Operation::Transfer {
+                        recipient: Address::Account(admin_id),
+                        amount: Amount::from(1),
+                        user_data: UserData::default(),
+                    },
+                )],
                 previous_block_hash: None,
                 height: BlockHeight::from(0),
             },
-            effects: vec![Effect::Credit {
-                recipient: admin_id,
-                amount: Amount::from(1),
-            }],
+            effects: vec![(
+                ROOT,
+                Effect::Credit {
+                    recipient: admin_id,
+                    amount: Amount::from(1),
+                },
+            )],
             state_hash: HashValue::new(&ExecutionState {
                 epoch: Some(Epoch::from(0)),
                 chain_id: user_id,
@@ -1880,30 +1966,42 @@ async fn test_transfers_and_committee_removal() {
                 chain_id: admin_id,
                 incoming_messages: Vec::new(),
                 operations: vec![
-                    Operation::CreateCommittee {
-                        admin_id,
-                        epoch: Epoch::from(1),
-                        committee: committee.clone(),
-                    },
-                    Operation::RemoveCommittee {
-                        admin_id,
-                        epoch: Epoch::from(0),
-                    },
+                    (
+                        ROOT,
+                        Operation::CreateCommittee {
+                            admin_id,
+                            epoch: Epoch::from(1),
+                            committee: committee.clone(),
+                        },
+                    ),
+                    (
+                        ROOT,
+                        Operation::RemoveCommittee {
+                            admin_id,
+                            epoch: Epoch::from(0),
+                        },
+                    ),
                 ],
                 previous_block_hash: None,
                 height: BlockHeight::from(0),
             },
             effects: vec![
-                Effect::SetCommittees {
-                    admin_id,
-                    epoch: Epoch::from(1),
-                    committees: committees2.clone(),
-                },
-                Effect::SetCommittees {
-                    admin_id,
-                    epoch: Epoch::from(1),
-                    committees: committees3.clone(),
-                },
+                (
+                    ROOT,
+                    Effect::SetCommittees {
+                        admin_id,
+                        epoch: Epoch::from(1),
+                        committees: committees2.clone(),
+                    },
+                ),
+                (
+                    ROOT,
+                    Effect::SetCommittees {
+                        admin_id,
+                        epoch: Epoch::from(1),
+                        committees: committees3.clone(),
+                    },
+                ),
             ],
             state_hash: HashValue::new(&ExecutionState {
                 epoch: Some(Epoch::from(1)),

@@ -150,7 +150,7 @@ impl ExecutionState {
 }
 
 #[derive(Debug, Default)]
-pub(crate) struct ApplicationResult {
+pub struct ApplicationResult {
     pub effects: Vec<Effect>,
     pub recipients: Vec<ChainId>,
     pub subscribe: Option<(String, ChainId)>,

@@ -10,9 +10,28 @@ use crate::{
     execution::{ApplicationResult, Balance, Effect, ExecutionState, ADMIN_CHANNEL},
     manager::ChainManager,
     messages::*,
+    smart_contract::SmartContract,
 };
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, VecDeque};
+use std::{
+    collections::{HashMap, VecDeque},
+    sync::Mutex,
+};
+
+pub static ROOT: ApplicationId = 0;
+
+static _CONTRACTS: Lazy<
+    Mutex<
+        HashMap<
+            ApplicationId,
+            Box<dyn SmartContract<Operation = Vec<u8>, Effect = Vec<u8>> + Send>,
+        >,
+    >,
+> = Lazy::new(|| {
+    let m = HashMap::new();
+    Mutex::new(m)
+});
 
 /// The state of a chain.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -20,10 +39,14 @@ use std::collections::{HashMap, VecDeque};
 pub struct ChainState {
     /// How the chain was created. May be unknown for inactive chains.
     pub description: Option<ChainDescription>,
-    /// Execution state.
+    /// Execution state of the "root" application.
     pub state: ExecutionState,
-    /// Hash of the execution state.
+    /// Execution states of smart contracts.
+    pub contract_states: HashMap<ApplicationId, ContractState>,
+    /// Hash of execution state + the state of all contract states
+    // TODO.
     pub state_hash: HashValue,
+
     /// Hash of the latest certified block in this chain, if any.
     pub block_hash: Option<HashValue>,
     /// Sequence number tracking blocks.
@@ -36,11 +59,18 @@ pub struct ChainState {
     pub received_log: Vec<HashValue>,
 
     /// Mailboxes used to send messages, indexed by recipient.
-    pub outboxes: HashMap<ChainId, OutboxState>,
+    pub outboxes: HashMap<(ApplicationId, ChainId), OutboxState>,
     /// Mailboxes used to receive messages indexed by their origin.
-    pub inboxes: HashMap<Origin, InboxState>,
+    pub inboxes: HashMap<(ApplicationId, Origin), InboxState>,
     /// Channels able to multicast messages to subscribers.
-    pub channels: HashMap<String, ChannelState>,
+    pub channels: HashMap<(ApplicationId, String), ChannelState>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+pub struct ContractState {
+    /// Execution state.
+    pub state: crate::smart_contract::ContractExecutionState,
 }
 
 /// An outbox used to send messages to another chain. NOTE: Messages are implied by the
@@ -75,7 +105,7 @@ pub struct ChannelState {
     /// The current subscribers.
     pub subscribers: HashMap<ChainId, ()>,
     /// The messages waiting to be delivered to present and past subscribers.
-    pub outboxes: HashMap<ChainId, OutboxState>,
+    pub outboxes: HashMap<(ApplicationId, ChainId), OutboxState>,
     /// The latest block height, if any, to be sent to future subscribers.
     pub block_height: Option<BlockHeight>,
 }
@@ -100,6 +130,7 @@ impl ChainState {
             description: None,
             state,
             state_hash,
+            contract_states: HashMap::new(),
             block_hash: None,
             next_block_height: BlockHeight::default(),
             confirmed_log: Vec::new(),
@@ -134,13 +165,14 @@ impl ChainState {
     }
 
     pub fn mark_messages_as_received(
-        outboxes: &mut HashMap<ChainId, OutboxState>,
+        outboxes: &mut HashMap<(ApplicationId, ChainId), OutboxState>,
+        application_id: ApplicationId,
         origin: &Origin,
         recipient: ChainId,
         height: BlockHeight,
     ) -> bool {
         let mut updated = false;
-        match outboxes.entry(recipient) {
+        match outboxes.entry((application_id, recipient)) {
             std::collections::hash_map::Entry::Occupied(mut entry) => {
                 updated = entry.get_mut().mark_messages_as_received(height);
                 if updated && entry.get().queue.is_empty() {
@@ -160,16 +192,24 @@ impl ChainState {
 
     pub fn mark_outbox_messages_as_received(
         &mut self,
+        application_id: ApplicationId,
         recipient: ChainId,
         height: BlockHeight,
     ) -> bool {
         let origin = Origin::Chain(self.chain_id());
-        Self::mark_messages_as_received(&mut self.outboxes, &origin, recipient, height)
+        Self::mark_messages_as_received(
+            &mut self.outboxes,
+            application_id,
+            &origin,
+            recipient,
+            height,
+        )
     }
 
     pub fn mark_channel_messages_as_received(
         &mut self,
         name: &str,
+        application_id: ApplicationId,
         recipient: ChainId,
         height: BlockHeight,
     ) -> bool {
@@ -177,7 +217,7 @@ impl ChainState {
             chain_id: self.chain_id(),
             name: name.to_string(),
         });
-        let channel = match self.channels.get_mut(name) {
+        let channel = match self.channels.get_mut(&(application_id, name.to_string())) {
             Some(channel) => channel,
             None => {
                 panic!(
@@ -189,7 +229,13 @@ impl ChainState {
                 );
             }
         };
-        Self::mark_messages_as_received(&mut channel.outboxes, &origin, recipient, height)
+        Self::mark_messages_as_received(
+            &mut channel.outboxes,
+            application_id,
+            &origin,
+            recipient,
+            height,
+        )
     }
 
     /// Invariant for the states of active chains.
@@ -230,7 +276,8 @@ impl ChainState {
             ensure!(
                 inbox.expected_events.is_empty(),
                 Error::MissingCrossChainUpdate {
-                    origin: origin.clone(),
+                    // TODO: application_id,
+                    origin: origin.1.clone(),
                     height: inbox.expected_events.front().unwrap().height,
                 }
             );
@@ -248,12 +295,16 @@ impl ChainState {
     /// received by order of heights and indices.
     pub fn receive_block(
         &mut self,
+        application_id: ApplicationId,
         origin: &Origin,
         height: BlockHeight,
-        effects: Vec<Effect>,
+        effects: Vec<(ApplicationId, Effect)>,
         key: HashValue,
     ) -> Result<bool, Error> {
-        let inbox = self.inboxes.entry(origin.clone()).or_default();
+        let inbox = self
+            .inboxes
+            .entry((application_id, origin.clone()))
+            .or_default();
         if height < inbox.next_height_to_receive {
             // We have already received this block.
             log::warn!(
@@ -275,10 +326,10 @@ impl ChainState {
         self.received_log.push(key);
 
         let mut was_a_recipient = false;
-        for (index, effect) in effects.into_iter().enumerate() {
+        for (index, (app_id, effect)) in effects.into_iter().enumerate() {
             // Skip events that do not belong to this origin OR have no effect on this
             // recipient.
-            if !self.state.is_recipient(origin, &effect) {
+            if app_id != application_id && !self.state.is_recipient(origin, &effect) {
                 continue;
             }
             was_a_recipient = true;
@@ -379,7 +430,7 @@ impl ChainState {
     /// * Modifies the state of inboxes, outboxes, and channels, if needed.
     /// * As usual, in case of errors, `self` may not be consistent any more and should be thrown away.
     /// * Returns the list of effects caused by the block being executed.
-    pub fn execute_block(&mut self, block: &Block) -> Result<Vec<Effect>, Error> {
+    pub fn execute_block(&mut self, block: &Block) -> Result<Vec<(ApplicationId, Effect)>, Error> {
         assert_eq!(block.chain_id, self.state.chain_id);
         let mut effects = Vec::new();
         // First, process incoming messages.
@@ -388,7 +439,7 @@ impl ChainState {
         for message_group in &block.incoming_messages {
             let inbox = self
                 .inboxes
-                .entry(message_group.origin.clone())
+                .entry((message_group.application_id, message_group.origin.clone()))
                 .or_default();
             for (message_index, message_effect) in &message_group.effects {
                 // Receivers are allowed to skip events from the received queue.
@@ -450,6 +501,7 @@ impl ChainState {
                 // Execute the received effect.
                 let application = self.state.apply_effect(message_effect)?;
                 Self::process_application_result(
+                    message_group.application_id,
                     &mut self.outboxes,
                     &mut self.channels,
                     &mut effects,
@@ -459,9 +511,10 @@ impl ChainState {
             }
         }
         // Second, execute the operations in the block and remember the recipients to notify.
-        for (index, operation) in block.operations.iter().enumerate() {
+        for (index, (application_id, operation)) in block.operations.iter().enumerate() {
             let application = self.state.apply_operation(block.height, index, operation)?;
             Self::process_application_result(
+                *application_id,
                 &mut self.outboxes,
                 &mut self.channels,
                 &mut effects,
@@ -475,40 +528,50 @@ impl ChainState {
     }
 
     fn process_application_result(
-        outboxes: &mut HashMap<ChainId, OutboxState>,
-        channels: &mut HashMap<String, ChannelState>,
-        effects: &mut Vec<Effect>,
+        application_id: ApplicationId,
+        outboxes: &mut HashMap<(ApplicationId, ChainId), OutboxState>,
+        channels: &mut HashMap<(ApplicationId, String), ChannelState>,
+        effects: &mut Vec<(ApplicationId, Effect)>,
         height: BlockHeight,
         application: ApplicationResult,
     ) {
         // Record the effects of the execution.
-        effects.extend(application.effects);
+        effects.extend(application.effects.into_iter().map(|e| (application_id, e)));
         // Update the (regular) outboxes.
         for recipient in application.recipients {
-            let outbox = outboxes.entry(recipient).or_default();
+            let outbox = outboxes.entry((application_id, recipient)).or_default();
             outbox.schedule_message(height);
         }
         // Update the channels.
         if let Some((name, id)) = application.unsubscribe {
-            let channel = channels.entry(name).or_insert_with(ChannelState::default);
+            let channel = channels
+                .entry((application_id, name))
+                .or_insert_with(ChannelState::default);
             // Remove subscriber. Do not remove the channel outbox yet.
             channel.subscribers.remove(&id);
         }
         for name in application.need_channel_broadcast {
-            let channel = channels.entry(name).or_insert_with(ChannelState::default);
+            let channel = channels
+                .entry((application_id, name))
+                .or_insert_with(ChannelState::default);
             for recipient in channel.subscribers.keys() {
-                let outbox = channel.outboxes.entry(*recipient).or_default();
+                let outbox = channel
+                    .outboxes
+                    .entry((application_id, *recipient))
+                    .or_default();
                 outbox.schedule_message(height);
             }
             channel.block_height = Some(height);
         }
         if let Some((name, id)) = application.subscribe {
-            let channel = channels.entry(name).or_insert_with(ChannelState::default);
+            let channel = channels
+                .entry((application_id, name))
+                .or_insert_with(ChannelState::default);
             // Add subscriber.
             if channel.subscribers.insert(id, ()).is_none() {
                 // Send the latest message if any.
                 if let Some(latest_height) = channel.block_height {
-                    let outbox = channel.outboxes.entry(id).or_default();
+                    let outbox = channel.outboxes.entry((application_id, id)).or_default();
                     outbox.schedule_message(latest_height);
                 }
             }

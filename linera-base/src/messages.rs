@@ -20,6 +20,9 @@ use test_strategy::Arbitrary;
 #[path = "unit_tests/messages_tests.rs"]
 mod messages_tests;
 
+// FIXME: placeholder
+pub type ApplicationId = u64;
+
 /// A block height to identify blocks in a chain.
 #[derive(
     Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
@@ -86,7 +89,7 @@ pub struct Block {
     /// sender and height are grouped together for conciseness.
     pub incoming_messages: Vec<MessageGroup>,
     /// The operations to execute.
-    pub operations: Vec<Operation>,
+    pub operations: Vec<(ApplicationId, Operation)>,
     /// The block height.
     pub height: BlockHeight,
     /// Certified hash (see `Certificate` below) of the previous block in the
@@ -129,6 +132,7 @@ impl Origin {
 /// A selection of messages sent by a block to another chain.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct MessageGroup {
+    pub application_id: ApplicationId,
     pub origin: Origin,
     pub height: BlockHeight,
     pub effects: Vec<(usize, Effect)>,
@@ -150,13 +154,13 @@ pub enum Value {
     ValidatedBlock {
         block: Block,
         round: RoundNumber,
-        effects: Vec<Effect>,
+        effects: Vec<(ApplicationId, Effect)>,
         state_hash: HashValue,
     },
     /// The block is validated and confirmed (i.e. ready to be published).
     ConfirmedBlock {
         block: Block,
-        effects: Vec<Effect>,
+        effects: Vec<(ApplicationId, Effect)>,
         state_hash: HashValue,
     },
 }
@@ -296,12 +300,14 @@ pub enum CrossChainRequest {
     /// Communicate a number of confirmed blocks from the sender to the recipient.
     /// Blocks must be given by increasing heights.
     UpdateRecipient {
+        application_id: ApplicationId,
         origin: Origin,
         recipient: ChainId,
         certificates: Vec<Certificate>,
     },
     /// Acknowledge the height of the highest confirmed block communicated with `UpdateRecipient`.
     ConfirmUpdatedRecipient {
+        application_id: ApplicationId,
         origin: Origin,
         recipient: ChainId,
         height: BlockHeight,
@@ -341,7 +347,7 @@ impl Value {
         }
     }
 
-    pub fn effects_and_state_hash(&self) -> (Vec<Effect>, HashValue) {
+    pub fn effects_and_state_hash(&self) -> (Vec<(ApplicationId, Effect)>, HashValue) {
         match self {
             Value::ConfirmedBlock {
                 effects,

@@ -10,3 +10,4 @@ pub mod execution;
 pub mod manager;
 pub mod messages;
 pub mod rpc;
+pub mod smart_contract;

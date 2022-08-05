@@ -22,7 +22,9 @@ Block:
           TYPENAME: MessageGroup
     - operations:
         SEQ:
-          TYPENAME: Operation
+          TUPLE:
+            - U64
+            - TYPENAME: Operation
     - height:
         TYPENAME: BlockHeight
     - previous_block_hash:
@@ -145,6 +147,11 @@ ChainState:
           TYPENAME: ChainDescription
     - state:
         TYPENAME: ExecutionState
+    - contract_states:
+        MAP:
+          KEY: U64
+          VALUE:
+            TYPENAME: ContractState
     - state_hash:
         TYPENAME: HashValue
     - block_hash:
@@ -161,18 +168,25 @@ ChainState:
     - outboxes:
         MAP:
           KEY:
-            TYPENAME: ChainId
+            TUPLE:
+              - U64
+              - TYPENAME: ChainId
           VALUE:
             TYPENAME: OutboxState
     - inboxes:
         MAP:
           KEY:
-            TYPENAME: Origin
+            TUPLE:
+              - U64
+              - TYPENAME: Origin
           VALUE:
             TYPENAME: InboxState
     - channels:
         MAP:
-          KEY: STR
+          KEY:
+            TUPLE:
+              - U64
+              - STR
           VALUE:
             TYPENAME: ChannelState
 ChannelId:
@@ -190,7 +204,9 @@ ChannelState:
     - outboxes:
         MAP:
           KEY:
-            TYPENAME: ChainId
+            TUPLE:
+              - U64
+              - TYPENAME: ChainId
           VALUE:
             TYPENAME: OutboxState
     - block_height:
@@ -205,11 +221,25 @@ Committee:
           VALUE:
             TYPENAME: ValidatorState
     - total_votes: U64
+ContractExecutionState:
+  STRUCT:
+    - subscriptions:
+        MAP:
+          KEY:
+            TYPENAME: ChannelId
+          VALUE: UNIT
+    - data:
+        SEQ: U8
+ContractState:
+  STRUCT:
+    - state:
+        TYPENAME: ContractExecutionState
 CrossChainRequest:
   ENUM:
     0:
       UpdateRecipient:
         STRUCT:
+          - application_id: U64
           - origin:
               TYPENAME: Origin
           - recipient:
@@ -220,6 +250,7 @@ CrossChainRequest:
     1:
       ConfirmUpdatedRecipient:
         STRUCT:
+          - application_id: U64
           - origin:
               TYPENAME: Origin
           - recipient:
@@ -544,6 +575,7 @@ Message:
           TYPENAME: CrossChainRequest
 MessageGroup:
   STRUCT:
+    - application_id: U64
     - origin:
         TYPENAME: Origin
     - height:
@@ -697,7 +729,9 @@ Value:
               TYPENAME: RoundNumber
           - effects:
               SEQ:
-                TYPENAME: Effect
+                TUPLE:
+                  - U64
+                  - TYPENAME: Effect
           - state_hash:
               TYPENAME: HashValue
     1:
@@ -707,7 +741,9 @@ Value:
               TYPENAME: Block
           - effects:
               SEQ:
-                TYPENAME: Effect
+                TUPLE:
+                  - U64
+                  - TYPENAME: Effect
           - state_hash:
               TYPENAME: HashValue
 Vote:

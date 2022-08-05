@@ -10,6 +10,7 @@ use {
     crate::Storage,
     linera_base::{
         chain::ChainState,
+        chain::ROOT,
         crypto::HashValue,
         execution::{ExecutionState, Operation},
         messages::{Block, BlockHeight, Certificate, ChainDescription, ChainId, Epoch, Value},
@@ -179,7 +180,7 @@ async fn certificate_storage_round_trip() -> Result<(), Error> {
         epoch: Epoch::from(0),
         chain_id: ChainId::root(1),
         incoming_messages: Vec::new(),
-        operations: vec![Operation::CloseChain],
+        operations: vec![(ROOT, Operation::CloseChain)],
         previous_block_hash: None,
         height: BlockHeight::default(),
     };

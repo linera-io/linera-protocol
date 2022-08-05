@@ -6,6 +6,7 @@
 
 use async_trait::async_trait;
 use linera_base::{
+    chain::ROOT,
     committee::ValidatorState,
     crypto::*,
     error::Error,
@@ -154,11 +155,14 @@ impl ClientContext {
                 epoch: Epoch::from(0),
                 chain_id: chain.chain_id,
                 incoming_messages: Vec::new(),
-                operations: vec![Operation::Transfer {
-                    recipient: Address::Account(next_recipient),
-                    amount: Amount::from(1),
-                    user_data: UserData::default(),
-                }],
+                operations: vec![(
+                    ROOT,
+                    Operation::Transfer {
+                        recipient: Address::Account(next_recipient),
+                        amount: Amount::from(1),
+                        user_data: UserData::default(),
+                    },
+                )],
                 previous_block_hash: chain.block_hash,
                 height: chain.next_block_height,
             };
