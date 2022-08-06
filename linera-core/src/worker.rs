@@ -152,7 +152,10 @@ where
         let mut continuation = Vec::new();
         for (application_id, state) in &chain.communication_states {
             for (&recipient, outbox) in &state.outboxes {
-                let origin = Origin::Chain(chain.chain_id());
+                let origin = Origin {
+                    chain_id: chain.chain_id(),
+                    medium: Medium::Direct,
+                };
                 let request = self
                     .make_cross_chain_request(chain, *application_id, origin, recipient, outbox)
                     .await?;
@@ -160,10 +163,10 @@ where
             }
             for (name, channel) in &state.channels {
                 for (&recipient, outbox) in &channel.outboxes {
-                    let origin = Origin::Channel(ChannelId {
+                    let origin = Origin {
                         chain_id: chain.chain_id(),
-                        name: name.into(),
-                    });
+                        medium: Medium::Channel(name.into()),
+                    };
                     let request = self
                         .make_cross_chain_request(chain, *application_id, origin, recipient, outbox)
                         .await?;
@@ -483,7 +486,7 @@ where
                         }
                     };
                     ensure!(
-                        origin.sender() == block.chain_id,
+                        origin.chain_id == block.chain_id,
                         Error::InvalidCrossChainRequest
                     );
                     ensure!(
@@ -551,11 +554,15 @@ where
             }
             CrossChainRequest::ConfirmUpdatedRecipient {
                 application_id,
-                origin: Origin::Chain(sender),
+                origin:
+                    Origin {
+                        chain_id,
+                        medium: Medium::Direct,
+                    },
                 recipient,
                 height,
             } => {
-                let mut chain = self.storage.read_chain_or_default(sender).await?;
+                let mut chain = self.storage.read_chain_or_default(chain_id).await?;
                 if chain.mark_outbox_messages_as_received(application_id, recipient, height) {
                     self.storage.write_chain(chain).await?;
                 }
@@ -563,20 +570,17 @@ where
             }
             CrossChainRequest::ConfirmUpdatedRecipient {
                 application_id,
-                origin: Origin::Channel(channel_id),
+                origin:
+                    Origin {
+                        chain_id,
+                        medium: Medium::Channel(name),
+                    },
                 recipient,
                 height,
             } => {
-                let mut chain = self
-                    .storage
-                    .read_chain_or_default(channel_id.chain_id)
-                    .await?;
-                if chain.mark_channel_messages_as_received(
-                    &channel_id.name,
-                    application_id,
-                    recipient,
-                    height,
-                ) {
+                let mut chain = self.storage.read_chain_or_default(chain_id).await?;
+                if chain.mark_channel_messages_as_received(&name, application_id, recipient, height)
+                {
                     self.storage.write_chain(chain).await?;
                 }
                 Ok(Vec::new())

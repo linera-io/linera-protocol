@@ -175,7 +175,10 @@ impl ChainState {
         recipient: ChainId,
         height: BlockHeight,
     ) -> bool {
-        let origin = Origin::Chain(self.chain_id());
+        let origin = Origin {
+            chain_id: self.chain_id(),
+            medium: Medium::Direct,
+        };
         let communication_state = self
             .communication_states
             .get_mut(&application_id)
@@ -196,10 +199,10 @@ impl ChainState {
         recipient: ChainId,
         height: BlockHeight,
     ) -> bool {
-        let origin = Origin::Channel(ChannelId {
+        let origin = Origin {
             chain_id: self.chain_id(),
-            name: name.to_string(),
-        });
+            medium: Medium::Channel(name.to_string()),
+        };
         let communication_state = self
             .communication_states
             .get_mut(&application_id)
@@ -332,7 +335,7 @@ impl ChainState {
                     assert!(!self.state.manager.is_active());
                     assert!(self.state.committees.is_empty());
                     let description = ChainDescription::Child(EffectId {
-                        chain_id: origin.sender(),
+                        chain_id: origin.chain_id,
                         height,
                         index,
                     });

@@ -536,6 +536,13 @@ InboxState:
     - expected_events:
         SEQ:
           TYPENAME: Event
+Medium:
+  ENUM:
+    0:
+      Direct: UNIT
+    1:
+      Channel:
+        NEWTYPE: STR
 Message:
   ENUM:
     0:
@@ -663,15 +670,11 @@ Operation:
           - epoch:
               TYPENAME: Epoch
 Origin:
-  ENUM:
-    0:
-      Chain:
-        NEWTYPE:
-          TYPENAME: ChainId
-    1:
-      Channel:
-        NEWTYPE:
-          TYPENAME: ChannelId
+  STRUCT:
+    - chain_id:
+        TYPENAME: ChainId
+    - medium:
+        TYPENAME: Medium
 OutboxState:
   STRUCT:
     - queue:
