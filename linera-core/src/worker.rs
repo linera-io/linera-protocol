@@ -122,6 +122,7 @@ where
     async fn make_cross_chain_request(
         &mut self,
         chain: &ChainState,
+        application_id: ApplicationId,
         origin: Origin,
         recipient: ChainId,
         outbox: &OutboxState,
@@ -136,6 +137,7 @@ where
             )
             .await?;
         Ok(CrossChainRequest::UpdateRecipient {
+            application_id,
             origin,
             recipient,
             certificates,
@@ -148,23 +150,25 @@ where
         chain: &ChainState,
     ) -> Result<Vec<CrossChainRequest>, Error> {
         let mut continuation = Vec::new();
-        for (&recipient, outbox) in &chain.outboxes {
-            let origin = Origin::Chain(chain.chain_id());
-            let request = self
-                .make_cross_chain_request(chain, origin, recipient, outbox)
-                .await?;
-            continuation.push(request);
-        }
-        for (name, channel) in &chain.channels {
-            for (&recipient, outbox) in &channel.outboxes {
-                let origin = Origin::Channel(ChannelId {
-                    chain_id: chain.chain_id(),
-                    name: name.into(),
-                });
+        for (application_id, state) in &chain.communication_states {
+            for (&recipient, outbox) in &state.outboxes {
+                let origin = Origin::Chain(chain.chain_id());
                 let request = self
-                    .make_cross_chain_request(chain, origin, recipient, outbox)
+                    .make_cross_chain_request(chain, *application_id, origin, recipient, outbox)
                     .await?;
                 continuation.push(request);
+            }
+            for (name, channel) in &state.channels {
+                for (&recipient, outbox) in &channel.outboxes {
+                    let origin = Origin::Channel(ChannelId {
+                        chain_id: chain.chain_id(),
+                        name: name.into(),
+                    });
+                    let request = self
+                        .make_cross_chain_request(chain, *application_id, origin, recipient, outbox)
+                        .await?;
+                    continuation.push(request);
+                }
             }
         }
         Ok(continuation)
@@ -390,37 +394,41 @@ where
         }
         if query.request_pending_messages {
             let mut message_groups = Vec::new();
-            for (origin, inbox) in &chain.inboxes {
-                let mut effects = Vec::new();
-                let mut current_height = None;
-                for event in &inbox.received_events {
-                    match current_height {
-                        None => {
-                            current_height = Some(event.height);
+            for (application_id, state) in &chain.communication_states {
+                for (origin, inbox) in &state.inboxes {
+                    let mut effects = Vec::new();
+                    let mut current_height = None;
+                    for event in &inbox.received_events {
+                        match current_height {
+                            None => {
+                                current_height = Some(event.height);
+                            }
+                            Some(height) if height != event.height => {
+                                // If the height changed, flush the accumulated effects
+                                // into a new group.
+                                message_groups.push(MessageGroup {
+                                    application_id: *application_id,
+                                    origin: origin.clone(),
+                                    height,
+                                    effects,
+                                });
+                                effects = Vec::new();
+                                current_height = Some(event.height);
+                            }
+                            _ => {
+                                // Otherwise, continue adding effects to the same group.
+                            }
                         }
-                        Some(height) if height != event.height => {
-                            // If the height changed, flush the accumulated effects
-                            // into a new group.
-                            message_groups.push(MessageGroup {
-                                origin: origin.clone(),
-                                height,
-                                effects,
-                            });
-                            effects = Vec::new();
-                            current_height = Some(event.height);
-                        }
-                        _ => {
-                            // Otherwise, continue adding effects to the same group.
-                        }
+                        effects.push((event.index, event.effect.clone()));
                     }
-                    effects.push((event.index, event.effect.clone()));
-                }
-                if let Some(height) = current_height {
-                    message_groups.push(MessageGroup {
-                        origin: origin.clone(),
-                        height,
-                        effects,
-                    });
+                    if let Some(height) = current_height {
+                        message_groups.push(MessageGroup {
+                            application_id: *application_id,
+                            origin: origin.clone(),
+                            height,
+                            effects,
+                        });
+                    }
                 }
             }
             info.requested_pending_messages = message_groups;
@@ -453,6 +461,7 @@ where
         log::trace!("{} <-- {:?}", self.nickname, request);
         match request {
             CrossChainRequest::UpdateRecipient {
+                application_id,
                 origin,
                 recipient,
                 certificates,
@@ -488,7 +497,13 @@ where
                     last_height = Some(block.height);
                     last_epoch = Some(block.epoch);
                     // Update the staged chain state with the received block.
-                    if chain.receive_block(&origin, block.height, effects, certificate.hash)? {
+                    if chain.receive_block(
+                        application_id,
+                        &origin,
+                        block.height,
+                        effects,
+                        certificate.hash,
+                    )? {
                         self.storage.write_certificate(certificate).await?;
                         need_update = true;
                     }
@@ -525,6 +540,7 @@ where
                         // We have processed at least one certificate successfully: send back
                         // an acknowledgment.
                         Ok(vec![CrossChainRequest::ConfirmUpdatedRecipient {
+                            application_id,
                             origin,
                             recipient,
                             height,
@@ -534,17 +550,19 @@ where
                 }
             }
             CrossChainRequest::ConfirmUpdatedRecipient {
+                application_id,
                 origin: Origin::Chain(sender),
                 recipient,
                 height,
             } => {
                 let mut chain = self.storage.read_chain_or_default(sender).await?;
-                if chain.mark_outbox_messages_as_received(recipient, height) {
+                if chain.mark_outbox_messages_as_received(application_id, recipient, height) {
                     self.storage.write_chain(chain).await?;
                 }
                 Ok(Vec::new())
             }
             CrossChainRequest::ConfirmUpdatedRecipient {
+                application_id,
                 origin: Origin::Channel(channel_id),
                 recipient,
                 height,
@@ -553,7 +571,12 @@ where
                     .storage
                     .read_chain_or_default(channel_id.chain_id)
                     .await?;
-                if chain.mark_channel_messages_as_received(&channel_id.name, recipient, height) {
+                if chain.mark_channel_messages_as_received(
+                    &channel_id.name,
+                    application_id,
+                    recipient,
+                    height,
+                ) {
                     self.storage.write_chain(chain).await?;
                 }
                 Ok(Vec::new())

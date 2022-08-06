@@ -472,7 +472,7 @@ async fn test_transfer_then_open_chain() {
         block: Block {
             operations,
             ..
-        }, ..} if matches!(&operations[..], &[Operation::OpenChain { id, .. }] if new_id == id)
+        }, ..} if matches!(&operations[..], &[(_, Operation::OpenChain { id, .. })] if new_id == id)
     ));
     // Make a client to try the new chain.
     let mut client = builder
@@ -545,7 +545,7 @@ async fn test_close_chain() {
                 ..
             },
             ..
-        } if matches!(&operations[..], &[Operation::CloseChain])
+        } if matches!(&operations[..], &[(_, Operation::CloseChain)])
     ));
     assert_eq!(sender.next_block_height, BlockHeight::from(1));
     assert!(sender.pending_block.is_none());
