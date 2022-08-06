@@ -20,8 +20,6 @@ pub static SYSTEM: ApplicationId = ApplicationId(0);
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct ChainState {
-    /// How the chain was created. May be unknown for inactive chains.
-    pub description: Option<ChainDescription>,
     /// Execution state of the "root" application.
     pub state: ExecutionState,
     /// Hash of execution state + the state of all contract states
@@ -46,10 +44,10 @@ pub struct ChainState {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct CommunicationState {
-    /// Mailboxes used to send messages, indexed by recipient.
-    pub outboxes: HashMap<ChainId, OutboxState>,
     /// Mailboxes used to receive messages indexed by their origin.
     pub inboxes: HashMap<Origin, InboxState>,
+    /// Mailboxes used to send messages, indexed by recipient.
+    pub outboxes: HashMap<ChainId, OutboxState>,
     /// Channels able to multicast messages to subscribers.
     pub channels: HashMap<String, ChannelState>,
 }
@@ -108,7 +106,6 @@ impl ChainState {
         let state = ExecutionState::new(id);
         let state_hash = HashValue::new(&state);
         Self {
-            description: None,
             state,
             state_hash,
             block_hash: None,
@@ -127,7 +124,7 @@ impl ChainState {
         balance: Balance,
     ) -> Self {
         let mut chain = Self::new(description.into());
-        chain.description = Some(description);
+        chain.state.description = Some(description);
         chain.state.epoch = Some(Epoch::from(0));
         chain.state.admin_id = Some(admin_id);
         chain.state.committees.insert(Epoch::from(0), committee);
@@ -222,21 +219,14 @@ impl ChainState {
 
     /// Invariant for the states of active chains.
     pub fn is_active(&self) -> bool {
-        self.description.is_some()
-            && self.state.manager.is_active()
-            && self.state.epoch.is_some()
-            && self
-                .state
-                .committees
-                .contains_key(self.state.epoch.as_ref().unwrap())
-            && self.state.admin_id.is_some()
+        self.state.is_active()
     }
 
     pub fn make_chain_info(&self, key_pair: Option<&KeyPair>) -> ChainInfoResponse {
         let info = ChainInfo {
             chain_id: self.state.chain_id,
             epoch: self.state.epoch,
-            description: self.description,
+            description: self.state.description,
             manager: self.state.manager.clone(),
             balance: self.state.balance,
             block_hash: self.block_hash,
@@ -329,13 +319,10 @@ impl ChainState {
             was_a_recipient = true;
             if app_id == SYSTEM {
                 // Handle special effects to be executed immediately.
-                if self.state.apply_immediate_effect(
-                    origin.chain_id,
-                    height,
-                    index,
-                    &mut self.description,
-                    &effect,
-                )? {
+                if self
+                    .state
+                    .apply_immediate_effect(origin.chain_id, height, index, &effect)?
+                {
                     self.state_hash = HashValue::new(&self.state);
                 }
             }

@@ -8,7 +8,7 @@ use linera_base::messages::{ChainDescription, Epoch, Owner};
 async fn test_read_write() {
     let mut store = InMemoryStoreClient::default();
     let mut chain = store.read_chain_or_default(ChainId::root(1)).await.unwrap();
-    chain.description = Some(ChainDescription::Root(1));
+    chain.state.description = Some(ChainDescription::Root(1));
     chain
         .state
         .committees

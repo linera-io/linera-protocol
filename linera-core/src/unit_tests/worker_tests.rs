@@ -127,7 +127,7 @@ fn make_certificate(
 
 #[allow(clippy::too_many_arguments)]
 fn make_transfer_certificate(
-    chain_id: ChainId,
+    chain_description: ChainDescription,
     key_pair: &KeyPair,
     recipient: Address,
     amount: Amount,
@@ -137,9 +137,11 @@ fn make_transfer_certificate(
     worker: &WorkerState<InMemoryStoreClient>,
     previous_confirmed_block: Option<&Certificate>,
 ) -> Certificate {
+    let chain_id = chain_description.into();
     let state = ExecutionState {
         epoch: Some(Epoch::from(0)),
         chain_id,
+        description: Some(chain_description),
         admin_id: Some(ChainId::root(0)),
         subscriptions: BTreeMap::new(),
         committees: [(Epoch::from(0), committee.clone())].into_iter().collect(),
@@ -205,7 +207,7 @@ async fn test_read_chain_state_unknown_chain() {
         .read_chain_or_default(unknown_chain_id)
         .await
         .unwrap();
-    chain.description = Some(ChainDescription::Root(99));
+    chain.state.description = Some(ChainDescription::Root(99));
     chain.state.committees.insert(Epoch(0), committee);
     chain.state.epoch = Some(Epoch(0));
     chain.state.admin_id = Some(ChainId::root(1));
@@ -365,7 +367,7 @@ async fn test_handle_block_proposal_with_chaining() {
         None,
     );
     let certificate0 = make_transfer_certificate(
-        ChainId::root(1),
+        ChainDescription::Root(1),
         &sender_key_pair,
         recipient,
         Amount::from(1),
@@ -495,6 +497,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             state_hash: HashValue::new(&ExecutionState {
                 epoch: Some(epoch),
                 chain_id: ChainId::root(1),
+                description: Some(ChainDescription::Root(1)),
                 admin_id: Some(ChainId::root(0)),
                 subscriptions: BTreeMap::new(),
                 committees: [(epoch, committee.clone())].into_iter().collect(),
@@ -534,6 +537,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             state_hash: HashValue::new(&ExecutionState {
                 epoch: Some(epoch),
                 chain_id: ChainId::root(1),
+                description: Some(ChainDescription::Root(1)),
                 admin_id: Some(ChainId::root(0)),
                 subscriptions: BTreeMap::new(),
                 committees: [(epoch, committee.clone())].into_iter().collect(),
@@ -750,6 +754,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                 state_hash: HashValue::new(&ExecutionState {
                     epoch: Some(epoch),
                     chain_id: ChainId::root(2),
+                    description: Some(ChainDescription::Root(2)),
                     admin_id: Some(ChainId::root(0)),
                     subscriptions: BTreeMap::new(),
                     committees: [(epoch, committee.clone())].into_iter().collect(),
@@ -917,7 +922,7 @@ async fn test_handle_certificate_unknown_sender() {
     )])
     .await;
     let certificate = make_transfer_certificate(
-        ChainId::root(1),
+        ChainDescription::Root(1),
         &sender_key_pair,
         Address::Account(ChainId::root(2)),
         Amount::from(5),
@@ -947,7 +952,7 @@ async fn test_handle_certificate_bad_block_height() {
     ])
     .await;
     let certificate = make_transfer_certificate(
-        ChainId::root(1),
+        ChainDescription::Root(1),
         &sender_key_pair,
         Address::Account(ChainId::root(2)),
         Amount::from(5),
@@ -983,7 +988,7 @@ async fn test_handle_certificate_with_anticipated_incoming_message() {
     .await;
 
     let certificate = make_transfer_certificate(
-        ChainId::root(1),
+        ChainDescription::Root(1),
         &key_pair,
         Address::Account(ChainId::root(2)),
         Amount::from(1000),
@@ -1066,7 +1071,7 @@ async fn test_handle_certificate_receiver_balance_overflow() {
     .await;
 
     let certificate = make_transfer_certificate(
-        ChainId::root(1),
+        ChainDescription::Root(1),
         &sender_key_pair,
         Address::Account(ChainId::root(2)),
         Amount::from(1),
@@ -1105,7 +1110,7 @@ async fn test_handle_certificate_receiver_equal_sender() {
         init_worker_with_chain(ChainDescription::Root(1), name, Balance::from(1)).await;
 
     let certificate = make_transfer_certificate(
-        ChainId::root(1),
+        ChainDescription::Root(1),
         &key_pair,
         Address::Account(ChainId::root(1)),
         Amount::from(1),
@@ -1155,7 +1160,7 @@ async fn test_handle_cross_chain_request() {
     )])
     .await;
     let certificate = make_transfer_certificate(
-        ChainId::root(1),
+        ChainDescription::Root(1),
         &sender_key_pair,
         Address::Account(ChainId::root(2)),
         Amount::from(10),
@@ -1206,7 +1211,7 @@ async fn test_handle_cross_chain_request_no_recipient_chain() {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker(/* allow_inactive_chains */ false);
     let certificate = make_transfer_certificate(
-        ChainId::root(1),
+        ChainDescription::Root(1),
         &sender_key_pair,
         Address::Account(ChainId::root(2)),
         Amount::from(10),
@@ -1240,7 +1245,7 @@ async fn test_handle_cross_chain_request_no_recipient_chain_with_inactive_chains
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker(/* allow_inactive_chains */ true);
     let certificate = make_transfer_certificate(
-        ChainId::root(1),
+        ChainDescription::Root(1),
         &sender_key_pair,
         Address::Account(ChainId::root(2)),
         Amount::from(10),
@@ -1295,7 +1300,7 @@ async fn test_handle_certificate_to_active_recipient() {
     ])
     .await;
     let certificate = make_transfer_certificate(
-        ChainId::root(1),
+        ChainDescription::Root(1),
         &sender_key_pair,
         Address::Account(ChainId::root(2)),
         Amount::from(5),
@@ -1319,7 +1324,7 @@ async fn test_handle_certificate_to_active_recipient() {
 
     // Try to use the money. This requires selecting the incoming message in a next block.
     let certificate = make_transfer_certificate(
-        ChainId::root(2),
+        ChainDescription::Root(2),
         &recipient_key_pair,
         Address::Account(ChainId::root(3)),
         Amount::from(1),
@@ -1380,7 +1385,7 @@ async fn test_handle_certificate_to_inactive_recipient() {
     )])
     .await;
     let certificate = make_transfer_certificate(
-        ChainId::root(1),
+        ChainDescription::Root(1),
         &sender_key_pair,
         Address::Account(ChainId::root(2)), // the recipient chain does not exist
         Amount::from(5),
@@ -1422,6 +1427,11 @@ async fn test_chain_creation_with_committee_creation() {
     let admin_channel_origin = Origin::channel(admin_id, ADMIN_CHANNEL.into());
     // Have the admin chain create a user chain.
     let user_id = ChainId::child(EffectId {
+        chain_id: admin_id,
+        height: BlockHeight::from(0),
+        index: 0,
+    });
+    let user_description = ChainDescription::Child(EffectId {
         chain_id: admin_id,
         height: BlockHeight::from(0),
         index: 0,
@@ -1471,6 +1481,7 @@ async fn test_chain_creation_with_committee_creation() {
             state_hash: HashValue::new(&ExecutionState {
                 epoch: Some(Epoch::from(0)),
                 chain_id: admin_id,
+                description: Some(ChainDescription::Root(0)),
                 admin_id: Some(admin_id),
                 subscriptions: BTreeMap::new(),
                 committees: committees.clone(),
@@ -1562,6 +1573,7 @@ async fn test_chain_creation_with_committee_creation() {
             state_hash: HashValue::new(&ExecutionState {
                 epoch: Some(Epoch::from(1)),
                 chain_id: admin_id,
+                description: Some(ChainDescription::Root(0)),
                 admin_id: Some(admin_id),
                 subscriptions: BTreeMap::new(),
                 // The root chain knows both committees at the end.
@@ -1608,6 +1620,7 @@ async fn test_chain_creation_with_committee_creation() {
             state_hash: HashValue::new(&ExecutionState {
                 epoch: Some(Epoch::from(1)),
                 chain_id: admin_id,
+                description: Some(ChainDescription::Root(0)),
                 admin_id: Some(admin_id),
                 subscriptions: BTreeMap::new(),
                 // The root chain knows both committees at the end.
@@ -1749,6 +1762,7 @@ async fn test_chain_creation_with_committee_creation() {
             state_hash: HashValue::new(&ExecutionState {
                 epoch: Some(Epoch::from(1)),
                 chain_id: user_id,
+                description: Some(user_description),
                 admin_id: Some(admin_id),
                 subscriptions: [(
                     ChannelId {
@@ -1858,6 +1872,7 @@ async fn test_transfers_and_committee_creation() {
             state_hash: HashValue::new(&ExecutionState {
                 epoch: Some(Epoch::from(0)),
                 chain_id: user_id,
+                description: Some(ChainDescription::Root(1)),
                 admin_id: Some(admin_id),
                 subscriptions: BTreeMap::new(),
                 committees: committees.clone(),
@@ -1904,6 +1919,7 @@ async fn test_transfers_and_committee_creation() {
             state_hash: HashValue::new(&ExecutionState {
                 epoch: Some(Epoch::from(1)),
                 chain_id: admin_id,
+                description: Some(ChainDescription::Root(0)),
                 admin_id: Some(admin_id),
                 subscriptions: BTreeMap::new(),
                 committees: committees2.clone(),
@@ -2012,6 +2028,7 @@ async fn test_transfers_and_committee_removal() {
             state_hash: HashValue::new(&ExecutionState {
                 epoch: Some(Epoch::from(0)),
                 chain_id: user_id,
+                description: Some(ChainDescription::Root(1)),
                 admin_id: Some(admin_id),
                 subscriptions: BTreeMap::new(),
                 committees: committees.clone(),
@@ -2079,6 +2096,7 @@ async fn test_transfers_and_committee_removal() {
             state_hash: HashValue::new(&ExecutionState {
                 epoch: Some(Epoch::from(1)),
                 chain_id: admin_id,
+                description: Some(ChainDescription::Root(0)),
                 admin_id: Some(admin_id),
                 subscriptions: BTreeMap::new(),
                 committees: committees3.clone(),

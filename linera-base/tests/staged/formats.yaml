@@ -144,9 +144,6 @@ ChainManager:
           TYPENAME: MultiOwnerManager
 ChainState:
   STRUCT:
-    - description:
-        OPTION:
-          TYPENAME: ChainDescription
     - state:
         TYPENAME: ExecutionState
     - state_hash:
@@ -200,18 +197,18 @@ Committee:
     - total_votes: U64
 CommunicationState:
   STRUCT:
-    - outboxes:
-        MAP:
-          KEY:
-            TYPENAME: ChainId
-          VALUE:
-            TYPENAME: OutboxState
     - inboxes:
         MAP:
           KEY:
             TYPENAME: Origin
           VALUE:
             TYPENAME: InboxState
+    - outboxes:
+        MAP:
+          KEY:
+            TYPENAME: ChainId
+          VALUE:
+            TYPENAME: OutboxState
     - channels:
         MAP:
           KEY: STR
@@ -509,6 +506,9 @@ ExecutionState:
   STRUCT:
     - chain_id:
         TYPENAME: ChainId
+    - description:
+        OPTION:
+          TYPENAME: ChainDescription
     - epoch:
         OPTION:
           TYPENAME: Epoch
