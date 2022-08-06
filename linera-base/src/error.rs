@@ -5,7 +5,7 @@
 use crate::{
     crypto::*,
     execution::Balance,
-    messages::{BlockHeight, ChainId, Epoch, Origin, RoundNumber},
+    messages::{ApplicationId, BlockHeight, ChainId, Epoch, Origin, RoundNumber},
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -101,12 +101,17 @@ pub enum Error {
         "This replica has not processed any update from {origin:?} \
         at height {height:?} yet"
     )]
-    MissingCrossChainUpdate { origin: Origin, height: BlockHeight },
+    MissingCrossChainUpdate {
+        application_id: ApplicationId,
+        origin: Origin,
+        height: BlockHeight,
+    },
     #[error(
         "Message in block proposal does not match received message from {origin:?} \
         at height {height:?} and index {index:?}"
     )]
     InvalidMessageContent {
+        application_id: ApplicationId,
         origin: Origin,
         height: BlockHeight,
         index: usize,
@@ -117,6 +122,7 @@ pub enum Error {
         instead of {expected_height:?} and {expected_index:?})"
     )]
     InvalidMessage {
+        application_id: ApplicationId,
         origin: Origin,
         height: BlockHeight,
         index: usize,
@@ -128,6 +134,7 @@ pub enum Error {
          index {index:?} is out of order"
     )]
     InvalidMessageOrder {
+        application_id: ApplicationId,
         origin: Origin,
         height: BlockHeight,
         index: usize,

@@ -10,6 +10,7 @@ use crate::{
 use anyhow::{anyhow, bail, ensure, Result};
 use async_trait::async_trait;
 use linera_base::{
+    chain::SYSTEM,
     committee::{Committee, ValidatorState},
     crypto::*,
     error::Error,
@@ -401,7 +402,7 @@ where
         let result = communicate_with_quorum(
             &nodes,
             committee,
-            |value: &Option<Vote>| -> Option<(Vec<Effect>, HashValue)> {
+            |value: &Option<Vote>| -> Option<(Vec<(ApplicationId, Effect)>, HashValue)> {
                 value
                     .as_ref()
                     .map(|vote| vote.value.effects_and_state_hash())
@@ -679,11 +680,14 @@ where
             epoch: self.epoch().await?,
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
-            operations: vec![Operation::Transfer {
-                recipient,
-                amount,
-                user_data,
-            }],
+            operations: vec![(
+                SYSTEM,
+                Operation::Transfer {
+                    recipient,
+                    amount,
+                    user_data,
+                },
+            )],
             height: self.next_block_height,
             previous_block_hash: self.block_hash,
         };
@@ -891,7 +895,7 @@ where
             epoch: self.epoch().await?,
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
-            operations: vec![Operation::ChangeOwner { new_owner }],
+            operations: vec![(SYSTEM, Operation::ChangeOwner { new_owner })],
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
         };
@@ -908,7 +912,7 @@ where
             epoch: self.epoch().await?,
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
-            operations: vec![Operation::ChangeOwner { new_owner }],
+            operations: vec![(SYSTEM, Operation::ChangeOwner { new_owner })],
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
         };
@@ -925,9 +929,12 @@ where
             epoch: self.epoch().await?,
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
-            operations: vec![Operation::ChangeMultipleOwners {
-                new_owners: vec![owner, new_owner],
-            }],
+            operations: vec![(
+                SYSTEM,
+                Operation::ChangeMultipleOwners {
+                    new_owners: vec![owner, new_owner],
+                },
+            )],
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
         };
@@ -952,13 +959,16 @@ where
             epoch,
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
-            operations: vec![Operation::OpenChain {
-                id,
-                owner,
-                committees,
-                admin_id,
-                epoch,
-            }],
+            operations: vec![(
+                SYSTEM,
+                Operation::OpenChain {
+                    id,
+                    owner,
+                    committees,
+                    admin_id,
+                    epoch,
+                },
+            )],
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
         };
@@ -974,7 +984,7 @@ where
             epoch: self.epoch().await?,
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
-            operations: vec![Operation::CloseChain],
+            operations: vec![(SYSTEM, Operation::CloseChain)],
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
         };
@@ -995,11 +1005,14 @@ where
             epoch,
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
-            operations: vec![Operation::CreateCommittee {
-                admin_id: self.chain_id,
-                epoch: epoch.try_add_one()?,
-                committee,
-            }],
+            operations: vec![(
+                SYSTEM,
+                Operation::CreateCommittee {
+                    admin_id: self.chain_id,
+                    epoch: epoch.try_add_one()?,
+                    committee,
+                },
+            )],
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
         };
@@ -1039,9 +1052,12 @@ where
             epoch: self.epoch().await?,
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
-            operations: vec![Operation::SubscribeToNewCommittees {
-                admin_id: self.admin_id,
-            }],
+            operations: vec![(
+                SYSTEM,
+                Operation::SubscribeToNewCommittees {
+                    admin_id: self.admin_id,
+                },
+            )],
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
         };
@@ -1057,9 +1073,12 @@ where
             epoch: self.epoch().await?,
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
-            operations: vec![Operation::UnsubscribeToNewCommittees {
-                admin_id: self.admin_id,
-            }],
+            operations: vec![(
+                SYSTEM,
+                Operation::UnsubscribeToNewCommittees {
+                    admin_id: self.admin_id,
+                },
+            )],
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
         };
@@ -1078,10 +1097,13 @@ where
             .keys()
             .filter_map(|epoch| {
                 if *epoch != current_epoch {
-                    Some(Operation::RemoveCommittee {
-                        admin_id: self.admin_id,
-                        epoch: *epoch,
-                    })
+                    Some((
+                        SYSTEM,
+                        Operation::RemoveCommittee {
+                            admin_id: self.admin_id,
+                            epoch: *epoch,
+                        },
+                    ))
                 } else {
                     None
                 }
@@ -1112,11 +1134,14 @@ where
             epoch: self.epoch().await?,
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
-            operations: vec![Operation::Transfer {
-                recipient: Address::Account(recipient),
-                amount,
-                user_data,
-            }],
+            operations: vec![(
+                SYSTEM,
+                Operation::Transfer {
+                    recipient: Address::Account(recipient),
+                    amount,
+                    user_data,
+                },
+            )],
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
         };

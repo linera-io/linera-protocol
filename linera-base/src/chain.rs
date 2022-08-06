@@ -14,16 +14,19 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 
+pub static SYSTEM: ApplicationId = ApplicationId(0);
+
 /// The state of a chain.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct ChainState {
     /// How the chain was created. May be unknown for inactive chains.
     pub description: Option<ChainDescription>,
-    /// Execution state.
+    /// Execution state of the "root" application.
     pub state: ExecutionState,
-    /// Hash of the execution state.
+    /// Hash of execution state + the state of all contract states
     pub state_hash: HashValue,
+
     /// Hash of the latest certified block in this chain, if any.
     pub block_hash: Option<HashValue>,
     /// Sequence number tracking blocks.
@@ -35,6 +38,14 @@ pub struct ChainState {
     /// Hashes of all certified blocks known as a receiver (local ordering).
     pub received_log: Vec<HashValue>,
 
+    /// Communication state of applications.
+    pub communication_states: HashMap<ApplicationId, CommunicationState>,
+}
+
+/// Communication state of an application.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+pub struct CommunicationState {
     /// Mailboxes used to send messages, indexed by recipient.
     pub outboxes: HashMap<ChainId, OutboxState>,
     /// Mailboxes used to receive messages indexed by their origin.
@@ -104,9 +115,7 @@ impl ChainState {
             next_block_height: BlockHeight::default(),
             confirmed_log: Vec::new(),
             received_log: Vec::new(),
-            inboxes: HashMap::new(),
-            outboxes: HashMap::new(),
-            channels: HashMap::new(),
+            communication_states: HashMap::new(),
         }
     }
 
@@ -135,6 +144,7 @@ impl ChainState {
 
     pub fn mark_messages_as_received(
         outboxes: &mut HashMap<ChainId, OutboxState>,
+        application_id: ApplicationId,
         origin: &Origin,
         recipient: ChainId,
         height: BlockHeight,
@@ -149,7 +159,8 @@ impl ChainState {
             }
             _ => {
                 log::warn!(
-                    "All messages were already marked as received in the outbox {:?} to {:?}",
+                    "All messages were already marked as received in the outbox {:?}::{:?} to {:?}",
+                    application_id,
                     origin,
                     recipient
                 );
@@ -160,16 +171,28 @@ impl ChainState {
 
     pub fn mark_outbox_messages_as_received(
         &mut self,
+        application_id: ApplicationId,
         recipient: ChainId,
         height: BlockHeight,
     ) -> bool {
         let origin = Origin::Chain(self.chain_id());
-        Self::mark_messages_as_received(&mut self.outboxes, &origin, recipient, height)
+        let communication_state = self
+            .communication_states
+            .get_mut(&application_id)
+            .expect("Application should exist already");
+        Self::mark_messages_as_received(
+            &mut communication_state.outboxes,
+            application_id,
+            &origin,
+            recipient,
+            height,
+        )
     }
 
     pub fn mark_channel_messages_as_received(
         &mut self,
         name: &str,
+        application_id: ApplicationId,
         recipient: ChainId,
         height: BlockHeight,
     ) -> bool {
@@ -177,19 +200,21 @@ impl ChainState {
             chain_id: self.chain_id(),
             name: name.to_string(),
         });
-        let channel = match self.channels.get_mut(name) {
-            Some(channel) => channel,
-            None => {
-                panic!(
-                    "Trying to mark messages as received for a non-existing channel {:?} {} to {:?} at height {}",
-                    self.chain_id(),
-                    name,
-                    recipient,
-                    height,
-                );
-            }
-        };
-        Self::mark_messages_as_received(&mut channel.outboxes, &origin, recipient, height)
+        let communication_state = self
+            .communication_states
+            .get_mut(&application_id)
+            .expect("Application should exist already");
+        let channel = communication_state
+            .channels
+            .get_mut(name)
+            .expect("Channel should exist already");
+        Self::mark_messages_as_received(
+            &mut channel.outboxes,
+            application_id,
+            &origin,
+            recipient,
+            height,
+        )
     }
 
     /// Invariant for the states of active chains.
@@ -226,14 +251,17 @@ impl ChainState {
     /// Verify that this chain is up-to-date and all the messages executed ahead of time
     /// have been properly received by now.
     pub fn validate_incoming_messages(&self) -> Result<(), Error> {
-        for (origin, inbox) in &self.inboxes {
-            ensure!(
-                inbox.expected_events.is_empty(),
-                Error::MissingCrossChainUpdate {
-                    origin: origin.clone(),
-                    height: inbox.expected_events.front().unwrap().height,
-                }
-            );
+        for (app_id, state) in &self.communication_states {
+            for (origin, inbox) in &state.inboxes {
+                ensure!(
+                    inbox.expected_events.is_empty(),
+                    Error::MissingCrossChainUpdate {
+                        application_id: *app_id,
+                        origin: origin.clone(),
+                        height: inbox.expected_events.front().unwrap().height,
+                    }
+                );
+            }
         }
         Ok(())
     }
@@ -248,12 +276,17 @@ impl ChainState {
     /// received by order of heights and indices.
     pub fn receive_block(
         &mut self,
+        application_id: ApplicationId,
         origin: &Origin,
         height: BlockHeight,
-        effects: Vec<Effect>,
+        effects: Vec<(ApplicationId, Effect)>,
         key: HashValue,
     ) -> Result<bool, Error> {
-        let inbox = self.inboxes.entry(origin.clone()).or_default();
+        let communication_state = self.communication_states.entry(application_id).or_default();
+        let inbox = communication_state
+            .inboxes
+            .entry(origin.clone())
+            .or_default();
         if height < inbox.next_height_to_receive {
             // We have already received this block.
             log::warn!(
@@ -275,9 +308,11 @@ impl ChainState {
         self.received_log.push(key);
 
         let mut was_a_recipient = false;
-        for (index, effect) in effects.into_iter().enumerate() {
+        for (index, (app_id, effect)) in effects.into_iter().enumerate() {
             // Skip events that do not belong to this origin OR have no effect on this
             // recipient.
+            // FIXME: query the proper application state.
+            assert_eq!(app_id, SYSTEM);
             if !self.state.is_recipient(origin, &effect) {
                 continue;
             }
@@ -355,15 +390,17 @@ impl ChainState {
     /// Verify that the incoming_messages are in the right order. This matters for inbox
     /// invariants, notably the fact that inbox.expected_events is sorted.
     fn check_incoming_messages(&self, messages: &[MessageGroup]) -> Result<(), Error> {
-        let mut next_messages: HashMap<Origin, (BlockHeight, usize)> = HashMap::new();
+        let mut next_messages: HashMap<(ApplicationId, Origin), (BlockHeight, usize)> =
+            HashMap::new();
         for message_group in messages {
             let next_message = next_messages
-                .entry(message_group.origin.clone())
+                .entry((message_group.application_id, message_group.origin.clone()))
                 .or_default();
             for (message_index, _) in &message_group.effects {
                 ensure!(
                     (message_group.height, *message_index) >= *next_message,
                     Error::InvalidMessageOrder {
+                        application_id: message_group.application_id,
                         origin: message_group.origin.clone(),
                         height: message_group.height,
                         index: *message_index,
@@ -379,17 +416,27 @@ impl ChainState {
     /// * Modifies the state of inboxes, outboxes, and channels, if needed.
     /// * As usual, in case of errors, `self` may not be consistent any more and should be thrown away.
     /// * Returns the list of effects caused by the block being executed.
-    pub fn execute_block(&mut self, block: &Block) -> Result<Vec<Effect>, Error> {
+    pub fn execute_block(&mut self, block: &Block) -> Result<Vec<(ApplicationId, Effect)>, Error> {
         assert_eq!(block.chain_id, self.state.chain_id);
         let mut effects = Vec::new();
         // First, process incoming messages.
         self.check_incoming_messages(&block.incoming_messages)?;
 
         for message_group in &block.incoming_messages {
-            let inbox = self
+            let communication_state = self
+                .communication_states
+                .entry(message_group.application_id)
+                .or_default();
+            let inbox = communication_state
                 .inboxes
                 .entry(message_group.origin.clone())
                 .or_default();
+            log::trace!(
+                "Updating inbox {:?}::{:?} in chain {:?}",
+                message_group.application_id,
+                message_group.origin,
+                self.state.chain_id
+            );
             for (message_index, message_effect) in &message_group.effects {
                 // Receivers are allowed to skip events from the received queue.
                 while let Some(Event {
@@ -405,12 +452,7 @@ impl ChainState {
                     }
                     assert!((*height, index) < (message_group.height, message_index));
                     let event = inbox.received_events.pop_front().unwrap();
-                    log::trace!(
-                        "Chain {:?} is skipping received event from {:?}: {:?}",
-                        self.state.chain_id,
-                        message_group.origin,
-                        event
-                    );
+                    log::trace!("Skipping received event {:?}", event);
                 }
                 // Reconcile the event with the received queue, or mark it as "expected".
                 match inbox.received_events.front() {
@@ -422,6 +464,7 @@ impl ChainState {
                         ensure!(
                             message_group.height == *height && message_index == index,
                             Error::InvalidMessage {
+                                application_id: message_group.application_id,
                                 origin: message_group.origin.clone(),
                                 height: message_group.height,
                                 index: *message_index,
@@ -432,26 +475,33 @@ impl ChainState {
                         ensure!(
                             message_effect == effect,
                             Error::InvalidMessageContent {
+                                application_id: message_group.application_id,
                                 origin: message_group.origin.clone(),
                                 height: message_group.height,
                                 index: *message_index,
                             }
                         );
-                        inbox.received_events.pop_front().unwrap();
+                        let event = inbox.received_events.pop_front().unwrap();
+                        log::trace!("Consuming event {:?}", event);
                     }
                     None => {
-                        inbox.expected_events.push_back(Event {
+                        let event = Event {
                             height: message_group.height,
                             index: *message_index,
                             effect: message_effect.clone(),
-                        });
+                        };
+                        log::trace!("Marking event as expected: {:?}", event);
+                        inbox.expected_events.push_back(event);
                     }
                 }
                 // Execute the received effect.
+                // FIXME: Only one application is supported at the moment.
+                assert_eq!(message_group.application_id, SYSTEM);
                 let application = self.state.apply_effect(message_effect)?;
                 Self::process_application_result(
-                    &mut self.outboxes,
-                    &mut self.channels,
+                    message_group.application_id,
+                    &mut communication_state.outboxes,
+                    &mut communication_state.channels,
                     &mut effects,
                     block.height,
                     application,
@@ -459,30 +509,40 @@ impl ChainState {
             }
         }
         // Second, execute the operations in the block and remember the recipients to notify.
-        for (index, operation) in block.operations.iter().enumerate() {
+        for (index, (application_id, operation)) in block.operations.iter().enumerate() {
+            // FIXME: Only one application is supported at the moment.
+            assert_eq!(*application_id, SYSTEM);
             let application = self.state.apply_operation(block.height, index, operation)?;
+            let communication_state = self
+                .communication_states
+                .entry(*application_id)
+                .or_default();
             Self::process_application_result(
-                &mut self.outboxes,
-                &mut self.channels,
+                *application_id,
+                &mut communication_state.outboxes,
+                &mut communication_state.channels,
                 &mut effects,
                 block.height,
                 application,
             );
         }
         // Last, recompute the state hash.
+        // FIXME: Only one application is supported at the moment.
         self.state_hash = HashValue::new(&self.state);
         Ok(effects)
     }
 
     fn process_application_result(
+        application_id: ApplicationId,
         outboxes: &mut HashMap<ChainId, OutboxState>,
         channels: &mut HashMap<String, ChannelState>,
-        effects: &mut Vec<Effect>,
+        effects: &mut Vec<(ApplicationId, Effect)>,
         height: BlockHeight,
         application: ApplicationResult,
     ) {
-        // Record the effects of the execution.
-        effects.extend(application.effects);
+        // Record the effects of the execution. Effects are understood within an
+        // application.
+        effects.extend(application.effects.into_iter().map(|e| (application_id, e)));
         // Update the (regular) outboxes.
         for recipient in application.recipients {
             let outbox = outboxes.entry(recipient).or_default();

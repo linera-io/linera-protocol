@@ -3,7 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use crate::execution::{Address, Amount, ExecutionState, Operation, UserData};
+use crate::{
+    chain::SYSTEM,
+    execution::{Address, Amount, ExecutionState, Operation, UserData},
+};
 
 #[test]
 fn test_signed_values() {
@@ -15,11 +18,14 @@ fn test_signed_values() {
         epoch: Epoch::from(0),
         chain_id: ChainId::root(1),
         incoming_messages: Vec::new(),
-        operations: vec![Operation::Transfer {
-            recipient: Address::Account(ChainId::root(2)),
-            amount: Amount::from(1),
-            user_data: UserData::default(),
-        }],
+        operations: vec![(
+            SYSTEM,
+            Operation::Transfer {
+                recipient: Address::Account(ChainId::root(2)),
+                amount: Amount::from(1),
+                user_data: UserData::default(),
+            },
+        )],
         height: BlockHeight::from(0),
         previous_block_hash: None,
     };
@@ -50,11 +56,14 @@ fn test_certificates() {
         epoch: Epoch::from(0),
         chain_id: ChainId::root(1),
         incoming_messages: Vec::new(),
-        operations: vec![Operation::Transfer {
-            recipient: Address::Account(ChainId::root(1)),
-            amount: Amount::from(1),
-            user_data: UserData::default(),
-        }],
+        operations: vec![(
+            SYSTEM,
+            Operation::Transfer {
+                recipient: Address::Account(ChainId::root(1)),
+                amount: Amount::from(1),
+                user_data: UserData::default(),
+            },
+        )],
         previous_block_hash: None,
         height: BlockHeight::from(0),
     };

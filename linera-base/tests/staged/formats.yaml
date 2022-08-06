@@ -9,6 +9,8 @@ Address:
           TYPENAME: ChainId
 Amount:
   NEWTYPESTRUCT: U64
+ApplicationId:
+  NEWTYPESTRUCT: U64
 Balance:
   NEWTYPESTRUCT: U128
 Block:
@@ -22,7 +24,9 @@ Block:
           TYPENAME: MessageGroup
     - operations:
         SEQ:
-          TYPENAME: Operation
+          TUPLE:
+            - TYPENAME: ApplicationId
+            - TYPENAME: Operation
     - height:
         TYPENAME: BlockHeight
     - previous_block_hash:
@@ -158,23 +162,12 @@ ChainState:
     - received_log:
         SEQ:
           TYPENAME: HashValue
-    - outboxes:
+    - communication_states:
         MAP:
           KEY:
-            TYPENAME: ChainId
+            TYPENAME: ApplicationId
           VALUE:
-            TYPENAME: OutboxState
-    - inboxes:
-        MAP:
-          KEY:
-            TYPENAME: Origin
-          VALUE:
-            TYPENAME: InboxState
-    - channels:
-        MAP:
-          KEY: STR
-          VALUE:
-            TYPENAME: ChannelState
+            TYPENAME: CommunicationState
 ChannelId:
   STRUCT:
     - chain_id:
@@ -205,11 +198,32 @@ Committee:
           VALUE:
             TYPENAME: ValidatorState
     - total_votes: U64
+CommunicationState:
+  STRUCT:
+    - outboxes:
+        MAP:
+          KEY:
+            TYPENAME: ChainId
+          VALUE:
+            TYPENAME: OutboxState
+    - inboxes:
+        MAP:
+          KEY:
+            TYPENAME: Origin
+          VALUE:
+            TYPENAME: InboxState
+    - channels:
+        MAP:
+          KEY: STR
+          VALUE:
+            TYPENAME: ChannelState
 CrossChainRequest:
   ENUM:
     0:
       UpdateRecipient:
         STRUCT:
+          - application_id:
+              TYPENAME: ApplicationId
           - origin:
               TYPENAME: Origin
           - recipient:
@@ -220,6 +234,8 @@ CrossChainRequest:
     1:
       ConfirmUpdatedRecipient:
         STRUCT:
+          - application_id:
+              TYPENAME: ApplicationId
           - origin:
               TYPENAME: Origin
           - recipient:
@@ -391,6 +407,8 @@ Error:
     32:
       MissingCrossChainUpdate:
         STRUCT:
+          - application_id:
+              TYPENAME: ApplicationId
           - origin:
               TYPENAME: Origin
           - height:
@@ -398,6 +416,8 @@ Error:
     33:
       InvalidMessageContent:
         STRUCT:
+          - application_id:
+              TYPENAME: ApplicationId
           - origin:
               TYPENAME: Origin
           - height:
@@ -406,6 +426,8 @@ Error:
     34:
       InvalidMessage:
         STRUCT:
+          - application_id:
+              TYPENAME: ApplicationId
           - origin:
               TYPENAME: Origin
           - height:
@@ -417,6 +439,8 @@ Error:
     35:
       InvalidMessageOrder:
         STRUCT:
+          - application_id:
+              TYPENAME: ApplicationId
           - origin:
               TYPENAME: Origin
           - height:
@@ -544,6 +568,8 @@ Message:
           TYPENAME: CrossChainRequest
 MessageGroup:
   STRUCT:
+    - application_id:
+        TYPENAME: ApplicationId
     - origin:
         TYPENAME: Origin
     - height:
@@ -697,7 +723,9 @@ Value:
               TYPENAME: RoundNumber
           - effects:
               SEQ:
-                TYPENAME: Effect
+                TUPLE:
+                  - TYPENAME: ApplicationId
+                  - TYPENAME: Effect
           - state_hash:
               TYPENAME: HashValue
     1:
@@ -707,7 +735,9 @@ Value:
               TYPENAME: Block
           - effects:
               SEQ:
-                TYPENAME: Effect
+                TUPLE:
+                  - TYPENAME: ApplicationId
+                  - TYPENAME: Effect
           - state_hash:
               TYPENAME: HashValue
 Vote:
