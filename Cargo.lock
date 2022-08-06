@@ -1248,18 +1248,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "linera-execution"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "linera-base",
- "linera-views",
- "log",
- "serde",
- "thiserror",
-]
-
-[[package]]
 name = "linera-service"
 version = "0.1.0"
 dependencies = [
