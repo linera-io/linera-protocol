@@ -8,7 +8,9 @@ use crate::{
     ensure,
     error::Error,
     manager::ChainManager,
-    messages::{BlockHeight, ChainId, ChannelId, EffectId, Epoch, Medium, Origin, Owner},
+    messages::{
+        BlockHeight, ChainDescription, ChainId, ChannelId, EffectId, Epoch, Medium, Origin, Owner,
+    },
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -473,6 +475,53 @@ impl ExecutionState {
                 log::error!("Skipping unexpected received effect: {effect:?}");
                 Ok(ApplicationResult::default())
             }
+        }
+    }
+
+    /// Execute certain effects immediately upon receiving a message.
+    pub(crate) fn apply_immediate_effect(
+        &mut self,
+        sender: ChainId,
+        height: BlockHeight,
+        index: usize,
+        description: &mut Option<ChainDescription>,
+        effect: &Effect,
+    ) -> Result<bool, Error> {
+        // Chain creation effects are special and executed (only) in this callback.
+        // For simplicity, they will still appear in the received messages.
+        match &effect {
+            Effect::OpenChain {
+                id,
+                owner,
+                epoch,
+                committees,
+                admin_id,
+            } if id == &self.chain_id => {
+                // Guaranteed under BFT assumptions.
+                assert!(description.is_none());
+                assert!(!self.manager.is_active());
+                assert!(self.committees.is_empty());
+                let chain_description = ChainDescription::Child(EffectId {
+                    chain_id: sender,
+                    height,
+                    index,
+                });
+                assert_eq!(self.chain_id, chain_description.into());
+                *description = Some(chain_description);
+                self.epoch = Some(*epoch);
+                self.committees = committees.clone();
+                self.admin_id = Some(*admin_id);
+                self.subscriptions.insert(
+                    ChannelId {
+                        chain_id: *admin_id,
+                        name: ADMIN_CHANNEL.into(),
+                    },
+                    (),
+                );
+                self.manager = ChainManager::single(*owner);
+                Ok(true)
+            }
+            _ => Ok(false),
         }
     }
 }

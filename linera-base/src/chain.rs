@@ -7,7 +7,7 @@ use crate::{
     crypto::*,
     ensure,
     error::Error,
-    execution::{ApplicationResult, Balance, Effect, ExecutionState, ADMIN_CHANNEL},
+    execution::{ApplicationResult, Balance, Effect, ExecutionState},
     manager::ChainManager,
     messages::*,
 };
@@ -320,41 +320,17 @@ impl ChainState {
                 continue;
             }
             was_a_recipient = true;
-            // Chain creation effects are special and executed (only) in this callback.
-            // For simplicity, they will still appear in the received messages.
-            match &effect {
-                Effect::OpenChain {
-                    id,
-                    owner,
-                    epoch,
-                    committees,
-                    admin_id,
-                } if id == &self.state.chain_id => {
-                    // Guaranteed under BFT assumptions.
-                    assert!(self.description.is_none());
-                    assert!(!self.state.manager.is_active());
-                    assert!(self.state.committees.is_empty());
-                    let description = ChainDescription::Child(EffectId {
-                        chain_id: origin.chain_id,
-                        height,
-                        index,
-                    });
-                    assert_eq!(self.state.chain_id, description.into());
-                    self.description = Some(description);
-                    self.state.epoch = Some(*epoch);
-                    self.state.committees = committees.clone();
-                    self.state.admin_id = Some(*admin_id);
-                    self.state.subscriptions.insert(
-                        ChannelId {
-                            chain_id: *admin_id,
-                            name: ADMIN_CHANNEL.into(),
-                        },
-                        (),
-                    );
-                    self.state.manager = ChainManager::single(*owner);
+            if app_id == SYSTEM {
+                // Handle special effects to be executed immediately.
+                if self.state.apply_immediate_effect(
+                    origin.chain_id,
+                    height,
+                    index,
+                    &mut self.description,
+                    &effect,
+                )? {
                     self.state_hash = HashValue::new(&self.state);
                 }
-                _ => (),
             }
             // Find if the message was executed ahead of time.
             match inbox.expected_events.front() {
