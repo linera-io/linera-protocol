@@ -211,7 +211,7 @@ where
         let chain = self.store.read_chain_or_default(chain_id).await?;
         for state in chain.communication_states.values() {
             for (origin, inbox) in state.inboxes.iter() {
-                self.send_chain_information(origin.sender(), inbox.next_height_to_receive)
+                self.send_chain_information(origin.chain_id, inbox.next_height_to_receive)
                     .await?;
             }
         }

@@ -8,7 +8,7 @@ use crate::{
     ensure,
     error::Error,
     manager::ChainManager,
-    messages::{BlockHeight, ChainId, ChannelId, EffectId, Epoch, Origin, Owner},
+    messages::{BlockHeight, ChainId, ChannelId, EffectId, Epoch, Medium, Origin, Owner},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -161,27 +161,26 @@ pub struct ApplicationResult {
 impl ExecutionState {
     pub(crate) fn is_recipient(&self, origin: &Origin, effect: &Effect) -> bool {
         use Effect::*;
-        match (origin, effect) {
-            (Origin::Chain(_), Credit { recipient, .. }) => {
+        match (&origin.medium, effect) {
+            (Medium::Direct, Credit { recipient, .. }) => {
                 // We are the recipient of the transfer.
                 self.chain_id == *recipient
             }
-            (Origin::Chain(_), OpenChain { id, .. }) => {
+            (Medium::Direct, OpenChain { id, .. }) => {
                 // We are the created chain.
                 self.chain_id == *id
             }
-            (Origin::Chain(_), Subscribe { channel, .. } | Unsubscribe { channel, .. }) => {
+            (Medium::Direct, Subscribe { channel, .. } | Unsubscribe { channel, .. }) => {
                 // We are the owner of the channel.
                 self.chain_id == channel.chain_id
             }
-            (Origin::Channel(channel), SetCommittees { admin_id, .. }) => {
+            (Medium::Channel(channel), SetCommittees { admin_id, .. }) => {
                 // We are managed by this admin chain.
-                channel.chain_id == *admin_id
-                    && channel.name == ADMIN_CHANNEL
+                channel == ADMIN_CHANNEL
                     && self.chain_id != *admin_id
                     && self.admin_id.as_ref() == Some(admin_id)
             }
-            (Origin::Chain(_), Notify { id }) => self.chain_id == *id,
+            (Medium::Direct, Notify { id }) => self.chain_id == *id,
             _ => false,
         }
     }

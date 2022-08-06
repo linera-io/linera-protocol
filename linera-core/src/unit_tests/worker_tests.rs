@@ -567,7 +567,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             vec![
                 MessageGroup {
                     application_id: SYSTEM,
-                    origin: Origin::Chain(ChainId::root(1)),
+                    origin: Origin::chain(ChainId::root(1)),
                     height: BlockHeight::from(0),
                     effects: vec![
                         (
@@ -588,7 +588,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                 },
                 MessageGroup {
                     application_id: SYSTEM,
-                    origin: Origin::Chain(ChainId::root(1)),
+                    origin: Origin::chain(ChainId::root(1)),
                     height: BlockHeight::from(1),
                     effects: vec![(
                         0,
@@ -616,7 +616,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             vec![
                 MessageGroup {
                     application_id: SYSTEM,
-                    origin: Origin::Chain(ChainId::root(1)),
+                    origin: Origin::chain(ChainId::root(1)),
                     height: BlockHeight::from(0),
                     effects: vec![
                         (
@@ -637,7 +637,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                 },
                 MessageGroup {
                     application_id: SYSTEM,
-                    origin: Origin::Chain(ChainId::root(1)),
+                    origin: Origin::chain(ChainId::root(1)),
                     height: BlockHeight::from(1),
                     effects: vec![(
                         0,
@@ -665,7 +665,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             vec![
                 MessageGroup {
                     application_id: SYSTEM,
-                    origin: Origin::Chain(ChainId::root(1)),
+                    origin: Origin::chain(ChainId::root(1)),
                     height: BlockHeight::from(1),
                     effects: vec![(
                         0,
@@ -677,7 +677,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                 },
                 MessageGroup {
                     application_id: SYSTEM,
-                    origin: Origin::Chain(ChainId::root(1)),
+                    origin: Origin::chain(ChainId::root(1)),
                     height: BlockHeight::from(0),
                     effects: vec![
                         (
@@ -713,7 +713,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             Amount::from(1),
             vec![MessageGroup {
                 application_id: SYSTEM,
-                origin: Origin::Chain(ChainId::root(1)),
+                origin: Origin::chain(ChainId::root(1)),
                 height: BlockHeight::from(0),
                 effects: vec![(
                     0,
@@ -765,7 +765,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             Amount::from(3),
             vec![MessageGroup {
                 application_id: SYSTEM,
-                origin: Origin::Chain(ChainId::root(1)),
+                origin: Origin::chain(ChainId::root(1)),
                 height: BlockHeight::from(1),
                 effects: vec![(
                     0,
@@ -984,7 +984,7 @@ async fn test_handle_certificate_with_anticipated_incoming_message() {
         Amount::from(1000),
         vec![MessageGroup {
             application_id: SYSTEM,
-            origin: Origin::Chain(ChainId::root(3)),
+            origin: Origin::chain(ChainId::root(3)),
             height: BlockHeight::from(0),
             effects: vec![(
                 0,
@@ -1017,7 +1017,7 @@ async fn test_handle_certificate_with_anticipated_incoming_message() {
             .get(&SYSTEM)
             .unwrap()
             .inboxes
-            .get(&Origin::Chain(ChainId::root(3)))
+            .get(&Origin::chain(ChainId::root(3)))
             .unwrap()
             .next_height_to_receive
     );
@@ -1026,12 +1026,12 @@ async fn test_handle_certificate_with_anticipated_incoming_message() {
         .get(&SYSTEM)
         .unwrap()
         .inboxes
-        .get(&Origin::Chain(ChainId::root(3)))
+        .get(&Origin::chain(ChainId::root(3)))
         .unwrap()
         .received_events
         .is_empty(),);
     assert!(matches!(
-        chain.communication_states.get(&SYSTEM).unwrap().inboxes.get(&Origin::Chain(ChainId::root(3))).unwrap().expected_events.front().unwrap(),
+        chain.communication_states.get(&SYSTEM).unwrap().inboxes.get(&Origin::chain(ChainId::root(3))).unwrap().expected_events.front().unwrap(),
         Event { height, index: 0, effect: Effect::Credit { amount, .. }} if *height == BlockHeight::from(0) && *amount == Amount::from(995),
     ));
     assert_eq!(chain.confirmed_log.len(), 1);
@@ -1127,12 +1127,12 @@ async fn test_handle_certificate_receiver_equal_sender() {
             .get(&SYSTEM)
             .unwrap()
             .inboxes
-            .get(&Origin::Chain(ChainId::root(1)))
+            .get(&Origin::chain(ChainId::root(1)))
             .unwrap()
             .next_height_to_receive
     );
     assert!(matches!(
-        chain.communication_states.get(&SYSTEM).unwrap().inboxes.get(&Origin::Chain(ChainId::root(1))).unwrap().received_events.front().unwrap(),
+        chain.communication_states.get(&SYSTEM).unwrap().inboxes.get(&Origin::chain(ChainId::root(1))).unwrap().received_events.front().unwrap(),
         Event { height, index: 0, effect: Effect::Credit { amount, .. }} if *height == BlockHeight::from(0) && *amount == Amount::from(1),
     ));
     assert_eq!(BlockHeight::from(1), chain.next_block_height);
@@ -1163,7 +1163,7 @@ async fn test_handle_cross_chain_request() {
     worker
         .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
             application_id: SYSTEM,
-            origin: Origin::Chain(ChainId::root(1)),
+            origin: Origin::chain(ChainId::root(1)),
             recipient: ChainId::root(2),
             certificates: vec![certificate],
         })
@@ -1183,12 +1183,12 @@ async fn test_handle_cross_chain_request() {
             .get(&SYSTEM)
             .unwrap()
             .inboxes
-            .get(&Origin::Chain(ChainId::root(1)))
+            .get(&Origin::chain(ChainId::root(1)))
             .unwrap()
             .next_height_to_receive
     );
     assert!(matches!(
-        chain.communication_states.get(&SYSTEM).unwrap().inboxes.get(&Origin::Chain(ChainId::root(1))).unwrap().received_events.front().unwrap(),
+        chain.communication_states.get(&SYSTEM).unwrap().inboxes.get(&Origin::chain(ChainId::root(1))).unwrap().received_events.front().unwrap(),
         Event { height, index: 0, effect: Effect::Credit { amount, .. }} if *height == BlockHeight::from(0) && *amount == Amount::from(10),
     ));
     assert_eq!(chain.confirmed_log.len(), 0);
@@ -1214,7 +1214,7 @@ async fn test_handle_cross_chain_request_no_recipient_chain() {
     assert!(worker
         .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
             application_id: SYSTEM,
-            origin: Origin::Chain(ChainId::root(1)),
+            origin: Origin::chain(ChainId::root(1)),
             recipient: ChainId::root(2),
             certificates: vec![certificate],
         })
@@ -1250,7 +1250,7 @@ async fn test_handle_cross_chain_request_no_recipient_chain_with_inactive_chains
         worker
             .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
                 application_id: SYSTEM,
-                origin: Origin::Chain(ChainId::root(1)),
+                origin: Origin::chain(ChainId::root(1)),
                 recipient: ChainId::root(2),
                 certificates: vec![certificate],
             })
@@ -1320,7 +1320,7 @@ async fn test_handle_certificate_to_active_recipient() {
         Amount::from(1),
         vec![MessageGroup {
             application_id: SYSTEM,
-            origin: Origin::Chain(ChainId::root(1)),
+            origin: Origin::chain(ChainId::root(1)),
             height: BlockHeight::from(0),
             effects: vec![(
                 0,
@@ -1414,6 +1414,7 @@ async fn test_chain_creation_with_committee_creation() {
         chain_id: admin_id,
         name: ADMIN_CHANNEL.into(),
     };
+    let admin_channel_origin = Origin::channel(admin_id, ADMIN_CHANNEL.into());
     // Have the admin chain create a user chain.
     let user_id = ChainId::child(EffectId {
         chain_id: admin_id,
@@ -1576,7 +1577,7 @@ async fn test_chain_creation_with_committee_creation() {
                 chain_id: admin_id,
                 incoming_messages: vec![MessageGroup {
                     application_id: SYSTEM,
-                    origin: Origin::Chain(admin_id),
+                    origin: Origin::chain(admin_id),
                     height: BlockHeight::from(0),
                     effects: vec![(
                         1,
@@ -1637,7 +1638,7 @@ async fn test_chain_creation_with_committee_creation() {
                 .get(&SYSTEM)
                 .unwrap()
                 .inboxes
-                .get(&Origin::Chain(admin_id))
+                .get(&Origin::chain(admin_id))
                 .unwrap()
                 .received_events
                 .iter()
@@ -1664,7 +1665,7 @@ async fn test_chain_creation_with_committee_creation() {
                 .get(&SYSTEM)
                 .unwrap()
                 .inboxes
-                .get(&Origin::Channel(admin_channel.clone()))
+                .get(&admin_channel_origin)
                 .unwrap()
                 .received_events
                 .iter()
@@ -1680,7 +1681,7 @@ async fn test_chain_creation_with_committee_creation() {
             .get(&SYSTEM)
             .unwrap()
             .inboxes
-            .get(&Origin::Channel(admin_channel.clone()))
+            .get(&admin_channel_origin)
             .unwrap()
             .expected_events
             .is_empty());
@@ -1697,7 +1698,7 @@ async fn test_chain_creation_with_committee_creation() {
                 incoming_messages: vec![
                     MessageGroup {
                         application_id: SYSTEM,
-                        origin: Origin::Channel(admin_channel.clone()),
+                        origin: admin_channel_origin.clone(),
                         height: BlockHeight::from(1),
                         effects: vec![(
                             0,
@@ -1710,7 +1711,7 @@ async fn test_chain_creation_with_committee_creation() {
                     },
                     MessageGroup {
                         application_id: SYSTEM,
-                        origin: Origin::Chain(admin_id),
+                        origin: Origin::chain(admin_id),
                         height: BlockHeight::from(1),
                         effects: vec![(
                             1,
@@ -1722,7 +1723,7 @@ async fn test_chain_creation_with_committee_creation() {
                     },
                     MessageGroup {
                         application_id: SYSTEM,
-                        origin: Origin::Chain(admin_id),
+                        origin: Origin::chain(admin_id),
                         height: BlockHeight::from(2),
                         effects: vec![(0, Effect::Notify { id: user_id })],
                     },
@@ -1766,7 +1767,7 @@ async fn test_chain_creation_with_committee_creation() {
                 .get(&SYSTEM)
                 .unwrap()
                 .inboxes
-                .get(&Origin::Chain(admin_id))
+                .get(&Origin::chain(admin_id))
                 .unwrap(),
             &InboxState {
                 next_height_to_receive: BlockHeight(3),
@@ -1780,7 +1781,7 @@ async fn test_chain_creation_with_committee_creation() {
                 .get(&SYSTEM)
                 .unwrap()
                 .inboxes
-                .get(&Origin::Channel(admin_channel.clone()))
+                .get(&admin_channel_origin)
                 .unwrap(),
             &InboxState {
                 next_height_to_receive: BlockHeight(2),
@@ -1930,7 +1931,7 @@ async fn test_transfers_and_committee_creation() {
             .get(&SYSTEM)
             .unwrap()
             .inboxes
-            .get(&Origin::Chain(user_id))
+            .get(&Origin::chain(user_id))
             .unwrap()
             .received_events
             .iter()

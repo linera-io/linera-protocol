@@ -118,19 +118,36 @@ pub struct ChannelId {
 
 /// The origin of a message. Used to identify each inbox.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub enum Origin {
-    /// The message is a direct message.
-    Chain(ChainId),
-    /// The message is a channel broadcast.
-    Channel(ChannelId),
+pub struct Origin {
+    /// The chain ID of the sender.
+    pub chain_id: ChainId,
+    /// The medium.
+    pub medium: Medium,
 }
 
 impl Origin {
-    pub fn sender(&self) -> ChainId {
-        match self {
-            Origin::Chain(id) | Origin::Channel(ChannelId { chain_id: id, .. }) => *id,
+    pub fn chain(chain_id: ChainId) -> Self {
+        Self {
+            chain_id,
+            medium: Medium::Direct,
         }
     }
+
+    pub fn channel(chain_id: ChainId, name: String) -> Self {
+        Self {
+            chain_id,
+            medium: Medium::Channel(name),
+        }
+    }
+}
+
+/// The origin of a message coming from a particular chain. Used to identify each inbox.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub enum Medium {
+    /// The message is a direct message.
+    Direct,
+    /// The message is a channel broadcast.
+    Channel(String),
 }
 
 /// A selection of messages sent by a block to another chain.
@@ -324,7 +341,7 @@ impl CrossChainRequest {
         use CrossChainRequest::*;
         match self {
             UpdateRecipient { recipient, .. } => *recipient,
-            ConfirmUpdatedRecipient { origin, .. } => origin.sender(),
+            ConfirmUpdatedRecipient { origin, .. } => origin.chain_id,
         }
     }
 }
