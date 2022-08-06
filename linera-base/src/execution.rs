@@ -21,6 +21,8 @@ use std::collections::BTreeMap;
 pub struct ExecutionState {
     /// The UID of the chain.
     pub chain_id: ChainId,
+    /// How the chain was created. May be unknown for inactive chains.
+    pub description: Option<ChainDescription>,
     /// The number identifying the current configuration.
     pub epoch: Option<Epoch>,
     /// The admin of the chain.
@@ -141,6 +143,7 @@ impl ExecutionState {
     pub fn new(chain_id: ChainId) -> Self {
         Self {
             chain_id,
+            description: None,
             epoch: None,
             admin_id: None,
             subscriptions: BTreeMap::new(),
@@ -148,6 +151,15 @@ impl ExecutionState {
             manager: ChainManager::default(),
             balance: Balance::default(),
         }
+    }
+
+    /// Invariant for the states of active chains.
+    pub fn is_active(&self) -> bool {
+        self.description.is_some()
+            && self.manager.is_active()
+            && self.epoch.is_some()
+            && self.committees.contains_key(self.epoch.as_ref().unwrap())
+            && self.admin_id.is_some()
     }
 }
 
@@ -458,7 +470,6 @@ impl ExecutionState {
         sender: ChainId,
         height: BlockHeight,
         index: usize,
-        description: &mut Option<ChainDescription>,
         effect: &Effect,
     ) -> Result<bool, Error> {
         // Chain creation effects are special and executed (only) in this callback.
@@ -472,16 +483,16 @@ impl ExecutionState {
                 admin_id,
             } if id == &self.chain_id => {
                 // Guaranteed under BFT assumptions.
-                assert!(description.is_none());
+                assert!(self.description.is_none());
                 assert!(!self.manager.is_active());
                 assert!(self.committees.is_empty());
-                let chain_description = ChainDescription::Child(EffectId {
+                let description = ChainDescription::Child(EffectId {
                     chain_id: sender,
                     height,
                     index,
                 });
-                assert_eq!(self.chain_id, chain_description.into());
-                *description = Some(chain_description);
+                assert_eq!(self.chain_id, description.into());
+                self.description = Some(description);
                 self.epoch = Some(*epoch);
                 self.committees = committees.clone();
                 self.admin_id = Some(*admin_id);
