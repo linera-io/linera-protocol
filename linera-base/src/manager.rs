@@ -258,7 +258,7 @@ impl ChainManager {
     pub fn create_vote(
         &mut self,
         proposal: BlockProposal,
-        effects: Vec<(ApplicationId, Effect)>,
+        effects: Vec<(ApplicationId, Destination, Effect)>,
         state_hash: HashValue,
         key_pair: Option<&KeyPair>,
     ) {
@@ -300,7 +300,7 @@ impl ChainManager {
     pub fn create_final_vote(
         &mut self,
         block: Block,
-        effects: Vec<(ApplicationId, Effect)>,
+        effects: Vec<(ApplicationId, Destination, Effect)>,
         state_hash: HashValue,
         certificate: Certificate,
         key_pair: Option<&KeyPair>,

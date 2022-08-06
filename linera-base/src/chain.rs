@@ -12,7 +12,7 @@ use crate::{
     messages::*,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 pub static SYSTEM: ApplicationId = ApplicationId(0);
 
@@ -282,7 +282,7 @@ impl ChainState {
         application_id: ApplicationId,
         origin: &Origin,
         height: BlockHeight,
-        effects: Vec<(ApplicationId, Effect)>,
+        effects: Vec<(ApplicationId, Destination, Effect)>,
         key: HashValue,
     ) -> Result<bool, Error> {
         let communication_state = self.communication_states.entry(application_id).or_default();
@@ -311,13 +311,20 @@ impl ChainState {
         self.received_log.push(key);
 
         let mut was_a_recipient = false;
-        for (index, (app_id, effect)) in effects.into_iter().enumerate() {
+        for (index, (app_id, destination, effect)) in effects.into_iter().enumerate() {
             // Skip events that do not belong to this origin OR have no effect on this
             // recipient.
-            // FIXME: query the proper application state.
-            assert_eq!(app_id, SYSTEM);
-            if !self.state.is_recipient(origin, &effect) {
-                continue;
+            match destination {
+                Destination::Recipient(id) => {
+                    if origin.medium != Medium::Direct || id != self.state.chain_id {
+                        continue;
+                    }
+                }
+                Destination::Subscribers(name) => {
+                    if !matches!(&origin.medium, Medium::Channel(n) if n == &name) {
+                        continue;
+                    }
+                }
             }
             was_a_recipient = true;
             if app_id == SYSTEM {
@@ -395,7 +402,10 @@ impl ChainState {
     /// * Modifies the state of inboxes, outboxes, and channels, if needed.
     /// * As usual, in case of errors, `self` may not be consistent any more and should be thrown away.
     /// * Returns the list of effects caused by the block being executed.
-    pub fn execute_block(&mut self, block: &Block) -> Result<Vec<(ApplicationId, Effect)>, Error> {
+    pub fn execute_block(
+        &mut self,
+        block: &Block,
+    ) -> Result<Vec<(ApplicationId, Destination, Effect)>, Error> {
         assert_eq!(block.chain_id, self.state.chain_id);
         let mut effects = Vec::new();
         // First, process incoming messages.
@@ -515,15 +525,27 @@ impl ChainState {
         application_id: ApplicationId,
         outboxes: &mut HashMap<ChainId, OutboxState>,
         channels: &mut HashMap<String, ChannelState>,
-        effects: &mut Vec<(ApplicationId, Effect)>,
+        effects: &mut Vec<(ApplicationId, Destination, Effect)>,
         height: BlockHeight,
         application: ApplicationResult,
     ) {
         // Record the effects of the execution. Effects are understood within an
         // application.
-        effects.extend(application.effects.into_iter().map(|e| (application_id, e)));
+        let mut recipients = HashSet::new();
+        let mut channel_broadcasts = HashSet::new();
+        for (destination, effect) in application.effects {
+            match &destination {
+                Destination::Recipient(id) => {
+                    recipients.insert(*id);
+                }
+                Destination::Subscribers(name) => {
+                    channel_broadcasts.insert(name.to_string());
+                }
+            }
+            effects.push((application_id, destination, effect));
+        }
         // Update the (regular) outboxes.
-        for recipient in application.recipients {
+        for recipient in recipients {
             let outbox = outboxes.entry(recipient).or_default();
             outbox.schedule_message(height);
         }
@@ -533,7 +555,7 @@ impl ChainState {
             // Remove subscriber. Do not remove the channel outbox yet.
             channel.subscribers.remove(&id);
         }
-        for name in application.need_channel_broadcast {
+        for name in channel_broadcasts {
             let channel = channels.entry(name).or_insert_with(ChannelState::default);
             for recipient in channel.subscribers.keys() {
                 let outbox = channel.outboxes.entry(*recipient).or_default();

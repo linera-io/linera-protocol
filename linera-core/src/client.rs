@@ -14,7 +14,7 @@ use linera_base::{
     committee::{Committee, ValidatorState},
     crypto::*,
     error::Error,
-    execution::{Address, Amount, Balance, Effect, ExecutionState, Operation, UserData},
+    execution::{Address, Amount, Balance, ExecutionState, Operation, UserData},
     manager::ChainManager,
     messages::*,
 };
@@ -402,7 +402,7 @@ where
         let result = communicate_with_quorum(
             &nodes,
             committee,
-            |value: &Option<Vote>| -> Option<(Vec<(ApplicationId, Effect)>, HashValue)> {
+            |value: &Option<Vote>| -> Option<_> {
                 value
                     .as_ref()
                     .map(|vote| vote.value.effects_and_state_hash())

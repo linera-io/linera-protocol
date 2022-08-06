@@ -21,6 +21,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<execution::Effect>(&samples)?;
     tracer.trace_type::<messages::Value>(&samples)?;
     tracer.trace_type::<messages::Medium>(&samples)?;
+    tracer.trace_type::<messages::Destination>(&samples)?;
     tracer.trace_type::<messages::ChainDescription>(&samples)?;
     tracer.trace_type::<manager::ChainManager>(&samples)?;
     tracer.trace_type::<messages::CrossChainRequest>(&samples)?;

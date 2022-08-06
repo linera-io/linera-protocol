@@ -160,6 +160,7 @@ fn make_transfer_certificate(
     let effects = match recipient {
         Address::Account(id) => vec![(
             SYSTEM,
+            Destination::Recipient(id),
             Effect::Credit {
                 recipient: id,
                 amount,
@@ -476,6 +477,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             effects: vec![
                 (
                     SYSTEM,
+                    Destination::Recipient(ChainId::root(2)),
                     Effect::Credit {
                         recipient: ChainId::root(2),
                         amount: Amount::from(1),
@@ -483,6 +485,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                 ),
                 (
                     SYSTEM,
+                    Destination::Recipient(ChainId::root(2)),
                     Effect::Credit {
                         recipient: ChainId::root(2),
                         amount: Amount::from(2),
@@ -522,6 +525,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             },
             effects: vec![(
                 SYSTEM,
+                Destination::Recipient(ChainId::root(2)),
                 Effect::Credit {
                     recipient: ChainId::root(2),
                     amount: Amount::from(3),
@@ -737,6 +741,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                 block: block_proposal.content.block,
                 effects: vec![(
                     SYSTEM,
+                    Destination::Recipient(ChainId::root(3)),
                     Effect::Credit {
                         recipient: ChainId::root(3),
                         amount: Amount::from(1),
@@ -1445,6 +1450,7 @@ async fn test_chain_creation_with_committee_creation() {
             effects: vec![
                 (
                     SYSTEM,
+                    Destination::Recipient(user_id),
                     Effect::OpenChain {
                         id: user_id,
                         owner: key_pair.public().into(),
@@ -1455,6 +1461,7 @@ async fn test_chain_creation_with_committee_creation() {
                 ),
                 (
                     SYSTEM,
+                    Destination::Recipient(admin_id),
                     Effect::Subscribe {
                         id: user_id,
                         channel: admin_channel.clone(),
@@ -1536,6 +1543,7 @@ async fn test_chain_creation_with_committee_creation() {
             effects: vec![
                 (
                     SYSTEM,
+                    Destination::Subscribers(ADMIN_CHANNEL.to_string()),
                     Effect::SetCommittees {
                         admin_id,
                         epoch: Epoch::from(1),
@@ -1544,6 +1552,7 @@ async fn test_chain_creation_with_committee_creation() {
                 ),
                 (
                     SYSTEM,
+                    Destination::Recipient(user_id),
                     Effect::Credit {
                         recipient: user_id,
                         amount: Amount::from(2),
@@ -1591,7 +1600,11 @@ async fn test_chain_creation_with_committee_creation() {
                 previous_block_hash: Some(certificate1.hash),
                 height: BlockHeight::from(2),
             },
-            effects: vec![(SYSTEM, Effect::Notify { id: user_id })],
+            effects: vec![(
+                SYSTEM,
+                Destination::Recipient(user_id),
+                Effect::Notify { id: user_id },
+            )],
             state_hash: HashValue::new(&ExecutionState {
                 epoch: Some(Epoch::from(1)),
                 chain_id: admin_id,
@@ -1836,6 +1849,7 @@ async fn test_transfers_and_committee_creation() {
             },
             effects: vec![(
                 SYSTEM,
+                Destination::Recipient(admin_id),
                 Effect::Credit {
                     recipient: admin_id,
                     amount: Amount::from(1),
@@ -1880,6 +1894,7 @@ async fn test_transfers_and_committee_creation() {
             },
             effects: vec![(
                 SYSTEM,
+                Destination::Subscribers(ADMIN_CHANNEL.to_string()),
                 Effect::SetCommittees {
                     admin_id,
                     epoch: Epoch::from(1),
@@ -1988,6 +2003,7 @@ async fn test_transfers_and_committee_removal() {
             },
             effects: vec![(
                 SYSTEM,
+                Destination::Recipient(admin_id),
                 Effect::Credit {
                     recipient: admin_id,
                     amount: Amount::from(1),
@@ -2043,6 +2059,7 @@ async fn test_transfers_and_committee_removal() {
             effects: vec![
                 (
                     SYSTEM,
+                    Destination::Subscribers(ADMIN_CHANNEL.to_string()),
                     Effect::SetCommittees {
                         admin_id,
                         epoch: Epoch::from(1),
@@ -2051,6 +2068,7 @@ async fn test_transfers_and_committee_removal() {
                 ),
                 (
                     SYSTEM,
+                    Destination::Subscribers(ADMIN_CHANNEL.to_string()),
                     Effect::SetCommittees {
                         admin_id,
                         epoch: Epoch::from(1),
