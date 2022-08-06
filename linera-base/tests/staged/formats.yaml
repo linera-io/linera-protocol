@@ -242,6 +242,15 @@ CrossChainRequest:
               TYPENAME: ChainId
           - height:
               TYPENAME: BlockHeight
+Destination:
+  ENUM:
+    0:
+      Recipient:
+        NEWTYPE:
+          TYPENAME: ChainId
+    1:
+      Subscribers:
+        NEWTYPE: STR
 Effect:
   ENUM:
     0:
@@ -728,6 +737,7 @@ Value:
               SEQ:
                 TUPLE:
                   - TYPENAME: ApplicationId
+                  - TYPENAME: Destination
                   - TYPENAME: Effect
           - state_hash:
               TYPENAME: HashValue
@@ -740,6 +750,7 @@ Value:
               SEQ:
                 TUPLE:
                   - TYPENAME: ApplicationId
+                  - TYPENAME: Destination
                   - TYPENAME: Effect
           - state_hash:
               TYPENAME: HashValue

@@ -108,7 +108,7 @@ pub struct BlockAndRound {
     pub round: RoundNumber,
 }
 
-/// The identifier of a channel.
+/// The identifier of a channel, relative to a particular application.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Hash, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Arbitrary))]
 pub struct ChannelId {
@@ -116,7 +116,7 @@ pub struct ChannelId {
     pub name: String,
 }
 
-/// The origin of a message. Used to identify each inbox.
+/// The origin of a message, relative to a particular application. Used to identify each inbox.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct Origin {
     /// The chain ID of the sender.
@@ -141,6 +141,15 @@ impl Origin {
     }
 }
 
+/// The destination of a message, relative to a particular application.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub enum Destination {
+    /// Direct message to a chain.
+    Recipient(ChainId),
+    /// Broadcast to the current subscribers of our channel.
+    Subscribers(String),
+}
+
 /// The origin of a message coming from a particular chain. Used to identify each inbox.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Medium {
@@ -150,7 +159,7 @@ pub enum Medium {
     Channel(String),
 }
 
-/// A selection of messages sent by a block to another chain.
+/// A selection of messages received from a block of another chain.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct MessageGroup {
     pub application_id: ApplicationId,
@@ -175,13 +184,13 @@ pub enum Value {
     ValidatedBlock {
         block: Block,
         round: RoundNumber,
-        effects: Vec<(ApplicationId, Effect)>,
+        effects: Vec<(ApplicationId, Destination, Effect)>,
         state_hash: HashValue,
     },
     /// The block is validated and confirmed (i.e. ready to be published).
     ConfirmedBlock {
         block: Block,
-        effects: Vec<(ApplicationId, Effect)>,
+        effects: Vec<(ApplicationId, Destination, Effect)>,
         state_hash: HashValue,
     },
 }
@@ -368,7 +377,7 @@ impl Value {
         }
     }
 
-    pub fn effects_and_state_hash(&self) -> (Vec<(ApplicationId, Effect)>, HashValue) {
+    pub fn effects_and_state_hash(&self) -> (Vec<(ApplicationId, Destination, Effect)>, HashValue) {
         match self {
             Value::ConfirmedBlock {
                 effects,

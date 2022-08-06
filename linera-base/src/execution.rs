@@ -9,7 +9,7 @@ use crate::{
     error::Error,
     manager::ChainManager,
     messages::{
-        BlockHeight, ChainDescription, ChainId, ChannelId, EffectId, Epoch, Medium, Origin, Owner,
+        BlockHeight, ChainDescription, ChainId, ChannelId, Destination, EffectId, Epoch, Owner,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -153,40 +153,12 @@ impl ExecutionState {
 
 #[derive(Debug, Default)]
 pub struct ApplicationResult {
-    pub effects: Vec<Effect>,
-    pub recipients: Vec<ChainId>,
+    pub effects: Vec<(Destination, Effect)>,
     pub subscribe: Option<(String, ChainId)>,
     pub unsubscribe: Option<(String, ChainId)>,
-    pub need_channel_broadcast: Vec<String>,
 }
 
 impl ExecutionState {
-    pub(crate) fn is_recipient(&self, origin: &Origin, effect: &Effect) -> bool {
-        use Effect::*;
-        match (&origin.medium, effect) {
-            (Medium::Direct, Credit { recipient, .. }) => {
-                // We are the recipient of the transfer.
-                self.chain_id == *recipient
-            }
-            (Medium::Direct, OpenChain { id, .. }) => {
-                // We are the created chain.
-                self.chain_id == *id
-            }
-            (Medium::Direct, Subscribe { channel, .. } | Unsubscribe { channel, .. }) => {
-                // We are the owner of the channel.
-                self.chain_id == channel.chain_id
-            }
-            (Medium::Channel(channel), SetCommittees { admin_id, .. }) => {
-                // We are managed by this admin chain.
-                channel == ADMIN_CHANNEL
-                    && self.chain_id != *admin_id
-                    && self.admin_id.as_ref() == Some(admin_id)
-            }
-            (Medium::Direct, Notify { id }) => self.chain_id == *id,
-            _ => false,
-        }
-    }
-
     /// Execute the sender's side of the operation.
     /// Return a list of recipients who need to be notified.
     pub(crate) fn apply_operation(
@@ -222,26 +194,30 @@ impl ExecutionState {
                         epoch: *epoch
                     }
                 );
-                let e1 = Effect::OpenChain {
-                    id: *id,
-                    owner: *owner,
-                    committees: committees.clone(),
-                    admin_id: *admin_id,
-                    epoch: *epoch,
-                };
-                let e2 = Effect::Subscribe {
-                    id: *id,
-                    channel: ChannelId {
-                        chain_id: *admin_id,
-                        name: ADMIN_CHANNEL.into(),
+                let e1 = (
+                    Destination::Recipient(*id),
+                    Effect::OpenChain {
+                        id: *id,
+                        owner: *owner,
+                        committees: committees.clone(),
+                        admin_id: *admin_id,
+                        epoch: *epoch,
                     },
-                };
+                );
+                let e2 = (
+                    Destination::Recipient(*admin_id),
+                    Effect::Subscribe {
+                        id: *id,
+                        channel: ChannelId {
+                            chain_id: *admin_id,
+                            name: ADMIN_CHANNEL.into(),
+                        },
+                    },
+                );
                 let application = ApplicationResult {
                     effects: vec![e1, e2],
-                    recipients: vec![*id, *admin_id],
                     subscribe: None,
                     unsubscribe: None,
-                    need_channel_broadcast: Vec::new(),
                 };
                 Ok(application)
             }
@@ -258,20 +234,19 @@ impl ExecutionState {
                 // Unsubscribe to all channels.
                 let subscriptions = std::mem::take(&mut self.subscriptions);
                 let mut effects = Vec::new();
-                let mut recipients = Vec::new();
                 for (channel, ()) in subscriptions {
-                    recipients.push(channel.chain_id);
-                    effects.push(Effect::Unsubscribe {
-                        id: self.chain_id,
-                        channel,
-                    });
+                    effects.push((
+                        Destination::Recipient(channel.chain_id),
+                        Effect::Unsubscribe {
+                            id: self.chain_id,
+                            channel,
+                        },
+                    ));
                 }
                 let application = ApplicationResult {
                     effects,
-                    recipients,
                     subscribe: None,
                     unsubscribe: None,
-                    need_channel_broadcast: Vec::new(),
                 };
                 Ok(application)
             }
@@ -289,14 +264,15 @@ impl ExecutionState {
                 let application = match recipient {
                     Address::Burn => ApplicationResult::default(),
                     Address::Account(id) => ApplicationResult {
-                        effects: vec![Effect::Credit {
-                            amount: *amount,
-                            recipient: *id,
-                        }],
-                        recipients: vec![*id],
+                        effects: vec![(
+                            Destination::Recipient(*id),
+                            Effect::Credit {
+                                amount: *amount,
+                                recipient: *id,
+                            },
+                        )],
                         subscribe: None,
                         unsubscribe: None,
-                        need_channel_broadcast: Vec::new(),
                     },
                 };
                 Ok(application)
@@ -319,16 +295,16 @@ impl ExecutionState {
                 self.committees.insert(*epoch, committee.clone());
                 self.epoch = Some(*epoch);
                 let application = ApplicationResult {
-                    effects: vec![Effect::SetCommittees {
-                        admin_id: *admin_id,
-                        epoch: self.epoch.expect("chain is active"),
-                        committees: self.committees.clone(),
-                    }],
-                    recipients: Vec::new(),
+                    effects: vec![(
+                        Destination::Subscribers(ADMIN_CHANNEL.into()),
+                        Effect::SetCommittees {
+                            admin_id: *admin_id,
+                            epoch: self.epoch.expect("chain is active"),
+                            committees: self.committees.clone(),
+                        },
+                    )],
                     subscribe: None,
                     unsubscribe: None,
-                    // Notify our subscribers.
-                    need_channel_broadcast: vec![ADMIN_CHANNEL.into()],
                 };
                 Ok(application)
             }
@@ -344,16 +320,16 @@ impl ExecutionState {
                     Error::InvalidCommitteeRemoval
                 );
                 let application = ApplicationResult {
-                    effects: vec![Effect::SetCommittees {
-                        admin_id: *admin_id,
-                        epoch: self.epoch.expect("chain is active"),
-                        committees: self.committees.clone(),
-                    }],
-                    recipients: Vec::new(),
+                    effects: vec![(
+                        Destination::Subscribers(ADMIN_CHANNEL.into()),
+                        Effect::SetCommittees {
+                            admin_id: *admin_id,
+                            epoch: self.epoch.expect("chain is active"),
+                            committees: self.committees.clone(),
+                        },
+                    )],
                     subscribe: None,
                     unsubscribe: None,
-                    // Notify our subscribers.
-                    need_channel_broadcast: vec![ADMIN_CHANNEL.into()],
                 };
                 Ok(application)
             }
@@ -377,17 +353,18 @@ impl ExecutionState {
                 );
                 self.subscriptions.insert(channel_id, ());
                 let application = ApplicationResult {
-                    effects: vec![Effect::Subscribe {
-                        id: self.chain_id,
-                        channel: ChannelId {
-                            chain_id: *admin_id,
-                            name: ADMIN_CHANNEL.into(),
+                    effects: vec![(
+                        Destination::Recipient(*admin_id),
+                        Effect::Subscribe {
+                            id: self.chain_id,
+                            channel: ChannelId {
+                                chain_id: *admin_id,
+                                name: ADMIN_CHANNEL.into(),
+                            },
                         },
-                    }],
-                    recipients: vec![*admin_id],
+                    )],
                     subscribe: None,
                     unsubscribe: None,
-                    need_channel_broadcast: Vec::new(),
                 };
                 Ok(application)
             }
@@ -402,17 +379,18 @@ impl ExecutionState {
                 );
                 self.subscriptions.remove(&channel_id);
                 let application = ApplicationResult {
-                    effects: vec![Effect::Unsubscribe {
-                        id: self.chain_id,
-                        channel: ChannelId {
-                            chain_id: *admin_id,
-                            name: ADMIN_CHANNEL.into(),
+                    effects: vec![(
+                        Destination::Recipient(*admin_id),
+                        Effect::Unsubscribe {
+                            id: self.chain_id,
+                            channel: ChannelId {
+                                chain_id: *admin_id,
+                                name: ADMIN_CHANNEL.into(),
+                            },
                         },
-                    }],
-                    recipients: vec![*admin_id],
+                    )],
                     subscribe: None,
                     unsubscribe: None,
-                    need_channel_broadcast: Vec::new(),
                 };
                 Ok(application)
             }
@@ -448,21 +426,17 @@ impl ExecutionState {
                 // Notify the subscriber about this block, so that it is included in the
                 // receive_log of the subscriber and correctly synchronized.
                 let application = ApplicationResult {
-                    effects: vec![Effect::Notify { id: *id }],
-                    recipients: vec![*id],
+                    effects: vec![(Destination::Recipient(*id), Effect::Notify { id: *id })],
                     subscribe: Some((channel.name.clone(), *id)),
                     unsubscribe: None,
-                    need_channel_broadcast: Vec::new(),
                 };
                 Ok(application)
             }
             Effect::Unsubscribe { id, channel } if channel.chain_id == self.chain_id => {
                 let application = ApplicationResult {
-                    effects: vec![Effect::Notify { id: *id }],
-                    recipients: vec![*id], // Notify the subscriber.
+                    effects: vec![(Destination::Recipient(*id), Effect::Notify { id: *id })],
                     subscribe: None,
                     unsubscribe: Some((channel.name.clone(), *id)),
-                    need_channel_broadcast: Vec::new(),
                 };
                 Ok(application)
             }
