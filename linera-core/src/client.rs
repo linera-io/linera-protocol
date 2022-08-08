@@ -10,10 +10,10 @@ use crate::{
 use anyhow::{anyhow, bail, ensure, Result};
 use async_trait::async_trait;
 use linera_base::{
-    chain::SYSTEM,
     committee::{Committee, ValidatorState},
     crypto::*,
     error::Error,
+    execution::SYSTEM,
     manager::ChainManager,
     messages::*,
     system::{Address, Amount, Balance, SystemExecutionState, SystemOperation, UserData},

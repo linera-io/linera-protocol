@@ -4,13 +4,13 @@
 
 use crate::{
     committee::Committee,
-    crypto::*,
     ensure,
     error::Error,
+    execution::ApplicationResult,
     manager::ChainManager,
     messages::{
         BlockHeight, ChainDescription, ChainId, ChannelId, Destination, Effect, EffectId, Epoch,
-        Operation, Owner,
+        Owner,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -138,8 +138,6 @@ pub enum SystemEffect {
     Notify { id: ChainId },
 }
 
-impl BcsSignable for SystemExecutionState {}
-
 impl SystemExecutionState {
     pub fn new(chain_id: ChainId) -> Self {
         Self {
@@ -164,13 +162,6 @@ impl SystemExecutionState {
     }
 }
 
-#[derive(Debug, Default)]
-pub struct ApplicationResult {
-    pub effects: Vec<(Destination, Effect)>,
-    pub subscribe: Option<(String, ChainId)>,
-    pub unsubscribe: Option<(String, ChainId)>,
-}
-
 impl SystemExecutionState {
     /// Execute the sender's side of the operation.
     /// Return a list of recipients who need to be notified.
@@ -178,15 +169,13 @@ impl SystemExecutionState {
         &mut self,
         height: BlockHeight,
         index: usize,
-        operation: &Operation,
+        operation: &SystemOperation,
     ) -> Result<ApplicationResult, Error> {
         let operation_id = EffectId {
             chain_id: self.chain_id,
             height,
             index,
         };
-        let Operation::System(operation) = operation;
-
         use SystemOperation::*;
         match operation {
             OpenChain {
@@ -415,9 +404,10 @@ impl SystemExecutionState {
 
     /// Execute the recipient's side of an operation, aka a "remote effect".
     /// Effects must be executed by order of heights in the sender's chain.
-    pub(crate) fn apply_effect(&mut self, effect: &Effect) -> Result<ApplicationResult, Error> {
-        let Effect::System(effect) = effect;
-
+    pub(crate) fn apply_effect(
+        &mut self,
+        effect: &SystemEffect,
+    ) -> Result<ApplicationResult, Error> {
         use SystemEffect::*;
         match effect {
             Credit { amount, recipient } if self.chain_id == *recipient => {

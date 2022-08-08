@@ -77,15 +77,18 @@ pub struct EffectId {
 }
 
 /// An operation.
+// TODO: we may want to unify user and system operations under Vec<u8> eventually.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Operation {
     System(SystemOperation),
+    UserBincodeEncoded(Vec<u8>),
 }
 
 /// An effect.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Effect {
     System(SystemEffect),
+    UserBincodeEncoded(Vec<u8>),
 }
 
 /// A block containing operations to apply on a given chain, as well as the

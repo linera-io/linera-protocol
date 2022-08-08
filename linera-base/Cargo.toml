@@ -13,6 +13,7 @@ bincode = "1.3.3"
 generic-array = { version = "0.14.4", features = ["serde"] }
 hex = "0.4.3"
 log = "0.4.14"
+once_cell = "1.13.0"
 rand = "0.7.3"
 serde = { version = "1.0.130", features = ["derive"] }
 ed25519 = "1.2.0"
