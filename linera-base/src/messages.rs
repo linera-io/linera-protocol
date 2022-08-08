@@ -81,14 +81,26 @@ pub struct EffectId {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Operation {
     System(SystemOperation),
-    UserBincodeEncoded(Vec<u8>),
+    User(Vec<u8>),
 }
 
 /// An effect.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Effect {
     System(SystemEffect),
-    UserBincodeEncoded(Vec<u8>),
+    User(Vec<u8>),
+}
+
+impl From<SystemEffect> for Effect {
+    fn from(effect: SystemEffect) -> Self {
+        Effect::System(effect)
+    }
+}
+
+impl From<Vec<u8>> for Effect {
+    fn from(effect: Vec<u8>) -> Self {
+        Effect::User(effect)
+    }
 }
 
 /// A block containing operations to apply on a given chain, as well as the

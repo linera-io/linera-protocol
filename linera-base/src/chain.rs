@@ -479,49 +479,44 @@ impl ChainState {
                     }
                 }
                 // Execute the received effect.
-                let application_result = self
-                    .state
-                    .apply_effect(message_group.application_id, message_effect)?;
-                Self::process_application_result(
+                self.state.apply_effect(
                     message_group.application_id,
+                    block.height,
+                    message_effect,
                     &mut communication_state.outboxes,
                     &mut communication_state.channels,
                     &mut effects,
-                    block.height,
-                    application_result,
-                );
+                )?;
             }
         }
         // Second, execute the operations in the block and remember the recipients to notify.
         for (index, (application_id, operation)) in block.operations.iter().enumerate() {
-            let application_result =
-                self.state
-                    .apply_operation(*application_id, block.height, index, operation)?;
             let communication_state = self
                 .communication_states
                 .entry(*application_id)
                 .or_default();
-            Self::process_application_result(
+            self.state.apply_operation(
                 *application_id,
+                block.height,
+                index,
+                operation,
                 &mut communication_state.outboxes,
                 &mut communication_state.channels,
                 &mut effects,
-                block.height,
-                application_result,
-            );
+            )?;
         }
         // Last, recompute the state hash.
         self.state_hash = HashValue::new(&self.state);
         Ok(effects)
     }
 
-    fn process_application_result(
+    pub(crate) fn process_application_result<E: Into<Effect>>(
         application_id: ApplicationId,
         outboxes: &mut HashMap<ChainId, OutboxState>,
         channels: &mut HashMap<String, ChannelState>,
         effects: &mut Vec<(ApplicationId, Destination, Effect)>,
         height: BlockHeight,
-        application: ApplicationResult,
+        application: ApplicationResult<E>,
     ) {
         // Record the effects of the execution. Effects are understood within an
         // application.
@@ -536,7 +531,7 @@ impl ChainState {
                     channel_broadcasts.insert(name.to_string());
                 }
             }
-            effects.push((application_id, destination, effect));
+            effects.push((application_id, destination, effect.into()));
         }
         // Update the (regular) outboxes.
         for recipient in recipients {
