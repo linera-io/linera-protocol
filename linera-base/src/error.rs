@@ -4,8 +4,8 @@
 
 use crate::{
     crypto::*,
-    execution::Balance,
     messages::{ApplicationId, BlockHeight, ChainId, Epoch, Origin, RoundNumber},
+    system::Balance,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

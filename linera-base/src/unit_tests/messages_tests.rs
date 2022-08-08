@@ -5,7 +5,7 @@
 use super::*;
 use crate::{
     chain::SYSTEM,
-    execution::{Address, Amount, ExecutionState, Operation, UserData},
+    system::{Address, Amount, SystemExecutionState, SystemOperation, UserData},
 };
 
 #[test]
@@ -20,11 +20,11 @@ fn test_signed_values() {
         incoming_messages: Vec::new(),
         operations: vec![(
             SYSTEM,
-            Operation::Transfer {
+            Operation::System(SystemOperation::Transfer {
                 recipient: Address::Account(ChainId::root(2)),
                 amount: Amount::from(1),
                 user_data: UserData::default(),
-            },
+            }),
         )],
         height: BlockHeight::from(0),
         previous_block_hash: None,
@@ -32,7 +32,7 @@ fn test_signed_values() {
     let value = Value::ConfirmedBlock {
         block,
         effects: Vec::new(),
-        state_hash: HashValue::new(&ExecutionState::new(ChainId::root(1))),
+        state_hash: HashValue::new(&SystemExecutionState::new(ChainId::root(1))),
     };
 
     let v = Vote::new(value.clone(), &key1);
@@ -58,11 +58,11 @@ fn test_certificates() {
         incoming_messages: Vec::new(),
         operations: vec![(
             SYSTEM,
-            Operation::Transfer {
+            Operation::System(SystemOperation::Transfer {
                 recipient: Address::Account(ChainId::root(1)),
                 amount: Amount::from(1),
                 user_data: UserData::default(),
-            },
+            }),
         )],
         previous_block_hash: None,
         height: BlockHeight::from(0),
@@ -70,7 +70,7 @@ fn test_certificates() {
     let value = Value::ConfirmedBlock {
         block,
         effects: Vec::new(),
-        state_hash: HashValue::new(&ExecutionState::new(ChainId::root(1))),
+        state_hash: HashValue::new(&SystemExecutionState::new(ChainId::root(1))),
     };
 
     let v1 = Vote::new(value.clone(), &key1);

@@ -10,9 +10,9 @@ use linera_base::{
     committee::ValidatorState,
     crypto::*,
     error::Error,
-    execution::{Address, Amount, Balance, Operation, UserData},
     messages::*,
     rpc,
+    system::{Address, Amount, Balance, SystemOperation, UserData},
 };
 use linera_core::{
     client::*,
@@ -157,11 +157,11 @@ impl ClientContext {
                 incoming_messages: Vec::new(),
                 operations: vec![(
                     SYSTEM,
-                    Operation::Transfer {
+                    Operation::System(SystemOperation::Transfer {
                         recipient: Address::Account(next_recipient),
                         amount: Amount::from(1),
                         user_data: UserData::default(),
-                    },
+                    }),
                 )],
                 previous_block_hash: chain.block_hash,
                 height: chain.next_block_height,

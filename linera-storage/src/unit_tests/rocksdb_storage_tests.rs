@@ -4,8 +4,8 @@
 use super::*;
 use linera_base::{
     chain::SYSTEM,
-    execution::{ExecutionState, Operation},
     messages::*,
+    system::{SystemExecutionState, SystemOperation},
 };
 
 #[tokio::test]
@@ -35,14 +35,14 @@ async fn test_rocksdb_storage_for_certificates() {
             epoch: Epoch::from(0),
             chain_id: ChainId::root(i),
             incoming_messages: Vec::new(),
-            operations: vec![(SYSTEM, Operation::CloseChain)],
+            operations: vec![(SYSTEM, Operation::System(SystemOperation::CloseChain))],
             previous_block_hash: None,
             height: BlockHeight::default(),
         };
         let value = Value::ConfirmedBlock {
             block,
             effects: Vec::new(),
-            state_hash: HashValue::new(&ExecutionState::new(ChainId::root(1))),
+            state_hash: HashValue::new(&SystemExecutionState::new(ChainId::root(1))),
         };
         let certificate = Certificate::new(value, vec![]);
         client.write_certificate(certificate.clone()).await.unwrap();
@@ -58,14 +58,14 @@ async fn test_rocksdb_persistance_across_writes() {
         epoch: Epoch::from(0),
         chain_id: ChainId::root(1),
         incoming_messages: Vec::new(),
-        operations: vec![(SYSTEM, Operation::CloseChain)],
+        operations: vec![(SYSTEM, Operation::System(SystemOperation::CloseChain))],
         previous_block_hash: None,
         height: BlockHeight::default(),
     };
     let value = Value::ConfirmedBlock {
         block,
         effects: Vec::new(),
-        state_hash: HashValue::new(&ExecutionState::new(ChainId::root(1))),
+        state_hash: HashValue::new(&SystemExecutionState::new(ChainId::root(1))),
     };
     let certificate = Certificate::new(value, vec![]);
 

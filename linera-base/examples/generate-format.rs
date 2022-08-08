@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::{chain, error, execution, manager, messages, rpc};
+use linera_base::{chain, error, manager, messages, rpc, system};
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use std::{fs::File, io::Write};
 use structopt::{clap::arg_enum, StructOpt};
@@ -16,9 +16,11 @@ fn get_registry() -> Result<Registry> {
     let samples = Samples::new();
     // 1. Record samples for types with custom deserializers.
     // 2. Trace the main entry point(s) + every enum separately.
-    tracer.trace_type::<execution::Address>(&samples)?;
-    tracer.trace_type::<execution::Operation>(&samples)?;
-    tracer.trace_type::<execution::Effect>(&samples)?;
+    tracer.trace_type::<system::Address>(&samples)?;
+    tracer.trace_type::<system::SystemOperation>(&samples)?;
+    tracer.trace_type::<system::SystemEffect>(&samples)?;
+    tracer.trace_type::<messages::Operation>(&samples)?;
+    tracer.trace_type::<messages::Effect>(&samples)?;
     tracer.trace_type::<messages::Value>(&samples)?;
     tracer.trace_type::<messages::Medium>(&samples)?;
     tracer.trace_type::<messages::Destination>(&samples)?;

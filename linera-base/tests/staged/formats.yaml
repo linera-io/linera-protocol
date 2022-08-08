@@ -87,7 +87,7 @@ ChainInfo:
           TYPENAME: ChainDescription
     - manager:
         TYPENAME: ChainManager
-    - balance:
+    - system_balance:
         TYPENAME: Balance
     - block_hash:
         OPTION:
@@ -96,9 +96,9 @@ ChainInfo:
         TYPENAME: BlockHeight
     - state_hash:
         TYPENAME: HashValue
-    - requested_execution_state:
+    - requested_system_execution_state:
         OPTION:
-          TYPENAME: ExecutionState
+          TYPENAME: SystemExecutionState
     - requested_pending_messages:
         SEQ:
           TYPENAME: MessageGroup
@@ -116,7 +116,7 @@ ChainInfoQuery:
     - test_next_block_height:
         OPTION:
           TYPENAME: BlockHeight
-    - request_execution_state: BOOL
+    - request_system_execution_state: BOOL
     - request_pending_messages: BOOL
     - request_sent_certificates_in_range:
         OPTION:
@@ -145,7 +145,7 @@ ChainManager:
 ChainState:
   STRUCT:
     - state:
-        TYPENAME: ExecutionState
+        TYPENAME: SystemExecutionState
     - state_hash:
         TYPENAME: HashValue
     - block_hash:
@@ -251,61 +251,9 @@ Destination:
 Effect:
   ENUM:
     0:
-      Credit:
-        STRUCT:
-          - recipient:
-              TYPENAME: ChainId
-          - amount:
-              TYPENAME: Amount
-    1:
-      OpenChain:
-        STRUCT:
-          - id:
-              TYPENAME: ChainId
-          - owner:
-              TYPENAME: Owner
-          - admin_id:
-              TYPENAME: ChainId
-          - epoch:
-              TYPENAME: Epoch
-          - committees:
-              MAP:
-                KEY:
-                  TYPENAME: Epoch
-                VALUE:
-                  TYPENAME: Committee
-    2:
-      SetCommittees:
-        STRUCT:
-          - admin_id:
-              TYPENAME: ChainId
-          - epoch:
-              TYPENAME: Epoch
-          - committees:
-              MAP:
-                KEY:
-                  TYPENAME: Epoch
-                VALUE:
-                  TYPENAME: Committee
-    3:
-      Subscribe:
-        STRUCT:
-          - id:
-              TYPENAME: ChainId
-          - channel:
-              TYPENAME: ChannelId
-    4:
-      Unsubscribe:
-        STRUCT:
-          - id:
-              TYPENAME: ChainId
-          - channel:
-              TYPENAME: ChannelId
-    5:
-      Notify:
-        STRUCT:
-          - id:
-              TYPENAME: ChainId
+      System:
+        NEWTYPE:
+          TYPENAME: SystemEffect
 EffectId:
   STRUCT:
     - chain_id:
@@ -502,34 +450,6 @@ Event:
     - index: U64
     - effect:
         TYPENAME: Effect
-ExecutionState:
-  STRUCT:
-    - chain_id:
-        TYPENAME: ChainId
-    - description:
-        OPTION:
-          TYPENAME: ChainDescription
-    - epoch:
-        OPTION:
-          TYPENAME: Epoch
-    - admin_id:
-        OPTION:
-          TYPENAME: ChainId
-    - subscriptions:
-        MAP:
-          KEY:
-            TYPENAME: ChannelId
-          VALUE: UNIT
-    - committees:
-        MAP:
-          KEY:
-            TYPENAME: Epoch
-          VALUE:
-            TYPENAME: Committee
-    - manager:
-        TYPENAME: ChainManager
-    - balance:
-        TYPENAME: Balance
 HashValue:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -614,6 +534,131 @@ MultiOwnerManager:
 Operation:
   ENUM:
     0:
+      System:
+        NEWTYPE:
+          TYPENAME: SystemOperation
+Origin:
+  STRUCT:
+    - chain_id:
+        TYPENAME: ChainId
+    - medium:
+        TYPENAME: Medium
+OutboxState:
+  STRUCT:
+    - queue:
+        SEQ:
+          TYPENAME: BlockHeight
+Owner:
+  NEWTYPESTRUCT:
+    TYPENAME: PublicKey
+PublicKey:
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 32
+RoundNumber:
+  NEWTYPESTRUCT: U64
+Signature:
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 64
+SingleOwnerManager:
+  STRUCT:
+    - owner:
+        TYPENAME: Owner
+    - pending:
+        OPTION:
+          TYPENAME: Vote
+SystemEffect:
+  ENUM:
+    0:
+      Credit:
+        STRUCT:
+          - recipient:
+              TYPENAME: ChainId
+          - amount:
+              TYPENAME: Amount
+    1:
+      OpenChain:
+        STRUCT:
+          - id:
+              TYPENAME: ChainId
+          - owner:
+              TYPENAME: Owner
+          - admin_id:
+              TYPENAME: ChainId
+          - epoch:
+              TYPENAME: Epoch
+          - committees:
+              MAP:
+                KEY:
+                  TYPENAME: Epoch
+                VALUE:
+                  TYPENAME: Committee
+    2:
+      SetCommittees:
+        STRUCT:
+          - admin_id:
+              TYPENAME: ChainId
+          - epoch:
+              TYPENAME: Epoch
+          - committees:
+              MAP:
+                KEY:
+                  TYPENAME: Epoch
+                VALUE:
+                  TYPENAME: Committee
+    3:
+      Subscribe:
+        STRUCT:
+          - id:
+              TYPENAME: ChainId
+          - channel:
+              TYPENAME: ChannelId
+    4:
+      Unsubscribe:
+        STRUCT:
+          - id:
+              TYPENAME: ChainId
+          - channel:
+              TYPENAME: ChannelId
+    5:
+      Notify:
+        STRUCT:
+          - id:
+              TYPENAME: ChainId
+SystemExecutionState:
+  STRUCT:
+    - chain_id:
+        TYPENAME: ChainId
+    - description:
+        OPTION:
+          TYPENAME: ChainDescription
+    - epoch:
+        OPTION:
+          TYPENAME: Epoch
+    - admin_id:
+        OPTION:
+          TYPENAME: ChainId
+    - subscriptions:
+        MAP:
+          KEY:
+            TYPENAME: ChannelId
+          VALUE: UNIT
+    - committees:
+        MAP:
+          KEY:
+            TYPENAME: Epoch
+          VALUE:
+            TYPENAME: Committee
+    - manager:
+        TYPENAME: ChainManager
+    - balance:
+        TYPENAME: Balance
+SystemOperation:
+  ENUM:
+    0:
       Transfer:
         STRUCT:
           - recipient:
@@ -678,39 +723,6 @@ Operation:
               TYPENAME: ChainId
           - epoch:
               TYPENAME: Epoch
-Origin:
-  STRUCT:
-    - chain_id:
-        TYPENAME: ChainId
-    - medium:
-        TYPENAME: Medium
-OutboxState:
-  STRUCT:
-    - queue:
-        SEQ:
-          TYPENAME: BlockHeight
-Owner:
-  NEWTYPESTRUCT:
-    TYPENAME: PublicKey
-PublicKey:
-  NEWTYPESTRUCT:
-    TUPLEARRAY:
-      CONTENT: U8
-      SIZE: 32
-RoundNumber:
-  NEWTYPESTRUCT: U64
-Signature:
-  NEWTYPESTRUCT:
-    TUPLEARRAY:
-      CONTENT: U8
-      SIZE: 64
-SingleOwnerManager:
-  STRUCT:
-    - owner:
-        TYPENAME: Owner
-    - pending:
-        OPTION:
-          TYPENAME: Vote
 UserData:
   NEWTYPESTRUCT:
     OPTION:

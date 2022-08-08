@@ -9,16 +9,17 @@ use crate::{
     error::Error,
     manager::ChainManager,
     messages::{
-        BlockHeight, ChainDescription, ChainId, ChannelId, Destination, EffectId, Epoch, Owner,
+        BlockHeight, ChainDescription, ChainId, ChannelId, Destination, Effect, EffectId, Epoch,
+        Operation, Owner,
     },
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-/// Execution state of a chain.
+/// The execution state of the system of a chain.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub struct ExecutionState {
+pub struct SystemExecutionState {
     /// The UID of the chain.
     pub chain_id: ChainId,
     /// How the chain was created. May be unknown for inactive chains.
@@ -68,7 +69,7 @@ pub const ADMIN_CHANNEL: &str = "ADMIN";
 
 /// A chain operation.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub enum Operation {
+pub enum SystemOperation {
     /// Transfer `amount` units of value to the recipient.
     Transfer {
         recipient: Address,
@@ -112,7 +113,7 @@ pub enum Operation {
 
 /// The effect of an operation to be performed on a remote chain.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub enum Effect {
+pub enum SystemEffect {
     /// Credit `amount` units of value to the recipient.
     Credit { recipient: ChainId, amount: Amount },
     /// Create (or activate) a new chain by installing the given authentication key.
@@ -137,9 +138,9 @@ pub enum Effect {
     Notify { id: ChainId },
 }
 
-impl BcsSignable for ExecutionState {}
+impl BcsSignable for SystemExecutionState {}
 
-impl ExecutionState {
+impl SystemExecutionState {
     pub fn new(chain_id: ChainId) -> Self {
         Self {
             chain_id,
@@ -170,7 +171,7 @@ pub struct ApplicationResult {
     pub unsubscribe: Option<(String, ChainId)>,
 }
 
-impl ExecutionState {
+impl SystemExecutionState {
     /// Execute the sender's side of the operation.
     /// Return a list of recipients who need to be notified.
     pub(crate) fn apply_operation(
@@ -184,8 +185,11 @@ impl ExecutionState {
             height,
             index,
         };
+        let Operation::System(operation) = operation;
+
+        use SystemOperation::*;
         match operation {
-            Operation::OpenChain {
+            OpenChain {
                 id,
                 owner,
                 committees,
@@ -208,23 +212,23 @@ impl ExecutionState {
                 );
                 let e1 = (
                     Destination::Recipient(*id),
-                    Effect::OpenChain {
+                    Effect::System(SystemEffect::OpenChain {
                         id: *id,
                         owner: *owner,
                         committees: committees.clone(),
                         admin_id: *admin_id,
                         epoch: *epoch,
-                    },
+                    }),
                 );
                 let e2 = (
                     Destination::Recipient(*admin_id),
-                    Effect::Subscribe {
+                    Effect::System(SystemEffect::Subscribe {
                         id: *id,
                         channel: ChannelId {
                             chain_id: *admin_id,
                             name: ADMIN_CHANNEL.into(),
                         },
-                    },
+                    }),
                 );
                 let application = ApplicationResult {
                     effects: vec![e1, e2],
@@ -233,15 +237,15 @@ impl ExecutionState {
                 };
                 Ok(application)
             }
-            Operation::ChangeOwner { new_owner } => {
+            ChangeOwner { new_owner } => {
                 self.manager = ChainManager::single(*new_owner);
                 Ok(ApplicationResult::default())
             }
-            Operation::ChangeMultipleOwners { new_owners } => {
+            ChangeMultipleOwners { new_owners } => {
                 self.manager = ChainManager::multiple(new_owners.clone());
                 Ok(ApplicationResult::default())
             }
-            Operation::CloseChain => {
+            CloseChain => {
                 self.manager = ChainManager::default();
                 // Unsubscribe to all channels.
                 let subscriptions = std::mem::take(&mut self.subscriptions);
@@ -249,10 +253,10 @@ impl ExecutionState {
                 for (channel, ()) in subscriptions {
                     effects.push((
                         Destination::Recipient(channel.chain_id),
-                        Effect::Unsubscribe {
+                        Effect::System(SystemEffect::Unsubscribe {
                             id: self.chain_id,
                             channel,
-                        },
+                        }),
                     ));
                 }
                 let application = ApplicationResult {
@@ -262,7 +266,7 @@ impl ExecutionState {
                 };
                 Ok(application)
             }
-            Operation::Transfer {
+            Transfer {
                 amount, recipient, ..
             } => {
                 ensure!(*amount > Amount::zero(), Error::IncorrectTransferAmount);
@@ -278,10 +282,10 @@ impl ExecutionState {
                     Address::Account(id) => ApplicationResult {
                         effects: vec![(
                             Destination::Recipient(*id),
-                            Effect::Credit {
+                            Effect::System(SystemEffect::Credit {
                                 amount: *amount,
                                 recipient: *id,
-                            },
+                            }),
                         )],
                         subscribe: None,
                         unsubscribe: None,
@@ -289,7 +293,7 @@ impl ExecutionState {
                 };
                 Ok(application)
             }
-            Operation::CreateCommittee {
+            CreateCommittee {
                 admin_id,
                 epoch,
                 committee,
@@ -309,18 +313,18 @@ impl ExecutionState {
                 let application = ApplicationResult {
                     effects: vec![(
                         Destination::Subscribers(ADMIN_CHANNEL.into()),
-                        Effect::SetCommittees {
+                        Effect::System(SystemEffect::SetCommittees {
                             admin_id: *admin_id,
                             epoch: self.epoch.expect("chain is active"),
                             committees: self.committees.clone(),
-                        },
+                        }),
                     )],
                     subscribe: None,
                     unsubscribe: None,
                 };
                 Ok(application)
             }
-            Operation::RemoveCommittee { admin_id, epoch } => {
+            RemoveCommittee { admin_id, epoch } => {
                 // We are the admin chain and want to remove a committee.
                 ensure!(*admin_id == self.chain_id, Error::InvalidCommitteeRemoval);
                 ensure!(
@@ -334,18 +338,18 @@ impl ExecutionState {
                 let application = ApplicationResult {
                     effects: vec![(
                         Destination::Subscribers(ADMIN_CHANNEL.into()),
-                        Effect::SetCommittees {
+                        Effect::System(SystemEffect::SetCommittees {
                             admin_id: *admin_id,
                             epoch: self.epoch.expect("chain is active"),
                             committees: self.committees.clone(),
-                        },
+                        }),
                     )],
                     subscribe: None,
                     unsubscribe: None,
                 };
                 Ok(application)
             }
-            Operation::SubscribeToNewCommittees { admin_id } => {
+            SubscribeToNewCommittees { admin_id } => {
                 // We should not subscribe to ourself in this case.
                 ensure!(
                     self.chain_id != *admin_id,
@@ -367,20 +371,20 @@ impl ExecutionState {
                 let application = ApplicationResult {
                     effects: vec![(
                         Destination::Recipient(*admin_id),
-                        Effect::Subscribe {
+                        Effect::System(SystemEffect::Subscribe {
                             id: self.chain_id,
                             channel: ChannelId {
                                 chain_id: *admin_id,
                                 name: ADMIN_CHANNEL.into(),
                             },
-                        },
+                        }),
                     )],
                     subscribe: None,
                     unsubscribe: None,
                 };
                 Ok(application)
             }
-            Operation::UnsubscribeToNewCommittees { admin_id } => {
+            UnsubscribeToNewCommittees { admin_id } => {
                 let channel_id = ChannelId {
                     chain_id: *admin_id,
                     name: ADMIN_CHANNEL.into(),
@@ -393,13 +397,13 @@ impl ExecutionState {
                 let application = ApplicationResult {
                     effects: vec![(
                         Destination::Recipient(*admin_id),
-                        Effect::Unsubscribe {
+                        Effect::System(SystemEffect::Unsubscribe {
                             id: self.chain_id,
                             channel: ChannelId {
                                 chain_id: *admin_id,
                                 name: ADMIN_CHANNEL.into(),
                             },
-                        },
+                        }),
                     )],
                     subscribe: None,
                     unsubscribe: None,
@@ -412,15 +416,18 @@ impl ExecutionState {
     /// Execute the recipient's side of an operation, aka a "remote effect".
     /// Effects must be executed by order of heights in the sender's chain.
     pub(crate) fn apply_effect(&mut self, effect: &Effect) -> Result<ApplicationResult, Error> {
+        let Effect::System(effect) = effect;
+
+        use SystemEffect::*;
         match effect {
-            Effect::Credit { amount, recipient } if self.chain_id == *recipient => {
+            Credit { amount, recipient } if self.chain_id == *recipient => {
                 self.balance = self
                     .balance
                     .try_add((*amount).into())
                     .unwrap_or_else(|_| Balance::max());
                 Ok(ApplicationResult::default())
             }
-            Effect::SetCommittees {
+            SetCommittees {
                 admin_id,
                 epoch,
                 committees,
@@ -434,26 +441,32 @@ impl ExecutionState {
                 self.committees = committees.clone();
                 Ok(ApplicationResult::default())
             }
-            Effect::Subscribe { id, channel } if channel.chain_id == self.chain_id => {
+            Subscribe { id, channel } if channel.chain_id == self.chain_id => {
                 // Notify the subscriber about this block, so that it is included in the
                 // receive_log of the subscriber and correctly synchronized.
                 let application = ApplicationResult {
-                    effects: vec![(Destination::Recipient(*id), Effect::Notify { id: *id })],
+                    effects: vec![(
+                        Destination::Recipient(*id),
+                        Effect::System(SystemEffect::Notify { id: *id }),
+                    )],
                     subscribe: Some((channel.name.clone(), *id)),
                     unsubscribe: None,
                 };
                 Ok(application)
             }
-            Effect::Unsubscribe { id, channel } if channel.chain_id == self.chain_id => {
+            Unsubscribe { id, channel } if channel.chain_id == self.chain_id => {
                 let application = ApplicationResult {
-                    effects: vec![(Destination::Recipient(*id), Effect::Notify { id: *id })],
+                    effects: vec![(
+                        Destination::Recipient(*id),
+                        Effect::System(SystemEffect::Notify { id: *id }),
+                    )],
                     subscribe: None,
                     unsubscribe: Some((channel.name.clone(), *id)),
                 };
                 Ok(application)
             }
-            Effect::Notify { .. } => Ok(ApplicationResult::default()),
-            Effect::OpenChain { .. } => {
+            Notify { .. } => Ok(ApplicationResult::default()),
+            OpenChain { .. } => {
                 // This special effect is executed immediately when cross-chain requests are received.
                 Ok(ApplicationResult::default())
             }
@@ -475,13 +488,13 @@ impl ExecutionState {
         // Chain creation effects are special and executed (only) in this callback.
         // For simplicity, they will still appear in the received messages.
         match &effect {
-            Effect::OpenChain {
+            Effect::System(SystemEffect::OpenChain {
                 id,
                 owner,
                 epoch,
                 committees,
                 admin_id,
-            } if id == &self.chain_id => {
+            }) if id == &self.chain_id => {
                 // Guaranteed under BFT assumptions.
                 assert!(self.description.is_none());
                 assert!(!self.manager.is_active());

@@ -7,9 +7,9 @@ use crate::{
     crypto::*,
     ensure,
     error::Error,
-    execution::{ApplicationResult, Balance, Effect, ExecutionState},
     manager::ChainManager,
     messages::*,
+    system::{ApplicationResult, Balance, SystemExecutionState},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -20,8 +20,8 @@ pub static SYSTEM: ApplicationId = ApplicationId(0);
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct ChainState {
-    /// Execution state of the "root" application.
-    pub state: ExecutionState,
+    /// Execution state of the "system" application.
+    pub state: SystemExecutionState,
     /// Hash of execution state + the state of all contract states
     pub state_hash: HashValue,
 
@@ -103,7 +103,7 @@ pub struct Event {
 
 impl ChainState {
     pub fn new(id: ChainId) -> Self {
-        let state = ExecutionState::new(id);
+        let state = SystemExecutionState::new(id);
         let state_hash = HashValue::new(&state);
         Self {
             state,
@@ -228,11 +228,11 @@ impl ChainState {
             epoch: self.state.epoch,
             description: self.state.description,
             manager: self.state.manager.clone(),
-            balance: self.state.balance,
+            system_balance: self.state.balance,
             block_hash: self.block_hash,
             next_block_height: self.next_block_height,
             state_hash: self.state_hash,
-            requested_execution_state: None,
+            requested_system_execution_state: None,
             requested_pending_messages: Vec::new(),
             requested_sent_certificates: Vec::new(),
             count_received_certificates: self.received_log.len(),

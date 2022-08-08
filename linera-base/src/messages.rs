@@ -7,8 +7,8 @@ use crate::{
     crypto::*,
     ensure,
     error::Error,
-    execution::{Balance, Effect, ExecutionState, Operation},
     manager::ChainManager,
+    system::{Balance, SystemEffect, SystemExecutionState, SystemOperation},
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, str::FromStr};
@@ -74,6 +74,18 @@ pub struct EffectId {
     pub chain_id: ChainId,
     pub height: BlockHeight,
     pub index: usize,
+}
+
+/// An operation.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub enum Operation {
+    System(SystemOperation),
+}
+
+/// An effect.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub enum Effect {
+    System(SystemEffect),
 }
 
 /// A block containing operations to apply on a given chain, as well as the
@@ -235,8 +247,8 @@ pub struct ChainInfoQuery {
     pub chain_id: ChainId,
     /// Optionally test that the block height is the one expected.
     pub test_next_block_height: Option<BlockHeight>,
-    /// Query the full execution state (may not supported by all validators).
-    pub request_execution_state: bool,
+    /// Query the full system execution state (may not supported by all validators).
+    pub request_system_execution_state: bool,
     /// Query the received messages that are waiting be picked in the next block.
     pub request_pending_messages: bool,
     /// Query a range of certificates sent from the chain.
@@ -250,7 +262,7 @@ impl ChainInfoQuery {
         Self {
             chain_id,
             test_next_block_height: None,
-            request_execution_state: false,
+            request_system_execution_state: false,
             request_pending_messages: false,
             request_sent_certificates_in_range: None,
             request_received_certificates_excluding_first_nth: None,
@@ -262,8 +274,8 @@ impl ChainInfoQuery {
         self
     }
 
-    pub fn with_execution_state(mut self) -> Self {
-        self.request_execution_state = true;
+    pub fn with_system_execution_state(mut self) -> Self {
+        self.request_system_execution_state = true;
         self
     }
 
@@ -295,7 +307,7 @@ pub struct ChainInfo {
     /// The state of the chain authentication.
     pub manager: ChainManager,
     /// The current balance.
-    pub balance: Balance,
+    pub system_balance: Balance,
     /// The last block hash, if any.
     pub block_hash: Option<HashValue>,
     /// The height after the latest block in the chain.
@@ -303,7 +315,7 @@ pub struct ChainInfo {
     /// The hash of the current execution state.
     pub state_hash: HashValue,
     /// The full execution state.
-    pub requested_execution_state: Option<ExecutionState>,
+    pub requested_system_execution_state: Option<SystemExecutionState>,
     /// The received messages that are waiting be picked in the next block (if requested).
     pub requested_pending_messages: Vec<MessageGroup>,
     /// The response to `request_sent_certificates_in_range`

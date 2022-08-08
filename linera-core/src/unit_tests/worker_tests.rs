@@ -8,11 +8,12 @@ use linera_base::{
     committee::Committee,
     crypto::*,
     error::Error,
-    execution::{
-        Address, Amount, Balance, Effect, ExecutionState, Operation, UserData, ADMIN_CHANNEL,
-    },
     manager::ChainManager,
     messages::*,
+    system::{
+        Address, Amount, Balance, SystemEffect, SystemExecutionState, SystemOperation, UserData,
+        ADMIN_CHANNEL,
+    },
 };
 use linera_storage::{InMemoryStoreClient, Storage};
 use std::collections::{BTreeMap, VecDeque};
@@ -95,11 +96,11 @@ fn make_transfer_block_proposal(
     let block = make_block(
         Epoch::from(0),
         chain_id,
-        vec![Operation::Transfer {
+        vec![Operation::System(SystemOperation::Transfer {
             recipient,
             amount,
             user_data: UserData::default(),
-        }],
+        })],
         incoming_messages,
         previous_confirmed_block,
     );
@@ -138,7 +139,7 @@ fn make_transfer_certificate(
     previous_confirmed_block: Option<&Certificate>,
 ) -> Certificate {
     let chain_id = chain_description.into();
-    let state = ExecutionState {
+    let state = SystemExecutionState {
         epoch: Some(Epoch::from(0)),
         chain_id,
         description: Some(chain_description),
@@ -151,11 +152,11 @@ fn make_transfer_certificate(
     let block = make_block(
         Epoch::from(0),
         chain_id,
-        vec![Operation::Transfer {
+        vec![Operation::System(SystemOperation::Transfer {
             recipient,
             amount,
             user_data: UserData::default(),
-        }],
+        })],
         incoming_messages,
         previous_confirmed_block,
     );
@@ -163,10 +164,10 @@ fn make_transfer_certificate(
         Address::Account(id) => vec![(
             SYSTEM,
             Destination::Recipient(id),
-            Effect::Credit {
+            Effect::System(SystemEffect::Credit {
                 recipient: id,
                 amount,
-            },
+            }),
         )],
         Address::Burn => Vec::new(),
     };
@@ -458,19 +459,19 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                 operations: vec![
                     (
                         SYSTEM,
-                        Operation::Transfer {
+                        Operation::System(SystemOperation::Transfer {
                             recipient,
                             amount: Amount::from(1),
                             user_data: UserData::default(),
-                        },
+                        }),
                     ),
                     (
                         SYSTEM,
-                        Operation::Transfer {
+                        Operation::System(SystemOperation::Transfer {
                             recipient,
                             amount: Amount::from(2),
                             user_data: UserData::default(),
-                        },
+                        }),
                     ),
                 ],
                 previous_block_hash: None,
@@ -480,21 +481,21 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                 (
                     SYSTEM,
                     Destination::Recipient(ChainId::root(2)),
-                    Effect::Credit {
+                    Effect::System(SystemEffect::Credit {
                         recipient: ChainId::root(2),
                         amount: Amount::from(1),
-                    },
+                    }),
                 ),
                 (
                     SYSTEM,
                     Destination::Recipient(ChainId::root(2)),
-                    Effect::Credit {
+                    Effect::System(SystemEffect::Credit {
                         recipient: ChainId::root(2),
                         amount: Amount::from(2),
-                    },
+                    }),
                 ),
             ],
-            state_hash: HashValue::new(&ExecutionState {
+            state_hash: HashValue::new(&SystemExecutionState {
                 epoch: Some(epoch),
                 chain_id: ChainId::root(1),
                 description: Some(ChainDescription::Root(1)),
@@ -517,11 +518,11 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                 incoming_messages: Vec::new(),
                 operations: vec![(
                     SYSTEM,
-                    Operation::Transfer {
+                    Operation::System(SystemOperation::Transfer {
                         recipient,
                         amount: Amount::from(3),
                         user_data: UserData::default(),
-                    },
+                    }),
                 )],
                 previous_block_hash: Some(certificate0.hash),
                 height: BlockHeight::from(1),
@@ -529,12 +530,12 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             effects: vec![(
                 SYSTEM,
                 Destination::Recipient(ChainId::root(2)),
-                Effect::Credit {
+                Effect::System(SystemEffect::Credit {
                     recipient: ChainId::root(2),
                     amount: Amount::from(3),
-                },
+                }),
             )],
-            state_hash: HashValue::new(&ExecutionState {
+            state_hash: HashValue::new(&SystemExecutionState {
                 epoch: Some(epoch),
                 chain_id: ChainId::root(1),
                 description: Some(ChainDescription::Root(1)),
@@ -580,17 +581,17 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                     effects: vec![
                         (
                             0,
-                            Effect::Credit {
+                            Effect::System(SystemEffect::Credit {
                                 recipient: ChainId::root(2),
                                 amount: Amount::from(1),
-                            },
+                            }),
                         ),
                         (
                             1,
-                            Effect::Credit {
+                            Effect::System(SystemEffect::Credit {
                                 recipient: ChainId::root(2),
                                 amount: Amount::from(2),
-                            },
+                            }),
                         ),
                     ],
                 },
@@ -600,10 +601,10 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                     height: BlockHeight::from(1),
                     effects: vec![(
                         0,
-                        Effect::Credit {
+                        Effect::System(SystemEffect::Credit {
                             recipient: ChainId::root(2),
                             amount: Amount::from(2), // wrong
-                        },
+                        }),
                     )],
                 },
             ],
@@ -629,17 +630,17 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                     effects: vec![
                         (
                             1,
-                            Effect::Credit {
+                            Effect::System(SystemEffect::Credit {
                                 recipient: ChainId::root(2),
                                 amount: Amount::from(2),
-                            },
+                            }),
                         ),
                         (
                             0,
-                            Effect::Credit {
+                            Effect::System(SystemEffect::Credit {
                                 recipient: ChainId::root(2),
                                 amount: Amount::from(1),
-                            },
+                            }),
                         ),
                     ],
                 },
@@ -649,10 +650,10 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                     height: BlockHeight::from(1),
                     effects: vec![(
                         0,
-                        Effect::Credit {
+                        Effect::System(SystemEffect::Credit {
                             recipient: ChainId::root(2),
                             amount: Amount::from(3),
-                        },
+                        }),
                     )],
                 },
             ],
@@ -677,10 +678,10 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                     height: BlockHeight::from(1),
                     effects: vec![(
                         0,
-                        Effect::Credit {
+                        Effect::System(SystemEffect::Credit {
                             recipient: ChainId::root(2),
                             amount: Amount::from(3),
-                        },
+                        }),
                     )],
                 },
                 MessageGroup {
@@ -690,17 +691,17 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                     effects: vec![
                         (
                             0,
-                            Effect::Credit {
+                            Effect::System(SystemEffect::Credit {
                                 recipient: ChainId::root(2),
                                 amount: Amount::from(1),
-                            },
+                            }),
                         ),
                         (
                             1,
-                            Effect::Credit {
+                            Effect::System(SystemEffect::Credit {
                                 recipient: ChainId::root(2),
                                 amount: Amount::from(2),
-                            },
+                            }),
                         ),
                     ],
                 },
@@ -725,10 +726,10 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                 height: BlockHeight::from(0),
                 effects: vec![(
                     0,
-                    Effect::Credit {
+                    Effect::System(SystemEffect::Credit {
                         recipient: ChainId::root(2),
                         amount: Amount::from(1),
-                    },
+                    }),
                 )],
             }],
             None,
@@ -746,12 +747,12 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                 effects: vec![(
                     SYSTEM,
                     Destination::Recipient(ChainId::root(3)),
-                    Effect::Credit {
+                    Effect::System(SystemEffect::Credit {
                         recipient: ChainId::root(3),
                         amount: Amount::from(1),
-                    },
+                    }),
                 )],
-                state_hash: HashValue::new(&ExecutionState {
+                state_hash: HashValue::new(&SystemExecutionState {
                     epoch: Some(epoch),
                     chain_id: ChainId::root(2),
                     description: Some(ChainDescription::Root(2)),
@@ -779,10 +780,10 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                 height: BlockHeight::from(1),
                 effects: vec![(
                     0,
-                    Effect::Credit {
+                    Effect::System(SystemEffect::Credit {
                         recipient: ChainId::root(2),
                         amount: Amount::from(3),
-                    },
+                    }),
                 )],
             }],
             Some(&certificate),
@@ -998,10 +999,10 @@ async fn test_handle_certificate_with_anticipated_incoming_message() {
             height: BlockHeight::from(0),
             effects: vec![(
                 0,
-                Effect::Credit {
+                Effect::System(SystemEffect::Credit {
                     recipient: ChainId::root(1),
                     amount: Amount::from(995),
-                },
+                }),
             )],
         }],
         &committee,
@@ -1042,7 +1043,7 @@ async fn test_handle_certificate_with_anticipated_incoming_message() {
         .is_empty(),);
     assert!(matches!(
         chain.communication_states.get(&SYSTEM).unwrap().inboxes.get(&Origin::chain(ChainId::root(3))).unwrap().expected_events.front().unwrap(),
-        Event { height, index: 0, effect: Effect::Credit { amount, .. }} if *height == BlockHeight::from(0) && *amount == Amount::from(995),
+        Event { height, index: 0, effect: Effect::System(SystemEffect::Credit { amount, .. })} if *height == BlockHeight::from(0) && *amount == Amount::from(995),
     ));
     assert_eq!(chain.confirmed_log.len(), 1);
     assert_eq!(Some(certificate.hash), chain.block_hash);
@@ -1143,7 +1144,7 @@ async fn test_handle_certificate_receiver_equal_sender() {
     );
     assert!(matches!(
         chain.communication_states.get(&SYSTEM).unwrap().inboxes.get(&Origin::chain(ChainId::root(1))).unwrap().received_events.front().unwrap(),
-        Event { height, index: 0, effect: Effect::Credit { amount, .. }} if *height == BlockHeight::from(0) && *amount == Amount::from(1),
+        Event { height, index: 0, effect: Effect::System(SystemEffect::Credit { amount, .. })} if *height == BlockHeight::from(0) && *amount == Amount::from(1),
     ));
     assert_eq!(BlockHeight::from(1), chain.next_block_height);
     assert_eq!(chain.confirmed_log.len(), 1);
@@ -1199,7 +1200,7 @@ async fn test_handle_cross_chain_request() {
     );
     assert!(matches!(
         chain.communication_states.get(&SYSTEM).unwrap().inboxes.get(&Origin::chain(ChainId::root(1))).unwrap().received_events.front().unwrap(),
-        Event { height, index: 0, effect: Effect::Credit { amount, .. }} if *height == BlockHeight::from(0) && *amount == Amount::from(10),
+        Event { height, index: 0, effect: Effect::System(SystemEffect::Credit { amount, .. })} if *height == BlockHeight::from(0) && *amount == Amount::from(10),
     ));
     assert_eq!(chain.confirmed_log.len(), 0);
     assert_eq!(None, chain.block_hash);
@@ -1317,7 +1318,7 @@ async fn test_handle_certificate_to_active_recipient() {
         .unwrap()
         .info;
     assert_eq!(ChainId::root(1), info.chain_id);
-    assert_eq!(Balance::from(0), info.balance);
+    assert_eq!(Balance::from(0), info.system_balance);
     assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert_eq!(Some(certificate.hash), info.block_hash);
     assert!(info.manager.pending().is_none());
@@ -1334,10 +1335,10 @@ async fn test_handle_certificate_to_active_recipient() {
             height: BlockHeight::from(0),
             effects: vec![(
                 0,
-                Effect::Credit {
+                Effect::System(SystemEffect::Credit {
                     recipient: ChainId::root(2),
                     amount: Amount::from(5),
-                },
+                }),
             )],
         }],
         &committee,
@@ -1372,7 +1373,7 @@ async fn test_handle_certificate_to_active_recipient() {
             .value
             .confirmed_block()
             .unwrap()
-            .operations[..], [(_, Operation::Transfer { amount, .. })] if amount == Amount::from(5)));
+            .operations[..], [(_, Operation::System(SystemOperation::Transfer { amount, .. }))] if amount == Amount::from(5)));
 }
 
 #[test(tokio::test)]
@@ -1402,7 +1403,7 @@ async fn test_handle_certificate_to_inactive_recipient() {
         .unwrap()
         .info;
     assert_eq!(ChainId::root(1), info.chain_id);
-    assert_eq!(Balance::from(0), info.balance);
+    assert_eq!(Balance::from(0), info.system_balance);
     assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert_eq!(Some(certificate.hash), info.block_hash);
     assert!(info.manager.pending().is_none());
@@ -1446,13 +1447,13 @@ async fn test_chain_creation_with_committee_creation() {
                 incoming_messages: Vec::new(),
                 operations: vec![(
                     SYSTEM,
-                    Operation::OpenChain {
+                    Operation::System(SystemOperation::OpenChain {
                         id: user_id,
                         owner: key_pair.public().into(),
                         epoch: Epoch::from(0),
                         committees: committees.clone(),
                         admin_id,
-                    },
+                    }),
                 )],
                 previous_block_hash: None,
                 height: BlockHeight::from(0),
@@ -1461,24 +1462,24 @@ async fn test_chain_creation_with_committee_creation() {
                 (
                     SYSTEM,
                     Destination::Recipient(user_id),
-                    Effect::OpenChain {
+                    Effect::System(SystemEffect::OpenChain {
                         id: user_id,
                         owner: key_pair.public().into(),
                         epoch: Epoch::from(0),
                         committees: committees.clone(),
                         admin_id,
-                    },
+                    }),
                 ),
                 (
                     SYSTEM,
                     Destination::Recipient(admin_id),
-                    Effect::Subscribe {
+                    Effect::System(SystemEffect::Subscribe {
                         id: user_id,
                         channel: admin_channel.clone(),
-                    },
+                    }),
                 ),
             ],
-            state_hash: HashValue::new(&ExecutionState {
+            state_hash: HashValue::new(&SystemExecutionState {
                 epoch: Some(Epoch::from(0)),
                 chain_id: admin_id,
                 description: Some(ChainDescription::Root(0)),
@@ -1533,19 +1534,19 @@ async fn test_chain_creation_with_committee_creation() {
                 operations: vec![
                     (
                         SYSTEM,
-                        Operation::CreateCommittee {
+                        Operation::System(SystemOperation::CreateCommittee {
                             admin_id,
                             epoch: Epoch::from(1),
                             committee: committee.clone(),
-                        },
+                        }),
                     ),
                     (
                         SYSTEM,
-                        Operation::Transfer {
+                        Operation::System(SystemOperation::Transfer {
                             recipient: Address::Account(user_id),
                             amount: Amount::from(2),
                             user_data: UserData::default(),
-                        },
+                        }),
                     ),
                 ],
                 previous_block_hash: Some(certificate0.hash),
@@ -1555,22 +1556,22 @@ async fn test_chain_creation_with_committee_creation() {
                 (
                     SYSTEM,
                     Destination::Subscribers(ADMIN_CHANNEL.to_string()),
-                    Effect::SetCommittees {
+                    Effect::System(SystemEffect::SetCommittees {
                         admin_id,
                         epoch: Epoch::from(1),
                         committees: committees2.clone(),
-                    },
+                    }),
                 ),
                 (
                     SYSTEM,
                     Destination::Recipient(user_id),
-                    Effect::Credit {
+                    Effect::System(SystemEffect::Credit {
                         recipient: user_id,
                         amount: Amount::from(2),
-                    },
+                    }),
                 ),
             ],
-            state_hash: HashValue::new(&ExecutionState {
+            state_hash: HashValue::new(&SystemExecutionState {
                 epoch: Some(Epoch::from(1)),
                 chain_id: admin_id,
                 description: Some(ChainDescription::Root(0)),
@@ -1602,10 +1603,10 @@ async fn test_chain_creation_with_committee_creation() {
                     height: BlockHeight::from(0),
                     effects: vec![(
                         1,
-                        Effect::Subscribe {
+                        Effect::System(SystemEffect::Subscribe {
                             id: user_id,
                             channel: admin_channel.clone(),
-                        },
+                        }),
                     )],
                 }],
                 operations: Vec::new(),
@@ -1615,9 +1616,9 @@ async fn test_chain_creation_with_committee_creation() {
             effects: vec![(
                 SYSTEM,
                 Destination::Recipient(user_id),
-                Effect::Notify { id: user_id },
+                Effect::System(SystemEffect::Notify { id: user_id }),
             )],
-            state_hash: HashValue::new(&ExecutionState {
+            state_hash: HashValue::new(&SystemExecutionState {
                 epoch: Some(Epoch::from(1)),
                 chain_id: admin_id,
                 description: Some(ChainDescription::Root(0)),
@@ -1672,15 +1673,15 @@ async fn test_chain_creation_with_committee_creation() {
                 .collect::<Vec<_>>()[..],
             [
                 Event {
-                    effect: Effect::OpenChain { .. },
+                    effect: Effect::System(SystemEffect::OpenChain { .. }),
                     ..
                 },
                 Event {
-                    effect: Effect::Credit { .. },
+                    effect: Effect::System(SystemEffect::Credit { .. }),
                     ..
                 },
                 Event {
-                    effect: Effect::Notify { .. },
+                    effect: Effect::System(SystemEffect::Notify { .. }),
                     ..
                 }
             ]
@@ -1698,7 +1699,7 @@ async fn test_chain_creation_with_committee_creation() {
                 .cloned()
                 .collect::<Vec<_>>()[..],
             [Event {
-                effect: Effect::SetCommittees { .. },
+                effect: Effect::System(SystemEffect::SetCommittees { .. }),
                 ..
             },]
         );
@@ -1728,11 +1729,11 @@ async fn test_chain_creation_with_committee_creation() {
                         height: BlockHeight::from(1),
                         effects: vec![(
                             0,
-                            Effect::SetCommittees {
+                            Effect::System(SystemEffect::SetCommittees {
                                 admin_id,
                                 epoch: Epoch::from(1),
                                 committees: committees2.clone(),
-                            },
+                            }),
                         )],
                     },
                     MessageGroup {
@@ -1741,17 +1742,17 @@ async fn test_chain_creation_with_committee_creation() {
                         height: BlockHeight::from(1),
                         effects: vec![(
                             1,
-                            Effect::Credit {
+                            Effect::System(SystemEffect::Credit {
                                 recipient: user_id,
                                 amount: Amount::from(2),
-                            },
+                            }),
                         )],
                     },
                     MessageGroup {
                         application_id: SYSTEM,
                         origin: Origin::chain(admin_id),
                         height: BlockHeight::from(2),
-                        effects: vec![(0, Effect::Notify { id: user_id })],
+                        effects: vec![(0, Effect::System(SystemEffect::Notify { id: user_id }))],
                     },
                 ],
                 operations: Vec::new(),
@@ -1759,7 +1760,7 @@ async fn test_chain_creation_with_committee_creation() {
                 height: BlockHeight::from(0),
             },
             effects: Vec::new(),
-            state_hash: HashValue::new(&ExecutionState {
+            state_hash: HashValue::new(&SystemExecutionState {
                 epoch: Some(Epoch::from(1)),
                 chain_id: user_id,
                 description: Some(user_description),
@@ -1852,11 +1853,11 @@ async fn test_transfers_and_committee_creation() {
                 incoming_messages: Vec::new(),
                 operations: vec![(
                     SYSTEM,
-                    Operation::Transfer {
+                    Operation::System(SystemOperation::Transfer {
                         recipient: Address::Account(admin_id),
                         amount: Amount::from(1),
                         user_data: UserData::default(),
-                    },
+                    }),
                 )],
                 previous_block_hash: None,
                 height: BlockHeight::from(0),
@@ -1864,12 +1865,12 @@ async fn test_transfers_and_committee_creation() {
             effects: vec![(
                 SYSTEM,
                 Destination::Recipient(admin_id),
-                Effect::Credit {
+                Effect::System(SystemEffect::Credit {
                     recipient: admin_id,
                     amount: Amount::from(1),
-                },
+                }),
             )],
-            state_hash: HashValue::new(&ExecutionState {
+            state_hash: HashValue::new(&SystemExecutionState {
                 epoch: Some(Epoch::from(0)),
                 chain_id: user_id,
                 description: Some(ChainDescription::Root(1)),
@@ -1898,11 +1899,11 @@ async fn test_transfers_and_committee_creation() {
                 incoming_messages: Vec::new(),
                 operations: vec![(
                     SYSTEM,
-                    Operation::CreateCommittee {
+                    Operation::System(SystemOperation::CreateCommittee {
                         admin_id,
                         epoch: Epoch::from(1),
                         committee: committee.clone(),
-                    },
+                    }),
                 )],
                 previous_block_hash: None,
                 height: BlockHeight::from(0),
@@ -1910,13 +1911,13 @@ async fn test_transfers_and_committee_creation() {
             effects: vec![(
                 SYSTEM,
                 Destination::Subscribers(ADMIN_CHANNEL.to_string()),
-                Effect::SetCommittees {
+                Effect::System(SystemEffect::SetCommittees {
                     admin_id,
                     epoch: Epoch::from(1),
                     committees: committees2.clone(),
-                },
+                }),
             )],
-            state_hash: HashValue::new(&ExecutionState {
+            state_hash: HashValue::new(&SystemExecutionState {
                 epoch: Some(Epoch::from(1)),
                 chain_id: admin_id,
                 description: Some(ChainDescription::Root(0)),
@@ -1969,7 +1970,7 @@ async fn test_transfers_and_committee_creation() {
             .cloned()
             .collect::<Vec<_>>()[..],
         [Event {
-            effect: Effect::Credit { .. },
+            effect: Effect::System(SystemEffect::Credit { .. }),
             ..
         },]
     );
@@ -2008,11 +2009,11 @@ async fn test_transfers_and_committee_removal() {
                 incoming_messages: Vec::new(),
                 operations: vec![(
                     SYSTEM,
-                    Operation::Transfer {
+                    Operation::System(SystemOperation::Transfer {
                         recipient: Address::Account(admin_id),
                         amount: Amount::from(1),
                         user_data: UserData::default(),
-                    },
+                    }),
                 )],
                 previous_block_hash: None,
                 height: BlockHeight::from(0),
@@ -2020,12 +2021,12 @@ async fn test_transfers_and_committee_removal() {
             effects: vec![(
                 SYSTEM,
                 Destination::Recipient(admin_id),
-                Effect::Credit {
+                Effect::System(SystemEffect::Credit {
                     recipient: admin_id,
                     amount: Amount::from(1),
-                },
+                }),
             )],
-            state_hash: HashValue::new(&ExecutionState {
+            state_hash: HashValue::new(&SystemExecutionState {
                 epoch: Some(Epoch::from(0)),
                 chain_id: user_id,
                 description: Some(ChainDescription::Root(1)),
@@ -2056,18 +2057,18 @@ async fn test_transfers_and_committee_removal() {
                 operations: vec![
                     (
                         SYSTEM,
-                        Operation::CreateCommittee {
+                        Operation::System(SystemOperation::CreateCommittee {
                             admin_id,
                             epoch: Epoch::from(1),
                             committee: committee.clone(),
-                        },
+                        }),
                     ),
                     (
                         SYSTEM,
-                        Operation::RemoveCommittee {
+                        Operation::System(SystemOperation::RemoveCommittee {
                             admin_id,
                             epoch: Epoch::from(0),
-                        },
+                        }),
                     ),
                 ],
                 previous_block_hash: None,
@@ -2077,23 +2078,23 @@ async fn test_transfers_and_committee_removal() {
                 (
                     SYSTEM,
                     Destination::Subscribers(ADMIN_CHANNEL.to_string()),
-                    Effect::SetCommittees {
+                    Effect::System(SystemEffect::SetCommittees {
                         admin_id,
                         epoch: Epoch::from(1),
                         committees: committees2.clone(),
-                    },
+                    }),
                 ),
                 (
                     SYSTEM,
                     Destination::Subscribers(ADMIN_CHANNEL.to_string()),
-                    Effect::SetCommittees {
+                    Effect::System(SystemEffect::SetCommittees {
                         admin_id,
                         epoch: Epoch::from(1),
                         committees: committees3.clone(),
-                    },
+                    }),
                 ),
             ],
-            state_hash: HashValue::new(&ExecutionState {
+            state_hash: HashValue::new(&SystemExecutionState {
                 epoch: Some(Epoch::from(1)),
                 chain_id: admin_id,
                 description: Some(ChainDescription::Root(0)),
