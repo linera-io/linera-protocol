@@ -65,7 +65,7 @@ impl SpawnedServer {
 /// A trait alias for a protocol transport.
 ///
 /// A transport is an active connection that can be used to send and receive
-/// [`Messages`]s.
+/// [`rpc::Message`]s.
 pub trait Transport:
     Stream<Item = Result<rpc::Message, codec::Error>> + Sink<rpc::Message, Error = codec::Error>
 {

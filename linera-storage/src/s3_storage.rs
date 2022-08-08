@@ -65,7 +65,7 @@ impl S3Storage {
 
     /// Create a new [`S3Storage`] instance using a LocalStack endpoint.
     ///
-    /// Requires a [`LOCALSTACK_ENDPOINT`] environment variable with the endpoint address to connect
+    /// Requires a `LOCALSTACK_ENDPOINT` environment variable with the endpoint address to connect
     /// to the LocalStack instance. Creates the necessary buckets if they don't yet exist,
     /// reporting a [`BucketStatus`] to indicate if the bucket was created or if it already exists.
     pub async fn with_localstack(
@@ -338,7 +338,7 @@ pub enum S3StorageError {
 }
 
 impl S3StorageError {
-    /// Convert the error into an instance of the main [`Error`] type.
+    /// Convert the error into an instance of the main [`enum@Error`] type.
     pub fn into_base_error(self) -> Error {
         Error::StorageIoError {
             error: self.to_string(),
