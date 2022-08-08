@@ -255,7 +255,7 @@ Effect:
         NEWTYPE:
           TYPENAME: SystemEffect
     1:
-      UserBincodeEncoded:
+      User:
         NEWTYPE:
           SEQ: U8
 EffectId:
@@ -558,7 +558,7 @@ Operation:
         NEWTYPE:
           TYPENAME: SystemOperation
     1:
-      UserBincodeEncoded:
+      User:
         NEWTYPE:
           SEQ: U8
 Origin:

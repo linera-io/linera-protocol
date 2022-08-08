@@ -170,7 +170,7 @@ impl SystemExecutionState {
         height: BlockHeight,
         index: usize,
         operation: &SystemOperation,
-    ) -> Result<ApplicationResult, Error> {
+    ) -> Result<ApplicationResult<SystemEffect>, Error> {
         let operation_id = EffectId {
             chain_id: self.chain_id,
             height,
@@ -201,23 +201,23 @@ impl SystemExecutionState {
                 );
                 let e1 = (
                     Destination::Recipient(*id),
-                    Effect::System(SystemEffect::OpenChain {
+                    SystemEffect::OpenChain {
                         id: *id,
                         owner: *owner,
                         committees: committees.clone(),
                         admin_id: *admin_id,
                         epoch: *epoch,
-                    }),
+                    },
                 );
                 let e2 = (
                     Destination::Recipient(*admin_id),
-                    Effect::System(SystemEffect::Subscribe {
+                    SystemEffect::Subscribe {
                         id: *id,
                         channel: ChannelId {
                             chain_id: *admin_id,
                             name: ADMIN_CHANNEL.into(),
                         },
-                    }),
+                    },
                 );
                 let application = ApplicationResult {
                     effects: vec![e1, e2],
@@ -242,10 +242,10 @@ impl SystemExecutionState {
                 for (channel, ()) in subscriptions {
                     effects.push((
                         Destination::Recipient(channel.chain_id),
-                        Effect::System(SystemEffect::Unsubscribe {
+                        SystemEffect::Unsubscribe {
                             id: self.chain_id,
                             channel,
-                        }),
+                        },
                     ));
                 }
                 let application = ApplicationResult {
@@ -271,10 +271,10 @@ impl SystemExecutionState {
                     Address::Account(id) => ApplicationResult {
                         effects: vec![(
                             Destination::Recipient(*id),
-                            Effect::System(SystemEffect::Credit {
+                            SystemEffect::Credit {
                                 amount: *amount,
                                 recipient: *id,
-                            }),
+                            },
                         )],
                         subscribe: None,
                         unsubscribe: None,
@@ -302,11 +302,11 @@ impl SystemExecutionState {
                 let application = ApplicationResult {
                     effects: vec![(
                         Destination::Subscribers(ADMIN_CHANNEL.into()),
-                        Effect::System(SystemEffect::SetCommittees {
+                        SystemEffect::SetCommittees {
                             admin_id: *admin_id,
                             epoch: self.epoch.expect("chain is active"),
                             committees: self.committees.clone(),
-                        }),
+                        },
                     )],
                     subscribe: None,
                     unsubscribe: None,
@@ -327,11 +327,11 @@ impl SystemExecutionState {
                 let application = ApplicationResult {
                     effects: vec![(
                         Destination::Subscribers(ADMIN_CHANNEL.into()),
-                        Effect::System(SystemEffect::SetCommittees {
+                        SystemEffect::SetCommittees {
                             admin_id: *admin_id,
                             epoch: self.epoch.expect("chain is active"),
                             committees: self.committees.clone(),
-                        }),
+                        },
                     )],
                     subscribe: None,
                     unsubscribe: None,
@@ -360,13 +360,13 @@ impl SystemExecutionState {
                 let application = ApplicationResult {
                     effects: vec![(
                         Destination::Recipient(*admin_id),
-                        Effect::System(SystemEffect::Subscribe {
+                        SystemEffect::Subscribe {
                             id: self.chain_id,
                             channel: ChannelId {
                                 chain_id: *admin_id,
                                 name: ADMIN_CHANNEL.into(),
                             },
-                        }),
+                        },
                     )],
                     subscribe: None,
                     unsubscribe: None,
@@ -386,13 +386,13 @@ impl SystemExecutionState {
                 let application = ApplicationResult {
                     effects: vec![(
                         Destination::Recipient(*admin_id),
-                        Effect::System(SystemEffect::Unsubscribe {
+                        SystemEffect::Unsubscribe {
                             id: self.chain_id,
                             channel: ChannelId {
                                 chain_id: *admin_id,
                                 name: ADMIN_CHANNEL.into(),
                             },
-                        }),
+                        },
                     )],
                     subscribe: None,
                     unsubscribe: None,
@@ -407,7 +407,7 @@ impl SystemExecutionState {
     pub(crate) fn apply_effect(
         &mut self,
         effect: &SystemEffect,
-    ) -> Result<ApplicationResult, Error> {
+    ) -> Result<ApplicationResult<SystemEffect>, Error> {
         use SystemEffect::*;
         match effect {
             Credit { amount, recipient } if self.chain_id == *recipient => {
@@ -437,7 +437,7 @@ impl SystemExecutionState {
                 let application = ApplicationResult {
                     effects: vec![(
                         Destination::Recipient(*id),
-                        Effect::System(SystemEffect::Notify { id: *id }),
+                        SystemEffect::Notify { id: *id },
                     )],
                     subscribe: Some((channel.name.clone(), *id)),
                     unsubscribe: None,
@@ -448,7 +448,7 @@ impl SystemExecutionState {
                 let application = ApplicationResult {
                     effects: vec![(
                         Destination::Recipient(*id),
-                        Effect::System(SystemEffect::Notify { id: *id }),
+                        SystemEffect::Notify { id: *id },
                     )],
                     subscribe: None,
                     unsubscribe: Some((channel.name.clone(), *id)),
