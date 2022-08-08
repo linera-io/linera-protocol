@@ -144,7 +144,7 @@ ChainManager:
           TYPENAME: MultiOwnerManager
 ChainState:
   STRUCT:
-    - state:
+    - system_state:
         TYPENAME: SystemExecutionState
     - state_hash:
         TYPENAME: HashValue

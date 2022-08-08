@@ -74,7 +74,7 @@ async fn s3_storage_is_not_reinitialized() -> Result<(), anyhow::Error> {
     let conflicting_balance = Balance::zero();
 
     conflicting_chain.2 = conflicting_balance;
-    conflicting_chain_state.state.balance = conflicting_balance;
+    conflicting_chain_state.system_state.balance = conflicting_balance;
 
     second_genesis_config.chains.push(conflicting_chain);
     second_expected_chain_states.push(conflicting_chain_state);
@@ -174,7 +174,7 @@ where
     async fn run(self, mut storage: S) -> Result<Self::Output, anyhow::Error> {
         for expected_chain_state in &self.presence {
             let chain_state = storage
-                .read_chain_or_default(expected_chain_state.state.chain_id)
+                .read_chain_or_default(expected_chain_state.system_state.chain_id)
                 .await?;
 
             assert_eq!(&chain_state, expected_chain_state);
@@ -182,7 +182,7 @@ where
 
         for unexpected_chain_state in &self.abscence {
             let chain_state = storage
-                .read_chain_or_default(unexpected_chain_state.state.chain_id)
+                .read_chain_or_default(unexpected_chain_state.system_state.chain_id)
                 .await?;
 
             assert_ne!(&chain_state, unexpected_chain_state);

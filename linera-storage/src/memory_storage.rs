@@ -58,7 +58,7 @@ impl Storage for InMemoryStoreClient {
             .lock()
             .await
             .chains
-            .insert(value.state.chain_id, value);
+            .insert(value.system_state.chain_id, value);
         Ok(())
     }
 
