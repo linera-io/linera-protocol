@@ -21,7 +21,7 @@ pub static SYSTEM: ApplicationId = ApplicationId(0);
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct ChainState {
     /// Execution state of the "system" application.
-    pub state: SystemExecutionState,
+    pub system_state: SystemExecutionState,
     /// Hash of execution state + the state of all contract states
     pub state_hash: HashValue,
 
@@ -103,10 +103,10 @@ pub struct Event {
 
 impl ChainState {
     pub fn new(id: ChainId) -> Self {
-        let state = SystemExecutionState::new(id);
-        let state_hash = HashValue::new(&state);
+        let system_state = SystemExecutionState::new(id);
+        let state_hash = HashValue::new(&system_state);
         Self {
-            state,
+            system_state,
             state_hash,
             block_hash: None,
             next_block_height: BlockHeight::default(),
@@ -124,19 +124,22 @@ impl ChainState {
         balance: Balance,
     ) -> Self {
         let mut chain = Self::new(description.into());
-        chain.state.description = Some(description);
-        chain.state.epoch = Some(Epoch::from(0));
-        chain.state.admin_id = Some(admin_id);
-        chain.state.committees.insert(Epoch::from(0), committee);
-        chain.state.manager = ChainManager::single(owner);
-        chain.state.balance = balance;
-        chain.state_hash = HashValue::new(&chain.state);
+        chain.system_state.description = Some(description);
+        chain.system_state.epoch = Some(Epoch::from(0));
+        chain.system_state.admin_id = Some(admin_id);
+        chain
+            .system_state
+            .committees
+            .insert(Epoch::from(0), committee);
+        chain.system_state.manager = ChainManager::single(owner);
+        chain.system_state.balance = balance;
+        chain.state_hash = HashValue::new(&chain.system_state);
         assert!(chain.is_active());
         chain
     }
 
     pub fn chain_id(&self) -> ChainId {
-        self.state.chain_id
+        self.system_state.chain_id
     }
 
     pub fn mark_messages_as_received(
@@ -219,16 +222,16 @@ impl ChainState {
 
     /// Invariant for the states of active chains.
     pub fn is_active(&self) -> bool {
-        self.state.is_active()
+        self.system_state.is_active()
     }
 
     pub fn make_chain_info(&self, key_pair: Option<&KeyPair>) -> ChainInfoResponse {
         let info = ChainInfo {
-            chain_id: self.state.chain_id,
-            epoch: self.state.epoch,
-            description: self.state.description,
-            manager: self.state.manager.clone(),
-            system_balance: self.state.balance,
+            chain_id: self.system_state.chain_id,
+            epoch: self.system_state.epoch,
+            description: self.system_state.description,
+            manager: self.system_state.manager.clone(),
+            system_balance: self.system_state.balance,
             block_hash: self.block_hash,
             next_block_height: self.next_block_height,
             state_hash: self.state_hash,
@@ -284,7 +287,7 @@ impl ChainState {
             // We have already received this block.
             log::warn!(
                 "Ignoring repeated messages to {:?} from {:?} at height {}",
-                self.state.chain_id,
+                self.system_state.chain_id,
                 origin,
                 height
             );
@@ -292,7 +295,7 @@ impl ChainState {
         }
         log::trace!(
             "Processing new messages to {:?} from {:?} at height {}",
-            self.state.chain_id,
+            self.system_state.chain_id,
             origin,
             height
         );
@@ -306,7 +309,7 @@ impl ChainState {
             // recipient.
             match destination {
                 Destination::Recipient(id) => {
-                    if origin.medium != Medium::Direct || id != self.state.chain_id {
+                    if origin.medium != Medium::Direct || id != self.system_state.chain_id {
                         continue;
                     }
                 }
@@ -319,11 +322,13 @@ impl ChainState {
             was_a_recipient = true;
             if app_id == SYSTEM {
                 // Handle special effects to be executed immediately.
-                if self
-                    .state
-                    .apply_immediate_effect(origin.chain_id, height, index, &effect)?
-                {
-                    self.state_hash = HashValue::new(&self.state);
+                if self.system_state.apply_immediate_effect(
+                    origin.chain_id,
+                    height,
+                    index,
+                    &effect,
+                )? {
+                    self.state_hash = HashValue::new(&self.system_state);
                 }
             }
             // Find if the message was executed ahead of time.
@@ -355,7 +360,7 @@ impl ChainState {
         debug_assert!(
             was_a_recipient,
             "The block received by {:?} from {:?} at height {:?} was entirely ignored. This should not happen",
-            self.state.chain_id, origin, height
+            self.system_state.chain_id, origin, height
         );
         Ok(true)
     }
@@ -393,7 +398,7 @@ impl ChainState {
         &mut self,
         block: &Block,
     ) -> Result<Vec<(ApplicationId, Destination, Effect)>, Error> {
-        assert_eq!(block.chain_id, self.state.chain_id);
+        assert_eq!(block.chain_id, self.system_state.chain_id);
         let mut effects = Vec::new();
         // First, process incoming messages.
         self.check_incoming_messages(&block.incoming_messages)?;
@@ -411,7 +416,7 @@ impl ChainState {
                 "Updating inbox {:?}::{:?} in chain {:?}",
                 message_group.application_id,
                 message_group.origin,
-                self.state.chain_id
+                self.system_state.chain_id
             );
             for (message_index, message_effect) in &message_group.effects {
                 // Receivers are allowed to skip events from the received queue.
@@ -473,7 +478,7 @@ impl ChainState {
                 // Execute the received effect.
                 // FIXME: Only one application is supported at the moment.
                 assert_eq!(message_group.application_id, SYSTEM);
-                let application = self.state.apply_effect(message_effect)?;
+                let application = self.system_state.apply_effect(message_effect)?;
                 Self::process_application_result(
                     message_group.application_id,
                     &mut communication_state.outboxes,
@@ -488,7 +493,9 @@ impl ChainState {
         for (index, (application_id, operation)) in block.operations.iter().enumerate() {
             // FIXME: Only one application is supported at the moment.
             assert_eq!(*application_id, SYSTEM);
-            let application = self.state.apply_operation(block.height, index, operation)?;
+            let application = self
+                .system_state
+                .apply_operation(block.height, index, operation)?;
             let communication_state = self
                 .communication_states
                 .entry(*application_id)
@@ -504,7 +511,7 @@ impl ChainState {
         }
         // Last, recompute the state hash.
         // FIXME: Only one application is supported at the moment.
-        self.state_hash = HashValue::new(&self.state);
+        self.state_hash = HashValue::new(&self.system_state);
         Ok(effects)
     }
 

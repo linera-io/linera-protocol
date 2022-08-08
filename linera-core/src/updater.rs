@@ -168,7 +168,7 @@ where
                     response.check(self.name)?;
                     // Obtain the chain description from our local node.
                     let chain = self.store.read_chain_or_default(chain_id).await?;
-                    match chain.state.description {
+                    match chain.system_state.description {
                         Some(ChainDescription::Child(EffectId {
                             chain_id: parent_id,
                             height,
