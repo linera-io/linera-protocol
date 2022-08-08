@@ -12,8 +12,10 @@ use {
         chain::ChainState,
         chain::SYSTEM,
         crypto::HashValue,
-        execution::{ExecutionState, Operation},
-        messages::{Block, BlockHeight, Certificate, ChainDescription, ChainId, Epoch, Value},
+        messages::{
+            Block, BlockHeight, Certificate, ChainDescription, ChainId, Epoch, Operation, Value,
+        },
+        system::{SystemExecutionState, SystemOperation},
     },
 };
 
@@ -180,14 +182,14 @@ async fn certificate_storage_round_trip() -> Result<(), Error> {
         epoch: Epoch::from(0),
         chain_id: ChainId::root(1),
         incoming_messages: Vec::new(),
-        operations: vec![(SYSTEM, Operation::CloseChain)],
+        operations: vec![(SYSTEM, Operation::System(SystemOperation::CloseChain))],
         previous_block_hash: None,
         height: BlockHeight::default(),
     };
     let value = Value::ConfirmedBlock {
         block,
         effects: Vec::new(),
-        state_hash: HashValue::new(&ExecutionState::new(ChainId::root(1))),
+        state_hash: HashValue::new(&SystemExecutionState::new(ChainId::root(1))),
     };
     let certificate = Certificate::new(value, vec![]);
 

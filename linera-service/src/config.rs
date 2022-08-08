@@ -7,8 +7,8 @@ use linera_base::{
     chain::ChainState,
     committee::{Committee, ValidatorState},
     crypto::*,
-    execution::Balance,
     messages::{BlockHeight, ChainDescription, ChainId, Owner, ValidatorName},
+    system::Balance,
 };
 use linera_core::{
     client::{ChainClientState, ValidatorNodeProvider},

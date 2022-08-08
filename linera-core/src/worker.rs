@@ -386,8 +386,8 @@ where
         log::trace!("{} <-- {:?}", self.nickname, query);
         let chain = self.storage.read_chain_or_default(query.chain_id).await?;
         let mut info = chain.make_chain_info(None).info;
-        if query.request_execution_state {
-            info.requested_execution_state = Some(chain.state);
+        if query.request_system_execution_state {
+            info.requested_system_execution_state = Some(chain.state);
         }
         if let Some(next_block_height) = query.test_next_block_height {
             ensure!(

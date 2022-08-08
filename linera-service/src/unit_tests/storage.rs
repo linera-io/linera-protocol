@@ -4,8 +4,8 @@ use async_trait::async_trait;
 use linera_base::{
     chain::ChainState,
     crypto::KeyPair,
-    execution::Balance,
     messages::{ChainDescription, ChainId},
+    system::Balance,
 };
 use linera_storage::{LocalStackTestContext, Storage};
 

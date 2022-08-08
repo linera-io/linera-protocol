@@ -14,9 +14,9 @@ use linera_base::{
     committee::{Committee, ValidatorState},
     crypto::*,
     error::Error,
-    execution::{Address, Amount, Balance, ExecutionState, Operation, UserData},
     manager::ChainManager,
     messages::*,
+    system::{Address, Amount, Balance, SystemExecutionState, SystemOperation, UserData},
 };
 use linera_storage::Storage;
 use std::{
@@ -249,13 +249,13 @@ where
         let local_state = self.execution_state().await?;
         let mut committees = local_state.committees;
         let mut max_epoch = local_state.epoch.unwrap_or_default();
-        let query = ChainInfoQuery::new(self.admin_id).with_execution_state();
+        let query = ChainInfoQuery::new(self.admin_id).with_system_execution_state();
         let info = self.node_client.handle_chain_info_query(query).await?.info;
-        let admin_state = info
-            .requested_execution_state
+        let system_state = info
+            .requested_system_execution_state
             .ok_or(Error::InvalidChainInfoResponse)?;
-        committees.extend(admin_state.committees);
-        max_epoch = std::cmp::max(max_epoch, admin_state.epoch.unwrap_or_default());
+        committees.extend(system_state.committees);
+        max_epoch = std::cmp::max(max_epoch, system_state.epoch.unwrap_or_default());
         Ok((committees, max_epoch))
     }
 
@@ -281,11 +281,11 @@ where
         Ok(nodes)
     }
 
-    async fn execution_state(&mut self) -> Result<ExecutionState, Error> {
-        let query = ChainInfoQuery::new(self.chain_id).with_execution_state();
+    async fn execution_state(&mut self) -> Result<SystemExecutionState, Error> {
+        let query = ChainInfoQuery::new(self.chain_id).with_system_execution_state();
         let info = self.node_client.handle_chain_info_query(query).await?.info;
         let state = info
-            .requested_execution_state
+            .requested_system_execution_state
             .ok_or(Error::InvalidChainInfoResponse)?;
         Ok(state)
     }
@@ -682,11 +682,11 @@ where
             incoming_messages: self.pending_messages().await?,
             operations: vec![(
                 SYSTEM,
-                Operation::Transfer {
+                Operation::System(SystemOperation::Transfer {
                     recipient,
                     amount,
                     user_data,
-                },
+                }),
             )],
             height: self.next_block_height,
             previous_block_hash: self.block_hash,
@@ -840,7 +840,7 @@ where
             .stage_block_execution(&block)
             .await?
             .info
-            .balance)
+            .system_balance)
     }
 
     async fn transfer_to_chain(
@@ -895,7 +895,10 @@ where
             epoch: self.epoch().await?,
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
-            operations: vec![(SYSTEM, Operation::ChangeOwner { new_owner })],
+            operations: vec![(
+                SYSTEM,
+                Operation::System(SystemOperation::ChangeOwner { new_owner }),
+            )],
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
         };
@@ -912,7 +915,10 @@ where
             epoch: self.epoch().await?,
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
-            operations: vec![(SYSTEM, Operation::ChangeOwner { new_owner })],
+            operations: vec![(
+                SYSTEM,
+                Operation::System(SystemOperation::ChangeOwner { new_owner }),
+            )],
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
         };
@@ -931,9 +937,9 @@ where
             incoming_messages: self.pending_messages().await?,
             operations: vec![(
                 SYSTEM,
-                Operation::ChangeMultipleOwners {
+                Operation::System(SystemOperation::ChangeMultipleOwners {
                     new_owners: vec![owner, new_owner],
-                },
+                }),
             )],
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
@@ -961,13 +967,13 @@ where
             incoming_messages: self.pending_messages().await?,
             operations: vec![(
                 SYSTEM,
-                Operation::OpenChain {
+                Operation::System(SystemOperation::OpenChain {
                     id,
                     owner,
                     committees,
                     admin_id,
                     epoch,
-                },
+                }),
             )],
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
@@ -984,7 +990,7 @@ where
             epoch: self.epoch().await?,
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
-            operations: vec![(SYSTEM, Operation::CloseChain)],
+            operations: vec![(SYSTEM, Operation::System(SystemOperation::CloseChain))],
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
         };
@@ -1007,11 +1013,11 @@ where
             incoming_messages: self.pending_messages().await?,
             operations: vec![(
                 SYSTEM,
-                Operation::CreateCommittee {
+                Operation::System(SystemOperation::CreateCommittee {
                     admin_id: self.chain_id,
                     epoch: epoch.try_add_one()?,
                     committee,
-                },
+                }),
             )],
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
@@ -1054,9 +1060,9 @@ where
             incoming_messages: self.pending_messages().await?,
             operations: vec![(
                 SYSTEM,
-                Operation::SubscribeToNewCommittees {
+                Operation::System(SystemOperation::SubscribeToNewCommittees {
                     admin_id: self.admin_id,
-                },
+                }),
             )],
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
@@ -1075,9 +1081,9 @@ where
             incoming_messages: self.pending_messages().await?,
             operations: vec![(
                 SYSTEM,
-                Operation::UnsubscribeToNewCommittees {
+                Operation::System(SystemOperation::UnsubscribeToNewCommittees {
                     admin_id: self.admin_id,
-                },
+                }),
             )],
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
@@ -1099,10 +1105,10 @@ where
                 if *epoch != current_epoch {
                     Some((
                         SYSTEM,
-                        Operation::RemoveCommittee {
+                        Operation::System(SystemOperation::RemoveCommittee {
                             admin_id: self.admin_id,
                             epoch: *epoch,
-                        },
+                        }),
                     ))
                 } else {
                     None
@@ -1136,11 +1142,11 @@ where
             incoming_messages: self.pending_messages().await?,
             operations: vec![(
                 SYSTEM,
-                Operation::Transfer {
+                Operation::System(SystemOperation::Transfer {
                     recipient: Address::Account(recipient),
                     amount,
                     user_data,
-                },
+                }),
             )],
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
