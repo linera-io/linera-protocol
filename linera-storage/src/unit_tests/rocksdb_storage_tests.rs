@@ -3,9 +3,9 @@
 
 use super::*;
 use linera_base::{
-    chain::SYSTEM,
+    execution::{ExecutionState, SYSTEM},
     messages::*,
-    system::{SystemExecutionState, SystemOperation},
+    system::SystemOperation,
 };
 
 #[tokio::test]
@@ -42,7 +42,7 @@ async fn test_rocksdb_storage_for_certificates() {
         let value = Value::ConfirmedBlock {
             block,
             effects: Vec::new(),
-            state_hash: HashValue::new(&SystemExecutionState::new(ChainId::root(1))),
+            state_hash: HashValue::new(&ExecutionState::new(ChainId::root(1))),
         };
         let certificate = Certificate::new(value, vec![]);
         client.write_certificate(certificate.clone()).await.unwrap();
@@ -65,7 +65,7 @@ async fn test_rocksdb_persistance_across_writes() {
     let value = Value::ConfirmedBlock {
         block,
         effects: Vec::new(),
-        state_hash: HashValue::new(&SystemExecutionState::new(ChainId::root(1))),
+        state_hash: HashValue::new(&ExecutionState::new(ChainId::root(1))),
     };
     let certificate = Certificate::new(value, vec![]);
 

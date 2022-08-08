@@ -144,8 +144,8 @@ ChainManager:
           TYPENAME: MultiOwnerManager
 ChainState:
   STRUCT:
-    - system_state:
-        TYPENAME: SystemExecutionState
+    - state:
+        TYPENAME: ExecutionState
     - state_hash:
         TYPENAME: HashValue
     - block_hash:
@@ -254,6 +254,10 @@ Effect:
       System:
         NEWTYPE:
           TYPENAME: SystemEffect
+    1:
+      UserBincodeEncoded:
+        NEWTYPE:
+          SEQ: U8
 EffectId:
   STRUCT:
     - chain_id:
@@ -443,6 +447,12 @@ Error:
         STRUCT:
           - hash:
               TYPENAME: HashValue
+    52:
+      UnknownApplication: UNIT
+    53:
+      InvalidOperation: UNIT
+    54:
+      InvalidEffect: UNIT
 Event:
   STRUCT:
     - height:
@@ -450,6 +460,16 @@ Event:
     - index: U64
     - effect:
         TYPENAME: Effect
+ExecutionState:
+  STRUCT:
+    - system:
+        TYPENAME: SystemExecutionState
+    - users:
+        MAP:
+          KEY:
+            TYPENAME: ApplicationId
+          VALUE:
+            SEQ: U8
 HashValue:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -537,6 +557,10 @@ Operation:
       System:
         NEWTYPE:
           TYPENAME: SystemOperation
+    1:
+      UserBincodeEncoded:
+        NEWTYPE:
+          SEQ: U8
 Origin:
   STRUCT:
     - chain_id:

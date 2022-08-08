@@ -4,10 +4,11 @@
 
 use crate::worker::{ValidatorWorker, WorkerState};
 use linera_base::{
-    chain::{ChainState, Event, InboxState, SYSTEM},
+    chain::{ChainState, Event, InboxState},
     committee::Committee,
     crypto::*,
     error::Error,
+    execution::{ExecutionState, SYSTEM},
     manager::ChainManager,
     messages::*,
     system::{
@@ -139,7 +140,7 @@ fn make_transfer_certificate(
     previous_confirmed_block: Option<&Certificate>,
 ) -> Certificate {
     let chain_id = chain_description.into();
-    let state = SystemExecutionState {
+    let state = ExecutionState::from(SystemExecutionState {
         epoch: Some(Epoch::from(0)),
         chain_id,
         description: Some(chain_description),
@@ -148,7 +149,7 @@ fn make_transfer_certificate(
         committees: [(Epoch::from(0), committee.clone())].into_iter().collect(),
         manager: ChainManager::single(key_pair.public().into()),
         balance,
-    };
+    });
     let block = make_block(
         Epoch::from(0),
         chain_id,
@@ -208,11 +209,11 @@ async fn test_read_chain_state_unknown_chain() {
         .read_chain_or_default(unknown_chain_id)
         .await
         .unwrap();
-    chain.system_state.description = Some(ChainDescription::Root(99));
-    chain.system_state.committees.insert(Epoch(0), committee);
-    chain.system_state.epoch = Some(Epoch(0));
-    chain.system_state.admin_id = Some(ChainId::root(1));
-    chain.system_state.manager = ChainManager::single(PublicKey::debug(4).into());
+    chain.state.system.description = Some(ChainDescription::Root(99));
+    chain.state.system.committees.insert(Epoch(0), committee);
+    chain.state.system.epoch = Some(Epoch(0));
+    chain.state.system.admin_id = Some(ChainId::root(1));
+    chain.state.system.manager = ChainManager::single(PublicKey::debug(4).into());
     worker.storage.write_chain(chain).await.unwrap();
     worker
         .storage
@@ -259,7 +260,8 @@ async fn test_handle_block_proposal_bad_signature() {
         .read_active_chain(ChainId::root(1))
         .await
         .unwrap()
-        .system_state
+        .state
+        .system
         .manager
         .pending()
         .is_none());
@@ -300,7 +302,8 @@ async fn test_handle_block_proposal_zero_amount() {
         .read_active_chain(ChainId::root(1))
         .await
         .unwrap()
-        .system_state
+        .state
+        .system
         .manager
         .pending()
         .is_none());
@@ -343,7 +346,8 @@ async fn test_handle_block_proposal_unknown_sender() {
         .read_active_chain(ChainId::root(1))
         .await
         .unwrap()
-        .system_state
+        .state
+        .system
         .manager
         .pending()
         .is_none());
@@ -396,7 +400,8 @@ async fn test_handle_block_proposal_with_chaining() {
         .read_active_chain(ChainId::root(1))
         .await
         .unwrap()
-        .system_state
+        .state
+        .system
         .manager
         .pending()
         .is_none());
@@ -410,7 +415,8 @@ async fn test_handle_block_proposal_with_chaining() {
         .read_active_chain(ChainId::root(1))
         .await
         .unwrap()
-        .system_state
+        .state
+        .system
         .manager
         .pending()
         .is_some());
@@ -421,7 +427,8 @@ async fn test_handle_block_proposal_with_chaining() {
         .read_active_chain(ChainId::root(1))
         .await
         .unwrap()
-        .system_state
+        .state
+        .system
         .manager
         .pending()
         .is_some());
@@ -495,7 +502,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                     }),
                 ),
             ],
-            state_hash: HashValue::new(&SystemExecutionState {
+            state_hash: HashValue::new(&ExecutionState::from(SystemExecutionState {
                 epoch: Some(epoch),
                 chain_id: ChainId::root(1),
                 description: Some(ChainDescription::Root(1)),
@@ -504,7 +511,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                 committees: [(epoch, committee.clone())].into_iter().collect(),
                 manager: ChainManager::single(sender_key_pair.public().into()),
                 balance: Balance::from(3),
-            }),
+            })),
         },
     );
 
@@ -535,7 +542,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                     amount: Amount::from(3),
                 }),
             )],
-            state_hash: HashValue::new(&SystemExecutionState {
+            state_hash: HashValue::new(&ExecutionState::from(SystemExecutionState {
                 epoch: Some(epoch),
                 chain_id: ChainId::root(1),
                 description: Some(ChainDescription::Root(1)),
@@ -544,7 +551,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                 committees: [(epoch, committee.clone())].into_iter().collect(),
                 manager: ChainManager::single(sender_key_pair.public().into()),
                 balance: Balance::from(0),
-            }),
+            })),
         },
     );
     // Missing earlier blocks
@@ -752,7 +759,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                         amount: Amount::from(1),
                     }),
                 )],
-                state_hash: HashValue::new(&SystemExecutionState {
+                state_hash: HashValue::new(&ExecutionState::from(SystemExecutionState {
                     epoch: Some(epoch),
                     chain_id: ChainId::root(2),
                     description: Some(ChainDescription::Root(2)),
@@ -761,7 +768,7 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                     committees: [(epoch, committee.clone())].into_iter().collect(),
                     manager: ChainManager::single(recipient_key_pair.public().into()),
                     balance: Balance::from(0),
-                }),
+                })),
             },
         );
         worker
@@ -826,7 +833,8 @@ async fn test_handle_block_proposal_exceed_balance() {
         .read_active_chain(ChainId::root(1))
         .await
         .unwrap()
-        .system_state
+        .state
+        .system
         .manager
         .pending()
         .is_none());
@@ -860,7 +868,8 @@ async fn test_handle_block_proposal() {
         .read_active_chain(ChainId::root(1))
         .await
         .unwrap()
-        .system_state
+        .state
+        .system
         .manager
         .pending()
         .cloned()
@@ -1019,7 +1028,7 @@ async fn test_handle_certificate_with_anticipated_incoming_message() {
         .read_active_chain(ChainId::root(1))
         .await
         .unwrap();
-    assert_eq!(Balance::from(0), chain.system_state.balance);
+    assert_eq!(Balance::from(0), chain.state.system.balance);
     assert_eq!(BlockHeight::from(1), chain.next_block_height);
     assert_eq!(
         BlockHeight::from(0),
@@ -1091,7 +1100,7 @@ async fn test_handle_certificate_receiver_balance_overflow() {
         .read_active_chain(ChainId::root(1))
         .await
         .unwrap();
-    assert_eq!(Balance::from(0), new_sender_chain.system_state.balance);
+    assert_eq!(Balance::from(0), new_sender_chain.state.system.balance);
     assert_eq!(BlockHeight::from(1), new_sender_chain.next_block_height);
     assert_eq!(new_sender_chain.confirmed_log.len(), 1);
     assert_eq!(Some(certificate.hash), new_sender_chain.block_hash);
@@ -1100,7 +1109,7 @@ async fn test_handle_certificate_receiver_balance_overflow() {
         .read_active_chain(ChainId::root(2))
         .await
         .unwrap();
-    assert_eq!(Balance::max(), new_recipient_chain.system_state.balance);
+    assert_eq!(Balance::max(), new_recipient_chain.state.system.balance);
 }
 
 #[test(tokio::test)]
@@ -1130,7 +1139,7 @@ async fn test_handle_certificate_receiver_equal_sender() {
         .read_active_chain(ChainId::root(1))
         .await
         .unwrap();
-    assert_eq!(Balance::from(0), chain.system_state.balance);
+    assert_eq!(Balance::from(0), chain.state.system.balance);
     assert_eq!(
         BlockHeight::from(1),
         chain
@@ -1185,7 +1194,7 @@ async fn test_handle_cross_chain_request() {
         .read_active_chain(ChainId::root(2))
         .await
         .unwrap();
-    assert_eq!(Balance::from(1), chain.system_state.balance);
+    assert_eq!(Balance::from(1), chain.state.system.balance);
     assert_eq!(BlockHeight::from(0), chain.next_block_height);
     assert_eq!(
         BlockHeight::from(1),
@@ -1356,9 +1365,10 @@ async fn test_handle_certificate_to_active_recipient() {
         .read_active_chain(ChainId::root(2))
         .await
         .unwrap();
-    assert_eq!(recipient_chain.system_state.balance, Balance::from(4));
+    assert_eq!(recipient_chain.state.system.balance, Balance::from(4));
     assert!(recipient_chain
-        .system_state
+        .state
+        .system
         .manager
         .has_owner(&recipient_key_pair.public().into()));
     assert_eq!(recipient_chain.confirmed_log.len(), 1);
@@ -1479,7 +1489,7 @@ async fn test_chain_creation_with_committee_creation() {
                     }),
                 ),
             ],
-            state_hash: HashValue::new(&SystemExecutionState {
+            state_hash: HashValue::new(&ExecutionState::from(SystemExecutionState {
                 epoch: Some(Epoch::from(0)),
                 chain_id: admin_id,
                 description: Some(ChainDescription::Root(0)),
@@ -1488,7 +1498,7 @@ async fn test_chain_creation_with_committee_creation() {
                 committees: committees.clone(),
                 manager: ChainManager::single(key_pair.public().into()),
                 balance: Balance::from(2),
-            }),
+            })),
         },
     );
     worker
@@ -1505,7 +1515,7 @@ async fn test_chain_creation_with_committee_creation() {
             .unwrap()
             .outboxes
             .is_empty());
-        assert_eq!(admin_chain.system_state.admin_id, Some(admin_id));
+        assert_eq!(admin_chain.state.system.admin_id, Some(admin_id));
         // The root chain has no subscribers yet.
         assert!(admin_chain
             .communication_states
@@ -1571,7 +1581,7 @@ async fn test_chain_creation_with_committee_creation() {
                     }),
                 ),
             ],
-            state_hash: HashValue::new(&SystemExecutionState {
+            state_hash: HashValue::new(&ExecutionState::from(SystemExecutionState {
                 epoch: Some(Epoch::from(1)),
                 chain_id: admin_id,
                 description: Some(ChainDescription::Root(0)),
@@ -1581,7 +1591,7 @@ async fn test_chain_creation_with_committee_creation() {
                 committees: committees2.clone(),
                 manager: ChainManager::single(key_pair.public().into()),
                 balance: Balance::from(0),
-            }),
+            })),
         },
     );
     worker
@@ -1618,7 +1628,7 @@ async fn test_chain_creation_with_committee_creation() {
                 Destination::Recipient(user_id),
                 Effect::System(SystemEffect::Notify { id: user_id }),
             )],
-            state_hash: HashValue::new(&SystemExecutionState {
+            state_hash: HashValue::new(&ExecutionState::from(SystemExecutionState {
                 epoch: Some(Epoch::from(1)),
                 chain_id: admin_id,
                 description: Some(ChainDescription::Root(0)),
@@ -1628,7 +1638,7 @@ async fn test_chain_creation_with_committee_creation() {
                 committees: committees2.clone(),
                 manager: ChainManager::single(key_pair.public().into()),
                 balance: Balance::from(0),
-            }),
+            })),
         },
     );
     worker
@@ -1656,8 +1666,8 @@ async fn test_chain_creation_with_committee_creation() {
         // The child is active and has not migrated yet.
         let user_chain = worker.storage.read_active_chain(user_id).await.unwrap();
         assert_eq!(BlockHeight::from(0), user_chain.next_block_height);
-        assert_eq!(user_chain.system_state.admin_id, Some(admin_id));
-        assert_eq!(user_chain.system_state.subscriptions.len(), 1);
+        assert_eq!(user_chain.state.system.admin_id, Some(admin_id));
+        assert_eq!(user_chain.state.system.subscriptions.len(), 1);
         user_chain.validate_incoming_messages().unwrap();
         matches!(
             user_chain
@@ -1712,7 +1722,7 @@ async fn test_chain_creation_with_committee_creation() {
             .unwrap()
             .expected_events
             .is_empty());
-        assert_eq!(user_chain.system_state.committees.len(), 1);
+        assert_eq!(user_chain.state.system.committees.len(), 1);
     }
     // Make the child receive the pending messages.
     let certificate3 = make_certificate(
@@ -1760,7 +1770,7 @@ async fn test_chain_creation_with_committee_creation() {
                 height: BlockHeight::from(0),
             },
             effects: Vec::new(),
-            state_hash: HashValue::new(&SystemExecutionState {
+            state_hash: HashValue::new(&ExecutionState::from(SystemExecutionState {
                 epoch: Some(Epoch::from(1)),
                 chain_id: user_id,
                 description: Some(user_description),
@@ -1778,16 +1788,16 @@ async fn test_chain_creation_with_committee_creation() {
                 committees: committees2.clone(),
                 manager: ChainManager::single(key_pair.public().into()),
                 balance: Balance::from(2),
-            }),
+            })),
         },
     );
     worker.fully_handle_certificate(certificate3).await.unwrap();
     {
         let user_chain = worker.storage.read_active_chain(user_id).await.unwrap();
         assert_eq!(BlockHeight::from(1), user_chain.next_block_height);
-        assert_eq!(user_chain.system_state.admin_id, Some(admin_id));
-        assert_eq!(user_chain.system_state.subscriptions.len(), 1);
-        assert_eq!(user_chain.system_state.committees.len(), 2);
+        assert_eq!(user_chain.state.system.admin_id, Some(admin_id));
+        assert_eq!(user_chain.state.system.subscriptions.len(), 1);
+        assert_eq!(user_chain.state.system.committees.len(), 2);
         user_chain.validate_incoming_messages().unwrap();
         assert_eq!(
             user_chain
@@ -1870,7 +1880,7 @@ async fn test_transfers_and_committee_creation() {
                     amount: Amount::from(1),
                 }),
             )],
-            state_hash: HashValue::new(&SystemExecutionState {
+            state_hash: HashValue::new(&ExecutionState::from(SystemExecutionState {
                 epoch: Some(Epoch::from(0)),
                 chain_id: user_id,
                 description: Some(ChainDescription::Root(1)),
@@ -1879,7 +1889,7 @@ async fn test_transfers_and_committee_creation() {
                 committees: committees.clone(),
                 manager: ChainManager::single(key_pair1.public().into()),
                 balance: Balance::from(2),
-            }),
+            })),
         },
     );
     // Have the admin chain create a new epoch without retiring the old one.
@@ -1917,7 +1927,7 @@ async fn test_transfers_and_committee_creation() {
                     committees: committees2.clone(),
                 }),
             )],
-            state_hash: HashValue::new(&SystemExecutionState {
+            state_hash: HashValue::new(&ExecutionState::from(SystemExecutionState {
                 epoch: Some(Epoch::from(1)),
                 chain_id: admin_id,
                 description: Some(ChainDescription::Root(0)),
@@ -1926,7 +1936,7 @@ async fn test_transfers_and_committee_creation() {
                 committees: committees2.clone(),
                 manager: ChainManager::single(key_pair0.public().into()),
                 balance: Balance::from(0),
-            }),
+            })),
         },
     );
     worker
@@ -1943,8 +1953,8 @@ async fn test_transfers_and_committee_creation() {
     // The transfer was started..
     let user_chain = worker.storage.read_active_chain(user_id).await.unwrap();
     assert_eq!(BlockHeight::from(1), user_chain.next_block_height);
-    assert_eq!(user_chain.system_state.balance, Balance::from(2));
-    assert_eq!(user_chain.system_state.epoch, Some(Epoch::from(0)));
+    assert_eq!(user_chain.state.system.balance, Balance::from(2));
+    assert_eq!(user_chain.state.system.epoch, Some(Epoch::from(0)));
 
     // .. and the message has gone through.
     let admin_chain = worker.storage.read_active_chain(admin_id).await.unwrap();
@@ -2026,7 +2036,7 @@ async fn test_transfers_and_committee_removal() {
                     amount: Amount::from(1),
                 }),
             )],
-            state_hash: HashValue::new(&SystemExecutionState {
+            state_hash: HashValue::new(&ExecutionState::from(SystemExecutionState {
                 epoch: Some(Epoch::from(0)),
                 chain_id: user_id,
                 description: Some(ChainDescription::Root(1)),
@@ -2035,7 +2045,7 @@ async fn test_transfers_and_committee_removal() {
                 committees: committees.clone(),
                 manager: ChainManager::single(key_pair1.public().into()),
                 balance: Balance::from(2),
-            }),
+            })),
         },
     );
     // Have the admin chain create a new epoch and retire the old one immediately.
@@ -2094,7 +2104,7 @@ async fn test_transfers_and_committee_removal() {
                     }),
                 ),
             ],
-            state_hash: HashValue::new(&SystemExecutionState {
+            state_hash: HashValue::new(&ExecutionState::from(SystemExecutionState {
                 epoch: Some(Epoch::from(1)),
                 chain_id: admin_id,
                 description: Some(ChainDescription::Root(0)),
@@ -2103,7 +2113,7 @@ async fn test_transfers_and_committee_removal() {
                 committees: committees3.clone(),
                 manager: ChainManager::single(key_pair0.public().into()),
                 balance: Balance::from(0),
-            }),
+            })),
         },
     );
     worker
@@ -2120,8 +2130,8 @@ async fn test_transfers_and_committee_removal() {
     // The transfer was started..
     let user_chain = worker.storage.read_active_chain(user_id).await.unwrap();
     assert_eq!(BlockHeight::from(1), user_chain.next_block_height);
-    assert_eq!(user_chain.system_state.balance, Balance::from(2));
-    assert_eq!(user_chain.system_state.epoch, Some(Epoch::from(0)));
+    assert_eq!(user_chain.state.system.balance, Balance::from(2));
+    assert_eq!(user_chain.state.system.epoch, Some(Epoch::from(0)));
 
     // .. but the message hasn't gone through.
     let admin_chain = worker.storage.read_active_chain(admin_id).await.unwrap();

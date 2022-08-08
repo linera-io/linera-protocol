@@ -179,4 +179,12 @@ pub enum Error {
     // Storage
     #[error("Missing certificate: {hash:?}")]
     MissingCertificate { hash: HashValue },
+
+    // Execution
+    #[error("Unknown application")]
+    UnknownApplication,
+    #[error("Invalid operation for this application")]
+    InvalidOperation,
+    #[error("Invalid effect for this application")]
+    InvalidEffect,
 }

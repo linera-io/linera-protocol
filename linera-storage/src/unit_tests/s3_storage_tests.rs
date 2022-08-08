@@ -10,12 +10,12 @@ use {
     crate::Storage,
     linera_base::{
         chain::ChainState,
-        chain::SYSTEM,
         crypto::HashValue,
+        execution::{ExecutionState, SYSTEM},
         messages::{
             Block, BlockHeight, Certificate, ChainDescription, ChainId, Epoch, Operation, Value,
         },
-        system::{SystemExecutionState, SystemOperation},
+        system::SystemOperation,
     },
 };
 
@@ -189,7 +189,7 @@ async fn certificate_storage_round_trip() -> Result<(), Error> {
     let value = Value::ConfirmedBlock {
         block,
         effects: Vec::new(),
-        state_hash: HashValue::new(&SystemExecutionState::new(ChainId::root(1))),
+        state_hash: HashValue::new(&ExecutionState::new(ChainId::root(1))),
     };
     let certificate = Certificate::new(value, vec![]);
 
@@ -237,7 +237,7 @@ async fn chain_storage_round_trip() -> Result<(), Error> {
     storage.write_chain(chain_state.clone()).await?;
 
     let stored_chain_state = storage
-        .read_chain_or_default(chain_state.system_state.chain_id)
+        .read_chain_or_default(chain_state.state.system.chain_id)
         .await?;
 
     assert_eq!(chain_state, stored_chain_state);

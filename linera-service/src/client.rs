@@ -6,10 +6,10 @@
 
 use async_trait::async_trait;
 use linera_base::{
-    chain::SYSTEM,
     committee::ValidatorState,
     crypto::*,
     error::Error,
+    execution::SYSTEM,
     messages::*,
     rpc,
     system::{Address, Amount, Balance, SystemOperation, UserData},

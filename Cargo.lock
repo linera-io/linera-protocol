@@ -1215,6 +1215,7 @@ dependencies = [
  "generic-array",
  "hex",
  "log",
+ "once_cell",
  "proptest",
  "rand 0.7.3",
  "serde",
@@ -1504,9 +1505,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.10.0"
+version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87f3e037eac156d1775da914196f0f37741a274155e34a0b7e427c35d2a2ecb9"
+checksum = "18a6dbe30758c9f83eb00cbea4ac95966305f5a7772f3f42ebfc7fc7eddbd8e1"
 
 [[package]]
 name = "opaque-debug"
