@@ -30,7 +30,7 @@ pub trait View<C: Context>: Sized {
     async fn load(context: C) -> Result<Self, C::Error>;
 
     /// Discard all pending changes. After that `commit` should have no effect to storage.
-    fn reset(&mut self);
+    fn reset_changes(&mut self);
 
     /// Persist changes to storage. This consumes the view. If the view is dropped without
     /// calling `commit`, staged changes are simply lost.
@@ -84,8 +84,8 @@ where
         Ok(Self { view })
     }
 
-    fn reset(&mut self) {
-        self.view.reset();
+    fn reset_changes(&mut self) {
+        self.view.reset_changes();
     }
 
     async fn commit(mut self) -> Result<(), C::Error> {
@@ -128,7 +128,7 @@ where
         })
     }
 
-    fn reset(&mut self) {
+    fn reset_changes(&mut self) {
         self.update = None
     }
 
@@ -192,7 +192,7 @@ where
         })
     }
 
-    fn reset(&mut self) {
+    fn reset_changes(&mut self) {
         self.new_values.clear();
     }
 
@@ -286,7 +286,7 @@ where
         })
     }
 
-    fn reset(&mut self) {
+    fn reset_changes(&mut self) {
         self.updates.clear();
     }
 
@@ -376,7 +376,7 @@ where
         })
     }
 
-    fn reset(&mut self) {
+    fn reset_changes(&mut self) {
         self.updates.clear();
     }
 
