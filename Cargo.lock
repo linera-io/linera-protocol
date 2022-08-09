@@ -1315,9 +1315,11 @@ dependencies = [
  "async-trait",
  "bcs",
  "futures",
+ "generic-array",
  "getset",
  "log",
  "serde",
+ "sha2",
  "thiserror",
  "tokio",
 ]

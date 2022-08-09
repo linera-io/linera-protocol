@@ -10,3 +10,6 @@ pub mod views;
 
 /// Helper definitions for in-memory storage.
 pub mod memory;
+
+/// Module to supporting hashing
+pub mod hash;

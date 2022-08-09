@@ -5,9 +5,8 @@ use async_trait::async_trait;
 use std::{
     borrow::Borrow,
     cmp::Eq,
-    collections::{hash_map, HashMap},
+    collections::{btree_map, BTreeMap},
     fmt::Debug,
-    hash::Hash,
 };
 use thiserror::Error;
 
@@ -16,7 +15,7 @@ use thiserror::Error;
 #[async_trait]
 pub trait Context {
     /// The error type in use.
-    type Error: Debug + Send + From<ViewError>;
+    type Error: Debug + Send + From<ViewError> + From<std::io::Error> + From<bcs::Error>;
 
     /// Erase the current entry from storage.
     async fn erase(&mut self) -> Result<(), Self::Error>;
@@ -50,7 +49,7 @@ pub enum ViewError {
 /// A view that adds a prefix to all the keys of the contained view.
 #[derive(Debug, Clone)]
 pub struct ScopedView<const INDEX: u64, W> {
-    view: W,
+    pub(crate) view: W,
 }
 
 impl<W, const INDEX: u64> std::ops::Deref for ScopedView<INDEX, W> {
@@ -254,35 +253,41 @@ where
 
 /// A view that supports inserting and removing values indexed by a key.
 #[derive(Debug, Clone)]
-pub struct MapView<C, K, V> {
+pub struct MapView<C, I, V> {
     context: C,
-    updates: HashMap<K, Option<V>>,
+    updates: BTreeMap<I, Option<V>>,
 }
 
 /// The context operations supporting [`MapView`].
 #[async_trait]
-pub trait MapOperations<K, V>: Context {
+pub trait MapOperations<I, V>: Context {
+    /// Obtain the value at the given index, if any.
     async fn get<T>(&mut self, index: &T) -> Result<Option<V>, Self::Error>
     where
-        K: Borrow<T>,
-        T: Eq + Hash + Sync + ?Sized;
+        I: Borrow<T>,
+        T: Eq + Ord + Sync + ?Sized;
 
-    async fn insert(&mut self, index: K, value: V) -> Result<(), Self::Error>;
+    /// Set a value.
+    async fn insert(&mut self, index: I, value: V) -> Result<(), Self::Error>;
 
-    async fn remove(&mut self, index: K) -> Result<(), Self::Error>;
+    /// Remove the entry at the given index.
+    async fn remove(&mut self, index: I) -> Result<(), Self::Error>;
+
+    /// Return the list of indices in the map.
+    async fn indices(&mut self) -> Result<Vec<I>, Self::Error>;
 }
 
 #[async_trait]
-impl<C, K, V> View<C> for MapView<C, K, V>
+impl<C, I, V> View<C> for MapView<C, I, V>
 where
-    C: MapOperations<K, V> + Send,
-    K: Eq + Hash + Send + Sync,
+    C: MapOperations<I, V> + Send,
+    I: Eq + Ord + Send + Sync,
     V: Clone + Send + Sync,
 {
     async fn load(context: C) -> Result<Self, C::Error> {
         Ok(Self {
             context,
-            updates: HashMap::new(),
+            updates: BTreeMap::new(),
         })
     }
 
@@ -309,37 +314,54 @@ where
     }
 }
 
-impl<C, K, V> MapView<C, K, V>
+impl<C, I, V> MapView<C, I, V>
 where
-    K: Eq + Hash,
+    I: Eq + Ord,
 {
     /// Set or insert a value.
-    pub fn insert(&mut self, index: K, value: V) {
+    pub fn insert(&mut self, index: I, value: V) {
         self.updates.insert(index, Some(value));
     }
 
     /// Remove a value.
-    pub fn remove(&mut self, index: K) {
+    pub fn remove(&mut self, index: I) {
         self.updates.insert(index, None);
     }
 }
 
-impl<C, K, V> MapView<C, K, V>
+impl<C, I, V> MapView<C, I, V>
 where
-    C: MapOperations<K, V>,
-    K: Eq + Hash + Sync,
+    C: MapOperations<I, V>,
+    I: Eq + Ord + Sync + Clone,
     V: Clone,
 {
     /// Read the value at the given position, if any.
     pub async fn get<T>(&mut self, index: &T) -> Result<Option<V>, C::Error>
     where
-        K: Borrow<T>,
-        T: Eq + Hash + Sync + ?Sized,
+        I: Borrow<T> + Clone,
+        T: Eq + Ord + Sync + ?Sized,
     {
         if let Some(update) = self.updates.get(index) {
             return Ok(update.as_ref().cloned());
         }
         self.context.get(index).await
+    }
+
+    /// Return the list of indices in the map.
+    pub async fn indices(&mut self) -> Result<Vec<I>, C::Error> {
+        let mut indices = Vec::new();
+        for index in self.context.indices().await? {
+            if !self.updates.contains_key(&index) {
+                indices.push(index);
+            }
+        }
+        for (index, entry) in &self.updates {
+            if entry.is_some() {
+                indices.push(index.clone());
+            }
+        }
+        indices.sort();
+        Ok(indices)
     }
 }
 
@@ -348,7 +370,7 @@ where
 #[derive(Debug, Clone)]
 pub struct CollectionView<C, I, W> {
     context: C,
-    updates: HashMap<I, Option<W>>,
+    updates: BTreeMap<I, Option<W>>,
 }
 
 /// The context operations supporting [`CollectionView`].
@@ -372,7 +394,7 @@ where
     async fn load(context: C) -> Result<Self, C::Error> {
         Ok(Self {
             context,
-            updates: HashMap::new(),
+            updates: BTreeMap::new(),
         })
     }
 
@@ -407,21 +429,21 @@ where
 impl<C, I, W> CollectionView<C, I, W>
 where
     C: CollectionOperations<I> + Send,
-    I: Eq + Hash + Sync + Clone + Send + Debug,
+    I: Eq + Ord + Sync + Clone + Send + Debug,
     W: View<C>,
 {
     /// Obtain a subview for the data at the given index in the collection. Return an
     /// error if `remove_entry` was used earlier on this index from the same [`CollectionView`].
     pub async fn load_entry(&mut self, index: I) -> Result<&mut W, C::Error> {
         match self.updates.entry(index.clone()) {
-            hash_map::Entry::Occupied(e) => match e.into_mut() {
+            btree_map::Entry::Occupied(e) => match e.into_mut() {
                 Some(view) => Ok(view),
                 None => Err(C::Error::from(ViewError::RemovedEntry(format!(
                     "{:?}",
                     index
                 )))),
             },
-            hash_map::Entry::Vacant(e) => {
+            btree_map::Entry::Vacant(e) => {
                 let context = self.context.clone_with_scope(&index);
                 let view = W::load(context).await?;
                 Ok(e.insert(Some(view)).as_mut().unwrap())
@@ -432,5 +454,22 @@ where
     /// Mark the entry so that it is removed in the next commit.
     pub fn remove_entry(&mut self, index: I) {
         self.updates.insert(index, None);
+    }
+
+    /// Return the list of indices in the collection.
+    pub async fn indices(&mut self) -> Result<Vec<I>, C::Error> {
+        let mut indices = Vec::new();
+        for index in self.context.indices().await? {
+            if !self.updates.contains_key(&index) {
+                indices.push(index);
+            }
+        }
+        for (index, entry) in &self.updates {
+            if entry.is_some() {
+                indices.push(index.clone());
+            }
+        }
+        indices.sort();
+        Ok(indices)
     }
 }
