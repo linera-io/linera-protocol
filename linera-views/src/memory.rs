@@ -7,15 +7,9 @@ use crate::views::{
 };
 use async_trait::async_trait;
 use std::{
-    any::Any,
-    borrow::Borrow,
-    cmp::Eq,
-    collections::{BTreeMap, HashMap},
-    fmt::Debug,
-    hash::Hash,
-    ops::Bound,
-    sync::Arc,
+    any::Any, borrow::Borrow, cmp::Eq, collections::BTreeMap, fmt::Debug, ops::Bound, sync::Arc,
 };
+use thiserror::Error;
 use tokio::sync::{OwnedMutexGuard, RwLock};
 
 /// A context that stores all values in memory.
@@ -80,7 +74,7 @@ impl InMemoryContext {
 
 #[async_trait]
 impl Context for InMemoryContext {
-    type Error = ViewError;
+    type Error = MemoryViewError;
 
     async fn erase(&mut self) -> Result<(), Self::Error> {
         let mut map = self.map.write().await;
@@ -104,13 +98,13 @@ impl<T> RegisterOperations<T> for InMemoryContext
 where
     T: Default + Clone + Send + Sync + 'static,
 {
-    async fn get(&mut self) -> Result<T, ViewError> {
+    async fn get(&mut self) -> Result<T, MemoryViewError> {
         Ok(self
             .with_ref(|value: Option<&T>| value.cloned().unwrap_or_default())
             .await)
     }
 
-    async fn set(&mut self, value: T) -> Result<(), ViewError> {
+    async fn set(&mut self, value: T) -> Result<(), MemoryViewError> {
         let mut map = self.map.write().await;
         map.insert(self.base_key.clone(), Box::new(value));
         Ok(())
@@ -122,7 +116,7 @@ impl<T> AppendOnlyLogOperations<T> for InMemoryContext
 where
     T: Clone + Send + Sync + 'static,
 {
-    async fn count(&mut self) -> Result<usize, ViewError> {
+    async fn count(&mut self) -> Result<usize, MemoryViewError> {
         Ok(self
             .with_ref(|v: Option<&Vec<T>>| match v {
                 None => 0,
@@ -131,7 +125,7 @@ where
             .await)
     }
 
-    async fn read(&mut self, range: std::ops::Range<usize>) -> Result<Vec<T>, ViewError> {
+    async fn read(&mut self, range: std::ops::Range<usize>) -> Result<Vec<T>, MemoryViewError> {
         Ok(self
             .with_ref(|v: Option<&Vec<T>>| match v {
                 None => Vec::new(),
@@ -140,7 +134,7 @@ where
             .await)
     }
 
-    async fn append(&mut self, mut values: Vec<T>) -> Result<(), ViewError> {
+    async fn append(&mut self, mut values: Vec<T>) -> Result<(), MemoryViewError> {
         if !values.is_empty() {
             self.with_mut(|v: &mut Vec<T>| v.append(&mut values)).await;
         }
@@ -149,38 +143,47 @@ where
 }
 
 #[async_trait]
-impl<K, V> MapOperations<K, V> for InMemoryContext
+impl<I, V> MapOperations<I, V> for InMemoryContext
 where
-    K: Eq + Hash + Send + Sync + 'static,
+    I: Eq + Ord + Send + Sync + Clone + 'static,
     V: Clone + Send + Sync + 'static,
 {
-    async fn get<K2>(&mut self, index: &K2) -> Result<Option<V>, ViewError>
+    async fn get<T>(&mut self, index: &T) -> Result<Option<V>, MemoryViewError>
     where
-        K: Borrow<K2>,
-        K2: Eq + Hash + Sync + ?Sized,
+        I: Borrow<T>,
+        T: Eq + Ord + Sync + ?Sized,
     {
         Ok(self
-            .with_ref(|m: Option<&HashMap<K, V>>| match m {
+            .with_ref(|m: Option<&BTreeMap<I, V>>| match m {
                 None => None,
                 Some(m) => m.get(index).cloned(),
             })
             .await)
     }
 
-    async fn insert(&mut self, index: K, value: V) -> Result<(), ViewError> {
-        self.with_mut(|m: &mut HashMap<K, V>| {
+    async fn insert(&mut self, index: I, value: V) -> Result<(), MemoryViewError> {
+        self.with_mut(|m: &mut BTreeMap<I, V>| {
             m.insert(index, value);
         })
         .await;
         Ok(())
     }
 
-    async fn remove(&mut self, index: K) -> Result<(), ViewError> {
-        self.with_mut(|m: &mut HashMap<K, V>| {
+    async fn remove(&mut self, index: I) -> Result<(), MemoryViewError> {
+        self.with_mut(|m: &mut BTreeMap<I, V>| {
             m.remove(&index);
         })
         .await;
         Ok(())
+    }
+
+    async fn indices(&mut self) -> Result<Vec<I>, MemoryViewError> {
+        Ok(self
+            .with_ref(|m: Option<&BTreeMap<I, V>>| match m {
+                None => Vec::new(),
+                Some(m) => m.keys().cloned().collect(),
+            })
+            .await)
     }
 }
 
@@ -198,10 +201,23 @@ where
 
     async fn indices(&mut self) -> Result<Vec<I>, Self::Error> {
         let map = self.map.read().await;
+        let base_len = self.base_key.len();
         Ok(map
             .range::<Vec<u8>, _>((Bound::Excluded(&self.base_key), Bound::Unbounded))
             .take_while(|(k, _)| k.starts_with(&self.base_key))
-            .map(|(k, _)| bcs::from_bytes(k).expect("deserialization should succeed"))
-            .collect())
+            .map(|(k, _)| bcs::from_bytes(&k[base_len..]))
+            .collect::<Result<Vec<I>, bcs::Error>>()?)
     }
+}
+
+#[derive(Error, Debug)]
+pub enum MemoryViewError {
+    #[error("View error: {0}")]
+    ViewError(#[from] ViewError),
+
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
+
+    #[error("BCS error: {0}")]
+    Bcs(#[from] bcs::Error),
 }
