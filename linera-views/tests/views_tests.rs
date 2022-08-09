@@ -62,12 +62,12 @@ where
         })
     }
 
-    fn reset(&mut self) {
-        self.x1.reset();
-        self.x2.reset();
-        self.log.reset();
-        self.map.reset();
-        self.collection.reset();
+    fn reset_changes(&mut self) {
+        self.x1.reset_changes();
+        self.x2.reset_changes();
+        self.log.reset_changes();
+        self.map.reset_changes();
+        self.collection.reset_changes();
     }
 
     async fn commit(self) -> Result<(), C::Error> {
@@ -147,7 +147,7 @@ where
         let mut view = store.load(1).await.unwrap();
         assert_eq!(view.x1().get(), &0);
         view.x1_mut().set(1);
-        view.reset();
+        view.reset_changes();
         view.x2_mut().set(2);
         view.log_mut().push(4);
         view.map_mut().insert("Hello".to_string(), 5);
