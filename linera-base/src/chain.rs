@@ -145,7 +145,7 @@ impl ChainState {
         self.state.system.chain_id
     }
 
-    pub fn mark_messages_as_received(
+    fn mark_messages_as_received(
         outboxes: &mut HashMap<ChainId, OutboxState>,
         application_id: ApplicationId,
         origin: &Origin,
