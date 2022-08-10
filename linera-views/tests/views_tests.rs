@@ -4,7 +4,7 @@
 use async_trait::async_trait;
 use getset::{Getters, MutGetters};
 use linera_views::{
-    hash::{HashView, Sha512Value},
+    hash::{HashView, Hasher, HashingContext},
     memory::{EntryMap, InMemoryContext, MemoryViewError},
     views::{
         AppendOnlyLogOperations, AppendOnlyLogView, CollectionOperations, CollectionView, Context,
@@ -12,7 +12,6 @@ use linera_views::{
         View,
     },
 };
-use sha2::{Digest, Sha512};
 use std::{
     collections::{BTreeMap, HashMap},
     fmt::Debug,
@@ -95,7 +94,7 @@ where
 #[async_trait]
 impl<C> HashView<C> for StateView<C>
 where
-    C: Context
+    C: HashingContext
         + Send
         + Sync
         + Clone
@@ -107,13 +106,13 @@ where
         + CollectionOperations<String>
         + ScopedOperations,
 {
-    async fn hash(&mut self) -> Result<Sha512Value, C::Error> {
-        let mut hasher = Sha512::default();
-        hasher.write_all(&self.x1.hash().await?)?;
-        hasher.write_all(&self.x2.hash().await?)?;
-        hasher.write_all(&self.log.hash().await?)?;
-        hasher.write_all(&self.map.hash().await?)?;
-        hasher.write_all(&self.collection.hash().await?)?;
+    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, C::Error> {
+        let mut hasher = C::Hasher::default();
+        hasher.write_all(self.x1.hash().await?.as_ref())?;
+        hasher.write_all(self.x2.hash().await?.as_ref())?;
+        hasher.write_all(self.log.hash().await?.as_ref())?;
+        hasher.write_all(self.map.hash().await?.as_ref())?;
+        hasher.write_all(self.collection.hash().await?.as_ref())?;
         Ok(hasher.finalize())
     }
 }
@@ -127,7 +126,7 @@ pub trait Store<Key> {
 }
 
 pub trait StateStore: Store<usize, View = StateView<<Self as StateStore>::C>> {
-    type C: Context
+    type C: HashingContext
         + Send
         + Sync
         + Clone
