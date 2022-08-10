@@ -1,9 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::views::{
-    AppendOnlyLogOperations, CollectionOperations, Context, MapOperations, RegisterOperations,
-    ScopedOperations, ViewError,
+use crate::{
+    hash::HashingContext,
+    views::{
+        AppendOnlyLogOperations, CollectionOperations, Context, MapOperations, RegisterOperations,
+        ScopedOperations, ViewError,
+    },
 };
 use async_trait::async_trait;
 use std::{
@@ -208,6 +211,10 @@ where
             .map(|(k, _)| bcs::from_bytes(&k[base_len..]))
             .collect::<Result<Vec<I>, bcs::Error>>()?)
     }
+}
+
+impl HashingContext for InMemoryContext {
+    type Hasher = sha2::Sha512;
 }
 
 #[derive(Error, Debug)]
