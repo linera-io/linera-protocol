@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use getset::{Getters, MutGetters};
 use linera_views::{
     hash::{HashView, Hasher, HashingContext},
     memory::{EntryMap, InMemoryContext, MemoryViewError},
@@ -20,18 +19,12 @@ use std::{
 };
 use tokio::sync::Mutex;
 
-#[derive(Getters, MutGetters)]
 pub struct StateView<C> {
-    #[getset(get = "pub", get_mut = "pub")]
-    x1: ScopedView<0, RegisterView<C, u64>>,
-    #[getset(get = "pub", get_mut = "pub")]
-    x2: ScopedView<1, RegisterView<C, u32>>,
-    #[getset(get = "pub", get_mut = "pub")]
-    log: ScopedView<2, AppendOnlyLogView<C, u32>>,
-    #[getset(get = "pub", get_mut = "pub")]
-    map: ScopedView<3, MapView<C, String, usize>>,
-    #[getset(get = "pub", get_mut = "pub")]
-    collection: ScopedView<4, CollectionView<C, String, AppendOnlyLogView<C, u32>>>,
+    pub x1: ScopedView<0, RegisterView<C, u64>>,
+    pub x2: ScopedView<1, RegisterView<C, u32>>,
+    pub log: ScopedView<2, AppendOnlyLogView<C, u32>>,
+    pub map: ScopedView<3, MapView<C, String, usize>>,
+    pub collection: ScopedView<4, CollectionView<C, String, AppendOnlyLogView<C, u32>>>,
 }
 
 #[async_trait]
@@ -179,21 +172,21 @@ where
         let mut view = store.load(1).await.unwrap();
         let hash = view.hash().await.unwrap();
         assert_eq!(hash, default_hash);
-        assert_eq!(view.x1().get(), &0);
-        view.x1_mut().set(1);
+        assert_eq!(view.x1.get(), &0);
+        view.x1.set(1);
         view.reset_changes();
         assert_eq!(view.hash().await.unwrap(), hash);
-        view.x2_mut().set(2);
+        view.x2.set(2);
         assert!(view.hash().await.unwrap() != hash);
-        view.log_mut().push(4);
-        view.map_mut().insert("Hello".to_string(), 5);
-        assert_eq!(view.x1().get(), &0);
-        assert_eq!(view.x2().get(), &2);
-        assert_eq!(view.log_mut().read(0..10).await.unwrap(), vec![4]);
-        assert_eq!(view.map_mut().get("Hello").await.unwrap(), Some(5));
+        view.log.push(4);
+        view.map.insert("Hello".to_string(), 5);
+        assert_eq!(view.x1.get(), &0);
+        assert_eq!(view.x2.get(), &2);
+        assert_eq!(view.log.read(0..10).await.unwrap(), vec![4]);
+        assert_eq!(view.map.get("Hello").await.unwrap(), Some(5));
         {
             let subview = view
-                .collection_mut()
+                .collection
                 .load_entry("hola".to_string())
                 .await
                 .unwrap();
@@ -201,7 +194,7 @@ where
             subview.push(18);
         }
         assert_eq!(
-            view.collection_mut().indices().await.unwrap(),
+            view.collection.indices().await.unwrap(),
             vec!["hola".to_string()]
         );
         {
@@ -216,10 +209,10 @@ where
     let stored_hash = {
         let mut view = store.load(1).await.unwrap();
         assert_eq!(view.hash().await.unwrap(), default_hash);
-        assert_eq!(view.x1().get(), &0);
-        assert_eq!(view.x2().get(), &0);
-        assert_eq!(view.log_mut().read(0..10).await.unwrap(), vec![]);
-        assert_eq!(view.map_mut().get("Hello").await.unwrap(), None);
+        assert_eq!(view.x1.get(), &0);
+        assert_eq!(view.x2.get(), &0);
+        assert_eq!(view.log.read(0..10).await.unwrap(), vec![]);
+        assert_eq!(view.map.get("Hello").await.unwrap(), None);
         {
             let subview = view
                 .collection
@@ -228,11 +221,11 @@ where
                 .unwrap();
             assert_eq!(subview.read(0..10).await.unwrap(), vec![]);
         }
-        view.x1_mut().set(1);
-        view.log_mut().push(4);
-        view.map_mut().insert("Hello".to_string(), 5);
-        view.map_mut().insert("Hi".to_string(), 2);
-        view.map_mut().remove("Hi".to_string());
+        view.x1.set(1);
+        view.log.push(4);
+        view.map.insert("Hello".to_string(), 5);
+        view.map.insert("Hi".to_string(), 2);
+        view.map.remove("Hi".to_string());
         {
             let subview = view
                 .collection
@@ -250,20 +243,20 @@ where
         let mut view = store.load(1).await.unwrap();
         let hash = view.hash().await.unwrap();
         assert_eq!(hash, stored_hash);
-        assert_eq!(view.x1().get(), &1);
-        assert_eq!(view.x2().get(), &0);
-        assert_eq!(view.log_mut().read(0..10).await.unwrap(), vec![4]);
-        assert_eq!(view.map_mut().get("Hello").await.unwrap(), Some(5));
-        assert_eq!(view.map_mut().get("Hi").await.unwrap(), None);
+        assert_eq!(view.x1.get(), &1);
+        assert_eq!(view.x2.get(), &0);
+        assert_eq!(view.log.read(0..10).await.unwrap(), vec![4]);
+        assert_eq!(view.map.get("Hello").await.unwrap(), Some(5));
+        assert_eq!(view.map.get("Hi").await.unwrap(), None);
         {
             let subview = view
-                .collection_mut()
+                .collection
                 .load_entry("hola".to_string())
                 .await
                 .unwrap();
             assert_eq!(subview.read(0..10).await.unwrap(), vec![17, 18]);
         }
-        view.collection_mut().remove_entry("hola".to_string());
+        view.collection.remove_entry("hola".to_string());
         assert!(view.hash().await.unwrap() != hash);
         view.commit().await.unwrap();
     }
@@ -271,7 +264,7 @@ where
         let mut view = store.load(1).await.unwrap();
         {
             let subview = view
-                .collection_mut()
+                .collection
                 .load_entry("hola".to_string())
                 .await
                 .unwrap();
