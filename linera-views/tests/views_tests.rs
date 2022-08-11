@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use linera_views::{
     hash::{HashView, Hasher, HashingContext},
     memory::{EntryMap, InMemoryContext, MemoryViewError},
+    rocksdb::{RocksdbContext, RocksdbViewError},
     views::{
         AppendOnlyLogOperations, AppendOnlyLogView, CollectionOperations, CollectionView, Context,
         MapOperations, MapView, RegisterOperations, RegisterView, ScopedOperations, ScopedView,
@@ -118,8 +119,8 @@ pub trait Store<Key> {
     async fn load(&mut self, id: Key) -> Result<Self::View, Self::Error>;
 }
 
-pub trait StateStore: Store<usize, View = StateView<<Self as StateStore>::C>> {
-    type C: HashingContext
+pub trait StateStore: Store<usize, View = StateView<<Self as StateStore>::Context>> {
+    type Context: HashingContext
         + Send
         + Sync
         + Clone
@@ -137,11 +138,13 @@ pub struct InMemoryTestStore {
     states: HashMap<usize, Arc<Mutex<EntryMap>>>,
 }
 
-pub type InMemoryStateView = StateView<InMemoryContext>;
+impl StateStore for InMemoryTestStore {
+    type Context = InMemoryContext;
+}
 
 #[async_trait]
 impl Store<usize> for InMemoryTestStore {
-    type View = InMemoryStateView;
+    type View = StateView<InMemoryContext>;
     type Error = MemoryViewError;
 
     async fn load(&mut self, id: usize) -> Result<Self::View, Self::Error> {
@@ -155,8 +158,42 @@ impl Store<usize> for InMemoryTestStore {
     }
 }
 
-impl StateStore for InMemoryTestStore {
-    type C = InMemoryContext;
+pub struct RocksdbTestStore {
+    db: Arc<rocksdb::DB>,
+    locks: HashMap<usize, Arc<Mutex<()>>>,
+}
+
+impl RocksdbTestStore {
+    fn new(db: rocksdb::DB) -> Self {
+        Self {
+            db: Arc::new(db),
+            locks: HashMap::new(),
+        }
+    }
+}
+
+impl StateStore for RocksdbTestStore {
+    type Context = RocksdbContext;
+}
+
+#[async_trait]
+impl Store<usize> for RocksdbTestStore {
+    type View = StateView<RocksdbContext>;
+    type Error = RocksdbViewError;
+
+    async fn load(&mut self, id: usize) -> Result<Self::View, Self::Error> {
+        let lock = self
+            .locks
+            .entry(id)
+            .or_insert_with(|| Arc::new(Mutex::new(())));
+        log::trace!("Acquiring lock on {:?}", id);
+        let context = RocksdbContext::new(
+            self.db.clone(),
+            lock.clone().lock_owned().await,
+            bcs::to_bytes(&id)?,
+        );
+        Self::View::load(context).await
+    }
 }
 
 #[cfg(test)]
@@ -183,7 +220,7 @@ where
         assert_eq!(view.x1.get(), &0);
         assert_eq!(view.x2.get(), &2);
         assert_eq!(view.log.read(0..10).await.unwrap(), vec![4]);
-        assert_eq!(view.map.get("Hello").await.unwrap(), Some(5));
+        assert_eq!(view.map.get(&"Hello".to_string()).await.unwrap(), Some(5));
         {
             let subview = view
                 .collection
@@ -212,7 +249,7 @@ where
         assert_eq!(view.x1.get(), &0);
         assert_eq!(view.x2.get(), &0);
         assert_eq!(view.log.read(0..10).await.unwrap(), vec![]);
-        assert_eq!(view.map.get("Hello").await.unwrap(), None);
+        assert_eq!(view.map.get(&"Hello".to_string()).await.unwrap(), None);
         {
             let subview = view
                 .collection
@@ -246,8 +283,8 @@ where
         assert_eq!(view.x1.get(), &1);
         assert_eq!(view.x2.get(), &0);
         assert_eq!(view.log.read(0..10).await.unwrap(), vec![4]);
-        assert_eq!(view.map.get("Hello").await.unwrap(), Some(5));
-        assert_eq!(view.map.get("Hi").await.unwrap(), None);
+        assert_eq!(view.map.get(&"Hello".to_string()).await.unwrap(), Some(5));
+        assert_eq!(view.map.get(&"Hi".to_string()).await.unwrap(), None);
         {
             let subview = view
                 .collection
@@ -275,10 +312,21 @@ where
 }
 
 #[tokio::test]
-async fn test_traits() {
+async fn test_views_in_memory() {
     let mut store = InMemoryTestStore::default();
     test_store(&mut store).await;
     assert_eq!(store.states.len(), 1);
     let entry = store.states.get(&1).unwrap().clone();
     assert!(entry.lock().await.is_empty());
+}
+
+#[tokio::test]
+async fn test_views_in_rocksdb() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let mut options = rocksdb::Options::default();
+    options.create_if_missing(true);
+    let db = rocksdb::DB::open(&options, dir).unwrap();
+    let mut store = RocksdbTestStore::new(db);
+    test_store(&mut store).await;
+    assert_eq!(store.locks.len(), 1);
 }

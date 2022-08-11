@@ -9,9 +9,7 @@ use crate::{
     },
 };
 use async_trait::async_trait;
-use std::{
-    any::Any, borrow::Borrow, cmp::Eq, collections::BTreeMap, fmt::Debug, ops::Bound, sync::Arc,
-};
+use std::{any::Any, cmp::Eq, collections::BTreeMap, fmt::Debug, ops::Bound, sync::Arc};
 use thiserror::Error;
 use tokio::sync::{OwnedMutexGuard, RwLock};
 
@@ -38,7 +36,7 @@ impl InMemoryContext {
 
     fn derive_key<I: serde::Serialize>(&self, index: &I) -> Vec<u8> {
         let mut key = self.base_key.clone();
-        bcs::serialize_into(&mut key, index).unwrap();
+        bcs::serialize_into(&mut key, index).expect("serialization should not fail");
         key
     }
 
@@ -151,11 +149,7 @@ where
     I: Eq + Ord + Send + Sync + Clone + 'static,
     V: Clone + Send + Sync + 'static,
 {
-    async fn get<T>(&mut self, index: &T) -> Result<Option<V>, MemoryViewError>
-    where
-        I: Borrow<T>,
-        T: Eq + Ord + Sync + ?Sized,
-    {
+    async fn get(&mut self, index: &I) -> Result<Option<V>, MemoryViewError> {
         Ok(self
             .with_ref(|m: Option<&BTreeMap<I, V>>| match m {
                 None => None,

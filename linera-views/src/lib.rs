@@ -11,5 +11,8 @@ pub mod views;
 /// Helper definitions for in-memory storage.
 pub mod memory;
 
+/// Helper definitions for Rocksdb storage.
+pub mod rocksdb;
+
 /// Module to supporting hashing
 pub mod hash;

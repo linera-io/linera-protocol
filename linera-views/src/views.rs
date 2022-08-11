@@ -3,7 +3,6 @@
 
 use async_trait::async_trait;
 use std::{
-    borrow::Borrow,
     cmp::Eq,
     collections::{btree_map, BTreeMap},
     fmt::Debug,
@@ -262,10 +261,7 @@ pub struct MapView<C, I, V> {
 #[async_trait]
 pub trait MapOperations<I, V>: Context {
     /// Obtain the value at the given index, if any.
-    async fn get<T>(&mut self, index: &T) -> Result<Option<V>, Self::Error>
-    where
-        I: Borrow<T>,
-        T: Eq + Ord + Sync + ?Sized;
+    async fn get(&mut self, index: &I) -> Result<Option<V>, Self::Error>;
 
     /// Set a value.
     async fn insert(&mut self, index: I, value: V) -> Result<(), Self::Error>;
@@ -336,11 +332,7 @@ where
     V: Clone,
 {
     /// Read the value at the given position, if any.
-    pub async fn get<T>(&mut self, index: &T) -> Result<Option<V>, C::Error>
-    where
-        I: Borrow<T> + Clone,
-        T: Eq + Ord + Sync + ?Sized,
-    {
+    pub async fn get(&mut self, index: &I) -> Result<Option<V>, C::Error> {
         if let Some(update) = self.updates.get(index) {
             return Ok(update.as_ref().cloned());
         }
