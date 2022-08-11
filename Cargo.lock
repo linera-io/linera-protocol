@@ -1305,8 +1305,10 @@ dependencies = [
  "futures",
  "generic-array",
  "log",
+ "rocksdb",
  "serde",
  "sha2",
+ "tempfile",
  "thiserror",
  "tokio",
 ]
