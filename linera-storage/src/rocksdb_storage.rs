@@ -23,7 +23,7 @@ mod rocksdb_storage_tests;
 #[derive(Debug)]
 pub struct RocksdbStore {
     /// RocksDB handle.
-    db: rocksdb::DB,
+    db: Arc<rocksdb::DB>,
     cache: Cache<Vec<u8>, Arc<dyn Any + Send + Sync + 'static>>,
 }
 
@@ -81,41 +81,61 @@ impl RocksdbStore {
     pub fn new(path: PathBuf, cache_size: u64) -> Result<Self, rocksdb::Error> {
         assert!(path.is_dir());
         Ok(Self {
-            db: open_db(&path)?,
+            db: Arc::new(open_db(&path)?),
             cache: Cache::<std::vec::Vec<u8>, Arc<dyn Send + Sync + Any + 'static>>::new(
                 cache_size,
             ),
         })
     }
 
-    fn get_db_handler(&self, kind: &str) -> Result<ColumnHandle<'_>, rocksdb::Error> {
-        let handle = self
-            .db
+    fn get_db_handler<'a>(
+        db: &'a rocksdb::DB,
+        kind: &str,
+    ) -> Result<ColumnHandle<'a>, rocksdb::Error> {
+        let handle = db
             .cf_handle(kind)
             .expect("Unable to access a Rocksdb ColumnFamily");
 
-        Ok(ColumnHandle::new(&self.db, handle))
+        Ok(ColumnHandle::new(db, handle))
     }
 
     async fn read_value(
         &self,
-        kind: &str,
-        key: &[u8],
+        kind: &'static str,
+        key: Vec<u8>,
     ) -> Result<std::option::Option<Vec<u8>>, rocksdb::Error> {
-        self.get_db_handler(kind)?.get(key)
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            let handler = Self::get_db_handler(&db, kind)?;
+            handler.get(&key)
+        })
+        .await
+        .expect("join should not fail")
     }
 
     async fn write_value(
         &self,
-        kind: &str,
-        key: &[u8],
-        value: &[u8],
+        kind: &'static str,
+        key: Vec<u8>,
+        value: Vec<u8>,
     ) -> Result<(), rocksdb::Error> {
-        self.get_db_handler(kind)?.put(key, value)
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            let handler = Self::get_db_handler(&db, kind)?;
+            handler.put(&key, &value)
+        })
+        .await
+        .expect("join should not fail")
     }
 
-    async fn remove_value(&self, kind: &str, key: &[u8]) -> Result<(), rocksdb::Error> {
-        self.get_db_handler(kind)?.delete(key)
+    async fn remove_value(&self, kind: &'static str, key: Vec<u8>) -> Result<(), rocksdb::Error> {
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            let handler = Self::get_db_handler(&db, kind)?;
+            handler.delete(&key)
+        })
+        .await
+        .expect("join should not fail")
     }
 
     async fn read<K, V>(&self, key: &K) -> Result<Option<V>, Error>
@@ -128,19 +148,18 @@ impl RocksdbStore {
             Some(v) => Some(V::clone(&v.downcast().expect("wrong bytes from cache"))),
             None => {
                 let kind = serde_name::trace_name::<V>().expect("V must be a struct or an enum");
-                let value =
-                    self.read_value(kind, &key)
-                        .await
-                        .map_err(|e| Error::StorageIoError {
-                            error: format!("{}: {}", kind, e),
-                        })?;
+                let value = self.read_value(kind, key.clone()).await.map_err(|e| {
+                    Error::StorageIoError {
+                        error: format!("{}: {}", kind, e),
+                    }
+                })?;
                 match value {
                     Some(v) => {
                         let from_db =
                             ron::de::from_bytes::<V>(&v).map_err(|e| Error::StorageBcsError {
                                 error: format!("{}: {}", kind, e),
                             })?;
-                        self.cache.insert(key.clone(), Arc::new(from_db.clone()));
+                        self.cache.insert(key, Arc::new(from_db.clone()));
                         Some(from_db)
                     }
                     None => None,
@@ -165,7 +184,7 @@ impl RocksdbStore {
         self.cache.insert(key.clone(), Arc::new(value.clone()));
         let kind = serde_name::trace_name::<V>().expect("V must be a struct or an enum");
         let value = ron::to_string(&value).expect("should not fail");
-        self.write_value(kind, &key, value.as_bytes())
+        self.write_value(kind, key, value.into_bytes())
             .await
             .map_err(|e| Error::StorageIoError {
                 error: format!("write {}", e),
@@ -181,7 +200,7 @@ impl RocksdbStore {
         let key = bcs::to_bytes(&key).expect("should not fail");
         self.cache.invalidate(&key);
         let kind = serde_name::trace_name::<V>().expect("V must be a struct or an enum");
-        self.remove_value(kind, &key)
+        self.remove_value(kind, key)
             .await
             .map_err(|e| Error::StorageIoError {
                 error: format!("remove {}", e),
