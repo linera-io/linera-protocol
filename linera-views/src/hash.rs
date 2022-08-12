@@ -70,6 +70,21 @@ where
 }
 
 #[async_trait]
+impl<C, T> HashView<C> for QueueView<C, T>
+where
+    C: HashingContext + QueueOperations<T> + Send + Sync,
+    T: Send + Sync + Clone + Serialize,
+{
+    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, C::Error> {
+        let count = self.count();
+        let elements = self.read_front(count).await?;
+        let mut hasher = C::Hasher::default();
+        bcs::serialize_into(&mut hasher, &elements)?;
+        Ok(hasher.finalize())
+    }
+}
+
+#[async_trait]
 impl<C, I, V> HashView<C> for MapView<C, I, V>
 where
     C: HashingContext + MapOperations<I, V> + Send,

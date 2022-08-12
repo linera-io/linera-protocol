@@ -4,8 +4,9 @@
 use async_trait::async_trait;
 use std::{
     cmp::Eq,
-    collections::{btree_map, BTreeMap},
+    collections::{btree_map, BTreeMap, VecDeque},
     fmt::Debug,
+    ops::Range,
 };
 use thiserror::Error;
 
@@ -170,7 +171,7 @@ pub struct AppendOnlyLogView<C, T> {
 pub trait AppendOnlyLogOperations<T>: Context {
     async fn count(&mut self) -> Result<usize, Self::Error>;
 
-    async fn read(&mut self, range: std::ops::Range<usize>) -> Result<Vec<T>, Self::Error>;
+    async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error>;
 
     async fn append(&mut self, values: Vec<T>) -> Result<(), Self::Error>;
 }
@@ -195,9 +196,7 @@ where
     }
 
     async fn commit(mut self) -> Result<(), C::Error> {
-        if !self.new_values.is_empty() {
-            self.context.append(self.new_values).await?;
-        }
+        self.context.append(self.new_values).await?;
         Ok(())
     }
 
@@ -224,7 +223,7 @@ where
     T: Send + Sync + Clone,
 {
     /// Read the logged values in the given range (including staged ones).
-    pub async fn read(&mut self, mut range: std::ops::Range<usize>) -> Result<Vec<T>, C::Error> {
+    pub async fn read(&mut self, mut range: Range<usize>) -> Result<Vec<T>, C::Error> {
         if range.end > self.count() {
             range.end = self.count();
         }
@@ -354,6 +353,132 @@ where
         }
         indices.sort();
         Ok(indices)
+    }
+}
+
+/// A view that supports a FIFO queue for values of type `T`.
+#[derive(Debug, Clone)]
+pub struct QueueView<C, T> {
+    context: C,
+    stored_indices: Range<usize>,
+    front_delete_count: usize,
+    new_back_values: VecDeque<T>,
+}
+
+/// The context operations supporting [`QueueView`].
+#[async_trait]
+pub trait QueueOperations<T>: Context {
+    async fn indices(&mut self) -> Result<Range<usize>, Self::Error>;
+
+    async fn get(&mut self, index: usize) -> Result<Option<T>, Self::Error>;
+
+    async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error>;
+
+    async fn delete_front(&mut self, count: usize) -> Result<(), Self::Error>;
+
+    async fn append_back(&mut self, values: Vec<T>) -> Result<(), Self::Error>;
+}
+
+#[async_trait]
+impl<C, T> View<C> for QueueView<C, T>
+where
+    C: QueueOperations<T> + Send + Sync,
+    T: Send + Sync + Clone,
+{
+    async fn load(mut context: C) -> Result<Self, C::Error> {
+        let stored_indices = context.indices().await?;
+        Ok(Self {
+            context,
+            stored_indices,
+            front_delete_count: 0,
+            new_back_values: VecDeque::new(),
+        })
+    }
+
+    fn reset_changes(&mut self) {
+        self.front_delete_count = 0;
+        self.new_back_values.clear();
+    }
+
+    async fn commit(mut self) -> Result<(), C::Error> {
+        self.context.delete_front(self.front_delete_count).await?;
+        self.context
+            .append_back(self.new_back_values.into_iter().collect())
+            .await?;
+        Ok(())
+    }
+
+    async fn delete(mut self) -> Result<(), C::Error> {
+        self.context.delete_front(self.stored_indices.len()).await?;
+        self.context.erase().await
+    }
+}
+
+impl<C, T> QueueView<C, T>
+where
+    C: QueueOperations<T> + Send + Sync,
+    T: Send + Sync + Clone,
+{
+    /// Read the front value, if any.
+    pub async fn front(&mut self) -> Result<Option<T>, C::Error> {
+        let stored_remainder = self.stored_indices.len() - self.front_delete_count;
+        if stored_remainder > 0 {
+            self.context
+                .get(self.stored_indices.end - stored_remainder)
+                .await
+        } else {
+            Ok(self.new_back_values.front().cloned())
+        }
+    }
+
+    /// Delete the front value, if any.
+    pub fn delete_front(&mut self) {
+        if self.front_delete_count < self.stored_indices.len() {
+            self.front_delete_count += 1;
+        } else {
+            self.new_back_values.pop_front();
+        }
+    }
+
+    /// Push a value to the end of the queue.
+    pub fn push_back(&mut self, value: T) {
+        self.new_back_values.push_back(value);
+    }
+
+    /// Read the size of the queue.
+    pub fn count(&self) -> usize {
+        self.stored_indices.len() + self.new_back_values.len()
+    }
+}
+
+impl<C, T> QueueView<C, T>
+where
+    C: QueueOperations<T> + Send + Sync,
+    T: Send + Sync + Clone,
+{
+    /// Read the `count` next values in the queue (including staged ones).
+    pub async fn read_front(&mut self, mut count: usize) -> Result<Vec<T>, C::Error> {
+        if count > self.count() {
+            count = self.count();
+        }
+        if count == 0 {
+            return Ok(Vec::new());
+        }
+        let mut values = Vec::new();
+        values.reserve(count);
+        let stored_remainder = self.stored_indices.len() - self.front_delete_count;
+        let start = self.stored_indices.end - stored_remainder;
+        if count <= stored_remainder {
+            values.extend(self.context.read(start..(start + count)).await?);
+        } else {
+            values.extend(self.context.read(start..self.stored_indices.end).await?);
+            values.extend(
+                self.new_back_values
+                    .range(0..(count - stored_remainder))
+                    .cloned(),
+            );
+        }
+        Ok(values)
     }
 }
 
