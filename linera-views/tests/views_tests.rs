@@ -8,8 +8,8 @@ use linera_views::{
     rocksdb::{RocksdbContext, RocksdbViewError},
     views::{
         AppendOnlyLogOperations, AppendOnlyLogView, CollectionOperations, CollectionView, Context,
-        MapOperations, MapView, RegisterOperations, RegisterView, ScopedOperations, ScopedView,
-        View,
+        MapOperations, MapView, QueueOperations, QueueView, RegisterOperations, RegisterView,
+        ScopedOperations, ScopedView, View,
     },
 };
 use std::{
@@ -25,7 +25,8 @@ pub struct StateView<C> {
     pub x2: ScopedView<1, RegisterView<C, u32>>,
     pub log: ScopedView<2, AppendOnlyLogView<C, u32>>,
     pub map: ScopedView<3, MapView<C, String, usize>>,
-    pub collection: ScopedView<4, CollectionView<C, String, AppendOnlyLogView<C, u32>>>,
+    pub queue: ScopedView<4, QueueView<C, u64>>,
+    pub collection: ScopedView<5, CollectionView<C, String, AppendOnlyLogView<C, u32>>>,
 }
 
 #[async_trait]
@@ -40,6 +41,7 @@ where
         + RegisterOperations<u32>
         + AppendOnlyLogOperations<u32>
         + MapOperations<String, usize>
+        + QueueOperations<u64>
         + CollectionOperations<String>
         + ScopedOperations,
 {
@@ -48,12 +50,14 @@ where
         let x2 = ScopedView::load(context.clone()).await?;
         let log = ScopedView::load(context.clone()).await?;
         let map = ScopedView::load(context.clone()).await?;
+        let queue = ScopedView::load(context.clone()).await?;
         let collection = ScopedView::load(context).await?;
         Ok(Self {
             x1,
             x2,
             log,
             map,
+            queue,
             collection,
         })
     }
@@ -63,6 +67,7 @@ where
         self.x2.reset_changes();
         self.log.reset_changes();
         self.map.reset_changes();
+        self.queue.reset_changes();
         self.collection.reset_changes();
     }
 
@@ -71,6 +76,7 @@ where
         self.x2.commit().await?;
         self.log.commit().await?;
         self.map.commit().await?;
+        self.queue.commit().await?;
         self.collection.commit().await?;
         Ok(())
     }
@@ -80,6 +86,7 @@ where
         self.x2.delete().await?;
         self.log.delete().await?;
         self.map.delete().await?;
+        self.queue.delete().await?;
         self.collection.delete().await?;
         Ok(())
     }
@@ -97,6 +104,7 @@ where
         + RegisterOperations<u32>
         + AppendOnlyLogOperations<u32>
         + MapOperations<String, usize>
+        + QueueOperations<u64>
         + CollectionOperations<String>
         + ScopedOperations,
 {
@@ -106,6 +114,7 @@ where
         hasher.write_all(self.x2.hash().await?.as_ref())?;
         hasher.write_all(self.log.hash().await?.as_ref())?;
         hasher.write_all(self.map.hash().await?.as_ref())?;
+        hasher.write_all(self.queue.hash().await?.as_ref())?;
         hasher.write_all(self.collection.hash().await?.as_ref())?;
         Ok(hasher.finalize())
     }
@@ -129,6 +138,7 @@ pub trait StateStore: Store<usize, View = StateView<<Self as StateStore>::Contex
         + RegisterOperations<u32>
         + AppendOnlyLogOperations<u32>
         + MapOperations<String, usize>
+        + QueueOperations<u64>
         + CollectionOperations<String>
         + ScopedOperations;
 }
@@ -216,10 +226,15 @@ where
         view.x2.set(2);
         assert!(view.hash().await.unwrap() != hash);
         view.log.push(4);
+        view.queue.push_back(8);
+        assert_eq!(view.queue.front().await.unwrap(), Some(8));
+        view.queue.push_back(7);
+        view.queue.delete_front();
         view.map.insert("Hello".to_string(), 5);
         assert_eq!(view.x1.get(), &0);
         assert_eq!(view.x2.get(), &2);
         assert_eq!(view.log.read(0..10).await.unwrap(), vec![4]);
+        assert_eq!(view.queue.read_front(10).await.unwrap(), vec![7]);
         assert_eq!(view.map.get(&"Hello".to_string()).await.unwrap(), Some(5));
         {
             let subview = view
@@ -249,6 +264,7 @@ where
         assert_eq!(view.x1.get(), &0);
         assert_eq!(view.x2.get(), &0);
         assert_eq!(view.log.read(0..10).await.unwrap(), vec![]);
+        assert_eq!(view.queue.read_front(10).await.unwrap(), vec![]);
         assert_eq!(view.map.get(&"Hello".to_string()).await.unwrap(), None);
         {
             let subview = view
@@ -260,6 +276,7 @@ where
         }
         view.x1.set(1);
         view.log.push(4);
+        view.queue.push_back(7);
         view.map.insert("Hello".to_string(), 5);
         view.map.insert("Hi".to_string(), 2);
         view.map.remove("Hi".to_string());
@@ -283,6 +300,7 @@ where
         assert_eq!(view.x1.get(), &1);
         assert_eq!(view.x2.get(), &0);
         assert_eq!(view.log.read(0..10).await.unwrap(), vec![4]);
+        assert_eq!(view.queue.read_front(10).await.unwrap(), vec![7]);
         assert_eq!(view.map.get(&"Hello".to_string()).await.unwrap(), Some(5));
         assert_eq!(view.map.get(&"Hi".to_string()).await.unwrap(), None);
         {

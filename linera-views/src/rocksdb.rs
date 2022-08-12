@@ -4,13 +4,13 @@
 use crate::{
     hash::HashingContext,
     views::{
-        AppendOnlyLogOperations, CollectionOperations, Context, MapOperations, RegisterOperations,
-        ScopedOperations, ViewError,
+        AppendOnlyLogOperations, CollectionOperations, Context, MapOperations, QueueOperations,
+        RegisterOperations, ScopedOperations, ViewError,
     },
 };
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
-use std::sync::Arc;
+use std::{ops::Range, sync::Arc};
 use thiserror::Error;
 use tokio::sync::OwnedMutexGuard;
 
@@ -163,6 +163,54 @@ where
         }
         self.write_key(&self.base_key, &i).await?;
         Ok(())
+    }
+}
+
+#[async_trait]
+impl<T> QueueOperations<T> for RocksdbContext
+where
+    T: Serialize + DeserializeOwned + Send + Sync + 'static,
+{
+    async fn indices(&mut self) -> Result<Range<usize>, Self::Error> {
+        let range = self.read_key(&self.base_key).await?.unwrap_or_default();
+        Ok(range)
+    }
+
+    async fn get(&mut self, index: usize) -> Result<Option<T>, Self::Error> {
+        Ok(self.read_key(&self.derive_key(&index)).await?)
+    }
+
+    async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error> {
+        let mut values = Vec::new();
+        for i in range {
+            match self.read_key(&self.derive_key(&i)).await? {
+                None => {
+                    return Ok(values);
+                }
+                Some(value) => {
+                    values.push(value);
+                }
+            }
+        }
+        Ok(values)
+    }
+
+    async fn delete_front(&mut self, count: usize) -> Result<(), Self::Error> {
+        let mut range: Range<usize> = self.read_key(&self.base_key).await?.unwrap_or_default();
+        for i in 0..count {
+            self.delete_key(&self.derive_key(&i)).await?;
+        }
+        range.start += count;
+        self.write_key(&self.base_key, &range).await
+    }
+
+    async fn append_back(&mut self, values: Vec<T>) -> Result<(), Self::Error> {
+        let mut range: Range<usize> = self.read_key(&self.base_key).await?.unwrap_or_default();
+        for value in values {
+            self.write_key(&self.derive_key(&range.end), &value).await?;
+            range.end += 1;
+        }
+        self.write_key(&self.base_key, &range).await
     }
 }
 

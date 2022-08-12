@@ -4,12 +4,19 @@
 use crate::{
     hash::HashingContext,
     views::{
-        AppendOnlyLogOperations, CollectionOperations, Context, MapOperations, RegisterOperations,
-        ScopedOperations, ViewError,
+        AppendOnlyLogOperations, CollectionOperations, Context, MapOperations, QueueOperations,
+        RegisterOperations, ScopedOperations, ViewError,
     },
 };
 use async_trait::async_trait;
-use std::{any::Any, cmp::Eq, collections::BTreeMap, fmt::Debug, ops::Bound, sync::Arc};
+use std::{
+    any::Any,
+    cmp::Eq,
+    collections::{BTreeMap, VecDeque},
+    fmt::Debug,
+    ops::{Bound, Range},
+    sync::Arc,
+};
 use thiserror::Error;
 use tokio::sync::{OwnedMutexGuard, RwLock};
 
@@ -121,16 +128,16 @@ where
         Ok(self
             .with_ref(|v: Option<&Vec<T>>| match v {
                 None => 0,
-                Some(s) => s.len(),
+                Some(x) => x.len(),
             })
             .await)
     }
 
-    async fn read(&mut self, range: std::ops::Range<usize>) -> Result<Vec<T>, MemoryViewError> {
+    async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, MemoryViewError> {
         Ok(self
             .with_ref(|v: Option<&Vec<T>>| match v {
                 None => Vec::new(),
-                Some(s) => s[range].to_vec(),
+                Some(x) => x[range].to_vec(),
             })
             .await)
     }
@@ -139,6 +146,59 @@ where
         if !values.is_empty() {
             self.with_mut(|v: &mut Vec<T>| v.append(&mut values)).await;
         }
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl<T> QueueOperations<T> for InMemoryContext
+where
+    T: Clone + Send + Sync + 'static,
+{
+    async fn indices(&mut self) -> Result<Range<usize>, Self::Error> {
+        Ok(self
+            .with_ref(|v: Option<&VecDeque<T>>| match v {
+                None => 0..0,
+                Some(x) => 0..x.len(),
+            })
+            .await)
+    }
+
+    async fn get(&mut self, index: usize) -> Result<Option<T>, Self::Error> {
+        Ok(self
+            .with_ref(|v: Option<&VecDeque<T>>| match v {
+                None => None,
+                Some(x) => x.get(index).cloned(),
+            })
+            .await)
+    }
+
+    async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error> {
+        Ok(self
+            .with_ref(|v: Option<&VecDeque<T>>| match v {
+                None => Vec::new(),
+                Some(x) => x.range(range).cloned().collect(),
+            })
+            .await)
+    }
+
+    async fn delete_front(&mut self, count: usize) -> Result<(), Self::Error> {
+        self.with_mut(|v: &mut VecDeque<T>| {
+            for _ in 0..count {
+                v.pop_front();
+            }
+        })
+        .await;
+        Ok(())
+    }
+
+    async fn append_back(&mut self, values: Vec<T>) -> Result<(), Self::Error> {
+        self.with_mut(|v: &mut VecDeque<T>| {
+            for value in values {
+                v.push_back(value);
+            }
+        })
+        .await;
         Ok(())
     }
 }
