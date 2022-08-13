@@ -144,7 +144,7 @@ pub struct ChannelId {
 }
 
 /// The origin of a message, relative to a particular application. Used to identify each inbox.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Serialize, Deserialize)]
 pub struct Origin {
     /// The chain ID of the sender.
     pub chain_id: ChainId,
@@ -178,7 +178,7 @@ pub enum Destination {
 }
 
 /// The origin of a message coming from a particular chain. Used to identify each inbox.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Ord, PartialOrd, Hash, Clone, Serialize, Deserialize)]
 pub enum Medium {
     /// The message is a direct message.
     Direct,

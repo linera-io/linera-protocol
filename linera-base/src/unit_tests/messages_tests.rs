@@ -32,7 +32,7 @@ fn test_signed_values() {
     let value = Value::ConfirmedBlock {
         block,
         effects: Vec::new(),
-        state_hash: HashValue::new(&ExecutionState::new(ChainId::root(1))),
+        state_hash: HashValue::new(&ExecutionState::default()),
     };
 
     let v = Vote::new(value.clone(), &key1);
@@ -70,7 +70,7 @@ fn test_certificates() {
     let value = Value::ConfirmedBlock {
         block,
         effects: Vec::new(),
-        state_hash: HashValue::new(&ExecutionState::new(ChainId::root(1))),
+        state_hash: HashValue::new(&ExecutionState::default()),
     };
 
     let v1 = Vote::new(value.clone(), &key1);
