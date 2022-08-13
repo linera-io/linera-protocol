@@ -14,11 +14,17 @@ use thiserror::Error;
 /// connect to the database and the address of the current entry.
 #[async_trait]
 pub trait Context {
+    /// User provided data to be carried along.
+    type Extra: Clone + Send + Sync;
+
     /// The error type in use.
     type Error: Debug + Send + From<ViewError> + From<std::io::Error> + From<bcs::Error>;
 
     /// Erase the current entry from storage.
     async fn erase(&mut self) -> Result<(), Self::Error>;
+
+    /// Getter for the user provided data.
+    fn extra(&self) -> &Self::Extra;
 }
 
 /// A view gives an exclusive access to read and write the data stored at an underlying
@@ -143,7 +149,10 @@ where
     }
 }
 
-impl<C, T> RegisterView<C, T> {
+impl<C, T> RegisterView<C, T>
+where
+    C: Context,
+{
     /// Read the value in the register.
     pub fn get(&self) -> &T {
         match &self.update {
@@ -155,6 +164,10 @@ impl<C, T> RegisterView<C, T> {
     /// Set the value in the register.
     pub fn set(&mut self, value: T) {
         self.update = Some(value);
+    }
+
+    pub fn extra(&self) -> &C::Extra {
+        self.context.extra()
     }
 }
 
@@ -205,7 +218,10 @@ where
     }
 }
 
-impl<C, T> AppendOnlyLogView<C, T> {
+impl<C, T> AppendOnlyLogView<C, T>
+where
+    C: Context,
+{
     /// Push a value to the end of the log.
     pub fn push(&mut self, value: T) {
         self.new_values.push(value);
@@ -214,6 +230,10 @@ impl<C, T> AppendOnlyLogView<C, T> {
     /// Read the size of the log.
     pub fn count(&self) -> usize {
         self.stored_count + self.new_values.len()
+    }
+
+    pub fn extra(&self) -> &C::Extra {
+        self.context.extra()
     }
 }
 
@@ -311,6 +331,7 @@ where
 
 impl<C, I, V> MapView<C, I, V>
 where
+    C: Context,
     I: Eq + Ord,
 {
     /// Set or insert a value.
@@ -321,6 +342,10 @@ where
     /// Remove a value.
     pub fn remove(&mut self, index: I) {
         self.updates.insert(index, None);
+    }
+
+    pub fn extra(&self) -> &C::Extra {
+        self.context.extra()
     }
 }
 
@@ -448,6 +473,10 @@ where
     /// Read the size of the queue.
     pub fn count(&self) -> usize {
         self.stored_indices.len() + self.new_back_values.len()
+    }
+
+    pub fn extra(&self) -> &C::Extra {
+        self.context.extra()
     }
 }
 
@@ -588,5 +617,9 @@ where
         }
         indices.sort();
         Ok(indices)
+    }
+
+    pub fn extra(&self) -> &C::Extra {
+        self.context.extra()
     }
 }

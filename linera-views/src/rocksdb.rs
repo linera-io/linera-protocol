@@ -15,18 +15,25 @@ use thiserror::Error;
 use tokio::sync::OwnedMutexGuard;
 
 #[derive(Debug, Clone)]
-pub struct RocksdbContext {
+pub struct RocksdbContext<E> {
     db: Arc<rocksdb::DB>,
     lock: Arc<OwnedMutexGuard<()>>,
     base_key: Vec<u8>,
+    extra: E,
 }
 
-impl RocksdbContext {
-    pub fn new(db: Arc<rocksdb::DB>, lock: OwnedMutexGuard<()>, base_key: Vec<u8>) -> Self {
+impl<E> RocksdbContext<E> {
+    pub fn new(
+        db: Arc<rocksdb::DB>,
+        lock: OwnedMutexGuard<()>,
+        base_key: Vec<u8>,
+        extra: E,
+    ) -> Self {
         Self {
             db,
             lock: Arc::new(lock),
             base_key,
+            extra,
         }
     }
 
@@ -94,30 +101,43 @@ impl RocksdbContext {
 }
 
 #[async_trait]
-impl Context for RocksdbContext {
+impl<E> Context for RocksdbContext<E>
+where
+    E: Clone + Send + Sync,
+{
+    type Extra = E;
     type Error = RocksdbViewError;
 
     async fn erase(&mut self) -> Result<(), Self::Error> {
         self.delete_key(&self.base_key).await?;
         Ok(())
     }
+
+    fn extra(&self) -> &E {
+        &self.extra
+    }
 }
 
 #[async_trait]
-impl ScopedOperations for RocksdbContext {
+impl<E> ScopedOperations for RocksdbContext<E>
+where
+    E: Clone + Send + Sync,
+{
     fn clone_with_scope(&self, index: u64) -> Self {
         Self {
             db: self.db.clone(),
             lock: self.lock.clone(),
             base_key: self.derive_key(&index),
+            extra: self.extra.clone(),
         }
     }
 }
 
 #[async_trait]
-impl<T> RegisterOperations<T> for RocksdbContext
+impl<E, T> RegisterOperations<T> for RocksdbContext<E>
 where
     T: Default + Serialize + DeserializeOwned + Send + Sync + 'static,
+    E: Clone + Send + Sync,
 {
     async fn get(&mut self) -> Result<T, RocksdbViewError> {
         let value = self.read_key(&self.base_key).await?.unwrap_or_default();
@@ -131,9 +151,10 @@ where
 }
 
 #[async_trait]
-impl<T> AppendOnlyLogOperations<T> for RocksdbContext
+impl<E, T> AppendOnlyLogOperations<T> for RocksdbContext<E>
 where
     T: Serialize + DeserializeOwned + Send + Sync + 'static,
+    E: Clone + Send + Sync,
 {
     async fn count(&mut self) -> Result<usize, RocksdbViewError> {
         let count = self.read_key(&self.base_key).await?.unwrap_or_default();
@@ -167,9 +188,10 @@ where
 }
 
 #[async_trait]
-impl<T> QueueOperations<T> for RocksdbContext
+impl<E, T> QueueOperations<T> for RocksdbContext<E>
 where
     T: Serialize + DeserializeOwned + Send + Sync + 'static,
+    E: Clone + Send + Sync,
 {
     async fn indices(&mut self) -> Result<Range<usize>, Self::Error> {
         let range = self.read_key(&self.base_key).await?.unwrap_or_default();
@@ -215,10 +237,11 @@ where
 }
 
 #[async_trait]
-impl<I, V> MapOperations<I, V> for RocksdbContext
+impl<E, I, V> MapOperations<I, V> for RocksdbContext<E>
 where
     I: Eq + Ord + Send + Sync + Serialize + DeserializeOwned + Clone + 'static,
     V: Serialize + DeserializeOwned + Send + Sync + 'static,
+    E: Clone + Send + Sync,
 {
     async fn get(&mut self, index: &I) -> Result<Option<V>, RocksdbViewError> {
         Ok(self.read_key(&self.derive_key(index)).await?)
@@ -245,15 +268,17 @@ where
 }
 
 #[async_trait]
-impl<I> CollectionOperations<I> for RocksdbContext
+impl<E, I> CollectionOperations<I> for RocksdbContext<E>
 where
     I: serde::Serialize + serde::de::DeserializeOwned + Send + Sync,
+    E: Clone + Send + Sync,
 {
     fn clone_with_scope(&self, index: &I) -> Self {
         Self {
             db: self.db.clone(),
             lock: self.lock.clone(),
             base_key: self.derive_key(index),
+            extra: self.extra.clone(),
         }
     }
 
@@ -278,7 +303,10 @@ where
     }
 }
 
-impl HashingContext for RocksdbContext {
+impl<E> HashingContext for RocksdbContext<E>
+where
+    E: Clone + Send + Sync,
+{
     type Hasher = sha2::Sha512;
 }
 
