@@ -47,7 +47,8 @@ pub trait Store<Key> {
 }
 
 pub trait StateStore: Store<usize, View = StateView<<Self as StateStore>::Context>> {
-    type Context: HashingContext
+    type Context: Context<Extra = usize>
+        + HashingContext
         + Send
         + Sync
         + Clone
@@ -66,13 +67,9 @@ pub struct InMemoryTestStore {
     states: HashMap<usize, Arc<Mutex<EntryMap>>>,
 }
 
-impl StateStore for InMemoryTestStore {
-    type Context = InMemoryContext;
-}
-
 #[async_trait]
 impl Store<usize> for InMemoryTestStore {
-    type View = StateView<InMemoryContext>;
+    type View = StateView<InMemoryContext<usize>>;
     type Error = MemoryViewError;
 
     async fn load(&mut self, id: usize) -> Result<Self::View, Self::Error> {
@@ -81,9 +78,13 @@ impl Store<usize> for InMemoryTestStore {
             .entry(id)
             .or_insert_with(|| Arc::new(Mutex::new(BTreeMap::new())));
         log::trace!("Acquiring lock on {:?}", id);
-        let context = InMemoryContext::new(state.clone().lock_owned().await);
+        let context = InMemoryContext::new(state.clone().lock_owned().await, id);
         Self::View::load(context).await
     }
+}
+
+impl StateStore for InMemoryTestStore {
+    type Context = InMemoryContext<usize>;
 }
 
 pub struct RocksdbTestStore {
@@ -101,12 +102,12 @@ impl RocksdbTestStore {
 }
 
 impl StateStore for RocksdbTestStore {
-    type Context = RocksdbContext;
+    type Context = RocksdbContext<usize>;
 }
 
 #[async_trait]
 impl Store<usize> for RocksdbTestStore {
-    type View = StateView<RocksdbContext>;
+    type View = StateView<RocksdbContext<usize>>;
     type Error = RocksdbViewError;
 
     async fn load(&mut self, id: usize) -> Result<Self::View, Self::Error> {
@@ -119,6 +120,7 @@ impl Store<usize> for RocksdbTestStore {
             self.db.clone(),
             lock.clone().lock_owned().await,
             bcs::to_bytes(&id)?,
+            id,
         );
         Self::View::load(context).await
     }
@@ -135,6 +137,7 @@ where
     };
     {
         let mut view = store.load(1).await.unwrap();
+        assert_eq!(view.x1.extra(), &1);
         let hash = view.hash().await.unwrap();
         assert_eq!(hash, default_hash);
         assert_eq!(view.x1.get(), &0);

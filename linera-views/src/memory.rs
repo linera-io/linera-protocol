@@ -22,9 +22,10 @@ use tokio::sync::{OwnedMutexGuard, RwLock};
 
 /// A context that stores all values in memory.
 #[derive(Clone, Debug)]
-pub struct InMemoryContext {
+pub struct InMemoryContext<E> {
     map: Arc<RwLock<OwnedMutexGuard<EntryMap>>>,
     base_key: Vec<u8>,
+    extra: E,
 }
 
 /// A Rust value stored in memory.
@@ -33,11 +34,12 @@ pub type Entry = Box<dyn Any + Send + Sync + 'static>;
 /// A map of Rust values indexed by their keys.
 pub type EntryMap = BTreeMap<Vec<u8>, Entry>;
 
-impl InMemoryContext {
-    pub fn new(guard: OwnedMutexGuard<EntryMap>) -> Self {
+impl<E> InMemoryContext<E> {
+    pub fn new(guard: OwnedMutexGuard<EntryMap>, extra: E) -> Self {
         Self {
             map: Arc::new(RwLock::new(guard)),
             base_key: Vec::new(),
+            extra,
         }
     }
 
@@ -81,7 +83,11 @@ impl InMemoryContext {
 }
 
 #[async_trait]
-impl Context for InMemoryContext {
+impl<E> Context for InMemoryContext<E>
+where
+    E: Clone + Send + Sync,
+{
+    type Extra = E;
     type Error = MemoryViewError;
 
     async fn erase(&mut self) -> Result<(), Self::Error> {
@@ -89,22 +95,31 @@ impl Context for InMemoryContext {
         map.remove(&self.base_key);
         Ok(())
     }
+
+    fn extra(&self) -> &E {
+        &self.extra
+    }
 }
 
 #[async_trait]
-impl ScopedOperations for InMemoryContext {
+impl<E> ScopedOperations for InMemoryContext<E>
+where
+    E: Clone + Send + Sync,
+{
     fn clone_with_scope(&self, index: u64) -> Self {
         Self {
             map: self.map.clone(),
             base_key: self.derive_key(&index),
+            extra: self.extra.clone(),
         }
     }
 }
 
 #[async_trait]
-impl<T> RegisterOperations<T> for InMemoryContext
+impl<E, T> RegisterOperations<T> for InMemoryContext<E>
 where
     T: Default + Clone + Send + Sync + 'static,
+    E: Clone + Send + Sync,
 {
     async fn get(&mut self) -> Result<T, MemoryViewError> {
         Ok(self
@@ -120,9 +135,10 @@ where
 }
 
 #[async_trait]
-impl<T> AppendOnlyLogOperations<T> for InMemoryContext
+impl<E, T> AppendOnlyLogOperations<T> for InMemoryContext<E>
 where
     T: Clone + Send + Sync + 'static,
+    E: Clone + Send + Sync,
 {
     async fn count(&mut self) -> Result<usize, MemoryViewError> {
         Ok(self
@@ -151,9 +167,10 @@ where
 }
 
 #[async_trait]
-impl<T> QueueOperations<T> for InMemoryContext
+impl<E, T> QueueOperations<T> for InMemoryContext<E>
 where
     T: Clone + Send + Sync + 'static,
+    E: Clone + Send + Sync,
 {
     async fn indices(&mut self) -> Result<Range<usize>, Self::Error> {
         Ok(self
@@ -204,10 +221,11 @@ where
 }
 
 #[async_trait]
-impl<I, V> MapOperations<I, V> for InMemoryContext
+impl<E, I, V> MapOperations<I, V> for InMemoryContext<E>
 where
     I: Eq + Ord + Send + Sync + Clone + 'static,
     V: Clone + Send + Sync + 'static,
+    E: Clone + Send + Sync,
 {
     async fn get(&mut self, index: &I) -> Result<Option<V>, MemoryViewError> {
         Ok(self
@@ -245,14 +263,16 @@ where
 }
 
 #[async_trait]
-impl<I> CollectionOperations<I> for InMemoryContext
+impl<E: Clone, I> CollectionOperations<I> for InMemoryContext<E>
 where
     I: serde::Serialize + serde::de::DeserializeOwned + Send + Sync,
+    E: Clone + Send + Sync,
 {
     fn clone_with_scope(&self, index: &I) -> Self {
         Self {
             map: self.map.clone(),
             base_key: self.derive_key(index),
+            extra: self.extra.clone(),
         }
     }
 
@@ -267,7 +287,10 @@ where
     }
 }
 
-impl HashingContext for InMemoryContext {
+impl<E> HashingContext for InMemoryContext<E>
+where
+    E: Clone + Send + Sync,
+{
     type Hasher = sha2::Sha512;
 }
 
