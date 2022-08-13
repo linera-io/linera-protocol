@@ -231,7 +231,7 @@ impl Storage for RocksdbStoreClient {
     }
 
     async fn write_chain(&mut self, state: ChainState) -> Result<(), Error> {
-        self.0.write(&state.state.system.chain_id, &state).await
+        self.0.write(&state.chain_id(), &state).await
     }
 
     async fn remove_chain(&mut self, id: ChainId) -> Result<(), Error> {

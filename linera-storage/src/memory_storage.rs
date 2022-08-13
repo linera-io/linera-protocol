@@ -54,11 +54,7 @@ impl Storage for InMemoryStoreClient {
 
     async fn write_chain(&mut self, value: ChainState) -> Result<(), Error> {
         let store = self.0.clone();
-        store
-            .lock()
-            .await
-            .chains
-            .insert(value.state.system.chain_id, value);
+        store.lock().await.chains.insert(value.chain_id(), value);
         Ok(())
     }
 
