@@ -1296,6 +1296,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "linera-storage2"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bcs",
+ "linera-base",
+ "linera-views",
+ "log",
+ "rocksdb",
+ "serde",
+ "tokio",
+]
+
+[[package]]
 name = "linera-views"
 version = "0.1.0"
 dependencies = [
