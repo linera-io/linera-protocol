@@ -14,5 +14,8 @@ pub mod memory;
 /// Helper definitions for Rocksdb storage.
 pub mod rocksdb;
 
-/// Module to supporting hashing
+/// Module to supporting hashing.
 pub mod hash;
+
+/// Macro definitions.
+mod macros;
