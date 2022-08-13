@@ -144,6 +144,8 @@ ChainManager:
           TYPENAME: MultiOwnerManager
 ChainState:
   STRUCT:
+    - chain_id:
+        TYPENAME: ChainId
     - state:
         TYPENAME: ExecutionState
     - state_hash:
@@ -659,8 +661,6 @@ SystemEffect:
               TYPENAME: ChainId
 SystemExecutionState:
   STRUCT:
-    - chain_id:
-        TYPENAME: ChainId
     - description:
         OPTION:
           TYPENAME: ChainDescription

@@ -27,15 +27,41 @@ pub static USER_APPLICATIONS: Lazy<
 pub trait UserApplication {
     fn apply_operation(
         &self,
+        context: &OperationContext,
         state: &mut Vec<u8>,
         operation: &[u8],
     ) -> Result<ApplicationResult<Vec<u8>>, Error>;
 
     fn apply_effect(
         &self,
+        context: &EffectContext,
         state: &mut Vec<u8>,
         operation: &[u8],
     ) -> Result<ApplicationResult<Vec<u8>>, Error>;
+}
+
+#[derive(Debug, Clone)]
+pub struct OperationContext {
+    pub chain_id: ChainId,
+    pub height: BlockHeight,
+    pub index: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct EffectContext {
+    pub chain_id: ChainId,
+    pub height: BlockHeight,
+    pub effect_id: EffectId,
+}
+
+impl From<OperationContext> for EffectId {
+    fn from(context: OperationContext) -> Self {
+        Self {
+            chain_id: context.chain_id,
+            height: context.height,
+            index: context.index,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -56,7 +82,7 @@ impl<Effect> Default for ApplicationResult<Effect> {
 }
 
 /// The authentication execution state of all applications.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct ExecutionState {
     /// System application.
@@ -66,10 +92,6 @@ pub struct ExecutionState {
 }
 
 impl ExecutionState {
-    pub fn new(id: ChainId) -> Self {
-        SystemExecutionState::new(id).into()
-    }
-
     fn get_user_application(
         application_id: ApplicationId,
     ) -> Result<Arc<dyn UserApplication + Send + Sync + 'static>, Error> {
@@ -84,8 +106,7 @@ impl ExecutionState {
     pub(crate) fn apply_operation(
         &mut self,
         application_id: ApplicationId,
-        height: BlockHeight,
-        index: usize,
+        context: &OperationContext,
         operation: &Operation,
         outboxes: &mut HashMap<ChainId, OutboxState>,
         channels: &mut HashMap<String, ChannelState>,
@@ -94,13 +115,13 @@ impl ExecutionState {
         if application_id == SYSTEM {
             match operation {
                 Operation::System(op) => {
-                    let result = self.system.apply_operation(height, index, op)?;
+                    let result = self.system.apply_operation(context, op)?;
                     ChainState::process_application_result(
                         application_id,
                         outboxes,
                         channels,
                         effects,
-                        height,
+                        context.height,
                         result,
                     );
                     Ok(())
@@ -113,13 +134,13 @@ impl ExecutionState {
             match operation {
                 Operation::System(_) => Err(Error::InvalidOperation),
                 Operation::User(operation) => {
-                    let result = application.apply_operation(state, operation)?;
+                    let result = application.apply_operation(context, state, operation)?;
                     ChainState::process_application_result(
                         application_id,
                         outboxes,
                         channels,
                         effects,
-                        height,
+                        context.height,
                         result,
                     );
                     Ok(())
@@ -131,7 +152,7 @@ impl ExecutionState {
     pub(crate) fn apply_effect(
         &mut self,
         application_id: ApplicationId,
-        height: BlockHeight,
+        context: &EffectContext,
         effect: &Effect,
         outboxes: &mut HashMap<ChainId, OutboxState>,
         channels: &mut HashMap<String, ChannelState>,
@@ -140,13 +161,13 @@ impl ExecutionState {
         if application_id == SYSTEM {
             match effect {
                 Effect::System(effect) => {
-                    let result = self.system.apply_effect(effect)?;
+                    let result = self.system.apply_effect(context, effect)?;
                     ChainState::process_application_result(
                         application_id,
                         outboxes,
                         channels,
                         effects,
-                        height,
+                        context.height,
                         result,
                     );
                     Ok(())
@@ -159,13 +180,13 @@ impl ExecutionState {
             match effect {
                 Effect::System(_) => Err(Error::InvalidEffect),
                 Effect::User(effect) => {
-                    let result = application.apply_effect(state, effect)?;
+                    let result = application.apply_effect(context, state, effect)?;
                     ChainState::process_application_result(
                         application_id,
                         outboxes,
                         channels,
                         effects,
-                        height,
+                        context.height,
                         result,
                     );
                     Ok(())

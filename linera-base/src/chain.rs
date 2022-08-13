@@ -7,10 +7,10 @@ use crate::{
     crypto::*,
     ensure,
     error::Error,
-    execution::{ApplicationResult, ExecutionState, SYSTEM},
+    execution::{ApplicationResult, EffectContext, ExecutionState, OperationContext, SYSTEM},
     manager::ChainManager,
     messages::*,
-    system::{Balance, SystemExecutionState},
+    system::Balance,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -19,6 +19,9 @@ use std::collections::{HashMap, HashSet, VecDeque};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct ChainState {
+    /// The ID of the chain.
+    chain_id: ChainId,
+
     /// Execution state.
     pub state: ExecutionState,
     /// Hash of execution state + the state of all contract states
@@ -101,13 +104,11 @@ pub struct Event {
 }
 
 impl ChainState {
-    pub fn new(id: ChainId) -> Self {
-        let state = ExecutionState {
-            system: SystemExecutionState::new(id),
-            users: HashMap::new(),
-        };
+    pub fn new(chain_id: ChainId) -> Self {
+        let state = ExecutionState::default();
         let state_hash = HashValue::new(&state);
         Self {
+            chain_id,
             state,
             state_hash,
             block_hash: None,
@@ -142,7 +143,7 @@ impl ChainState {
     }
 
     pub fn chain_id(&self) -> ChainId {
-        self.state.system.chain_id
+        self.chain_id
     }
 
     fn mark_messages_as_received(
@@ -230,7 +231,7 @@ impl ChainState {
 
     pub fn make_chain_info(&self, key_pair: Option<&KeyPair>) -> ChainInfoResponse {
         let info = ChainInfo {
-            chain_id: self.state.system.chain_id,
+            chain_id: self.chain_id,
             epoch: self.state.system.epoch,
             description: self.state.system.description,
             manager: self.state.system.manager.clone(),
@@ -285,7 +286,7 @@ impl ChainState {
             // We have already received this block.
             log::warn!(
                 "Ignoring repeated messages to {:?} from {:?} at height {}",
-                self.state.system.chain_id,
+                self.chain_id,
                 origin,
                 height
             );
@@ -293,7 +294,7 @@ impl ChainState {
         }
         log::trace!(
             "Processing new messages to {:?} from {:?} at height {}",
-            self.state.system.chain_id,
+            self.chain_id,
             origin,
             height
         );
@@ -307,7 +308,7 @@ impl ChainState {
             // recipient.
             match destination {
                 Destination::Recipient(id) => {
-                    if origin.medium != Medium::Direct || id != self.state.system.chain_id {
+                    if origin.medium != Medium::Direct || id != self.chain_id {
                         continue;
                     }
                 }
@@ -319,13 +320,17 @@ impl ChainState {
             }
             was_a_recipient = true;
             if app_id == SYSTEM {
-                // Handle special effects to be executed immediately.
-                if self.state.system.apply_immediate_effect(
-                    origin.chain_id,
+                let effect_id = EffectId {
+                    chain_id: origin.chain_id,
                     height,
                     index,
-                    &effect,
-                )? {
+                };
+                // Handle special effects to be executed immediately.
+                if self
+                    .state
+                    .system
+                    .apply_immediate_effect(self.chain_id, effect_id, &effect)?
+                {
                     self.state_hash = HashValue::new(&self.state);
                 }
             }
@@ -358,7 +363,7 @@ impl ChainState {
         debug_assert!(
             was_a_recipient,
             "The block received by {:?} from {:?} at height {:?} was entirely ignored. This should not happen",
-            self.state.system.chain_id, origin, height
+            self.chain_id, origin, height
         );
         Ok(true)
     }
@@ -396,7 +401,7 @@ impl ChainState {
         &mut self,
         block: &Block,
     ) -> Result<Vec<(ApplicationId, Destination, Effect)>, Error> {
-        assert_eq!(block.chain_id, self.state.system.chain_id);
+        assert_eq!(block.chain_id, self.chain_id);
         let mut effects = Vec::new();
         // First, process incoming messages.
         self.check_incoming_messages(&block.incoming_messages)?;
@@ -414,7 +419,7 @@ impl ChainState {
                 "Updating inbox {:?}::{:?} in chain {:?}",
                 message_group.application_id,
                 message_group.origin,
-                self.state.system.chain_id
+                self.chain_id
             );
             for (message_index, message_effect) in &message_group.effects {
                 // Receivers are allowed to skip events from the received queue.
@@ -474,9 +479,18 @@ impl ChainState {
                     }
                 }
                 // Execute the received effect.
+                let context = EffectContext {
+                    chain_id: self.chain_id,
+                    height: block.height,
+                    effect_id: EffectId {
+                        chain_id: message_group.origin.chain_id,
+                        height: message_group.height,
+                        index: *message_index,
+                    },
+                };
                 self.state.apply_effect(
                     message_group.application_id,
-                    block.height,
+                    &context,
                     message_effect,
                     &mut communication_state.outboxes,
                     &mut communication_state.channels,
@@ -490,10 +504,14 @@ impl ChainState {
                 .communication_states
                 .entry(*application_id)
                 .or_default();
+            let context = OperationContext {
+                chain_id: self.chain_id,
+                height: block.height,
+                index,
+            };
             self.state.apply_operation(
                 *application_id,
-                block.height,
-                index,
+                &context,
                 operation,
                 &mut communication_state.outboxes,
                 &mut communication_state.channels,

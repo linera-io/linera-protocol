@@ -142,7 +142,6 @@ fn make_transfer_certificate(
     let chain_id = chain_description.into();
     let state = ExecutionState::from(SystemExecutionState {
         epoch: Some(Epoch::from(0)),
-        chain_id,
         description: Some(chain_description),
         admin_id: Some(ChainId::root(0)),
         subscriptions: BTreeMap::new(),
@@ -504,7 +503,6 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             ],
             state_hash: HashValue::new(&ExecutionState::from(SystemExecutionState {
                 epoch: Some(epoch),
-                chain_id: ChainId::root(1),
                 description: Some(ChainDescription::Root(1)),
                 admin_id: Some(ChainId::root(0)),
                 subscriptions: BTreeMap::new(),
@@ -544,7 +542,6 @@ async fn test_handle_block_proposal_with_incoming_messages() {
             )],
             state_hash: HashValue::new(&ExecutionState::from(SystemExecutionState {
                 epoch: Some(epoch),
-                chain_id: ChainId::root(1),
                 description: Some(ChainDescription::Root(1)),
                 admin_id: Some(ChainId::root(0)),
                 subscriptions: BTreeMap::new(),
@@ -761,7 +758,6 @@ async fn test_handle_block_proposal_with_incoming_messages() {
                 )],
                 state_hash: HashValue::new(&ExecutionState::from(SystemExecutionState {
                     epoch: Some(epoch),
-                    chain_id: ChainId::root(2),
                     description: Some(ChainDescription::Root(2)),
                     admin_id: Some(ChainId::root(0)),
                     subscriptions: BTreeMap::new(),
@@ -1491,7 +1487,6 @@ async fn test_chain_creation_with_committee_creation() {
             ],
             state_hash: HashValue::new(&ExecutionState::from(SystemExecutionState {
                 epoch: Some(Epoch::from(0)),
-                chain_id: admin_id,
                 description: Some(ChainDescription::Root(0)),
                 admin_id: Some(admin_id),
                 subscriptions: BTreeMap::new(),
@@ -1583,7 +1578,6 @@ async fn test_chain_creation_with_committee_creation() {
             ],
             state_hash: HashValue::new(&ExecutionState::from(SystemExecutionState {
                 epoch: Some(Epoch::from(1)),
-                chain_id: admin_id,
                 description: Some(ChainDescription::Root(0)),
                 admin_id: Some(admin_id),
                 subscriptions: BTreeMap::new(),
@@ -1630,7 +1624,6 @@ async fn test_chain_creation_with_committee_creation() {
             )],
             state_hash: HashValue::new(&ExecutionState::from(SystemExecutionState {
                 epoch: Some(Epoch::from(1)),
-                chain_id: admin_id,
                 description: Some(ChainDescription::Root(0)),
                 admin_id: Some(admin_id),
                 subscriptions: BTreeMap::new(),
@@ -1772,7 +1765,6 @@ async fn test_chain_creation_with_committee_creation() {
             effects: Vec::new(),
             state_hash: HashValue::new(&ExecutionState::from(SystemExecutionState {
                 epoch: Some(Epoch::from(1)),
-                chain_id: user_id,
                 description: Some(user_description),
                 admin_id: Some(admin_id),
                 subscriptions: [(
@@ -1882,7 +1874,6 @@ async fn test_transfers_and_committee_creation() {
             )],
             state_hash: HashValue::new(&ExecutionState::from(SystemExecutionState {
                 epoch: Some(Epoch::from(0)),
-                chain_id: user_id,
                 description: Some(ChainDescription::Root(1)),
                 admin_id: Some(admin_id),
                 subscriptions: BTreeMap::new(),
@@ -1929,7 +1920,6 @@ async fn test_transfers_and_committee_creation() {
             )],
             state_hash: HashValue::new(&ExecutionState::from(SystemExecutionState {
                 epoch: Some(Epoch::from(1)),
-                chain_id: admin_id,
                 description: Some(ChainDescription::Root(0)),
                 admin_id: Some(admin_id),
                 subscriptions: BTreeMap::new(),
@@ -2038,7 +2028,6 @@ async fn test_transfers_and_committee_removal() {
             )],
             state_hash: HashValue::new(&ExecutionState::from(SystemExecutionState {
                 epoch: Some(Epoch::from(0)),
-                chain_id: user_id,
                 description: Some(ChainDescription::Root(1)),
                 admin_id: Some(admin_id),
                 subscriptions: BTreeMap::new(),
@@ -2106,7 +2095,6 @@ async fn test_transfers_and_committee_removal() {
             ],
             state_hash: HashValue::new(&ExecutionState::from(SystemExecutionState {
                 epoch: Some(Epoch::from(1)),
-                chain_id: admin_id,
                 description: Some(ChainDescription::Root(0)),
                 admin_id: Some(admin_id),
                 subscriptions: BTreeMap::new(),

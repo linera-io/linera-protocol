@@ -189,7 +189,7 @@ async fn certificate_storage_round_trip() -> Result<(), Error> {
     let value = Value::ConfirmedBlock {
         block,
         effects: Vec::new(),
-        state_hash: HashValue::new(&ExecutionState::new(ChainId::root(1))),
+        state_hash: HashValue::new(&ExecutionState::default()),
     };
     let certificate = Certificate::new(value, vec![]);
 
@@ -226,10 +226,8 @@ async fn retrieval_of_inexistent_certificate() -> Result<(), Error> {
 #[ignore]
 async fn chain_storage_round_trip() -> Result<(), Error> {
     let chain_id = ChainId::root(1);
-    let chain_state = ChainState {
-        next_block_height: BlockHeight(100),
-        ..ChainState::new(chain_id)
-    };
+    let mut chain_state = ChainState::new(chain_id);
+    chain_state.next_block_height = BlockHeight(100);
 
     let localstack = LocalStackTestContext::new().await?;
     let mut storage = localstack.create_s3_storage().await?;
@@ -267,10 +265,8 @@ async fn retrieval_of_inexistent_chain_state() -> Result<(), Error> {
 #[ignore]
 async fn removal_of_chain_state() -> Result<(), Error> {
     let chain_id = ChainId::root(9);
-    let chain_state = ChainState {
-        next_block_height: BlockHeight(300),
-        ..ChainState::new(chain_id)
-    };
+    let mut chain_state = ChainState::new(chain_id);
+    chain_state.next_block_height = BlockHeight(300);
 
     let localstack = LocalStackTestContext::new().await?;
     let mut storage = localstack.create_s3_storage().await?;
