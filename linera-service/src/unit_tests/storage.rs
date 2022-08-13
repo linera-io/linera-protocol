@@ -174,7 +174,7 @@ where
     async fn run(self, mut storage: S) -> Result<Self::Output, anyhow::Error> {
         for expected_chain_state in &self.presence {
             let chain_state = storage
-                .read_chain_or_default(expected_chain_state.state.system.chain_id)
+                .read_chain_or_default(expected_chain_state.chain_id())
                 .await?;
 
             assert_eq!(&chain_state, expected_chain_state);
@@ -182,7 +182,7 @@ where
 
         for unexpected_chain_state in &self.abscence {
             let chain_state = storage
-                .read_chain_or_default(unexpected_chain_state.state.system.chain_id)
+                .read_chain_or_default(unexpected_chain_state.chain_id())
                 .await?;
 
             assert_ne!(&chain_state, unexpected_chain_state);

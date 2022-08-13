@@ -237,7 +237,7 @@ async fn chain_storage_round_trip() -> Result<(), Error> {
     storage.write_chain(chain_state.clone()).await?;
 
     let stored_chain_state = storage
-        .read_chain_or_default(chain_state.state.system.chain_id)
+        .read_chain_or_default(chain_state.chain_id())
         .await?;
 
     assert_eq!(chain_state, stored_chain_state);
