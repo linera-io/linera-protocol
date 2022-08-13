@@ -4,6 +4,7 @@
 use async_trait::async_trait;
 use linera_views::{
     hash::{HashView, Hasher, HashingContext},
+    impl_view,
     memory::{EntryMap, InMemoryContext, MemoryViewError},
     rocksdb::{RocksdbContext, RocksdbViewError},
     views::{
@@ -15,7 +16,6 @@ use linera_views::{
 use std::{
     collections::{BTreeMap, HashMap},
     fmt::Debug,
-    io::Write,
     sync::Arc,
 };
 use tokio::sync::Mutex;
@@ -29,96 +29,14 @@ pub struct StateView<C> {
     pub collection: ScopedView<5, CollectionView<C, String, AppendOnlyLogView<C, u32>>>,
 }
 
-#[async_trait]
-impl<C> View<C> for StateView<C>
-where
-    C: Context
-        + Send
-        + Sync
-        + Clone
-        + 'static
-        + RegisterOperations<u64>
-        + RegisterOperations<u32>
-        + AppendOnlyLogOperations<u32>
-        + MapOperations<String, usize>
-        + QueueOperations<u64>
-        + CollectionOperations<String>
-        + ScopedOperations,
-{
-    async fn load(context: C) -> Result<Self, C::Error> {
-        let x1 = ScopedView::load(context.clone()).await?;
-        let x2 = ScopedView::load(context.clone()).await?;
-        let log = ScopedView::load(context.clone()).await?;
-        let map = ScopedView::load(context.clone()).await?;
-        let queue = ScopedView::load(context.clone()).await?;
-        let collection = ScopedView::load(context).await?;
-        Ok(Self {
-            x1,
-            x2,
-            log,
-            map,
-            queue,
-            collection,
-        })
-    }
-
-    fn reset_changes(&mut self) {
-        self.x1.reset_changes();
-        self.x2.reset_changes();
-        self.log.reset_changes();
-        self.map.reset_changes();
-        self.queue.reset_changes();
-        self.collection.reset_changes();
-    }
-
-    async fn commit(self) -> Result<(), C::Error> {
-        self.x1.commit().await?;
-        self.x2.commit().await?;
-        self.log.commit().await?;
-        self.map.commit().await?;
-        self.queue.commit().await?;
-        self.collection.commit().await?;
-        Ok(())
-    }
-
-    async fn delete(self) -> Result<(), C::Error> {
-        self.x1.delete().await?;
-        self.x2.delete().await?;
-        self.log.delete().await?;
-        self.map.delete().await?;
-        self.queue.delete().await?;
-        self.collection.delete().await?;
-        Ok(())
-    }
-}
-
-#[async_trait]
-impl<C> HashView<C> for StateView<C>
-where
-    C: HashingContext
-        + Send
-        + Sync
-        + Clone
-        + 'static
-        + RegisterOperations<u64>
-        + RegisterOperations<u32>
-        + AppendOnlyLogOperations<u32>
-        + MapOperations<String, usize>
-        + QueueOperations<u64>
-        + CollectionOperations<String>
-        + ScopedOperations,
-{
-    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, C::Error> {
-        let mut hasher = C::Hasher::default();
-        hasher.write_all(self.x1.hash().await?.as_ref())?;
-        hasher.write_all(self.x2.hash().await?.as_ref())?;
-        hasher.write_all(self.log.hash().await?.as_ref())?;
-        hasher.write_all(self.map.hash().await?.as_ref())?;
-        hasher.write_all(self.queue.hash().await?.as_ref())?;
-        hasher.write_all(self.collection.hash().await?.as_ref())?;
-        Ok(hasher.finalize())
-    }
-}
+impl_view!(StateView { x1, x2, log, map, queue, collection };
+           RegisterOperations<u64>,
+           RegisterOperations<u32>,
+           AppendOnlyLogOperations<u32>,
+           MapOperations<String, usize>,
+           QueueOperations<u64>,
+           CollectionOperations<String>
+);
 
 #[async_trait]
 pub trait Store<Key> {
