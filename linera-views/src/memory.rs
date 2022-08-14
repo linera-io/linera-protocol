@@ -22,7 +22,7 @@ use tokio::sync::{OwnedMutexGuard, RwLock};
 
 /// A context that stores all values in memory.
 #[derive(Clone, Debug)]
-pub struct InMemoryContext<E> {
+pub struct MemoryContext<E> {
     map: Arc<RwLock<OwnedMutexGuard<EntryMap>>>,
     base_key: Vec<u8>,
     extra: E,
@@ -34,7 +34,7 @@ pub type Entry = Box<dyn Any + Send + Sync + 'static>;
 /// A map of Rust values indexed by their keys.
 pub type EntryMap = BTreeMap<Vec<u8>, Entry>;
 
-impl<E> InMemoryContext<E> {
+impl<E> MemoryContext<E> {
     pub fn new(guard: OwnedMutexGuard<EntryMap>, extra: E) -> Self {
         Self {
             map: Arc::new(RwLock::new(guard)),
@@ -83,7 +83,7 @@ impl<E> InMemoryContext<E> {
 }
 
 #[async_trait]
-impl<E> Context for InMemoryContext<E>
+impl<E> Context for MemoryContext<E>
 where
     E: Clone + Send + Sync,
 {
@@ -102,7 +102,7 @@ where
 }
 
 #[async_trait]
-impl<E> ScopedOperations for InMemoryContext<E>
+impl<E> ScopedOperations for MemoryContext<E>
 where
     E: Clone + Send + Sync,
 {
@@ -116,7 +116,7 @@ where
 }
 
 #[async_trait]
-impl<E, T> RegisterOperations<T> for InMemoryContext<E>
+impl<E, T> RegisterOperations<T> for MemoryContext<E>
 where
     T: Default + Clone + Send + Sync + 'static,
     E: Clone + Send + Sync,
@@ -135,7 +135,7 @@ where
 }
 
 #[async_trait]
-impl<E, T> AppendOnlyLogOperations<T> for InMemoryContext<E>
+impl<E, T> AppendOnlyLogOperations<T> for MemoryContext<E>
 where
     T: Clone + Send + Sync + 'static,
     E: Clone + Send + Sync,
@@ -167,7 +167,7 @@ where
 }
 
 #[async_trait]
-impl<E, T> QueueOperations<T> for InMemoryContext<E>
+impl<E, T> QueueOperations<T> for MemoryContext<E>
 where
     T: Clone + Send + Sync + 'static,
     E: Clone + Send + Sync,
@@ -221,7 +221,7 @@ where
 }
 
 #[async_trait]
-impl<E, I, V> MapOperations<I, V> for InMemoryContext<E>
+impl<E, I, V> MapOperations<I, V> for MemoryContext<E>
 where
     I: Eq + Ord + Send + Sync + Clone + 'static,
     V: Clone + Send + Sync + 'static,
@@ -263,7 +263,7 @@ where
 }
 
 #[async_trait]
-impl<E: Clone, I> CollectionOperations<I> for InMemoryContext<E>
+impl<E: Clone, I> CollectionOperations<I> for MemoryContext<E>
 where
     I: serde::Serialize + serde::de::DeserializeOwned + Send + Sync,
     E: Clone + Send + Sync,
@@ -287,7 +287,7 @@ where
     }
 }
 
-impl<E> HashingContext for InMemoryContext<E>
+impl<E> HashingContext for MemoryContext<E>
 where
     E: Clone + Send + Sync,
 {
