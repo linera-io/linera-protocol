@@ -8,10 +8,11 @@ mod rocksdb;
 pub use crate::{memory::MemoryStore, rocksdb::RocksdbStore};
 
 use async_trait::async_trait;
+use futures::future;
 use linera_base::{
     crypto::HashValue,
     execution::ExecutionState,
-    messages::{ApplicationId, BlockHeight, ChainId, Origin},
+    messages::{ApplicationId, BlockHeight, Certificate, ChainId, Origin},
 };
 use linera_views::{
     hash::HashingContext,
@@ -52,4 +53,36 @@ pub trait Store {
         &mut self,
         id: ChainId,
     ) -> Result<chain::ChainStateView<Self::Context>, <Self::Context as Context>::Error>;
+
+    async fn read_certificate(
+        &mut self,
+        hash: HashValue,
+    ) -> Result<Certificate, <Self::Context as Context>::Error>;
+
+    async fn read_certificates<I: Iterator<Item = HashValue> + Send>(
+        &self,
+        keys: I,
+    ) -> Result<Vec<Certificate>, <Self::Context as Context>::Error>
+    where
+        Self: Clone + Send + 'static,
+    {
+        let mut tasks = Vec::new();
+        for key in keys {
+            let mut client = self.clone();
+            tasks.push(tokio::task::spawn(async move {
+                client.read_certificate(key).await
+            }));
+        }
+        let results = future::join_all(tasks).await;
+        let mut certs = Vec::new();
+        for result in results {
+            certs.push(result.expect("storage access should not cancel or crash")?);
+        }
+        Ok(certs)
+    }
+
+    async fn write_certificate(
+        &mut self,
+        certificate: Certificate,
+    ) -> Result<(), <Self::Context as Context>::Error>;
 }
