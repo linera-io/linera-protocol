@@ -3,11 +3,15 @@
 
 use crate::{chain::ChainStateView, Store};
 use async_trait::async_trait;
-use linera_base::messages::ChainId;
+use linera_base::{
+    crypto::HashValue,
+    messages::{Certificate, ChainId},
+};
 use linera_views::{
-    rocksdb::{RocksdbContext, RocksdbViewError},
+    rocksdb::{KeyValueOperations, RocksdbContext, RocksdbViewError},
     views::View,
 };
+use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
 
@@ -25,6 +29,12 @@ impl RocksdbStore {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+enum BaseKey {
+    ChainState(ChainId),
+    Certificate(HashValue),
+}
+
 #[async_trait]
 impl Store for RocksdbStore {
     type Context = RocksdbContext<ChainId>;
@@ -36,14 +46,27 @@ impl Store for RocksdbStore {
         let lock = self
             .locks
             .entry(id)
-            .or_insert_with(|| Arc::new(Mutex::new(())));
+            .or_insert_with(|| Arc::new(Mutex::new(())))
+            .clone();
         log::trace!("Acquiring lock on {:?}", id);
-        let context = RocksdbContext::new(
-            self.db.clone(),
-            lock.clone().lock_owned().await,
-            bcs::to_bytes(&id)?,
-            id,
-        );
+        let base_key = bcs::to_bytes(&BaseKey::ChainState(id))?;
+        let context = RocksdbContext::new(self.db.clone(), lock.lock_owned().await, base_key, id);
         ChainStateView::load(context).await
+    }
+
+    async fn read_certificate(&mut self, hash: HashValue) -> Result<Certificate, RocksdbViewError> {
+        let key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
+        let value = self.db.read_key(&key).await?.ok_or_else(|| {
+            RocksdbViewError::NotFound(format!("certificate for hash {:?}", hash))
+        })?;
+        Ok(value)
+    }
+
+    async fn write_certificate(
+        &mut self,
+        certificate: Certificate,
+    ) -> Result<(), RocksdbViewError> {
+        let key = bcs::to_bytes(&BaseKey::Certificate(certificate.hash))?;
+        self.db.write_key(&key, &certificate).await
     }
 }
