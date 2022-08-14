@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use linera_views::{
     hash::{HashView, Hasher, HashingContext},
     impl_view,
-    memory::{EntryMap, InMemoryContext, MemoryViewError},
+    memory::{EntryMap, MemoryContext, MemoryViewError},
     rocksdb::{RocksdbContext, RocksdbViewError},
     views::{
         AppendOnlyLogOperations, AppendOnlyLogView, CollectionOperations, CollectionView, Context,
@@ -15,7 +15,6 @@ use linera_views::{
 };
 use std::{
     collections::{BTreeMap, HashMap},
-    fmt::Debug,
     sync::Arc,
 };
 use tokio::sync::Mutex;
@@ -39,14 +38,7 @@ impl_view!(StateView { x1, x2, log, map, queue, collection };
 );
 
 #[async_trait]
-pub trait Store<Key> {
-    type View;
-    type Error: Debug;
-
-    async fn load(&mut self, id: Key) -> Result<Self::View, Self::Error>;
-}
-
-pub trait StateStore: Store<usize, View = StateView<<Self as StateStore>::Context>> {
+pub trait StateStore {
     type Context: Context<Extra = usize>
         + HashingContext
         + Send
@@ -60,31 +52,31 @@ pub trait StateStore: Store<usize, View = StateView<<Self as StateStore>::Contex
         + QueueOperations<u64>
         + CollectionOperations<String>
         + ScopedOperations;
+
+    async fn load(
+        &mut self,
+        id: usize,
+    ) -> Result<StateView<Self::Context>, <Self::Context as Context>::Error>;
 }
 
 #[derive(Default)]
-pub struct InMemoryTestStore {
+pub struct MemoryTestStore {
     states: HashMap<usize, Arc<Mutex<EntryMap>>>,
 }
 
 #[async_trait]
-impl Store<usize> for InMemoryTestStore {
-    type View = StateView<InMemoryContext<usize>>;
-    type Error = MemoryViewError;
+impl StateStore for MemoryTestStore {
+    type Context = MemoryContext<usize>;
 
-    async fn load(&mut self, id: usize) -> Result<Self::View, Self::Error> {
+    async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, MemoryViewError> {
         let state = self
             .states
             .entry(id)
             .or_insert_with(|| Arc::new(Mutex::new(BTreeMap::new())));
         log::trace!("Acquiring lock on {:?}", id);
-        let context = InMemoryContext::new(state.clone().lock_owned().await, id);
-        Self::View::load(context).await
+        let context = MemoryContext::new(state.clone().lock_owned().await, id);
+        StateView::load(context).await
     }
-}
-
-impl StateStore for InMemoryTestStore {
-    type Context = InMemoryContext<usize>;
 }
 
 pub struct RocksdbTestStore {
@@ -101,16 +93,11 @@ impl RocksdbTestStore {
     }
 }
 
+#[async_trait]
 impl StateStore for RocksdbTestStore {
     type Context = RocksdbContext<usize>;
-}
 
-#[async_trait]
-impl Store<usize> for RocksdbTestStore {
-    type View = StateView<RocksdbContext<usize>>;
-    type Error = RocksdbViewError;
-
-    async fn load(&mut self, id: usize) -> Result<Self::View, Self::Error> {
+    async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, RocksdbViewError> {
         let lock = self
             .locks
             .entry(id)
@@ -122,7 +109,7 @@ impl Store<usize> for RocksdbTestStore {
             bcs::to_bytes(&id)?,
             id,
         );
-        Self::View::load(context).await
+        StateView::load(context).await
     }
 }
 
@@ -252,7 +239,7 @@ where
 
 #[tokio::test]
 async fn test_views_in_memory() {
-    let mut store = InMemoryTestStore::default();
+    let mut store = MemoryTestStore::default();
     test_store(&mut store).await;
     assert_eq!(store.states.len(), 1);
     let entry = store.states.get(&1).unwrap().clone();
