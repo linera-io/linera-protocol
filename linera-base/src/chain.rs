@@ -241,7 +241,7 @@ impl ChainState {
             system_balance: self.state.system.balance,
             block_hash: self.block_hash,
             next_block_height: self.next_block_height,
-            state_hash: self.state_hash,
+            state_hash: Some(self.state_hash),
             requested_system_execution_state: None,
             requested_pending_messages: Vec::new(),
             requested_sent_certificates: Vec::new(),
