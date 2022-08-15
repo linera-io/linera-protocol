@@ -328,7 +328,7 @@ pub struct ChainInfo {
     /// The height after the latest block in the chain.
     pub next_block_height: BlockHeight,
     /// The hash of the current execution state.
-    pub state_hash: HashValue,
+    pub state_hash: Option<HashValue>,
     /// The full execution state.
     pub requested_system_execution_state: Option<SystemExecutionState>,
     /// The received messages that are waiting be picked in the next block (if requested).

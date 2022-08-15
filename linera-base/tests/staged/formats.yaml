@@ -95,7 +95,8 @@ ChainInfo:
     - next_block_height:
         TYPENAME: BlockHeight
     - state_hash:
-        TYPENAME: HashValue
+        OPTION:
+          TYPENAME: HashValue
     - requested_system_execution_state:
         OPTION:
           TYPENAME: SystemExecutionState
