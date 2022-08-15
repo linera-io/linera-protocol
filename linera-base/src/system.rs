@@ -451,7 +451,7 @@ impl SystemExecutionState {
     }
 
     /// Execute certain effects immediately upon receiving a message.
-    pub(crate) fn apply_immediate_effect(
+    pub fn apply_immediate_effect(
         &mut self,
         this_chain_id: ChainId,
         effect_id: EffectId,

@@ -10,10 +10,14 @@ pub use crate::{memory::MemoryStoreClient, rocksdb::RocksdbStoreClient};
 use async_trait::async_trait;
 use futures::future;
 use linera_base::{
+    committee::Committee,
     crypto::HashValue,
-    messages::{Certificate, ChainId},
+    ensure,
+    manager::ChainManager,
+    messages::{Certificate, ChainDescription, ChainId, Epoch, Owner},
+    system::Balance,
 };
-use linera_views::views::Context;
+use linera_views::views::{Context, View};
 
 /// Communicate with a persistent storage using the "views" abstraction.
 #[async_trait]
@@ -32,7 +36,28 @@ pub trait Store {
         hash: HashValue,
     ) -> Result<Certificate, <Self::Context as Context>::Error>;
 
-    async fn read_certificates<I: Iterator<Item = HashValue> + Send>(
+    async fn write_certificate(
+        &mut self,
+        certificate: Certificate,
+    ) -> Result<(), <Self::Context as Context>::Error>;
+
+    /// Load the view of a chain state and check that it is active.
+    async fn load_active_chain(
+        &mut self,
+        id: ChainId,
+    ) -> Result<chain::ChainStateView<Self::Context>, linera_base::error::Error>
+    where
+        linera_base::error::Error: From<<Self::Context as Context>::Error>,
+    {
+        let chain = self.load_chain(id).await?;
+        ensure!(
+            chain.is_active(),
+            linera_base::error::Error::InactiveChain(id)
+        );
+        Ok(chain)
+    }
+
+    async fn read_certificates<I: IntoIterator<Item = HashValue> + Send>(
         &self,
         keys: I,
     ) -> Result<Vec<Certificate>, <Self::Context as Context>::Error>
@@ -54,8 +79,25 @@ pub trait Store {
         Ok(certs)
     }
 
-    async fn write_certificate(
+    async fn create_chain(
         &mut self,
-        certificate: Certificate,
-    ) -> Result<(), <Self::Context as Context>::Error>;
+        committee: Committee,
+        admin_id: ChainId,
+        description: ChainDescription,
+        owner: Owner,
+        balance: Balance,
+    ) -> Result<(), <Self::Context as Context>::Error> {
+        let mut chain = self.load_chain(description.into()).await?;
+        let state = chain.execution_state.get_mut();
+        state.system.description = Some(description);
+        state.system.epoch = Some(Epoch::from(0));
+        state.system.admin_id = Some(admin_id);
+        state.system.committees.insert(Epoch::from(0), committee);
+        state.system.manager = ChainManager::single(owner);
+        state.system.balance = balance;
+        chain
+            .execution_state_hash
+            .set(Some(HashValue::new(&*state)));
+        chain.commit().await
+    }
 }
