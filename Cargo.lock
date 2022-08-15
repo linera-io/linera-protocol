@@ -1305,6 +1305,7 @@ dependencies = [
  "futures",
  "generic-array",
  "log",
+ "paste",
  "rocksdb",
  "serde",
  "sha2",
@@ -1534,6 +1535,12 @@ dependencies = [
  "smallvec",
  "windows-sys",
 ]
+
+[[package]]
+name = "paste"
+version = "1.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9423e2b32f7a043629287a536f21951e8c6a82482d0acb1eeebfc90bc2225b22"
 
 [[package]]
 name = "peeking_take_while"

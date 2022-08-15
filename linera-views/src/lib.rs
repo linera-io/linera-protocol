@@ -19,3 +19,6 @@ pub mod hash;
 
 /// Macro definitions.
 mod macros;
+
+/// For macros.
+pub use paste::paste;
