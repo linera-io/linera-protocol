@@ -456,6 +456,17 @@ where
         }
     }
 
+    /// Read the back value, if any.
+    pub async fn back(&mut self) -> Result<Option<T>, C::Error> {
+        match self.new_back_values.back() {
+            Some(value) => Ok(Some(value.clone())),
+            None if self.stored_indices.len() > self.front_delete_count => {
+                self.context.get(self.stored_indices.end - 1).await
+            }
+            _ => Ok(None),
+        }
+    }
+
     /// Delete the front value, if any.
     pub fn delete_front(&mut self) {
         if self.front_delete_count < self.stored_indices.len() {
@@ -472,19 +483,13 @@ where
 
     /// Read the size of the queue.
     pub fn count(&self) -> usize {
-        self.stored_indices.len() + self.new_back_values.len()
+        self.stored_indices.len() - self.front_delete_count + self.new_back_values.len()
     }
 
     pub fn extra(&self) -> &C::Extra {
         self.context.extra()
     }
-}
 
-impl<C, T> QueueView<C, T>
-where
-    C: QueueOperations<T> + Send + Sync,
-    T: Send + Sync + Clone,
-{
     /// Read the `count` next values in the queue (including staged ones).
     pub async fn read_front(&mut self, mut count: usize) -> Result<Vec<T>, C::Error> {
         if count > self.count() {
@@ -506,6 +511,31 @@ where
                     .range(0..(count - stored_remainder))
                     .cloned(),
             );
+        }
+        Ok(values)
+    }
+
+    /// Read the `count` last values in the queue (including staged ones).
+    pub async fn read_back(&mut self, mut count: usize) -> Result<Vec<T>, C::Error> {
+        if count > self.count() {
+            count = self.count();
+        }
+        if count == 0 {
+            return Ok(Vec::new());
+        }
+        let mut values = Vec::new();
+        values.reserve(count);
+        let new_back_len = self.new_back_values.len();
+        if count <= new_back_len {
+            values.extend(
+                self.new_back_values
+                    .range((new_back_len - count)..new_back_len)
+                    .cloned(),
+            );
+        } else {
+            let start = self.stored_indices.end + new_back_len - count;
+            values.extend(self.context.read(start..self.stored_indices.end).await?);
+            values.extend(self.new_back_values.iter().cloned());
         }
         Ok(values)
     }

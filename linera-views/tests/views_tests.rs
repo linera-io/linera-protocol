@@ -208,7 +208,19 @@ where
         assert_eq!(view.x1.get(), &1);
         assert_eq!(view.x2.get(), &0);
         assert_eq!(view.log.read(0..10).await.unwrap(), vec![4]);
-        assert_eq!(view.queue.read_front(10).await.unwrap(), vec![7]);
+        view.queue.push_back(8);
+        assert_eq!(view.queue.read_front(10).await.unwrap(), vec![7, 8]);
+        assert_eq!(view.queue.read_front(1).await.unwrap(), vec![7]);
+        assert_eq!(view.queue.read_back(10).await.unwrap(), vec![7, 8]);
+        assert_eq!(view.queue.read_back(1).await.unwrap(), vec![8]);
+        assert_eq!(view.queue.front().await.unwrap(), Some(7));
+        assert_eq!(view.queue.back().await.unwrap(), Some(8));
+        assert_eq!(view.queue.count(), 2);
+        view.queue.delete_front();
+        assert_eq!(view.queue.front().await.unwrap(), Some(8));
+        view.queue.delete_front();
+        assert_eq!(view.queue.front().await.unwrap(), None);
+        assert_eq!(view.queue.count(), 0);
         assert_eq!(view.map.get(&"Hello".to_string()).await.unwrap(), Some(5));
         assert_eq!(view.map.get(&"Hi".to_string()).await.unwrap(), None);
         {
