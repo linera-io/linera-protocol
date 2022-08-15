@@ -1,7 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{chain::ChainStateView, Store};
+use crate::{
+    chain::{ChainStateView, ChainStateViewContext},
+    Store,
+};
 use async_trait::async_trait;
 use linera_base::{
     crypto::HashValue,
@@ -12,16 +15,28 @@ use linera_views::{
     views::View,
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use tokio::sync::Mutex;
 
-pub struct RocksdbStore {
+struct RocksdbStore {
     db: Arc<rocksdb::DB>,
     locks: HashMap<ChainId, Arc<Mutex<()>>>,
 }
 
+#[derive(Clone)]
+pub struct RocksdbStoreClient(Arc<Mutex<RocksdbStore>>);
+
+impl RocksdbStoreClient {
+    pub fn new(path: PathBuf) -> Self {
+        RocksdbStoreClient(Arc::new(Mutex::new(RocksdbStore::new(path))))
+    }
+}
+
 impl RocksdbStore {
-    pub fn new(db: rocksdb::DB) -> Self {
+    pub fn new(dir: PathBuf) -> Self {
+        let mut options = rocksdb::Options::default();
+        options.create_if_missing(true);
+        let db = rocksdb::DB::open(&options, dir).unwrap();
         Self {
             db: Arc::new(db),
             locks: HashMap::new(),
@@ -35,28 +50,40 @@ enum BaseKey {
     Certificate(HashValue),
 }
 
+impl ChainStateViewContext for RocksdbContext<ChainId> {}
+
 #[async_trait]
-impl Store for RocksdbStore {
+impl Store for RocksdbStoreClient {
     type Context = RocksdbContext<ChainId>;
 
     async fn load_chain(
         &mut self,
         id: ChainId,
     ) -> Result<ChainStateView<Self::Context>, RocksdbViewError> {
-        let lock = self
-            .locks
-            .entry(id)
-            .or_insert_with(|| Arc::new(Mutex::new(())))
-            .clone();
+        let (db, lock) = {
+            let store = self.0.clone();
+            let mut store = store.lock().await;
+            // FIXME: we are never cleaning up locks.
+            (
+                store.db.clone(),
+                store
+                    .locks
+                    .entry(id)
+                    .or_insert_with(|| Arc::new(Mutex::new(())))
+                    .clone(),
+            )
+        };
         log::trace!("Acquiring lock on {:?}", id);
         let base_key = bcs::to_bytes(&BaseKey::ChainState(id))?;
-        let context = RocksdbContext::new(self.db.clone(), lock.lock_owned().await, base_key, id);
+        let context = RocksdbContext::new(db, lock.lock_owned().await, base_key, id);
         ChainStateView::load(context).await
     }
 
     async fn read_certificate(&mut self, hash: HashValue) -> Result<Certificate, RocksdbViewError> {
+        let store = self.0.clone();
+        let store = store.lock().await;
         let key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
-        let value = self.db.read_key(&key).await?.ok_or_else(|| {
+        let value = store.db.read_key(&key).await?.ok_or_else(|| {
             RocksdbViewError::NotFound(format!("certificate for hash {:?}", hash))
         })?;
         Ok(value)
@@ -66,7 +93,9 @@ impl Store for RocksdbStore {
         &mut self,
         certificate: Certificate,
     ) -> Result<(), RocksdbViewError> {
+        let store = self.0.clone();
+        let store = store.lock().await;
         let key = bcs::to_bytes(&BaseKey::Certificate(certificate.hash))?;
-        self.db.write_key(&key, &certificate).await
+        store.db.write_key(&key, &certificate).await
     }
 }

@@ -5,48 +5,21 @@ pub mod chain;
 mod memory;
 mod rocksdb;
 
-pub use crate::{memory::MemoryStore, rocksdb::RocksdbStore};
+pub use crate::{memory::MemoryStoreClient, rocksdb::RocksdbStoreClient};
 
 use async_trait::async_trait;
 use futures::future;
 use linera_base::{
     crypto::HashValue,
-    execution::ExecutionState,
-    messages::{ApplicationId, BlockHeight, Certificate, ChainId, Origin},
+    messages::{Certificate, ChainId},
 };
-use linera_views::{
-    hash::HashingContext,
-    views::{
-        AppendOnlyLogOperations, CollectionOperations, Context, MapOperations, QueueOperations,
-        RegisterOperations, ScopedOperations,
-    },
-};
+use linera_views::views::Context;
 
 /// Communicate with a persistent storage using the "views" abstraction.
 #[async_trait]
 pub trait Store {
     /// The `context` data-type provided by the storage implementation in use.
-    type Context: Context<Extra = ChainId>
-        + HashingContext
-        + Send
-        + Sync
-        + Clone
-        + 'static
-        + ScopedOperations
-        + RegisterOperations<ExecutionState>
-        + RegisterOperations<Option<HashValue>>
-        + RegisterOperations<chain::ChainingState>
-        + AppendOnlyLogOperations<HashValue>
-        + CollectionOperations<ApplicationId>
-        + QueueOperations<BlockHeight>
-        + RegisterOperations<BlockHeight>
-        + QueueOperations<chain::Event>
-        + MapOperations<ChainId, ()>
-        + CollectionOperations<ChainId>
-        + RegisterOperations<Option<BlockHeight>>
-        + CollectionOperations<Origin>
-        + CollectionOperations<ChainId>
-        + CollectionOperations<String>;
+    type Context: chain::ChainStateViewContext<Extra = ChainId>;
 
     /// Load the view of a chain state.
     async fn load_chain(
