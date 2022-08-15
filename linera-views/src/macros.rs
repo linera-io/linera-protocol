@@ -59,5 +59,16 @@ where
     }
 }
 
+linera_views::paste! {
+pub trait [< $name Context >]: HashingContext
+    + Send
+    + Sync
+    + Clone
+    + 'static
+    + ScopedOperations
+    $(+ $op_name < $($op_param),* >)*
+{}
+}
+
     }
 }

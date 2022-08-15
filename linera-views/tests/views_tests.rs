@@ -28,6 +28,7 @@ pub struct StateView<C> {
     pub collection: ScopedView<5, CollectionView<C, String, AppendOnlyLogView<C, u32>>>,
 }
 
+// This also generates `trait StateViewContext: Context ... {}`
 impl_view!(StateView { x1, x2, log, map, queue, collection };
            RegisterOperations<u64>,
            RegisterOperations<u32>,
@@ -39,19 +40,7 @@ impl_view!(StateView { x1, x2, log, map, queue, collection };
 
 #[async_trait]
 pub trait StateStore {
-    type Context: Context<Extra = usize>
-        + HashingContext
-        + Send
-        + Sync
-        + Clone
-        + 'static
-        + RegisterOperations<u64>
-        + RegisterOperations<u32>
-        + AppendOnlyLogOperations<u32>
-        + MapOperations<String, usize>
-        + QueueOperations<u64>
-        + CollectionOperations<String>
-        + ScopedOperations;
+    type Context: StateViewContext<Extra = usize>;
 
     async fn load(
         &mut self,
@@ -63,6 +52,8 @@ pub trait StateStore {
 pub struct MemoryTestStore {
     states: HashMap<usize, Arc<Mutex<EntryMap>>>,
 }
+
+impl StateViewContext for MemoryContext<usize> {}
 
 #[async_trait]
 impl StateStore for MemoryTestStore {
@@ -92,6 +83,8 @@ impl RocksdbTestStore {
         }
     }
 }
+
+impl StateViewContext for RocksdbContext<usize> {}
 
 #[async_trait]
 impl StateStore for RocksdbTestStore {
