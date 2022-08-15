@@ -6,7 +6,7 @@ use crate::{
     committee::Committee,
     ensure,
     error::Error,
-    execution::{ApplicationResult, EffectContext, OperationContext},
+    execution::{EffectContext, OperationContext, RawApplicationResult},
     manager::ChainManager,
     messages::{ChainDescription, ChainId, ChannelId, Destination, Effect, EffectId, Epoch, Owner},
 };
@@ -151,7 +151,7 @@ impl SystemExecutionState {
         &mut self,
         context: &OperationContext,
         operation: &SystemOperation,
-    ) -> Result<ApplicationResult<SystemEffect>, Error> {
+    ) -> Result<RawApplicationResult<SystemEffect>, Error> {
         use SystemOperation::*;
         match operation {
             OpenChain {
@@ -195,7 +195,7 @@ impl SystemExecutionState {
                         },
                     },
                 );
-                let application = ApplicationResult {
+                let application = RawApplicationResult {
                     effects: vec![e1, e2],
                     subscribe: None,
                     unsubscribe: None,
@@ -204,11 +204,11 @@ impl SystemExecutionState {
             }
             ChangeOwner { new_owner } => {
                 self.manager = ChainManager::single(*new_owner);
-                Ok(ApplicationResult::default())
+                Ok(RawApplicationResult::default())
             }
             ChangeMultipleOwners { new_owners } => {
                 self.manager = ChainManager::multiple(new_owners.clone());
-                Ok(ApplicationResult::default())
+                Ok(RawApplicationResult::default())
             }
             CloseChain => {
                 self.manager = ChainManager::default();
@@ -224,7 +224,7 @@ impl SystemExecutionState {
                         },
                     ));
                 }
-                let application = ApplicationResult {
+                let application = RawApplicationResult {
                     effects,
                     subscribe: None,
                     unsubscribe: None,
@@ -243,8 +243,8 @@ impl SystemExecutionState {
                 );
                 self.balance.try_sub_assign((*amount).into())?;
                 let application = match recipient {
-                    Address::Burn => ApplicationResult::default(),
-                    Address::Account(id) => ApplicationResult {
+                    Address::Burn => RawApplicationResult::default(),
+                    Address::Account(id) => RawApplicationResult {
                         effects: vec![(
                             Destination::Recipient(*id),
                             SystemEffect::Credit {
@@ -278,7 +278,7 @@ impl SystemExecutionState {
                 );
                 self.committees.insert(*epoch, committee.clone());
                 self.epoch = Some(*epoch);
-                let application = ApplicationResult {
+                let application = RawApplicationResult {
                     effects: vec![(
                         Destination::Subscribers(ADMIN_CHANNEL.into()),
                         SystemEffect::SetCommittees {
@@ -306,7 +306,7 @@ impl SystemExecutionState {
                     self.committees.remove(epoch).is_some(),
                     Error::InvalidCommitteeRemoval
                 );
-                let application = ApplicationResult {
+                let application = RawApplicationResult {
                     effects: vec![(
                         Destination::Subscribers(ADMIN_CHANNEL.into()),
                         SystemEffect::SetCommittees {
@@ -339,7 +339,7 @@ impl SystemExecutionState {
                     Error::InvalidSubscriptionToNewCommittees(context.chain_id)
                 );
                 self.subscriptions.insert(channel_id, ());
-                let application = ApplicationResult {
+                let application = RawApplicationResult {
                     effects: vec![(
                         Destination::Recipient(*admin_id),
                         SystemEffect::Subscribe {
@@ -365,7 +365,7 @@ impl SystemExecutionState {
                     Error::InvalidUnsubscriptionToNewCommittees(context.chain_id)
                 );
                 self.subscriptions.remove(&channel_id);
-                let application = ApplicationResult {
+                let application = RawApplicationResult {
                     effects: vec![(
                         Destination::Recipient(*admin_id),
                         SystemEffect::Unsubscribe {
@@ -390,7 +390,7 @@ impl SystemExecutionState {
         &mut self,
         context: &EffectContext,
         effect: &SystemEffect,
-    ) -> Result<ApplicationResult<SystemEffect>, Error> {
+    ) -> Result<RawApplicationResult<SystemEffect>, Error> {
         use SystemEffect::*;
         match effect {
             Credit { amount, recipient } if context.chain_id == *recipient => {
@@ -398,7 +398,7 @@ impl SystemExecutionState {
                     .balance
                     .try_add((*amount).into())
                     .unwrap_or_else(|_| Balance::max());
-                Ok(ApplicationResult::default())
+                Ok(RawApplicationResult::default())
             }
             SetCommittees {
                 admin_id,
@@ -412,12 +412,12 @@ impl SystemExecutionState {
                 );
                 self.epoch = Some(*epoch);
                 self.committees = committees.clone();
-                Ok(ApplicationResult::default())
+                Ok(RawApplicationResult::default())
             }
             Subscribe { id, channel } if channel.chain_id == context.chain_id => {
                 // Notify the subscriber about this block, so that it is included in the
                 // receive_log of the subscriber and correctly synchronized.
-                let application = ApplicationResult {
+                let application = RawApplicationResult {
                     effects: vec![(
                         Destination::Recipient(*id),
                         SystemEffect::Notify { id: *id },
@@ -428,7 +428,7 @@ impl SystemExecutionState {
                 Ok(application)
             }
             Unsubscribe { id, channel } if channel.chain_id == context.chain_id => {
-                let application = ApplicationResult {
+                let application = RawApplicationResult {
                     effects: vec![(
                         Destination::Recipient(*id),
                         SystemEffect::Notify { id: *id },
@@ -438,14 +438,14 @@ impl SystemExecutionState {
                 };
                 Ok(application)
             }
-            Notify { .. } => Ok(ApplicationResult::default()),
+            Notify { .. } => Ok(RawApplicationResult::default()),
             OpenChain { .. } => {
                 // This special effect is executed immediately when cross-chain requests are received.
-                Ok(ApplicationResult::default())
+                Ok(RawApplicationResult::default())
             }
             _ => {
                 log::error!("Skipping unexpected received effect: {effect:?}");
-                Ok(ApplicationResult::default())
+                Ok(RawApplicationResult::default())
             }
         }
     }

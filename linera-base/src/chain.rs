@@ -7,7 +7,10 @@ use crate::{
     crypto::*,
     ensure,
     error::Error,
-    execution::{ApplicationResult, EffectContext, ExecutionState, OperationContext, SYSTEM},
+    execution::{
+        ApplicationResult, EffectContext, ExecutionState, OperationContext, RawApplicationResult,
+        SYSTEM,
+    },
     manager::ChainManager,
     messages::*,
     system::Balance,
@@ -488,14 +491,19 @@ impl ChainState {
                         index: *message_index,
                     },
                 };
-                self.state.apply_effect(
+                let result = self.state.apply_effect(
                     message_group.application_id,
                     &context,
                     message_effect,
+                )?;
+                Self::process_application_result(
+                    message_group.application_id,
                     &mut communication_state.outboxes,
                     &mut communication_state.channels,
                     &mut effects,
-                )?;
+                    context.height,
+                    result,
+                );
             }
         }
         // Second, execute the operations in the block and remember the recipients to notify.
@@ -509,27 +517,58 @@ impl ChainState {
                 height: block.height,
                 index,
             };
-            self.state.apply_operation(
+            let result = self
+                .state
+                .apply_operation(*application_id, &context, operation)?;
+            Self::process_application_result(
                 *application_id,
-                &context,
-                operation,
                 &mut communication_state.outboxes,
                 &mut communication_state.channels,
                 &mut effects,
-            )?;
+                context.height,
+                result,
+            );
         }
         // Last, recompute the state hash.
         self.state_hash = HashValue::new(&self.state);
         Ok(effects)
     }
 
-    pub(crate) fn process_application_result<E: Into<Effect>>(
+    fn process_application_result(
         application_id: ApplicationId,
         outboxes: &mut HashMap<ChainId, OutboxState>,
         channels: &mut HashMap<String, ChannelState>,
         effects: &mut Vec<(ApplicationId, Destination, Effect)>,
         height: BlockHeight,
-        application: ApplicationResult<E>,
+        application: ApplicationResult,
+    ) {
+        match application {
+            ApplicationResult::System(raw) => Self::process_raw_application_result(
+                application_id,
+                outboxes,
+                channels,
+                effects,
+                height,
+                raw,
+            ),
+            ApplicationResult::User(raw) => Self::process_raw_application_result(
+                application_id,
+                outboxes,
+                channels,
+                effects,
+                height,
+                raw,
+            ),
+        }
+    }
+
+    fn process_raw_application_result<E: Into<Effect>>(
+        application_id: ApplicationId,
+        outboxes: &mut HashMap<ChainId, OutboxState>,
+        channels: &mut HashMap<String, ChannelState>,
+        effects: &mut Vec<(ApplicationId, Destination, Effect)>,
+        height: BlockHeight,
+        application: RawApplicationResult<E>,
     ) {
         // Record the effects of the execution. Effects are understood within an
         // application.
