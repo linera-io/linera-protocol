@@ -2,11 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    chain::{ChainState, ChannelState, OutboxState},
     crypto::BcsSignable,
     error::Error,
     messages::*,
-    system::SystemExecutionState,
+    system::{SystemEffect, SystemExecutionState},
 };
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
@@ -30,14 +29,14 @@ pub trait UserApplication {
         context: &OperationContext,
         state: &mut Vec<u8>,
         operation: &[u8],
-    ) -> Result<ApplicationResult<Vec<u8>>, Error>;
+    ) -> Result<RawApplicationResult<Vec<u8>>, Error>;
 
     fn apply_effect(
         &self,
         context: &EffectContext,
         state: &mut Vec<u8>,
         operation: &[u8],
-    ) -> Result<ApplicationResult<Vec<u8>>, Error>;
+    ) -> Result<RawApplicationResult<Vec<u8>>, Error>;
 }
 
 #[derive(Debug, Clone)]
@@ -65,13 +64,19 @@ impl From<OperationContext> for EffectId {
 }
 
 #[derive(Debug)]
-pub struct ApplicationResult<Effect> {
+pub struct RawApplicationResult<Effect> {
     pub effects: Vec<(Destination, Effect)>,
     pub subscribe: Option<(String, ChainId)>,
     pub unsubscribe: Option<(String, ChainId)>,
 }
 
-impl<Effect> Default for ApplicationResult<Effect> {
+#[derive(Debug)]
+pub enum ApplicationResult {
+    System(RawApplicationResult<SystemEffect>),
+    User(RawApplicationResult<Vec<u8>>),
+}
+
+impl<Effect> Default for RawApplicationResult<Effect> {
     fn default() -> Self {
         Self {
             effects: Vec::new(),
@@ -102,29 +107,17 @@ impl ExecutionState {
             .clone())
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn apply_operation(
+    pub fn apply_operation(
         &mut self,
         application_id: ApplicationId,
         context: &OperationContext,
         operation: &Operation,
-        outboxes: &mut HashMap<ChainId, OutboxState>,
-        channels: &mut HashMap<String, ChannelState>,
-        effects: &mut Vec<(ApplicationId, Destination, Effect)>,
-    ) -> Result<(), Error> {
+    ) -> Result<ApplicationResult, Error> {
         if application_id == SYSTEM {
             match operation {
                 Operation::System(op) => {
                     let result = self.system.apply_operation(context, op)?;
-                    ChainState::process_application_result(
-                        application_id,
-                        outboxes,
-                        channels,
-                        effects,
-                        context.height,
-                        result,
-                    );
-                    Ok(())
+                    Ok(ApplicationResult::System(result))
                 }
                 _ => Err(Error::InvalidOperation),
             }
@@ -135,42 +128,23 @@ impl ExecutionState {
                 Operation::System(_) => Err(Error::InvalidOperation),
                 Operation::User(operation) => {
                     let result = application.apply_operation(context, state, operation)?;
-                    ChainState::process_application_result(
-                        application_id,
-                        outboxes,
-                        channels,
-                        effects,
-                        context.height,
-                        result,
-                    );
-                    Ok(())
+                    Ok(ApplicationResult::User(result))
                 }
             }
         }
     }
 
-    pub(crate) fn apply_effect(
+    pub fn apply_effect(
         &mut self,
         application_id: ApplicationId,
         context: &EffectContext,
         effect: &Effect,
-        outboxes: &mut HashMap<ChainId, OutboxState>,
-        channels: &mut HashMap<String, ChannelState>,
-        effects: &mut Vec<(ApplicationId, Destination, Effect)>,
-    ) -> Result<(), Error> {
+    ) -> Result<ApplicationResult, Error> {
         if application_id == SYSTEM {
             match effect {
                 Effect::System(effect) => {
                     let result = self.system.apply_effect(context, effect)?;
-                    ChainState::process_application_result(
-                        application_id,
-                        outboxes,
-                        channels,
-                        effects,
-                        context.height,
-                        result,
-                    );
-                    Ok(())
+                    Ok(ApplicationResult::System(result))
                 }
                 _ => Err(Error::InvalidEffect),
             }
@@ -181,15 +155,7 @@ impl ExecutionState {
                 Effect::System(_) => Err(Error::InvalidEffect),
                 Effect::User(effect) => {
                     let result = application.apply_effect(context, state, effect)?;
-                    ChainState::process_application_result(
-                        application_id,
-                        outboxes,
-                        channels,
-                        effects,
-                        context.height,
-                        result,
-                    );
-                    Ok(())
+                    Ok(ApplicationResult::User(result))
                 }
             }
         }
