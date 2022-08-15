@@ -1,7 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{chain::ChainStateView, Store};
+use crate::{
+    chain::{ChainStateView, ChainStateViewContext},
+    Store,
+};
 use async_trait::async_trait;
 use linera_base::{
     crypto::HashValue,
@@ -17,39 +20,53 @@ use std::{
 };
 use tokio::sync::Mutex;
 
-#[derive(Default)]
-pub struct MemoryStore {
+#[derive(Default, Clone)]
+struct MemoryStore {
     states: HashMap<ChainId, Arc<Mutex<EntryMap>>>,
     certificates: HashMap<HashValue, Certificate>,
 }
 
+#[derive(Clone, Default)]
+pub struct MemoryStoreClient(Arc<Mutex<MemoryStore>>);
+
+impl ChainStateViewContext for MemoryContext<ChainId> {}
+
 #[async_trait]
-impl Store for MemoryStore {
+impl Store for MemoryStoreClient {
     type Context = MemoryContext<ChainId>;
 
     async fn load_chain(
         &mut self,
         id: ChainId,
     ) -> Result<ChainStateView<Self::Context>, MemoryViewError> {
-        let state = self
-            .states
-            .entry(id)
-            .or_insert_with(|| Arc::new(Mutex::new(BTreeMap::new())));
+        let state = {
+            let store = self.0.clone();
+            let mut store = store.lock().await;
+            store
+                .states
+                .entry(id)
+                .or_insert_with(|| Arc::new(Mutex::new(BTreeMap::new())))
+                .clone()
+        };
         log::trace!("Acquiring lock on {:?}", id);
-        let context = MemoryContext::new(state.clone().lock_owned().await, id);
+        let context = MemoryContext::new(state.lock_owned().await, id);
         ChainStateView::load(context).await
     }
 
     async fn read_certificate(&mut self, hash: HashValue) -> Result<Certificate, MemoryViewError> {
-        self.certificates
+        let store = self.0.clone();
+        let store = store.lock().await;
+        store
+            .certificates
             .get(&hash)
             .cloned()
             .ok_or_else(|| MemoryViewError::NotFound(format!("certificate for hash {:?}", hash)))
     }
 
     async fn write_certificate(&mut self, certificate: Certificate) -> Result<(), MemoryViewError> {
-        let hash = certificate.hash;
-        self.certificates.insert(hash, certificate);
+        let store = self.0.clone();
+        let mut store = store.lock().await;
+        store.certificates.insert(certificate.hash, certificate);
         Ok(())
     }
 }
