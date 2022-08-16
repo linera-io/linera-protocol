@@ -450,6 +450,7 @@ Error:
     52:
       StorageError:
         STRUCT:
+          - backend: STR
           - error: STR
     53:
       UnknownApplication: UNIT

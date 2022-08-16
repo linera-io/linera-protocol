@@ -370,6 +370,7 @@ pub enum RocksdbViewError {
 impl From<RocksdbViewError> for linera_base::error::Error {
     fn from(error: RocksdbViewError) -> Self {
         Self::StorageError {
+            backend: "rocksdb".to_string(),
             error: error.to_string(),
         }
     }

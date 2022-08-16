@@ -180,8 +180,8 @@ pub enum Error {
     #[error("Missing certificate: {hash:?}")]
     MissingCertificate { hash: HashValue },
 
-    #[error("Storage error: {error}")]
-    StorageError { error: String },
+    #[error("Storage error in {backend}: {error}")]
+    StorageError { backend: String, error: String },
 
     // Execution
     #[error("Unknown application")]
