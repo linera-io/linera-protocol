@@ -33,7 +33,7 @@ pub enum Error {
     UnexpectedPreviousBlockHash,
     #[error("The height of a new block should increase the last block height of the chain by one")]
     UnexpectedBlockHeight,
-    #[error("Sequence numbers above the maximal value are not usable for blocks.")]
+    #[error("Sequence numbers above the maximal value are not usable for blocks")]
     InvalidBlockHeight,
     #[error("Cannot initiate a new block while the previous one is still pending confirmation")]
     PreviousBlockMustBeConfirmedFirst,
@@ -41,19 +41,19 @@ pub enum Error {
     MissingEarlierBlocks { current_block_height: BlockHeight },
 
     // Algorithmic operations
-    #[error("Sequence number overflow.")]
+    #[error("Sequence number overflow")]
     SequenceOverflow,
-    #[error("Sequence number underflow.")]
+    #[error("Sequence number underflow")]
     SequenceUnderflow,
-    #[error("Amount overflow.")]
+    #[error("Amount overflow")]
     AmountOverflow,
-    #[error("Amount underflow.")]
+    #[error("Amount underflow")]
     AmountUnderflow,
-    #[error("Chain balance overflow.")]
+    #[error("Chain balance overflow")]
     BalanceOverflow,
-    #[error("Chain balance underflow.")]
+    #[error("Chain balance underflow")]
     BalanceUnderflow,
-    #[error("Operation is not supported for this chain.")]
+    #[error("Operation is not supported for this chain")]
     UnsupportedOperation,
 
     // Signatures and certificates
@@ -63,13 +63,13 @@ pub enum Error {
     InvalidSigner,
     #[error("Signatures in a certificate must form a quorum")]
     CertificateRequiresQuorum,
-    #[error("Signatures in a certificate must be from different validators.")]
+    #[error("Signatures in a certificate must be from different validators")]
     CertificateValidatorReuse,
-    #[error("The given certificate is invalid.")]
+    #[error("The given certificate is invalid")]
     InvalidCertificate,
-    #[error("The given chain info response is invalid.")]
+    #[error("The given chain info response is invalid")]
     InvalidChainInfoResponse,
-    #[error("{epoch:?} is not recognized by chain {chain_id:}.")]
+    #[error("{epoch:?} is not recognized by chain {chain_id:}")]
     InvalidEpoch { chain_id: ChainId, epoch: Epoch },
 
     // Validation of operations and blocks
@@ -143,11 +143,11 @@ pub enum Error {
     // Other server-side errors
     #[error("No certificate for this chain and block height")]
     CertificateNotFound,
-    #[error("Invalid cross-chain request.")]
+    #[error("Invalid cross-chain request")]
     InvalidCrossChainRequest,
-    #[error("Invalid block proposal.")]
+    #[error("Invalid block proposal")]
     InvalidBlockProposal,
-    #[error("The block does contain the hash that we expected for the previous block.")]
+    #[error("The block does contain the hash that we expected for the previous block")]
     InvalidBlockChaining,
     #[error("The given state hash is not what we computed after executing the block")]
     IncorrectStateHash,
@@ -161,19 +161,19 @@ pub enum Error {
     ClientErrorWhileQueryingCertificate,
 
     // Networking and sharding
-    #[error("Wrong shard used.")]
+    #[error("Wrong shard used")]
     WrongShard,
-    #[error("Cannot deserialize.")]
+    #[error("Cannot deserialize")]
     InvalidDecoding,
-    #[error("Unexpected message.")]
+    #[error("Unexpected message")]
     UnexpectedMessage,
-    #[error("Network error while querying service: {error:?}.")]
+    #[error("Network error while querying service: {error}")]
     ClientIoError { error: String },
-    #[error("Storage error while querying service: {error:?}.")]
+    #[error("Storage error while querying service: {error}")]
     StorageIoError { error: String },
-    #[error("Storage (de)serialization error: {error:?}.")]
+    #[error("Storage (de)serialization error: {error}")]
     StorageBcsError { error: String },
-    #[error("Failed to resolve validator address: {address:?}.")]
+    #[error("Failed to resolve validator address: {address}")]
     CannotResolveValidatorAddress { address: String },
 
     // Storage
