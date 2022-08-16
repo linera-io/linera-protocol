@@ -5,7 +5,8 @@
 use crate::node::ValidatorNode;
 use futures::{future, StreamExt};
 use linera_base::{committee::Committee, error::Error, messages::*};
-use linera_storage::Storage;
+use linera_storage2::Store;
+use linera_views::views;
 use std::{collections::HashMap, hash::Hash, time::Duration};
 
 /// Used for `communicate_chain_updates`
@@ -88,8 +89,9 @@ where
 
 impl<A, S> ValidatorUpdater<A, S>
 where
-    A: ValidatorNode + Send + Sync + 'static + Clone,
-    S: Storage + Clone + 'static,
+    A: ValidatorNode + Clone + Send + Sync + 'static,
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
 {
     pub async fn send_certificate(
         &mut self,
@@ -167,8 +169,15 @@ where
                 Ok(response) => {
                     response.check(self.name)?;
                     // Obtain the chain description from our local node.
-                    let chain = self.store.read_chain_or_default(chain_id).await?;
-                    match chain.state.system.description {
+                    let description = self
+                        .store
+                        .load_chain(chain_id)
+                        .await?
+                        .execution_state
+                        .get()
+                        .system
+                        .description;
+                    match description {
                         Some(ChainDescription::Child(EffectId {
                             chain_id: parent_id,
                             height,
@@ -190,15 +199,15 @@ where
             jobs.into_iter().rev()
         {
             // Obtain chain state.
-            let chain = self.store.read_chain_or_default(chain_id).await?;
-            // Send the requested certificates in order.
-            for number in usize::from(initial_block_height)..usize::from(target_block_height) {
-                let key = chain
-                    .confirmed_log
-                    .get(number)
-                    .expect("certificate should be known locally");
-                let cert = self.store.read_certificate(*key).await?;
-                self.send_certificate(cert, retryable).await?;
+            let range = usize::from(initial_block_height)..usize::from(target_block_height);
+            if !range.is_empty() {
+                let mut chain = self.store.load_chain(chain_id).await?;
+                // Send the requested certificates in order.
+                let keys = chain.confirmed_log.read(range).await?;
+                let certs = self.store.read_certificates(keys.into_iter()).await?;
+                for cert in certs {
+                    self.send_certificate(cert, retryable).await?;
+                }
             }
         }
         Ok(())
@@ -208,12 +217,19 @@ where
         &mut self,
         chain_id: ChainId,
     ) -> Result<(), Error> {
-        let chain = self.store.read_chain_or_default(chain_id).await?;
-        for state in chain.communication_states.values() {
-            for (origin, inbox) in state.inboxes.iter() {
-                self.send_chain_information(origin.chain_id, inbox.next_height_to_receive)
-                    .await?;
+        let mut info = Vec::new();
+        {
+            let mut chain = self.store.load_chain(chain_id).await?;
+            for id in chain.communication_states.indices().await? {
+                let state = chain.communication_states.load_entry(id).await?;
+                for origin in state.inboxes.indices().await? {
+                    let inbox = state.inboxes.load_entry(origin.clone()).await?;
+                    info.push((origin.chain_id, *inbox.next_height_to_receive.get()));
+                }
             }
+        }
+        for (sender, next_height) in info {
+            self.send_chain_information(sender, next_height).await?;
         }
         Ok(())
     }

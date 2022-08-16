@@ -7,7 +7,7 @@
 use anyhow::{anyhow, ensure};
 use async_trait::async_trait;
 use futures::future::join_all;
-use linera_base::{crypto::*, messages::ValidatorName};
+use linera_base::{crypto::*, error::Error, messages::ValidatorName};
 use linera_core::worker::*;
 use linera_service::{
     config::*,
@@ -16,7 +16,8 @@ use linera_service::{
     storage::{Runnable, StorageConfig},
     transport,
 };
-use linera_storage::Storage;
+use linera_storage2::Store;
+use linera_views::views;
 use log::*;
 use std::{
     path::{Path, PathBuf},
@@ -38,7 +39,7 @@ impl ServerContext {
         storage: S,
     ) -> network::Server<S>
     where
-        S: Storage + Clone + Send + Sync + 'static,
+        S: Store + Clone + Send + Sync + 'static,
     {
         let shard = self.server_config.internal_network.shard(shard_id);
         info!("Shard booted on {}", shard.host);
@@ -60,7 +61,7 @@ impl ServerContext {
 
     async fn make_servers<S>(&self, local_ip_addr: &str, storage: S) -> Vec<network::Server<S>>
     where
-        S: Storage + Clone + Send + Sync + 'static,
+        S: Store + Clone + Send + Sync + 'static,
     {
         let num_shards = self.server_config.internal_network.shards.len();
         join_all(
@@ -75,7 +76,8 @@ impl ServerContext {
 #[async_trait]
 impl<S> Runnable<S> for ServerContext
 where
-    S: Storage + Clone + Send + Sync + 'static,
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
 {
     type Output = ();
 

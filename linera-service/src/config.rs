@@ -4,7 +4,6 @@
 
 use crate::network::{ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig};
 use linera_base::{
-    chain::ChainState,
     committee::{Committee, ValidatorState},
     crypto::*,
     messages::{BlockHeight, ChainDescription, ChainId, Owner, ValidatorName},
@@ -14,7 +13,8 @@ use linera_core::{
     client::{ChainClientState, ValidatorNodeProvider},
     node::ValidatorNode,
 };
-use linera_storage::Storage;
+use linera_storage2::Store;
+use linera_views::views;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
@@ -157,7 +157,8 @@ impl WalletState {
     where
         P: ValidatorNodeProvider + Send + 'static,
         P::Node: ValidatorNode + Send + Sync + 'static + Clone,
-        S: Storage + Clone + Send + Sync + 'static,
+        S: Store + Clone + Send + Sync + 'static,
+        linera_base::error::Error: From<<S::Context as views::Context>::Error>,
     {
         let chain = self
             .chains
@@ -216,17 +217,18 @@ impl GenesisConfig {
 
     pub async fn initialize_store<S>(&self, store: &mut S) -> Result<(), anyhow::Error>
     where
-        S: Storage + Clone + 'static,
+        S: Store + Clone + Send + Sync + 'static,
     {
         for (description, owner, balance) in &self.chains {
-            let chain = ChainState::create(
-                self.committee.clone().into_committee(),
-                self.admin_id,
-                *description,
-                *owner,
-                *balance,
-            );
-            store.write_chain(chain.clone()).await?;
+            store
+                .create_chain(
+                    self.committee.clone().into_committee(),
+                    self.admin_id,
+                    *description,
+                    *owner,
+                    *balance,
+                )
+                .await?;
         }
         Ok(())
     }

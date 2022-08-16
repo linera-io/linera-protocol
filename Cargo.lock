@@ -735,12 +735,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dyn-clone"
-version = "1.0.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21e50f3adc76d6a43f5ed73b698a87d0760ca74617f60f7c3b879003536fdd28"
-
-[[package]]
 name = "ed25519"
 version = "1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1224,11 +1218,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "dyn-clone",
  "env_logger",
  "futures",
  "linera-base",
- "linera-storage",
+ "linera-storage2",
+ "linera-views",
  "log",
  "rand 0.7.3",
  "serde",
@@ -1248,12 +1242,13 @@ dependencies = [
  "bytes",
  "clap",
  "dashmap",
- "dyn-clone",
  "env_logger",
  "futures",
  "linera-base",
  "linera-core",
  "linera-storage",
+ "linera-storage2",
+ "linera-views",
  "log",
  "net2",
  "proptest",

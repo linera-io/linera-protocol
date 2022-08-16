@@ -25,7 +25,8 @@ use linera_service::{
     network::ValidatorPublicNetworkConfig,
     storage::{Runnable, StorageConfig},
 };
-use linera_storage::Storage;
+use linera_storage2::Store;
+use linera_views::views;
 use log::*;
 use std::{
     collections::{HashMap, HashSet},
@@ -283,7 +284,8 @@ impl ClientContext {
     where
         P: ValidatorNodeProvider + Send + 'static,
         P::Node: ValidatorNode + Send + Sync + 'static + Clone,
-        S: Storage + Clone + Send + Sync + 'static,
+        S: Store + Clone + Send + Sync + 'static,
+        Error: From<<S::Context as views::Context>::Error>,
     {
         self.wallet_state.update_from_state(state).await
     }
@@ -303,7 +305,8 @@ impl ClientContext {
         storage: S,
         certificates: Vec<Certificate>,
     ) where
-        S: Storage + Clone + Send + Sync + 'static,
+        S: Store + Clone + Send + Sync + 'static,
+        Error: From<<S::Context as views::Context>::Error>,
     {
         // First instantiate a local node on top of storage.
         let worker = WorkerState::new("Temporary client node".to_string(), None, storage)
@@ -325,7 +328,8 @@ impl ClientContext {
 
     async fn ensure_admin_subscription<S>(&mut self, storage: &S) -> Vec<Certificate>
     where
-        S: Storage + Clone + Send + Sync + 'static,
+        S: Store + Clone + Send + Sync + 'static,
+        Error: From<<S::Context as views::Context>::Error>,
     {
         let mut certificates = Vec::new();
         for chain_id in self.wallet_state.chain_ids() {
@@ -344,7 +348,8 @@ impl ClientContext {
 
     async fn push_to_all_chains<S>(&mut self, storage: &S, certificate: &Certificate)
     where
-        S: Storage + Clone + Send + Sync + 'static,
+        S: Store + Clone + Send + Sync + 'static,
+        Error: From<<S::Context as views::Context>::Error>,
     {
         for chain_id in self.wallet_state.chain_ids() {
             let mut client_state = self.make_chain_client(storage.clone(), chain_id);
@@ -536,7 +541,8 @@ struct Job(ClientContext, ClientCommand);
 #[async_trait]
 impl<S> Runnable<S> for Job
 where
-    S: Storage + Clone + Send + Sync + 'static,
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
 {
     type Output = ();
 

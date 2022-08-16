@@ -18,7 +18,8 @@ use linera_base::{
     messages::*,
     system::{Address, Amount, Balance, SystemExecutionState, SystemOperation, UserData},
 };
-use linera_storage::Storage;
+use linera_storage2::Store;
+use linera_views::views;
 use std::{
     collections::{BTreeMap, HashMap},
     time::Duration,
@@ -212,7 +213,8 @@ impl<P, S> ChainClientState<P, S>
 where
     P: ValidatorNodeProvider,
     P::Node: ValidatorNode + Send + Sync + 'static + Clone,
-    S: Storage + Clone + Send + Sync + 'static,
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
 {
     async fn chain_info(&mut self) -> Result<ChainInfo, Error> {
         let query = ChainInfoQuery::new(self.chain_id);
@@ -350,7 +352,8 @@ impl<P, S> ChainClientState<P, S>
 where
     P: ValidatorNodeProvider + Send + 'static,
     P::Node: ValidatorNode + Send + Sync + 'static + Clone,
-    S: Storage + Clone + Send + Sync + 'static,
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
 {
     /// Prepare the chain for the next operation.
     async fn prepare_chain(&mut self) -> Result<(), Error> {
@@ -823,7 +826,8 @@ impl<P, S> ChainClient for ChainClientState<P, S>
 where
     P: ValidatorNodeProvider + Send + 'static,
     P::Node: ValidatorNode + Send + Sync + 'static + Clone,
-    S: Storage + Clone + Send + Sync + 'static,
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
 {
     async fn local_balance(&mut self) -> Result<Balance> {
         ensure!(

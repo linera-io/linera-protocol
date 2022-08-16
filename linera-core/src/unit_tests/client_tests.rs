@@ -9,14 +9,13 @@ use crate::{
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use linera_base::{
-    chain::ChainState,
     committee::Committee,
     crypto::*,
     error::Error,
     messages::*,
     system::{Amount, Balance, SystemOperation, UserData},
 };
-use linera_storage::{InMemoryStoreClient, Storage};
+use linera_storage2::{MemoryStoreClient, Store};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     str::FromStr,
@@ -28,7 +27,7 @@ use test_log::test;
 /// certificates or info queries) and have the wrong initial balance for all chains.
 struct LocalValidator {
     is_faulty: bool,
-    state: WorkerState<InMemoryStoreClient>,
+    state: WorkerState<MemoryStoreClient>,
 }
 
 #[derive(Clone)]
@@ -73,7 +72,7 @@ impl ValidatorNode for LocalValidatorClient {
 }
 
 impl LocalValidatorClient {
-    fn new(is_faulty: bool, state: WorkerState<InMemoryStoreClient>) -> Self {
+    fn new(is_faulty: bool, state: WorkerState<MemoryStoreClient>) -> Self {
         let validator = LocalValidator { is_faulty, state };
         Self(Arc::new(Mutex::new(validator)))
     }
@@ -105,11 +104,49 @@ impl ValidatorNodeProvider for NodeProvider {
 struct TestBuilder {
     initial_committee: Committee,
     admin_id: ChainId,
-    genesis_store: InMemoryStoreClient,
+    genesis_store_builder: GenesisStoreBuilder,
     faulty_validators: HashSet<ValidatorName>,
     validator_clients: Vec<(ValidatorName, LocalValidatorClient)>,
-    validator_stores: HashMap<ValidatorName, InMemoryStoreClient>,
-    chain_client_stores: Vec<InMemoryStoreClient>,
+    validator_stores: HashMap<ValidatorName, MemoryStoreClient>,
+    chain_client_stores: Vec<MemoryStoreClient>,
+}
+
+#[derive(Default)]
+struct GenesisStoreBuilder {
+    accounts: Vec<GenesisAccount>,
+}
+
+struct GenesisAccount {
+    description: ChainDescription,
+    owner: Owner,
+    balance: Balance,
+}
+
+impl GenesisStoreBuilder {
+    fn add(&mut self, description: ChainDescription, owner: Owner, balance: Balance) {
+        self.accounts.push(GenesisAccount {
+            description,
+            owner,
+            balance,
+        })
+    }
+
+    async fn build(&self, initial_committee: Committee, admin_id: ChainId) -> MemoryStoreClient {
+        let store = MemoryStoreClient::default();
+        for account in &self.accounts {
+            store
+                .create_chain(
+                    initial_committee.clone(),
+                    admin_id,
+                    account.description,
+                    account.owner,
+                    account.balance,
+                )
+                .await
+                .unwrap();
+        }
+        store
+    }
 }
 
 impl TestBuilder {
@@ -128,7 +165,7 @@ impl TestBuilder {
         let mut faulty_validators = HashSet::new();
         for (i, key_pair) in key_pairs.into_iter().enumerate() {
             let name = ValidatorName(key_pair.public());
-            let store = InMemoryStoreClient::default();
+            let store = MemoryStoreClient::default();
             let state = WorkerState::new(format!("Node {}", i), Some(key_pair), store.clone())
                 .allow_inactive_chains(false);
             let validator = if i < with_faulty_validators {
@@ -147,7 +184,7 @@ impl TestBuilder {
         Self {
             initial_committee,
             admin_id: ChainId::root(0),
-            genesis_store: InMemoryStoreClient::default(),
+            genesis_store_builder: GenesisStoreBuilder::default(),
             faulty_validators,
             validator_clients,
             validator_stores,
@@ -159,34 +196,47 @@ impl TestBuilder {
         &mut self,
         description: ChainDescription,
         balance: Balance,
-    ) -> ChainClientState<NodeProvider, InMemoryStoreClient> {
+    ) -> ChainClientState<NodeProvider, MemoryStoreClient> {
         let key_pair = KeyPair::generate();
         let owner = Owner(key_pair.public());
-        let chain = ChainState::create(
-            self.initial_committee.clone(),
-            self.admin_id,
-            description,
-            owner,
-            balance,
-        );
-        let chain_bad = ChainState::create(
-            self.initial_committee.clone(),
-            self.admin_id,
-            description,
-            owner,
-            Balance::from(0),
-        );
-        // Create genesis chain in all the existing stores.
-        self.genesis_store.write_chain(chain.clone()).await.unwrap();
+        // Remember what's in the genesis store for future clients to join.
+        self.genesis_store_builder.add(description, owner, balance);
         for (name, store) in self.validator_stores.iter_mut() {
             if self.faulty_validators.contains(name) {
-                store.write_chain(chain_bad.clone()).await.unwrap();
+                store
+                    .create_chain(
+                        self.initial_committee.clone(),
+                        self.admin_id,
+                        description,
+                        owner,
+                        Balance::from(0),
+                    )
+                    .await
+                    .unwrap();
             } else {
-                store.write_chain(chain.clone()).await.unwrap();
+                store
+                    .create_chain(
+                        self.initial_committee.clone(),
+                        self.admin_id,
+                        description,
+                        owner,
+                        balance,
+                    )
+                    .await
+                    .unwrap();
             }
         }
         for store in self.chain_client_stores.iter_mut() {
-            store.write_chain(chain.clone()).await.unwrap();
+            store
+                .create_chain(
+                    self.initial_committee.clone(),
+                    self.admin_id,
+                    description,
+                    owner,
+                    balance,
+                )
+                .await
+                .unwrap();
         }
         self.make_client(description.into(), key_pair, None, BlockHeight::from(0))
             .await
@@ -198,10 +248,13 @@ impl TestBuilder {
         key_pair: KeyPair,
         block_hash: Option<HashValue>,
         block_height: BlockHeight,
-    ) -> ChainClientState<NodeProvider, InMemoryStoreClient> {
+    ) -> ChainClientState<NodeProvider, MemoryStoreClient> {
         // Note that new clients are only given the genesis store: they must figure out
         // the rest by asking validators.
-        let store = self.genesis_store.copy().await;
+        let store = self
+            .genesis_store_builder
+            .build(self.initial_committee.clone(), self.admin_id)
+            .await;
         self.chain_client_stores.push(store.clone());
         let provider = NodeProvider(self.validator_clients.iter().cloned().collect());
         ChainClientState::new(

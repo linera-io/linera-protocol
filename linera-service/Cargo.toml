@@ -13,7 +13,6 @@ bincode = "1.3.3"
 bytes = "1.1.0"
 clap = "2.33.3"
 dashmap = "5.3.4"
-dyn-clone = "1.0.4"
 env_logger = "0.9.0"
 futures = "0.3.17"
 log = "0.4.14"
@@ -27,7 +26,8 @@ tokio-util = { version = "0.6.9", features = ["codec", "net"] }
 
 linera-core = { path = "../linera-core" }
 linera-base = { path = "../linera-base" }
-linera-storage = { path = "../linera-storage" }
+linera-storage2 = { path = "../linera-storage2" }
+linera-views = { path = "../linera-views" }
 
 [dev-dependencies]
 proptest = "1.0.0"
