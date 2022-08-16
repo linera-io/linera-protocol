@@ -81,21 +81,20 @@ impl<E> MemoryContext<E> {
             .expect("downcast to &mut T should not fail");
         f(value)
     }
+
+    async fn erase(&mut self) -> Result<(), MemoryViewError> {
+        let mut map = self.map.write().await;
+        map.remove(&self.base_key);
+        Ok(())
+    }
 }
 
-#[async_trait]
 impl<E> Context for MemoryContext<E>
 where
     E: Clone + Send + Sync,
 {
     type Extra = E;
     type Error = MemoryViewError;
-
-    async fn erase(&mut self) -> Result<(), Self::Error> {
-        let mut map = self.map.write().await;
-        map.remove(&self.base_key);
-        Ok(())
-    }
 
     fn extra(&self) -> &E {
         &self.extra
@@ -132,6 +131,10 @@ where
         let mut map = self.map.write().await;
         map.insert(self.base_key.clone(), Box::new(value));
         Ok(())
+    }
+
+    async fn delete(&mut self) -> Result<(), MemoryViewError> {
+        self.erase().await
     }
 }
 
@@ -170,6 +173,10 @@ where
             self.with_mut(|v: &mut Vec<T>| v.append(&mut values)).await;
         }
         Ok(())
+    }
+
+    async fn delete(&mut self) -> Result<(), MemoryViewError> {
+        self.erase().await
     }
 }
 
@@ -222,6 +229,10 @@ where
         .await;
         Ok(())
     }
+
+    async fn delete(&mut self) -> Result<(), MemoryViewError> {
+        self.erase().await
+    }
 }
 
 #[async_trait]
@@ -260,6 +271,10 @@ where
                 Some(m) => m.keys().cloned().collect(),
             })
             .await)
+    }
+
+    async fn delete(&mut self) -> Result<(), MemoryViewError> {
+        self.erase().await
     }
 }
 
