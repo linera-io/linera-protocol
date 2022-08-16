@@ -149,6 +149,15 @@ where
             .await)
     }
 
+    async fn get(&mut self, index: usize) -> Result<Option<T>, MemoryViewError> {
+        Ok(self
+            .with_ref(|v: Option<&Vec<T>>| match v {
+                None => None,
+                Some(x) => x.get(index).cloned(),
+            })
+            .await)
+    }
+
     async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, MemoryViewError> {
         Ok(self
             .with_ref(|v: Option<&Vec<T>>| match v {
