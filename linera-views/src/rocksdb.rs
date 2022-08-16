@@ -9,7 +9,7 @@ use crate::{
     },
 };
 use async_trait::async_trait;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{ops::Range, sync::Arc};
 use thiserror::Error;
 use tokio::sync::OwnedMutexGuard;
@@ -303,32 +303,49 @@ where
     }
 }
 
+#[derive(Serialize, Deserialize)]
+enum CollectionKey<I> {
+    Index(I),
+    Subview(I),
+}
+
 #[async_trait]
 impl<E, I> CollectionOperations<I> for RocksdbContext<E>
 where
-    I: serde::Serialize + serde::de::DeserializeOwned + Send + Sync,
+    I: serde::Serialize + serde::de::DeserializeOwned + Send + Sync + 'static,
     E: Clone + Send + Sync,
 {
     fn clone_with_scope(&self, index: &I) -> Self {
         Self {
             db: self.db.clone(),
             lock: self.lock.clone(),
-            base_key: self.derive_key(index),
+            base_key: self.derive_key(&CollectionKey::Subview(index)),
             extra: self.extra.clone(),
         }
     }
 
+    async fn add_index(&mut self, index: I) -> Result<(), Self::Error> {
+        self.db
+            .write_key(&self.derive_key(&CollectionKey::Index(index)), &())
+            .await?;
+        Ok(())
+    }
+
+    async fn remove_index(&mut self, index: I) -> Result<(), Self::Error> {
+        self.db
+            .delete_key(&self.derive_key(&CollectionKey::Index(index)))
+            .await?;
+        Ok(())
+    }
+
     async fn indices(&mut self) -> Result<Vec<I>, Self::Error> {
-        let len = self.base_key.len();
+        let base = self.derive_key(&CollectionKey::Index(()));
+        let len = base.len();
         let mut keys = Vec::new();
-        for bytes in self.db.find_keys_with_strict_prefix(&self.base_key).await? {
+        for bytes in self.db.find_keys_with_strict_prefix(&base).await? {
             match bcs::from_bytes(&bytes[len..]) {
                 Ok(key) => {
                     keys.push(key);
-                }
-                Err(bcs::Error::RemainingInput) => {
-                    // Skip composite keys corresponding to objects in subviews.
-                    // FIXME: this makes this function slower than linear time!
                 }
                 Err(e) => {
                     return Err(e.into());
