@@ -3,15 +3,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use linera_base::{
-    chain::{ChainState, OutboxState},
-    crypto::*,
-    ensure,
-    error::Error,
-    manager::Outcome,
-    messages::*,
+use linera_base::{crypto::*, ensure, error::Error, manager::Outcome, messages::*};
+use linera_storage2::{
+    chain::{ChainStateView, OutboxStateView},
+    Store,
 };
-use linera_storage::Storage;
+use linera_views::{
+    views,
+    views::{AppendOnlyLogView, View},
+};
 use std::{collections::VecDeque, sync::Arc};
 
 #[cfg(test)]
@@ -87,7 +87,8 @@ impl<Client> WorkerState<Client> {
 
 impl<Client> WorkerState<Client>
 where
-    Client: Storage + Clone + Send + Sync + 'static,
+    Client: Store + Clone + Send + Sync + 'static,
+    Error: From<<Client::Context as views::Context>::Error>,
 {
     // NOTE: This only works for non-sharded workers!
     pub(crate) async fn fully_handle_certificate(
@@ -107,8 +108,8 @@ where
         &mut self,
         block: &Block,
     ) -> Result<ChainInfoResponse, Error> {
-        let mut chain = self.storage.read_active_chain(block.chain_id).await?;
-        chain.execute_block(block)?;
+        let mut chain = self.storage.load_active_chain(block.chain_id).await?;
+        chain.execute_block(block).await?;
         let info = chain.make_chain_info(None);
         // Do not save the new state.
         Ok(info)
@@ -121,21 +122,21 @@ where
 
     async fn make_cross_chain_request(
         &mut self,
-        chain: &ChainState,
+        confirmed_log: &mut AppendOnlyLogView<Client::Context, HashValue>,
         application_id: ApplicationId,
         origin: Origin,
         recipient: ChainId,
-        outbox: &OutboxState,
+        outbox: &mut OutboxStateView<Client::Context>,
     ) -> Result<CrossChainRequest, Error> {
-        let certificates = self
-            .storage
-            .read_certificates(
-                outbox
-                    .queue
-                    .iter()
-                    .map(|height| chain.confirmed_log[usize::from(*height)]),
-            )
-            .await?;
+        let count = outbox.queue.count();
+        let heights = outbox.queue.read_front(count).await?;
+        let mut keys = Vec::new();
+        for height in heights {
+            if let Some(key) = confirmed_log.get(usize::from(height)).await? {
+                keys.push(key);
+            }
+        }
+        let certificates = self.storage.read_certificates(keys).await?;
         Ok(CrossChainRequest::UpdateRecipient {
             application_id,
             origin,
@@ -147,28 +148,48 @@ where
     /// Load pending cross-chain requests.
     async fn make_continuation(
         &mut self,
-        chain: &ChainState,
+        chain: &mut ChainStateView<Client::Context>,
     ) -> Result<Vec<CrossChainRequest>, Error> {
         let mut continuation = Vec::new();
-        for (application_id, state) in &chain.communication_states {
-            for (&recipient, outbox) in &state.outboxes {
+        let chain_id = chain.chain_id();
+        for application_id in chain.communication_states.indices().await? {
+            let state = chain
+                .communication_states
+                .load_entry(application_id)
+                .await?;
+            for recipient in state.outboxes.indices().await? {
+                let outbox = state.outboxes.load_entry(recipient).await?;
                 let origin = Origin {
-                    chain_id: chain.chain_id(),
+                    chain_id,
                     medium: Medium::Direct,
                 };
                 let request = self
-                    .make_cross_chain_request(chain, *application_id, origin, recipient, outbox)
+                    .make_cross_chain_request(
+                        &mut chain.confirmed_log,
+                        application_id,
+                        origin,
+                        recipient,
+                        outbox,
+                    )
                     .await?;
                 continuation.push(request);
             }
-            for (name, channel) in &state.channels {
-                for (&recipient, outbox) in &channel.outboxes {
+            for name in state.channels.indices().await? {
+                let channel = state.channels.load_entry(name.clone()).await?;
+                for recipient in channel.outboxes.indices().await? {
+                    let outbox = channel.outboxes.load_entry(recipient).await?;
                     let origin = Origin {
-                        chain_id: chain.chain_id(),
-                        medium: Medium::Channel(name.into()),
+                        chain_id,
+                        medium: Medium::Channel(name.clone()),
                     };
                     let request = self
-                        .make_cross_chain_request(chain, *application_id, origin, recipient, outbox)
+                        .make_cross_chain_request(
+                            &mut chain.confirmed_log,
+                            application_id,
+                            origin,
+                            recipient,
+                            outbox,
+                        )
                         .await?;
                     continuation.push(request);
                 }
@@ -193,20 +214,26 @@ where
         // Obtain the sender's chain.
         let sender = block.chain_id;
         // Check that the chain is active and ready for this confirmation.
-        let mut chain = self.storage.read_active_chain(sender).await?;
-        if chain.next_block_height < block.height {
+        let mut chain = self.storage.load_active_chain(sender).await?;
+        let chaining = chain.chaining_state.get();
+        if chaining.next_block_height < block.height {
             return Err(Error::MissingEarlierBlocks {
-                current_block_height: chain.next_block_height,
+                current_block_height: chaining.next_block_height,
             });
         }
-        if chain.next_block_height > block.height {
+        if chaining.next_block_height > block.height {
             // Block was already confirmed.
             let info = chain.make_chain_info(self.key_pair());
-            let continuation = self.make_continuation(&chain).await?;
+            let continuation = self.make_continuation(&mut chain).await?;
             return Ok((info, continuation));
         }
         // Verify the certificate. Returns a catch-all error to make client code more robust.
-        let epoch = chain.state.system.epoch.expect("chain is active");
+        let epoch = chain
+            .execution_state
+            .get()
+            .system
+            .epoch
+            .expect("chain is active");
         ensure!(
             block.epoch == epoch,
             Error::InvalidEpoch {
@@ -215,7 +242,8 @@ where
             }
         );
         let committee = chain
-            .state
+            .execution_state
+            .get()
             .system
             .committees
             .get(&epoch)
@@ -225,26 +253,30 @@ where
             .map_err(|_| Error::InvalidCertificate)?;
         // This should always be true for valid certificates.
         ensure!(
-            chain.block_hash == block.previous_block_hash,
+            chaining.block_hash == block.previous_block_hash,
             Error::InvalidBlockChaining
         );
         // Persist certificate.
         self.storage.write_certificate(certificate.clone()).await?;
         // Make sure temporary manager information are cleared.
-        chain.state.system.manager.reset();
+        chain.execution_state.get_mut().system.manager.reset();
         // Execute the block.
-        let verified_effects = chain.execute_block(block)?;
+        let verified_effects = chain.execute_block(block).await?;
         ensure!(effects == verified_effects, Error::IncorrectEffects);
         // Advance to next block height.
-        chain.block_hash = Some(certificate.hash);
+        let chaining = chain.chaining_state.get_mut();
+        chaining.block_hash = Some(certificate.hash);
+        chaining.next_block_height.try_add_assign_one()?;
         chain.confirmed_log.push(certificate.hash);
-        chain.next_block_height.try_add_assign_one()?;
         // We should always agree on the state hash.
-        ensure!(chain.state_hash == state_hash, Error::IncorrectStateHash);
+        ensure!(
+            *chain.execution_state_hash.get() == Some(state_hash),
+            Error::IncorrectStateHash
+        );
         let info = chain.make_chain_info(self.key_pair());
-        let continuation = self.make_continuation(&chain).await?;
+        let continuation = self.make_continuation(&mut chain).await?;
         // Persist chain.
-        self.storage.write_chain(chain).await?;
+        chain.commit().await?;
         Ok((info, continuation))
     }
 
@@ -263,9 +295,14 @@ where
             _ => panic!("Expecting a validation certificate"),
         };
         // Check that the chain is active and ready for this confirmation.
-        let mut chain = self.storage.read_active_chain(block.chain_id).await?;
+        let mut chain = self.storage.load_active_chain(block.chain_id).await?;
         // Verify the certificate. Returns a catch-all error to make client code more robust.
-        let epoch = chain.state.system.epoch.expect("chain is active");
+        let epoch = chain
+            .execution_state
+            .get()
+            .system
+            .epoch
+            .expect("chain is active");
         ensure!(
             block.epoch == epoch,
             Error::InvalidEpoch {
@@ -274,7 +311,8 @@ where
             }
         );
         let committee = chain
-            .state
+            .execution_state
+            .get_mut()
             .system
             .committees
             .get(&epoch)
@@ -282,25 +320,32 @@ where
         certificate
             .check(committee)
             .map_err(|_| Error::InvalidCertificate)?;
-        if chain.state.system.manager.check_validated_block(
-            chain.next_block_height,
-            block,
-            round,
-        )? == Outcome::Skip
+        if chain
+            .execution_state
+            .get_mut()
+            .system
+            .manager
+            .check_validated_block(chain.chaining_state.get().next_block_height, block, round)?
+            == Outcome::Skip
         {
             // If we just processed the same pending block, return the chain info
             // unchanged.
             return Ok(chain.make_chain_info(self.key_pair()));
         }
-        chain.state.system.manager.create_final_vote(
-            block.clone(),
-            effects,
-            state_hash,
-            certificate,
-            self.key_pair(),
-        );
+        chain
+            .execution_state
+            .get_mut()
+            .system
+            .manager
+            .create_final_vote(
+                block.clone(),
+                effects,
+                state_hash,
+                certificate,
+                self.key_pair(),
+            );
         let info = chain.make_chain_info(self.key_pair());
-        self.storage.write_chain(chain).await?;
+        chain.commit().await?;
         Ok(info)
     }
 }
@@ -308,7 +353,8 @@ where
 #[async_trait]
 impl<Client> ValidatorWorker for WorkerState<Client>
 where
-    Client: Storage + Clone + Send + Sync + 'static,
+    Client: Store + Clone + Send + Sync + 'static,
+    Error: From<<Client::Context as views::Context>::Error>,
 {
     async fn handle_block_proposal(
         &mut self,
@@ -317,9 +363,14 @@ where
         log::trace!("{} <-- {:?}", self.nickname, proposal);
         // Obtain the sender's chain.
         let sender = proposal.content.block.chain_id;
-        let mut chain = self.storage.read_active_chain(sender).await?;
+        let mut chain = self.storage.load_active_chain(sender).await?;
         // Check the epoch.
-        let epoch = chain.state.system.epoch.expect("chain is active");
+        let epoch = chain
+            .execution_state
+            .get()
+            .system
+            .epoch
+            .expect("chain is active");
         ensure!(
             proposal.content.block.epoch == epoch,
             Error::InvalidEpoch {
@@ -329,7 +380,12 @@ where
         );
         // Check authentication of the block.
         ensure!(
-            chain.state.system.manager.has_owner(&proposal.owner),
+            chain
+                .execution_state
+                .get()
+                .system
+                .manager
+                .has_owner(&proposal.owner),
             Error::InvalidOwner
         );
         proposal
@@ -337,37 +393,45 @@ where
             .check(&proposal.content, proposal.owner.0)?;
         // Check if the chain is ready for this new block proposal.
         // This should always pass for nodes without voting key.
-        if chain.state.system.manager.check_proposed_block(
-            chain.block_hash,
-            chain.next_block_height,
-            &proposal.content.block,
-            proposal.content.round,
-        )? == Outcome::Skip
+        if chain
+            .execution_state
+            .get()
+            .system
+            .manager
+            .check_proposed_block(
+                chain.chaining_state.get().block_hash,
+                chain.chaining_state.get().next_block_height,
+                &proposal.content.block,
+                proposal.content.round,
+            )?
+            == Outcome::Skip
         {
             // If we just processed the same pending block, return the chain info
             // unchanged.
             return Ok(chain.make_chain_info(self.key_pair()));
         }
         let (effects, state_hash) = {
-            // Execute the block on a copy of the chain state for validation.
-            let mut staged = chain.clone();
             // Make sure the clear round information in the state so that it is not
             // hashed.
-            staged.state.system.manager.reset();
-            let effects = staged.execute_block(&proposal.content.block)?;
+            chain.execution_state.get_mut().system.manager.reset();
+            let effects = chain.execute_block(&proposal.content.block).await?;
+            let hash = chain.execution_state_hash.get().expect("was just computed");
             // Verify that the resulting chain would have no unconfirmed incoming
             // messages.
-            staged.validate_incoming_messages()?;
-            (effects, staged.state_hash)
+            chain.validate_incoming_messages().await?;
+            // Reset all the staged changes as we were only validating things.
+            chain.reset_changes();
+            (effects, hash)
         };
         // Create the vote and store it in the chain state.
-        chain
-            .state
-            .system
-            .manager
-            .create_vote(proposal, effects, state_hash, self.key_pair());
+        chain.execution_state.get_mut().system.manager.create_vote(
+            proposal,
+            effects,
+            state_hash,
+            self.key_pair(),
+        );
         let info = chain.make_chain_info(self.key_pair());
-        self.storage.write_chain(chain).await?;
+        chain.commit().await?;
         Ok(info)
     }
 
@@ -395,24 +459,31 @@ where
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, Error> {
         log::trace!("{} <-- {:?}", self.nickname, query);
-        let chain = self.storage.read_chain_or_default(query.chain_id).await?;
+        let mut chain = self.storage.load_chain(query.chain_id).await?;
         let mut info = chain.make_chain_info(None).info;
         if query.request_system_execution_state {
-            info.requested_system_execution_state = Some(chain.state.system);
+            info.requested_system_execution_state =
+                Some(chain.execution_state.get().system.clone());
         }
         if let Some(next_block_height) = query.test_next_block_height {
             ensure!(
-                chain.next_block_height == next_block_height,
+                chain.chaining_state.get().next_block_height == next_block_height,
                 Error::UnexpectedBlockHeight
             );
         }
         if query.request_pending_messages {
             let mut message_groups = Vec::new();
-            for (application_id, state) in &chain.communication_states {
-                for (origin, inbox) in &state.inboxes {
+            for application_id in chain.communication_states.indices().await? {
+                let state = chain
+                    .communication_states
+                    .load_entry(application_id)
+                    .await?;
+                for origin in state.inboxes.indices().await? {
+                    let inbox = state.inboxes.load_entry(origin.clone()).await?;
                     let mut effects = Vec::new();
                     let mut current_height = None;
-                    for event in &inbox.received_events {
+                    let count = inbox.received_events.count();
+                    for event in inbox.received_events.read_front(count).await? {
                         match current_height {
                             None => {
                                 current_height = Some(event.height);
@@ -421,7 +492,7 @@ where
                                 // If the height changed, flush the accumulated effects
                                 // into a new group.
                                 message_groups.push(MessageGroup {
-                                    application_id: *application_id,
+                                    application_id,
                                     origin: origin.clone(),
                                     height,
                                     effects,
@@ -437,7 +508,7 @@ where
                     }
                     if let Some(height) = current_height {
                         message_groups.push(MessageGroup {
-                            application_id: *application_id,
+                            application_id,
                             origin: origin.clone(),
                             height,
                             effects,
@@ -448,18 +519,18 @@ where
             info.requested_pending_messages = message_groups;
         }
         if let Some(range) = query.request_sent_certificates_in_range {
-            let keys = chain.confirmed_log[..]
-                .iter()
-                .skip(range.start.into())
-                .cloned();
-            let certs = match range.limit {
-                None => self.storage.read_certificates(keys).await?,
-                Some(count) => self.storage.read_certificates(keys.take(count)).await?,
+            let start = range.start.into();
+            let end = match range.limit {
+                None => chain.confirmed_log.count(),
+                Some(limit) => std::cmp::max(start + limit, chain.confirmed_log.count()),
             };
+            let keys = chain.confirmed_log.read(start..end).await?;
+            let certs = self.storage.read_certificates(keys).await?;
             info.requested_sent_certificates = certs;
         }
-        if let Some(idx) = query.request_received_certificates_excluding_first_nth {
-            let keys = chain.received_log[..].iter().skip(idx).cloned();
+        if let Some(start) = query.request_received_certificates_excluding_first_nth {
+            let end = chain.received_log.count();
+            let keys = chain.received_log.read(start..end).await?;
             let certs = self.storage.read_certificates(keys).await?;
             info.requested_received_certificates = certs;
         }
@@ -480,7 +551,7 @@ where
                 recipient,
                 certificates,
             } => {
-                let mut chain = self.storage.read_chain_or_default(recipient).await?;
+                let mut chain = self.storage.load_chain(recipient).await?;
                 let mut last_height = None;
                 let mut last_epoch = None;
                 let mut need_update = false;
@@ -511,13 +582,16 @@ where
                     last_height = Some(block.height);
                     last_epoch = Some(block.epoch);
                     // Update the staged chain state with the received block.
-                    if chain.receive_block(
-                        application_id,
-                        &origin,
-                        block.height,
-                        effects,
-                        certificate.hash,
-                    )? {
+                    if chain
+                        .receive_block(
+                            application_id,
+                            &origin,
+                            block.height,
+                            effects,
+                            certificate.hash,
+                        )
+                        .await?
+                    {
                         self.storage.write_certificate(certificate).await?;
                         need_update = true;
                     }
@@ -537,8 +611,13 @@ where
                             return Ok(Vec::new());
                         }
                         let epoch = last_epoch.expect("need_update implies epoch.is_some()");
-                        if Some(epoch) < chain.state.system.epoch
-                            && !chain.state.system.committees.contains_key(&epoch)
+                        if Some(epoch) < chain.execution_state.get().system.epoch
+                            && !chain
+                                .execution_state
+                                .get()
+                                .system
+                                .committees
+                                .contains_key(&epoch)
                         {
                             // Refuse to persist the chain state if the latest epoch in
                             // the received blocks from this recipient is not recognized
@@ -547,7 +626,7 @@ where
                             return Ok(Vec::new());
                         }
                     }
-                    self.storage.write_chain(chain).await?;
+                    chain.commit().await?;
                 }
                 match last_height {
                     Some(height) => {
@@ -573,9 +652,12 @@ where
                 recipient,
                 height,
             } => {
-                let mut chain = self.storage.read_chain_or_default(chain_id).await?;
-                if chain.mark_outbox_messages_as_received(application_id, recipient, height) {
-                    self.storage.write_chain(chain).await?;
+                let mut chain = self.storage.load_chain(chain_id).await?;
+                if chain
+                    .mark_outbox_messages_as_received(application_id, recipient, height)
+                    .await?
+                {
+                    chain.commit().await?;
                 }
                 Ok(Vec::new())
             }
@@ -589,10 +671,12 @@ where
                 recipient,
                 height,
             } => {
-                let mut chain = self.storage.read_chain_or_default(chain_id).await?;
-                if chain.mark_channel_messages_as_received(&name, application_id, recipient, height)
+                let mut chain = self.storage.load_chain(chain_id).await?;
+                if chain
+                    .mark_channel_messages_as_received(&name, application_id, recipient, height)
+                    .await?
                 {
-                    self.storage.write_chain(chain).await?;
+                    chain.commit().await?;
                 }
                 Ok(Vec::new())
             }

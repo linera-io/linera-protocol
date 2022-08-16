@@ -11,16 +11,13 @@ use async_trait::async_trait;
 use futures::{channel::mpsc, sink::SinkExt, stream::StreamExt};
 use linera_base::{error::*, messages::*, rpc};
 use linera_core::{node::ValidatorNode, worker::*};
-use linera_storage::Storage;
+use linera_storage2::Store;
+use linera_views::views;
 use log::*;
 use serde::{Deserialize, Serialize};
 use std::{io, time::Duration};
 use structopt::StructOpt;
 use tokio::time;
-
-#[cfg(test)]
-#[path = "unit_tests/network.rs"]
-mod unit_tests;
 
 #[derive(Clone, Debug, StructOpt)]
 pub struct CrossChainConfig {
@@ -148,7 +145,8 @@ impl<S> Server<S> {
 
 impl<S> Server<S>
 where
-    S: Storage + Clone + Send + Sync + 'static,
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
 {
     async fn forward_cross_chain_queries(
         network: ValidatorInternalNetworkConfig,
@@ -238,7 +236,8 @@ struct RunningServerState<S> {
 
 impl<S> MessageHandler for RunningServerState<S>
 where
-    S: Storage + Clone + Send + Sync + 'static,
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
 {
     fn handle_message(
         &mut self,

@@ -175,6 +175,7 @@ impl ChainManager {
                 if let Some(vote) = &manager.pending {
                     match &vote.value {
                         Value::ConfirmedBlock { block, .. } if block != new_block => {
+                            log::error!("Attempting to sign a different block at the same height: {:?} {:?}", block, new_block);
                             return Err(Error::PreviousBlockMustBeConfirmedFirst);
                         }
                         Value::ValidatedBlock { .. } => {
