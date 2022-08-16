@@ -43,6 +43,8 @@ pub trait KeyValueOperations {
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<Vec<u8>>, RocksdbViewError>;
+
+    async fn count_keys(&self) -> Result<usize, RocksdbViewError>;
 }
 
 #[async_trait]
@@ -102,6 +104,14 @@ impl KeyValueOperations for Arc<rocksdb::DB> {
         .await?;
         Ok(keys)
     }
+
+    async fn count_keys(&self) -> Result<usize, RocksdbViewError> {
+        let db = self.clone();
+        let size =
+            tokio::task::spawn_blocking(move || db.iterator(rocksdb::IteratorMode::Start).count())
+                .await?;
+        Ok(size)
+    }
 }
 
 impl<E> RocksdbContext<E> {
@@ -138,11 +148,6 @@ where
     type Extra = E;
     type Error = RocksdbViewError;
 
-    async fn erase(&mut self) -> Result<(), Self::Error> {
-        self.db.delete_key(&self.base_key).await?;
-        Ok(())
-    }
-
     fn extra(&self) -> &E {
         &self.extra
     }
@@ -176,6 +181,11 @@ where
 
     async fn set(&mut self, value: T) -> Result<(), RocksdbViewError> {
         self.db.write_key(&self.base_key, &value).await?;
+        Ok(())
+    }
+
+    async fn delete(&mut self) -> Result<(), Self::Error> {
+        self.db.delete_key(&self.base_key).await?;
         Ok(())
     }
 }
@@ -217,6 +227,15 @@ where
             i += 1;
         }
         self.db.write_key(&self.base_key, &i).await?;
+        Ok(())
+    }
+
+    async fn delete(&mut self) -> Result<(), Self::Error> {
+        let count = AppendOnlyLogOperations::<T>::count(self).await?;
+        self.db.delete_key(&self.base_key).await?;
+        for i in 0..count {
+            self.db.delete_key(&self.derive_key(&i)).await?;
+        }
         Ok(())
     }
 }
@@ -271,6 +290,15 @@ where
         }
         self.db.write_key(&self.base_key, &range).await
     }
+
+    async fn delete(&mut self) -> Result<(), RocksdbViewError> {
+        let range: Range<usize> = self.db.read_key(&self.base_key).await?.unwrap_or_default();
+        self.db.delete_key(&self.base_key).await?;
+        for i in range {
+            self.db.delete_key(&self.derive_key(&i)).await?;
+        }
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -301,6 +329,13 @@ where
             keys.push(bcs::from_bytes(&key[len..])?);
         }
         Ok(keys)
+    }
+
+    async fn delete(&mut self) -> Result<(), RocksdbViewError> {
+        for key in self.db.find_keys_with_strict_prefix(&self.base_key).await? {
+            self.db.delete_key(&key).await?;
+        }
+        Ok(())
     }
 }
 

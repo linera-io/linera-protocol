@@ -12,7 +12,6 @@ use thiserror::Error;
 
 /// The context in which a view is operated. Typically, this includes the client to
 /// connect to the database and the address of the current entry.
-#[async_trait]
 pub trait Context {
     /// User provided data to be carried along.
     type Extra: Clone + Send + Sync;
@@ -25,9 +24,6 @@ pub trait Context {
         + From<ViewError>
         + From<std::io::Error>
         + From<bcs::Error>;
-
-    /// Erase the current entry from storage.
-    async fn erase(&mut self) -> Result<(), Self::Error>;
 
     /// Getter for the user provided data.
     fn extra(&self) -> &Self::Extra;
@@ -122,6 +118,8 @@ pub trait RegisterOperations<T>: Context {
     async fn get(&mut self) -> Result<T, Self::Error>;
 
     async fn set(&mut self, value: T) -> Result<(), Self::Error>;
+
+    async fn delete(&mut self) -> Result<(), Self::Error>;
 }
 
 #[async_trait]
@@ -151,7 +149,7 @@ where
     }
 
     async fn delete(mut self) -> Result<(), C::Error> {
-        self.context.erase().await
+        self.context.delete().await
     }
 }
 
@@ -212,6 +210,8 @@ pub trait AppendOnlyLogOperations<T>: Context {
     async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error>;
 
     async fn append(&mut self, values: Vec<T>) -> Result<(), Self::Error>;
+
+    async fn delete(&mut self) -> Result<(), Self::Error>;
 }
 
 #[async_trait]
@@ -239,7 +239,7 @@ where
     }
 
     async fn delete(mut self) -> Result<(), C::Error> {
-        self.context.erase().await
+        self.context.delete().await
     }
 }
 
@@ -324,6 +324,9 @@ pub trait MapOperations<I, V>: Context {
 
     /// Return the list of indices in the map.
     async fn indices(&mut self) -> Result<Vec<I>, Self::Error>;
+
+    /// Delete the map and its entries from storage.
+    async fn delete(&mut self) -> Result<(), Self::Error>;
 }
 
 #[async_trait]
@@ -359,7 +362,7 @@ where
     }
 
     async fn delete(mut self) -> Result<(), C::Error> {
-        self.context.erase().await
+        self.context.delete().await
     }
 }
 
@@ -436,6 +439,9 @@ pub trait QueueOperations<T>: Context {
     async fn delete_front(&mut self, count: usize) -> Result<(), Self::Error>;
 
     async fn append_back(&mut self, values: Vec<T>) -> Result<(), Self::Error>;
+
+    /// Delete the queue from storage.
+    async fn delete(&mut self) -> Result<(), Self::Error>;
 }
 
 #[async_trait]
@@ -468,8 +474,7 @@ where
     }
 
     async fn delete(mut self) -> Result<(), C::Error> {
-        self.context.delete_front(self.stored_indices.len()).await?;
-        self.context.erase().await
+        self.context.delete().await
     }
 }
 
