@@ -188,3 +188,10 @@ pub enum Error {
     #[error("Invalid effect for this application")]
     InvalidEffect,
 }
+
+impl Error {
+    /// Whether an invalid operation for this block can become valid later.
+    pub fn is_retriable_validation_error(&self) -> bool {
+        matches!(self, Error::MissingCrossChainUpdate { .. })
+    }
+}
