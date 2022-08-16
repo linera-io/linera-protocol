@@ -590,6 +590,12 @@ pub trait CollectionOperations<I>: Context {
     /// operations.
     fn clone_with_scope(&self, index: &I) -> Self;
 
+    /// Add the index to the list of indices.
+    async fn add_index(&mut self, index: I) -> Result<(), Self::Error>;
+
+    /// Remove the index from the list of indices.
+    async fn remove_index(&mut self, index: I) -> Result<(), Self::Error>;
+
     /// Return the list of indices in the collection.
     async fn indices(&mut self) -> Result<Vec<I>, Self::Error>;
 }
@@ -598,7 +604,7 @@ pub trait CollectionOperations<I>: Context {
 impl<C, I, W> View<C> for CollectionView<C, I, W>
 where
     C: CollectionOperations<I> + Send,
-    I: Send + Sync,
+    I: Send + Sync + Debug + Clone,
     W: View<C> + Send,
 {
     async fn load(context: C) -> Result<Self, C::Error> {
@@ -615,9 +621,13 @@ where
     async fn commit(mut self) -> Result<(), C::Error> {
         for (index, update) in self.updates {
             match update {
-                Some(view) => view.commit().await?,
+                Some(view) => {
+                    view.commit().await?;
+                    self.context.add_index(index).await?;
+                }
                 None => {
                     let context = self.context.clone_with_scope(&index);
+                    self.context.remove_index(index).await?;
                     let view = W::load(context).await?;
                     view.delete().await?;
                 }
@@ -629,6 +639,7 @@ where
     async fn delete(mut self) -> Result<(), C::Error> {
         for index in self.context.indices().await? {
             let context = self.context.clone_with_scope(&index);
+            self.context.remove_index(index).await?;
             let view = W::load(context).await?;
             view.delete().await?;
         }

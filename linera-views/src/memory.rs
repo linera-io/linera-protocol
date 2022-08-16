@@ -9,12 +9,13 @@ use crate::{
     },
 };
 use async_trait::async_trait;
+use serde::Serialize;
 use std::{
     any::Any,
     cmp::Eq,
-    collections::{BTreeMap, VecDeque},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     fmt::Debug,
-    ops::{Bound, Range},
+    ops::Range,
     sync::Arc,
 };
 use thiserror::Error;
@@ -271,28 +272,70 @@ where
     }
 }
 
+#[derive(Serialize)]
+enum CollectionKey<I> {
+    Indices,
+    Subview(I),
+}
+
 #[async_trait]
 impl<E: Clone, I> CollectionOperations<I> for MemoryContext<E>
 where
-    I: serde::Serialize + serde::de::DeserializeOwned + Send + Sync,
+    I: serde::Serialize + serde::de::DeserializeOwned + Send + Sync + Ord + Clone + 'static,
     E: Clone + Send + Sync,
 {
     fn clone_with_scope(&self, index: &I) -> Self {
         Self {
             map: self.map.clone(),
-            base_key: self.derive_key(index),
+            base_key: self.derive_key(&CollectionKey::Subview(index)),
             extra: self.extra.clone(),
         }
     }
 
+    async fn add_index(&mut self, index: I) -> Result<(), Self::Error> {
+        let context = Self {
+            map: self.map.clone(),
+            base_key: self.derive_key(&CollectionKey::<I>::Indices),
+            extra: self.extra.clone(),
+        };
+        context
+            .with_mut(|m: &mut BTreeSet<I>| {
+                m.insert(index);
+            })
+            .await;
+        Ok(())
+    }
+
+    async fn remove_index(&mut self, index: I) -> Result<(), Self::Error> {
+        let mut context = Self {
+            map: self.map.clone(),
+            base_key: self.derive_key(&CollectionKey::<I>::Indices),
+            extra: self.extra.clone(),
+        };
+        let is_empty = context
+            .with_mut(|m: &mut BTreeSet<I>| {
+                m.remove(&index);
+                m.is_empty()
+            })
+            .await;
+        if is_empty {
+            context.erase().await?;
+        }
+        Ok(())
+    }
+
     async fn indices(&mut self) -> Result<Vec<I>, Self::Error> {
-        let map = self.map.read().await;
-        let base_len = self.base_key.len();
-        Ok(map
-            .range::<Vec<u8>, _>((Bound::Excluded(&self.base_key), Bound::Unbounded))
-            .take_while(|(k, _)| k.starts_with(&self.base_key))
-            .map(|(k, _)| bcs::from_bytes(&k[base_len..]))
-            .collect::<Result<Vec<I>, bcs::Error>>()?)
+        let context = Self {
+            map: self.map.clone(),
+            base_key: self.derive_key(&CollectionKey::<I>::Indices),
+            extra: self.extra.clone(),
+        };
+        Ok(context
+            .with_ref(|m: Option<&BTreeSet<I>>| match m {
+                None => Vec::new(),
+                Some(m) => m.iter().cloned().collect(),
+            })
+            .await)
     }
 }
 

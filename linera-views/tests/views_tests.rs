@@ -19,6 +19,7 @@ use std::{
 };
 use tokio::sync::Mutex;
 
+#[allow(clippy::type_complexity)]
 pub struct StateView<C> {
     pub x1: ScopedView<0, RegisterView<C, u64>>,
     pub x2: ScopedView<1, RegisterView<C, u32>>,
@@ -26,10 +27,12 @@ pub struct StateView<C> {
     pub map: ScopedView<3, MapView<C, String, usize>>,
     pub queue: ScopedView<4, QueueView<C, u64>>,
     pub collection: ScopedView<5, CollectionView<C, String, AppendOnlyLogView<C, u32>>>,
+    pub collection2:
+        ScopedView<6, CollectionView<C, String, CollectionView<C, String, RegisterView<C, u32>>>>,
 }
 
 // This also generates `trait StateViewContext: Context ... {}`
-impl_view!(StateView { x1, x2, log, map, queue, collection };
+impl_view!(StateView { x1, x2, log, map, queue, collection, collection2 };
            RegisterOperations<u64>,
            RegisterOperations<u32>,
            AppendOnlyLogOperations<u32>,
@@ -107,7 +110,7 @@ impl StateStore for RocksdbTestStore {
 }
 
 #[cfg(test)]
-async fn test_store<S>(store: &mut S)
+async fn test_store<S>(store: &mut S) -> <<S::Context as HashingContext>::Hasher as Hasher>::Output
 where
     S: StateStore,
 {
@@ -159,7 +162,7 @@ where
             assert_eq!(subview.read(0..10).await.unwrap(), vec![17, 18]);
         }
     };
-    let stored_hash = {
+    let staged_hash = {
         let mut view = store.load(1).await.unwrap();
         assert_eq!(view.hash().await.unwrap(), default_hash);
         assert_eq!(view.x1.get(), &0);
@@ -174,6 +177,16 @@ where
                 .await
                 .unwrap();
             assert_eq!(subview.read(0..10).await.unwrap(), vec![]);
+        }
+        {
+            let subview = view
+                .collection2
+                .load_entry("ciao".to_string())
+                .await
+                .unwrap();
+            let subsubview = subview.load_entry("!".to_string()).await.unwrap();
+            subsubview.set(3);
+            assert_eq!(subsubview.get(), &3);
         }
         view.x1.set(1);
         view.log.push(4);
@@ -196,8 +209,8 @@ where
     };
     {
         let mut view = store.load(1).await.unwrap();
-        let hash = view.hash().await.unwrap();
-        assert_eq!(hash, stored_hash);
+        let stored_hash = view.hash().await.unwrap();
+        assert_eq!(staged_hash, stored_hash);
         assert_eq!(view.x1.get(), &1);
         assert_eq!(view.x2.get(), &0);
         assert_eq!(view.log.read(0..10).await.unwrap(), vec![4]);
@@ -224,8 +237,21 @@ where
                 .unwrap();
             assert_eq!(subview.read(0..10).await.unwrap(), vec![17, 18]);
         }
+        {
+            let subview = view
+                .collection2
+                .load_entry("ciao".to_string())
+                .await
+                .unwrap();
+            let subsubview = subview.load_entry("!".to_string()).await.unwrap();
+            assert_eq!(subsubview.get(), &3);
+        }
+        assert_eq!(
+            view.collection.indices().await.unwrap(),
+            vec!["hola".to_string()]
+        );
         view.collection.remove_entry("hola".to_string());
-        assert!(view.hash().await.unwrap() != hash);
+        assert!(view.hash().await.unwrap() != stored_hash);
         view.commit().await.unwrap();
     }
     {
@@ -240,6 +266,7 @@ where
         }
         view.delete().await.unwrap();
     }
+    staged_hash
 }
 
 #[tokio::test]
@@ -258,6 +285,10 @@ async fn test_views_in_rocksdb() {
     options.create_if_missing(true);
     let db = rocksdb::DB::open(&options, dir).unwrap();
     let mut store = RocksdbTestStore::new(db);
-    test_store(&mut store).await;
+    let hash = test_store(&mut store).await;
     assert_eq!(store.locks.len(), 1);
+
+    let mut store = MemoryTestStore::default();
+    let hash2 = test_store(&mut store).await;
+    assert_eq!(hash, hash2);
 }
