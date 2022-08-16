@@ -366,3 +366,11 @@ pub enum RocksdbViewError {
     #[error("Entry does not exist in Rocksdb: {0}")]
     NotFound(String),
 }
+
+impl From<RocksdbViewError> for linera_base::error::Error {
+    fn from(error: RocksdbViewError) -> Self {
+        Self::StorageError {
+            error: error.to_string(),
+        }
+    }
+}

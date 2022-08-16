@@ -18,7 +18,13 @@ pub trait Context {
     type Extra: Clone + Send + Sync;
 
     /// The error type in use.
-    type Error: Debug + Send + From<ViewError> + From<std::io::Error> + From<bcs::Error>;
+    type Error: std::error::Error
+        + Debug
+        + Send
+        + Sync
+        + From<ViewError>
+        + From<std::io::Error>
+        + From<bcs::Error>;
 
     /// Erase the current entry from storage.
     async fn erase(&mut self) -> Result<(), Self::Error>;

@@ -448,10 +448,14 @@ Error:
           - hash:
               TYPENAME: HashValue
     52:
-      UnknownApplication: UNIT
+      StorageError:
+        STRUCT:
+          - error: STR
     53:
-      InvalidOperation: UNIT
+      UnknownApplication: UNIT
     54:
+      InvalidOperation: UNIT
+    55:
       InvalidEffect: UNIT
 Event:
   STRUCT:

@@ -18,6 +18,8 @@ sha2 = "0.9.8"
 thiserror = "1.0.31"
 tokio = { version = "1.12.0", features = ["full"] }
 
+linera-base = { path = "../linera-base" }
+
 [dev-dependencies]
 anyhow = "1.0.57"
 tempfile = "3.2.0"
