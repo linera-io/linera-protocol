@@ -265,11 +265,6 @@ impl ChainState {
         Ok(())
     }
 
-    /// Whether an invalid operation for this block can become valid later.
-    pub fn is_retriable_validation_error(error: &Error) -> bool {
-        matches!(error, Error::MissingCrossChainUpdate { .. })
-    }
-
     /// Schedule operations to be executed as a recipient, unless this block was already
     /// processed. Returns true if the call changed the chain state. Operations must be
     /// received by order of heights and indices.
