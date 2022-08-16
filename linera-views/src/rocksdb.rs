@@ -253,11 +253,12 @@ where
 
     async fn delete_front(&mut self, count: usize) -> Result<(), Self::Error> {
         let mut range: Range<usize> = self.db.read_key(&self.base_key).await?.unwrap_or_default();
+        range.start += count;
+        self.db.write_key(&self.base_key, &range).await?;
         for i in 0..count {
             self.db.delete_key(&self.derive_key(&i)).await?;
         }
-        range.start += count;
-        self.db.write_key(&self.base_key, &range).await
+        Ok(())
     }
 
     async fn append_back(&mut self, values: Vec<T>) -> Result<(), Self::Error> {

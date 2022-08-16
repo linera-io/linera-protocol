@@ -128,7 +128,7 @@ where
         view.reset_changes();
         assert_eq!(view.hash().await.unwrap(), hash);
         view.x2.set(2);
-        assert!(view.hash().await.unwrap() != hash);
+        assert_ne!(view.hash().await.unwrap(), hash);
         view.log.push(4);
         view.queue.push_back(8);
         assert_eq!(view.queue.front().await.unwrap(), Some(8));
@@ -251,7 +251,7 @@ where
             vec!["hola".to_string()]
         );
         view.collection.remove_entry("hola".to_string());
-        assert!(view.hash().await.unwrap() != stored_hash);
+        assert_ne!(view.hash().await.unwrap(), stored_hash);
         view.commit().await.unwrap();
     }
     {

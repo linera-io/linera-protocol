@@ -152,10 +152,7 @@ where
 
     async fn get(&mut self, index: usize) -> Result<Option<T>, MemoryViewError> {
         Ok(self
-            .with_ref(|v: Option<&Vec<T>>| match v {
-                None => None,
-                Some(x) => x.get(index).cloned(),
-            })
+            .with_ref(|v: Option<&Vec<T>>| v?.get(index).cloned())
             .await)
     }
 
@@ -193,10 +190,7 @@ where
 
     async fn get(&mut self, index: usize) -> Result<Option<T>, Self::Error> {
         Ok(self
-            .with_ref(|v: Option<&VecDeque<T>>| match v {
-                None => None,
-                Some(x) => x.get(index).cloned(),
-            })
+            .with_ref(|v: Option<&VecDeque<T>>| v?.get(index).cloned())
             .await)
     }
 
@@ -239,10 +233,7 @@ where
 {
     async fn get(&mut self, index: &I) -> Result<Option<V>, MemoryViewError> {
         Ok(self
-            .with_ref(|m: Option<&BTreeMap<I, V>>| match m {
-                None => None,
-                Some(m) => m.get(index).cloned(),
-            })
+            .with_ref(|m: Option<&BTreeMap<I, V>>| m?.get(index).cloned())
             .await)
     }
 
