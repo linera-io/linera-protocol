@@ -321,6 +321,7 @@ pub enum MemoryViewError {
 impl From<MemoryViewError> for linera_base::error::Error {
     fn from(error: MemoryViewError) -> Self {
         Self::StorageError {
+            backend: "memory".to_string(),
             error: error.to_string(),
         }
     }
