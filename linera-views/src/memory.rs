@@ -317,3 +317,11 @@ pub enum MemoryViewError {
     #[error("Entry does not exist in memory: {0}")]
     NotFound(String),
 }
+
+impl From<MemoryViewError> for linera_base::error::Error {
+    fn from(error: MemoryViewError) -> Self {
+        Self::StorageError {
+            error: error.to_string(),
+        }
+    }
+}
