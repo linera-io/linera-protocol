@@ -313,4 +313,7 @@ pub enum MemoryViewError {
 
     #[error("BCS error: {0}")]
     Bcs(#[from] bcs::Error),
+
+    #[error("Entry does not exist in memory: {0}")]
+    NotFound(String),
 }
