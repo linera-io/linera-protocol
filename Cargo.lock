@@ -1304,6 +1304,7 @@ dependencies = [
  "bcs",
  "futures",
  "generic-array",
+ "linera-base",
  "log",
  "paste",
  "rocksdb",

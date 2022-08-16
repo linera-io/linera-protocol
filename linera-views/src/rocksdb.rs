@@ -161,6 +161,10 @@ where
         Ok(count)
     }
 
+    async fn get(&mut self, index: usize) -> Result<Option<T>, RocksdbViewError> {
+        self.db.read_key(&self.derive_key(&index)).await
+    }
+
     async fn read(&mut self, range: std::ops::Range<usize>) -> Result<Vec<T>, RocksdbViewError> {
         let mut values = Vec::new();
         for i in range {

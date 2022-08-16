@@ -153,7 +153,7 @@ impl<C, T> RegisterView<C, T>
 where
     C: Context,
 {
-    /// Read the value in the register.
+    /// Access the current value in the register.
     pub fn get(&self) -> &T {
         match &self.update {
             None => &self.stored_value,
@@ -171,6 +171,23 @@ where
     }
 }
 
+impl<C, T> RegisterView<C, T>
+where
+    C: Context,
+    T: Clone,
+{
+    /// Obtain a mutable reference to the value in the register.
+    pub fn get_mut(&mut self) -> &mut T {
+        match &mut self.update {
+            Some(value) => value,
+            update => {
+                *update = Some(self.stored_value.clone());
+                update.as_mut().unwrap()
+            }
+        }
+    }
+}
+
 /// A view that supports logging values of type `T`.
 #[derive(Debug, Clone)]
 pub struct AppendOnlyLogView<C, T> {
@@ -183,6 +200,8 @@ pub struct AppendOnlyLogView<C, T> {
 #[async_trait]
 pub trait AppendOnlyLogOperations<T>: Context {
     async fn count(&mut self) -> Result<usize, Self::Error>;
+
+    async fn get(&mut self, index: usize) -> Result<Option<T>, Self::Error>;
 
     async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error>;
 
@@ -242,6 +261,15 @@ where
     C: AppendOnlyLogOperations<T> + Send + Sync,
     T: Send + Sync + Clone,
 {
+    /// Read the logged values in the given range (including staged ones).
+    pub async fn get(&mut self, index: usize) -> Result<Option<T>, C::Error> {
+        if index < self.stored_count {
+            self.context.get(index).await
+        } else {
+            Ok(self.new_values.get(index - self.stored_count).cloned())
+        }
+    }
+
     /// Read the logged values in the given range (including staged ones).
     pub async fn read(&mut self, mut range: Range<usize>) -> Result<Vec<T>, C::Error> {
         if range.end > self.count() {
