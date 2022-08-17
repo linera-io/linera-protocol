@@ -14,6 +14,10 @@ use std::{str::FromStr, sync::Arc};
 use thiserror::Error;
 use tokio::sync::OwnedMutexGuard;
 
+#[cfg(test)]
+#[path = "unit_tests/dynamo_db_context_tests.rs"]
+pub mod dynamo_db_context_tests;
+
 /// The attribute name of the partition key.
 const PARTITION_ATTRIBUTE: &str = "item_partition";
 
