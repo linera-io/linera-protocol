@@ -1,7 +1,6 @@
 use crate::Storage;
 use async_trait::async_trait;
-use aws_sdk_s3::{types::SdkError, Client, Endpoint};
-use http::uri::InvalidUri;
+use aws_sdk_s3::{types::SdkError, Client};
 use linera_base::{
     chain::ChainState,
     crypto::HashValue,
@@ -9,8 +8,9 @@ use linera_base::{
     error::Error,
     messages::{Certificate, ChainId},
 };
+use linera_views::localstack;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{env, fmt::Display, net::IpAddr, str::FromStr};
+use std::{fmt::Display, net::IpAddr, str::FromStr};
 use thiserror::Error;
 
 #[cfg(any(test, feature = "test"))]
@@ -22,9 +22,6 @@ const CERTIFICATE_PREFIX: &str = "certificates";
 
 /// Chain prefix for stored chain states.
 const CHAIN_PREFIX: &str = "chains";
-
-/// Name of the environment variable with the address to a LocalStack instance.
-const LOCALSTACK_ENDPOINT: &str = "LOCALSTACK_ENDPOINT";
 
 /// Storage layer that uses Amazon S3.
 #[derive(Clone, Debug)]
@@ -65,16 +62,17 @@ impl S3Storage {
 
     /// Create a new [`S3Storage`] instance using a LocalStack endpoint.
     ///
-    /// Requires a `LOCALSTACK_ENDPOINT` environment variable with the endpoint address to connect
-    /// to the LocalStack instance. Creates the necessary buckets if they don't yet exist,
-    /// reporting a [`BucketStatus`] to indicate if the bucket was created or if it already exists.
+    /// Requires a [`LOCALSTACK_ENDPOINT`][localstack::LOCALSTACK_ENDPOINT] environment variable
+    /// with the endpoint address to connect to the LocalStack instance.
+    ///
+    /// Creates the necessary buckets if they don't yet exist, reporting a [`BucketStatus`] to
+    /// indicate if the bucket was created or if it already exists.
     pub async fn with_localstack(
         bucket: BucketName,
     ) -> Result<(Self, BucketStatus), LocalStackError> {
-        let endpoint_address = env::var(LOCALSTACK_ENDPOINT)?.parse()?;
         let base_config = aws_config::load_from_env().await;
         let config = aws_sdk_s3::config::Builder::from(&base_config)
-            .endpoint_resolver(Endpoint::immutable(endpoint_address))
+            .endpoint_resolver(localstack::get_endpoint()?)
             .build();
 
         Ok(S3Storage::from_config(config, bucket)
@@ -363,11 +361,8 @@ impl S3StorageError {
 /// Failure to create an [`S3Storage`] using a LocalStack configuration.
 #[derive(Debug, Error)]
 pub enum LocalStackError {
-    #[error("Missing LocalStack endpoint address in {LOCALSTACK_ENDPOINT:?} environment variable")]
-    MissingEndpoint(#[from] env::VarError),
-
-    #[error("LocalStack endpoint address is not a valid URI")]
-    InvalidUri(#[from] InvalidUri),
+    #[error(transparent)]
+    Endpoint(#[from] localstack::EndpointError),
 
     #[error(transparent)]
     InitializeBucket(#[from] Box<S3StorageError>),

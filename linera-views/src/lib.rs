@@ -23,5 +23,8 @@ pub mod hash;
 /// Macro definitions.
 mod macros;
 
+/// Helper types for interfacing with a LocalStack instance.
+pub mod localstack;
+
 /// For macros.
 pub use paste::paste;
