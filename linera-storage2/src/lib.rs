@@ -27,23 +27,23 @@ pub trait Store {
 
     /// Load the view of a chain state.
     async fn load_chain(
-        &mut self,
+        &self,
         id: ChainId,
     ) -> Result<chain::ChainStateView<Self::Context>, <Self::Context as Context>::Error>;
 
     async fn read_certificate(
-        &mut self,
+        &self,
         hash: HashValue,
     ) -> Result<Certificate, <Self::Context as Context>::Error>;
 
     async fn write_certificate(
-        &mut self,
+        &self,
         certificate: Certificate,
     ) -> Result<(), <Self::Context as Context>::Error>;
 
     /// Load the view of a chain state and check that it is active.
     async fn load_active_chain(
-        &mut self,
+        &self,
         id: ChainId,
     ) -> Result<chain::ChainStateView<Self::Context>, linera_base::error::Error>
     where
@@ -66,7 +66,8 @@ pub trait Store {
     {
         let mut tasks = Vec::new();
         for key in keys {
-            let mut client = self.clone();
+            // TODO: remove clone using scoped threads
+            let client = self.clone();
             tasks.push(tokio::task::spawn(async move {
                 client.read_certificate(key).await
             }));
@@ -80,7 +81,7 @@ pub trait Store {
     }
 
     async fn create_chain(
-        &mut self,
+        &self,
         committee: Committee,
         admin_id: ChainId,
         description: ChainDescription,

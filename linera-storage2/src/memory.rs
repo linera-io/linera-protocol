@@ -36,7 +36,7 @@ impl Store for MemoryStoreClient {
     type Context = MemoryContext<ChainId>;
 
     async fn load_chain(
-        &mut self,
+        &self,
         id: ChainId,
     ) -> Result<ChainStateView<Self::Context>, MemoryViewError> {
         let state = {
@@ -53,7 +53,7 @@ impl Store for MemoryStoreClient {
         ChainStateView::load(context).await
     }
 
-    async fn read_certificate(&mut self, hash: HashValue) -> Result<Certificate, MemoryViewError> {
+    async fn read_certificate(&self, hash: HashValue) -> Result<Certificate, MemoryViewError> {
         let store = self.0.clone();
         let store = store.lock().await;
         store
@@ -63,7 +63,7 @@ impl Store for MemoryStoreClient {
             .ok_or_else(|| MemoryViewError::NotFound(format!("certificate for hash {:?}", hash)))
     }
 
-    async fn write_certificate(&mut self, certificate: Certificate) -> Result<(), MemoryViewError> {
+    async fn write_certificate(&self, certificate: Certificate) -> Result<(), MemoryViewError> {
         let store = self.0.clone();
         let mut store = store.lock().await;
         store.certificates.insert(certificate.hash, certificate);
