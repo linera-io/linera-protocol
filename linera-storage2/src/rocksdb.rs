@@ -80,9 +80,9 @@ impl Store for RocksdbStoreClient {
     }
 
     async fn read_certificate(&self, hash: HashValue) -> Result<Certificate, RocksdbViewError> {
+        let key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
         let store = self.0.clone();
         let store = store.lock().await;
-        let key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
         let value = store.db.read_key(&key).await?.ok_or_else(|| {
             RocksdbViewError::NotFound(format!("certificate for hash {:?}", hash))
         })?;
@@ -90,9 +90,9 @@ impl Store for RocksdbStoreClient {
     }
 
     async fn write_certificate(&self, certificate: Certificate) -> Result<(), RocksdbViewError> {
+        let key = bcs::to_bytes(&BaseKey::Certificate(certificate.hash))?;
         let store = self.0.clone();
         let store = store.lock().await;
-        let key = bcs::to_bytes(&BaseKey::Certificate(certificate.hash))?;
         store.db.write_key(&key, &certificate).await
     }
 }

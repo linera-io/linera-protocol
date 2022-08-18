@@ -39,7 +39,7 @@ pub trait KeyValueOperations {
 
     async fn delete_key(&self, key: &[u8]) -> Result<(), RocksdbViewError>;
 
-    async fn find_keys_with_strict_prefix(
+    async fn find_keys_with_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<Vec<u8>>, RocksdbViewError>;
@@ -81,23 +81,24 @@ impl KeyValueOperations for Arc<rocksdb::DB> {
         Ok(())
     }
 
-    async fn find_keys_with_strict_prefix(
+    async fn find_keys_with_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<Vec<u8>>, RocksdbViewError> {
         let db = self.clone();
-        let key = key_prefix.to_vec();
+        let prefix = key_prefix.to_vec();
         let keys = tokio::task::spawn_blocking(move || {
             let mut iter = db.raw_iterator();
             let mut keys = Vec::new();
-            iter.seek(&key);
-            if matches!(iter.key(), Some(k) if k == key) {
-                // Skip the key it self
+            iter.seek(&prefix);
+            let mut next_key = iter.key();
+            while let Some(key) = next_key {
+                if !key.starts_with(&prefix) {
+                    break;
+                }
+                keys.push(key.to_vec());
                 iter.next();
-            }
-            while matches!(iter.key(), Some(k) if k.starts_with(&key)) {
-                keys.push(iter.key().unwrap().to_vec());
-                iter.next();
+                next_key = iter.key();
             }
             keys
         })
@@ -221,6 +222,9 @@ where
     }
 
     async fn append(&mut self, values: Vec<T>) -> Result<(), RocksdbViewError> {
+        if values.is_empty() {
+            return Ok(());
+        }
         let mut i = AppendOnlyLogOperations::<T>::count(self).await?;
         for value in values {
             self.db.write_key(&self.derive_key(&i), &value).await?;
@@ -271,6 +275,9 @@ where
     }
 
     async fn delete_front(&mut self, count: usize) -> Result<(), Self::Error> {
+        if count == 0 {
+            return Ok(());
+        }
         let mut range: Range<usize> = self.db.read_key(&self.base_key).await?.unwrap_or_default();
         range.start += count;
         self.db.write_key(&self.base_key, &range).await?;
@@ -281,6 +288,9 @@ where
     }
 
     async fn append_back(&mut self, values: Vec<T>) -> Result<(), Self::Error> {
+        if values.is_empty() {
+            return Ok(());
+        }
         let mut range: Range<usize> = self.db.read_key(&self.base_key).await?.unwrap_or_default();
         for value in values {
             self.db
@@ -325,14 +335,14 @@ where
     async fn indices(&mut self) -> Result<Vec<I>, RocksdbViewError> {
         let len = self.base_key.len();
         let mut keys = Vec::new();
-        for key in self.db.find_keys_with_strict_prefix(&self.base_key).await? {
+        for key in self.db.find_keys_with_prefix(&self.base_key).await? {
             keys.push(bcs::from_bytes(&key[len..])?);
         }
         Ok(keys)
     }
 
     async fn delete(&mut self) -> Result<(), RocksdbViewError> {
-        for key in self.db.find_keys_with_strict_prefix(&self.base_key).await? {
+        for key in self.db.find_keys_with_prefix(&self.base_key).await? {
             self.db.delete_key(&key).await?;
         }
         Ok(())
@@ -375,10 +385,12 @@ where
     }
 
     async fn indices(&mut self) -> Result<Vec<I>, Self::Error> {
+        // Hack: the BCS-serialization of `CollectionKey::Index(value)` for any `value` must
+        // start with that of `CollectionKey::Index(())`, that is, the enum tag.
         let base = self.derive_key(&CollectionKey::Index(()));
         let len = base.len();
         let mut keys = Vec::new();
-        for bytes in self.db.find_keys_with_strict_prefix(&base).await? {
+        for bytes in self.db.find_keys_with_prefix(&base).await? {
             match bcs::from_bytes(&bytes[len..]) {
                 Ok(key) => {
                     keys.push(key);
