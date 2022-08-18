@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use linera_views::{
     hash::{HashView, Hasher, HashingContext},
     impl_view,
-    memory::{EntryMap, MemoryContext, MemoryViewError},
+    memory::{MemoryContext, MemoryStoreMap, MemoryViewError},
     rocksdb::{KeyValueOperations, RocksdbContext, RocksdbViewError},
     views::{
         AppendOnlyLogOperations, AppendOnlyLogView, CollectionOperations, CollectionView, Context,
@@ -53,7 +53,7 @@ pub trait StateStore {
 
 #[derive(Default)]
 pub struct MemoryTestStore {
-    states: HashMap<usize, Arc<Mutex<EntryMap>>>,
+    states: HashMap<usize, Arc<Mutex<MemoryStoreMap>>>,
 }
 
 impl StateViewContext for MemoryContext<usize> {}

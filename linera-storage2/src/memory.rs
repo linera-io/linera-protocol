@@ -11,7 +11,7 @@ use linera_base::{
     messages::{Certificate, ChainId},
 };
 use linera_views::{
-    memory::{EntryMap, MemoryContext, MemoryViewError},
+    memory::{MemoryContext, MemoryStoreMap, MemoryViewError},
     views::View,
 };
 use std::{
@@ -22,7 +22,7 @@ use tokio::sync::Mutex;
 
 #[derive(Default, Clone)]
 struct MemoryStore {
-    states: HashMap<ChainId, Arc<Mutex<EntryMap>>>,
+    chains: HashMap<ChainId, Arc<Mutex<MemoryStoreMap>>>,
     certificates: HashMap<HashValue, Certificate>,
 }
 
@@ -43,7 +43,7 @@ impl Store for MemoryStoreClient {
             let store = self.0.clone();
             let mut store = store.lock().await;
             store
-                .states
+                .chains
                 .entry(id)
                 .or_insert_with(|| Arc::new(Mutex::new(BTreeMap::new())))
                 .clone()

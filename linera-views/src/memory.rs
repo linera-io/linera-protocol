@@ -24,19 +24,19 @@ use tokio::sync::{OwnedMutexGuard, RwLock};
 /// A context that stores all values in memory.
 #[derive(Clone, Debug)]
 pub struct MemoryContext<E> {
-    map: Arc<RwLock<OwnedMutexGuard<EntryMap>>>,
+    map: Arc<RwLock<OwnedMutexGuard<MemoryStoreMap>>>,
     base_key: Vec<u8>,
     extra: E,
 }
 
 /// A Rust value stored in memory.
-pub type Entry = Box<dyn Any + Send + Sync + 'static>;
+pub type MemoryStoreValue = Box<dyn Any + Send + Sync + 'static>;
 
 /// A map of Rust values indexed by their keys.
-pub type EntryMap = BTreeMap<Vec<u8>, Entry>;
+pub type MemoryStoreMap = BTreeMap<Vec<u8>, MemoryStoreValue>;
 
 impl<E> MemoryContext<E> {
-    pub fn new(guard: OwnedMutexGuard<EntryMap>, extra: E) -> Self {
+    pub fn new(guard: OwnedMutexGuard<MemoryStoreMap>, extra: E) -> Self {
         Self {
             map: Arc::new(RwLock::new(guard)),
             base_key: Vec::new(),
