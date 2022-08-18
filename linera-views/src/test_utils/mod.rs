@@ -66,8 +66,23 @@ impl LocalStackTestContext {
             .build()
     }
 
-    /// Remove all buckets from the LocalStack S3 storage.
+    /// Create a new [`aws_sdk_dynamodb::Config`] for tests, using a LocalStack instance.
+    pub fn dynamo_db_config(&self) -> aws_sdk_dynamodb::Config {
+        aws_sdk_dynamodb::config::Builder::from(&self.base_config)
+            .endpoint_resolver(self.endpoint.clone())
+            .build()
+    }
+
+    /// Remove all stored data from LocalStack storage.
     async fn clear(&self) -> Result<(), Error> {
+        self.remove_buckets().await?;
+        self.remove_tables().await?;
+
+        Ok(())
+    }
+
+    /// Remove all buckets from the LocalStack S3 storage.
+    async fn remove_buckets(&self) -> Result<(), Error> {
         let client = aws_sdk_s3::Client::from_conf(self.s3_config());
 
         for bucket in list_buckets(&client).await? {
@@ -89,6 +104,17 @@ impl LocalStackTestContext {
 
         Ok(())
     }
+
+    /// Remove all tables from the LocalStack DynamoDB storage.
+    async fn remove_tables(&self) -> Result<(), Error> {
+        let client = aws_sdk_dynamodb::Client::from_conf(self.dynamo_db_config());
+
+        for table in list_tables(&client).await? {
+            client.delete_table().table_name(table).send().await?;
+        }
+
+        Ok(())
+    }
 }
 
 /// Helper function to list the names of buckets registered on S3.
@@ -102,4 +128,14 @@ pub async fn list_buckets(client: &aws_sdk_s3::Client) -> Result<Vec<String>, Er
         .into_iter()
         .filter_map(|bucket| bucket.name)
         .collect())
+}
+
+/// Helper function to list the names of tables registered on DynamoDB.
+pub async fn list_tables(client: &aws_sdk_dynamodb::Client) -> Result<Vec<String>, Error> {
+    Ok(client
+        .list_tables()
+        .send()
+        .await?
+        .table_names
+        .expect("List of tables was not returned"))
 }
