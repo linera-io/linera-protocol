@@ -34,7 +34,7 @@ fn init_worker(allow_inactive_chains: bool) -> (Committee, WorkerState<MemorySto
 async fn init_worker_with_chains<I: IntoIterator<Item = (ChainDescription, PublicKey, Balance)>>(
     balances: I,
 ) -> (Committee, WorkerState<MemoryStoreClient>) {
-    let (committee, mut worker) = init_worker(/* allow_inactive_chains */ false);
+    let (committee, worker) = init_worker(/* allow_inactive_chains */ false);
     for (description, pubk, balance) in balances {
         worker
             .storage

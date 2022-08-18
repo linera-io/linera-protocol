@@ -57,7 +57,7 @@ impl Store for RocksdbStoreClient {
     type Context = RocksdbContext<ChainId>;
 
     async fn load_chain(
-        &mut self,
+        &self,
         id: ChainId,
     ) -> Result<ChainStateView<Self::Context>, RocksdbViewError> {
         let (db, lock) = {
@@ -79,7 +79,7 @@ impl Store for RocksdbStoreClient {
         ChainStateView::load(context).await
     }
 
-    async fn read_certificate(&mut self, hash: HashValue) -> Result<Certificate, RocksdbViewError> {
+    async fn read_certificate(&self, hash: HashValue) -> Result<Certificate, RocksdbViewError> {
         let store = self.0.clone();
         let store = store.lock().await;
         let key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
@@ -89,10 +89,7 @@ impl Store for RocksdbStoreClient {
         Ok(value)
     }
 
-    async fn write_certificate(
-        &mut self,
-        certificate: Certificate,
-    ) -> Result<(), RocksdbViewError> {
+    async fn write_certificate(&self, certificate: Certificate) -> Result<(), RocksdbViewError> {
         let store = self.0.clone();
         let store = store.lock().await;
         let key = bcs::to_bytes(&BaseKey::Certificate(certificate.hash))?;
