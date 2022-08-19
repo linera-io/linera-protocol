@@ -16,6 +16,7 @@ use linera_base::{
     system::{Amount, Balance, SystemOperation, UserData},
 };
 use linera_storage2::{MemoryStoreClient, Store};
+use linera_views::views;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     str::FromStr,
@@ -25,16 +26,20 @@ use test_log::test;
 
 /// An validator used for testing. "Faulty" validators ignore block proposals (but not
 /// certificates or info queries) and have the wrong initial balance for all chains.
-struct LocalValidator {
+struct LocalValidator<S> {
     is_faulty: bool,
-    state: WorkerState<MemoryStoreClient>,
+    state: WorkerState<S>,
 }
 
 #[derive(Clone)]
-struct LocalValidatorClient(Arc<Mutex<LocalValidator>>);
+struct LocalValidatorClient<S>(Arc<Mutex<LocalValidator<S>>>);
 
 #[async_trait]
-impl ValidatorNode for LocalValidatorClient {
+impl<S> ValidatorNode for LocalValidatorClient<S>
+where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
     async fn handle_block_proposal(
         &mut self,
         proposal: BlockProposal,
@@ -71,17 +76,21 @@ impl ValidatorNode for LocalValidatorClient {
     }
 }
 
-impl LocalValidatorClient {
-    fn new(is_faulty: bool, state: WorkerState<MemoryStoreClient>) -> Self {
+impl<S> LocalValidatorClient<S> {
+    fn new(is_faulty: bool, state: WorkerState<S>) -> Self {
         let validator = LocalValidator { is_faulty, state };
         Self(Arc::new(Mutex::new(validator)))
     }
 }
 
-struct NodeProvider(BTreeMap<ValidatorName, LocalValidatorClient>);
+struct NodeProvider<S>(BTreeMap<ValidatorName, LocalValidatorClient<S>>);
 
-impl ValidatorNodeProvider for NodeProvider {
-    type Node = LocalValidatorClient;
+impl<S> ValidatorNodeProvider for NodeProvider<S>
+where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
+    type Node = LocalValidatorClient<S>;
 
     fn make_node(&self, address: &str) -> Result<Self::Node, Error> {
         let name = ValidatorName::from_str(address).unwrap();
@@ -101,14 +110,15 @@ impl ValidatorNodeProvider for NodeProvider {
 // * When using `LocalValidatorClient`, clients communicate with an exact quorum then stops.
 // * Most tests have 1 faulty validator out 4 so that there is exactly only 1 quorum to
 // communicate with.
-struct TestBuilder {
+struct TestBuilder<S> {
+    store_builder: fn() -> S,
     initial_committee: Committee,
     admin_id: ChainId,
     genesis_store_builder: GenesisStoreBuilder,
     faulty_validators: HashSet<ValidatorName>,
-    validator_clients: Vec<(ValidatorName, LocalValidatorClient)>,
-    validator_stores: HashMap<ValidatorName, MemoryStoreClient>,
-    chain_client_stores: Vec<MemoryStoreClient>,
+    validator_clients: Vec<(ValidatorName, LocalValidatorClient<S>)>,
+    validator_stores: HashMap<ValidatorName, S>,
+    chain_client_stores: Vec<S>,
 }
 
 #[derive(Default)]
@@ -131,8 +141,18 @@ impl GenesisStoreBuilder {
         })
     }
 
-    async fn build(&self, initial_committee: Committee, admin_id: ChainId) -> MemoryStoreClient {
-        let store = MemoryStoreClient::default();
+    async fn build<S, F>(
+        &self,
+        store_builder: F,
+        initial_committee: Committee,
+        admin_id: ChainId,
+    ) -> S
+    where
+        S: Store + Clone + Send + Sync + 'static,
+        Error: From<<S::Context as views::Context>::Error>,
+        F: Fn() -> S,
+    {
+        let store = store_builder();
         for account in &self.accounts {
             store
                 .create_chain(
@@ -149,8 +169,12 @@ impl GenesisStoreBuilder {
     }
 }
 
-impl TestBuilder {
-    fn new(count: usize, with_faulty_validators: usize) -> Self {
+impl<S> TestBuilder<S>
+where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
+    fn new(store_builder: fn() -> S, count: usize, with_faulty_validators: usize) -> Self {
         let mut key_pairs = Vec::new();
         let mut validators = Vec::new();
         for _ in 0..count {
@@ -165,7 +189,7 @@ impl TestBuilder {
         let mut faulty_validators = HashSet::new();
         for (i, key_pair) in key_pairs.into_iter().enumerate() {
             let name = ValidatorName(key_pair.public());
-            let store = MemoryStoreClient::default();
+            let store = store_builder();
             let state = WorkerState::new(format!("Node {}", i), Some(key_pair), store.clone())
                 .allow_inactive_chains(false);
             let validator = if i < with_faulty_validators {
@@ -182,6 +206,7 @@ impl TestBuilder {
             faulty_validators
         );
         Self {
+            store_builder,
             initial_committee,
             admin_id: ChainId::root(0),
             genesis_store_builder: GenesisStoreBuilder::default(),
@@ -196,7 +221,7 @@ impl TestBuilder {
         &mut self,
         description: ChainDescription,
         balance: Balance,
-    ) -> ChainClientState<NodeProvider, MemoryStoreClient> {
+    ) -> ChainClientState<NodeProvider<S>, S> {
         let key_pair = KeyPair::generate();
         let owner = Owner(key_pair.public());
         // Remember what's in the genesis store for future clients to join.
@@ -248,12 +273,16 @@ impl TestBuilder {
         key_pair: KeyPair,
         block_hash: Option<HashValue>,
         block_height: BlockHeight,
-    ) -> ChainClientState<NodeProvider, MemoryStoreClient> {
+    ) -> ChainClientState<NodeProvider<S>, S> {
         // Note that new clients are only given the genesis store: they must figure out
         // the rest by asking validators.
         let store = self
             .genesis_store_builder
-            .build(self.initial_committee.clone(), self.admin_id)
+            .build(
+                self.store_builder,
+                self.initial_committee.clone(),
+                self.admin_id,
+            )
             .await;
         self.chain_client_stores.push(store.clone());
         let provider = NodeProvider(self.validator_clients.iter().cloned().collect());
@@ -311,7 +340,7 @@ impl TestBuilder {
 
 #[test(tokio::test)]
 async fn test_initiating_valid_transfer() {
-    let mut builder = TestBuilder::new(4, 1);
+    let mut builder = TestBuilder::new(MemoryStoreClient::default, 4, 1);
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await;
@@ -338,7 +367,7 @@ async fn test_initiating_valid_transfer() {
 
 #[test(tokio::test)]
 async fn test_rotate_key_pair() {
-    let mut builder = TestBuilder::new(4, 1);
+    let mut builder = TestBuilder::new(MemoryStoreClient::default, 4, 1);
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await;
@@ -370,7 +399,7 @@ async fn test_rotate_key_pair() {
 
 #[test(tokio::test)]
 async fn test_transfer_ownership() {
-    let mut builder = TestBuilder::new(4, 1);
+    let mut builder = TestBuilder::new(MemoryStoreClient::default, 4, 1);
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await;
@@ -403,7 +432,7 @@ async fn test_transfer_ownership() {
 
 #[test(tokio::test)]
 async fn test_share_ownership() {
-    let mut builder = TestBuilder::new(4, 1);
+    let mut builder = TestBuilder::new(MemoryStoreClient::default, 4, 1);
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await;
@@ -457,7 +486,7 @@ async fn test_share_ownership() {
 
 #[test(tokio::test)]
 async fn test_open_chain_then_close_it() {
-    let mut builder = TestBuilder::new(4, 1);
+    let mut builder = TestBuilder::new(MemoryStoreClient::default, 4, 1);
     // New chains use the admin chain to verify their creation certificate.
     builder
         .add_initial_chain(ChainDescription::Root(0), Balance::from(0))
@@ -487,7 +516,7 @@ async fn test_open_chain_then_close_it() {
 
 #[test(tokio::test)]
 async fn test_transfer_then_open_chain() {
-    let mut builder = TestBuilder::new(4, 1);
+    let mut builder = TestBuilder::new(MemoryStoreClient::default, 4, 1);
     // New chains use the admin chain to verify their creation certificate.
     builder
         .add_initial_chain(ChainDescription::Root(0), Balance::from(0))
@@ -541,7 +570,7 @@ async fn test_transfer_then_open_chain() {
 
 #[test(tokio::test)]
 async fn test_open_chain_then_transfer() {
-    let mut builder = TestBuilder::new(4, 1);
+    let mut builder = TestBuilder::new(MemoryStoreClient::default, 4, 1);
     // New chains use the admin chain to verify their creation certificate.
     builder
         .add_initial_chain(ChainDescription::Root(0), Balance::from(0))
@@ -585,7 +614,7 @@ async fn test_open_chain_then_transfer() {
 
 #[test(tokio::test)]
 async fn test_close_chain() {
-    let mut builder = TestBuilder::new(4, 1);
+    let mut builder = TestBuilder::new(MemoryStoreClient::default, 4, 1);
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await;
@@ -620,7 +649,7 @@ async fn test_close_chain() {
 
 #[test(tokio::test)]
 async fn test_initiating_valid_transfer_too_many_faults() {
-    let mut builder = TestBuilder::new(4, 2);
+    let mut builder = TestBuilder::new(MemoryStoreClient::default, 4, 2);
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await;
@@ -639,7 +668,7 @@ async fn test_initiating_valid_transfer_too_many_faults() {
 
 #[test(tokio::test)]
 async fn test_bidirectional_transfer() {
-    let mut builder = TestBuilder::new(4, 1);
+    let mut builder = TestBuilder::new(MemoryStoreClient::default, 4, 1);
     let mut client1 = builder
         .add_initial_chain(ChainDescription::Root(1), Balance::from(3))
         .await;
@@ -691,7 +720,7 @@ async fn test_bidirectional_transfer() {
 
 #[test(tokio::test)]
 async fn test_receiving_unconfirmed_transfer() {
-    let mut builder = TestBuilder::new(4, 1);
+    let mut builder = TestBuilder::new(MemoryStoreClient::default, 4, 1);
     let mut client1 = builder
         .add_initial_chain(ChainDescription::Root(1), Balance::from(3))
         .await;
@@ -717,7 +746,7 @@ async fn test_receiving_unconfirmed_transfer() {
 
 #[test(tokio::test)]
 async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
-    let mut builder = TestBuilder::new(4, 1);
+    let mut builder = TestBuilder::new(MemoryStoreClient::default, 4, 1);
     let mut client1 = builder
         .add_initial_chain(ChainDescription::Root(1), Balance::from(3))
         .await;
@@ -793,7 +822,7 @@ async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
 
 #[test(tokio::test)]
 async fn test_change_voting_rights() {
-    let mut builder = TestBuilder::new(4, 1);
+    let mut builder = TestBuilder::new(MemoryStoreClient::default, 4, 1);
     let mut admin = builder
         .add_initial_chain(ChainDescription::Root(0), Balance::from(3))
         .await;
