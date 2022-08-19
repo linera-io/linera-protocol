@@ -468,7 +468,10 @@ where
         if let Some(next_block_height) = query.test_next_block_height {
             ensure!(
                 chain.chaining_state.get().next_block_height == next_block_height,
-                Error::UnexpectedBlockHeight
+                Error::UnexpectedBlockHeight {
+                    expected_block_height: next_block_height,
+                    found_block_height: chain.chaining_state.get().next_block_height
+                }
             );
         }
         if query.request_pending_messages {

@@ -31,8 +31,13 @@ pub enum Error {
     // Chaining
     #[error("The previous block hash of a new block should match the last block of the chain")]
     UnexpectedPreviousBlockHash,
-    #[error("The height of a new block should increase the last block height of the chain by one")]
-    UnexpectedBlockHeight,
+    #[error(
+        "Was expecting block height {expected_block_height} but found {found_block_height} instead"
+    )]
+    UnexpectedBlockHeight {
+        expected_block_height: BlockHeight,
+        found_block_height: BlockHeight,
+    },
     #[error("Sequence numbers above the maximal value are not usable for blocks")]
     InvalidBlockHeight,
     #[error("Cannot initiate a new block while the previous one is still pending confirmation")]

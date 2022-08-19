@@ -283,7 +283,12 @@ Error:
     2:
       UnexpectedPreviousBlockHash: UNIT
     3:
-      UnexpectedBlockHeight: UNIT
+      UnexpectedBlockHeight:
+        STRUCT:
+          - expected_block_height:
+              TYPENAME: BlockHeight
+          - found_block_height:
+              TYPENAME: BlockHeight
     4:
       InvalidBlockHeight: UNIT
     5:

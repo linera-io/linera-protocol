@@ -832,7 +832,7 @@ where
     async fn local_balance(&mut self) -> Result<Balance> {
         ensure!(
             self.chain_info().await?.next_block_height == self.next_block_height,
-            "The local node is behind and needs synchronization"
+            "The local node is behind the trusted state in wallet and needs synchronization with validators"
         );
         let block = Block {
             epoch: self.epoch().await?,

@@ -155,16 +155,19 @@ impl ChainManager {
         new_round: RoundNumber,
     ) -> Result<Outcome, Error> {
         ensure!(
-            new_block.height <= BlockHeight::max(),
-            Error::InvalidBlockHeight
+            new_block.height == next_block_height,
+            Error::UnexpectedBlockHeight {
+                expected_block_height: next_block_height,
+                found_block_height: new_block.height
+            }
         );
         ensure!(
             new_block.previous_block_hash == block_hash,
             Error::UnexpectedPreviousBlockHash
         );
         ensure!(
-            new_block.height == next_block_height,
-            Error::UnexpectedBlockHeight
+            new_block.height <= BlockHeight::max(),
+            Error::InvalidBlockHeight
         );
         match self {
             ChainManager::Single(manager) => {
@@ -175,7 +178,7 @@ impl ChainManager {
                 if let Some(vote) = &manager.pending {
                     match &vote.value {
                         Value::ConfirmedBlock { block, .. } if block != new_block => {
-                            log::error!("Attempting to sign a different block at the same height: {:?} {:?}", block, new_block);
+                            log::error!("Attempting to sign a different block at the same height:\n{:?}\n{:?}", block, new_block);
                             return Err(Error::PreviousBlockMustBeConfirmedFirst);
                         }
                         Value::ValidatedBlock { .. } => {
