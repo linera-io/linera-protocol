@@ -1,9 +1,69 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use aws_sdk_dynamodb::Client;
 use linera_base::ensure;
-use std::str::FromStr;
+use std::{str::FromStr, sync::Arc};
 use thiserror::Error;
+use tokio::sync::OwnedMutexGuard;
+
+/// A implementation of [`Context`] based on DynamoDB.
+#[derive(Debug, Clone)]
+pub struct DynamoDbContext<E> {
+    client: Client,
+    table: TableName,
+    lock: Arc<OwnedMutexGuard<()>>,
+    key_prefix: Vec<u8>,
+    extra: E,
+}
+
+impl<E> DynamoDbContext<E> {
+    /// Create a new [`DynamoDbContext`] instance.
+    pub async fn new(
+        table: TableName,
+        lock: OwnedMutexGuard<()>,
+        key_prefix: Vec<u8>,
+        extra: E,
+    ) -> Result<(Self, TableStatus), CreateTableError> {
+        let config = aws_config::load_from_env().await;
+
+        DynamoDbContext::from_config(&config, table, lock, key_prefix, extra).await
+    }
+
+    /// Create a new [`DynamoDbContext`] instance using the provided `config` parameters.
+    pub async fn from_config(
+        config: impl Into<aws_sdk_dynamodb::Config>,
+        table: TableName,
+        lock: OwnedMutexGuard<()>,
+        key_prefix: Vec<u8>,
+        extra: E,
+    ) -> Result<(Self, TableStatus), CreateTableError> {
+        let storage = DynamoDbContext {
+            client: Client::from_conf(config.into()),
+            table,
+            lock: Arc::new(lock),
+            key_prefix,
+            extra,
+        };
+
+        let table_status = storage.create_table_if_needed().await?;
+
+        Ok((storage, table_status))
+    }
+
+    async fn create_table_if_needed(&self) -> Result<TableStatus, CreateTableError> {
+        Ok(TableStatus::Existing)
+    }
+}
+
+/// Status of a table at the creation time of a [`DynamoDbContext`] instance.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TableStatus {
+    /// Table was created during the construction of the [`DynamoDbContext`] instance.
+    New,
+    /// Table already existed when the [`DynamoDbContext`] instance was created.
+    Existing,
+}
 
 /// A DynamoDB table name.
 ///
@@ -51,3 +111,7 @@ pub enum InvalidTableName {
     #[error("Table name must only contain lowercase letters, numbers, periods and hyphens")]
     InvalidCharacter,
 }
+
+/// Error when creating a table for a new [`DynamoDbContext`] instance.
+#[derive(Debug, Error)]
+pub enum CreateTableError {}
