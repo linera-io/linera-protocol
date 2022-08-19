@@ -8,6 +8,7 @@ edition = "2021"
 anyhow = "1.0.57"
 async-trait = "0.1.52"
 futures = "0.3.17"
+once_cell = "1.13.0"
 rand = "0.7.3"
 serde = { version = "1.0.130", features = ["derive"] }
 tokio = { version = "1.12.0", features = ["full"] }
