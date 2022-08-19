@@ -1224,6 +1224,7 @@ dependencies = [
  "linera-storage2",
  "linera-views",
  "log",
+ "once_cell",
  "rand 0.7.3",
  "serde",
  "tempfile",

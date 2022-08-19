@@ -15,8 +15,9 @@ use linera_base::{
     messages::*,
     system::{Amount, Balance, SystemOperation, UserData},
 };
-use linera_storage2::{MemoryStoreClient, Store};
+use linera_storage2::{MemoryStoreClient, RocksdbStoreClient, Store};
 use linera_views::views;
+use once_cell::sync::Lazy;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     str::FromStr,
@@ -338,9 +339,36 @@ where
     }
 }
 
+static TEMP_DIRS: Lazy<std::sync::Mutex<Vec<tempfile::TempDir>>> =
+    Lazy::new(|| std::sync::Mutex::new(Vec::new()));
+
+/// Need a guard to avoid "too many open files" error
+static GUARD: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+fn make_rocksdb_client() -> RocksdbStoreClient {
+    let dir = tempfile::TempDir::new().unwrap();
+    let path = dir.path().to_path_buf();
+    TEMP_DIRS.lock().unwrap().push(dir);
+    RocksdbStoreClient::new(path)
+}
+
 #[test(tokio::test)]
-async fn test_initiating_valid_transfer() {
-    let mut builder = TestBuilder::new(MemoryStoreClient::default, 4, 1);
+async fn test_memory_initiating_valid_transfer() {
+    run_test_initiating_valid_transfer(MemoryStoreClient::default).await
+}
+
+#[test(tokio::test)]
+async fn test_rocksdb_initiating_valid_transfer() {
+    let _lock = GUARD.lock().await;
+    run_test_initiating_valid_transfer(make_rocksdb_client).await
+}
+
+async fn run_test_initiating_valid_transfer<S>(store_builder: fn() -> S)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
+    let mut builder = TestBuilder::new(store_builder, 4, 1);
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await;
@@ -366,8 +394,22 @@ async fn test_initiating_valid_transfer() {
 }
 
 #[test(tokio::test)]
-async fn test_rotate_key_pair() {
-    let mut builder = TestBuilder::new(MemoryStoreClient::default, 4, 1);
+async fn test_memory_rotate_key_pair() {
+    run_test_rotate_key_pair(MemoryStoreClient::default).await
+}
+
+#[test(tokio::test)]
+async fn test_rocksdb_rotate_key_pair() {
+    let _lock = GUARD.lock().await;
+    run_test_rotate_key_pair(make_rocksdb_client).await
+}
+
+async fn run_test_rotate_key_pair<S>(store_builder: fn() -> S)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
+    let mut builder = TestBuilder::new(store_builder, 4, 1);
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await;
@@ -398,8 +440,22 @@ async fn test_rotate_key_pair() {
 }
 
 #[test(tokio::test)]
-async fn test_transfer_ownership() {
-    let mut builder = TestBuilder::new(MemoryStoreClient::default, 4, 1);
+async fn test_memory_transfer_ownership() {
+    run_test_transfer_ownership(MemoryStoreClient::default).await
+}
+
+#[test(tokio::test)]
+async fn test_rocksdb_transfer_ownership() {
+    let _lock = GUARD.lock().await;
+    run_test_transfer_ownership(make_rocksdb_client).await
+}
+
+async fn run_test_transfer_ownership<S>(store_builder: fn() -> S)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
+    let mut builder = TestBuilder::new(store_builder, 4, 1);
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await;
@@ -431,8 +487,22 @@ async fn test_transfer_ownership() {
 }
 
 #[test(tokio::test)]
-async fn test_share_ownership() {
-    let mut builder = TestBuilder::new(MemoryStoreClient::default, 4, 1);
+async fn test_memory_share_ownership() {
+    run_test_share_ownership(MemoryStoreClient::default).await
+}
+
+#[test(tokio::test)]
+async fn test_rocksdb_share_ownership() {
+    let _lock = GUARD.lock().await;
+    run_test_share_ownership(make_rocksdb_client).await
+}
+
+async fn run_test_share_ownership<S>(store_builder: fn() -> S)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
+    let mut builder = TestBuilder::new(store_builder, 4, 1);
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await;
@@ -485,8 +555,22 @@ async fn test_share_ownership() {
 }
 
 #[test(tokio::test)]
-async fn test_open_chain_then_close_it() {
-    let mut builder = TestBuilder::new(MemoryStoreClient::default, 4, 1);
+async fn test_memory_open_chain_then_close_it() {
+    run_test_open_chain_then_close_it(MemoryStoreClient::default).await
+}
+
+#[test(tokio::test)]
+async fn test_rocksdb_open_chain_then_close_it() {
+    let _lock = GUARD.lock().await;
+    run_test_open_chain_then_close_it(make_rocksdb_client).await
+}
+
+async fn run_test_open_chain_then_close_it<S>(store_builder: fn() -> S)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
+    let mut builder = TestBuilder::new(store_builder, 4, 1);
     // New chains use the admin chain to verify their creation certificate.
     builder
         .add_initial_chain(ChainDescription::Root(0), Balance::from(0))
@@ -515,8 +599,22 @@ async fn test_open_chain_then_close_it() {
 }
 
 #[test(tokio::test)]
-async fn test_transfer_then_open_chain() {
-    let mut builder = TestBuilder::new(MemoryStoreClient::default, 4, 1);
+async fn test_memory_transfer_then_open_chain() {
+    run_test_transfer_then_open_chain(MemoryStoreClient::default).await
+}
+
+#[test(tokio::test)]
+async fn test_rocksdb_transfer_then_open_chain() {
+    let _lock = GUARD.lock().await;
+    run_test_transfer_then_open_chain(make_rocksdb_client).await
+}
+
+async fn run_test_transfer_then_open_chain<S>(store_builder: fn() -> S)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
+    let mut builder = TestBuilder::new(store_builder, 4, 1);
     // New chains use the admin chain to verify their creation certificate.
     builder
         .add_initial_chain(ChainDescription::Root(0), Balance::from(0))
@@ -569,8 +667,22 @@ async fn test_transfer_then_open_chain() {
 }
 
 #[test(tokio::test)]
-async fn test_open_chain_then_transfer() {
-    let mut builder = TestBuilder::new(MemoryStoreClient::default, 4, 1);
+async fn test_memory_open_chain_then_transfer() {
+    run_test_open_chain_then_transfer(MemoryStoreClient::default).await
+}
+
+#[test(tokio::test)]
+async fn test_rocksdb_open_chain_then_transfer() {
+    let _lock = GUARD.lock().await;
+    run_test_open_chain_then_transfer(make_rocksdb_client).await
+}
+
+async fn run_test_open_chain_then_transfer<S>(store_builder: fn() -> S)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
+    let mut builder = TestBuilder::new(store_builder, 4, 1);
     // New chains use the admin chain to verify their creation certificate.
     builder
         .add_initial_chain(ChainDescription::Root(0), Balance::from(0))
@@ -613,8 +725,22 @@ async fn test_open_chain_then_transfer() {
 }
 
 #[test(tokio::test)]
-async fn test_close_chain() {
-    let mut builder = TestBuilder::new(MemoryStoreClient::default, 4, 1);
+async fn test_memory_close_chain() {
+    run_test_close_chain(MemoryStoreClient::default).await
+}
+
+#[test(tokio::test)]
+async fn test_rocksdb_close_chain() {
+    let _lock = GUARD.lock().await;
+    run_test_close_chain(make_rocksdb_client).await
+}
+
+async fn run_test_close_chain<S>(store_builder: fn() -> S)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
+    let mut builder = TestBuilder::new(store_builder, 4, 1);
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await;
@@ -648,8 +774,22 @@ async fn test_close_chain() {
 }
 
 #[test(tokio::test)]
-async fn test_initiating_valid_transfer_too_many_faults() {
-    let mut builder = TestBuilder::new(MemoryStoreClient::default, 4, 2);
+async fn test_memory_initiating_valid_transfer_too_many_faults() {
+    run_test_initiating_valid_transfer_too_many_faults(MemoryStoreClient::default).await
+}
+
+#[test(tokio::test)]
+async fn test_rocksdb_initiating_valid_transfer_too_many_faults() {
+    let _lock = GUARD.lock().await;
+    run_test_initiating_valid_transfer_too_many_faults(make_rocksdb_client).await
+}
+
+async fn run_test_initiating_valid_transfer_too_many_faults<S>(store_builder: fn() -> S)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
+    let mut builder = TestBuilder::new(store_builder, 4, 2);
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await;
@@ -667,8 +807,22 @@ async fn test_initiating_valid_transfer_too_many_faults() {
 }
 
 #[test(tokio::test)]
-async fn test_bidirectional_transfer() {
-    let mut builder = TestBuilder::new(MemoryStoreClient::default, 4, 1);
+async fn test_memory_bidirectional_transfer() {
+    run_test_bidirectional_transfer(MemoryStoreClient::default).await
+}
+
+#[test(tokio::test)]
+async fn test_rocksdb_bidirectional_transfer() {
+    let _lock = GUARD.lock().await;
+    run_test_bidirectional_transfer(make_rocksdb_client).await
+}
+
+async fn run_test_bidirectional_transfer<S>(store_builder: fn() -> S)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
+    let mut builder = TestBuilder::new(store_builder, 4, 1);
     let mut client1 = builder
         .add_initial_chain(ChainDescription::Root(1), Balance::from(3))
         .await;
@@ -719,8 +873,22 @@ async fn test_bidirectional_transfer() {
 }
 
 #[test(tokio::test)]
-async fn test_receiving_unconfirmed_transfer() {
-    let mut builder = TestBuilder::new(MemoryStoreClient::default, 4, 1);
+async fn test_memory_receiving_unconfirmed_transfer() {
+    run_test_receiving_unconfirmed_transfer(MemoryStoreClient::default).await
+}
+
+#[test(tokio::test)]
+async fn test_rocksdb_receiving_unconfirmed_transfer() {
+    let _lock = GUARD.lock().await;
+    run_test_receiving_unconfirmed_transfer(make_rocksdb_client).await
+}
+
+async fn run_test_receiving_unconfirmed_transfer<S>(store_builder: fn() -> S)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
+    let mut builder = TestBuilder::new(store_builder, 4, 1);
     let mut client1 = builder
         .add_initial_chain(ChainDescription::Root(1), Balance::from(3))
         .await;
@@ -745,8 +913,24 @@ async fn test_receiving_unconfirmed_transfer() {
 }
 
 #[test(tokio::test)]
-async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
-    let mut builder = TestBuilder::new(MemoryStoreClient::default, 4, 1);
+async fn test_memory_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
+    run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(MemoryStoreClient::default)
+        .await
+}
+
+#[test(tokio::test)]
+async fn test_rocksdb_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
+    let _lock = GUARD.lock().await;
+    run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(make_rocksdb_client).await
+}
+
+async fn run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances<S>(
+    store_builder: fn() -> S,
+) where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
+    let mut builder = TestBuilder::new(store_builder, 4, 1);
     let mut client1 = builder
         .add_initial_chain(ChainDescription::Root(1), Balance::from(3))
         .await;
@@ -821,8 +1005,22 @@ async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
 }
 
 #[test(tokio::test)]
-async fn test_change_voting_rights() {
-    let mut builder = TestBuilder::new(MemoryStoreClient::default, 4, 1);
+async fn test_memory_change_voting_rights() {
+    run_test_change_voting_rights(MemoryStoreClient::default).await
+}
+
+#[test(tokio::test)]
+async fn test_rocksdb_change_voting_rights() {
+    let _lock = GUARD.lock().await;
+    run_test_change_voting_rights(make_rocksdb_client).await
+}
+
+async fn run_test_change_voting_rights<S>(store_builder: fn() -> S)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
+    let mut builder = TestBuilder::new(store_builder, 4, 1);
     let mut admin = builder
         .add_initial_chain(ChainDescription::Root(0), Balance::from(3))
         .await;
