@@ -14,10 +14,12 @@ use std::{ops::Range, sync::Arc};
 use thiserror::Error;
 use tokio::sync::OwnedMutexGuard;
 
+pub type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
+
 /// An implementation of [`crate::views::Context`] based on Rocksdb
 #[derive(Debug, Clone)]
 pub struct RocksdbContext<E> {
-    db: Arc<rocksdb::DB>,
+    db: Arc<DB>,
     lock: Arc<OwnedMutexGuard<()>>,
     base_key: Vec<u8>,
     extra: E,
@@ -48,7 +50,7 @@ pub trait KeyValueOperations {
 }
 
 #[async_trait]
-impl KeyValueOperations for Arc<rocksdb::DB> {
+impl KeyValueOperations for Arc<DB> {
     async fn read_key<V: DeserializeOwned>(
         &self,
         key: &[u8],
@@ -117,7 +119,7 @@ impl KeyValueOperations for Arc<rocksdb::DB> {
 
 impl<E> RocksdbContext<E> {
     pub fn new(
-        db: Arc<rocksdb::DB>,
+        db: Arc<DB>,
         lock: OwnedMutexGuard<()>,
         base_key: Vec<u8>,
         extra: E,

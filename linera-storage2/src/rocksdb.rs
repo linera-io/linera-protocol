@@ -8,7 +8,7 @@ use linera_base::{
     messages::{Certificate, ChainId},
 };
 use linera_views::{
-    rocksdb::{KeyValueOperations, RocksdbContext, RocksdbViewError},
+    rocksdb::{KeyValueOperations, RocksdbContext, RocksdbViewError, DB},
     views::View,
 };
 use serde::{Deserialize, Serialize};
@@ -16,7 +16,7 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use tokio::sync::Mutex;
 
 struct RocksdbStore {
-    db: Arc<rocksdb::DB>,
+    db: Arc<DB>,
     locks: HashMap<ChainId, Arc<Mutex<()>>>,
 }
 
@@ -33,7 +33,7 @@ impl RocksdbStore {
     pub fn new(dir: PathBuf) -> Self {
         let mut options = rocksdb::Options::default();
         options.create_if_missing(true);
-        let db = rocksdb::DB::open(&options, dir).unwrap();
+        let db = DB::open(&options, dir).unwrap();
         Self {
             db: Arc::new(db),
             locks: HashMap::new(),
