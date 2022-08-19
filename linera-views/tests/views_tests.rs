@@ -7,7 +7,7 @@ use linera_views::{
     hash::{HashView, Hasher, HashingContext},
     impl_view,
     memory::{MemoryContext, MemoryStoreMap, MemoryViewError},
-    rocksdb::{KeyValueOperations, RocksdbContext, RocksdbViewError},
+    rocksdb::{KeyValueOperations, RocksdbContext, RocksdbViewError, DB},
     test_utils::LocalStackTestContext,
     views::{
         AppendOnlyLogOperations, AppendOnlyLogView, CollectionOperations, CollectionView, Context,
@@ -74,12 +74,12 @@ impl StateStore for MemoryTestStore {
 }
 
 pub struct RocksdbTestStore {
-    db: Arc<rocksdb::DB>,
+    db: Arc<DB>,
     locks: HashMap<usize, Arc<Mutex<()>>>,
 }
 
 impl RocksdbTestStore {
-    fn new(db: rocksdb::DB) -> Self {
+    fn new(db: DB) -> Self {
         Self {
             db: Arc::new(db),
             locks: HashMap::new(),
@@ -319,7 +319,7 @@ async fn test_views_in_rocksdb() {
     let mut options = rocksdb::Options::default();
     options.create_if_missing(true);
 
-    let db = rocksdb::DB::open(&options, &dir).unwrap();
+    let db = DB::open(&options, &dir).unwrap();
     let mut store = RocksdbTestStore::new(db);
     let hash = test_store(&mut store).await;
     assert_eq!(store.locks.len(), 1);
