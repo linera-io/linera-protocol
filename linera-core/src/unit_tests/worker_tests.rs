@@ -15,26 +15,33 @@ use linera_base::{
         ADMIN_CHANNEL,
     },
 };
-use linera_storage2::{chain::Event, MemoryStoreClient, Store};
+use linera_storage2::{chain::Event, MemoryStoreClient, RocksdbStoreClient, Store};
+use linera_views::views;
 use std::collections::BTreeMap;
 use test_log::test;
 
 /// Instantiate the protocol with a single validator. Returns the corresponding committee
 /// and the (non-sharded, in-memory) "worker" that we can interact with.
-fn init_worker(allow_inactive_chains: bool) -> (Committee, WorkerState<MemoryStoreClient>) {
+fn init_worker<S>(client: S, allow_inactive_chains: bool) -> (Committee, WorkerState<S>)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
     let key_pair = KeyPair::generate();
     let committee = Committee::make_simple(vec![ValidatorName(key_pair.public())]);
-    let client = MemoryStoreClient::default();
     let worker = WorkerState::new("Single validator node".to_string(), Some(key_pair), client)
         .allow_inactive_chains(allow_inactive_chains);
     (committee, worker)
 }
 
 /// Same as `init_worker` but also instantiate some initial chains.
-async fn init_worker_with_chains<I: IntoIterator<Item = (ChainDescription, PublicKey, Balance)>>(
-    balances: I,
-) -> (Committee, WorkerState<MemoryStoreClient>) {
-    let (committee, worker) = init_worker(/* allow_inactive_chains */ false);
+async fn init_worker_with_chains<S, I>(client: S, balances: I) -> (Committee, WorkerState<S>)
+where
+    I: IntoIterator<Item = (ChainDescription, PublicKey, Balance)>,
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
+    let (committee, worker) = init_worker(client, /* allow_inactive_chains */ false);
     for (description, pubk, balance) in balances {
         worker
             .storage
@@ -52,12 +59,17 @@ async fn init_worker_with_chains<I: IntoIterator<Item = (ChainDescription, Publi
 }
 
 /// Same as `init_worker` but also instantiate a single initial chain.
-async fn init_worker_with_chain(
+async fn init_worker_with_chain<S>(
+    client: S,
     description: ChainDescription,
     owner: PublicKey,
     balance: Balance,
-) -> (Committee, WorkerState<MemoryStoreClient>) {
-    init_worker_with_chains([(description, owner, balance)]).await
+) -> (Committee, WorkerState<S>)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
+    init_worker_with_chains(client, [(description, owner, balance)]).await
 }
 
 fn make_block(
@@ -116,9 +128,9 @@ fn make_transfer_block_proposal(
     )
 }
 
-fn make_certificate(
+fn make_certificate<S>(
     committee: &Committee,
-    worker: &WorkerState<MemoryStoreClient>,
+    worker: &WorkerState<S>,
     value: Value,
 ) -> Certificate {
     let vote = Vote::new(value.clone(), worker.key_pair.as_ref().unwrap());
@@ -130,7 +142,7 @@ fn make_certificate(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn make_transfer_certificate(
+fn make_transfer_certificate<S>(
     chain_description: ChainDescription,
     key_pair: &KeyPair,
     recipient: Address,
@@ -138,7 +150,7 @@ fn make_transfer_certificate(
     incoming_messages: Vec<MessageGroup>,
     committee: &Committee,
     balance: Balance,
-    worker: &WorkerState<MemoryStoreClient>,
+    worker: &WorkerState<S>,
     previous_confirmed_block: Option<&Certificate>,
 ) -> Certificate {
     let chain_id = chain_description.into();
@@ -183,21 +195,40 @@ fn make_transfer_certificate(
 }
 
 #[test(tokio::test)]
-async fn test_handle_block_proposal_bad_signature() {
+async fn test_memory_handle_block_proposal_bad_signature() {
+    let client = MemoryStoreClient::default();
+    run_test_handle_block_proposal_bad_signature(client).await;
+}
+
+#[test(tokio::test)]
+async fn test_rocksdb_handle_block_proposal_bad_signature() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf());
+    run_test_handle_block_proposal_bad_signature(client).await;
+}
+
+async fn run_test_handle_block_proposal_bad_signature<S>(client: S)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(ChainId::root(2));
-    let (_, mut worker) = init_worker_with_chains(vec![
-        (
-            ChainDescription::Root(1),
-            sender_key_pair.public(),
-            Balance::from(5),
-        ),
-        (
-            ChainDescription::Root(2),
-            PublicKey::debug(2),
-            Balance::from(0),
-        ),
-    ])
+    let (_, mut worker) = init_worker_with_chains(
+        client,
+        vec![
+            (
+                ChainDescription::Root(1),
+                sender_key_pair.public(),
+                Balance::from(5),
+            ),
+            (
+                ChainDescription::Root(2),
+                PublicKey::debug(2),
+                Balance::from(0),
+            ),
+        ],
+    )
     .await;
     let block_proposal = make_transfer_block_proposal(
         ChainId::root(1),
@@ -229,21 +260,40 @@ async fn test_handle_block_proposal_bad_signature() {
 }
 
 #[test(tokio::test)]
-async fn test_handle_block_proposal_zero_amount() {
+async fn test_memory_handle_block_proposal_zero_amount() {
+    let client = MemoryStoreClient::default();
+    run_test_handle_block_proposal_zero_amount(client).await;
+}
+
+#[test(tokio::test)]
+async fn test_rocksdb_handle_block_proposal_zero_amount() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf());
+    run_test_handle_block_proposal_zero_amount(client).await;
+}
+
+async fn run_test_handle_block_proposal_zero_amount<S>(client: S)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(ChainId::root(2));
-    let (_, mut worker) = init_worker_with_chains(vec![
-        (
-            ChainDescription::Root(1),
-            sender_key_pair.public(),
-            Balance::from(5),
-        ),
-        (
-            ChainDescription::Root(2),
-            PublicKey::debug(2),
-            Balance::from(0),
-        ),
-    ])
+    let (_, mut worker) = init_worker_with_chains(
+        client,
+        vec![
+            (
+                ChainDescription::Root(1),
+                sender_key_pair.public(),
+                Balance::from(5),
+            ),
+            (
+                ChainDescription::Root(2),
+                PublicKey::debug(2),
+                Balance::from(0),
+            ),
+        ],
+    )
     .await;
     // test block non-positive amount
     let zero_amount_block_proposal = make_transfer_block_proposal(
@@ -272,21 +322,40 @@ async fn test_handle_block_proposal_zero_amount() {
 }
 
 #[test(tokio::test)]
-async fn test_handle_block_proposal_unknown_sender() {
+async fn test_memory_handle_block_proposal_unknown_sender() {
+    let client = MemoryStoreClient::default();
+    run_test_handle_block_proposal_unknown_sender(client).await;
+}
+
+#[test(tokio::test)]
+async fn test_rocksdb_handle_block_proposal_unknown_sender() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf());
+    run_test_handle_block_proposal_unknown_sender(client).await;
+}
+
+async fn run_test_handle_block_proposal_unknown_sender<S>(client: S)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(ChainId::root(2));
-    let (_, mut worker) = init_worker_with_chains(vec![
-        (
-            ChainDescription::Root(1),
-            sender_key_pair.public(),
-            Balance::from(5),
-        ),
-        (
-            ChainDescription::Root(2),
-            PublicKey::debug(2),
-            Balance::from(0),
-        ),
-    ])
+    let (_, mut worker) = init_worker_with_chains(
+        client,
+        vec![
+            (
+                ChainDescription::Root(1),
+                sender_key_pair.public(),
+                Balance::from(5),
+            ),
+            (
+                ChainDescription::Root(2),
+                PublicKey::debug(2),
+                Balance::from(0),
+            ),
+        ],
+    )
     .await;
     let block_proposal = make_transfer_block_proposal(
         ChainId::root(1),
@@ -317,14 +386,33 @@ async fn test_handle_block_proposal_unknown_sender() {
 }
 
 #[test(tokio::test)]
-async fn test_handle_block_proposal_with_chaining() {
+async fn test_memory_handle_block_proposal_with_chaining() {
+    let client = MemoryStoreClient::default();
+    run_test_handle_block_proposal_with_chaining(client).await;
+}
+
+#[test(tokio::test)]
+async fn test_rocksdb_handle_block_proposal_with_chaining() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf());
+    run_test_handle_block_proposal_with_chaining(client).await;
+}
+
+async fn run_test_handle_block_proposal_with_chaining<S>(client: S)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(ChainId::root(2));
-    let (committee, mut worker) = init_worker_with_chains(vec![(
-        ChainDescription::Root(1),
-        sender_key_pair.public(),
-        Balance::from(5),
-    )])
+    let (committee, mut worker) = init_worker_with_chains(
+        client,
+        vec![(
+            ChainDescription::Root(1),
+            sender_key_pair.public(),
+            Balance::from(5),
+        )],
+    )
     .await;
     let block_proposal0 = make_transfer_block_proposal(
         ChainId::root(1),
@@ -402,22 +490,41 @@ async fn test_handle_block_proposal_with_chaining() {
 }
 
 #[test(tokio::test)]
-async fn test_handle_block_proposal_with_incoming_messages() {
+async fn test_memory_handle_block_proposal_with_incoming_messages() {
+    let client = MemoryStoreClient::default();
+    run_test_handle_block_proposal_with_incoming_messages(client).await;
+}
+
+#[test(tokio::test)]
+async fn test_rocksdb_handle_block_proposal_with_incoming_messages() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf());
+    run_test_handle_block_proposal_with_incoming_messages(client).await;
+}
+
+async fn run_test_handle_block_proposal_with_incoming_messages<S>(client: S)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
     let sender_key_pair = KeyPair::generate();
     let recipient_key_pair = KeyPair::generate();
     let recipient = Address::Account(ChainId::root(2));
-    let (committee, mut worker) = init_worker_with_chains(vec![
-        (
-            ChainDescription::Root(1),
-            sender_key_pair.public(),
-            Balance::from(6),
-        ),
-        (
-            ChainDescription::Root(2),
-            recipient_key_pair.public(),
-            Balance::from(0),
-        ),
-    ])
+    let (committee, mut worker) = init_worker_with_chains(
+        client,
+        vec![
+            (
+                ChainDescription::Root(1),
+                sender_key_pair.public(),
+                Balance::from(6),
+            ),
+            (
+                ChainDescription::Root(2),
+                recipient_key_pair.public(),
+                Balance::from(0),
+            ),
+        ],
+    )
     .await;
 
     let epoch = Epoch::from(0);
@@ -766,21 +873,40 @@ async fn test_handle_block_proposal_with_incoming_messages() {
 }
 
 #[test(tokio::test)]
-async fn test_handle_block_proposal_exceed_balance() {
+async fn test_memory_handle_block_proposal_exceed_balance() {
+    let client = MemoryStoreClient::default();
+    run_test_handle_block_proposal_exceed_balance(client).await;
+}
+
+#[test(tokio::test)]
+async fn test_rocksdb_handle_block_proposal_exceed_balance() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf());
+    run_test_handle_block_proposal_exceed_balance(client).await;
+}
+
+async fn run_test_handle_block_proposal_exceed_balance<S>(client: S)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(ChainId::root(2));
-    let (_, mut worker) = init_worker_with_chains(vec![
-        (
-            ChainDescription::Root(1),
-            sender_key_pair.public(),
-            Balance::from(5),
-        ),
-        (
-            ChainDescription::Root(2),
-            PublicKey::debug(2),
-            Balance::from(0),
-        ),
-    ])
+    let (_, mut worker) = init_worker_with_chains(
+        client,
+        vec![
+            (
+                ChainDescription::Root(1),
+                sender_key_pair.public(),
+                Balance::from(5),
+            ),
+            (
+                ChainDescription::Root(2),
+                PublicKey::debug(2),
+                Balance::from(0),
+            ),
+        ],
+    )
     .await;
     let block_proposal = make_transfer_block_proposal(
         ChainId::root(1),
@@ -805,14 +931,33 @@ async fn test_handle_block_proposal_exceed_balance() {
 }
 
 #[test(tokio::test)]
-async fn test_handle_block_proposal() {
+async fn test_memory_handle_block_proposal() {
+    let client = MemoryStoreClient::default();
+    run_test_handle_block_proposal(client).await;
+}
+
+#[test(tokio::test)]
+async fn test_rocksdb_handle_block_proposal() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf());
+    run_test_handle_block_proposal(client).await;
+}
+
+async fn run_test_handle_block_proposal<S>(client: S)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(ChainId::root(2));
-    let (_, mut worker) = init_worker_with_chains(vec![(
-        ChainDescription::Root(1),
-        sender_key_pair.public(),
-        Balance::from(5),
-    )])
+    let (_, mut worker) = init_worker_with_chains(
+        client,
+        vec![(
+            ChainDescription::Root(1),
+            sender_key_pair.public(),
+            Balance::from(5),
+        )],
+    )
     .await;
     let block_proposal = make_transfer_block_proposal(
         ChainId::root(1),
@@ -846,21 +991,40 @@ async fn test_handle_block_proposal() {
 }
 
 #[test(tokio::test)]
-async fn test_handle_block_proposal_replay() {
+async fn test_memory_handle_block_proposal_replay() {
+    let client = MemoryStoreClient::default();
+    run_test_handle_block_proposal_replay(client).await;
+}
+
+#[test(tokio::test)]
+async fn test_rocksdb_handle_block_proposal_replay() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf());
+    run_test_handle_block_proposal_replay(client).await;
+}
+
+async fn run_test_handle_block_proposal_replay<S>(client: S)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(ChainId::root(2));
-    let (_, mut worker) = init_worker_with_chains(vec![
-        (
-            ChainDescription::Root(1),
-            sender_key_pair.public(),
-            Balance::from(5),
-        ),
-        (
-            ChainDescription::Root(2),
-            PublicKey::debug(2),
-            Balance::from(0),
-        ),
-    ])
+    let (_, mut worker) = init_worker_with_chains(
+        client,
+        vec![
+            (
+                ChainDescription::Root(1),
+                sender_key_pair.public(),
+                Balance::from(5),
+            ),
+            (
+                ChainDescription::Root(2),
+                PublicKey::debug(2),
+                Balance::from(0),
+            ),
+        ],
+    )
     .await;
     let block_proposal = make_transfer_block_proposal(
         ChainId::root(1),
@@ -888,13 +1052,32 @@ async fn test_handle_block_proposal_replay() {
 }
 
 #[test(tokio::test)]
-async fn test_handle_certificate_unknown_sender() {
+async fn test_memory_handle_certificate_unknown_sender() {
+    let client = MemoryStoreClient::default();
+    run_test_handle_certificate_unknown_sender(client).await;
+}
+
+#[test(tokio::test)]
+async fn test_rocksdb_handle_certificate_unknown_sender() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf());
+    run_test_handle_certificate_unknown_sender(client).await;
+}
+
+async fn run_test_handle_certificate_unknown_sender<S>(client: S)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
     let sender_key_pair = KeyPair::generate();
-    let (committee, mut worker) = init_worker_with_chains(vec![(
-        ChainDescription::Root(2),
-        PublicKey::debug(2),
-        Balance::from(0),
-    )])
+    let (committee, mut worker) = init_worker_with_chains(
+        client,
+        vec![(
+            ChainDescription::Root(2),
+            PublicKey::debug(2),
+            Balance::from(0),
+        )],
+    )
     .await;
     let certificate = make_transfer_certificate(
         ChainDescription::Root(1),
@@ -911,20 +1094,39 @@ async fn test_handle_certificate_unknown_sender() {
 }
 
 #[test(tokio::test)]
-async fn test_handle_certificate_bad_block_height() {
+async fn test_memory_handle_certificate_bad_block_height() {
+    let client = MemoryStoreClient::default();
+    run_test_handle_certificate_bad_block_height(client).await;
+}
+
+#[test(tokio::test)]
+async fn test_rocksdb_handle_certificate_bad_block_height() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf());
+    run_test_handle_certificate_bad_block_height(client).await;
+}
+
+async fn run_test_handle_certificate_bad_block_height<S>(client: S)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
     let sender_key_pair = KeyPair::generate();
-    let (committee, mut worker) = init_worker_with_chains(vec![
-        (
-            ChainDescription::Root(1),
-            sender_key_pair.public(),
-            Balance::from(5),
-        ),
-        (
-            ChainDescription::Root(2),
-            PublicKey::debug(2),
-            Balance::from(0),
-        ),
-    ])
+    let (committee, mut worker) = init_worker_with_chains(
+        client,
+        vec![
+            (
+                ChainDescription::Root(1),
+                sender_key_pair.public(),
+                Balance::from(5),
+            ),
+            (
+                ChainDescription::Root(2),
+                PublicKey::debug(2),
+                Balance::from(0),
+            ),
+        ],
+    )
     .await;
     let certificate = make_transfer_certificate(
         ChainDescription::Root(1),
@@ -946,20 +1148,39 @@ async fn test_handle_certificate_bad_block_height() {
 }
 
 #[test(tokio::test)]
-async fn test_handle_certificate_with_anticipated_incoming_message() {
+async fn test_memory_handle_certificate_with_anticipated_incoming_message() {
+    let client = MemoryStoreClient::default();
+    run_test_handle_certificate_with_anticipated_incoming_message(client).await;
+}
+
+#[test(tokio::test)]
+async fn test_rocksdb_handle_certificate_with_anticipated_incoming_message() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf());
+    run_test_handle_certificate_with_anticipated_incoming_message(client).await;
+}
+
+async fn run_test_handle_certificate_with_anticipated_incoming_message<S>(client: S)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
     let key_pair = KeyPair::generate();
-    let (committee, mut worker) = init_worker_with_chains(vec![
-        (
-            ChainDescription::Root(1),
-            key_pair.public(),
-            Balance::from(5),
-        ),
-        (
-            ChainDescription::Root(2),
-            PublicKey::debug(2),
-            Balance::from(0),
-        ),
-    ])
+    let (committee, mut worker) = init_worker_with_chains(
+        client,
+        vec![
+            (
+                ChainDescription::Root(1),
+                key_pair.public(),
+                Balance::from(5),
+            ),
+            (
+                ChainDescription::Root(2),
+                PublicKey::debug(2),
+                Balance::from(0),
+            ),
+        ],
+    )
     .await;
 
     let certificate = make_transfer_certificate(
@@ -1043,20 +1264,39 @@ async fn test_handle_certificate_with_anticipated_incoming_message() {
 }
 
 #[test(tokio::test)]
-async fn test_handle_certificate_receiver_balance_overflow() {
+async fn test_memory_handle_certificate_receiver_balance_overflow() {
+    let client = MemoryStoreClient::default();
+    run_test_handle_certificate_receiver_balance_overflow(client).await;
+}
+
+#[test(tokio::test)]
+async fn test_rocksdb_handle_certificate_receiver_balance_overflow() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf());
+    run_test_handle_certificate_receiver_balance_overflow(client).await;
+}
+
+async fn run_test_handle_certificate_receiver_balance_overflow<S>(client: S)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
     let sender_key_pair = KeyPair::generate();
-    let (committee, mut worker) = init_worker_with_chains(vec![
-        (
-            ChainDescription::Root(1),
-            sender_key_pair.public(),
-            Balance::from(1),
-        ),
-        (
-            ChainDescription::Root(2),
-            PublicKey::debug(2),
-            Balance::max(),
-        ),
-    ])
+    let (committee, mut worker) = init_worker_with_chains(
+        client,
+        vec![
+            (
+                ChainDescription::Root(1),
+                sender_key_pair.public(),
+                Balance::from(1),
+            ),
+            (
+                ChainDescription::Root(2),
+                PublicKey::debug(2),
+                Balance::max(),
+            ),
+        ],
+    )
     .await;
 
     let certificate = make_transfer_certificate(
@@ -1104,11 +1344,27 @@ async fn test_handle_certificate_receiver_balance_overflow() {
 }
 
 #[test(tokio::test)]
-async fn test_handle_certificate_receiver_equal_sender() {
+async fn test_memory_handle_certificate_receiver_equal_sender() {
+    let client = MemoryStoreClient::default();
+    run_test_handle_certificate_receiver_equal_sender(client).await;
+}
+
+#[test(tokio::test)]
+async fn test_rocksdb_handle_certificate_receiver_equal_sender() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf());
+    run_test_handle_certificate_receiver_equal_sender(client).await;
+}
+
+async fn run_test_handle_certificate_receiver_equal_sender<S>(client: S)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
     let key_pair = KeyPair::generate();
     let name = key_pair.public();
     let (committee, mut worker) =
-        init_worker_with_chain(ChainDescription::Root(1), name, Balance::from(1)).await;
+        init_worker_with_chain(client, ChainDescription::Root(1), name, Balance::from(1)).await;
 
     let certificate = make_transfer_certificate(
         ChainDescription::Root(1),
@@ -1161,13 +1417,32 @@ async fn test_handle_certificate_receiver_equal_sender() {
 }
 
 #[test(tokio::test)]
-async fn test_handle_cross_chain_request() {
+async fn test_memory_handle_cross_chain_request() {
+    let client = MemoryStoreClient::default();
+    run_test_handle_cross_chain_request(client).await;
+}
+
+#[test(tokio::test)]
+async fn test_rocksdb_handle_cross_chain_request() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf());
+    run_test_handle_cross_chain_request(client).await;
+}
+
+async fn run_test_handle_cross_chain_request<S>(client: S)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
     let sender_key_pair = KeyPair::generate();
-    let (committee, mut worker) = init_worker_with_chains(vec![(
-        ChainDescription::Root(2),
-        PublicKey::debug(2),
-        Balance::from(1),
-    )])
+    let (committee, mut worker) = init_worker_with_chains(
+        client,
+        vec![(
+            ChainDescription::Root(2),
+            PublicKey::debug(2),
+            Balance::from(1),
+        )],
+    )
     .await;
     let certificate = make_transfer_certificate(
         ChainDescription::Root(1),
@@ -1223,9 +1498,25 @@ async fn test_handle_cross_chain_request() {
 }
 
 #[test(tokio::test)]
-async fn test_handle_cross_chain_request_no_recipient_chain() {
+async fn test_memory_handle_cross_chain_request_no_recipient_chain() {
+    let client = MemoryStoreClient::default();
+    run_test_handle_cross_chain_request_no_recipient_chain(client).await;
+}
+
+#[test(tokio::test)]
+async fn test_rocksdb_handle_cross_chain_request_no_recipient_chain() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf());
+    run_test_handle_cross_chain_request_no_recipient_chain(client).await;
+}
+
+async fn run_test_handle_cross_chain_request_no_recipient_chain<S>(client: S)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
     let sender_key_pair = KeyPair::generate();
-    let (committee, mut worker) = init_worker(/* allow_inactive_chains */ false);
+    let (committee, mut worker) = init_worker(client, /* allow_inactive_chains */ false);
     let certificate = make_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
@@ -1258,9 +1549,28 @@ async fn test_handle_cross_chain_request_no_recipient_chain() {
 }
 
 #[test(tokio::test)]
-async fn test_handle_cross_chain_request_no_recipient_chain_with_inactive_chains_allowed() {
+async fn test_memory_handle_cross_chain_request_no_recipient_chain_with_inactive_chains_allowed() {
+    let client = MemoryStoreClient::default();
+    run_test_handle_cross_chain_request_no_recipient_chain_with_inactive_chains_allowed(client)
+        .await;
+}
+
+#[test(tokio::test)]
+async fn test_rocksdb_handle_cross_chain_request_no_recipient_chain_with_inactive_chains_allowed() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf());
+    run_test_handle_cross_chain_request_no_recipient_chain_with_inactive_chains_allowed(client)
+        .await;
+}
+
+async fn run_test_handle_cross_chain_request_no_recipient_chain_with_inactive_chains_allowed<S>(
+    client: S,
+) where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
     let sender_key_pair = KeyPair::generate();
-    let (committee, mut worker) = init_worker(/* allow_inactive_chains */ true);
+    let (committee, mut worker) = init_worker(client, /* allow_inactive_chains */ true);
     let certificate = make_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
@@ -1300,21 +1610,40 @@ async fn test_handle_cross_chain_request_no_recipient_chain_with_inactive_chains
 }
 
 #[test(tokio::test)]
-async fn test_handle_certificate_to_active_recipient() {
+async fn test_memory_handle_certificate_to_active_recipient() {
+    let client = MemoryStoreClient::default();
+    run_test_handle_certificate_to_active_recipient(client).await;
+}
+
+#[test(tokio::test)]
+async fn test_rocksdb_handle_certificate_to_active_recipient() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf());
+    run_test_handle_certificate_to_active_recipient(client).await;
+}
+
+async fn run_test_handle_certificate_to_active_recipient<S>(client: S)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
     let sender_key_pair = KeyPair::generate();
     let recipient_key_pair = KeyPair::generate();
-    let (committee, mut worker) = init_worker_with_chains(vec![
-        (
-            ChainDescription::Root(1),
-            sender_key_pair.public(),
-            Balance::from(5),
-        ),
-        (
-            ChainDescription::Root(2),
-            recipient_key_pair.public(),
-            Balance::from(0),
-        ),
-    ])
+    let (committee, mut worker) = init_worker_with_chains(
+        client,
+        vec![
+            (
+                ChainDescription::Root(1),
+                sender_key_pair.public(),
+                Balance::from(5),
+            ),
+            (
+                ChainDescription::Root(2),
+                recipient_key_pair.public(),
+                Balance::from(0),
+            ),
+        ],
+    )
     .await;
     let certificate = make_transfer_certificate(
         ChainDescription::Root(1),
@@ -1402,13 +1731,32 @@ async fn test_handle_certificate_to_active_recipient() {
 }
 
 #[test(tokio::test)]
-async fn test_handle_certificate_to_inactive_recipient() {
+async fn test_memory_handle_certificate_to_inactive_recipient() {
+    let client = MemoryStoreClient::default();
+    run_test_handle_certificate_to_inactive_recipient(client).await;
+}
+
+#[test(tokio::test)]
+async fn test_rocksdb_handle_certificate_to_inactive_recipient() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf());
+    run_test_handle_certificate_to_inactive_recipient(client).await;
+}
+
+async fn run_test_handle_certificate_to_inactive_recipient<S>(client: S)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
     let sender_key_pair = KeyPair::generate();
-    let (committee, mut worker) = init_worker_with_chains(vec![(
-        ChainDescription::Root(1),
-        sender_key_pair.public(),
-        Balance::from(5),
-    )])
+    let (committee, mut worker) = init_worker_with_chains(
+        client,
+        vec![(
+            ChainDescription::Root(1),
+            sender_key_pair.public(),
+            Balance::from(5),
+        )],
+    )
     .await;
     let certificate = make_transfer_certificate(
         ChainDescription::Root(1),
@@ -1435,13 +1783,32 @@ async fn test_handle_certificate_to_inactive_recipient() {
 }
 
 #[test(tokio::test)]
-async fn test_chain_creation_with_committee_creation() {
+async fn test_memory_chain_creation_with_committee_creation() {
+    let client = MemoryStoreClient::default();
+    run_test_chain_creation_with_committee_creation(client).await;
+}
+
+#[test(tokio::test)]
+async fn test_rocksdb_chain_creation_with_committee_creation() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf());
+    run_test_chain_creation_with_committee_creation(client).await;
+}
+
+async fn run_test_chain_creation_with_committee_creation<S>(client: S)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
     let key_pair = KeyPair::generate();
-    let (committee, mut worker) = init_worker_with_chains(vec![(
-        ChainDescription::Root(0),
-        key_pair.public(),
-        Balance::from(2),
-    )])
+    let (committee, mut worker) = init_worker_with_chains(
+        client,
+        vec![(
+            ChainDescription::Root(0),
+            key_pair.public(),
+            Balance::from(2),
+        )],
+    )
     .await;
     let mut committees = BTreeMap::new();
     committees.insert(Epoch::from(0), committee.clone());
@@ -1888,21 +2255,40 @@ async fn test_chain_creation_with_committee_creation() {
 }
 
 #[test(tokio::test)]
-async fn test_transfers_and_committee_creation() {
+async fn test_memory_transfers_and_committee_creation() {
+    let client = MemoryStoreClient::default();
+    run_test_transfers_and_committee_creation(client).await;
+}
+
+#[test(tokio::test)]
+async fn test_rocksdb_transfers_and_committee_creation() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf());
+    run_test_transfers_and_committee_creation(client).await;
+}
+
+async fn run_test_transfers_and_committee_creation<S>(client: S)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
     let key_pair0 = KeyPair::generate();
     let key_pair1 = KeyPair::generate();
-    let (committee, mut worker) = init_worker_with_chains(vec![
-        (
-            ChainDescription::Root(0),
-            key_pair0.public(),
-            Balance::from(0),
-        ),
-        (
-            ChainDescription::Root(1),
-            key_pair1.public(),
-            Balance::from(3),
-        ),
-    ])
+    let (committee, mut worker) = init_worker_with_chains(
+        client,
+        vec![
+            (
+                ChainDescription::Root(0),
+                key_pair0.public(),
+                Balance::from(0),
+            ),
+            (
+                ChainDescription::Root(1),
+                key_pair1.public(),
+                Balance::from(3),
+            ),
+        ],
+    )
     .await;
     let mut committees = BTreeMap::new();
     committees.insert(Epoch::from(0), committee.clone());
@@ -2057,21 +2443,40 @@ async fn test_transfers_and_committee_creation() {
 }
 
 #[test(tokio::test)]
-async fn test_transfers_and_committee_removal() {
+async fn test_memory_transfers_and_committee_removal() {
+    let client = MemoryStoreClient::default();
+    run_test_transfers_and_committee_removal(client).await;
+}
+
+#[test(tokio::test)]
+async fn test_rocksdb_transfers_and_committee_removal() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf());
+    run_test_transfers_and_committee_removal(client).await;
+}
+
+async fn run_test_transfers_and_committee_removal<S>(client: S)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    Error: From<<S::Context as views::Context>::Error>,
+{
     let key_pair0 = KeyPair::generate();
     let key_pair1 = KeyPair::generate();
-    let (committee, mut worker) = init_worker_with_chains(vec![
-        (
-            ChainDescription::Root(0),
-            key_pair0.public(),
-            Balance::from(0),
-        ),
-        (
-            ChainDescription::Root(1),
-            key_pair1.public(),
-            Balance::from(3),
-        ),
-    ])
+    let (committee, mut worker) = init_worker_with_chains(
+        client,
+        vec![
+            (
+                ChainDescription::Root(0),
+                key_pair0.public(),
+                Balance::from(0),
+            ),
+            (
+                ChainDescription::Root(1),
+                key_pair1.public(),
+                Balance::from(3),
+            ),
+        ],
+    )
     .await;
     let mut committees = BTreeMap::new();
     committees.insert(Epoch::from(0), committee.clone());
