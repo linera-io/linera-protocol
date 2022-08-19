@@ -20,3 +20,4 @@ linera-views = { path = "../linera-views" }
 [dev-dependencies]
 env_logger = "0.9.0"
 test-log = "0.2.10"
+tempfile = "3.2.0"
