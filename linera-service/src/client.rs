@@ -607,7 +607,10 @@ where
                 let mut client_state = context.make_chain_client(storage, chain_id);
                 info!("Starting query for the local balance");
                 let time_start = Instant::now();
-                let balance = client_state.local_balance().await.unwrap();
+                let balance = client_state
+                    .local_balance()
+                    .await
+                    .expect("Use sync_balance instead");
                 let time_total = time_start.elapsed().as_micros();
                 info!("Local balance obtained after {} us", time_total);
                 println!("{}", balance);
@@ -720,6 +723,7 @@ where
                     max_proposals.unwrap_or_else(|| context.wallet_state.num_chains());
                 warn!("Starting benchmark phase 1 (block proposals)");
                 let proposals = context.make_benchmark_block_proposals(max_proposals);
+                let num_proposal = proposals.len();
                 let responses = context
                     .mass_broadcast("block proposals", max_in_flight, proposals)
                     .await;
@@ -734,6 +738,11 @@ where
 
                 warn!("Starting benchmark phase 2 (certified blocks)");
                 let certificates = context.make_benchmark_certificates_from_votes(votes);
+                assert_eq!(
+                    num_proposal,
+                    certificates.len(),
+                    "Unable to build all the expected certificates from received votes"
+                );
                 let messages = certificates
                     .iter()
                     .map(|certificate| certificate.clone().into())
@@ -752,7 +761,7 @@ where
                     }
                 });
                 warn!(
-                    "Received {} valid certificates for {} block proposals.",
+                    "Confirmed {} valid certificates for {} block proposals.",
                     num_valid,
                     confirmed.len()
                 );
