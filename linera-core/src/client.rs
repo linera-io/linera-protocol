@@ -106,6 +106,9 @@ pub trait ChainClient {
 
     /// Return the current local balance.
     async fn local_balance(&mut self) -> Result<Balance>;
+
+    /// Attempt to update all validators about the current chain.
+    async fn force_validator_update(&mut self) -> Result<()>;
 }
 
 /// Turn an address into a validator node (local node or client to a remote node).
@@ -841,6 +844,19 @@ where
             .await?
             .info
             .system_balance)
+    }
+
+    /// Attempt to update all validators about the current chain.
+    async fn force_validator_update(&mut self) -> Result<()> {
+        let mut committee = self.committee().await?;
+        committee.quorum_threshold = committee.total_votes;
+        self.communicate_chain_updates(
+            &committee,
+            self.chain_id,
+            CommunicateAction::AdvanceToNextBlockHeight(self.next_block_height),
+        )
+        .await?;
+        Ok(())
     }
 
     async fn transfer_to_chain(

@@ -142,6 +142,19 @@ impl ClientContext {
         )
     }
 
+    async fn process_inboxes_and_force_validator_updates<S>(&mut self, storage: &S)
+    where
+        S: Store + Clone + Send + Sync + 'static,
+        Error: From<<S::Context as views::Context>::Error>,
+    {
+        for chain_id in self.wallet_state.chain_ids() {
+            let mut client = self.make_chain_client(storage.clone(), chain_id);
+            client.process_inbox().await.unwrap();
+            client.force_validator_update().await.unwrap();
+            self.update_wallet_from_client(&mut client).await;
+        }
+    }
+
     /// Make one block proposal per chain, up to `max_proposals` blocks.
     fn make_benchmark_block_proposals(&mut self, max_proposals: usize) -> Vec<rpc::Message> {
         let mut proposals = Vec::new();
@@ -688,6 +701,13 @@ where
                 max_in_flight,
                 max_proposals,
             } => {
+                // Below all block proposals are supposed to succeed without retries, we
+                // must make sure that all incoming payments have been accepted on-chain
+                // and that no validator is missing user certificates.
+                context
+                    .process_inboxes_and_force_validator_updates(&storage)
+                    .await;
+
                 // For this command, we create proposals and gather certificates without using
                 // the client library. We update the wallet storage at the end using a local node.
                 let max_proposals =

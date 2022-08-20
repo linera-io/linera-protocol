@@ -198,6 +198,8 @@ Committee:
           VALUE:
             TYPENAME: ValidatorState
     - total_votes: U64
+    - quorum_threshold: U64
+    - validity_threshold: U64
 CommunicationState:
   STRUCT:
     - inboxes:
