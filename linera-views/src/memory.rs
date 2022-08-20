@@ -89,15 +89,26 @@ impl<E> MemoryContext<E> {
     }
 }
 
+#[async_trait]
 impl<E> Context for MemoryContext<E>
 where
     E: Clone + Send + Sync,
 {
+    type Batch = ();
     type Extra = E;
     type Error = MemoryViewError;
 
     fn extra(&self) -> &E {
         &self.extra
+    }
+
+    async fn run_with_batch<F>(&self, builder: F) -> Result<(), Self::Error>
+    where
+        F: FnOnce(&mut Self::Batch) -> futures::future::BoxFuture<Result<(), Self::Error>>
+            + Send
+            + Sync,
+    {
+        builder(&mut ()).await
     }
 }
 
@@ -127,13 +138,13 @@ where
             .await)
     }
 
-    async fn set(&mut self, value: T) -> Result<(), MemoryViewError> {
+    async fn set(&mut self, _batch: &mut Self::Batch, value: T) -> Result<(), MemoryViewError> {
         let mut map = self.map.write().await;
         map.insert(self.base_key.clone(), Box::new(value));
         Ok(())
     }
 
-    async fn delete(&mut self) -> Result<(), MemoryViewError> {
+    async fn delete(&mut self, _batch: &mut Self::Batch) -> Result<(), MemoryViewError> {
         self.erase().await
     }
 }
@@ -168,14 +179,23 @@ where
             .await)
     }
 
-    async fn append(&mut self, mut values: Vec<T>) -> Result<(), MemoryViewError> {
+    async fn append(
+        &mut self,
+        _count: usize,
+        _batch: &mut Self::Batch,
+        mut values: Vec<T>,
+    ) -> Result<(), MemoryViewError> {
         if !values.is_empty() {
             self.with_mut(|v: &mut Vec<T>| v.append(&mut values)).await;
         }
         Ok(())
     }
 
-    async fn delete(&mut self) -> Result<(), MemoryViewError> {
+    async fn delete(
+        &mut self,
+        _count: usize,
+        _batch: &mut Self::Batch,
+    ) -> Result<(), MemoryViewError> {
         self.erase().await
     }
 }
@@ -210,7 +230,12 @@ where
             .await)
     }
 
-    async fn delete_front(&mut self, count: usize) -> Result<(), Self::Error> {
+    async fn delete_front(
+        &mut self,
+        _stored_indices: Range<usize>,
+        _batch: &mut Self::Batch,
+        count: usize,
+    ) -> Result<(), Self::Error> {
         self.with_mut(|v: &mut VecDeque<T>| {
             for _ in 0..count {
                 v.pop_front();
@@ -220,7 +245,12 @@ where
         Ok(())
     }
 
-    async fn append_back(&mut self, values: Vec<T>) -> Result<(), Self::Error> {
+    async fn append_back(
+        &mut self,
+        _stored_indices: Range<usize>,
+        _batch: &mut Self::Batch,
+        values: Vec<T>,
+    ) -> Result<(), Self::Error> {
         self.with_mut(|v: &mut VecDeque<T>| {
             for value in values {
                 v.push_back(value);
@@ -230,7 +260,11 @@ where
         Ok(())
     }
 
-    async fn delete(&mut self) -> Result<(), MemoryViewError> {
+    async fn delete(
+        &mut self,
+        _stored_indices: Range<usize>,
+        _batch: &mut Self::Batch,
+    ) -> Result<(), MemoryViewError> {
         self.erase().await
     }
 }
@@ -248,7 +282,12 @@ where
             .await)
     }
 
-    async fn insert(&mut self, index: I, value: V) -> Result<(), MemoryViewError> {
+    async fn insert(
+        &mut self,
+        _batch: &mut Self::Batch,
+        index: I,
+        value: V,
+    ) -> Result<(), MemoryViewError> {
         self.with_mut(|m: &mut BTreeMap<I, V>| {
             m.insert(index, value);
         })
@@ -256,7 +295,7 @@ where
         Ok(())
     }
 
-    async fn remove(&mut self, index: I) -> Result<(), MemoryViewError> {
+    async fn remove(&mut self, _batch: &mut Self::Batch, index: I) -> Result<(), MemoryViewError> {
         self.with_mut(|m: &mut BTreeMap<I, V>| {
             m.remove(&index);
         })
@@ -273,7 +312,7 @@ where
             .await)
     }
 
-    async fn delete(&mut self) -> Result<(), MemoryViewError> {
+    async fn delete(&mut self, _batch: &mut Self::Batch) -> Result<(), MemoryViewError> {
         self.erase().await
     }
 }
@@ -298,7 +337,7 @@ where
         }
     }
 
-    async fn add_index(&mut self, index: I) -> Result<(), Self::Error> {
+    async fn add_index(&mut self, _batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
         let context = Self {
             map: self.map.clone(),
             base_key: self.derive_key(&CollectionKey::<I>::Indices),
@@ -312,7 +351,11 @@ where
         Ok(())
     }
 
-    async fn remove_index(&mut self, index: I) -> Result<(), Self::Error> {
+    async fn remove_index(
+        &mut self,
+        _batch: &mut Self::Batch,
+        index: I,
+    ) -> Result<(), Self::Error> {
         let mut context = Self {
             map: self.map.clone(),
             base_key: self.derive_key(&CollectionKey::<I>::Indices),

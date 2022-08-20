@@ -12,7 +12,11 @@ use thiserror::Error;
 
 /// The context in which a view is operated. Typically, this includes the client to
 /// connect to the database and the address of the current entry.
+#[async_trait]
 pub trait Context {
+    /// A batch of writes inside a transaction;
+    type Batch: Send + Sync;
+
     /// User provided data to be carried along.
     type Extra: Clone + Send + Sync;
 
@@ -21,6 +25,13 @@ pub trait Context {
 
     /// Getter for the user provided data.
     fn extra(&self) -> &Self::Extra;
+
+    /// Provide a reference to a new batch to the builder then execute the batch.
+    async fn run_with_batch<F>(&self, builder: F) -> Result<(), Self::Error>
+    where
+        F: FnOnce(&mut Self::Batch) -> futures::future::BoxFuture<Result<(), Self::Error>>
+            + Send
+            + Sync;
 }
 
 /// A view gives an exclusive access to read and write the data stored at an underlying
@@ -35,11 +46,11 @@ pub trait View<C: Context>: Sized {
 
     /// Persist changes to storage. This consumes the view. If the view is dropped without
     /// calling `commit`, staged changes are simply lost.
-    async fn commit(self) -> Result<(), C::Error>;
+    async fn commit(self, batch: &mut C::Batch) -> Result<(), C::Error>;
 
     /// Instead of persisting changes, clear all the data that belong to this view and its
     /// subviews.
-    async fn delete(self) -> Result<(), C::Error>;
+    async fn delete(self, batch: &mut C::Batch) -> Result<(), C::Error>;
 }
 
 #[derive(Error, Debug)]
@@ -92,12 +103,12 @@ where
         self.view.rollback();
     }
 
-    async fn commit(mut self) -> Result<(), C::Error> {
-        self.view.commit().await
+    async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+        self.view.commit(batch).await
     }
 
-    async fn delete(self) -> Result<(), C::Error> {
-        self.view.delete().await
+    async fn delete(self, batch: &mut C::Batch) -> Result<(), C::Error> {
+        self.view.delete(batch).await
     }
 }
 
@@ -114,9 +125,9 @@ pub struct RegisterView<C, T> {
 pub trait RegisterOperations<T>: Context {
     async fn get(&mut self) -> Result<T, Self::Error>;
 
-    async fn set(&mut self, value: T) -> Result<(), Self::Error>;
+    async fn set(&mut self, batch: &mut Self::Batch, value: T) -> Result<(), Self::Error>;
 
-    async fn delete(&mut self) -> Result<(), Self::Error>;
+    async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error>;
 }
 
 #[async_trait]
@@ -138,15 +149,15 @@ where
         self.update = None
     }
 
-    async fn commit(mut self) -> Result<(), C::Error> {
+    async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         if let Some(value) = self.update {
-            self.context.set(value).await?;
+            self.context.set(batch, value).await?;
         }
         Ok(())
     }
 
-    async fn delete(mut self) -> Result<(), C::Error> {
-        self.context.delete().await
+    async fn delete(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+        self.context.delete(batch).await
     }
 }
 
@@ -206,9 +217,14 @@ pub trait AppendOnlyLogOperations<T>: Context {
 
     async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error>;
 
-    async fn append(&mut self, values: Vec<T>) -> Result<(), Self::Error>;
+    async fn append(
+        &mut self,
+        count: usize,
+        batch: &mut Self::Batch,
+        values: Vec<T>,
+    ) -> Result<(), Self::Error>;
 
-    async fn delete(&mut self) -> Result<(), Self::Error>;
+    async fn delete(&mut self, count: usize, batch: &mut Self::Batch) -> Result<(), Self::Error>;
 }
 
 #[async_trait]
@@ -230,13 +246,14 @@ where
         self.new_values.clear();
     }
 
-    async fn commit(mut self) -> Result<(), C::Error> {
-        self.context.append(self.new_values).await?;
-        Ok(())
+    async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+        self.context
+            .append(self.stored_count, batch, self.new_values)
+            .await
     }
 
-    async fn delete(mut self) -> Result<(), C::Error> {
-        self.context.delete().await
+    async fn delete(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+        self.context.delete(self.stored_count, batch).await
     }
 }
 
@@ -313,17 +330,22 @@ pub trait MapOperations<I, V>: Context {
     /// Obtain the value at the given index, if any.
     async fn get(&mut self, index: &I) -> Result<Option<V>, Self::Error>;
 
-    /// Set a value.
-    async fn insert(&mut self, index: I, value: V) -> Result<(), Self::Error>;
-
-    /// Remove the entry at the given index.
-    async fn remove(&mut self, index: I) -> Result<(), Self::Error>;
-
     /// Return the list of indices in the map.
     async fn indices(&mut self) -> Result<Vec<I>, Self::Error>;
 
+    /// Set a value.
+    async fn insert(
+        &mut self,
+        batch: &mut Self::Batch,
+        index: I,
+        value: V,
+    ) -> Result<(), Self::Error>;
+
+    /// Remove the entry at the given index.
+    async fn remove(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error>;
+
     /// Delete the map and its entries from storage.
-    async fn delete(&mut self) -> Result<(), Self::Error>;
+    async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error>;
 }
 
 #[async_trait]
@@ -344,22 +366,22 @@ where
         self.updates.clear();
     }
 
-    async fn commit(mut self) -> Result<(), C::Error> {
+    async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         for (index, update) in self.updates {
             match update {
                 None => {
-                    self.context.remove(index).await?;
+                    self.context.remove(batch, index).await?;
                 }
                 Some(value) => {
-                    self.context.insert(index, value).await?;
+                    self.context.insert(batch, index, value).await?;
                 }
             }
         }
         Ok(())
     }
 
-    async fn delete(mut self) -> Result<(), C::Error> {
-        self.context.delete().await
+    async fn delete(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+        self.context.delete(batch).await
     }
 }
 
@@ -433,12 +455,26 @@ pub trait QueueOperations<T>: Context {
 
     async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error>;
 
-    async fn delete_front(&mut self, count: usize) -> Result<(), Self::Error>;
+    async fn delete_front(
+        &mut self,
+        stored_indices: Range<usize>,
+        batch: &mut Self::Batch,
+        count: usize,
+    ) -> Result<(), Self::Error>;
 
-    async fn append_back(&mut self, values: Vec<T>) -> Result<(), Self::Error>;
+    async fn append_back(
+        &mut self,
+        stored_indices: Range<usize>,
+        batch: &mut Self::Batch,
+        values: Vec<T>,
+    ) -> Result<(), Self::Error>;
 
     /// Delete the queue from storage.
-    async fn delete(&mut self) -> Result<(), Self::Error>;
+    async fn delete(
+        &mut self,
+        stored_indices: Range<usize>,
+        batch: &mut Self::Batch,
+    ) -> Result<(), Self::Error>;
 }
 
 #[async_trait]
@@ -462,16 +498,22 @@ where
         self.new_back_values.clear();
     }
 
-    async fn commit(mut self) -> Result<(), C::Error> {
-        self.context.delete_front(self.front_delete_count).await?;
+    async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         self.context
-            .append_back(self.new_back_values.into_iter().collect())
+            .delete_front(self.stored_indices.clone(), batch, self.front_delete_count)
+            .await?;
+        self.context
+            .append_back(
+                self.stored_indices,
+                batch,
+                self.new_back_values.into_iter().collect(),
+            )
             .await?;
         Ok(())
     }
 
-    async fn delete(mut self) -> Result<(), C::Error> {
-        self.context.delete().await
+    async fn delete(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+        self.context.delete(self.stored_indices, batch).await
     }
 }
 
@@ -592,14 +634,14 @@ pub trait CollectionOperations<I>: Context {
     /// operations.
     fn clone_with_scope(&self, index: &I) -> Self;
 
-    /// Add the index to the list of indices.
-    async fn add_index(&mut self, index: I) -> Result<(), Self::Error>;
-
-    /// Remove the index from the list of indices.
-    async fn remove_index(&mut self, index: I) -> Result<(), Self::Error>;
-
     /// Return the list of indices in the collection.
     async fn indices(&mut self) -> Result<Vec<I>, Self::Error>;
+
+    /// Add the index to the list of indices.
+    async fn add_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error>;
+
+    /// Remove the index from the list of indices.
+    async fn remove_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error>;
 }
 
 #[async_trait]
@@ -620,30 +662,30 @@ where
         self.updates.clear();
     }
 
-    async fn commit(mut self) -> Result<(), C::Error> {
+    async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         for (index, update) in self.updates {
             match update {
                 Some(view) => {
-                    view.commit().await?;
-                    self.context.add_index(index).await?;
+                    view.commit(batch).await?;
+                    self.context.add_index(batch, index).await?;
                 }
                 None => {
                     let context = self.context.clone_with_scope(&index);
-                    self.context.remove_index(index).await?;
+                    self.context.remove_index(batch, index).await?;
                     let view = W::load(context).await?;
-                    view.delete().await?;
+                    view.delete(batch).await?;
                 }
             }
         }
         Ok(())
     }
 
-    async fn delete(mut self) -> Result<(), C::Error> {
+    async fn delete(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         for index in self.context.indices().await? {
             let context = self.context.clone_with_scope(&index);
-            self.context.remove_index(index).await?;
+            self.context.remove_index(batch, index).await?;
             let view = W::load(context).await?;
-            view.delete().await?;
+            view.delete(batch).await?;
         }
         Ok(())
     }

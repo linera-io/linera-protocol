@@ -21,7 +21,7 @@ generic-array = { version = "0.14.4", features = ["serde"] }
 http = "0.2.7"
 log = "0.4.14"
 paste = "1.0.8"
-rocksdb = "0.18.0"
+rocksdb = "0.19.0"
 serde = { version = "1.0.130", features = ["derive"] }
 sha2 = "0.9.8"
 thiserror = "1.0.31"

@@ -31,6 +31,8 @@ pub struct StateView<C> {
     pub collection: ScopedView<5, CollectionView<C, String, AppendOnlyLogView<C, u32>>>,
     pub collection2:
         ScopedView<6, CollectionView<C, String, CollectionView<C, String, RegisterView<C, u32>>>>,
+    // required
+    context: C,
 }
 
 // This also generates `trait StateViewContext: Context ... {}`
@@ -239,7 +241,7 @@ where
             subview.push(18);
         }
         let hash = view.hash().await.unwrap();
-        view.commit().await.unwrap();
+        view.write_commit().await.unwrap();
         hash
     };
     {
@@ -287,7 +289,7 @@ where
         );
         view.collection.remove_entry("hola".to_string());
         assert_ne!(view.hash().await.unwrap(), stored_hash);
-        view.commit().await.unwrap();
+        view.write_commit().await.unwrap();
     }
     {
         let mut view = store.load(1).await.unwrap();
@@ -299,7 +301,7 @@ where
                 .unwrap();
             assert_eq!(subview.read(0..10).await.unwrap(), vec![]);
         }
-        view.delete().await.unwrap();
+        view.write_delete().await.unwrap();
     }
     staged_hash
 }
