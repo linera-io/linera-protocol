@@ -24,8 +24,8 @@ where
         })
     }
 
-    fn reset_changes(&mut self) {
-        $( self.$field.reset_changes(); )*
+    fn rollback(&mut self) {
+        $( self.$field.rollback(); )*
     }
 
     async fn commit(self) -> Result<(), C::Error> {

@@ -37,7 +37,7 @@ pub trait View<C: Context>: Sized {
     async fn load(context: C) -> Result<Self, C::Error>;
 
     /// Discard all pending changes. After that `commit` should have no effect to storage.
-    fn reset_changes(&mut self);
+    fn rollback(&mut self);
 
     /// Persist changes to storage. This consumes the view. If the view is dropped without
     /// calling `commit`, staged changes are simply lost.
@@ -91,8 +91,8 @@ where
         Ok(Self { view })
     }
 
-    fn reset_changes(&mut self) {
-        self.view.reset_changes();
+    fn rollback(&mut self) {
+        self.view.rollback();
     }
 
     async fn commit(mut self) -> Result<(), C::Error> {
@@ -137,7 +137,7 @@ where
         })
     }
 
-    fn reset_changes(&mut self) {
+    fn rollback(&mut self) {
         self.update = None
     }
 
@@ -229,7 +229,7 @@ where
         })
     }
 
-    fn reset_changes(&mut self) {
+    fn rollback(&mut self) {
         self.new_values.clear();
     }
 
@@ -343,7 +343,7 @@ where
         })
     }
 
-    fn reset_changes(&mut self) {
+    fn rollback(&mut self) {
         self.updates.clear();
     }
 
@@ -460,7 +460,7 @@ where
         })
     }
 
-    fn reset_changes(&mut self) {
+    fn rollback(&mut self) {
         self.front_delete_count = 0;
         self.new_back_values.clear();
     }
@@ -619,7 +619,7 @@ where
         })
     }
 
-    fn reset_changes(&mut self) {
+    fn rollback(&mut self) {
         self.updates.clear();
     }
 
