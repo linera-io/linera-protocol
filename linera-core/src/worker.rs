@@ -420,7 +420,7 @@ where
             // messages.
             chain.validate_incoming_messages().await?;
             // Reset all the staged changes as we were only validating things.
-            chain.reset_changes();
+            chain.rollback();
             (effects, hash)
         };
         // Create the vote and store it in the chain state.

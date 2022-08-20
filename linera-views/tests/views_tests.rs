@@ -125,7 +125,7 @@ where
         assert_eq!(hash, default_hash);
         assert_eq!(view.x1.get(), &0);
         view.x1.set(1);
-        view.reset_changes();
+        view.rollback();
         assert_eq!(view.hash().await.unwrap(), hash);
         view.x2.set(2);
         assert_ne!(view.hash().await.unwrap(), hash);
