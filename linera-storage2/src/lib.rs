@@ -17,7 +17,6 @@ use linera_base::{
     messages::{Certificate, ChainDescription, ChainId, Epoch, Owner},
     system::Balance,
 };
-use linera_views::views::View;
 use std::fmt::Debug;
 
 /// Communicate with a persistent storage using the "views" abstraction.
@@ -103,7 +102,7 @@ pub trait Store {
         chain
             .execution_state_hash
             .set(Some(HashValue::new(&*state)));
-        chain.commit().await?;
+        chain.write_commit().await?;
         Ok(())
     }
 }

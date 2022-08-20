@@ -273,7 +273,7 @@ where
         let info = chain.make_chain_info(self.key_pair());
         let continuation = self.make_continuation(&mut chain).await?;
         // Persist chain.
-        chain.commit().await?;
+        chain.write_commit().await?;
         Ok((info, continuation))
     }
 
@@ -342,7 +342,7 @@ where
                 self.key_pair(),
             );
         let info = chain.make_chain_info(self.key_pair());
-        chain.commit().await?;
+        chain.write_commit().await?;
         Ok(info)
     }
 }
@@ -428,7 +428,7 @@ where
             self.key_pair(),
         );
         let info = chain.make_chain_info(self.key_pair());
-        chain.commit().await?;
+        chain.write_commit().await?;
         Ok(info)
     }
 
@@ -626,7 +626,7 @@ where
                             return Ok(Vec::new());
                         }
                     }
-                    chain.commit().await?;
+                    chain.write_commit().await?;
                 }
                 match last_height {
                     Some(height) => {
@@ -657,7 +657,7 @@ where
                     .mark_outbox_messages_as_received(application_id, recipient, height)
                     .await?
                 {
-                    chain.commit().await?;
+                    chain.write_commit().await?;
                 }
                 Ok(Vec::new())
             }
@@ -676,7 +676,7 @@ where
                     .mark_channel_messages_as_received(&name, application_id, recipient, height)
                     .await?
                 {
-                    chain.commit().await?;
+                    chain.write_commit().await?;
                 }
                 Ok(Vec::new())
             }

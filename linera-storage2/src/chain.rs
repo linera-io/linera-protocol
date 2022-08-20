@@ -45,6 +45,8 @@ pub struct ChainStateView<C> {
     /// Communication state of applications.
     pub communication_states:
         ScopedView<5, CollectionView<C, ApplicationId, CommunicationStateView<C>>>,
+
+    context: C,
 }
 
 impl_view!(
@@ -82,6 +84,8 @@ pub struct CommunicationStateView<C> {
     pub outboxes: ScopedView<1, CollectionView<C, ChainId, OutboxStateView<C>>>,
     /// Channels able to multicast messages to subscribers.
     pub channels: ScopedView<2, CollectionView<C, String, ChannelStateView<C>>>,
+
+    context: C,
 }
 
 impl_view!(
@@ -102,6 +106,8 @@ pub struct OutboxStateView<C> {
     /// Keep sending these certified blocks of ours until they are acknowledged by
     /// receivers.
     pub queue: ScopedView<0, QueueView<C, BlockHeight>>,
+
+    context: C,
 }
 
 impl_view!(
@@ -120,6 +126,8 @@ pub struct InboxStateView<C> {
     /// These events have been executed but the cross-chain requests have not been
     /// received yet.
     pub expected_events: ScopedView<2, QueueView<C, Event>>,
+
+    context: C,
 }
 
 impl_view!(
@@ -137,6 +145,8 @@ pub struct ChannelStateView<C> {
     pub outboxes: ScopedView<1, CollectionView<C, ChainId, OutboxStateView<C>>>,
     /// The latest block height, if any, to be sent to future subscribers.
     pub block_height: ScopedView<2, RegisterView<C, Option<BlockHeight>>>,
+
+    context: C,
 }
 
 impl_view!(

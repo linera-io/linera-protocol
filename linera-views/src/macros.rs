@@ -20,6 +20,7 @@ where
     async fn load(context: C) -> Result<Self, C::Error> {
         $( let $field = ScopedView::load(context.clone()).await?; )*
         Ok(Self {
+            context,
             $( $field ),*
         })
     }
@@ -28,13 +29,17 @@ where
         $( self.$field.rollback(); )*
     }
 
-    async fn commit(self) -> Result<(), C::Error> {
-        $( self.$field.commit().await?; )*
+    async fn commit(self, batch: &mut C::Batch) -> Result<(), C::Error> {
+        use $crate::views::View;
+
+        $( self.$field.commit(batch).await?; )*
         Ok(())
     }
 
-    async fn delete(self) -> Result<(), C::Error> {
-        $( self.$field.delete().await?; )*
+    async fn delete(self, batch: &mut C::Batch) -> Result<(), C::Error> {
+        use $crate::views::View;
+
+        $( self.$field.delete(batch).await?; )*
         Ok(())
     }
 }
@@ -60,7 +65,43 @@ where
     }
 }
 
+impl<C> $name<C>
+where
+    C: $crate::views::Context
+        + Send
+        + Sync
+        + Clone
+        + 'static
+        + $crate::views::ScopedOperations
+        $( + $ops_trait )*
+{
+    pub async fn write_commit(self) -> Result<(), C::Error> {
+        use $crate::views::View;
+
+        let context = self.context;
+        context.run_with_batch(move |batch| {
+            Box::pin(async move {
+                $( self.$field.commit(batch).await?; )*
+                Ok(())
+            })
+        }).await
+    }
+
+    pub async fn write_delete(self) -> Result<(), C::Error> {
+        use $crate::views::View;
+
+        let context = self.context;
+        context.run_with_batch(move |batch| {
+            Box::pin(async move {
+                $( self.$field.delete(batch).await?; )*
+                Ok(())
+            })
+        }).await
+    }
+}
+
 linera_views::paste! {
+
 pub trait [< $name Context >]: $crate::hash::HashingContext
     + Send
     + Sync
