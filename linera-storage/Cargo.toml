@@ -31,7 +31,7 @@ rocksdb = "0.18.0"
 moka = "0.8"
 
 linera-base = { path = "../linera-base" }
-linera-views = { path = "../linera-views" }
+linera-views = { path = "../linera-views", features = ["test"] }
 
 [dev-dependencies]
 anyhow = "1.0.57"

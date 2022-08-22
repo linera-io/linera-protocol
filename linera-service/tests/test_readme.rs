@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//use linera_storage::LocalStackTestContext;
+// use linera_views::test_utils::LocalStackTestContext;
 use std::{io::Write, process::Command};
 use tempfile::tempdir;
 

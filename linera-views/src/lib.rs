@@ -26,5 +26,9 @@ mod macros;
 /// Helper types for interfacing with a LocalStack instance.
 pub mod localstack;
 
+/// Helper types for tests.
+#[cfg(any(test, feature = "test"))]
+pub mod test_utils;
+
 /// For macros.
 pub use paste::paste;

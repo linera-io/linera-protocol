@@ -13,7 +13,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use std::{fmt::Display, net::IpAddr, str::FromStr};
 use thiserror::Error;
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(test)]
 #[path = "unit_tests/s3_storage_tests.rs"]
 pub mod s3_storage_tests;
 

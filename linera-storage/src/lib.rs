@@ -9,9 +9,6 @@ pub use memory_storage::*;
 pub use rocksdb_storage::*;
 pub use s3_storage::*;
 
-#[cfg(any(test, feature = "test"))]
-pub use s3_storage::s3_storage_tests::LocalStackTestContext;
-
 use async_trait::async_trait;
 use futures::future;
 use linera_base::{

@@ -1,131 +1,31 @@
-use super::S3Storage;
+use super::{BucketName, BucketStatus, S3Storage};
+use crate::Storage;
 use anyhow::{Context, Error};
-use aws_sdk_s3::Endpoint;
-use aws_types::SdkConfig;
-use std::env;
-use tokio::sync::{Mutex, MutexGuard};
-#[cfg(test)]
-use {
-    super::{BucketName, BucketStatus},
-    crate::Storage,
-    linera_base::{
-        chain::ChainState,
-        crypto::HashValue,
-        execution::{ExecutionState, SYSTEM},
-        messages::{
-            Block, BlockHeight, Certificate, ChainDescription, ChainId, Epoch, Operation, Value,
-        },
-        system::SystemOperation,
+use async_trait::async_trait;
+use linera_base::{
+    chain::ChainState,
+    crypto::HashValue,
+    execution::{ExecutionState, SYSTEM},
+    messages::{
+        Block, BlockHeight, Certificate, ChainDescription, ChainId, Epoch, Operation, Value,
     },
+    system::SystemOperation,
 };
-
-/// A static lock to prevent multiple tests from using the same LocalStack instance at the same
-/// time.
-static LOCALSTACK_GUARD: Mutex<()> = Mutex::const_new(());
-
-/// Name of the environment variable with the address to a LocalStack instance.
-const LOCALSTACK_ENDPOINT: &str = "LOCALSTACK_ENDPOINT";
-
-/// A type to help tests that need a LocalStack instance.
-pub struct LocalStackTestContext {
-    base_config: SdkConfig,
-    endpoint: Endpoint,
-    _guard: MutexGuard<'static, ()>,
-}
-
-impl LocalStackTestContext {
-    /// Creates an instance of [`LocalStackTestContext`], loading the necessary LocalStack
-    /// configuration.
-    ///
-    /// An address to the LocalStack instance must be specified using a `LOCALSTACK_ENDPOINT`
-    /// environment variable.
-    ///
-    /// This also locks the `LOCALSTACK_GUARD` to enforce only one test has access to the
-    /// LocalStack instance.
-    pub async fn new() -> Result<LocalStackTestContext, Error> {
-        let base_config = aws_config::load_from_env().await;
-        let endpoint = Self::load_endpoint()?;
-        let _guard = LOCALSTACK_GUARD.lock().await;
-
-        let context = LocalStackTestContext {
-            base_config,
-            endpoint,
-            _guard,
-        };
-
-        context.clear().await?;
-
-        Ok(context)
-    }
-
-    /// Creates an [`Endpoint`] using the configuration in the [`LOCALSTACK_ENDPOINT`] environment
-    /// variable.
-    fn load_endpoint() -> Result<Endpoint, Error> {
-        let endpoint_address = env::var(LOCALSTACK_ENDPOINT)
-            .with_context(|| {
-                format!(
-                    "Missing LocalStack endpoint address in {LOCALSTACK_ENDPOINT:?} \
-                    environment variable"
-                )
-            })?
-            .parse()
-            .context("LocalStack endpoint address is not a valid URI")?;
-
-        Ok(Endpoint::immutable(endpoint_address))
-    }
-
-    /// Create a new [`aws_sdk_s3::Config`] for tests, using a LocalStack instance.
-    pub fn config(&self) -> aws_sdk_s3::Config {
-        aws_sdk_s3::config::Builder::from(&self.base_config)
-            .endpoint_resolver(self.endpoint.clone())
-            .build()
-    }
-
-    /// Create a new [`S3Storage`] instance, using a LocalStack instance.
-    pub async fn create_s3_storage(&self) -> Result<S3Storage, Error> {
-        let bucket = "linera".parse().context("Invalid S3 bucket name")?;
-        let (storage, _) = S3Storage::from_config(self.config(), bucket).await?;
-        Ok(storage)
-    }
-
-    /// Remove all buckets from the LocalStack S3 storage.
-    async fn clear(&self) -> Result<(), Error> {
-        let client = aws_sdk_s3::Client::from_conf(self.config());
-
-        for bucket in list_buckets(&client).await? {
-            let objects = client.list_objects().bucket(&bucket).send().await?;
-
-            for object in objects.contents().into_iter().flatten() {
-                if let Some(key) = object.key.as_ref() {
-                    client
-                        .delete_object()
-                        .bucket(&bucket)
-                        .key(key)
-                        .send()
-                        .await?;
-                }
-            }
-
-            client.delete_bucket().bucket(bucket).send().await?;
-        }
-
-        Ok(())
-    }
-}
+use linera_views::test_utils::{list_buckets, LocalStackTestContext};
 
 /// Test if the bucket for the storage is created when needed.
 #[tokio::test]
 #[ignore]
 async fn bucket_is_created() -> Result<(), Error> {
     let localstack = LocalStackTestContext::new().await?;
-    let client = aws_sdk_s3::Client::from_conf(localstack.config());
+    let client = aws_sdk_s3::Client::from_conf(localstack.s3_config());
     let bucket: BucketName = "linera".parse().expect("Invalid bucket name");
 
     let initial_buckets = list_buckets(&client).await?;
     assert!(!initial_buckets.contains(bucket.as_ref()));
 
     let (_storage, bucket_status) =
-        S3Storage::from_config(localstack.config(), bucket.clone()).await?;
+        S3Storage::from_config(localstack.s3_config(), bucket.clone()).await?;
 
     let buckets = list_buckets(&client).await?;
     assert!(buckets.contains(bucket.as_ref()));
@@ -139,7 +39,7 @@ async fn bucket_is_created() -> Result<(), Error> {
 #[ignore]
 async fn separate_buckets_are_created() -> Result<(), Error> {
     let localstack = LocalStackTestContext::new().await?;
-    let client = aws_sdk_s3::Client::from_conf(localstack.config());
+    let client = aws_sdk_s3::Client::from_conf(localstack.s3_config());
     let first_bucket: BucketName = "first".parse().expect("Invalid bucket name");
     let second_bucket: BucketName = "second".parse().expect("Invalid bucket name");
 
@@ -148,9 +48,9 @@ async fn separate_buckets_are_created() -> Result<(), Error> {
     assert!(!initial_buckets.contains(second_bucket.as_ref()));
 
     let (_storage, first_bucket_status) =
-        S3Storage::from_config(localstack.config(), first_bucket.clone()).await?;
+        S3Storage::from_config(localstack.s3_config(), first_bucket.clone()).await?;
     let (_storage, second_bucket_status) =
-        S3Storage::from_config(localstack.config(), second_bucket.clone()).await?;
+        S3Storage::from_config(localstack.s3_config(), second_bucket.clone()).await?;
 
     let buckets = list_buckets(&client).await?;
     assert!(buckets.contains(first_bucket.as_ref()));
@@ -159,19 +59,6 @@ async fn separate_buckets_are_created() -> Result<(), Error> {
     assert_eq!(second_bucket_status, BucketStatus::New);
 
     Ok(())
-}
-
-/// Helper function to list the names of buckets registered on S3.
-async fn list_buckets(client: &aws_sdk_s3::Client) -> Result<Vec<String>, Error> {
-    Ok(client
-        .list_buckets()
-        .send()
-        .await?
-        .buckets
-        .expect("List of buckets was not returned")
-        .into_iter()
-        .filter_map(|bucket| bucket.name)
-        .collect())
 }
 
 /// Test if certificates are stored and retrieved correctly.
@@ -280,4 +167,21 @@ async fn removal_of_chain_state() -> Result<(), Error> {
     assert_eq!(retrieved_chain_state, expected_chain_state);
 
     Ok(())
+}
+
+/// Extension trait to make it easier to create [`S3Storage`] instances from a
+/// [`LocalStackTestContext`].
+#[async_trait]
+trait CreateS3Storage {
+    /// Create a new [`S3Storage`] instance, using a LocalStack instance.
+    async fn create_s3_storage(&self) -> Result<S3Storage, Error>;
+}
+
+#[async_trait]
+impl CreateS3Storage for LocalStackTestContext {
+    async fn create_s3_storage(&self) -> Result<S3Storage, Error> {
+        let bucket = "linera".parse().context("Invalid S3 bucket name")?;
+        let (storage, _) = S3Storage::from_config(self.s3_config(), bucket).await?;
+        Ok(storage)
+    }
 }
