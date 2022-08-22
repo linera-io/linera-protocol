@@ -1,6 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::localstack;
 use aws_sdk_dynamodb::Client;
 use linera_base::ensure;
 use std::{str::FromStr, sync::Arc};
@@ -49,6 +50,25 @@ impl<E> DynamoDbContext<E> {
         let table_status = storage.create_table_if_needed().await?;
 
         Ok((storage, table_status))
+    }
+
+    /// Create a new [`DynamoDbContext`] instance using a LocalStack endpoint.
+    ///
+    /// Requires a [`LOCALSTACK_ENDPOINT`] environment variable with the endpoint address to connect
+    /// to the LocalStack instance. Creates the table if it doesn't exist yet, reporting a
+    /// [`TableStatus`] to indicate if the table was created or if it already exists.
+    pub async fn with_localstack(
+        table: TableName,
+        lock: OwnedMutexGuard<()>,
+        key_prefix: Vec<u8>,
+        extra: E,
+    ) -> Result<(Self, TableStatus), LocalStackError> {
+        let base_config = aws_config::load_from_env().await;
+        let config = aws_sdk_dynamodb::config::Builder::from(&base_config)
+            .endpoint_resolver(localstack::get_endpoint()?)
+            .build();
+
+        Ok(DynamoDbContext::from_config(config, table, lock, key_prefix, extra).await?)
     }
 
     async fn create_table_if_needed(&self) -> Result<TableStatus, CreateTableError> {
@@ -115,3 +135,13 @@ pub enum InvalidTableName {
 /// Error when creating a table for a new [`DynamoDbContext`] instance.
 #[derive(Debug, Error)]
 pub enum CreateTableError {}
+
+/// Error when creating a [`DynamoDbContext`] instance using a LocalStack instance.
+#[derive(Debug, Error)]
+pub enum LocalStackError {
+    #[error(transparent)]
+    Endpoint(#[from] localstack::EndpointError),
+
+    #[error(transparent)]
+    CreateTable(#[from] CreateTableError),
+}
