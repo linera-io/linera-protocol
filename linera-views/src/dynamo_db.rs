@@ -3,7 +3,7 @@
 
 use crate::{
     localstack,
-    views::{Context, ViewError},
+    views::{Context, ScopedOperations, ViewError},
 };
 use async_trait::async_trait;
 use aws_sdk_dynamodb::{
@@ -273,6 +273,22 @@ where
 
     fn extra(&self) -> &E {
         &self.extra
+    }
+}
+
+#[async_trait]
+impl<E> ScopedOperations for DynamoDbContext<E>
+where
+    E: Clone + Send + Sync,
+{
+    fn clone_with_scope(&self, index: u64) -> Self {
+        DynamoDbContext {
+            client: self.client.clone(),
+            table: self.table.clone(),
+            lock: self.lock.clone(),
+            key_prefix: [self.key_prefix.as_slice(), &index.to_le_bytes()].concat(),
+            extra: self.extra.clone(),
+        }
     }
 }
 
