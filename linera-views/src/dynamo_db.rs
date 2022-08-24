@@ -3,7 +3,7 @@
 
 use crate::{
     localstack,
-    views::{Context, RegisterOperations, ScopedOperations, ViewError},
+    views::{AppendOnlyLogOperations, Context, RegisterOperations, ScopedOperations, ViewError},
 };
 use async_trait::async_trait;
 use aws_sdk_dynamodb::{
@@ -310,6 +310,53 @@ where
 
     async fn delete(&mut self) -> Result<(), Self::Error> {
         self.remove_item(&()).await?;
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl<E, T> AppendOnlyLogOperations<T> for DynamoDbContext<E>
+where
+    T: Serialize + DeserializeOwned + Send + Sync + 'static,
+    E: Clone + Send + Sync,
+{
+    async fn count(&mut self) -> Result<usize, Self::Error> {
+        let count = self.get_item(&()).await?.unwrap_or_default();
+        Ok(count)
+    }
+
+    async fn get(&mut self, index: usize) -> Result<Option<T>, Self::Error> {
+        self.get_item(&index).await
+    }
+
+    async fn read(&mut self, range: std::ops::Range<usize>) -> Result<Vec<T>, Self::Error> {
+        let mut items = Vec::with_capacity(range.len());
+        for index in range {
+            let item = match self.get_item(&index).await? {
+                Some(item) => item,
+                None => return Ok(items),
+            };
+            items.push(item);
+        }
+        Ok(items)
+    }
+
+    async fn append(&mut self, values: Vec<T>) -> Result<(), Self::Error> {
+        let mut count = AppendOnlyLogOperations::<T>::count(self).await?;
+        for value in values {
+            self.put_item(&count, &value).await?;
+            count += 1;
+        }
+        self.put_item(&(), &count).await?;
+        Ok(())
+    }
+
+    async fn delete(&mut self) -> Result<(), Self::Error> {
+        let count = AppendOnlyLogOperations::<T>::count(self).await?;
+        self.remove_item(&()).await?;
+        for index in 0..count {
+            self.remove_item(&index).await?;
+        }
         Ok(())
     }
 }
