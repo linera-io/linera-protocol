@@ -3,7 +3,10 @@
 
 use crate::{
     localstack,
-    views::{AppendOnlyLogOperations, Context, RegisterOperations, ScopedOperations, ViewError},
+    views::{
+        AppendOnlyLogOperations, Context, QueueOperations, RegisterOperations, ScopedOperations,
+        ViewError,
+    },
 };
 use async_trait::async_trait;
 use aws_sdk_dynamodb::{
@@ -16,7 +19,7 @@ use aws_sdk_dynamodb::{
 };
 use linera_base::ensure;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{collections::HashMap, io, str::FromStr, sync::Arc};
+use std::{collections::HashMap, io, ops::Range, str::FromStr, sync::Arc};
 use thiserror::Error;
 use tokio::sync::OwnedMutexGuard;
 
@@ -355,6 +358,61 @@ where
         let count = AppendOnlyLogOperations::<T>::count(self).await?;
         self.remove_item(&()).await?;
         for index in 0..count {
+            self.remove_item(&index).await?;
+        }
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl<E, T> QueueOperations<T> for DynamoDbContext<E>
+where
+    T: Serialize + DeserializeOwned + Send + Sync + 'static,
+    E: Clone + Send + Sync,
+{
+    async fn indices(&mut self) -> Result<Range<usize>, Self::Error> {
+        let range = self.get_item(&()).await?.unwrap_or_default();
+        Ok(range)
+    }
+
+    async fn get(&mut self, index: usize) -> Result<Option<T>, Self::Error> {
+        Ok(self.get_item(&index).await?)
+    }
+
+    async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error> {
+        let mut values = Vec::new();
+        for index in range {
+            match self.get_item(&index).await? {
+                None => return Ok(values),
+                Some(value) => values.push(value),
+            }
+        }
+        Ok(values)
+    }
+
+    async fn delete_front(&mut self, count: usize) -> Result<(), Self::Error> {
+        let mut range: Range<usize> = self.get_item(&()).await?.unwrap_or_default();
+        range.start += count;
+        self.put_item(&(), &range).await?;
+        for index in 0..count {
+            self.remove_item(&index).await?;
+        }
+        Ok(())
+    }
+
+    async fn append_back(&mut self, values: Vec<T>) -> Result<(), Self::Error> {
+        let mut range: Range<usize> = self.get_item(&()).await?.unwrap_or_default();
+        for value in values {
+            self.put_item(&range.end, &value).await?;
+            range.end += 1;
+        }
+        self.put_item(&(), &range).await
+    }
+
+    async fn delete(&mut self) -> Result<(), Self::Error> {
+        let range: Range<usize> = self.get_item(&()).await?.unwrap_or_default();
+        self.remove_item(&()).await?;
+        for index in range {
             self.remove_item(&index).await?;
         }
         Ok(())
