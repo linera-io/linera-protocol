@@ -4,7 +4,7 @@
 #[macro_export]
 macro_rules! impl_view {
 
-    ($name: ident { $($field:ident),* }; $($op_name:ident < $($op_param:ty),+ >),* ) => {
+    ($name: ident { $($field:ident),* $(,)? }; $($op_name:ident < $($op_param:ty),+ >),* $(,)? ) => {
 
 #[async_trait]
 impl<C> View<C> for $name<C>
