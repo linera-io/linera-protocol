@@ -50,7 +50,14 @@ pub struct ChainStateView<C> {
 }
 
 impl_view!(
-    ChainStateView{ execution_state, execution_state_hash, chaining_state, confirmed_log, received_log, communication_states};
+    ChainStateView {
+        execution_state,
+        execution_state_hash,
+        chaining_state,
+        confirmed_log,
+        received_log,
+        communication_states,
+    };
     RegisterOperations<ExecutionState>,
     RegisterOperations<Option<HashValue>>,
     RegisterOperations<ChainingState>,
@@ -68,7 +75,7 @@ impl_view!(
     // from CommunicationStateView
     CollectionOperations<Origin>,
     CollectionOperations<ChainId>,
-    CollectionOperations<String>
+    CollectionOperations<String>,
 );
 
 /// Block-chaining state.
