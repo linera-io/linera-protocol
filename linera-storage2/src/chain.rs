@@ -36,7 +36,7 @@ pub struct ChainStateView<C> {
     pub execution_state_hash: ScopedView<1, RegisterView<C, Option<HashValue>>>,
 
     /// Block-chaining state.
-    pub chaining_state: ScopedView<2, RegisterView<C, ChainingState>>,
+    pub tip_state: ScopedView<2, RegisterView<C, ChainTipState>>,
 
     /// Hashes of all certified blocks for this sender.
     /// This ends with `block_hash` and has length `usize::from(next_block_height)`.
@@ -53,14 +53,14 @@ impl_view!(
     ChainStateView {
         execution_state,
         execution_state_hash,
-        chaining_state,
+        tip_state,
         confirmed_log,
         received_log,
         communication_states,
     };
     RegisterOperations<ExecutionState>,
     RegisterOperations<Option<HashValue>>,
-    RegisterOperations<ChainingState>,
+    RegisterOperations<ChainTipState>,
     AppendOnlyLogOperations<HashValue>,
     CollectionOperations<ApplicationId>,
     // from OutboxStateView
@@ -80,7 +80,7 @@ impl_view!(
 
 /// Block-chaining state.
 #[derive(Debug, Default, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub struct ChainingState {
+pub struct ChainTipState {
     /// Hash of the latest certified block in this chain, if any.
     pub block_hash: Option<HashValue>,
     /// Sequence number tracking blocks.
@@ -267,10 +267,10 @@ where
 
     pub fn make_chain_info(&self, key_pair: Option<&KeyPair>) -> ChainInfoResponse {
         let state = self.execution_state.get();
-        let ChainingState {
+        let ChainTipState {
             block_hash,
             next_block_height,
-        } = self.chaining_state.get();
+        } = self.tip_state.get();
         let info = ChainInfo {
             chain_id: self.chain_id(),
             epoch: state.system.epoch,

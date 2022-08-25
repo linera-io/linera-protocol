@@ -1217,7 +1217,7 @@ where
     assert_eq!(Balance::from(0), chain.execution_state.get().system.balance);
     assert_eq!(
         BlockHeight::from(1),
-        chain.chaining_state.get().next_block_height
+        chain.tip_state.get().next_block_height
     );
     assert_eq!(
         BlockHeight::from(0),
@@ -1252,10 +1252,7 @@ where
         Event { height, index: 0, effect: Effect::System(SystemEffect::Credit { amount, .. })} if height == BlockHeight::from(0) && amount == Amount::from(995),
     ));
     assert_eq!(chain.confirmed_log.count(), 1);
-    assert_eq!(
-        Some(certificate.hash),
-        chain.chaining_state.get().block_hash
-    );
+    assert_eq!(Some(certificate.hash), chain.tip_state.get().block_hash);
     worker
         .storage
         .load_active_chain(ChainId::root(2))
@@ -1325,12 +1322,12 @@ where
     );
     assert_eq!(
         BlockHeight::from(1),
-        new_sender_chain.chaining_state.get().next_block_height
+        new_sender_chain.tip_state.get().next_block_height
     );
     assert_eq!(new_sender_chain.confirmed_log.count(), 1);
     assert_eq!(
         Some(certificate.hash),
-        new_sender_chain.chaining_state.get().block_hash
+        new_sender_chain.tip_state.get().block_hash
     );
     let new_recipient_chain = worker
         .storage
@@ -1407,13 +1404,10 @@ where
     ));
     assert_eq!(
         BlockHeight::from(1),
-        chain.chaining_state.get().next_block_height
+        chain.tip_state.get().next_block_height
     );
     assert_eq!(chain.confirmed_log.count(), 1);
-    assert_eq!(
-        Some(certificate.hash),
-        chain.chaining_state.get().block_hash
-    );
+    assert_eq!(Some(certificate.hash), chain.tip_state.get().block_hash);
 }
 
 #[test(tokio::test)]
@@ -1472,7 +1466,7 @@ where
     assert_eq!(Balance::from(1), chain.execution_state.get().system.balance);
     assert_eq!(
         BlockHeight::from(0),
-        chain.chaining_state.get().next_block_height
+        chain.tip_state.get().next_block_height
     );
     assert_eq!(
         BlockHeight::from(1),
@@ -1493,7 +1487,7 @@ where
         Event { height, index: 0, effect: Effect::System(SystemEffect::Credit { amount, .. })} if height == BlockHeight::from(0) && amount == Amount::from(10),
     ));
     assert_eq!(chain.confirmed_log.count(), 0);
-    assert_eq!(None, chain.chaining_state.get().block_hash);
+    assert_eq!(None, chain.tip_state.get().block_hash);
     assert_eq!(chain.received_log.count(), 1);
 }
 
@@ -1714,7 +1708,7 @@ where
             .has_owner(&recipient_key_pair.public().into()));
         assert_eq!(recipient_chain.confirmed_log.count(), 1);
         assert_eq!(
-            recipient_chain.chaining_state.get().block_hash,
+            recipient_chain.tip_state.get().block_hash,
             Some(certificate.hash)
         );
         assert_eq!(recipient_chain.received_log.count(), 1);
@@ -1891,7 +1885,7 @@ where
         admin_chain.validate_incoming_messages().await.unwrap();
         assert_eq!(
             BlockHeight::from(1),
-            admin_chain.chaining_state.get().next_block_height
+            admin_chain.tip_state.get().next_block_height
         );
         // FIXME: we do not clean up empty outboxes yet.
         assert!(!admin_chain
@@ -2065,7 +2059,7 @@ where
         let mut user_chain = worker.storage.load_active_chain(user_id).await.unwrap();
         assert_eq!(
             BlockHeight::from(0),
-            user_chain.chaining_state.get().next_block_height
+            user_chain.tip_state.get().next_block_height
         );
         assert_eq!(
             user_chain.execution_state.get().system.admin_id,
@@ -2211,7 +2205,7 @@ where
         let mut user_chain = worker.storage.load_active_chain(user_id).await.unwrap();
         assert_eq!(
             BlockHeight::from(1),
-            user_chain.chaining_state.get().next_block_height
+            user_chain.tip_state.get().next_block_height
         );
         assert_eq!(
             user_chain.execution_state.get().system.admin_id,
@@ -2395,7 +2389,7 @@ where
     let user_chain = worker.storage.load_active_chain(user_id).await.unwrap();
     assert_eq!(
         BlockHeight::from(1),
-        user_chain.chaining_state.get().next_block_height
+        user_chain.tip_state.get().next_block_height
     );
     assert_eq!(
         user_chain.execution_state.get().system.balance,
@@ -2604,7 +2598,7 @@ where
     let user_chain = worker.storage.load_active_chain(user_id).await.unwrap();
     assert_eq!(
         BlockHeight::from(1),
-        user_chain.chaining_state.get().next_block_height
+        user_chain.tip_state.get().next_block_height
     );
     assert_eq!(
         user_chain.execution_state.get().system.balance,
