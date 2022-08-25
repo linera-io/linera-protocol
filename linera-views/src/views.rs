@@ -17,13 +17,7 @@ pub trait Context {
     type Extra: Clone + Send + Sync;
 
     /// The error type in use.
-    type Error: std::error::Error
-        + Debug
-        + Send
-        + Sync
-        + From<ViewError>
-        + From<std::io::Error>
-        + From<bcs::Error>;
+    type Error: std::error::Error + Debug + Send + Sync + From<ViewError> + From<std::io::Error>;
 
     /// Getter for the user provided data.
     fn extra(&self) -> &Self::Extra;
@@ -52,6 +46,9 @@ pub trait View<C: Context>: Sized {
 pub enum ViewError {
     #[error("the entry with key {0} was removed thus cannot be loaded any more")]
     RemovedEntry(String),
+
+    #[error("failed to serialize value to calculate its hash")]
+    Serialization(#[from] bcs::Error),
 }
 
 /// A view that adds a prefix to all the keys of the contained view.
