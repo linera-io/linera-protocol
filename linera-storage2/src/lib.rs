@@ -87,8 +87,16 @@ pub trait Store {
         description: ChainDescription,
         owner: Owner,
         balance: Balance,
-    ) -> Result<(), <Self::Context as Context>::Error> {
-        let mut chain = self.load_chain(description.into()).await?;
+    ) -> Result<(), linera_base::error::Error>
+    where
+        linera_base::error::Error: From<<Self::Context as Context>::Error>,
+    {
+        let id = description.into();
+        let mut chain = self.load_chain(id).await?;
+        ensure!(
+            !chain.is_active(),
+            linera_base::error::Error::InactiveChain(id)
+        );
         let state = chain.execution_state.get_mut();
         state.system.description = Some(description);
         state.system.epoch = Some(Epoch::from(0));
@@ -99,6 +107,7 @@ pub trait Store {
         chain
             .execution_state_hash
             .set(Some(HashValue::new(&*state)));
-        chain.commit().await
+        chain.commit().await?;
+        Ok(())
     }
 }
