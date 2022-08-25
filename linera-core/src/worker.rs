@@ -215,13 +215,13 @@ where
         let sender = block.chain_id;
         // Check that the chain is active and ready for this confirmation.
         let mut chain = self.storage.load_active_chain(sender).await?;
-        let chaining = chain.chaining_state.get();
-        if chaining.next_block_height < block.height {
+        let tip = chain.tip_state.get();
+        if tip.next_block_height < block.height {
             return Err(Error::MissingEarlierBlocks {
-                current_block_height: chaining.next_block_height,
+                current_block_height: tip.next_block_height,
             });
         }
-        if chaining.next_block_height > block.height {
+        if tip.next_block_height > block.height {
             // Block was already confirmed.
             let info = chain.make_chain_info(self.key_pair());
             let continuation = self.make_continuation(&mut chain).await?;
@@ -253,7 +253,7 @@ where
             .map_err(|_| Error::InvalidCertificate)?;
         // This should always be true for valid certificates.
         ensure!(
-            chaining.block_hash == block.previous_block_hash,
+            tip.block_hash == block.previous_block_hash,
             Error::InvalidBlockChaining
         );
         // Persist certificate.
@@ -264,9 +264,9 @@ where
         let verified_effects = chain.execute_block(block).await?;
         ensure!(effects == verified_effects, Error::IncorrectEffects);
         // Advance to next block height.
-        let chaining = chain.chaining_state.get_mut();
-        chaining.block_hash = Some(certificate.hash);
-        chaining.next_block_height.try_add_assign_one()?;
+        let tip = chain.tip_state.get_mut();
+        tip.block_hash = Some(certificate.hash);
+        tip.next_block_height.try_add_assign_one()?;
         chain.confirmed_log.push(certificate.hash);
         // We should always agree on the state hash.
         ensure!(
@@ -325,7 +325,7 @@ where
             .get_mut()
             .system
             .manager
-            .check_validated_block(chain.chaining_state.get().next_block_height, block, round)?
+            .check_validated_block(chain.tip_state.get().next_block_height, block, round)?
             == Outcome::Skip
         {
             // If we just processed the same pending block, return the chain info
@@ -399,8 +399,8 @@ where
             .system
             .manager
             .check_proposed_block(
-                chain.chaining_state.get().block_hash,
-                chain.chaining_state.get().next_block_height,
+                chain.tip_state.get().block_hash,
+                chain.tip_state.get().next_block_height,
                 &proposal.content.block,
                 proposal.content.round,
             )?
@@ -467,10 +467,10 @@ where
         }
         if let Some(next_block_height) = query.test_next_block_height {
             ensure!(
-                chain.chaining_state.get().next_block_height == next_block_height,
+                chain.tip_state.get().next_block_height == next_block_height,
                 Error::UnexpectedBlockHeight {
                     expected_block_height: next_block_height,
-                    found_block_height: chain.chaining_state.get().next_block_height
+                    found_block_height: chain.tip_state.get().next_block_height
                 }
             );
         }
