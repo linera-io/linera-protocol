@@ -190,11 +190,20 @@ impl<E> DynamoDbContext<E> {
             .send()
             .await?;
 
-        let item = match response.item() {
-            Some(item) => item,
-            None => return Ok(None),
-        };
-        let bytes = item
+        match response.item() {
+            Some(item) => Ok(Some(Self::extract_value(item)?)),
+            None => Ok(None),
+        }
+    }
+
+    /// Extract the value attribute from an item and deserialize it into the `Value` type.
+    fn extract_value<Value>(
+        attributes: &HashMap<String, AttributeValue>,
+    ) -> Result<Value, DynamoDbContextError>
+    where
+        Value: DeserializeOwned,
+    {
+        let bytes = attributes
             .get(VALUE_ATTRIBUTE)
             .ok_or(DynamoDbContextError::MissingValue)?
             .as_b()
