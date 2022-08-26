@@ -4,8 +4,8 @@
 use crate::{
     localstack,
     views::{
-        AppendOnlyLogOperations, Context, QueueOperations, RegisterOperations, ScopedOperations,
-        ViewError,
+        AppendOnlyLogOperations, Context, MapOperations, QueueOperations, RegisterOperations,
+        ScopedOperations, ViewError,
     },
 };
 use async_trait::async_trait;
@@ -515,6 +515,40 @@ where
         for index in range {
             self.remove_item(&index).await?;
         }
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl<E, I, V> MapOperations<I, V> for DynamoDbContext<E>
+where
+    I: Eq + Ord + Send + Sync + Serialize + DeserializeOwned + Clone + 'static,
+    V: Serialize + DeserializeOwned + Send + Sync + 'static,
+    E: Clone + Send + Sync,
+{
+    async fn get(&mut self, index: &I) -> Result<Option<V>, Self::Error> {
+        Ok(self.get_item(&index).await?)
+    }
+
+    async fn insert(&mut self, index: I, value: V) -> Result<(), Self::Error> {
+        self.put_item(&index, &value).await?;
+        Ok(())
+    }
+
+    async fn remove(&mut self, index: I) -> Result<(), Self::Error> {
+        self.remove_item(&index).await?;
+        Ok(())
+    }
+
+    async fn indices(&mut self) -> Result<Vec<I>, Self::Error> {
+        self.get_sub_keys(&()).await
+    }
+
+    async fn delete(&mut self) -> Result<(), Self::Error> {
+        for key in self.get_sub_keys::<I, _>(&()).await? {
+            self.remove_item(&key).await?;
+        }
+
         Ok(())
     }
 }
