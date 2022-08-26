@@ -16,7 +16,6 @@ use linera_base::{
     system::{Amount, Balance, SystemOperation, UserData},
 };
 use linera_storage2::{MemoryStoreClient, RocksdbStoreClient, Store};
-use linera_views::views;
 use once_cell::sync::Lazy;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -39,7 +38,7 @@ struct LocalValidatorClient<S>(Arc<Mutex<LocalValidator<S>>>);
 impl<S> ValidatorNode for LocalValidatorClient<S>
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<<S::Context as views::Context>::Error>,
+    Error: From<S::Error>,
 {
     async fn handle_block_proposal(
         &mut self,
@@ -89,7 +88,7 @@ struct NodeProvider<S>(BTreeMap<ValidatorName, LocalValidatorClient<S>>);
 impl<S> ValidatorNodeProvider for NodeProvider<S>
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<<S::Context as views::Context>::Error>,
+    Error: From<S::Error>,
 {
     type Node = LocalValidatorClient<S>;
 
@@ -150,7 +149,7 @@ impl GenesisStoreBuilder {
     ) -> S
     where
         S: Store + Clone + Send + Sync + 'static,
-        Error: From<<S::Context as views::Context>::Error>,
+        Error: From<S::Error>,
         F: Fn() -> S,
     {
         let store = store_builder();
@@ -173,7 +172,7 @@ impl GenesisStoreBuilder {
 impl<S> TestBuilder<S>
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<<S::Context as views::Context>::Error>,
+    Error: From<S::Error>,
 {
     fn new(store_builder: fn() -> S, count: usize, with_faulty_validators: usize) -> Self {
         let mut key_pairs = Vec::new();
@@ -366,7 +365,7 @@ async fn test_rocksdb_initiating_valid_transfer() {
 async fn run_test_initiating_valid_transfer<S>(store_builder: fn() -> S)
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<<S::Context as views::Context>::Error>,
+    Error: From<S::Error>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1);
     let mut sender = builder
@@ -407,7 +406,7 @@ async fn test_rocksdb_rotate_key_pair() {
 async fn run_test_rotate_key_pair<S>(store_builder: fn() -> S)
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<<S::Context as views::Context>::Error>,
+    Error: From<S::Error>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1);
     let mut sender = builder
@@ -453,7 +452,7 @@ async fn test_rocksdb_transfer_ownership() {
 async fn run_test_transfer_ownership<S>(store_builder: fn() -> S)
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<<S::Context as views::Context>::Error>,
+    Error: From<S::Error>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1);
     let mut sender = builder
@@ -500,7 +499,7 @@ async fn test_rocksdb_share_ownership() {
 async fn run_test_share_ownership<S>(store_builder: fn() -> S)
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<<S::Context as views::Context>::Error>,
+    Error: From<S::Error>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1);
     let mut sender = builder
@@ -568,7 +567,7 @@ async fn test_rocksdb_open_chain_then_close_it() {
 async fn run_test_open_chain_then_close_it<S>(store_builder: fn() -> S)
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<<S::Context as views::Context>::Error>,
+    Error: From<S::Error>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1);
     // New chains use the admin chain to verify their creation certificate.
@@ -612,7 +611,7 @@ async fn test_rocksdb_transfer_then_open_chain() {
 async fn run_test_transfer_then_open_chain<S>(store_builder: fn() -> S)
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<<S::Context as views::Context>::Error>,
+    Error: From<S::Error>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1);
     // New chains use the admin chain to verify their creation certificate.
@@ -680,7 +679,7 @@ async fn test_rocksdb_open_chain_then_transfer() {
 async fn run_test_open_chain_then_transfer<S>(store_builder: fn() -> S)
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<<S::Context as views::Context>::Error>,
+    Error: From<S::Error>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1);
     // New chains use the admin chain to verify their creation certificate.
@@ -738,7 +737,7 @@ async fn test_rocksdb_close_chain() {
 async fn run_test_close_chain<S>(store_builder: fn() -> S)
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<<S::Context as views::Context>::Error>,
+    Error: From<S::Error>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1);
     let mut sender = builder
@@ -787,7 +786,7 @@ async fn test_rocksdb_initiating_valid_transfer_too_many_faults() {
 async fn run_test_initiating_valid_transfer_too_many_faults<S>(store_builder: fn() -> S)
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<<S::Context as views::Context>::Error>,
+    Error: From<S::Error>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 2);
     let mut sender = builder
@@ -820,7 +819,7 @@ async fn test_rocksdb_bidirectional_transfer() {
 async fn run_test_bidirectional_transfer<S>(store_builder: fn() -> S)
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<<S::Context as views::Context>::Error>,
+    Error: From<S::Error>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1);
     let mut client1 = builder
@@ -886,7 +885,7 @@ async fn test_rocksdb_receiving_unconfirmed_transfer() {
 async fn run_test_receiving_unconfirmed_transfer<S>(store_builder: fn() -> S)
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<<S::Context as views::Context>::Error>,
+    Error: From<S::Error>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1);
     let mut client1 = builder
@@ -928,7 +927,7 @@ async fn run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances<S>
     store_builder: fn() -> S,
 ) where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<<S::Context as views::Context>::Error>,
+    Error: From<S::Error>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1);
     let mut client1 = builder
@@ -1018,7 +1017,7 @@ async fn test_rocksdb_change_voting_rights() {
 async fn run_test_change_voting_rights<S>(store_builder: fn() -> S)
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<<S::Context as views::Context>::Error>,
+    Error: From<S::Error>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1);
     let mut admin = builder

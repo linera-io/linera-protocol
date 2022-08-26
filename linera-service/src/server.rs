@@ -17,7 +17,6 @@ use linera_service::{
     transport,
 };
 use linera_storage2::Store;
-use linera_views::views;
 use log::*;
 use std::{
     path::{Path, PathBuf},
@@ -77,7 +76,7 @@ impl ServerContext {
 impl<S> Runnable<S> for ServerContext
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<<S::Context as views::Context>::Error>,
+    Error: From<S::Error>,
 {
     type Output = ();
 

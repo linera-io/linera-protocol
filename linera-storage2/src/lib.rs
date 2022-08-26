@@ -17,29 +17,25 @@ use linera_base::{
     messages::{Certificate, ChainDescription, ChainId, Epoch, Owner},
     system::Balance,
 };
-use linera_views::views::{Context, View};
+use linera_views::views::View;
+use std::fmt::Debug;
 
 /// Communicate with a persistent storage using the "views" abstraction.
 #[async_trait]
 pub trait Store {
     /// The `context` data-type provided by the storage implementation in use.
-    type Context: chain::ChainStateViewContext<Extra = ChainId>;
+    type Context: chain::ChainStateViewContext<Extra = ChainId, Error = Self::Error>;
+    type Error: std::error::Error + Debug + Sync + Send;
 
     /// Load the view of a chain state.
     async fn load_chain(
         &self,
         id: ChainId,
-    ) -> Result<chain::ChainStateView<Self::Context>, <Self::Context as Context>::Error>;
+    ) -> Result<chain::ChainStateView<Self::Context>, Self::Error>;
 
-    async fn read_certificate(
-        &self,
-        hash: HashValue,
-    ) -> Result<Certificate, <Self::Context as Context>::Error>;
+    async fn read_certificate(&self, hash: HashValue) -> Result<Certificate, Self::Error>;
 
-    async fn write_certificate(
-        &self,
-        certificate: Certificate,
-    ) -> Result<(), <Self::Context as Context>::Error>;
+    async fn write_certificate(&self, certificate: Certificate) -> Result<(), Self::Error>;
 
     /// Load the view of a chain state and check that it is active.
     async fn load_active_chain(
@@ -47,7 +43,7 @@ pub trait Store {
         id: ChainId,
     ) -> Result<chain::ChainStateView<Self::Context>, linera_base::error::Error>
     where
-        linera_base::error::Error: From<<Self::Context as Context>::Error>,
+        linera_base::error::Error: From<Self::Error>,
     {
         let chain = self.load_chain(id).await?;
         ensure!(
@@ -60,7 +56,7 @@ pub trait Store {
     async fn read_certificates<I: IntoIterator<Item = HashValue> + Send>(
         &self,
         keys: I,
-    ) -> Result<Vec<Certificate>, <Self::Context as Context>::Error>
+    ) -> Result<Vec<Certificate>, Self::Error>
     where
         Self: Clone + Send + 'static,
     {
@@ -89,7 +85,7 @@ pub trait Store {
         balance: Balance,
     ) -> Result<(), linera_base::error::Error>
     where
-        linera_base::error::Error: From<<Self::Context as Context>::Error>,
+        linera_base::error::Error: From<Self::Error>,
     {
         let id = description.into();
         let mut chain = self.load_chain(id).await?;
