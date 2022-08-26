@@ -519,7 +519,11 @@ impl DynamoDbContextError {
     ///
     /// If the value type is in the correct type, a binary blob.
     pub fn wrong_value_type(value: &AttributeValue) -> Self {
-        let type_description = match value {
+        DynamoDbContextError::WrongValueType(Self::type_description_of(value))
+    }
+
+    fn type_description_of(value: &AttributeValue) -> String {
+        match value {
             AttributeValue::B(_) => unreachable!("creating an error type for the correct type"),
             AttributeValue::Bool(_) => "a boolean",
             AttributeValue::Bs(_) => "a list of binary blobs",
@@ -532,9 +536,7 @@ impl DynamoDbContextError {
             AttributeValue::Ss(_) => "a list of strings",
             _ => "an unknown type",
         }
-        .to_owned();
-
-        DynamoDbContextError::WrongValueType(type_description)
+        .to_owned()
     }
 }
 
