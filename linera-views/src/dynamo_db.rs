@@ -4,8 +4,8 @@
 use crate::{
     localstack,
     views::{
-        AppendOnlyLogOperations, Context, MapOperations, QueueOperations, RegisterOperations,
-        ScopedOperations, ViewError,
+        AppendOnlyLogOperations, CollectionOperations, Context, MapOperations, QueueOperations,
+        RegisterOperations, ScopedOperations, ViewError,
     },
 };
 use async_trait::async_trait;
@@ -555,6 +555,51 @@ where
         }
 
         Ok(())
+    }
+}
+
+/// A marker type used to distinguish keys from the current scope from the keys of sub-views.
+///
+/// Sub-views in a collection share a common key prefix, like in other view types. However,
+/// just concatenating the shared prefix with sub-view keys makes it impossible to distinguish if a
+/// given key belongs to child sub-view or a grandchild sub-view (consider for example if a
+/// collection is stored inside the collection).
+///
+/// The solution to this is to use a marker type to have two sets of keys, where
+/// [`CollectionKey::Index`] serves to indicate the existence of an entry in the collection, and
+/// [`CollectionKey::Subvie`] serves as the prefix for the sub-view.
+#[derive(Serialize)]
+enum CollectionKey<I> {
+    Index(I),
+    Subview(I),
+}
+
+#[async_trait]
+impl<E, I> CollectionOperations<I> for DynamoDbContext<E>
+where
+    I: serde::Serialize + serde::de::DeserializeOwned + Send + Sync + 'static,
+    E: Clone + Send + Sync,
+{
+    fn clone_with_scope(&self, index: &I) -> Self {
+        DynamoDbContext {
+            client: self.client.clone(),
+            table: self.table.clone(),
+            lock: self.lock.clone(),
+            key_prefix: self.extend_prefix(&CollectionKey::Subview(index)),
+            extra: self.extra.clone(),
+        }
+    }
+
+    async fn add_index(&mut self, index: I) -> Result<(), Self::Error> {
+        self.put_item(&CollectionKey::Index(index), &()).await
+    }
+
+    async fn remove_index(&mut self, index: I) -> Result<(), Self::Error> {
+        self.remove_item(&CollectionKey::Index(index)).await
+    }
+
+    async fn indices(&mut self) -> Result<Vec<I>, Self::Error> {
+        self.get_sub_keys(&CollectionKey::Index(())).await
     }
 }
 
