@@ -213,6 +213,25 @@ impl<E> DynamoDbContext<E> {
         }
     }
 
+    /// Extract the key attribute from an item and deserialize it into the `Key` type.
+    fn extract_key<Key>(
+        &self,
+        attributes: &HashMap<String, AttributeValue>,
+        extra_bytes_to_skip: Option<usize>,
+    ) -> Result<Key, DynamoDbContextError>
+    where
+        Key: DeserializeOwned,
+    {
+        Self::extract_attribute(
+            attributes,
+            KEY_ATTRIBUTE,
+            Some(self.key_prefix.len() + extra_bytes_to_skip.unwrap_or(0)),
+            DynamoDbContextError::MissingKey,
+            DynamoDbContextError::wrong_key_type,
+            DynamoDbContextError::KeyDeserialization,
+        )
+    }
+
     /// Extract the value attribute from an item and deserialize it into the `Value` type.
     fn extract_value<Value>(
         attributes: &HashMap<String, AttributeValue>,
@@ -220,15 +239,50 @@ impl<E> DynamoDbContext<E> {
     where
         Value: DeserializeOwned,
     {
+        Self::extract_attribute(
+            attributes,
+            VALUE_ATTRIBUTE,
+            None,
+            DynamoDbContextError::MissingValue,
+            DynamoDbContextError::wrong_value_type,
+            DynamoDbContextError::ValueDeserialization,
+        )
+    }
+
+    /// Extract the requested `attribute` from an item and deserialize it into the `Data` type.
+    ///
+    /// # Parameters
+    ///
+    /// - `attributes`: the attributes of the item
+    /// - `attribute`: the attribute to extract
+    /// - `bytes_to_skip`: the number of bytes from the value blob to ignore before attempting to
+    ///   deserialize it
+    /// - `missing_error`: error to return if the requested attribute is missing
+    /// - `type_error`: error to return if the attribute value is not a binary blob
+    /// - `deserialization_error`: error to return if the attribute value blob can't be
+    ///   deserialized into a `Data` instance
+    fn extract_attribute<Data>(
+        attributes: &HashMap<String, AttributeValue>,
+        attribute: &str,
+        bytes_to_skip: Option<usize>,
+        missing_error: DynamoDbContextError,
+        type_error: impl FnOnce(&AttributeValue) -> DynamoDbContextError,
+        deserialization_error: impl FnOnce(bcs::Error) -> DynamoDbContextError,
+    ) -> Result<Data, DynamoDbContextError>
+    where
+        Data: DeserializeOwned,
+    {
         let bytes = attributes
-            .get(VALUE_ATTRIBUTE)
-            .ok_or(DynamoDbContextError::MissingValue)?
+            .get(attribute)
+            .ok_or(missing_error)?
             .as_b()
-            .map_err(DynamoDbContextError::wrong_value_type)?;
+            .map_err(type_error)?
+            .as_ref()
+            .to_owned();
+        let data_start = bytes_to_skip.unwrap_or(0);
+        let data_bytes = &bytes[data_start..];
 
-        let item = bcs::from_bytes(bytes.as_ref())?;
-
-        Ok(item)
+        bcs::from_bytes(data_bytes).map_err(deserialization_error)
     }
 
     /// Store a generic `value` into the table using the provided `key` prefixed by the current
@@ -487,14 +541,23 @@ pub enum DynamoDbContextError {
     #[error(transparent)]
     Delete(#[from] Box<SdkError<aws_sdk_dynamodb::error::DeleteItemError>>),
 
+    #[error("The stored key attribute is missing")]
+    MissingKey,
+
+    #[error("Key was stored as {0}, but it was expected to be stored as a binary blob")]
+    WrongKeyType(String),
+
     #[error("The stored value attribute is missing")]
     MissingValue,
 
     #[error("Value was stored as {0}, but it was expected to be stored as a binary blob")]
     WrongValueType(String),
 
+    #[error("Failed to deserialize key")]
+    KeyDeserialization(#[source] bcs::Error),
+
     #[error("Failed to deserialize value")]
-    ValueDeserialization(#[from] bcs::Error),
+    ValueDeserialization(#[source] bcs::Error),
 
     #[error("IO error")]
     Io(#[from] io::Error),
@@ -513,6 +576,15 @@ where
 }
 
 impl DynamoDbContextError {
+    /// Create a [`DynamoDbContextError::WrongKeyType`] instance based on the returned value type.
+    ///
+    /// # Panics
+    ///
+    /// If the value type is in the correct type, a binary blob.
+    pub fn wrong_key_type(value: &AttributeValue) -> Self {
+        DynamoDbContextError::WrongKeyType(Self::type_description_of(value))
+    }
+
     /// Create a [`DynamoDbContextError::WrongValueType`] instance based on the returned value type.
     ///
     /// # Panics
