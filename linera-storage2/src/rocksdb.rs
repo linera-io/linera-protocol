@@ -55,6 +55,7 @@ impl ChainStateViewContext for RocksdbContext<ChainId> {}
 #[async_trait]
 impl Store for RocksdbStoreClient {
     type Context = RocksdbContext<ChainId>;
+    type Error = RocksdbViewError;
 
     async fn load_chain(
         &self,

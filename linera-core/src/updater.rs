@@ -6,7 +6,6 @@ use crate::node::ValidatorNode;
 use futures::{future, StreamExt};
 use linera_base::{committee::Committee, error::Error, messages::*};
 use linera_storage2::Store;
-use linera_views::views;
 use std::{collections::HashMap, hash::Hash, time::Duration};
 
 /// Used for `communicate_chain_updates`
@@ -91,7 +90,7 @@ impl<A, S> ValidatorUpdater<A, S>
 where
     A: ValidatorNode + Clone + Send + Sync + 'static,
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<<S::Context as views::Context>::Error>,
+    Error: From<S::Error>,
 {
     pub async fn send_certificate(
         &mut self,

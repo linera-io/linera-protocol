@@ -34,6 +34,7 @@ impl ChainStateViewContext for MemoryContext<ChainId> {}
 #[async_trait]
 impl Store for MemoryStoreClient {
     type Context = MemoryContext<ChainId>;
+    type Error = MemoryViewError;
 
     async fn load_chain(
         &self,

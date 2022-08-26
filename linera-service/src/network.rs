@@ -12,7 +12,6 @@ use futures::{channel::mpsc, sink::SinkExt, stream::StreamExt};
 use linera_base::{error::*, messages::*, rpc};
 use linera_core::{node::ValidatorNode, worker::*};
 use linera_storage2::Store;
-use linera_views::views;
 use log::*;
 use serde::{Deserialize, Serialize};
 use std::{io, time::Duration};
@@ -146,7 +145,7 @@ impl<S> Server<S> {
 impl<S> Server<S>
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<<S::Context as views::Context>::Error>,
+    Error: From<S::Error>,
 {
     async fn forward_cross_chain_queries(
         network: ValidatorInternalNetworkConfig,
@@ -237,7 +236,7 @@ struct RunningServerState<S> {
 impl<S> MessageHandler for RunningServerState<S>
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<<S::Context as views::Context>::Error>,
+    Error: From<S::Error>,
 {
     fn handle_message(
         &mut self,

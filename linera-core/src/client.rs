@@ -19,7 +19,6 @@ use linera_base::{
     system::{Address, Amount, Balance, SystemExecutionState, SystemOperation, UserData},
 };
 use linera_storage2::Store;
-use linera_views::views;
 use std::{
     collections::{BTreeMap, HashMap},
     time::Duration,
@@ -214,7 +213,7 @@ where
     P: ValidatorNodeProvider,
     P::Node: ValidatorNode + Send + Sync + 'static + Clone,
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<<S::Context as views::Context>::Error>,
+    Error: From<S::Error>,
 {
     async fn chain_info(&mut self) -> Result<ChainInfo, Error> {
         let query = ChainInfoQuery::new(self.chain_id);
@@ -353,7 +352,7 @@ where
     P: ValidatorNodeProvider + Send + 'static,
     P::Node: ValidatorNode + Send + Sync + 'static + Clone,
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<<S::Context as views::Context>::Error>,
+    Error: From<S::Error>,
 {
     /// Prepare the chain for the next operation.
     async fn prepare_chain(&mut self) -> Result<(), Error> {
@@ -827,7 +826,7 @@ where
     P: ValidatorNodeProvider + Send + 'static,
     P::Node: ValidatorNode + Send + Sync + 'static + Clone,
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<<S::Context as views::Context>::Error>,
+    Error: From<S::Error>,
 {
     async fn local_balance(&mut self) -> Result<Balance> {
         ensure!(

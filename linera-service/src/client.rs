@@ -26,7 +26,6 @@ use linera_service::{
     storage::{Runnable, StorageConfig},
 };
 use linera_storage2::Store;
-use linera_views::views;
 use log::*;
 use std::{
     collections::{HashMap, HashSet},
@@ -146,7 +145,7 @@ impl ClientContext {
     async fn process_inboxes_and_force_validator_updates<S>(&mut self, storage: &S)
     where
         S: Store + Clone + Send + Sync + 'static,
-        Error: From<<S::Context as views::Context>::Error>,
+        Error: From<S::Error>,
     {
         for chain_id in self.wallet_state.chain_ids() {
             let mut client = self.make_chain_client(storage.clone(), chain_id);
@@ -285,7 +284,7 @@ impl ClientContext {
         P: ValidatorNodeProvider + Send + 'static,
         P::Node: ValidatorNode + Send + Sync + 'static + Clone,
         S: Store + Clone + Send + Sync + 'static,
-        Error: From<<S::Context as views::Context>::Error>,
+        Error: From<S::Error>,
     {
         self.wallet_state.update_from_state(state).await
     }
@@ -306,7 +305,7 @@ impl ClientContext {
         certificates: Vec<Certificate>,
     ) where
         S: Store + Clone + Send + Sync + 'static,
-        Error: From<<S::Context as views::Context>::Error>,
+        Error: From<S::Error>,
     {
         // First instantiate a local node on top of storage.
         let worker = WorkerState::new("Temporary client node".to_string(), None, storage)
@@ -329,7 +328,7 @@ impl ClientContext {
     async fn ensure_admin_subscription<S>(&mut self, storage: &S) -> Vec<Certificate>
     where
         S: Store + Clone + Send + Sync + 'static,
-        Error: From<<S::Context as views::Context>::Error>,
+        Error: From<S::Error>,
     {
         let mut certificates = Vec::new();
         for chain_id in self.wallet_state.chain_ids() {
@@ -349,7 +348,7 @@ impl ClientContext {
     async fn push_to_all_chains<S>(&mut self, storage: &S, certificate: &Certificate)
     where
         S: Store + Clone + Send + Sync + 'static,
-        Error: From<<S::Context as views::Context>::Error>,
+        Error: From<S::Error>,
     {
         for chain_id in self.wallet_state.chain_ids() {
             let mut client_state = self.make_chain_client(storage.clone(), chain_id);
@@ -542,7 +541,7 @@ struct Job(ClientContext, ClientCommand);
 impl<S> Runnable<S> for Job
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<<S::Context as views::Context>::Error>,
+    Error: From<S::Error>,
 {
     type Output = ();
 
