@@ -3,6 +3,7 @@
 
 use crate::{
     crypto::BcsSignable,
+    ensure,
     error::Error,
     messages::*,
     system::{SystemEffect, SystemExecutionState},
@@ -172,3 +173,32 @@ impl From<SystemExecutionState> for ExecutionState {
 }
 
 impl BcsSignable for ExecutionState {}
+
+#[derive(Clone, Default)]
+pub struct ApplicationRegistry {
+    applications: HashMap<ApplicationId, Arc<dyn UserApplication + Send + Sync + 'static>>,
+}
+
+impl ApplicationRegistry {
+    pub fn deploy_application(
+        &mut self,
+        id: ApplicationId,
+        application_code: usize,
+    ) -> Result<(), Error> {
+        ensure!(
+            !self.applications.contains_key(&id),
+            Error::ApplicationRedeployment { id }
+        );
+        let application = match application_code {
+            _ => return Err(Error::UnknownApplication),
+        };
+        self.applications.insert(id, application);
+    }
+
+    pub fn get_application(
+        &self,
+        id: ApplicationId,
+    ) -> Option<Arc<dyn UserApplication + Send + Sync + 'static>> {
+        self.applications.get(&id).cloned()
+    }
+}

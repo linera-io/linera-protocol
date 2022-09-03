@@ -6,9 +6,12 @@ use crate::{
     committee::Committee,
     ensure,
     error::Error,
-    execution::{EffectContext, OperationContext, RawApplicationResult},
+    execution::{EffectContext, OperationContext, RawApplicationResult, USER_APPLICATIONS},
     manager::ChainManager,
-    messages::{ChainDescription, ChainId, ChannelId, Destination, Effect, EffectId, Epoch, Owner},
+    messages::{
+        ApplicationId, ChainDescription, ChainId, ChannelId, Destination, Effect, EffectId, Epoch,
+        Owner,
+    },
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -104,6 +107,8 @@ pub enum SystemOperation {
     /// blocks from the retired epoch will not be accepted until they are followed (hence
     /// re-certified) by a block certified by a recent committee.
     RemoveCommittee { admin_id: ChainId, epoch: Epoch },
+    /// Publish an application smart contract.
+    PublishContract { application_code: usize },
 }
 
 /// The effect of an operation to be performed on a remote chain.
@@ -376,6 +381,14 @@ impl SystemExecutionState {
                             },
                         },
                     )],
+                    subscribe: None,
+                    unsubscribe: None,
+                };
+                Ok(application)
+            }
+            PublishContract { application_code } => {
+                let application = RawApplicationResult {
+                    effects: vec![],
                     subscribe: None,
                     unsubscribe: None,
                 };

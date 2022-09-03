@@ -195,6 +195,8 @@ pub enum Error {
     InvalidOperation,
     #[error("Invalid effect for this application")]
     InvalidEffect,
+    #[error("Application ID {id} has already been deployed")]
+    ApplicationRedeployment { id: ApplicationId },
 }
 
 impl Error {

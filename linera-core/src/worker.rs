@@ -106,7 +106,7 @@ where
         block: &Block,
     ) -> Result<ChainInfoResponse, Error> {
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
-        chain.execute_block(block).await?;
+        chain.execute_block(block, &mut map).await?;
         let info = chain.make_chain_info(None);
         // Do not save the new state.
         Ok(info)
