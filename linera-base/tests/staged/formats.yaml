@@ -143,52 +143,11 @@ ChainManager:
       Multi:
         NEWTYPE:
           TYPENAME: MultiOwnerManager
-ChainState:
-  STRUCT:
-    - chain_id:
-        TYPENAME: ChainId
-    - state:
-        TYPENAME: ExecutionState
-    - state_hash:
-        TYPENAME: HashValue
-    - block_hash:
-        OPTION:
-          TYPENAME: HashValue
-    - next_block_height:
-        TYPENAME: BlockHeight
-    - confirmed_log:
-        SEQ:
-          TYPENAME: HashValue
-    - received_log:
-        SEQ:
-          TYPENAME: HashValue
-    - communication_states:
-        MAP:
-          KEY:
-            TYPENAME: ApplicationId
-          VALUE:
-            TYPENAME: CommunicationState
 ChannelId:
   STRUCT:
     - chain_id:
         TYPENAME: ChainId
     - name: STR
-ChannelState:
-  STRUCT:
-    - subscribers:
-        MAP:
-          KEY:
-            TYPENAME: ChainId
-          VALUE: UNIT
-    - outboxes:
-        MAP:
-          KEY:
-            TYPENAME: ChainId
-          VALUE:
-            TYPENAME: OutboxState
-    - block_height:
-        OPTION:
-          TYPENAME: BlockHeight
 Committee:
   STRUCT:
     - validators:
@@ -200,25 +159,6 @@ Committee:
     - total_votes: U64
     - quorum_threshold: U64
     - validity_threshold: U64
-CommunicationState:
-  STRUCT:
-    - inboxes:
-        MAP:
-          KEY:
-            TYPENAME: Origin
-          VALUE:
-            TYPENAME: InboxState
-    - outboxes:
-        MAP:
-          KEY:
-            TYPENAME: ChainId
-          VALUE:
-            TYPENAME: OutboxState
-    - channels:
-        MAP:
-          KEY: STR
-          VALUE:
-            TYPENAME: ChannelState
 CrossChainRequest:
   ENUM:
     0:
@@ -468,38 +408,11 @@ Error:
       InvalidOperation: UNIT
     55:
       InvalidEffect: UNIT
-Event:
-  STRUCT:
-    - height:
-        TYPENAME: BlockHeight
-    - index: U64
-    - effect:
-        TYPENAME: Effect
-ExecutionState:
-  STRUCT:
-    - system:
-        TYPENAME: SystemExecutionState
-    - users:
-        MAP:
-          KEY:
-            TYPENAME: ApplicationId
-          VALUE:
-            SEQ: U8
 HashValue:
   NEWTYPESTRUCT:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 64
-InboxState:
-  STRUCT:
-    - next_height_to_receive:
-        TYPENAME: BlockHeight
-    - received_events:
-        SEQ:
-          TYPENAME: Event
-    - expected_events:
-        SEQ:
-          TYPENAME: Event
 Medium:
   ENUM:
     0:
@@ -582,11 +495,6 @@ Origin:
         TYPENAME: ChainId
     - medium:
         TYPENAME: Medium
-OutboxState:
-  STRUCT:
-    - queue:
-        SEQ:
-          TYPENAME: BlockHeight
 Owner:
   NEWTYPESTRUCT:
     TYPENAME: PublicKey

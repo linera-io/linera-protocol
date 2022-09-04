@@ -3,7 +3,6 @@ members = [
         "linera-base",
         "linera-core",
         "linera-service",
-        "linera-storage",
         "linera-storage2",
         "linera-views",
 ]
