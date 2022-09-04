@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::{chain, error, manager, messages, rpc, system};
+use linera_base::{error, manager, messages, rpc, system};
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use std::{fs::File, io::Write};
 use structopt::{clap::arg_enum, StructOpt};
@@ -29,7 +29,6 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<messages::CrossChainRequest>(&samples)?;
     tracer.trace_type::<error::Error>(&samples)?;
     tracer.trace_type::<rpc::Message>(&samples)?;
-    tracer.trace_type::<chain::ChainState>(&samples)?;
     tracer.registry()
 }
 
