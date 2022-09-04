@@ -349,6 +349,10 @@ where
 
         let mut was_a_recipient = false;
         for (index, (app_id, destination, effect)) in effects.into_iter().enumerate() {
+            // Skip events that do not belong to this application.
+            if app_id != application_id {
+                continue;
+            }
             // Skip events that do not belong to this origin OR have no effect on this
             // recipient.
             match destination {
