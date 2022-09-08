@@ -87,8 +87,11 @@ impl<E> DynamoDbContext<E> {
     }
 
     /// Create the storage table if it doesn't exist.
+    ///
+    /// Attempts to create the table and ignores errors that indicate that it already exists.
     async fn create_table_if_needed(&self) -> Result<TableStatus, CreateTableError> {
-        self.client
+        let result = self
+            .client
             .create_table()
             .table_name(self.table.as_ref())
             .attribute_definitions(
@@ -122,9 +125,13 @@ impl<E> DynamoDbContext<E> {
                     .build(),
             )
             .send()
-            .await?;
+            .await;
 
-        Ok(TableStatus::New)
+        match result {
+            Ok(_) => Ok(TableStatus::New),
+            Err(error) if error.is_resource_in_use_exception() => Ok(TableStatus::Existing),
+            Err(error) => Err(error.into()),
+        }
     }
 }
 
@@ -204,5 +211,26 @@ pub enum LocalStackError {
 impl From<CreateTableError> for LocalStackError {
     fn from(error: CreateTableError) -> Self {
         Box::new(error).into()
+    }
+}
+
+/// A helper trait to add a `SdkError<CreateTableError>::is_resource_in_use_exception()` method.
+trait IsResourceInUseException {
+    /// Check if the error is a resource is in use exception.
+    fn is_resource_in_use_exception(&self) -> bool;
+}
+
+impl IsResourceInUseException for SdkError<aws_sdk_dynamodb::error::CreateTableError> {
+    fn is_resource_in_use_exception(&self) -> bool {
+        matches!(
+            self,
+            SdkError::ServiceError {
+                err: aws_sdk_dynamodb::error::CreateTableError {
+                    kind: aws_sdk_dynamodb::error::CreateTableErrorKind::ResourceInUseException(_),
+                    ..
+                },
+                ..
+            }
+        )
     }
 }
