@@ -28,4 +28,4 @@ jobs:
         AWS_ACCESS_KEY_ID: test
         AWS_SECRET_ACCESS_KEY: test
         LOCALSTACK_ENDPOINT: http://localhost:4566
-      run: cargo test --locked -- --ignored s3
+      run: cargo test --locked -- --ignored dynamo
