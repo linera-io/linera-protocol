@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    hash::HashingContext,
     localstack,
     views::{
         AppendOnlyLogOperations, CollectionOperations, Context, MapOperations, QueueOperations,
@@ -556,6 +557,13 @@ where
 
         Ok(())
     }
+}
+
+impl<E> HashingContext for DynamoDbContext<E>
+where
+    E: Clone + Send + Sync,
+{
+    type Hasher = sha2::Sha512;
 }
 
 /// A marker type used to distinguish keys from the current scope from the keys of sub-views.
