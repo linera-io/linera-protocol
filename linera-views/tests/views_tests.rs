@@ -3,10 +3,12 @@
 
 use async_trait::async_trait;
 use linera_views::{
+    dynamo_db::{DynamoDbContext, DynamoDbContextError},
     hash::{HashView, Hasher, HashingContext},
     impl_view,
     memory::{MemoryContext, MemoryStoreMap, MemoryViewError},
     rocksdb::{KeyValueOperations, RocksdbContext, RocksdbViewError},
+    test_utils::LocalStackTestContext,
     views::{
         AppendOnlyLogOperations, AppendOnlyLogView, CollectionOperations, CollectionView, Context,
         MapOperations, MapView, QueueOperations, QueueView, RegisterOperations, RegisterView,
@@ -105,6 +107,45 @@ impl StateStore for RocksdbTestStore {
             bcs::to_bytes(&id)?,
             id,
         );
+        StateView::load(context).await
+    }
+}
+
+pub struct DynamoDbTestStore {
+    localstack: LocalStackTestContext,
+    locks: HashMap<usize, Arc<Mutex<()>>>,
+}
+
+impl DynamoDbTestStore {
+    pub async fn new() -> Result<Self, anyhow::Error> {
+        Ok(DynamoDbTestStore {
+            localstack: LocalStackTestContext::new().await?,
+            locks: HashMap::new(),
+        })
+    }
+}
+
+impl StateViewContext for DynamoDbContext<usize> {}
+
+#[async_trait]
+impl StateStore for DynamoDbTestStore {
+    type Context = DynamoDbContext<usize>;
+
+    async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, DynamoDbContextError> {
+        log::trace!("Acquiring lock on {:?}", id);
+        let lock = self
+            .locks
+            .entry(id)
+            .or_insert_with(|| Arc::new(Mutex::new(())));
+        let (context, _) = DynamoDbContext::from_config(
+            self.localstack.dynamo_db_config(),
+            "test_table".parse().expect("Invalid table name"),
+            lock.clone().lock_owned().await,
+            vec![0],
+            id,
+        )
+        .await
+        .expect("Failed to create DynamoDB context");
         StateView::load(context).await
     }
 }
@@ -293,4 +334,18 @@ async fn test_views_in_rocksdb() {
     let mut store = MemoryTestStore::default();
     let hash2 = test_store(&mut store).await;
     assert_eq!(hash, hash2);
+}
+
+#[tokio::test]
+#[ignore]
+async fn test_views_in_dynamo_db() -> Result<(), anyhow::Error> {
+    let mut store = DynamoDbTestStore::new().await?;
+    let hash = test_store(&mut store).await;
+    assert_eq!(store.locks.len(), 1);
+
+    let mut store = MemoryTestStore::default();
+    let hash2 = test_store(&mut store).await;
+    assert_eq!(hash, hash2);
+
+    Ok(())
 }
