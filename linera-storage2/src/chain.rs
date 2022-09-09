@@ -61,19 +61,7 @@ impl_view!(
     RegisterOperations<ChainTipState>,
     AppendOnlyLogOperations<HashValue>,
     CollectionOperations<ApplicationId>,
-    // from OutboxStateView
-    QueueOperations<BlockHeight>,
-    // from InboxStateView
-    RegisterOperations<BlockHeight>,
-    QueueOperations<Event>,
-    // from ChannelStateView
-    MapOperations<ChainId, ()>,
-    CollectionOperations<ChainId>,
-    RegisterOperations<Option<BlockHeight>>,
-    // from CommunicationStateView
-    CollectionOperations<Origin>,
-    CollectionOperations<ChainId>,
-    CollectionOperations<String>,
+    CommunicationStateViewContext,
 );
 
 /// Block-chaining state.
@@ -101,15 +89,9 @@ impl_view!(
     CollectionOperations<Origin>,
     CollectionOperations<ChainId>,
     CollectionOperations<String>,
-    // from OutboxStateView
-    QueueOperations<BlockHeight>,
-    // from InboxStateView
-    RegisterOperations<BlockHeight>,
-    QueueOperations<Event>,
-    // from ChannelStateView
-    MapOperations<ChainId, ()>,
-    CollectionOperations<ChainId>,
-    RegisterOperations<Option<BlockHeight>>
+    InboxStateViewContext,
+    OutboxStateViewContext,
+    ChannelStateViewContext,
 );
 
 /// An outbox used to send messages to another chain. NOTE: Messages are implied by the
@@ -162,8 +144,7 @@ impl_view!(
     MapOperations<ChainId, ()>,
     CollectionOperations<ChainId>,
     RegisterOperations<Option<BlockHeight>>,
-    // From OutboxStateView
-    QueueOperations<BlockHeight>
+    OutboxStateViewContext,
 );
 
 /// A message sent by some (unspecified) chain at a particular height and index.
