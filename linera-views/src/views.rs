@@ -2,14 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
+use futures::FutureExt;
+use linera_base::ensure;
 use std::{
     cmp::Eq,
     collections::{btree_map, BTreeMap, VecDeque},
     fmt::Debug,
     mem,
     ops::{Deref, DerefMut, Range},
+    sync::Arc,
 };
 use thiserror::Error;
+use tokio::sync::{Mutex, OwnedMutexGuard};
 
 #[cfg(test)]
 #[path = "unit_tests/views.rs"]
@@ -846,5 +850,180 @@ impl<'entry, Index, Entry> Deref for CollectionEntry<'entry, Index, Entry> {
 impl<'entry, Index, Entry> DerefMut for CollectionEntry<'entry, Index, Entry> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.entry
+    }
+}
+
+/// A view that supports accessing a collection of views of the same kind, indexed by a key, in a
+/// concurrent manner.
+///
+/// This is a variant of [`CollectionView`] that uses locks to guard each entry.
+#[derive(Debug, Clone)]
+pub struct SharedCollectionView<C, I, W> {
+    context: C,
+    updates: BTreeMap<I, Arc<Mutex<Option<W>>>>,
+}
+
+#[async_trait]
+impl<C, I, W> View<C> for SharedCollectionView<C, I, W>
+where
+    C: CollectionOperations<I> + Send,
+    I: Send + Sync + Debug + Clone + Ord,
+    W: View<C> + Send,
+{
+    async fn load(context: C) -> Result<Self, C::Error> {
+        Ok(Self {
+            context,
+            updates: BTreeMap::new(),
+        })
+    }
+
+    fn rollback(&mut self) {
+        // TODO: Maybe make `View::rollback` async?
+        self.try_rollback()
+            .now_or_never()
+            .expect("Attempt to rollback a `SharedCollectionView` while an entry was still locked");
+    }
+
+    async fn commit(mut self) -> Result<(), C::Error> {
+        for (index, update) in self.updates {
+            match update.lock().await.take() {
+                Some(view) => {
+                    view.commit().await?;
+                    self.context.add_index(index).await?;
+                }
+                None => {
+                    let context = self.context.clone_with_scope(&index);
+                    self.context.remove_index(index).await?;
+                    let view = W::load(context).await?;
+                    view.delete().await?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    async fn delete(mut self) -> Result<(), C::Error> {
+        for index in self.context.indices().await? {
+            let _guard = match self.updates.get(&index) {
+                Some(entry) => Some(entry.lock().await),
+                None => None,
+            };
+            let context = self.context.clone_with_scope(&index);
+            self.context.remove_index(index).await?;
+            let view = W::load(context).await?;
+            view.delete().await?;
+        }
+        Ok(())
+    }
+}
+
+impl<C, I, W> SharedCollectionView<C, I, W>
+where
+    C: CollectionOperations<I> + Send,
+    I: Eq + Ord + Sync + Clone + Send + Debug,
+    W: View<C>,
+{
+    /// Obtain a subview for the data at the given index in the collection. Return an
+    /// error if `remove_entry` was used earlier on this index from the same [`CollectionView`].
+    ///
+    /// Note that the returned [`SharedCollectionEntry`] holds a lock on the entry, which means
+    /// that subsequent calls to methods that access the same entry (or all entries, like `commit`,
+    /// `rollback` and `delete`) won't complete until the lock is dropped.
+    pub async fn load_entry(&mut self, index: I) -> Result<SharedCollectionEntry<I, W>, C::Error> {
+        let entry = match self.updates.entry(index.clone()) {
+            btree_map::Entry::Occupied(entry) => entry.into_mut(),
+            btree_map::Entry::Vacant(entry) => {
+                let context = self.context.clone_with_scope(&index);
+                let view = W::load(context).await?;
+                entry.insert(Arc::new(Mutex::new(Some(view))))
+            }
+        }
+        .clone()
+        .lock_owned()
+        .await;
+
+        ensure!(
+            entry.is_some(),
+            C::Error::from(ViewError::RemovedEntry(format!("{:?}", index)))
+        );
+
+        Ok(SharedCollectionEntry { index, entry })
+    }
+
+    /// Mark the entry so that it is removed in the next commit.
+    ///
+    /// If the entry is being editted, awaits until its lock is released.
+    pub async fn remove_entry(&mut self, index: I) {
+        match self.updates.entry(index) {
+            btree_map::Entry::Occupied(entry) => {
+                entry.get().lock().await.take();
+            }
+            btree_map::Entry::Vacant(entry) => {
+                entry.insert(Arc::new(Mutex::new(None)));
+            }
+        }
+    }
+
+    /// Return the list of indices in the collection.
+    ///
+    /// If any entry is being editted, awaits until all entry locks are released.
+    pub async fn indices(&mut self) -> Result<Vec<I>, C::Error> {
+        let mut indices = Vec::new();
+        for index in self.context.indices().await? {
+            if !self.updates.contains_key(&index) {
+                indices.push(index);
+            }
+        }
+        for (index, entry) in &self.updates {
+            if entry.lock().await.is_some() {
+                indices.push(index.clone());
+            }
+        }
+        indices.sort();
+        Ok(indices)
+    }
+
+    /// Restore the view to its initial state.
+    ///
+    /// If any entry is being editted, awaits until all entry locks are released.
+    pub async fn try_rollback(&mut self) {
+        for (_, update) in mem::take(&mut self.updates) {
+            update.lock().await;
+        }
+    }
+
+    pub fn extra(&self) -> &C::Extra {
+        self.context.extra()
+    }
+}
+
+/// An active entry inside a [`SharedCollectionView`].
+pub struct SharedCollectionEntry<Index, Entry> {
+    index: Index,
+    entry: OwnedMutexGuard<Option<Entry>>,
+}
+
+impl<Index, Entry> SharedCollectionEntry<Index, Entry> {
+    /// The index of this entry.
+    pub fn index(&self) -> &Index {
+        &self.index
+    }
+}
+
+impl<Index, Entry> Deref for SharedCollectionEntry<Index, Entry> {
+    type Target = Entry;
+
+    fn deref(&self) -> &Self::Target {
+        self.entry
+            .as_ref()
+            .expect("Created a SharedCollectionEntry for a removed entry")
+    }
+}
+
+impl<Index, Entry> DerefMut for SharedCollectionEntry<Index, Entry> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.entry
+            .as_mut()
+            .expect("Created a SharedCollectionEntry for a removed entry")
     }
 }
