@@ -16,7 +16,9 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: stable
+          toolchain: 1.60.0
+      - name: Report warnings as errors
+        run: echo 'RUSTFLAGS=-D warnings' >> $GITHUB_ENV
       - uses: Swatinem/rust-cache@v1
       - name: Build binaries
         run: cargo build --release --locked --bin client --bin proxy --bin server

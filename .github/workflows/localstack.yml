@@ -14,9 +14,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
-    - name: Setup
-      run: |
-        rustup toolchain install 1.60.0-x86_64-unknown-linux-gnu
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: 1.60.0
+    - name: Report warnings as errors
+      run: echo 'RUSTFLAGS=-D warnings' >> $GITHUB_ENV
     - name: Build
       run: cargo build --locked
     - name: Setup LocalStack
