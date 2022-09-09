@@ -220,7 +220,7 @@ where
         {
             let mut chain = self.store.load_chain(chain_id).await?;
             for id in chain.communication_states.indices().await? {
-                let state = chain.communication_states.load_entry(id).await?;
+                let mut state = chain.communication_states.load_entry(id).await?;
                 for origin in state.inboxes.indices().await? {
                     let inbox = state.inboxes.load_entry(origin.clone()).await?;
                     info.push((origin.chain_id, *inbox.next_height_to_receive.get()));

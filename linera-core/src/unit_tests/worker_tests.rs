@@ -2435,11 +2435,12 @@ where
         assert_eq!(user_chain.execution_state.get().system.committees.len(), 2);
         user_chain.validate_incoming_messages().await.unwrap();
         {
-            let inbox = user_chain
+            let mut communication_states = user_chain
                 .communication_states
                 .load_entry(SYSTEM)
                 .await
-                .unwrap()
+                .unwrap();
+            let inbox = communication_states
                 .inboxes
                 .load_entry(Origin::chain(admin_id))
                 .await
@@ -2449,11 +2450,12 @@ where
             assert_eq!(inbox.expected_events.count(), 0);
         }
         {
-            let inbox = user_chain
+            let mut communication_states = user_chain
                 .communication_states
                 .load_entry(SYSTEM)
                 .await
-                .unwrap()
+                .unwrap();
+            let inbox = communication_states
                 .inboxes
                 .load_entry(admin_channel_origin)
                 .await

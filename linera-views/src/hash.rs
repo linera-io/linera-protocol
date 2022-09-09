@@ -126,7 +126,7 @@ where
         hasher.update_with_bcs_bytes(&indices.len())?;
         for index in indices {
             hasher.update_with_bcs_bytes(&index)?;
-            let view = self.load_entry(index).await?;
+            let mut view = self.load_entry(index).await?;
             let hash = view.hash().await?;
             hasher.write_all(hash.as_ref())?;
         }

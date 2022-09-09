@@ -176,7 +176,7 @@ where
         assert_eq!(view.queue.read_front(10).await.unwrap(), vec![7]);
         assert_eq!(view.map.get(&"Hello".to_string()).await.unwrap(), Some(5));
         {
-            let subview = view
+            let mut subview = view
                 .collection
                 .load_entry("hola".to_string())
                 .await
@@ -189,7 +189,7 @@ where
             vec!["hola".to_string()]
         );
         {
-            let subview = view
+            let mut subview = view
                 .collection
                 .load_entry("hola".to_string())
                 .await
@@ -206,7 +206,7 @@ where
         assert_eq!(view.queue.read_front(10).await.unwrap(), vec![]);
         assert_eq!(view.map.get(&"Hello".to_string()).await.unwrap(), None);
         {
-            let subview = view
+            let mut subview = view
                 .collection
                 .load_entry("hola".to_string())
                 .await
@@ -214,12 +214,12 @@ where
             assert_eq!(subview.read(0..10).await.unwrap(), vec![]);
         }
         {
-            let subview = view
+            let mut subview = view
                 .collection2
                 .load_entry("ciao".to_string())
                 .await
                 .unwrap();
-            let subsubview = subview.load_entry("!".to_string()).await.unwrap();
+            let mut subsubview = subview.load_entry("!".to_string()).await.unwrap();
             subsubview.set(3);
             assert_eq!(subsubview.get(), &3);
         }
@@ -230,7 +230,7 @@ where
         view.map.insert("Hi".to_string(), 2);
         view.map.remove("Hi".to_string());
         {
-            let subview = view
+            let mut subview = view
                 .collection
                 .load_entry("hola".to_string())
                 .await
@@ -265,7 +265,7 @@ where
         assert_eq!(view.map.get(&"Hello".to_string()).await.unwrap(), Some(5));
         assert_eq!(view.map.get(&"Hi".to_string()).await.unwrap(), None);
         {
-            let subview = view
+            let mut subview = view
                 .collection
                 .load_entry("hola".to_string())
                 .await
@@ -273,7 +273,7 @@ where
             assert_eq!(subview.read(0..10).await.unwrap(), vec![17, 18]);
         }
         {
-            let subview = view
+            let mut subview = view
                 .collection2
                 .load_entry("ciao".to_string())
                 .await
@@ -292,7 +292,7 @@ where
     {
         let mut view = store.load(1).await.unwrap();
         {
-            let subview = view
+            let mut subview = view
                 .collection
                 .load_entry("hola".to_string())
                 .await

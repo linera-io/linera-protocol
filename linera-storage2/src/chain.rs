@@ -23,7 +23,10 @@ use linera_views::{
     },
 };
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    ops::DerefMut,
+};
 
 /// A view accessing the state of a chain.
 #[derive(Debug)]
@@ -174,7 +177,7 @@ where
         recipient: ChainId,
         height: BlockHeight,
     ) -> Result<bool, C::Error> {
-        let outbox = outboxes.load_entry(recipient).await?;
+        let mut outbox = outboxes.load_entry(recipient).await?;
         if outbox.queue.count() == 0 {
             log::warn!(
                 "All messages were already marked as received in the outbox {:?}::{:?} to {:?}",
@@ -202,7 +205,7 @@ where
             chain_id: self.chain_id(),
             medium: Medium::Direct,
         };
-        let communication_state = self.communication_states.load_entry(application_id).await?;
+        let mut communication_state = self.communication_states.load_entry(application_id).await?;
         Self::mark_messages_as_received(
             &mut communication_state.outboxes,
             application_id,
@@ -224,8 +227,8 @@ where
             chain_id: self.chain_id(),
             medium: Medium::Channel(name.to_string()),
         };
-        let communication_state = self.communication_states.load_entry(application_id).await?;
-        let channel = communication_state
+        let mut communication_state = self.communication_states.load_entry(application_id).await?;
+        let mut channel = communication_state
             .channels
             .load_entry(name.to_string())
             .await?;
@@ -272,9 +275,9 @@ where
     /// have been properly received by now.
     pub async fn validate_incoming_messages(&mut self) -> Result<(), Error> {
         for id in self.communication_states.indices().await? {
-            let state = self.communication_states.load_entry(id).await?;
+            let mut state = self.communication_states.load_entry(id).await?;
             for origin in state.inboxes.indices().await? {
-                let inbox = state.inboxes.load_entry(origin.clone()).await?;
+                let mut inbox = state.inboxes.load_entry(origin.clone()).await?;
                 let expected_event = inbox.expected_events.front().await?;
                 ensure!(
                     expected_event.is_none(),
@@ -301,8 +304,8 @@ where
         key: HashValue,
     ) -> Result<bool, Error> {
         let chain_id = self.chain_id();
-        let communication_state = self.communication_states.load_entry(application_id).await?;
-        let inbox = communication_state
+        let mut communication_state = self.communication_states.load_entry(application_id).await?;
+        let mut inbox = communication_state
             .inboxes
             .load_entry(origin.clone())
             .await?;
@@ -438,11 +441,12 @@ where
         Self::check_incoming_messages(&block.incoming_messages)?;
 
         for message_group in &block.incoming_messages {
-            let communication_state = self
+            let mut communication_state = self
                 .communication_states
                 .load_entry(message_group.application_id)
                 .await?;
-            let inbox = communication_state
+            let communication_state = communication_state.deref_mut();
+            let mut inbox = communication_state
                 .inboxes
                 .load_entry(message_group.origin.clone())
                 .await?;
@@ -537,10 +541,11 @@ where
         }
         // Second, execute the operations in the block and remember the recipients to notify.
         for (index, (application_id, operation)) in block.operations.iter().enumerate() {
-            let communication_state = self
+            let mut communication_state = self
                 .communication_states
                 .load_entry(*application_id)
                 .await?;
+            let communication_state = communication_state.deref_mut();
             let context = OperationContext {
                 chain_id,
                 height: block.height,
@@ -627,32 +632,32 @@ where
 
         // Update the (regular) outboxes.
         for recipient in recipients {
-            let outbox = outboxes.load_entry(recipient).await?;
+            let mut outbox = outboxes.load_entry(recipient).await?;
             outbox.schedule_message(height).await?;
         }
 
         // Update the channels.
         if let Some((name, id)) = application.unsubscribe {
-            let channel = channels.load_entry(name.to_string()).await?;
+            let mut channel = channels.load_entry(name.to_string()).await?;
             // Remove subscriber. Do not remove the channel outbox yet.
             channel.subscribers.remove(id);
         }
         for name in channel_broadcasts {
-            let channel = channels.load_entry(name.to_string()).await?;
+            let mut channel = channels.load_entry(name.to_string()).await?;
             for recipient in channel.subscribers.indices().await? {
-                let outbox = channel.outboxes.load_entry(recipient).await?;
+                let mut outbox = channel.outboxes.load_entry(recipient).await?;
                 outbox.schedule_message(height).await?;
             }
             channel.block_height.set(Some(height));
         }
         if let Some((name, id)) = application.subscribe {
-            let channel = channels.load_entry(name.to_string()).await?;
+            let mut channel = channels.load_entry(name.to_string()).await?;
             // Add subscriber.
             if channel.subscribers.get(&id).await?.is_none() {
                 // Send the latest message if any.
-                if let Some(latest_height) = channel.block_height.get() {
-                    let outbox = channel.outboxes.load_entry(id).await?;
-                    outbox.schedule_message(*latest_height).await?;
+                if let Some(latest_height) = *channel.block_height.get() {
+                    let mut outbox = channel.outboxes.load_entry(id).await?;
+                    outbox.schedule_message(latest_height).await?;
                 }
             }
             channel.subscribers.insert(id, ());

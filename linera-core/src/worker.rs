@@ -150,12 +150,12 @@ where
         let mut continuation = Vec::new();
         let chain_id = chain.chain_id();
         for application_id in chain.communication_states.indices().await? {
-            let state = chain
+            let mut state = chain
                 .communication_states
                 .load_entry(application_id)
                 .await?;
             for recipient in state.outboxes.indices().await? {
-                let outbox = state.outboxes.load_entry(recipient).await?;
+                let mut outbox = state.outboxes.load_entry(recipient).await?;
                 let origin = Origin {
                     chain_id,
                     medium: Medium::Direct,
@@ -166,15 +166,15 @@ where
                         application_id,
                         origin,
                         recipient,
-                        outbox,
+                        &mut *outbox,
                     )
                     .await?;
                 continuation.push(request);
             }
             for name in state.channels.indices().await? {
-                let channel = state.channels.load_entry(name.clone()).await?;
+                let mut channel = state.channels.load_entry(name.clone()).await?;
                 for recipient in channel.outboxes.indices().await? {
-                    let outbox = channel.outboxes.load_entry(recipient).await?;
+                    let mut outbox = channel.outboxes.load_entry(recipient).await?;
                     let origin = Origin {
                         chain_id,
                         medium: Medium::Channel(name.clone()),
@@ -185,7 +185,7 @@ where
                             application_id,
                             origin,
                             recipient,
-                            outbox,
+                            &mut *outbox,
                         )
                         .await?;
                     continuation.push(request);
@@ -474,12 +474,12 @@ where
         if query.request_pending_messages {
             let mut message_groups = Vec::new();
             for application_id in chain.communication_states.indices().await? {
-                let state = chain
+                let mut state = chain
                     .communication_states
                     .load_entry(application_id)
                     .await?;
                 for origin in state.inboxes.indices().await? {
-                    let inbox = state.inboxes.load_entry(origin.clone()).await?;
+                    let mut inbox = state.inboxes.load_entry(origin.clone()).await?;
                     let mut effects = Vec::new();
                     let mut current_height = None;
                     let count = inbox.received_events.count();
