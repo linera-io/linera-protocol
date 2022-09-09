@@ -31,4 +31,5 @@ pub mod localstack;
 pub mod test_utils;
 
 /// For macros.
+pub use async_trait::async_trait;
 pub use paste::paste;

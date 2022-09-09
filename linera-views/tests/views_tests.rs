@@ -12,7 +12,7 @@ use linera_views::{
     views::{
         AppendOnlyLogOperations, AppendOnlyLogView, CollectionOperations, CollectionView, Context,
         MapOperations, MapView, QueueOperations, QueueView, RegisterOperations, RegisterView,
-        ScopedOperations, ScopedView, View,
+        ScopedView, View,
     },
 };
 use std::{

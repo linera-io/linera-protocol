@@ -1,7 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_trait::async_trait;
 use linera_base::{
     crypto::{HashValue, KeyPair},
     ensure,
@@ -16,12 +15,11 @@ use linera_base::{
     },
 };
 use linera_views::{
-    hash::{HashView, Hasher, HashingContext},
     impl_view,
     views::{
-        AppendOnlyLogOperations, AppendOnlyLogView, CollectionOperations, CollectionView, Context,
+        AppendOnlyLogOperations, AppendOnlyLogView, CollectionOperations, CollectionView,
         MapOperations, MapView, QueueOperations, QueueView, RegisterOperations, RegisterView,
-        ScopedOperations, ScopedView, View,
+        ScopedView,
     },
 };
 use serde::{Deserialize, Serialize};
