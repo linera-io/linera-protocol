@@ -69,6 +69,18 @@ pub trait [< $name Context >]: $crate::hash::HashingContext
     + $crate::views::ScopedOperations
     $( + $ops_trait )*
 {}
+
+impl<AnyContext> [< $name Context >] for AnyContext
+where
+    AnyContext: $crate::hash::HashingContext
+        + Send
+        + Sync
+        + Clone
+        + 'static
+        + $crate::views::ScopedOperations
+        $( + $ops_trait )*
+{}
+
 }
 
     }

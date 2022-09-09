@@ -1,10 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    chain::{ChainStateView, ChainStateViewContext},
-    Store,
-};
+use crate::{chain::ChainStateView, Store};
 use async_trait::async_trait;
 use linera_base::{
     crypto::HashValue,
@@ -28,8 +25,6 @@ struct MemoryStore {
 
 #[derive(Clone, Default)]
 pub struct MemoryStoreClient(Arc<Mutex<MemoryStore>>);
-
-impl ChainStateViewContext for MemoryContext<ChainId> {}
 
 #[async_trait]
 impl Store for MemoryStoreClient {

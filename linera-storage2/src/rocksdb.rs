@@ -1,10 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    chain::{ChainStateView, ChainStateViewContext},
-    Store,
-};
+use crate::{chain::ChainStateView, Store};
 use async_trait::async_trait;
 use linera_base::{
     crypto::HashValue,
@@ -49,8 +46,6 @@ enum BaseKey {
     ChainState(ChainId),
     Certificate(HashValue),
 }
-
-impl ChainStateViewContext for RocksdbContext<ChainId> {}
 
 #[async_trait]
 impl Store for RocksdbStoreClient {

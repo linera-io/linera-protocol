@@ -58,8 +58,6 @@ pub struct MemoryTestStore {
     states: HashMap<usize, Arc<Mutex<MemoryStoreMap>>>,
 }
 
-impl StateViewContext for MemoryContext<usize> {}
-
 #[async_trait]
 impl StateStore for MemoryTestStore {
     type Context = MemoryContext<usize>;
@@ -88,8 +86,6 @@ impl RocksdbTestStore {
         }
     }
 }
-
-impl StateViewContext for RocksdbContext<usize> {}
 
 #[async_trait]
 impl StateStore for RocksdbTestStore {
@@ -124,8 +120,6 @@ impl DynamoDbTestStore {
         })
     }
 }
-
-impl StateViewContext for DynamoDbContext<usize> {}
 
 #[async_trait]
 impl StateStore for DynamoDbTestStore {
