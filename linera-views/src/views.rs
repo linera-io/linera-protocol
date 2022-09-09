@@ -819,3 +819,30 @@ where
         self.context.extra()
     }
 }
+
+/// An active entry inside a [`CollectionView`].
+pub struct CollectionEntry<'entry, Index, Entry> {
+    index: Index,
+    entry: &'entry mut Entry,
+}
+
+impl<Index, Entry> CollectionEntry<'_, Index, Entry> {
+    /// The index of this entry.
+    pub fn index(&self) -> &Index {
+        &self.index
+    }
+}
+
+impl<'entry, Index, Entry> Deref for CollectionEntry<'entry, Index, Entry> {
+    type Target = Entry;
+
+    fn deref(&self) -> &Self::Target {
+        &*self.entry
+    }
+}
+
+impl<'entry, Index, Entry> DerefMut for CollectionEntry<'entry, Index, Entry> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.entry
+    }
+}
