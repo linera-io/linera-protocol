@@ -19,7 +19,7 @@ use linera_views::{
     views::{
         AppendOnlyLogOperations, AppendOnlyLogView, CollectionOperations, CollectionView,
         MapOperations, MapView, QueueOperations, QueueView, RegisterOperations, RegisterView,
-        ScopedView, SharedCollectionEntry,
+        ScopedView, SharedCollectionEntry, View,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -197,8 +197,11 @@ where
         *self.0.index()
     }
 
-    pub async fn commit(self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        self.0.commit(batch).await
+    pub async fn commit(self) -> Result<(), C::Error> {
+        let context = self.0.context().clone();
+        context
+            .run_with_batch(move |batch| Box::pin(self.0.commit(batch)))
+            .await
     }
 
     async fn mark_messages_as_received(

@@ -1,4 +1,8 @@
-use crate::chain::{ChainStateView, InnerChainStateView, InnerChainStateViewContext};
+use crate::{
+    chain::{ChainStateView, InnerChainStateView, InnerChainStateViewContext},
+    Store,
+};
+use async_trait::async_trait;
 use linera_base::{
     crypto::HashValue,
     messages::{Certificate, ChainId},
@@ -7,6 +11,9 @@ use linera_views::{
     impl_view,
     views::{CollectionOperations, MapOperations, MapView, ScopedView, SharedCollectionView, View},
 };
+use std::{fmt::Display, sync::Arc};
+use thiserror::Error;
+use tokio::sync::Mutex;
 
 /// A view accessing the validator's storage.
 #[derive(Debug)]
@@ -25,30 +32,73 @@ impl_view! {
     InnerChainStateViewContext,
 }
 
-impl<C> StorageView<C>
+#[async_trait]
+impl<C> Store for Arc<Mutex<StorageView<C>>>
 where
     C: StorageViewContext,
 {
-    pub async fn load_chain(&mut self, id: ChainId) -> Result<ChainStateView<C>, C::Error> {
-        Ok(self.chain_states.load_entry(id).await?.into())
+    type Context = C;
+    type Error = StoreError<C::Error>;
+
+    async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<C>, Self::Error> {
+        let mut storage = self.lock().await;
+        let chain_state = storage.chain_states.load_entry(id).await?;
+        Ok(chain_state.into())
     }
 
-    pub async fn read_certificate(
-        &mut self,
-        hash: HashValue,
-    ) -> Result<Option<Certificate>, C::Error> {
-        self.certificates.get(&hash).await
+    async fn read_certificate(&self, hash: HashValue) -> Result<Certificate, Self::Error> {
+        let mut storage = self.lock().await;
+        let maybe_certificate = storage.certificates.get(&hash).await?;
+        maybe_certificate.ok_or_else(|| StoreError::MissingCertificate { hash })
     }
 
-    pub async fn write_certificate(&mut self, certificate: Certificate) -> Result<(), C::Error> {
-        let context = self.context().clone();
+    async fn write_certificate(&self, certificate: Certificate) -> Result<(), Self::Error> {
+        let context = self.lock().await.context().clone();
+        let context_for_scope = context.clone();
+        let cloned_self = self.clone();
         context
-            .run_with_batch(|batch| {
-                Box::pin(async {
-                    self.certificates.insert(certificate.hash, certificate);
-                    self.certificates.commit(batch).await
+            .run_with_batch(move |batch| {
+                Box::pin(async move {
+                    let mut storage = cloned_self.lock().await;
+                    storage.certificates.insert(certificate.hash, certificate);
+                    storage.certificates.commit(batch).await?;
+                    storage.certificates = ScopedView::load(context_for_scope).await?;
+                    Ok(())
                 })
             })
-            .await
+            .await?;
+        Ok(())
+    }
+}
+
+/// Storage access error.
+#[derive(Debug, Error)]
+pub enum StoreError<E> {
+    #[error("Certificate with hash {hash} is missing from the storage")]
+    MissingCertificate { hash: HashValue },
+
+    #[error(transparent)]
+    Context(E),
+}
+
+impl<E> From<E> for StoreError<E> {
+    fn from(context_error: E) -> Self {
+        StoreError::Context(context_error)
+    }
+}
+
+impl<E> From<StoreError<E>> for linera_base::error::Error
+where
+    E: Display,
+    linera_base::error::Error: From<E>,
+{
+    fn from(error: StoreError<E>) -> Self {
+        match error {
+            StoreError::MissingCertificate { .. } => Self::StorageError {
+                backend: String::new(),
+                error: error.to_string(),
+            },
+            StoreError::Context(context_error) => context_error.into(),
+        }
     }
 }

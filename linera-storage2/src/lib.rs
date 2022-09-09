@@ -21,14 +21,15 @@ use linera_base::{
     messages::{Certificate, ChainDescription, ChainId, Epoch, Owner},
     system::Balance,
 };
+use linera_views::views::Context;
 use std::fmt::Debug;
 
 /// Communicate with a persistent storage using the "views" abstraction.
 #[async_trait]
 pub trait Store {
     /// The `context` data-type provided by the storage implementation in use.
-    type Context: chain::ChainStateViewContext<Error = Self::Error>;
-    type Error: std::error::Error + Debug + Sync + Send;
+    type Context: chain::ChainStateViewContext;
+    type Error: std::error::Error + From<<Self::Context as Context>::Error> + Debug + Sync + Send;
 
     /// Load the view of a chain state.
     async fn load_chain(
@@ -46,7 +47,7 @@ pub trait Store {
         id: ChainId,
     ) -> Result<chain::ChainStateView<Self::Context>, linera_base::error::Error>
     where
-        linera_base::error::Error: From<Self::Error>,
+        linera_base::error::Error: From<Self::Error> + From<<Self::Context as Context>::Error>,
     {
         let chain = self.load_chain(id).await?;
         ensure!(
@@ -88,7 +89,7 @@ pub trait Store {
         balance: Balance,
     ) -> Result<(), linera_base::error::Error>
     where
-        linera_base::error::Error: From<Self::Error>,
+        linera_base::error::Error: From<Self::Error> + From<<Self::Context as Context>::Error>,
     {
         let id = description.into();
         let mut chain = self.load_chain(id).await?;
@@ -103,10 +104,9 @@ pub trait Store {
         state.system.committees.insert(Epoch::from(0), committee);
         state.system.manager = ChainManager::single(owner);
         state.system.balance = balance;
-        chain
-            .execution_state_hash
-            .set(Some(HashValue::new(&*state)));
-        chain.write_commit().await?;
+        let hash = HashValue::new(&*state);
+        chain.execution_state_hash.set(Some(hash));
+        chain.commit().await?;
         Ok(())
     }
 }
