@@ -792,6 +792,15 @@ impl DynamoDbContextError {
     }
 }
 
+impl From<DynamoDbContextError> for linera_base::error::Error {
+    fn from(error: DynamoDbContextError) -> Self {
+        Self::StorageError {
+            backend: "DynamoDB".to_string(),
+            error: error.to_string(),
+        }
+    }
+}
+
 /// Error when creating a table for a new [`DynamoDbContext`] instance.
 #[derive(Debug, Error)]
 pub enum CreateTableError {
