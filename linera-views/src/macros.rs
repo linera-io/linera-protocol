@@ -17,6 +17,11 @@ where
         + $crate::views::ScopedOperations
         $( + $ops_trait )*
 {
+    #[allow(unreachable_code)]
+    fn context(&self) -> &C {
+        $( return self.$field.context(); )*
+    }
+
     async fn load(context: C) -> Result<Self, C::Error> {
         $( let $field = ScopedView::load(context.clone()).await?; )*
         Ok(Self {

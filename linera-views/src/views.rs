@@ -38,6 +38,9 @@ pub trait Context {
 /// address in storage.
 #[async_trait]
 pub trait View<C: Context>: Sized {
+    /// Obtain a mutable reference to the internal context.
+    fn context(&self) -> &C;
+
     /// Create a view or a subview.
     async fn load(context: C) -> Result<Self, C::Error>;
 
@@ -97,6 +100,10 @@ where
     C: Context + Send + Sync + ScopedOperations + 'static,
     W: View<C> + Send,
 {
+    fn context(&self) -> &C {
+        self.view.context()
+    }
+
     async fn load(context: C) -> Result<Self, C::Error> {
         let view = W::load(context.clone_with_scope(INDEX)).await?;
         Ok(Self { view })
@@ -142,6 +149,10 @@ where
     C: RegisterOperations<T> + Send + Sync,
     T: Send + Sync,
 {
+    fn context(&self) -> &C {
+        &self.context
+    }
+
     async fn load(mut context: C) -> Result<Self, C::Error> {
         let stored_value = context.get().await?;
         Ok(Self {
@@ -248,6 +259,10 @@ where
     C: AppendOnlyLogOperations<T> + Send + Sync,
     T: Send + Sync + Clone,
 {
+    fn context(&self) -> &C {
+        &self.context
+    }
+
     async fn load(mut context: C) -> Result<Self, C::Error> {
         let stored_count = context.count().await?;
         Ok(Self {
@@ -372,6 +387,10 @@ where
     I: Eq + Ord + Send + Sync,
     V: Clone + Send + Sync,
 {
+    fn context(&self) -> &C {
+        &self.context
+    }
+
     async fn load(context: C) -> Result<Self, C::Error> {
         Ok(Self {
             context,
@@ -507,6 +526,10 @@ where
     C: QueueOperations<T> + Send + Sync,
     T: Send + Sync + Clone,
 {
+    fn context(&self) -> &C {
+        &self.context
+    }
+
     async fn load(mut context: C) -> Result<Self, C::Error> {
         let stored_indices = context.indices().await?;
         Ok(Self {
@@ -677,6 +700,10 @@ where
     I: Send + Sync + Debug + Clone,
     W: View<C> + Send,
 {
+    fn context(&self) -> &C {
+        &self.context
+    }
+
     async fn load(context: C) -> Result<Self, C::Error> {
         Ok(Self {
             context,
