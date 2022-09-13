@@ -83,7 +83,7 @@ where
     pub async fn write_commit(self) -> Result<(), C::Error> {
         use $crate::views::View;
 
-        let context = self.context;
+        let context = self.context().clone();
         context.run_with_batch(move |batch| {
             Box::pin(async move {
                 $( self.$field.commit(batch).await?; )*
@@ -95,7 +95,7 @@ where
     pub async fn write_delete(self) -> Result<(), C::Error> {
         use $crate::views::View;
 
-        let context = self.context;
+        let context = self.context().clone();
         context.run_with_batch(move |batch| {
             Box::pin(async move {
                 $( self.$field.delete(batch).await?; )*
