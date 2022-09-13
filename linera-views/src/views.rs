@@ -219,12 +219,16 @@ pub trait AppendOnlyLogOperations<T>: Context {
 
     async fn append(
         &mut self,
-        count: usize,
+        stored_count: usize,
         batch: &mut Self::Batch,
         values: Vec<T>,
     ) -> Result<(), Self::Error>;
 
-    async fn delete(&mut self, count: usize, batch: &mut Self::Batch) -> Result<(), Self::Error>;
+    async fn delete(
+        &mut self,
+        stored_count: usize,
+        batch: &mut Self::Batch,
+    ) -> Result<(), Self::Error>;
 }
 
 #[async_trait]

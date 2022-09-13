@@ -272,26 +272,30 @@ where
 
     async fn append(
         &mut self,
-        count: usize,
+        stored_count: usize,
         batch: &mut Self::Batch,
         values: Vec<T>,
     ) -> Result<(), RocksdbViewError> {
         if values.is_empty() {
             return Ok(());
         }
-        let mut i = count;
+        let mut count = stored_count;
         for value in values {
-            batch.write_key(&self.derive_key(&i), &value)?;
-            i += 1;
+            batch.write_key(&self.derive_key(&count), &value)?;
+            count += 1;
         }
-        batch.write_key(&self.base_key, &i)?;
+        batch.write_key(&self.base_key, &count)?;
         Ok(())
     }
 
-    async fn delete(&mut self, count: usize, batch: &mut Self::Batch) -> Result<(), Self::Error> {
+    async fn delete(
+        &mut self,
+        stored_count: usize,
+        batch: &mut Self::Batch,
+    ) -> Result<(), Self::Error> {
         batch.delete_key(&self.base_key);
-        for i in 0..count {
-            batch.delete_key(&self.derive_key(&i));
+        for index in 0..stored_count {
+            batch.delete_key(&self.derive_key(&index));
         }
         Ok(())
     }

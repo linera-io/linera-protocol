@@ -462,10 +462,11 @@ where
 
     async fn append(
         &mut self,
-        mut count: usize,
+        stored_count: usize,
         _batch: &mut Self::Batch,
         values: Vec<T>,
     ) -> Result<(), Self::Error> {
+        let mut count = stored_count;
         for value in values {
             self.put_item(&count, &value).await?;
             count += 1;
@@ -474,9 +475,13 @@ where
         Ok(())
     }
 
-    async fn delete(&mut self, count: usize, _batch: &mut Self::Batch) -> Result<(), Self::Error> {
+    async fn delete(
+        &mut self,
+        stored_count: usize,
+        _batch: &mut Self::Batch,
+    ) -> Result<(), Self::Error> {
         self.remove_item(&()).await?;
-        for index in 0..count {
+        for index in 0..stored_count {
             self.remove_item(&index).await?;
         }
         Ok(())
