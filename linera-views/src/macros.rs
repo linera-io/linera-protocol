@@ -17,10 +17,14 @@ where
         + $crate::views::ScopedOperations
         $( + $ops_trait )*
 {
+    #[allow(unreachable_code)]
+    fn context(&self) -> &C {
+        $( return self.$field.context(); )*
+    }
+
     async fn load(context: C) -> Result<Self, C::Error> {
         $( let $field = ScopedView::load(context.clone()).await?; )*
         Ok(Self {
-            context,
             $( $field ),*
         })
     }
@@ -78,7 +82,7 @@ where
     pub async fn write_commit(self) -> Result<(), C::Error> {
         use $crate::views::View;
 
-        let context = self.context;
+        let context = self.context().clone();
         context.run_with_batch(move |batch| {
             Box::pin(async move {
                 $( self.$field.commit(batch).await?; )*
@@ -90,7 +94,7 @@ where
     pub async fn write_delete(self) -> Result<(), C::Error> {
         use $crate::views::View;
 
-        let context = self.context;
+        let context = self.context().clone();
         context.run_with_batch(move |batch| {
             Box::pin(async move {
                 $( self.$field.delete(batch).await?; )*
