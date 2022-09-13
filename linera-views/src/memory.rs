@@ -181,7 +181,7 @@ where
 
     async fn append(
         &mut self,
-        _count: usize,
+        _stored_count: usize,
         _batch: &mut Self::Batch,
         mut values: Vec<T>,
     ) -> Result<(), MemoryViewError> {
@@ -193,7 +193,7 @@ where
 
     async fn delete(
         &mut self,
-        _count: usize,
+        _stored_count: usize,
         _batch: &mut Self::Batch,
     ) -> Result<(), MemoryViewError> {
         self.erase().await
