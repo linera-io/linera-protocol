@@ -44,12 +44,15 @@ pub trait View<C: Context>: Sized {
     /// Discard all pending changes. After that `commit` should have no effect to storage.
     fn rollback(&mut self);
 
-    /// Persist changes to storage. This consumes the view. If the view is dropped without
-    /// calling `commit`, staged changes are simply lost.
+    /// Persist changes to storage. This consumes the view. Crash-resistant storage
+    /// implementations are expected to accumulate the desired changes in the `batch`
+    /// variable first. If the view is dropped without calling `commit`, staged changes
+    /// are simply lost.
     async fn commit(self, batch: &mut C::Batch) -> Result<(), C::Error>;
 
     /// Instead of persisting changes, clear all the data that belong to this view and its
-    /// subviews.
+    /// subviews. Crash-resistant storage implementations are expected to accumulate the
+    /// desired changes into the `batch` variable first.
     async fn delete(self, batch: &mut C::Batch) -> Result<(), C::Error>;
 }
 
@@ -123,10 +126,13 @@ pub struct RegisterView<C, T> {
 /// The context operations supporting [`RegisterView`].
 #[async_trait]
 pub trait RegisterOperations<T>: Context {
+    /// Obtain the value in the register.
     async fn get(&mut self) -> Result<T, Self::Error>;
 
+    /// Set the value in the register. Crash-resistant implementations should only write to `batch`.
     async fn set(&mut self, batch: &mut Self::Batch, value: T) -> Result<(), Self::Error>;
 
+    /// Delete the register. Crash-resistant implementations should only write to `batch`.
     async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error>;
 }
 
@@ -211,12 +217,16 @@ pub struct AppendOnlyLogView<C, T> {
 /// The context operations supporting [`AppendOnlyLogView`].
 #[async_trait]
 pub trait AppendOnlyLogOperations<T>: Context {
+    /// Return the size of the log in storage.
     async fn count(&mut self) -> Result<usize, Self::Error>;
 
+    /// Obtain the value at the given index.
     async fn get(&mut self, index: usize) -> Result<Option<T>, Self::Error>;
 
+    /// Obtain the values in the given range of indices.
     async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error>;
 
+    /// Append values to the logs. Crash-resistant implementations should only write to `batch`.
     async fn append(
         &mut self,
         stored_count: usize,
@@ -224,6 +234,7 @@ pub trait AppendOnlyLogOperations<T>: Context {
         values: Vec<T>,
     ) -> Result<(), Self::Error>;
 
+    /// Delete the log. Crash-resistant implementations should only write to `batch`.
     async fn delete(
         &mut self,
         stored_count: usize,
@@ -337,7 +348,7 @@ pub trait MapOperations<I, V>: Context {
     /// Return the list of indices in the map.
     async fn indices(&mut self) -> Result<Vec<I>, Self::Error>;
 
-    /// Set a value.
+    /// Set a value. Crash-resistant implementations should only write to `batch`.
     async fn insert(
         &mut self,
         batch: &mut Self::Batch,
@@ -345,10 +356,12 @@ pub trait MapOperations<I, V>: Context {
         value: V,
     ) -> Result<(), Self::Error>;
 
-    /// Remove the entry at the given index.
+    /// Remove the entry at the given index. Crash-resistant implementations should only write
+    /// to `batch`.
     async fn remove(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error>;
 
-    /// Delete the map and its entries from storage.
+    /// Delete the map and its entries from storage. Crash-resistant implementations should only
+    /// write to `batch`.
     async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error>;
 }
 
@@ -453,12 +466,17 @@ pub struct QueueView<C, T> {
 /// The context operations supporting [`QueueView`].
 #[async_trait]
 pub trait QueueOperations<T>: Context {
+    /// Obtain the range of indices in the stored queue.
     async fn indices(&mut self) -> Result<Range<usize>, Self::Error>;
 
+    /// Obtain the value at the given index.
     async fn get(&mut self, index: usize) -> Result<Option<T>, Self::Error>;
 
+    /// Obtain the values in the given range.
     async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error>;
 
+    /// Delete `count` values from the fron of the queue. Crash-resistant implementations
+    /// should only write to `batch`.
     async fn delete_front(
         &mut self,
         stored_indices: Range<usize>,
@@ -466,6 +484,8 @@ pub trait QueueOperations<T>: Context {
         count: usize,
     ) -> Result<(), Self::Error>;
 
+    /// Append the given values from the back of the queue. Crash-resistant
+    /// implementations should only write to `batch`.
     async fn append_back(
         &mut self,
         stored_indices: Range<usize>,
@@ -473,7 +493,7 @@ pub trait QueueOperations<T>: Context {
         values: Vec<T>,
     ) -> Result<(), Self::Error>;
 
-    /// Delete the queue from storage.
+    /// Delete the queue from storage. Crash-resistant implementations should only write to `batch`.
     async fn delete(
         &mut self,
         stored_indices: Range<usize>,
@@ -641,10 +661,12 @@ pub trait CollectionOperations<I>: Context {
     /// Return the list of indices in the collection.
     async fn indices(&mut self) -> Result<Vec<I>, Self::Error>;
 
-    /// Add the index to the list of indices.
+    /// Add the index to the list of indices. Crash-resistant implementations should only write
+    /// to `batch`.
     async fn add_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error>;
 
-    /// Remove the index from the list of indices.
+    /// Remove the index from the list of indices. Crash-resistant implementations should only
+    /// write to `batch`.
     async fn remove_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error>;
 }
 
