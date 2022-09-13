@@ -31,8 +31,6 @@ pub struct StateView<C> {
     pub collection: ScopedView<5, CollectionView<C, String, AppendOnlyLogView<C, u32>>>,
     pub collection2:
         ScopedView<6, CollectionView<C, String, CollectionView<C, String, RegisterView<C, u32>>>>,
-    // required
-    context: C,
 }
 
 // This also generates `trait StateViewContext: Context ... {}`

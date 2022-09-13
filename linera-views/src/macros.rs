@@ -25,7 +25,6 @@ where
     async fn load(context: C) -> Result<Self, C::Error> {
         $( let $field = ScopedView::load(context.clone()).await?; )*
         Ok(Self {
-            context,
             $( $field ),*
         })
     }
