@@ -121,10 +121,11 @@ struct TestBuilder<B: StoreBuilder> {
     chain_client_stores: Vec<B::Store>,
 }
 
+#[async_trait]
 trait StoreBuilder {
     type Store: Store + Clone + Send + Sync + 'static;
 
-    fn build(&self) -> Result<Self::Store, anyhow::Error>;
+    async fn build(&self) -> Result<Self::Store, anyhow::Error>;
 }
 
 #[derive(Default)]
@@ -173,7 +174,7 @@ where
     B: StoreBuilder,
     Error: From<<B::Store as Store>::Error>,
 {
-    fn new(
+    async fn new(
         store_builder: B,
         count: usize,
         with_faulty_validators: usize,
@@ -192,7 +193,7 @@ where
         let mut faulty_validators = HashSet::new();
         for (i, key_pair) in key_pairs.into_iter().enumerate() {
             let name = ValidatorName(key_pair.public());
-            let store = store_builder.build()?;
+            let store = store_builder.build().await?;
             let state = WorkerState::new(format!("Node {}", i), Some(key_pair), store.clone())
                 .allow_inactive_chains(false);
             let validator = if i < with_faulty_validators {
@@ -282,7 +283,7 @@ where
         let store = self
             .genesis_store_builder
             .build(
-                self.store_builder.build()?,
+                self.store_builder.build().await?,
                 self.initial_committee.clone(),
                 self.admin_id,
             )
@@ -349,20 +350,22 @@ static GUARD: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 pub struct MakeMemoryStoreClient;
 
+#[async_trait]
 impl StoreBuilder for MakeMemoryStoreClient {
     type Store = MemoryStoreClient;
 
-    fn build(&self) -> Result<Self::Store, anyhow::Error> {
+    async fn build(&self) -> Result<Self::Store, anyhow::Error> {
         Ok(MemoryStoreClient::default())
     }
 }
 
 pub struct MakeRocksdbStoreClient;
 
+#[async_trait]
 impl StoreBuilder for MakeRocksdbStoreClient {
     type Store = RocksdbStoreClient;
 
-    fn build(&self) -> Result<Self::Store, anyhow::Error> {
+    async fn build(&self) -> Result<Self::Store, anyhow::Error> {
         let dir = tempfile::TempDir::new()?;
         let path = dir.path().to_path_buf();
         TEMP_DIRS.lock().unwrap().push(dir);
@@ -386,7 +389,7 @@ where
     B: StoreBuilder,
     Error: From<<B::Store as Store>::Error>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1)?;
+    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await?;
@@ -428,7 +431,7 @@ where
     B: StoreBuilder,
     Error: From<<B::Store as Store>::Error>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1)?;
+    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await?;
@@ -475,7 +478,7 @@ where
     B: StoreBuilder,
     Error: From<<B::Store as Store>::Error>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1)?;
+    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await?;
@@ -523,7 +526,7 @@ where
     B: StoreBuilder,
     Error: From<<B::Store as Store>::Error>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1)?;
+    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await?;
@@ -592,7 +595,7 @@ where
     B: StoreBuilder,
     Error: From<<B::Store as Store>::Error>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1)?;
+    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     // New chains use the admin chain to verify their creation certificate.
     builder
         .add_initial_chain(ChainDescription::Root(0), Balance::from(0))
@@ -637,7 +640,7 @@ where
     B: StoreBuilder,
     Error: From<<B::Store as Store>::Error>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1)?;
+    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     // New chains use the admin chain to verify their creation certificate.
     builder
         .add_initial_chain(ChainDescription::Root(0), Balance::from(0))
@@ -706,7 +709,7 @@ where
     B: StoreBuilder,
     Error: From<<B::Store as Store>::Error>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1)?;
+    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     // New chains use the admin chain to verify their creation certificate.
     builder
         .add_initial_chain(ChainDescription::Root(0), Balance::from(0))
@@ -765,7 +768,7 @@ where
     B: StoreBuilder,
     Error: From<<B::Store as Store>::Error>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1)?;
+    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await?;
@@ -817,7 +820,7 @@ where
     B: StoreBuilder,
     Error: From<<B::Store as Store>::Error>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 2)?;
+    let mut builder = TestBuilder::new(store_builder, 4, 2).await?;
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await?;
@@ -851,7 +854,7 @@ where
     B: StoreBuilder,
     Error: From<<B::Store as Store>::Error>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1)?;
+    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut client1 = builder
         .add_initial_chain(ChainDescription::Root(1), Balance::from(3))
         .await?;
@@ -918,7 +921,7 @@ where
     B: StoreBuilder,
     Error: From<<B::Store as Store>::Error>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1)?;
+    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut client1 = builder
         .add_initial_chain(ChainDescription::Root(1), Balance::from(3))
         .await?;
@@ -965,7 +968,7 @@ where
     B: StoreBuilder,
     Error: From<<B::Store as Store>::Error>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1)?;
+    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut client1 = builder
         .add_initial_chain(ChainDescription::Root(1), Balance::from(3))
         .await?;
@@ -1056,7 +1059,7 @@ where
     B: StoreBuilder,
     Error: From<<B::Store as Store>::Error>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1)?;
+    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut admin = builder
         .add_initial_chain(ChainDescription::Root(0), Balance::from(3))
         .await?;
