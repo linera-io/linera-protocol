@@ -344,6 +344,10 @@ static TEMP_DIRS: Lazy<std::sync::Mutex<Vec<tempfile::TempDir>>> =
 /// Need a guard to avoid "too many open files" error
 static GUARD: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
+fn make_memory_client() -> MemoryStoreClient {
+    MemoryStoreClient::default()
+}
+
 fn make_rocksdb_client() -> RocksdbStoreClient {
     let dir = tempfile::TempDir::new().unwrap();
     let path = dir.path().to_path_buf();
@@ -353,7 +357,7 @@ fn make_rocksdb_client() -> RocksdbStoreClient {
 
 #[test(tokio::test)]
 async fn test_memory_initiating_valid_transfer() {
-    run_test_initiating_valid_transfer(MemoryStoreClient::default).await
+    run_test_initiating_valid_transfer(make_memory_client).await
 }
 
 #[test(tokio::test)]
@@ -394,7 +398,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_rotate_key_pair() {
-    run_test_rotate_key_pair(MemoryStoreClient::default).await
+    run_test_rotate_key_pair(make_memory_client).await
 }
 
 #[test(tokio::test)]
@@ -440,7 +444,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_transfer_ownership() {
-    run_test_transfer_ownership(MemoryStoreClient::default).await
+    run_test_transfer_ownership(make_memory_client).await
 }
 
 #[test(tokio::test)]
@@ -487,7 +491,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_share_ownership() {
-    run_test_share_ownership(MemoryStoreClient::default).await
+    run_test_share_ownership(make_memory_client).await
 }
 
 #[test(tokio::test)]
@@ -555,7 +559,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_open_chain_then_close_it() {
-    run_test_open_chain_then_close_it(MemoryStoreClient::default).await
+    run_test_open_chain_then_close_it(make_memory_client).await
 }
 
 #[test(tokio::test)]
@@ -599,7 +603,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_transfer_then_open_chain() {
-    run_test_transfer_then_open_chain(MemoryStoreClient::default).await
+    run_test_transfer_then_open_chain(make_memory_client).await
 }
 
 #[test(tokio::test)]
@@ -667,7 +671,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_open_chain_then_transfer() {
-    run_test_open_chain_then_transfer(MemoryStoreClient::default).await
+    run_test_open_chain_then_transfer(make_memory_client).await
 }
 
 #[test(tokio::test)]
@@ -725,7 +729,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_close_chain() {
-    run_test_close_chain(MemoryStoreClient::default).await
+    run_test_close_chain(make_memory_client).await
 }
 
 #[test(tokio::test)]
@@ -774,7 +778,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_initiating_valid_transfer_too_many_faults() {
-    run_test_initiating_valid_transfer_too_many_faults(MemoryStoreClient::default).await
+    run_test_initiating_valid_transfer_too_many_faults(make_memory_client).await
 }
 
 #[test(tokio::test)]
@@ -807,7 +811,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_bidirectional_transfer() {
-    run_test_bidirectional_transfer(MemoryStoreClient::default).await
+    run_test_bidirectional_transfer(make_memory_client).await
 }
 
 #[test(tokio::test)]
@@ -873,7 +877,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_receiving_unconfirmed_transfer() {
-    run_test_receiving_unconfirmed_transfer(MemoryStoreClient::default).await
+    run_test_receiving_unconfirmed_transfer(make_memory_client).await
 }
 
 #[test(tokio::test)]
@@ -913,8 +917,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
-    run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(MemoryStoreClient::default)
-        .await
+    run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(make_memory_client).await
 }
 
 #[test(tokio::test)]
@@ -1005,7 +1008,7 @@ async fn run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances<S>
 
 #[test(tokio::test)]
 async fn test_memory_change_voting_rights() {
-    run_test_change_voting_rights(MemoryStoreClient::default).await
+    run_test_change_voting_rights(make_memory_client).await
 }
 
 #[test(tokio::test)]
