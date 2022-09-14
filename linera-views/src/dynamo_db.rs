@@ -448,7 +448,7 @@ where
         self.get_item(&index).await
     }
 
-    async fn read(&mut self, range: std::ops::Range<usize>) -> Result<Vec<T>, Self::Error> {
+    async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error> {
         let mut items = Vec::with_capacity(range.len());
         for index in range {
             let item = match self.get_item(&index).await? {
