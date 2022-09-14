@@ -367,17 +367,17 @@ impl StoreBuilder for MakeRocksdbStoreClient {
 }
 
 #[test(tokio::test)]
-async fn test_memory_initiating_valid_transfer() {
+async fn test_memory_initiating_valid_transfer() -> Result<(), anyhow::Error> {
     run_test_initiating_valid_transfer(MakeMemoryStoreClient).await
 }
 
 #[test(tokio::test)]
-async fn test_rocksdb_initiating_valid_transfer() {
+async fn test_rocksdb_initiating_valid_transfer() -> Result<(), anyhow::Error> {
     let _lock = GUARD.lock().await;
     run_test_initiating_valid_transfer(MakeRocksdbStoreClient).await
 }
 
-async fn run_test_initiating_valid_transfer<B>(store_builder: B)
+async fn run_test_initiating_valid_transfer<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
     Error: From<<B::Store as Store>::Error>,
@@ -405,20 +405,21 @@ where
             .value,
         certificate.value
     );
+    Ok(())
 }
 
 #[test(tokio::test)]
-async fn test_memory_rotate_key_pair() {
+async fn test_memory_rotate_key_pair() -> Result<(), anyhow::Error> {
     run_test_rotate_key_pair(MakeMemoryStoreClient).await
 }
 
 #[test(tokio::test)]
-async fn test_rocksdb_rotate_key_pair() {
+async fn test_rocksdb_rotate_key_pair() -> Result<(), anyhow::Error> {
     let _lock = GUARD.lock().await;
     run_test_rotate_key_pair(MakeRocksdbStoreClient).await
 }
 
-async fn run_test_rotate_key_pair<B>(store_builder: B)
+async fn run_test_rotate_key_pair<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
     Error: From<<B::Store as Store>::Error>,
@@ -451,20 +452,21 @@ where
         .transfer_to_chain(Amount::from(3), ChainId::root(2), UserData::default())
         .await
         .unwrap();
+    Ok(())
 }
 
 #[test(tokio::test)]
-async fn test_memory_transfer_ownership() {
+async fn test_memory_transfer_ownership() -> Result<(), anyhow::Error> {
     run_test_transfer_ownership(MakeMemoryStoreClient).await
 }
 
 #[test(tokio::test)]
-async fn test_rocksdb_transfer_ownership() {
+async fn test_rocksdb_transfer_ownership() -> Result<(), anyhow::Error> {
     let _lock = GUARD.lock().await;
     run_test_transfer_ownership(MakeRocksdbStoreClient).await
 }
 
-async fn run_test_transfer_ownership<B>(store_builder: B)
+async fn run_test_transfer_ownership<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
     Error: From<<B::Store as Store>::Error>,
@@ -498,20 +500,21 @@ where
         .transfer_to_chain(Amount::from(3), ChainId::root(2), UserData::default())
         .await
         .is_err());
+    Ok(())
 }
 
 #[test(tokio::test)]
-async fn test_memory_share_ownership() {
+async fn test_memory_share_ownership() -> Result<(), anyhow::Error> {
     run_test_share_ownership(MakeMemoryStoreClient).await
 }
 
 #[test(tokio::test)]
-async fn test_rocksdb_share_ownership() {
+async fn test_rocksdb_share_ownership() -> Result<(), anyhow::Error> {
     let _lock = GUARD.lock().await;
     run_test_share_ownership(MakeRocksdbStoreClient).await
 }
 
-async fn run_test_share_ownership<B>(store_builder: B)
+async fn run_test_share_ownership<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
     Error: From<<B::Store as Store>::Error>,
@@ -566,20 +569,21 @@ where
         .transfer_to_chain(Amount::from(1), ChainId::root(3), UserData::default())
         .await
         .unwrap();
+    Ok(())
 }
 
 #[test(tokio::test)]
-async fn test_memory_open_chain_then_close_it() {
+async fn test_memory_open_chain_then_close_it() -> Result<(), anyhow::Error> {
     run_test_open_chain_then_close_it(MakeMemoryStoreClient).await
 }
 
 #[test(tokio::test)]
-async fn test_rocksdb_open_chain_then_close_it() {
+async fn test_rocksdb_open_chain_then_close_it() -> Result<(), anyhow::Error> {
     let _lock = GUARD.lock().await;
     run_test_open_chain_then_close_it(MakeRocksdbStoreClient).await
 }
 
-async fn run_test_open_chain_then_close_it<B>(store_builder: B)
+async fn run_test_open_chain_then_close_it<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
     Error: From<<B::Store as Store>::Error>,
@@ -610,20 +614,21 @@ where
     );
     assert_eq!(client.local_balance().await.unwrap(), Balance::from(0));
     client.close_chain().await.unwrap();
+    Ok(())
 }
 
 #[test(tokio::test)]
-async fn test_memory_transfer_then_open_chain() {
+async fn test_memory_transfer_then_open_chain() -> Result<(), anyhow::Error> {
     run_test_transfer_then_open_chain(MakeMemoryStoreClient).await
 }
 
 #[test(tokio::test)]
-async fn test_rocksdb_transfer_then_open_chain() {
+async fn test_rocksdb_transfer_then_open_chain() -> Result<(), anyhow::Error> {
     let _lock = GUARD.lock().await;
     run_test_transfer_then_open_chain(MakeRocksdbStoreClient).await
 }
 
-async fn run_test_transfer_then_open_chain<B>(store_builder: B)
+async fn run_test_transfer_then_open_chain<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
     Error: From<<B::Store as Store>::Error>,
@@ -678,20 +683,21 @@ where
         .transfer_to_chain(Amount::from(3), ChainId::root(3), UserData::default())
         .await
         .unwrap();
+    Ok(())
 }
 
 #[test(tokio::test)]
-async fn test_memory_open_chain_then_transfer() {
+async fn test_memory_open_chain_then_transfer() -> Result<(), anyhow::Error> {
     run_test_open_chain_then_transfer(MakeMemoryStoreClient).await
 }
 
 #[test(tokio::test)]
-async fn test_rocksdb_open_chain_then_transfer() {
+async fn test_rocksdb_open_chain_then_transfer() -> Result<(), anyhow::Error> {
     let _lock = GUARD.lock().await;
     run_test_open_chain_then_transfer(MakeRocksdbStoreClient).await
 }
 
-async fn run_test_open_chain_then_transfer<B>(store_builder: B)
+async fn run_test_open_chain_then_transfer<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
     Error: From<<B::Store as Store>::Error>,
@@ -736,20 +742,21 @@ where
         .await
         .unwrap();
     assert_eq!(client.local_balance().await.unwrap(), Balance::from(0));
+    Ok(())
 }
 
 #[test(tokio::test)]
-async fn test_memory_close_chain() {
+async fn test_memory_close_chain() -> Result<(), anyhow::Error> {
     run_test_close_chain(MakeMemoryStoreClient).await
 }
 
 #[test(tokio::test)]
-async fn test_rocksdb_close_chain() {
+async fn test_rocksdb_close_chain() -> Result<(), anyhow::Error> {
     let _lock = GUARD.lock().await;
     run_test_close_chain(MakeRocksdbStoreClient).await
 }
 
-async fn run_test_close_chain<B>(store_builder: B)
+async fn run_test_close_chain<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
     Error: From<<B::Store as Store>::Error>,
@@ -785,20 +792,23 @@ where
         .transfer_to_chain(Amount::from(3), ChainId::root(2), UserData::default())
         .await
         .is_err());
+    Ok(())
 }
 
 #[test(tokio::test)]
-async fn test_memory_initiating_valid_transfer_too_many_faults() {
+async fn test_memory_initiating_valid_transfer_too_many_faults() -> Result<(), anyhow::Error> {
     run_test_initiating_valid_transfer_too_many_faults(MakeMemoryStoreClient).await
 }
 
 #[test(tokio::test)]
-async fn test_rocksdb_initiating_valid_transfer_too_many_faults() {
+async fn test_rocksdb_initiating_valid_transfer_too_many_faults() -> Result<(), anyhow::Error> {
     let _lock = GUARD.lock().await;
     run_test_initiating_valid_transfer_too_many_faults(MakeRocksdbStoreClient).await
 }
 
-async fn run_test_initiating_valid_transfer_too_many_faults<B>(store_builder: B)
+async fn run_test_initiating_valid_transfer_too_many_faults<B>(
+    store_builder: B,
+) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
     Error: From<<B::Store as Store>::Error>,
@@ -818,20 +828,21 @@ where
     assert_eq!(sender.next_block_height, BlockHeight::from(0));
     assert!(sender.pending_block.is_some());
     assert_eq!(sender.local_balance().await.unwrap(), Balance::from(4));
+    Ok(())
 }
 
 #[test(tokio::test)]
-async fn test_memory_bidirectional_transfer() {
+async fn test_memory_bidirectional_transfer() -> Result<(), anyhow::Error> {
     run_test_bidirectional_transfer(MakeMemoryStoreClient).await
 }
 
 #[test(tokio::test)]
-async fn test_rocksdb_bidirectional_transfer() {
+async fn test_rocksdb_bidirectional_transfer() -> Result<(), anyhow::Error> {
     let _lock = GUARD.lock().await;
     run_test_bidirectional_transfer(MakeRocksdbStoreClient).await
 }
 
-async fn run_test_bidirectional_transfer<B>(store_builder: B)
+async fn run_test_bidirectional_transfer<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
     Error: From<<B::Store as Store>::Error>,
@@ -884,20 +895,21 @@ where
         client1.synchronize_balance().await.unwrap(),
         Balance::from(1)
     );
+    Ok(())
 }
 
 #[test(tokio::test)]
-async fn test_memory_receiving_unconfirmed_transfer() {
+async fn test_memory_receiving_unconfirmed_transfer() -> Result<(), anyhow::Error> {
     run_test_receiving_unconfirmed_transfer(MakeMemoryStoreClient).await
 }
 
 #[test(tokio::test)]
-async fn test_rocksdb_receiving_unconfirmed_transfer() {
+async fn test_rocksdb_receiving_unconfirmed_transfer() -> Result<(), anyhow::Error> {
     let _lock = GUARD.lock().await;
     run_test_receiving_unconfirmed_transfer(MakeRocksdbStoreClient).await
 }
 
-async fn run_test_receiving_unconfirmed_transfer<B>(store_builder: B)
+async fn run_test_receiving_unconfirmed_transfer<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
     Error: From<<B::Store as Store>::Error>,
@@ -924,22 +936,27 @@ where
     // Let the receiver confirm in last resort.
     client2.receive_certificate(certificate).await.unwrap();
     assert_eq!(client2.local_balance().await.unwrap(), Balance::from(2));
+    Ok(())
 }
 
 #[test(tokio::test)]
-async fn test_memory_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
+async fn test_memory_receiving_unconfirmed_transfer_with_lagging_sender_balances(
+) -> Result<(), anyhow::Error> {
     run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(MakeMemoryStoreClient)
         .await
 }
 
 #[test(tokio::test)]
-async fn test_rocksdb_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
+async fn test_rocksdb_receiving_unconfirmed_transfer_with_lagging_sender_balances(
+) -> Result<(), anyhow::Error> {
     let _lock = GUARD.lock().await;
     run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(MakeRocksdbStoreClient)
         .await
 }
 
-async fn run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances<B>(store_builder: B)
+async fn run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances<B>(
+    store_builder: B,
+) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
     Error: From<<B::Store as Store>::Error>,
@@ -1016,20 +1033,21 @@ where
     // Let the receiver confirm in last resort.
     client3.receive_certificate(certificate).await.unwrap();
     assert_eq!(client3.local_balance().await.unwrap(), Balance::from(2));
+    Ok(())
 }
 
 #[test(tokio::test)]
-async fn test_memory_change_voting_rights() {
+async fn test_memory_change_voting_rights() -> Result<(), anyhow::Error> {
     run_test_change_voting_rights(MakeMemoryStoreClient).await
 }
 
 #[test(tokio::test)]
-async fn test_rocksdb_change_voting_rights() {
+async fn test_rocksdb_change_voting_rights() -> Result<(), anyhow::Error> {
     let _lock = GUARD.lock().await;
     run_test_change_voting_rights(MakeRocksdbStoreClient).await
 }
 
-async fn run_test_change_voting_rights<B>(store_builder: B)
+async fn run_test_change_voting_rights<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
     Error: From<<B::Store as Store>::Error>,
@@ -1100,4 +1118,5 @@ where
     admin.receive_certificate(cert).await.unwrap();
     // Transfer goes through and the previous one as well thanks to block chaining.
     assert_eq!(admin.synchronize_balance().await.unwrap(), Balance::from(3));
+    Ok(())
 }
