@@ -16,7 +16,6 @@ use linera_base::{
     system::{Amount, Balance, SystemOperation, UserData},
 };
 use linera_storage2::{MemoryStoreClient, RocksdbStoreClient, Store};
-use once_cell::sync::Lazy;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     str::FromStr,
@@ -342,9 +341,6 @@ where
     }
 }
 
-static TEMP_DIRS: Lazy<std::sync::Mutex<Vec<tempfile::TempDir>>> =
-    Lazy::new(|| std::sync::Mutex::new(Vec::new()));
-
 /// Need a guard to avoid "too many open files" error
 static GUARD: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
@@ -359,7 +355,10 @@ impl StoreBuilder for MakeMemoryStoreClient {
     }
 }
 
-pub struct MakeRocksdbStoreClient;
+#[derive(Default)]
+pub struct MakeRocksdbStoreClient {
+    temp_dirs: Vec<tempfile::TempDir>,
+}
 
 #[async_trait]
 impl StoreBuilder for MakeRocksdbStoreClient {
@@ -368,7 +367,7 @@ impl StoreBuilder for MakeRocksdbStoreClient {
     async fn build(&mut self) -> Result<Self::Store, anyhow::Error> {
         let dir = tempfile::TempDir::new()?;
         let path = dir.path().to_path_buf();
-        TEMP_DIRS.lock().unwrap().push(dir);
+        self.temp_dirs.push(dir);
         Ok(RocksdbStoreClient::new(path))
     }
 }
@@ -381,7 +380,7 @@ async fn test_memory_initiating_valid_transfer() -> Result<(), anyhow::Error> {
 #[test(tokio::test)]
 async fn test_rocksdb_initiating_valid_transfer() -> Result<(), anyhow::Error> {
     let _lock = GUARD.lock().await;
-    run_test_initiating_valid_transfer(MakeRocksdbStoreClient).await
+    run_test_initiating_valid_transfer(MakeRocksdbStoreClient::default()).await
 }
 
 async fn run_test_initiating_valid_transfer<B>(store_builder: B) -> Result<(), anyhow::Error>
@@ -423,7 +422,7 @@ async fn test_memory_rotate_key_pair() -> Result<(), anyhow::Error> {
 #[test(tokio::test)]
 async fn test_rocksdb_rotate_key_pair() -> Result<(), anyhow::Error> {
     let _lock = GUARD.lock().await;
-    run_test_rotate_key_pair(MakeRocksdbStoreClient).await
+    run_test_rotate_key_pair(MakeRocksdbStoreClient::default()).await
 }
 
 async fn run_test_rotate_key_pair<B>(store_builder: B) -> Result<(), anyhow::Error>
@@ -470,7 +469,7 @@ async fn test_memory_transfer_ownership() -> Result<(), anyhow::Error> {
 #[test(tokio::test)]
 async fn test_rocksdb_transfer_ownership() -> Result<(), anyhow::Error> {
     let _lock = GUARD.lock().await;
-    run_test_transfer_ownership(MakeRocksdbStoreClient).await
+    run_test_transfer_ownership(MakeRocksdbStoreClient::default()).await
 }
 
 async fn run_test_transfer_ownership<B>(store_builder: B) -> Result<(), anyhow::Error>
@@ -518,7 +517,7 @@ async fn test_memory_share_ownership() -> Result<(), anyhow::Error> {
 #[test(tokio::test)]
 async fn test_rocksdb_share_ownership() -> Result<(), anyhow::Error> {
     let _lock = GUARD.lock().await;
-    run_test_share_ownership(MakeRocksdbStoreClient).await
+    run_test_share_ownership(MakeRocksdbStoreClient::default()).await
 }
 
 async fn run_test_share_ownership<B>(store_builder: B) -> Result<(), anyhow::Error>
@@ -587,7 +586,7 @@ async fn test_memory_open_chain_then_close_it() -> Result<(), anyhow::Error> {
 #[test(tokio::test)]
 async fn test_rocksdb_open_chain_then_close_it() -> Result<(), anyhow::Error> {
     let _lock = GUARD.lock().await;
-    run_test_open_chain_then_close_it(MakeRocksdbStoreClient).await
+    run_test_open_chain_then_close_it(MakeRocksdbStoreClient::default()).await
 }
 
 async fn run_test_open_chain_then_close_it<B>(store_builder: B) -> Result<(), anyhow::Error>
@@ -632,7 +631,7 @@ async fn test_memory_transfer_then_open_chain() -> Result<(), anyhow::Error> {
 #[test(tokio::test)]
 async fn test_rocksdb_transfer_then_open_chain() -> Result<(), anyhow::Error> {
     let _lock = GUARD.lock().await;
-    run_test_transfer_then_open_chain(MakeRocksdbStoreClient).await
+    run_test_transfer_then_open_chain(MakeRocksdbStoreClient::default()).await
 }
 
 async fn run_test_transfer_then_open_chain<B>(store_builder: B) -> Result<(), anyhow::Error>
@@ -701,7 +700,7 @@ async fn test_memory_open_chain_then_transfer() -> Result<(), anyhow::Error> {
 #[test(tokio::test)]
 async fn test_rocksdb_open_chain_then_transfer() -> Result<(), anyhow::Error> {
     let _lock = GUARD.lock().await;
-    run_test_open_chain_then_transfer(MakeRocksdbStoreClient).await
+    run_test_open_chain_then_transfer(MakeRocksdbStoreClient::default()).await
 }
 
 async fn run_test_open_chain_then_transfer<B>(store_builder: B) -> Result<(), anyhow::Error>
@@ -760,7 +759,7 @@ async fn test_memory_close_chain() -> Result<(), anyhow::Error> {
 #[test(tokio::test)]
 async fn test_rocksdb_close_chain() -> Result<(), anyhow::Error> {
     let _lock = GUARD.lock().await;
-    run_test_close_chain(MakeRocksdbStoreClient).await
+    run_test_close_chain(MakeRocksdbStoreClient::default()).await
 }
 
 async fn run_test_close_chain<B>(store_builder: B) -> Result<(), anyhow::Error>
@@ -810,7 +809,7 @@ async fn test_memory_initiating_valid_transfer_too_many_faults() -> Result<(), a
 #[test(tokio::test)]
 async fn test_rocksdb_initiating_valid_transfer_too_many_faults() -> Result<(), anyhow::Error> {
     let _lock = GUARD.lock().await;
-    run_test_initiating_valid_transfer_too_many_faults(MakeRocksdbStoreClient).await
+    run_test_initiating_valid_transfer_too_many_faults(MakeRocksdbStoreClient::default()).await
 }
 
 async fn run_test_initiating_valid_transfer_too_many_faults<B>(
@@ -846,7 +845,7 @@ async fn test_memory_bidirectional_transfer() -> Result<(), anyhow::Error> {
 #[test(tokio::test)]
 async fn test_rocksdb_bidirectional_transfer() -> Result<(), anyhow::Error> {
     let _lock = GUARD.lock().await;
-    run_test_bidirectional_transfer(MakeRocksdbStoreClient).await
+    run_test_bidirectional_transfer(MakeRocksdbStoreClient::default()).await
 }
 
 async fn run_test_bidirectional_transfer<B>(store_builder: B) -> Result<(), anyhow::Error>
@@ -913,7 +912,7 @@ async fn test_memory_receiving_unconfirmed_transfer() -> Result<(), anyhow::Erro
 #[test(tokio::test)]
 async fn test_rocksdb_receiving_unconfirmed_transfer() -> Result<(), anyhow::Error> {
     let _lock = GUARD.lock().await;
-    run_test_receiving_unconfirmed_transfer(MakeRocksdbStoreClient).await
+    run_test_receiving_unconfirmed_transfer(MakeRocksdbStoreClient::default()).await
 }
 
 async fn run_test_receiving_unconfirmed_transfer<B>(store_builder: B) -> Result<(), anyhow::Error>
@@ -957,8 +956,10 @@ async fn test_memory_receiving_unconfirmed_transfer_with_lagging_sender_balances
 async fn test_rocksdb_receiving_unconfirmed_transfer_with_lagging_sender_balances(
 ) -> Result<(), anyhow::Error> {
     let _lock = GUARD.lock().await;
-    run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(MakeRocksdbStoreClient)
-        .await
+    run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(
+        MakeRocksdbStoreClient::default(),
+    )
+    .await
 }
 
 async fn run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances<B>(
@@ -1051,7 +1052,7 @@ async fn test_memory_change_voting_rights() -> Result<(), anyhow::Error> {
 #[test(tokio::test)]
 async fn test_rocksdb_change_voting_rights() -> Result<(), anyhow::Error> {
     let _lock = GUARD.lock().await;
-    run_test_change_voting_rights(MakeRocksdbStoreClient).await
+    run_test_change_voting_rights(MakeRocksdbStoreClient::default()).await
 }
 
 async fn run_test_change_voting_rights<B>(store_builder: B) -> Result<(), anyhow::Error>
