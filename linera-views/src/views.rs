@@ -6,6 +6,7 @@ use std::{
     cmp::Eq,
     collections::{btree_map, BTreeMap, VecDeque},
     fmt::Debug,
+    mem,
     ops::Range,
 };
 use thiserror::Error;
@@ -47,11 +48,19 @@ pub trait View<C: Context>: Sized {
     /// Discard all pending changes. After that `commit` should have no effect to storage.
     fn rollback(&mut self);
 
+    /// Persist changes to storage and reset the view's staged changes. Crash-resistant storage
+    /// implementations are expected to accumulate the desired changes in the `batch`
+    /// variable first. If the view is dropped without calling `commit` or `commit_and_reset`,
+    /// staged changes are simply lost.
+    async fn commit_and_reset(&mut self, batch: &mut C::Batch) -> Result<(), C::Error>;
+
     /// Persist changes to storage. This consumes the view. Crash-resistant storage
     /// implementations are expected to accumulate the desired changes in the `batch`
-    /// variable first. If the view is dropped without calling `commit`, staged changes
-    /// are simply lost.
-    async fn commit(self, batch: &mut C::Batch) -> Result<(), C::Error>;
+    /// variable first. If the view is dropped without calling `commit` or `commit_and_reset`,
+    /// staged changes are simply lost.
+    async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+        self.commit_and_reset(batch).await
+    }
 
     /// Instead of persisting changes, clear all the data that belong to this view and its
     /// subviews. Crash-resistant storage implementations are expected to accumulate the
@@ -113,8 +122,8 @@ where
         self.view.rollback();
     }
 
-    async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        self.view.commit(batch).await
+    async fn commit_and_reset(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+        self.view.commit_and_reset(batch).await
     }
 
     async fn delete(self, batch: &mut C::Batch) -> Result<(), C::Error> {
@@ -147,7 +156,7 @@ pub trait RegisterOperations<T>: Context {
 impl<C, T> View<C> for RegisterView<C, T>
 where
     C: RegisterOperations<T> + Send + Sync,
-    T: Send + Sync,
+    T: Clone + Send + Sync,
 {
     fn context(&self) -> &C {
         &self.context
@@ -166,9 +175,10 @@ where
         self.update = None
     }
 
-    async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        if let Some(value) = self.update {
-            self.context.set(batch, value).await?;
+    async fn commit_and_reset(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+        if let Some(value) = self.update.take() {
+            self.context.set(batch, value.clone()).await?;
+            self.stored_value = value;
         }
         Ok(())
     }
@@ -276,10 +286,13 @@ where
         self.new_values.clear();
     }
 
-    async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+    async fn commit_and_reset(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+        let new_count = self.stored_count + self.new_values.len();
         self.context
-            .append(self.stored_count, batch, self.new_values)
-            .await
+            .append(self.stored_count, batch, mem::take(&mut self.new_values))
+            .await?;
+        self.stored_count = new_count;
+        Ok(())
     }
 
     async fn delete(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
@@ -402,8 +415,8 @@ where
         self.updates.clear();
     }
 
-    async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        for (index, update) in self.updates {
+    async fn commit_and_reset(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+        for (index, update) in mem::take(&mut self.updates) {
             match update {
                 None => {
                     self.context.remove(batch, index).await?;
@@ -545,17 +558,21 @@ where
         self.new_back_values.clear();
     }
 
-    async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+    async fn commit_and_reset(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+        let new_indices_count = self.new_back_values.len();
         self.context
             .delete_front(self.stored_indices.clone(), batch, self.front_delete_count)
             .await?;
         self.context
             .append_back(
-                self.stored_indices,
+                self.stored_indices.clone(),
                 batch,
-                self.new_back_values.into_iter().collect(),
+                mem::take(&mut self.new_back_values).into_iter().collect(),
             )
             .await?;
+        self.stored_indices.start += self.front_delete_count;
+        self.stored_indices.end += new_indices_count;
+        self.front_delete_count = 0;
         Ok(())
     }
 
@@ -715,8 +732,8 @@ where
         self.updates.clear();
     }
 
-    async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        for (index, update) in self.updates {
+    async fn commit_and_reset(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+        for (index, update) in mem::take(&mut self.updates) {
             match update {
                 Some(view) => {
                     view.commit(batch).await?;
