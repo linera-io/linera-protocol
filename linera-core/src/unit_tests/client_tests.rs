@@ -15,7 +15,8 @@ use linera_base::{
     messages::*,
     system::{Amount, Balance, SystemOperation, UserData},
 };
-use linera_storage2::{MemoryStoreClient, RocksdbStoreClient, Store};
+use linera_storage2::{DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient, Store};
+use linera_views::test_utils::LocalStackTestContext;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     str::FromStr,
@@ -372,6 +373,28 @@ impl StoreBuilder for MakeRocksdbStoreClient {
     }
 }
 
+#[derive(Default)]
+pub struct MakeDynamoDbStoreClient {
+    instance_counter: usize,
+    localstack: Option<LocalStackTestContext>,
+}
+
+#[async_trait]
+impl StoreBuilder for MakeDynamoDbStoreClient {
+    type Store = DynamoDbStoreClient;
+
+    async fn build(&mut self) -> Result<Self::Store, anyhow::Error> {
+        if self.localstack.is_none() {
+            self.localstack = Some(LocalStackTestContext::new().await?);
+        }
+        let config = self.localstack.as_ref().unwrap().dynamo_db_config();
+        let table = format!("linera{}", self.instance_counter).parse()?;
+        self.instance_counter += 1;
+        let (store, _) = DynamoDbStoreClient::from_config(config, table).await?;
+        Ok(store)
+    }
+}
+
 #[test(tokio::test)]
 async fn test_memory_initiating_valid_transfer() -> Result<(), anyhow::Error> {
     run_test_initiating_valid_transfer(MakeMemoryStoreClient).await
@@ -381,6 +404,12 @@ async fn test_memory_initiating_valid_transfer() -> Result<(), anyhow::Error> {
 async fn test_rocksdb_initiating_valid_transfer() -> Result<(), anyhow::Error> {
     let _lock = GUARD.lock().await;
     run_test_initiating_valid_transfer(MakeRocksdbStoreClient::default()).await
+}
+
+#[test(tokio::test)]
+#[ignore]
+async fn test_dynamo_db_initiating_valid_transfer() -> Result<(), anyhow::Error> {
+    run_test_initiating_valid_transfer(MakeDynamoDbStoreClient::default()).await
 }
 
 async fn run_test_initiating_valid_transfer<B>(store_builder: B) -> Result<(), anyhow::Error>
@@ -423,6 +452,12 @@ async fn test_memory_rotate_key_pair() -> Result<(), anyhow::Error> {
 async fn test_rocksdb_rotate_key_pair() -> Result<(), anyhow::Error> {
     let _lock = GUARD.lock().await;
     run_test_rotate_key_pair(MakeRocksdbStoreClient::default()).await
+}
+
+#[test(tokio::test)]
+#[ignore]
+async fn test_dynamo_db_rotate_key_pair() -> Result<(), anyhow::Error> {
+    run_test_rotate_key_pair(MakeDynamoDbStoreClient::default()).await
 }
 
 async fn run_test_rotate_key_pair<B>(store_builder: B) -> Result<(), anyhow::Error>
@@ -472,6 +507,12 @@ async fn test_rocksdb_transfer_ownership() -> Result<(), anyhow::Error> {
     run_test_transfer_ownership(MakeRocksdbStoreClient::default()).await
 }
 
+#[test(tokio::test)]
+#[ignore]
+async fn test_dynamo_db_transfer_ownership() -> Result<(), anyhow::Error> {
+    run_test_transfer_ownership(MakeDynamoDbStoreClient::default()).await
+}
+
 async fn run_test_transfer_ownership<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
@@ -518,6 +559,12 @@ async fn test_memory_share_ownership() -> Result<(), anyhow::Error> {
 async fn test_rocksdb_share_ownership() -> Result<(), anyhow::Error> {
     let _lock = GUARD.lock().await;
     run_test_share_ownership(MakeRocksdbStoreClient::default()).await
+}
+
+#[test(tokio::test)]
+#[ignore]
+async fn test_dynamo_db_share_ownership() -> Result<(), anyhow::Error> {
+    run_test_share_ownership(MakeDynamoDbStoreClient::default()).await
 }
 
 async fn run_test_share_ownership<B>(store_builder: B) -> Result<(), anyhow::Error>
@@ -589,6 +636,12 @@ async fn test_rocksdb_open_chain_then_close_it() -> Result<(), anyhow::Error> {
     run_test_open_chain_then_close_it(MakeRocksdbStoreClient::default()).await
 }
 
+#[test(tokio::test)]
+#[ignore]
+async fn test_dynamo_db_open_chain_then_close_it() -> Result<(), anyhow::Error> {
+    run_test_open_chain_then_close_it(MakeDynamoDbStoreClient::default()).await
+}
+
 async fn run_test_open_chain_then_close_it<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
@@ -632,6 +685,12 @@ async fn test_memory_transfer_then_open_chain() -> Result<(), anyhow::Error> {
 async fn test_rocksdb_transfer_then_open_chain() -> Result<(), anyhow::Error> {
     let _lock = GUARD.lock().await;
     run_test_transfer_then_open_chain(MakeRocksdbStoreClient::default()).await
+}
+
+#[test(tokio::test)]
+#[ignore]
+async fn test_dynamo_db_transfer_then_open_chain() -> Result<(), anyhow::Error> {
+    run_test_transfer_then_open_chain(MakeDynamoDbStoreClient::default()).await
 }
 
 async fn run_test_transfer_then_open_chain<B>(store_builder: B) -> Result<(), anyhow::Error>
@@ -703,6 +762,12 @@ async fn test_rocksdb_open_chain_then_transfer() -> Result<(), anyhow::Error> {
     run_test_open_chain_then_transfer(MakeRocksdbStoreClient::default()).await
 }
 
+#[test(tokio::test)]
+#[ignore]
+async fn test_dynamo_db_open_chain_then_transfer() -> Result<(), anyhow::Error> {
+    run_test_open_chain_then_transfer(MakeDynamoDbStoreClient::default()).await
+}
+
 async fn run_test_open_chain_then_transfer<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
@@ -762,6 +827,12 @@ async fn test_rocksdb_close_chain() -> Result<(), anyhow::Error> {
     run_test_close_chain(MakeRocksdbStoreClient::default()).await
 }
 
+#[test(tokio::test)]
+#[ignore]
+async fn test_dynamo_db_close_chain() -> Result<(), anyhow::Error> {
+    run_test_close_chain(MakeDynamoDbStoreClient::default()).await
+}
+
 async fn run_test_close_chain<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
@@ -812,6 +883,12 @@ async fn test_rocksdb_initiating_valid_transfer_too_many_faults() -> Result<(), 
     run_test_initiating_valid_transfer_too_many_faults(MakeRocksdbStoreClient::default()).await
 }
 
+#[test(tokio::test)]
+#[ignore]
+async fn test_dynamo_db_initiating_valid_transfer_too_many_faults() -> Result<(), anyhow::Error> {
+    run_test_initiating_valid_transfer_too_many_faults(MakeDynamoDbStoreClient::default()).await
+}
+
 async fn run_test_initiating_valid_transfer_too_many_faults<B>(
     store_builder: B,
 ) -> Result<(), anyhow::Error>
@@ -846,6 +923,12 @@ async fn test_memory_bidirectional_transfer() -> Result<(), anyhow::Error> {
 async fn test_rocksdb_bidirectional_transfer() -> Result<(), anyhow::Error> {
     let _lock = GUARD.lock().await;
     run_test_bidirectional_transfer(MakeRocksdbStoreClient::default()).await
+}
+
+#[test(tokio::test)]
+#[ignore]
+async fn test_dynamo_db_bidirectional_transfer() -> Result<(), anyhow::Error> {
+    run_test_bidirectional_transfer(MakeDynamoDbStoreClient::default()).await
 }
 
 async fn run_test_bidirectional_transfer<B>(store_builder: B) -> Result<(), anyhow::Error>
@@ -915,6 +998,12 @@ async fn test_rocksdb_receiving_unconfirmed_transfer() -> Result<(), anyhow::Err
     run_test_receiving_unconfirmed_transfer(MakeRocksdbStoreClient::default()).await
 }
 
+#[test(tokio::test)]
+#[ignore]
+async fn test_dynamo_db_receiving_unconfirmed_transfer() -> Result<(), anyhow::Error> {
+    run_test_receiving_unconfirmed_transfer(MakeDynamoDbStoreClient::default()).await
+}
+
 async fn run_test_receiving_unconfirmed_transfer<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
@@ -958,6 +1047,16 @@ async fn test_rocksdb_receiving_unconfirmed_transfer_with_lagging_sender_balance
     let _lock = GUARD.lock().await;
     run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(
         MakeRocksdbStoreClient::default(),
+    )
+    .await
+}
+
+#[test(tokio::test)]
+#[ignore]
+async fn test_dynamo_db_receiving_unconfirmed_transfer_with_lagging_sender_balances(
+) -> Result<(), anyhow::Error> {
+    run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(
+        MakeDynamoDbStoreClient::default(),
     )
     .await
 }
@@ -1053,6 +1152,12 @@ async fn test_memory_change_voting_rights() -> Result<(), anyhow::Error> {
 async fn test_rocksdb_change_voting_rights() -> Result<(), anyhow::Error> {
     let _lock = GUARD.lock().await;
     run_test_change_voting_rights(MakeRocksdbStoreClient::default()).await
+}
+
+#[test(tokio::test)]
+#[ignore]
+async fn test_dynamo_db_change_voting_rights() -> Result<(), anyhow::Error> {
+    run_test_change_voting_rights(MakeDynamoDbStoreClient::default()).await
 }
 
 async fn run_test_change_voting_rights<B>(store_builder: B) -> Result<(), anyhow::Error>
