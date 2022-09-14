@@ -494,7 +494,7 @@ pub trait QueueOperations<T>: Context {
     /// Obtain the values in the given range.
     async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error>;
 
-    /// Delete `count` values from the fron of the queue. Crash-resistant implementations
+    /// Delete `count` values from the front of the queue. Crash-resistant implementations
     /// should only write to `batch`.
     async fn delete_front(
         &mut self,
