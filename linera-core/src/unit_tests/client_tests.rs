@@ -125,7 +125,7 @@ struct TestBuilder<B: StoreBuilder> {
 trait StoreBuilder {
     type Store: Store + Clone + Send + Sync + 'static;
 
-    async fn build(&self) -> Result<Self::Store, anyhow::Error>;
+    async fn build(&mut self) -> Result<Self::Store, anyhow::Error>;
 }
 
 #[derive(Default)]
@@ -175,7 +175,7 @@ where
     Error: From<<B::Store as Store>::Error>,
 {
     async fn new(
-        store_builder: B,
+        mut store_builder: B,
         count: usize,
         with_faulty_validators: usize,
     ) -> Result<Self, anyhow::Error> {
@@ -354,7 +354,7 @@ pub struct MakeMemoryStoreClient;
 impl StoreBuilder for MakeMemoryStoreClient {
     type Store = MemoryStoreClient;
 
-    async fn build(&self) -> Result<Self::Store, anyhow::Error> {
+    async fn build(&mut self) -> Result<Self::Store, anyhow::Error> {
         Ok(MemoryStoreClient::default())
     }
 }
@@ -365,7 +365,7 @@ pub struct MakeRocksdbStoreClient;
 impl StoreBuilder for MakeRocksdbStoreClient {
     type Store = RocksdbStoreClient;
 
-    async fn build(&self) -> Result<Self::Store, anyhow::Error> {
+    async fn build(&mut self) -> Result<Self::Store, anyhow::Error> {
         let dir = tempfile::TempDir::new()?;
         let path = dir.path().to_path_buf();
         TEMP_DIRS.lock().unwrap().push(dir);
