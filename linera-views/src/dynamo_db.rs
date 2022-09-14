@@ -106,6 +106,26 @@ impl<E> DynamoDbContext<E> {
         Ok(DynamoDbContext::from_config(config, table, lock, key_prefix, extra).await?)
     }
 
+    /// Clone this [`DynamoDbContext`] while entering a sub-scope.
+    ///
+    /// The return context uses the `new_lock` instead of the current internal lock, and has its key
+    /// prefix extended with `scope_prefix` and uses the `new_extra` instead of cloning the current
+    /// extra data.
+    pub fn clone_with_sub_scope<NewE>(
+        &self,
+        new_lock: OwnedMutexGuard<()>,
+        scope_prefix: &impl Serialize,
+        new_extra: NewE,
+    ) -> DynamoDbContext<NewE> {
+        DynamoDbContext {
+            client: self.client.clone(),
+            table: self.table.clone(),
+            lock: Arc::new(new_lock),
+            key_prefix: self.extend_prefix(scope_prefix),
+            extra: new_extra,
+        }
+    }
+
     /// Create the storage table if it doesn't exist.
     ///
     /// Attempts to create the table and ignores errors that indicate that it already exists.
