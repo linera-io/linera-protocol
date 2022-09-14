@@ -110,15 +110,21 @@ where
 // * When using `LocalValidatorClient`, clients communicate with an exact quorum then stops.
 // * Most tests have 1 faulty validator out 4 so that there is exactly only 1 quorum to
 // communicate with.
-struct TestBuilder<S> {
-    store_builder: fn() -> S,
+struct TestBuilder<B: StoreBuilder> {
+    store_builder: B,
     initial_committee: Committee,
     admin_id: ChainId,
     genesis_store_builder: GenesisStoreBuilder,
     faulty_validators: HashSet<ValidatorName>,
-    validator_clients: Vec<(ValidatorName, LocalValidatorClient<S>)>,
-    validator_stores: HashMap<ValidatorName, S>,
-    chain_client_stores: Vec<S>,
+    validator_clients: Vec<(ValidatorName, LocalValidatorClient<B::Store>)>,
+    validator_stores: HashMap<ValidatorName, B::Store>,
+    chain_client_stores: Vec<B::Store>,
+}
+
+trait StoreBuilder {
+    type Store: Store + Clone + Send + Sync + 'static;
+
+    fn build(&self) -> Self::Store;
 }
 
 #[derive(Default)]
@@ -141,18 +147,11 @@ impl GenesisStoreBuilder {
         })
     }
 
-    async fn build<S, F>(
-        &self,
-        store_builder: F,
-        initial_committee: Committee,
-        admin_id: ChainId,
-    ) -> S
+    async fn build<S>(&self, store: S, initial_committee: Committee, admin_id: ChainId) -> S
     where
         S: Store + Clone + Send + Sync + 'static,
         Error: From<S::Error>,
-        F: Fn() -> S,
     {
-        let store = store_builder();
         for account in &self.accounts {
             store
                 .create_chain(
@@ -169,12 +168,12 @@ impl GenesisStoreBuilder {
     }
 }
 
-impl<S> TestBuilder<S>
+impl<B> TestBuilder<B>
 where
-    S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    B: StoreBuilder,
+    Error: From<<B::Store as Store>::Error>,
 {
-    fn new(store_builder: fn() -> S, count: usize, with_faulty_validators: usize) -> Self {
+    fn new(store_builder: B, count: usize, with_faulty_validators: usize) -> Self {
         let mut key_pairs = Vec::new();
         let mut validators = Vec::new();
         for _ in 0..count {
@@ -189,7 +188,7 @@ where
         let mut faulty_validators = HashSet::new();
         for (i, key_pair) in key_pairs.into_iter().enumerate() {
             let name = ValidatorName(key_pair.public());
-            let store = store_builder();
+            let store = store_builder.build();
             let state = WorkerState::new(format!("Node {}", i), Some(key_pair), store.clone())
                 .allow_inactive_chains(false);
             let validator = if i < with_faulty_validators {
@@ -221,7 +220,7 @@ where
         &mut self,
         description: ChainDescription,
         balance: Balance,
-    ) -> ChainClientState<NodeProvider<S>, S> {
+    ) -> ChainClientState<NodeProvider<B::Store>, B::Store> {
         let key_pair = KeyPair::generate();
         let owner = Owner(key_pair.public());
         // Remember what's in the genesis store for future clients to join.
@@ -273,13 +272,13 @@ where
         key_pair: KeyPair,
         block_hash: Option<HashValue>,
         block_height: BlockHeight,
-    ) -> ChainClientState<NodeProvider<S>, S> {
+    ) -> ChainClientState<NodeProvider<B::Store>, B::Store> {
         // Note that new clients are only given the genesis store: they must figure out
         // the rest by asking validators.
         let store = self
             .genesis_store_builder
             .build(
-                self.store_builder,
+                self.store_builder.build(),
                 self.initial_committee.clone(),
                 self.admin_id,
             )
@@ -344,32 +343,44 @@ static TEMP_DIRS: Lazy<std::sync::Mutex<Vec<tempfile::TempDir>>> =
 /// Need a guard to avoid "too many open files" error
 static GUARD: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
-fn make_memory_client() -> MemoryStoreClient {
-    MemoryStoreClient::default()
+pub struct MakeMemoryStoreClient;
+
+impl StoreBuilder for MakeMemoryStoreClient {
+    type Store = MemoryStoreClient;
+
+    fn build(&self) -> Self::Store {
+        MemoryStoreClient::default()
+    }
 }
 
-fn make_rocksdb_client() -> RocksdbStoreClient {
-    let dir = tempfile::TempDir::new().unwrap();
-    let path = dir.path().to_path_buf();
-    TEMP_DIRS.lock().unwrap().push(dir);
-    RocksdbStoreClient::new(path)
+pub struct MakeRocksdbStoreClient;
+
+impl StoreBuilder for MakeRocksdbStoreClient {
+    type Store = RocksdbStoreClient;
+
+    fn build(&self) -> Self::Store {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().to_path_buf();
+        TEMP_DIRS.lock().unwrap().push(dir);
+        RocksdbStoreClient::new(path)
+    }
 }
 
 #[test(tokio::test)]
 async fn test_memory_initiating_valid_transfer() {
-    run_test_initiating_valid_transfer(make_memory_client).await
+    run_test_initiating_valid_transfer(MakeMemoryStoreClient).await
 }
 
 #[test(tokio::test)]
 async fn test_rocksdb_initiating_valid_transfer() {
     let _lock = GUARD.lock().await;
-    run_test_initiating_valid_transfer(make_rocksdb_client).await
+    run_test_initiating_valid_transfer(MakeRocksdbStoreClient).await
 }
 
-async fn run_test_initiating_valid_transfer<S>(store_builder: fn() -> S)
+async fn run_test_initiating_valid_transfer<B>(store_builder: B)
 where
-    S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    B: StoreBuilder,
+    Error: From<<B::Store as Store>::Error>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1);
     let mut sender = builder
@@ -398,19 +409,19 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_rotate_key_pair() {
-    run_test_rotate_key_pair(make_memory_client).await
+    run_test_rotate_key_pair(MakeMemoryStoreClient).await
 }
 
 #[test(tokio::test)]
 async fn test_rocksdb_rotate_key_pair() {
     let _lock = GUARD.lock().await;
-    run_test_rotate_key_pair(make_rocksdb_client).await
+    run_test_rotate_key_pair(MakeRocksdbStoreClient).await
 }
 
-async fn run_test_rotate_key_pair<S>(store_builder: fn() -> S)
+async fn run_test_rotate_key_pair<B>(store_builder: B)
 where
-    S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    B: StoreBuilder,
+    Error: From<<B::Store as Store>::Error>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1);
     let mut sender = builder
@@ -444,19 +455,19 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_transfer_ownership() {
-    run_test_transfer_ownership(make_memory_client).await
+    run_test_transfer_ownership(MakeMemoryStoreClient).await
 }
 
 #[test(tokio::test)]
 async fn test_rocksdb_transfer_ownership() {
     let _lock = GUARD.lock().await;
-    run_test_transfer_ownership(make_rocksdb_client).await
+    run_test_transfer_ownership(MakeRocksdbStoreClient).await
 }
 
-async fn run_test_transfer_ownership<S>(store_builder: fn() -> S)
+async fn run_test_transfer_ownership<B>(store_builder: B)
 where
-    S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    B: StoreBuilder,
+    Error: From<<B::Store as Store>::Error>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1);
     let mut sender = builder
@@ -491,19 +502,19 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_share_ownership() {
-    run_test_share_ownership(make_memory_client).await
+    run_test_share_ownership(MakeMemoryStoreClient).await
 }
 
 #[test(tokio::test)]
 async fn test_rocksdb_share_ownership() {
     let _lock = GUARD.lock().await;
-    run_test_share_ownership(make_rocksdb_client).await
+    run_test_share_ownership(MakeRocksdbStoreClient).await
 }
 
-async fn run_test_share_ownership<S>(store_builder: fn() -> S)
+async fn run_test_share_ownership<B>(store_builder: B)
 where
-    S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    B: StoreBuilder,
+    Error: From<<B::Store as Store>::Error>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1);
     let mut sender = builder
@@ -559,19 +570,19 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_open_chain_then_close_it() {
-    run_test_open_chain_then_close_it(make_memory_client).await
+    run_test_open_chain_then_close_it(MakeMemoryStoreClient).await
 }
 
 #[test(tokio::test)]
 async fn test_rocksdb_open_chain_then_close_it() {
     let _lock = GUARD.lock().await;
-    run_test_open_chain_then_close_it(make_rocksdb_client).await
+    run_test_open_chain_then_close_it(MakeRocksdbStoreClient).await
 }
 
-async fn run_test_open_chain_then_close_it<S>(store_builder: fn() -> S)
+async fn run_test_open_chain_then_close_it<B>(store_builder: B)
 where
-    S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    B: StoreBuilder,
+    Error: From<<B::Store as Store>::Error>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1);
     // New chains use the admin chain to verify their creation certificate.
@@ -603,19 +614,19 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_transfer_then_open_chain() {
-    run_test_transfer_then_open_chain(make_memory_client).await
+    run_test_transfer_then_open_chain(MakeMemoryStoreClient).await
 }
 
 #[test(tokio::test)]
 async fn test_rocksdb_transfer_then_open_chain() {
     let _lock = GUARD.lock().await;
-    run_test_transfer_then_open_chain(make_rocksdb_client).await
+    run_test_transfer_then_open_chain(MakeRocksdbStoreClient).await
 }
 
-async fn run_test_transfer_then_open_chain<S>(store_builder: fn() -> S)
+async fn run_test_transfer_then_open_chain<B>(store_builder: B)
 where
-    S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    B: StoreBuilder,
+    Error: From<<B::Store as Store>::Error>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1);
     // New chains use the admin chain to verify their creation certificate.
@@ -671,19 +682,19 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_open_chain_then_transfer() {
-    run_test_open_chain_then_transfer(make_memory_client).await
+    run_test_open_chain_then_transfer(MakeMemoryStoreClient).await
 }
 
 #[test(tokio::test)]
 async fn test_rocksdb_open_chain_then_transfer() {
     let _lock = GUARD.lock().await;
-    run_test_open_chain_then_transfer(make_rocksdb_client).await
+    run_test_open_chain_then_transfer(MakeRocksdbStoreClient).await
 }
 
-async fn run_test_open_chain_then_transfer<S>(store_builder: fn() -> S)
+async fn run_test_open_chain_then_transfer<B>(store_builder: B)
 where
-    S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    B: StoreBuilder,
+    Error: From<<B::Store as Store>::Error>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1);
     // New chains use the admin chain to verify their creation certificate.
@@ -729,19 +740,19 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_close_chain() {
-    run_test_close_chain(make_memory_client).await
+    run_test_close_chain(MakeMemoryStoreClient).await
 }
 
 #[test(tokio::test)]
 async fn test_rocksdb_close_chain() {
     let _lock = GUARD.lock().await;
-    run_test_close_chain(make_rocksdb_client).await
+    run_test_close_chain(MakeRocksdbStoreClient).await
 }
 
-async fn run_test_close_chain<S>(store_builder: fn() -> S)
+async fn run_test_close_chain<B>(store_builder: B)
 where
-    S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    B: StoreBuilder,
+    Error: From<<B::Store as Store>::Error>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1);
     let mut sender = builder
@@ -778,19 +789,19 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_initiating_valid_transfer_too_many_faults() {
-    run_test_initiating_valid_transfer_too_many_faults(make_memory_client).await
+    run_test_initiating_valid_transfer_too_many_faults(MakeMemoryStoreClient).await
 }
 
 #[test(tokio::test)]
 async fn test_rocksdb_initiating_valid_transfer_too_many_faults() {
     let _lock = GUARD.lock().await;
-    run_test_initiating_valid_transfer_too_many_faults(make_rocksdb_client).await
+    run_test_initiating_valid_transfer_too_many_faults(MakeRocksdbStoreClient).await
 }
 
-async fn run_test_initiating_valid_transfer_too_many_faults<S>(store_builder: fn() -> S)
+async fn run_test_initiating_valid_transfer_too_many_faults<B>(store_builder: B)
 where
-    S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    B: StoreBuilder,
+    Error: From<<B::Store as Store>::Error>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 2);
     let mut sender = builder
@@ -811,19 +822,19 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_bidirectional_transfer() {
-    run_test_bidirectional_transfer(make_memory_client).await
+    run_test_bidirectional_transfer(MakeMemoryStoreClient).await
 }
 
 #[test(tokio::test)]
 async fn test_rocksdb_bidirectional_transfer() {
     let _lock = GUARD.lock().await;
-    run_test_bidirectional_transfer(make_rocksdb_client).await
+    run_test_bidirectional_transfer(MakeRocksdbStoreClient).await
 }
 
-async fn run_test_bidirectional_transfer<S>(store_builder: fn() -> S)
+async fn run_test_bidirectional_transfer<B>(store_builder: B)
 where
-    S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    B: StoreBuilder,
+    Error: From<<B::Store as Store>::Error>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1);
     let mut client1 = builder
@@ -877,19 +888,19 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_receiving_unconfirmed_transfer() {
-    run_test_receiving_unconfirmed_transfer(make_memory_client).await
+    run_test_receiving_unconfirmed_transfer(MakeMemoryStoreClient).await
 }
 
 #[test(tokio::test)]
 async fn test_rocksdb_receiving_unconfirmed_transfer() {
     let _lock = GUARD.lock().await;
-    run_test_receiving_unconfirmed_transfer(make_rocksdb_client).await
+    run_test_receiving_unconfirmed_transfer(MakeRocksdbStoreClient).await
 }
 
-async fn run_test_receiving_unconfirmed_transfer<S>(store_builder: fn() -> S)
+async fn run_test_receiving_unconfirmed_transfer<B>(store_builder: B)
 where
-    S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    B: StoreBuilder,
+    Error: From<<B::Store as Store>::Error>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1);
     let mut client1 = builder
@@ -917,20 +928,21 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
-    run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(make_memory_client).await
+    run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(MakeMemoryStoreClient)
+        .await
 }
 
 #[test(tokio::test)]
 async fn test_rocksdb_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
     let _lock = GUARD.lock().await;
-    run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(make_rocksdb_client).await
+    run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(MakeRocksdbStoreClient)
+        .await
 }
 
-async fn run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances<S>(
-    store_builder: fn() -> S,
-) where
-    S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+async fn run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances<B>(store_builder: B)
+where
+    B: StoreBuilder,
+    Error: From<<B::Store as Store>::Error>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1);
     let mut client1 = builder
@@ -1008,19 +1020,19 @@ async fn run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances<S>
 
 #[test(tokio::test)]
 async fn test_memory_change_voting_rights() {
-    run_test_change_voting_rights(make_memory_client).await
+    run_test_change_voting_rights(MakeMemoryStoreClient).await
 }
 
 #[test(tokio::test)]
 async fn test_rocksdb_change_voting_rights() {
     let _lock = GUARD.lock().await;
-    run_test_change_voting_rights(make_rocksdb_client).await
+    run_test_change_voting_rights(MakeRocksdbStoreClient).await
 }
 
-async fn run_test_change_voting_rights<S>(store_builder: fn() -> S)
+async fn run_test_change_voting_rights<B>(store_builder: B)
 where
-    S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    B: StoreBuilder,
+    Error: From<<B::Store as Store>::Error>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1);
     let mut admin = builder
