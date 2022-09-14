@@ -24,6 +24,9 @@ use std::{collections::HashMap, io, ops::Range, str::FromStr, sync::Arc};
 use thiserror::Error;
 use tokio::sync::OwnedMutexGuard;
 
+/// The configuration to connect to DynamoDB.
+pub use aws_sdk_dynamodb::Config;
+
 #[cfg(test)]
 #[path = "unit_tests/dynamo_db_context_tests.rs"]
 pub mod dynamo_db_context_tests;
@@ -65,7 +68,7 @@ impl<E> DynamoDbContext<E> {
 
     /// Create a new [`DynamoDbContext`] instance using the provided `config` parameters.
     pub async fn from_config(
-        config: impl Into<aws_sdk_dynamodb::Config>,
+        config: impl Into<Config>,
         table: TableName,
         lock: OwnedMutexGuard<()>,
         key_prefix: Vec<u8>,
