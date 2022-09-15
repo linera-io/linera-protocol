@@ -1,5 +1,6 @@
 use crate::{
     memory::MemoryContext,
+    rocksdb::RocksdbContext,
     views::{Context, QueueOperations, QueueView, View},
 };
 use async_trait::async_trait;
@@ -7,11 +8,17 @@ use std::{
     collections::{BTreeMap, VecDeque},
     sync::Arc,
 };
+use tempfile::TempDir;
 use tokio::sync::Mutex;
 
 #[tokio::test]
 async fn test_queue_operations_with_memory_context() -> Result<(), anyhow::Error> {
     run_test_queue_operations_test_cases(MemoryContextFactory).await
+}
+
+#[tokio::test]
+async fn test_queue_operations_with_rocksdb_context() -> Result<(), anyhow::Error> {
+    run_test_queue_operations_test_cases(RocksdbContextFactory::default()).await
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -167,5 +174,30 @@ impl TestContextFactory for MemoryContextFactory {
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
         let dummy_lock = Arc::new(Mutex::new(BTreeMap::new()));
         Ok(MemoryContext::new(dummy_lock.lock_owned().await, ()))
+    }
+}
+
+#[derive(Default)]
+struct RocksdbContextFactory {
+    temporary_directories: Vec<TempDir>,
+}
+
+#[async_trait]
+impl TestContextFactory for RocksdbContextFactory {
+    type Context = RocksdbContext<()>;
+
+    async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
+        let directory = TempDir::new()?;
+        let mut options = rocksdb::Options::default();
+        options.create_if_missing(true);
+        let db =
+            rocksdb::DBWithThreadMode::<rocksdb::MultiThreaded>::open(&options, directory.path())?;
+
+        let dummy_lock = Arc::new(Mutex::new(()));
+        let context = RocksdbContext::new(Arc::new(db), dummy_lock.lock_owned().await, vec![], ());
+
+        self.temporary_directories.push(directory);
+
+        Ok(context)
     }
 }
