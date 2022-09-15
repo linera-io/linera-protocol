@@ -10,6 +10,10 @@ use std::{
 };
 use thiserror::Error;
 
+#[cfg(test)]
+#[path = "unit_tests/views.rs"]
+mod tests;
+
 /// The context in which a view is operated. Typically, this includes the client to
 /// connect to the database and the address of the current entry.
 #[async_trait]
