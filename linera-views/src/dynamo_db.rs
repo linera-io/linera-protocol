@@ -516,14 +516,14 @@ where
 
     async fn delete_front(
         &mut self,
-        stored_indices: Range<usize>,
+        mut stored_indices: Range<usize>,
         _batch: &mut Self::Batch,
         count: usize,
     ) -> Result<(), Self::Error> {
-        let mut range = stored_indices;
-        range.start += count;
-        self.put_item(&(), &range).await?;
-        for index in 0..count {
+        let deletion_range = stored_indices.clone().take(count);
+        stored_indices.start += count;
+        self.put_item(&(), &stored_indices).await?;
+        for index in deletion_range {
             self.remove_item(&index).await?;
         }
         Ok(())

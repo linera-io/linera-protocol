@@ -340,9 +340,10 @@ where
         if count == 0 {
             return Ok(());
         }
+        let deletion_range = range.clone().take(count);
         range.start += count;
         batch.write_key(&self.base_key, &range)?;
-        for i in 0..count {
+        for i in deletion_range {
             batch.delete_key(&self.derive_key(&i));
         }
         Ok(())
