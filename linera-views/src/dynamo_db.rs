@@ -516,7 +516,7 @@ where
 
     async fn delete_front(
         &mut self,
-        mut stored_indices: Range<usize>,
+        stored_indices: &mut Range<usize>,
         _batch: &mut Self::Batch,
         count: usize,
     ) -> Result<(), Self::Error> {
@@ -531,16 +531,15 @@ where
 
     async fn append_back(
         &mut self,
-        stored_indices: Range<usize>,
+        stored_indices: &mut Range<usize>,
         _batch: &mut Self::Batch,
         values: Vec<T>,
     ) -> Result<(), Self::Error> {
-        let mut range = stored_indices;
         for value in values {
-            self.put_item(&range.end, &value).await?;
-            range.end += 1;
+            self.put_item(&stored_indices.end, &value).await?;
+            stored_indices.end += 1;
         }
-        self.put_item(&(), &range).await
+        self.put_item(&(), &stored_indices).await
     }
 
     async fn delete(
