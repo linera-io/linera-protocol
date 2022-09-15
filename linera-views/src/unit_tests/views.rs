@@ -1,6 +1,8 @@
 use crate::{
+    dynamo_db::DynamoDbContext,
     memory::MemoryContext,
     rocksdb::RocksdbContext,
+    test_utils::LocalStackTestContext,
     views::{Context, QueueOperations, QueueView, View},
 };
 use async_trait::async_trait;
@@ -19,6 +21,12 @@ async fn test_queue_operations_with_memory_context() -> Result<(), anyhow::Error
 #[tokio::test]
 async fn test_queue_operations_with_rocksdb_context() -> Result<(), anyhow::Error> {
     run_test_queue_operations_test_cases(RocksdbContextFactory::default()).await
+}
+
+#[tokio::test]
+#[ignore]
+async fn test_queue_operations_with_dynamodb_context() -> Result<(), anyhow::Error> {
+    run_test_queue_operations_test_cases(DynamoDbContextFactory::default()).await
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -197,6 +205,40 @@ impl TestContextFactory for RocksdbContextFactory {
         let context = RocksdbContext::new(Arc::new(db), dummy_lock.lock_owned().await, vec![], ());
 
         self.temporary_directories.push(directory);
+
+        Ok(context)
+    }
+}
+
+#[derive(Default)]
+struct DynamoDbContextFactory {
+    localstack: Option<LocalStackTestContext>,
+    table_counter: usize,
+}
+
+#[async_trait]
+impl TestContextFactory for DynamoDbContextFactory {
+    type Context = DynamoDbContext<()>;
+
+    async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
+        if self.localstack.is_none() {
+            self.localstack = Some(LocalStackTestContext::new().await?);
+        }
+        let config = self.localstack.as_ref().unwrap().dynamo_db_config();
+
+        let table = format!("linera{}", self.table_counter).parse()?;
+        self.table_counter += 1;
+
+        let dummy_lock = Arc::new(Mutex::new(()));
+        let dummy_key_prefix = vec![0];
+        let (context, _) = DynamoDbContext::from_config(
+            config,
+            table,
+            dummy_lock.lock_owned().await,
+            dummy_key_prefix,
+            (),
+        )
+        .await?;
 
         Ok(context)
     }
