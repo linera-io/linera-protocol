@@ -4,7 +4,8 @@
 use crate::config::GenesisConfig;
 use anyhow::format_err;
 use async_trait::async_trait;
-use linera_storage2::{MemoryStoreClient, RocksdbStoreClient};
+use linera_storage2::{DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient};
+use linera_views::dynamo_db::{TableName, TableStatus};
 use std::{path::PathBuf, str::FromStr};
 
 /// The description of a storage implementation.
@@ -12,7 +13,13 @@ use std::{path::PathBuf, str::FromStr};
 #[cfg_attr(any(test), derive(Eq, PartialEq))]
 pub enum StorageConfig {
     Memory,
-    Rocksdb { path: PathBuf },
+    Rocksdb {
+        path: PathBuf,
+    },
+    DynamoDb {
+        table: TableName,
+        use_localstack: bool,
+    },
 }
 
 #[async_trait]
@@ -30,7 +37,8 @@ impl StorageConfig {
     ) -> Result<Output, anyhow::Error>
     where
         Job: Runnable<MemoryStoreClient, Output = Output>
-            + Runnable<RocksdbStoreClient, Output = Output>,
+            + Runnable<RocksdbStoreClient, Output = Output>
+            + Runnable<DynamoDbStoreClient, Output = Output>,
     {
         use StorageConfig::*;
         match self {
@@ -50,12 +58,26 @@ impl StorageConfig {
                 config.initialize_store(&mut client).await?;
                 job.run(client).await
             }
+            DynamoDb {
+                table,
+                use_localstack,
+            } => {
+                let (mut client, table_status) = match use_localstack {
+                    true => DynamoDbStoreClient::with_localstack(table.clone()).await?,
+                    false => DynamoDbStoreClient::new(table.clone()).await?,
+                };
+                if table_status == TableStatus::New {
+                    config.initialize_store(&mut client).await?;
+                }
+                job.run(client).await
+            }
         }
     }
 }
 
 const MEMORY: &str = "memory";
 const ROCKSDB: &str = "rocksdb:";
+const DYNAMO_DB: &str = "dynamodb:";
 
 impl FromStr for StorageConfig {
     type Err = anyhow::Error;
@@ -67,6 +89,27 @@ impl FromStr for StorageConfig {
         if let Some(s) = input.strip_prefix(ROCKSDB) {
             return Ok(Self::Rocksdb {
                 path: s.to_string().into(),
+            });
+        }
+        if let Some(s) = input.strip_prefix(DYNAMO_DB) {
+            let mut parts = s.splitn(2, ':');
+            let table = parts
+                .next()
+                .ok_or_else(|| format_err!("Missing DynamoDB table name, e.g. {DYNAMO_DB}TABLE"))?
+                .parse()?;
+            let use_localstack = match parts.next() {
+                None | Some("env") => false,
+                Some("localstack") => true,
+                Some(unknown) => {
+                    return Err(format_err!(
+                        "Invalid DynamoDB endpoint {unknown:?}. \
+                        Expected {DYNAMO_DB}TABLE:[env|localstack]"
+                    ));
+                }
+            };
+            return Ok(Self::DynamoDb {
+                table,
+                use_localstack,
             });
         }
         Err(format_err!("Incorrect storage description"))
