@@ -128,6 +128,31 @@ fn test_storage_config_from_str() {
             path: "foo.db".into()
         }
     );
+    assert_eq!(
+        StorageConfig::from_str("dynamodb:table").unwrap(),
+        StorageConfig::DynamoDb {
+            table: "table".parse().unwrap(),
+            use_localstack: false,
+        }
+    );
+    assert_eq!(
+        StorageConfig::from_str("dynamodb:table:env").unwrap(),
+        StorageConfig::DynamoDb {
+            table: "table".parse().unwrap(),
+            use_localstack: false,
+        }
+    );
+    assert_eq!(
+        StorageConfig::from_str("dynamodb:table:localstack").unwrap(),
+        StorageConfig::DynamoDb {
+            table: "table".parse().unwrap(),
+            use_localstack: true,
+        }
+    );
     assert!(StorageConfig::from_str("memory_").is_err());
     assert!(StorageConfig::from_str("rocksdb_foo.db").is_err());
+    assert!(StorageConfig::from_str("dynamodb").is_err());
+    assert!(StorageConfig::from_str("dynamodb:").is_err());
+    assert!(StorageConfig::from_str("dynamodb:1").is_err());
+    assert!(StorageConfig::from_str("dynamodb:wrong:endpoint").is_err());
 }
