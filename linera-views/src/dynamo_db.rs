@@ -687,7 +687,7 @@ pub enum TableStatus {
 /// Table names must follow some [naming
 /// rules](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.NamingRulesDataTypes.html#HowItWorks.NamingRules),
 /// so this type ensures that they are properly validated.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TableName(String);
 
 impl FromStr for TableName {
