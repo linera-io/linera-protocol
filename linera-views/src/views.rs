@@ -799,7 +799,10 @@ where
 
     /// Mark the entry so that it is removed in the next commit.
     pub fn remove_entry(&mut self, index: I) {
-        self.updates.insert(index, None);
+        match &mut self.updates.get_mut(&index).unwrap().as_mut() {
+            Some(y) => y.reset_to_default(),
+            None => panic!("The entry is none so impossible to remove")
+        }
     }
 
     /// Return the list of indices in the collection.
