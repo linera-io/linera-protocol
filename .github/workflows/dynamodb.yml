@@ -1,4 +1,4 @@
-name: LocalStack tests
+name: DynamoDB tests
 
 on:
   push:
@@ -23,13 +23,13 @@ jobs:
     - uses: Swatinem/rust-cache@v1
     - name: Build
       run: cargo build --locked
-    - name: Setup LocalStack
+    - name: Setup local DynamoDB instance
       run: |
-        docker run --rm -d --name localstack -p 4566:4566/tcp localstack/localstack
+        docker run --rm -d --name local-dynamodb -p 8000:8000/tcp amazon/dynamodb-local
     - name: Run DynamoDB tests
       env:
         AWS_REGION: us-east-1
         AWS_ACCESS_KEY_ID: test
         AWS_SECRET_ACCESS_KEY: test
-        LOCALSTACK_ENDPOINT: http://localhost:4566
+        LOCALSTACK_ENDPOINT: http://localhost:8000
       run: cargo test --locked -- --ignored dynamo
