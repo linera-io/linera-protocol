@@ -281,9 +281,13 @@ where
     }
 
     async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        self.context
-            .append(self.stored_count, batch, self.new_values)
-            .await
+        if !self.new_values.is_empty() {
+            self.context
+                .append(self.stored_count, batch, self.new_values)
+                .await
+        } else {
+            Ok(())
+        }
     }
 
     async fn delete(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
