@@ -333,16 +333,17 @@ where
 
     async fn delete_front(
         &mut self,
-        mut range: Range<usize>,
+        range: &mut Range<usize>,
         batch: &mut Self::Batch,
         count: usize,
     ) -> Result<(), Self::Error> {
         if count == 0 {
             return Ok(());
         }
+        let deletion_range = range.clone().take(count);
         range.start += count;
         batch.write_key(&self.base_key, &range)?;
-        for i in 0..count {
+        for i in deletion_range {
             batch.delete_key(&self.derive_key(&i));
         }
         Ok(())
@@ -350,7 +351,7 @@ where
 
     async fn append_back(
         &mut self,
-        mut range: Range<usize>,
+        range: &mut Range<usize>,
         batch: &mut Self::Batch,
         values: Vec<T>,
     ) -> Result<(), Self::Error> {

@@ -10,6 +10,10 @@ use std::{
 };
 use thiserror::Error;
 
+#[cfg(test)]
+#[path = "unit_tests/views.rs"]
+mod tests;
+
 /// The context in which a view is operated. Typically, this includes the client to
 /// connect to the database and the address of the current entry.
 #[async_trait]
@@ -517,7 +521,7 @@ pub trait QueueOperations<T>: Context {
     /// should only write to `batch`.
     async fn delete_front(
         &mut self,
-        stored_indices: Range<usize>,
+        stored_indices: &mut Range<usize>,
         batch: &mut Self::Batch,
         count: usize,
     ) -> Result<(), Self::Error>;
@@ -526,7 +530,7 @@ pub trait QueueOperations<T>: Context {
     /// implementations should only write to `batch`.
     async fn append_back(
         &mut self,
-        stored_indices: Range<usize>,
+        stored_indices: &mut Range<usize>,
         batch: &mut Self::Batch,
         values: Vec<T>,
     ) -> Result<(), Self::Error>;
@@ -566,11 +570,11 @@ where
 
     async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         self.context
-            .delete_front(self.stored_indices.clone(), batch, self.front_delete_count)
+            .delete_front(&mut self.stored_indices, batch, self.front_delete_count)
             .await?;
         self.context
             .append_back(
-                self.stored_indices,
+                &mut self.stored_indices,
                 batch,
                 self.new_back_values.into_iter().collect(),
             )
