@@ -58,7 +58,7 @@ pub trait View<C: Context>: Sized {
     /// desired changes into the `batch` variable first.
     async fn delete(self, batch: &mut C::Batch) -> Result<(), C::Error>;
 
-    /// Discard all pending changes. After that `commit` should have no effect to storage.
+    /// Reset to the default values. Need for remove_entry
     fn reset_to_default(&mut self);
 }
 
