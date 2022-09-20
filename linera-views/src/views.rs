@@ -57,6 +57,9 @@ pub trait View<C: Context>: Sized {
     /// subviews. Crash-resistant storage implementations are expected to accumulate the
     /// desired changes into the `batch` variable first.
     async fn delete(self, batch: &mut C::Batch) -> Result<(), C::Error>;
+
+    /// Discard all pending changes. After that `commit` should have no effect to storage.
+    fn reset_to_default(&mut self);
 }
 
 #[derive(Error, Debug)]
@@ -120,6 +123,10 @@ where
     async fn delete(self, batch: &mut C::Batch) -> Result<(), C::Error> {
         self.view.delete(batch).await
     }
+
+    fn reset_to_default(&mut self) {
+        self.view.reset_to_default();
+    }
 }
 
 /// A view that supports modifying a single value of type `T`.
@@ -147,7 +154,7 @@ pub trait RegisterOperations<T>: Context {
 impl<C, T> View<C> for RegisterView<C, T>
 where
     C: RegisterOperations<T> + Send + Sync,
-    T: Send + Sync,
+    T: Send + Sync + Default,
 {
     fn context(&self) -> &C {
         &self.context
@@ -175,6 +182,10 @@ where
 
     async fn delete(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         self.context.delete(batch).await
+    }
+
+    fn reset_to_default(&mut self) {
+        self.update = Some(T::default())
     }
 }
 
@@ -284,6 +295,10 @@ where
 
     async fn delete(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         self.context.delete(self.stored_count, batch).await
+    }
+
+    fn reset_to_default(&mut self) {
+        self.new_values.clear();
     }
 }
 
@@ -418,6 +433,10 @@ where
 
     async fn delete(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         self.context.delete(batch).await
+    }
+
+    fn reset_to_default(&mut self) {
+        self.updates.clear();
     }
 }
 
@@ -561,6 +580,11 @@ where
 
     async fn delete(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         self.context.delete(self.stored_indices, batch).await
+    }
+
+    fn reset_to_default(&mut self) {
+        self.front_delete_count = 0;
+        self.new_back_values.clear();
     }
 }
 
@@ -741,6 +765,10 @@ where
             view.delete(batch).await?;
         }
         Ok(())
+    }
+
+    fn reset_to_default(&mut self) {
+        self.updates.clear();
     }
 }
 
