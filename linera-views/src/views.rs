@@ -554,16 +554,20 @@ where
     }
 
     async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        self.context
-            .delete_front(&mut self.stored_indices, batch, self.front_delete_count)
-            .await?;
-        self.context
-            .append_back(
-                &mut self.stored_indices,
-                batch,
-                self.new_back_values.into_iter().collect(),
-            )
-            .await?;
+        if self.front_delete_count > 0 {
+            self.context
+                .delete_front(&mut self.stored_indices, batch, self.front_delete_count)
+                .await?;
+        }
+        if !self.new_back_values.is_empty() {
+            self.context
+                .append_back(
+                    &mut self.stored_indices,
+                    batch,
+                    self.new_back_values.into_iter().collect(),
+                )
+                .await?;
+        }
         Ok(())
     }
 
