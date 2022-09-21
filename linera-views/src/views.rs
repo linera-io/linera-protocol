@@ -827,13 +827,10 @@ where
     }
 
     /// Mark the entry so that it is removed in the next commit.
-    pub fn remove_entry(&mut self, index: I) {
-        self.updates
-            .get_mut(&index)
-            .unwrap()
-            .as_mut()
-            .unwrap()
-            .reset_to_default();
+    pub async fn remove_entry(&mut self, index: I) -> Result<(), C::Error> {
+        let view = self.load_entry(index).await?;
+        view.reset_to_default();
+        Ok(())
     }
 
     /// Return the list of indices in the collection.
