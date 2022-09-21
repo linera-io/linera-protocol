@@ -295,12 +295,18 @@ where
 
     async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         if self.need_delete {
-            self.context.delete(self.stored_count, batch).await?;
-            self.stored_count = 0
+            if self.stored_count > 0 {
+                self.context.delete(self.stored_count, batch).await?;
+                self.stored_count = 0
+            }
         }
-        self.context
-            .append(self.stored_count, batch, self.new_values)
-            .await
+        if !self.new_values.is_empty() {
+            self.context
+                .append(self.stored_count, batch, self.new_values)
+                .await
+        } else {
+            Ok(())
+        }
     }
 
     async fn delete(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
@@ -581,16 +587,20 @@ where
     }
 
     async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        self.context
-            .delete_front(&mut self.stored_indices, batch, self.front_delete_count)
-            .await?;
-        self.context
-            .append_back(
-                &mut self.stored_indices,
-                batch,
-                self.new_back_values.into_iter().collect(),
-            )
-            .await?;
+        if self.front_delete_count > 0 {
+            self.context
+                .delete_front(&mut self.stored_indices, batch, self.front_delete_count)
+                .await?;
+        }
+        if !self.new_back_values.is_empty() {
+            self.context
+                .append_back(
+                    &mut self.stored_indices,
+                    batch,
+                    self.new_back_values.into_iter().collect(),
+                )
+                .await?;
+        }
         Ok(())
     }
 
