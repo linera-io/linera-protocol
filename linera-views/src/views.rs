@@ -62,7 +62,7 @@ pub trait View<C: Context>: Sized {
     /// desired changes into the `batch` variable first.
     async fn delete(self, batch: &mut C::Batch) -> Result<(), C::Error>;
 
-    /// Reset to the default values. Need for remove_entry
+    /// Reset to the default values. Needed by [`CollectionView::remove_entry`].
     fn reset_to_default(&mut self);
 }
 
