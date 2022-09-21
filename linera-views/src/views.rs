@@ -294,11 +294,9 @@ where
     }
 
     async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        if self.need_delete {
-            if self.stored_count > 0 {
-                self.context.delete(self.stored_count, batch).await?;
-                self.stored_count = 0
-            }
+        if self.need_delete && self.stored_count > 0 {
+            self.context.delete(self.stored_count, batch).await?;
+            self.stored_count = 0
         }
         if !self.new_values.is_empty() {
             self.context
