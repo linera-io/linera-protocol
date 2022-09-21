@@ -238,6 +238,7 @@ pub struct AppendOnlyLogView<C, T> {
     context: C,
     stored_count: usize,
     new_values: Vec<T>,
+    need_delete: bool,
 }
 
 /// The context operations supporting [`AppendOnlyLogView`].
@@ -284,6 +285,7 @@ where
             context,
             stored_count,
             new_values: Vec::new(),
+            need_delete: false,
         })
     }
 
@@ -292,6 +294,10 @@ where
     }
 
     async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+        if self.need_delete {
+            self.context.delete(self.stored_count, batch).await?;
+            self.stored_count = 0
+        }
         self.context
             .append(self.stored_count, batch, self.new_values)
             .await
@@ -302,6 +308,7 @@ where
     }
 
     fn reset_to_default(&mut self) {
+        self.need_delete = true;
         self.new_values.clear();
     }
 }
@@ -370,6 +377,7 @@ where
 #[derive(Debug, Clone)]
 pub struct MapView<C, I, V> {
     context: C,
+    stored_indices: Vec<I>,
     updates: BTreeMap<I, Option<V>>,
 }
 
@@ -403,16 +411,18 @@ pub trait MapOperations<I, V>: Context {
 impl<C, I, V> View<C> for MapView<C, I, V>
 where
     C: MapOperations<I, V> + Send,
-    I: Eq + Ord + Send + Sync,
+    I: Eq + Ord + Send + Sync + Clone,
     V: Clone + Send + Sync,
 {
     fn context(&self) -> &C {
         &self.context
     }
 
-    async fn load(context: C) -> Result<Self, C::Error> {
+    async fn load(mut context: C) -> Result<Self, C::Error> {
+        let stored_indices = context.indices().await?;
         Ok(Self {
             context,
+            stored_indices,
             updates: BTreeMap::new(),
         })
     }
@@ -440,7 +450,9 @@ where
     }
 
     fn reset_to_default(&mut self) {
-        self.updates.clear();
+        for index in &self.stored_indices {
+            self.updates.insert(index.clone(), None);
+        }
     }
 }
 
@@ -587,7 +599,7 @@ where
     }
 
     fn reset_to_default(&mut self) {
-        self.front_delete_count = 0;
+        self.front_delete_count = self.stored_indices.len();
         self.new_back_values.clear();
     }
 }
@@ -699,6 +711,7 @@ where
 #[derive(Debug, Clone)]
 pub struct CollectionView<C, I, W> {
     context: C,
+    stored_indices: Vec<I>,
     updates: BTreeMap<I, Option<W>>,
 }
 
@@ -725,16 +738,18 @@ pub trait CollectionOperations<I>: Context {
 impl<C, I, W> View<C> for CollectionView<C, I, W>
 where
     C: CollectionOperations<I> + Send,
-    I: Send + Sync + Debug + Clone,
+    I: Send + Ord + Sync + Debug + Clone,
     W: View<C> + Send,
 {
     fn context(&self) -> &C {
         &self.context
     }
 
-    async fn load(context: C) -> Result<Self, C::Error> {
+    async fn load(mut context: C) -> Result<Self, C::Error> {
+        let stored_indices = context.indices().await?;
         Ok(Self {
             context,
+            stored_indices,
             updates: BTreeMap::new(),
         })
     }
@@ -762,9 +777,9 @@ where
     }
 
     async fn delete(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        for index in self.context.indices().await? {
-            let context = self.context.clone_with_scope(&index);
-            self.context.remove_index(batch, index).await?;
+        for index in &self.stored_indices {
+            let context = self.context.clone_with_scope(index);
+            self.context.remove_index(batch, index.clone()).await?;
             let view = W::load(context).await?;
             view.delete(batch).await?;
         }
@@ -772,7 +787,9 @@ where
     }
 
     fn reset_to_default(&mut self) {
-        self.updates.clear();
+        for index in &self.stored_indices {
+            self.updates.insert(index.clone(), None);
+        }
     }
 }
 
