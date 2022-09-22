@@ -4,6 +4,7 @@
 
 use ed25519_dalek as dalek;
 use ed25519_dalek::{Signer, Verifier};
+use generic_array::typenum::Unsigned;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
@@ -402,6 +403,25 @@ impl Signature {
         })
     }
 }
+
+impl TryFrom<&[u8]> for HashValue {
+    type Error = IncorrectHashSize;
+
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        if bytes.len() == <sha2::Sha512 as sha2::Digest>::OutputSize::to_usize() {
+            Ok(HashValue(*generic_array::GenericArray::from_slice(bytes)))
+        } else {
+            Err(IncorrectHashSize(bytes.len()))
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Error)]
+#[error(
+    "Byte slice has length {0} but a `HashValue` requires exactly {expected} bytes",
+    expected = <sha2::Sha512 as sha2::Digest>::OutputSize::to_usize(),
+)]
+pub struct IncorrectHashSize(usize);
 
 #[cfg(any(test, feature = "test"))]
 impl Arbitrary for HashValue {
