@@ -285,7 +285,7 @@ where
             view.collection.indices().await.unwrap(),
             vec!["hola".to_string()]
         );
-        view.collection.remove_entry("hola".to_string()).await.unwrap();
+        view.collection.remove_entry("hola".to_string());
         assert_ne!(view.hash().await.unwrap(), stored_hash);
         view.write_commit().await.unwrap();
     }
@@ -321,15 +321,53 @@ async fn test_collection_removal() -> anyhow::Result<()> {
 
     // Remove the entry from the collection.
     let mut collection = CollectionViewType::load(context.clone()).await?;
-    collection.remove_entry(1).await?;
+    collection.remove_entry(1);
     collection.commit(&mut ()).await?;
 
     // Check that the entry was removed.
-//    let mut collection = CollectionViewType::load(context.clone()).await?;
-//    assert!(!collection.indices().await?.contains(&1));
+    let mut collection = CollectionViewType::load(context.clone()).await?;
+    assert!(!collection.indices().await?.contains(&1));
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_removal_api() -> anyhow::Result<()> {
+    type EntryType = RegisterView<MemoryContext<()>, u8>;
+    type CollectionViewType = CollectionView<MemoryContext<()>, u8, EntryType>;
+
+    let state = Arc::new(Mutex::new(BTreeMap::new()));
+    let context = MemoryContext::new(state.lock_owned().await, ());
+
+    let first_condition = true;
+    let second_condition = true;
+    // First add an entry `1` with value `100` and commit
+    let mut collection : CollectionViewType = CollectionView::load(context.clone()).await?;
+    let mut entry = collection.load_entry(1).await?;
+    entry.set(100);
+    collection.commit(&mut ()).await?;
+
+    // Reload the collection view and remove the entry, but don't commit yet
+    let mut collection : CollectionViewType = CollectionView::load(context.clone()).await?;
+    collection.remove_entry(1);
+
+    // Now, read the entry with a different value if a certain condition is true
+    if first_condition {
+        let mut entry = collection.load_entry(1).await?;
+        entry.set(200);
+    }
+
+    // Finally, either commit or rollback based on some other condition
+    if second_condition {
+        // When committing, the entry `1` is either deleted or with `200`.
+        collection.commit(&mut ()).await?;
+    } else {
+        // If rolling back, then the entry `1` still exists with value `100`.
+        collection.rollback();
+    }
+    Ok(())
+}
+
 
 #[tokio::test]
 async fn test_views_in_memory() {
