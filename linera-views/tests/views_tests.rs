@@ -332,38 +332,44 @@ async fn test_collection_removal() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn test_removal_api() -> anyhow::Result<()> {
-    type EntryType = RegisterView<MemoryContext<()>, u8>;
-    type CollectionViewType = CollectionView<MemoryContext<()>, u8, EntryType>;
+    async fn test_case(first_condition: bool, second_condition: bool) -> anyhow::Result<()> {
+        type EntryType = RegisterView<MemoryContext<()>, u8>;
+        type CollectionViewType = CollectionView<MemoryContext<()>, u8, EntryType>;
 
-    let state = Arc::new(Mutex::new(BTreeMap::new()));
-    let context = MemoryContext::new(state.lock_owned().await, ());
+        let state = Arc::new(Mutex::new(BTreeMap::new()));
+        let context = MemoryContext::new(state.lock_owned().await, ());
 
-    let first_condition = true;
-    let second_condition = true;
-    // First add an entry `1` with value `100` and commit
-    let mut collection: CollectionViewType = CollectionView::load(context.clone()).await?;
-    let mut entry = collection.load_entry(1).await?;
-    entry.set(100);
-    collection.commit(&mut ()).await?;
-
-    // Reload the collection view and remove the entry, but don't commit yet
-    let mut collection: CollectionViewType = CollectionView::load(context.clone()).await?;
-    collection.remove_entry(1);
-
-    // Now, read the entry with a different value if a certain condition is true
-    if first_condition {
-        let mut entry = collection.load_entry(1).await?;
-        entry.set(200);
-    }
-
-    // Finally, either commit or rollback based on some other condition
-    if second_condition {
-        // When committing, the entry `1` is either deleted or with `200`.
+        // First add an entry `1` with value `100` and commit
+        let mut collection: CollectionViewType = CollectionView::load(context.clone()).await?;
+        let entry = collection.load_entry(1).await?;
+        entry.set(100);
         collection.commit(&mut ()).await?;
-    } else {
-        // If rolling back, then the entry `1` still exists with value `100`.
-        collection.rollback();
+
+        // Reload the collection view and remove the entry, but don't commit yet
+        let mut collection: CollectionViewType = CollectionView::load(context.clone()).await?;
+        collection.remove_entry(1);
+
+        
+        // Now, read the entry with a different value if a certain condition is true
+        if first_condition {
+            let entry = collection.load_entry(1).await?;
+            entry.set(200);
+        }
+
+        // Finally, either commit or rollback based on some other condition
+        if second_condition {
+            // When committing, the entry `1` is either deleted or with `200`.
+            collection.commit(&mut ()).await?;
+        } else {
+            // If rolling back, then the entry `1` still exists with value `100`.
+            collection.rollback();
+        }
+        Ok(())
     }
+    test_case(true , true).await?;
+    test_case(false, true).await?;
+    test_case(true , false).await?;
+    test_case(false, false).await?;
     Ok(())
 }
 
