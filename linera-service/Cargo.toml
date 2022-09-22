@@ -36,7 +36,6 @@ test-strategy = "0.2.0"
 tokio = { version = "1.12.0", features = ["full", "test-util"] }
 
 linera-base = { path = "../linera-base", features = ["test"] }
-linera-storage = { path = "../linera-storage", features = ["test"] }
 linera-views = { path = "../linera-views", features = ["test"] }
 
 [[bin]]

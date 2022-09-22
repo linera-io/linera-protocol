@@ -24,6 +24,9 @@ use std::{collections::HashMap, io, ops::Range, str::FromStr, sync::Arc};
 use thiserror::Error;
 use tokio::sync::OwnedMutexGuard;
 
+/// The configuration to connect to DynamoDB.
+pub use aws_sdk_dynamodb::Config;
+
 #[cfg(test)]
 #[path = "unit_tests/dynamo_db_context_tests.rs"]
 pub mod dynamo_db_context_tests;
@@ -65,7 +68,7 @@ impl<E> DynamoDbContext<E> {
 
     /// Create a new [`DynamoDbContext`] instance using the provided `config` parameters.
     pub async fn from_config(
-        config: impl Into<aws_sdk_dynamodb::Config>,
+        config: impl Into<Config>,
         table: TableName,
         lock: OwnedMutexGuard<()>,
         key_prefix: Vec<u8>,
@@ -101,6 +104,26 @@ impl<E> DynamoDbContext<E> {
             .build();
 
         Ok(DynamoDbContext::from_config(config, table, lock, key_prefix, extra).await?)
+    }
+
+    /// Clone this [`DynamoDbContext`] while entering a sub-scope.
+    ///
+    /// The return context uses the `new_lock` instead of the current internal lock, and has its key
+    /// prefix extended with `scope_prefix` and uses the `new_extra` instead of cloning the current
+    /// extra data.
+    pub fn clone_with_sub_scope<NewE>(
+        &self,
+        new_lock: OwnedMutexGuard<()>,
+        scope_prefix: &impl Serialize,
+        new_extra: NewE,
+    ) -> DynamoDbContext<NewE> {
+        DynamoDbContext {
+            client: self.client.clone(),
+            table: self.table.clone(),
+            lock: Arc::new(new_lock),
+            key_prefix: self.extend_prefix(scope_prefix),
+            extra: new_extra,
+        }
     }
 
     /// Create the storage table if it doesn't exist.
@@ -664,7 +687,7 @@ pub enum TableStatus {
 /// Table names must follow some [naming
 /// rules](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.NamingRulesDataTypes.html#HowItWorks.NamingRules),
 /// so this type ensures that they are properly validated.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TableName(String);
 
 impl FromStr for TableName {
@@ -744,6 +767,16 @@ pub enum DynamoDbContextError {
 
     #[error(transparent)]
     View(#[from] ViewError),
+
+    // TODO: Remove the following variants
+    #[error("Unknown BCS serialization/deserialization error")]
+    UnknownBcsError(#[from] bcs::Error),
+
+    #[error(transparent)]
+    CreateTable(#[from] Box<CreateTableError>),
+
+    #[error("Item not found in DynamoDB table: {0}")]
+    NotFound(String),
 }
 
 impl<InnerError> From<SdkError<InnerError>> for DynamoDbContextError
@@ -751,6 +784,12 @@ where
     DynamoDbContextError: From<Box<SdkError<InnerError>>>,
 {
     fn from(error: SdkError<InnerError>) -> Self {
+        Box::new(error).into()
+    }
+}
+
+impl From<CreateTableError> for DynamoDbContextError {
+    fn from(error: CreateTableError) -> Self {
         Box::new(error).into()
     }
 }
@@ -789,6 +828,15 @@ impl DynamoDbContextError {
             _ => "an unknown type",
         }
         .to_owned()
+    }
+}
+
+impl From<DynamoDbContextError> for linera_base::error::Error {
+    fn from(error: DynamoDbContextError) -> Self {
+        Self::StorageError {
+            backend: "DynamoDB".to_string(),
+            error: error.to_string(),
+        }
     }
 }
 

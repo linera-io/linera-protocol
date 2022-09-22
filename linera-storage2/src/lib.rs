@@ -2,10 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod chain;
+mod dynamo_db;
 mod memory;
 mod rocksdb;
 
-pub use crate::{memory::MemoryStoreClient, rocksdb::RocksdbStoreClient};
+pub use crate::{
+    dynamo_db::DynamoDbStoreClient, memory::MemoryStoreClient, rocksdb::RocksdbStoreClient,
+};
 
 use async_trait::async_trait;
 use futures::future;

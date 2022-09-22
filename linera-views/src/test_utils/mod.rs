@@ -85,7 +85,7 @@ impl LocalStackTestContext {
     async fn remove_buckets(&self) -> Result<(), Error> {
         let client = aws_sdk_s3::Client::from_conf(self.s3_config());
 
-        for bucket in list_buckets(&client).await? {
+        for bucket in list_buckets(&client).await.unwrap_or_default() {
             let objects = client.list_objects().bucket(&bucket).send().await?;
 
             for object in objects.contents().into_iter().flatten() {
@@ -109,7 +109,7 @@ impl LocalStackTestContext {
     async fn remove_tables(&self) -> Result<(), Error> {
         let client = aws_sdk_dynamodb::Client::from_conf(self.dynamo_db_config());
 
-        for table in list_tables(&client).await? {
+        for table in list_tables(&client).await.unwrap_or_default() {
             client.delete_table().table_name(table).send().await?;
         }
 
