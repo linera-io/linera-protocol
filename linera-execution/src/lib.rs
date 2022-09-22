@@ -5,6 +5,7 @@ mod execution;
 mod ownership;
 mod runtime;
 pub mod system;
+mod wasm;
 
 pub use execution::{ExecutionStateView, ExecutionStateViewContext};
 pub use ownership::ChainOwnership;
@@ -14,6 +15,8 @@ pub use system::{
     SystemEffect, SystemExecutionStateView, SystemExecutionStateViewContext, SystemOperation,
     SystemQuery, SystemResponse,
 };
+#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
+pub use wasm::WasmApplication;
 
 use async_trait::async_trait;
 use dashmap::DashMap;
