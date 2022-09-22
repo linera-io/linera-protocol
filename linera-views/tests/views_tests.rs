@@ -349,7 +349,6 @@ async fn test_removal_api() -> anyhow::Result<()> {
         let mut collection: CollectionViewType = CollectionView::load(context.clone()).await?;
         collection.remove_entry(1);
 
-        
         // Now, read the entry with a different value if a certain condition is true
         if first_condition {
             let entry = collection.load_entry(1).await?;
@@ -358,12 +357,32 @@ async fn test_removal_api() -> anyhow::Result<()> {
 
         // Finally, either commit or rollback based on some other condition
         if second_condition {
-            // When committing, the entry `1` is either deleted or with `200`.
-            collection.commit(&mut ()).await?;
-        } else {
             // If rolling back, then the entry `1` still exists with value `100`.
             collection.rollback();
         }
+
+        // We commit
+        collection.commit(&mut ()).await?;
+
+        let mut collection: CollectionViewType = CollectionView::load(context.clone()).await?;
+        let expected_val = if second_condition {
+            Some(100)
+        } else {
+            if first_condition {
+                Some(200)
+            } else {
+                None
+            }
+        };
+        match expected_val {
+            Some(expected_val_i) => {
+                let subview = collection.load_entry(1).await?;
+                assert_eq!(subview.get(), &expected_val_i);
+            },
+            None => {
+                assert!(!collection.indices().await?.contains(&1));
+            }
+        };
         Ok(())
     }
     test_case(true , true).await?;
