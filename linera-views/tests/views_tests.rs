@@ -304,7 +304,6 @@ where
     staged_hash
 }
 
-
 #[tokio::test]
 async fn test_collection_removal() -> anyhow::Result<()> {
     type EntryType = RegisterView<MemoryContext<()>, u8>;
@@ -342,13 +341,13 @@ async fn test_removal_api() -> anyhow::Result<()> {
     let first_condition = true;
     let second_condition = true;
     // First add an entry `1` with value `100` and commit
-    let mut collection : CollectionViewType = CollectionView::load(context.clone()).await?;
+    let mut collection: CollectionViewType = CollectionView::load(context.clone()).await?;
     let mut entry = collection.load_entry(1).await?;
     entry.set(100);
     collection.commit(&mut ()).await?;
 
     // Reload the collection view and remove the entry, but don't commit yet
-    let mut collection : CollectionViewType = CollectionView::load(context.clone()).await?;
+    let mut collection: CollectionViewType = CollectionView::load(context.clone()).await?;
     collection.remove_entry(1);
 
     // Now, read the entry with a different value if a certain condition is true
@@ -367,7 +366,6 @@ async fn test_removal_api() -> anyhow::Result<()> {
     }
     Ok(())
 }
-
 
 #[tokio::test]
 async fn test_views_in_memory() {

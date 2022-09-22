@@ -820,9 +820,9 @@ where
                         let view = W::load(context).await?;
                         *f = Some(view);
                         Ok(f.as_mut().unwrap())
-                    },
+                    }
                 }
-            },
+            }
             btree_map::Entry::Vacant(e) => {
                 let context = self.context.clone_with_scope(&index);
                 let view = W::load(context).await?;
