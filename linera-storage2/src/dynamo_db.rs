@@ -99,12 +99,28 @@ impl DynamoDbStore {
             table_status,
         ))
     }
+
+    /// Obtain a [`MapView`] of certificates.
+    async fn certificates(
+        &mut self,
+    ) -> Result<MapView<DynamoDbContext<()>, HashValue, Certificate>, DynamoDbContextError> {
+        let dummy_lock = Arc::new(Mutex::new(())).lock_owned().await;
+        MapView::load(
+            self.context
+                .clone_with_sub_scope(dummy_lock, &BaseKey::Certificate, ()),
+        )
+        .await
+    }
 }
 
+/// The key type used to distinguish certificates and chain states.
+///
+/// Allows selecting a stored sub-view, either a chain state view or the [`MapView`] of
+/// certificates.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
 enum BaseKey {
     ChainState(ChainId),
-    Certificate(HashValue),
+    Certificate,
 }
 
 #[async_trait]
@@ -136,10 +152,11 @@ impl Store for DynamoDbStoreClient {
     }
 
     async fn read_certificate(&self, hash: HashValue) -> Result<Certificate, DynamoDbContextError> {
-        let store = self.0.lock().await;
-        let mut certificates = MapView::load(store.context.clone()).await?;
-        certificates
-            .get(&BaseKey::Certificate(hash))
+        let mut store = self.0.lock().await;
+        store
+            .certificates()
+            .await?
+            .get(&hash)
             .await?
             .ok_or_else(|| {
                 DynamoDbContextError::NotFound(format!("certificate for hash {:?}", hash))
@@ -150,9 +167,9 @@ impl Store for DynamoDbStoreClient {
         &self,
         certificate: Certificate,
     ) -> Result<(), DynamoDbContextError> {
-        let store = self.0.lock().await;
-        let mut certificates = MapView::load(store.context.clone()).await?;
-        certificates.insert(BaseKey::Certificate(certificate.hash), certificate);
+        let mut store = self.0.lock().await;
+        let mut certificates = store.certificates().await?;
+        certificates.insert(certificate.hash, certificate);
         certificates.commit(&mut ()).await
     }
 }
