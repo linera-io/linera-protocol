@@ -367,27 +367,25 @@ async fn test_removal_api() -> anyhow::Result<()> {
         let mut collection: CollectionViewType = CollectionView::load(context.clone()).await?;
         let expected_val = if second_condition {
             Some(100)
+        } else if first_condition {
+            Some(200)
         } else {
-            if first_condition {
-                Some(200)
-            } else {
-                None
-            }
+            None
         };
         match expected_val {
             Some(expected_val_i) => {
                 let subview = collection.load_entry(1).await?;
                 assert_eq!(subview.get(), &expected_val_i);
-            },
+            }
             None => {
                 assert!(!collection.indices().await?.contains(&1));
             }
         };
         Ok(())
     }
-    test_case(true , true).await?;
+    test_case(true, true).await?;
     test_case(false, true).await?;
-    test_case(true , false).await?;
+    test_case(true, false).await?;
     test_case(false, false).await?;
     Ok(())
 }
