@@ -811,12 +811,17 @@ where
     /// error if `remove_entry` was used earlier on this index from the same [`CollectionView`].
     pub async fn load_entry(&mut self, index: I) -> Result<&mut W, C::Error> {
         match self.updates.entry(index.clone()) {
-            btree_map::Entry::Occupied(e) => match e.into_mut() {
-                Some(view) => Ok(view),
-                None => Err(C::Error::from(ViewError::RemovedEntry(format!(
-                    "{:?}",
-                    index
-                )))),
+            btree_map::Entry::Occupied(e) => {
+                let f = e.into_mut();
+                match f {
+                    Some(view) => Ok(view),
+                    None => {
+                        let context = self.context.clone_with_scope(&index);
+                        let view = W::load(context).await?;
+                        *f = Some(view);
+                        Ok(f.as_mut().unwrap())
+                    },
+                }
             },
             btree_map::Entry::Vacant(e) => {
                 let context = self.context.clone_with_scope(&index);
