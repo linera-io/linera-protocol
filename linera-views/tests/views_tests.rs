@@ -266,7 +266,6 @@ where
         assert_eq!(view.queue.front().await.unwrap(), None);
         assert_eq!(view.queue.count(), 0);
         view.queue.push_back(13);
-        view.queue.push_back(14);
         assert_eq!(view.map.get(&"Hello".to_string()).await.unwrap(), Some(5));
         assert_eq!(view.map.get(&"Hi".to_string()).await.unwrap(), None);
         {
@@ -303,6 +302,12 @@ where
                 .await
                 .unwrap();
             assert_eq!(subview.read(0..10).await.unwrap(), vec![]);
+        }
+        {
+            assert_eq!(view.queue.front().await.unwrap(), Some(13));
+            view.queue.delete_front();
+            assert_eq!(view.queue.front().await.unwrap(), None);
+            assert_eq!(view.queue.count(), 0);
         }
         view.write_delete().await.unwrap();
     }

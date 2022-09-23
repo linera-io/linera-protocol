@@ -517,15 +517,20 @@ where
         if let Some(update) = self.updates.get(index) {
             return Ok(update.as_ref().cloned());
         }
+        if self.need_delete {
+            return Ok(None);
+        }
         self.context.get(index).await
     }
 
     /// Return the list of indices in the map.
     pub async fn indices(&mut self) -> Result<Vec<I>, C::Error> {
         let mut indices = Vec::new();
-        for index in self.context.indices().await? {
-            if !self.updates.contains_key(&index) {
-                indices.push(index);
+        if !self.need_delete {
+            for index in self.context.indices().await? {
+                if !self.updates.contains_key(&index) {
+                    indices.push(index);
+                }
             }
         }
         for (index, entry) in &self.updates {
