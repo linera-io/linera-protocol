@@ -14,6 +14,7 @@ use linera_core::{
     node::ValidatorNode,
 };
 use linera_storage2::Store;
+use linera_views::views::Context;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
@@ -157,7 +158,7 @@ impl WalletState {
         P: ValidatorNodeProvider + Send + 'static,
         P::Node: ValidatorNode + Send + Sync + 'static + Clone,
         S: Store + Clone + Send + Sync + 'static,
-        linera_base::error::Error: From<S::Error>,
+        linera_base::error::Error: From<S::Error> + From<<<S as Store>::Context as Context>::Error>,
     {
         let chain = self
             .chains
@@ -217,7 +218,7 @@ impl GenesisConfig {
     pub async fn initialize_store<S>(&self, store: &mut S) -> Result<(), anyhow::Error>
     where
         S: Store + Clone + Send + Sync + 'static,
-        linera_base::error::Error: From<S::Error>,
+        linera_base::error::Error: From<S::Error> + From<<<S as Store>::Context as Context>::Error>,
     {
         for (description, owner, balance) in &self.chains {
             store

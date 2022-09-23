@@ -18,7 +18,7 @@ use linera_base::{
 use linera_storage2::{
     chain::Event, DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient, Store,
 };
-use linera_views::test_utils::LocalStackTestContext;
+use linera_views::{test_utils::LocalStackTestContext, views::Context};
 use std::collections::BTreeMap;
 use test_log::test;
 
@@ -27,7 +27,7 @@ use test_log::test;
 fn init_worker<S>(client: S, allow_inactive_chains: bool) -> (Committee, WorkerState<S>)
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    Error: From<S::Error> + From<<<S as Store>::Context as Context>::Error>,
 {
     let key_pair = KeyPair::generate();
     let committee = Committee::make_simple(vec![ValidatorName(key_pair.public())]);
@@ -41,7 +41,7 @@ async fn init_worker_with_chains<S, I>(client: S, balances: I) -> (Committee, Wo
 where
     I: IntoIterator<Item = (ChainDescription, PublicKey, Balance)>,
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    Error: From<S::Error> + From<<<S as Store>::Context as Context>::Error>,
 {
     let (committee, worker) = init_worker(client, /* allow_inactive_chains */ false);
     for (description, pubk, balance) in balances {
@@ -69,7 +69,7 @@ async fn init_worker_with_chain<S>(
 ) -> (Committee, WorkerState<S>)
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    Error: From<S::Error> + From<<<S as Store>::Context as Context>::Error>,
 {
     init_worker_with_chains(client, [(description, owner, balance)]).await
 }
@@ -227,7 +227,7 @@ async fn test_dynamo_db_handle_block_proposal_bad_signature() -> Result<(), anyh
 async fn run_test_handle_block_proposal_bad_signature<S>(client: S)
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    Error: From<S::Error> + From<<<S as Store>::Context as Context>::Error>,
 {
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(ChainId::root(2));
@@ -307,7 +307,7 @@ async fn test_dynamo_db_handle_block_proposal_zero_amount() -> Result<(), anyhow
 async fn run_test_handle_block_proposal_zero_amount<S>(client: S)
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    Error: From<S::Error> + From<<<S as Store>::Context as Context>::Error>,
 {
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(ChainId::root(2));
@@ -384,7 +384,7 @@ async fn test_dynamo_db_handle_block_proposal_unknown_sender() -> Result<(), any
 async fn run_test_handle_block_proposal_unknown_sender<S>(client: S)
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    Error: From<S::Error> + From<<<S as Store>::Context as Context>::Error>,
 {
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(ChainId::root(2));
@@ -463,7 +463,7 @@ async fn test_dynamo_db_handle_block_proposal_with_chaining() -> Result<(), anyh
 async fn run_test_handle_block_proposal_with_chaining<S>(client: S)
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    Error: From<S::Error> + From<<<S as Store>::Context as Context>::Error>,
 {
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(ChainId::root(2));
@@ -583,7 +583,7 @@ async fn test_dynamo_db_handle_block_proposal_with_incoming_messages() -> Result
 async fn run_test_handle_block_proposal_with_incoming_messages<S>(client: S)
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    Error: From<S::Error> + From<<<S as Store>::Context as Context>::Error>,
 {
     let sender_key_pair = KeyPair::generate();
     let recipient_key_pair = KeyPair::generate();
@@ -981,7 +981,7 @@ async fn test_dynamo_db_handle_block_proposal_exceed_balance() -> Result<(), any
 async fn run_test_handle_block_proposal_exceed_balance<S>(client: S)
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    Error: From<S::Error> + From<<<S as Store>::Context as Context>::Error>,
 {
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(ChainId::root(2));
@@ -1054,7 +1054,7 @@ async fn test_dynamo_db_handle_block_proposal() -> Result<(), anyhow::Error> {
 async fn run_test_handle_block_proposal<S>(client: S)
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    Error: From<S::Error> + From<<<S as Store>::Context as Context>::Error>,
 {
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(ChainId::root(2));
@@ -1129,7 +1129,7 @@ async fn test_dynamo_db_handle_block_proposal_replay() -> Result<(), anyhow::Err
 async fn run_test_handle_block_proposal_replay<S>(client: S)
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    Error: From<S::Error> + From<<<S as Store>::Context as Context>::Error>,
 {
     let sender_key_pair = KeyPair::generate();
     let recipient = Address::Account(ChainId::root(2));
@@ -1205,7 +1205,7 @@ async fn test_dynamo_db_handle_certificate_unknown_sender() -> Result<(), anyhow
 async fn run_test_handle_certificate_unknown_sender<S>(client: S)
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    Error: From<S::Error> + From<<<S as Store>::Context as Context>::Error>,
 {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
@@ -1262,7 +1262,7 @@ async fn test_dynamo_db_handle_certificate_bad_block_height() -> Result<(), anyh
 async fn run_test_handle_certificate_bad_block_height<S>(client: S)
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    Error: From<S::Error> + From<<<S as Store>::Context as Context>::Error>,
 {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
@@ -1332,7 +1332,7 @@ async fn test_dynamo_db_handle_certificate_with_anticipated_incoming_message(
 async fn run_test_handle_certificate_with_anticipated_incoming_message<S>(client: S)
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    Error: From<S::Error> + From<<<S as Store>::Context as Context>::Error>,
 {
     let key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
@@ -1461,7 +1461,7 @@ async fn test_dynamo_db_handle_certificate_receiver_balance_overflow() -> Result
 async fn run_test_handle_certificate_receiver_balance_overflow<S>(client: S)
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    Error: From<S::Error> + From<<<S as Store>::Context as Context>::Error>,
 {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
@@ -1556,7 +1556,7 @@ async fn test_dynamo_db_handle_certificate_receiver_equal_sender() -> Result<(),
 async fn run_test_handle_certificate_receiver_equal_sender<S>(client: S)
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    Error: From<S::Error> + From<<<S as Store>::Context as Context>::Error>,
 {
     let key_pair = KeyPair::generate();
     let name = key_pair.public();
@@ -1641,7 +1641,7 @@ async fn test_dynamo_db_handle_cross_chain_request() -> Result<(), anyhow::Error
 async fn run_test_handle_cross_chain_request<S>(client: S)
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    Error: From<S::Error> + From<<<S as Store>::Context as Context>::Error>,
 {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
@@ -1738,7 +1738,7 @@ async fn test_dynamo_db_handle_cross_chain_request_no_recipient_chain() -> Resul
 async fn run_test_handle_cross_chain_request_no_recipient_chain<S>(client: S)
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    Error: From<S::Error> + From<<<S as Store>::Context as Context>::Error>,
 {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker(client, /* allow_inactive_chains */ false);
@@ -1809,7 +1809,7 @@ async fn run_test_handle_cross_chain_request_no_recipient_chain_with_inactive_ch
     client: S,
 ) where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    Error: From<S::Error> + From<<<S as Store>::Context as Context>::Error>,
 {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker(client, /* allow_inactive_chains */ true);
@@ -1882,7 +1882,7 @@ async fn test_dynamo_db_handle_certificate_to_active_recipient() -> Result<(), a
 async fn run_test_handle_certificate_to_active_recipient<S>(client: S)
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    Error: From<S::Error> + From<<<S as Store>::Context as Context>::Error>,
 {
     let sender_key_pair = KeyPair::generate();
     let recipient_key_pair = KeyPair::generate();
@@ -2018,7 +2018,7 @@ async fn test_dynamo_db_handle_certificate_to_inactive_recipient() -> Result<(),
 async fn run_test_handle_certificate_to_inactive_recipient<S>(client: S)
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    Error: From<S::Error> + From<<<S as Store>::Context as Context>::Error>,
 {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
@@ -2085,7 +2085,7 @@ async fn test_dynamo_db_chain_creation_with_committee_creation() -> Result<(), a
 async fn run_test_chain_creation_with_committee_creation<S>(client: S)
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    Error: From<S::Error> + From<<<S as Store>::Context as Context>::Error>,
 {
     let key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
@@ -2574,7 +2574,7 @@ async fn test_dynamo_db_transfers_and_committee_creation() -> Result<(), anyhow:
 async fn run_test_transfers_and_committee_creation<S>(client: S)
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    Error: From<S::Error> + From<<<S as Store>::Context as Context>::Error>,
 {
     let key_pair0 = KeyPair::generate();
     let key_pair1 = KeyPair::generate();
@@ -2777,7 +2777,7 @@ async fn test_dynamo_db_transfers_and_committee_removal() -> Result<(), anyhow::
 async fn run_test_transfers_and_committee_removal<S>(client: S)
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    Error: From<S::Error> + From<<<S as Store>::Context as Context>::Error>,
 {
     let key_pair0 = KeyPair::generate();
     let key_pair1 = KeyPair::generate();

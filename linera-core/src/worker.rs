@@ -8,7 +8,7 @@ use linera_storage2::{
     chain::{ChainStateView, OutboxStateView},
     Store,
 };
-use linera_views::views::{AppendOnlyLogView, View};
+use linera_views::views::{AppendOnlyLogView, Context, View};
 use std::{collections::VecDeque, sync::Arc};
 
 #[cfg(test)]
@@ -85,7 +85,7 @@ impl<Client> WorkerState<Client> {
 impl<Client> WorkerState<Client>
 where
     Client: Store + Clone + Send + Sync + 'static,
-    Error: From<Client::Error>,
+    Error: From<Client::Error> + From<<<Client as Store>::Context as Context>::Error>,
 {
     // NOTE: This only works for non-sharded workers!
     pub(crate) async fn fully_handle_certificate(
@@ -105,6 +105,7 @@ where
         &mut self,
         block: &Block,
     ) -> Result<ChainInfoResponse, Error> {
+        dbg!("worker:108");
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
         chain.execute_block(block).await?;
         let info = chain.make_chain_info(None);
@@ -212,6 +213,7 @@ where
         // Obtain the sender's chain.
         let sender = block.chain_id;
         // Check that the chain is active and ready for this confirmation.
+        dbg!("worker:216");
         let mut chain = self.storage.load_active_chain(sender).await?;
         let tip = chain.tip_state.get();
         if tip.next_block_height < block.height {
@@ -274,7 +276,7 @@ where
         let info = chain.make_chain_info(self.key_pair());
         let continuation = self.make_continuation(&mut chain).await?;
         // Persist chain.
-        chain.write_commit().await?;
+        chain.commit().await?;
         Ok((info, continuation))
     }
 
@@ -293,6 +295,7 @@ where
             _ => panic!("Expecting a validation certificate"),
         };
         // Check that the chain is active and ready for this confirmation.
+        dbg!("worker:298");
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
         // Verify the certificate. Returns a catch-all error to make client code more robust.
         let epoch = chain
@@ -344,7 +347,7 @@ where
                 self.key_pair(),
             );
         let info = chain.make_chain_info(self.key_pair());
-        chain.write_commit().await?;
+        chain.commit().await?;
         Ok(info)
     }
 }
@@ -353,7 +356,7 @@ where
 impl<Client> ValidatorWorker for WorkerState<Client>
 where
     Client: Store + Clone + Send + Sync + 'static,
-    Error: From<Client::Error>,
+    Error: From<Client::Error> + From<<<Client as Store>::Context as Context>::Error>,
 {
     async fn handle_block_proposal(
         &mut self,
@@ -362,6 +365,7 @@ where
         log::trace!("{} <-- {:?}", self.nickname, proposal);
         // Obtain the sender's chain.
         let sender = proposal.content.block.chain_id;
+        dbg!("worker:368");
         let mut chain = self.storage.load_active_chain(sender).await?;
         // Check the epoch.
         let epoch = chain
@@ -430,7 +434,7 @@ where
             self.key_pair(),
         );
         let info = chain.make_chain_info(self.key_pair());
-        chain.write_commit().await?;
+        chain.commit().await?;
         Ok(info)
     }
 
@@ -458,7 +462,7 @@ where
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, Error> {
         log::trace!("{} <-- {:?}", self.nickname, query);
-        dbg!("worker:461");
+        dbg!("worker:465");
         let mut chain = self.storage.load_chain(query.chain_id).await?;
         let mut info = chain.make_chain_info(None).info;
         if query.request_system_execution_state {
@@ -554,7 +558,7 @@ where
                 recipient,
                 certificates,
             } => {
-                dbg!("worker:558");
+                dbg!("worker:561");
                 let mut chain = self.storage.load_chain(recipient).await?;
                 let mut last_height = None;
                 let mut last_epoch = None;
@@ -630,7 +634,7 @@ where
                             return Ok(Vec::new());
                         }
                     }
-                    chain.write_commit().await?;
+                    chain.commit().await?;
                 }
                 match last_height {
                     Some(height) => {
@@ -656,13 +660,13 @@ where
                 recipient,
                 height,
             } => {
-                dbg!("worker:659");
+                dbg!("worker:663");
                 let mut chain = self.storage.load_chain(chain_id).await?;
                 if chain
                     .mark_outbox_messages_as_received(application_id, recipient, height)
                     .await?
                 {
-                    chain.write_commit().await?;
+                    chain.commit().await?;
                 }
                 Ok(Vec::new())
             }
@@ -676,13 +680,13 @@ where
                 recipient,
                 height,
             } => {
-                dbg!("worker:679");
+                dbg!("worker:683");
                 let mut chain = self.storage.load_chain(chain_id).await?;
                 if chain
                     .mark_channel_messages_as_received(&name, application_id, recipient, height)
                     .await?
                 {
-                    chain.write_commit().await?;
+                    chain.commit().await?;
                 }
                 Ok(Vec::new())
             }

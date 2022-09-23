@@ -4,9 +4,16 @@
 use crate::config::GenesisConfig;
 use anyhow::format_err;
 use async_trait::async_trait;
-use linera_storage2::{DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient};
-use linera_views::dynamo_db::{TableName, TableStatus};
-use std::{path::PathBuf, str::FromStr};
+use linera_storage2::{
+    view::StorageView, DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient,
+};
+use linera_views::{
+    dynamo_db::{DynamoDbContext, TableName, TableStatus},
+    memory::MemoryContext,
+    rocksdb::RocksdbContext,
+};
+use std::{path::PathBuf, str::FromStr, sync::Arc};
+use tokio::sync::Mutex;
 
 /// The description of a storage implementation.
 #[derive(Debug)]
@@ -36,9 +43,9 @@ impl StorageConfig {
         job: Job,
     ) -> Result<Output, anyhow::Error>
     where
-        Job: Runnable<MemoryStoreClient, Output = Output>
-            + Runnable<RocksdbStoreClient, Output = Output>
-            + Runnable<DynamoDbStoreClient, Output = Output>,
+        Job: Runnable<Arc<Mutex<StorageView<MemoryContext>>>, Output = Output>
+            + Runnable<Arc<Mutex<StorageView<RocksdbContext>>>, Output = Output>
+            + Runnable<Arc<Mutex<StorageView<DynamoDbContext>>>, Output = Output>,
     {
         use StorageConfig::*;
         match self {

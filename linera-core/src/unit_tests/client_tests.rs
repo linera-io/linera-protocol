@@ -7,7 +7,6 @@ use crate::{
     worker::{ValidatorWorker, WorkerState},
 };
 use async_trait::async_trait;
-use futures::lock::Mutex;
 use linera_base::{
     committee::Committee,
     crypto::*,
@@ -15,8 +14,13 @@ use linera_base::{
     messages::*,
     system::{Amount, Balance, SystemOperation, UserData},
 };
-use linera_storage2::{DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient, Store};
-use linera_views::test_utils::LocalStackTestContext;
+use linera_storage2::{
+    view::StorageView, DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient, Store,
+};
+use linera_views::{
+    dynamo_db::DynamoDbContext, memory::MemoryContext, rocksdb::RocksdbContext,
+    test_utils::LocalStackTestContext, views::Context,
+};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     future::Future,
@@ -24,10 +28,12 @@ use std::{
     sync::Arc,
 };
 use test_log::test;
+use tokio::sync::Mutex;
 
 /// An validator used for testing. "Faulty" validators ignore block proposals (but not
 /// certificates or info queries) and have the wrong initial balance for all chains.
 struct LocalValidator<S> {
+    id: usize,
     is_faulty: bool,
     state: WorkerState<S>,
 }
@@ -39,47 +45,59 @@ struct LocalValidatorClient<S>(Arc<Mutex<LocalValidator<S>>>);
 impl<S> ValidatorNode for LocalValidatorClient<S>
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    Error: From<S::Error> + From<<<S as Store>::Context as Context>::Error>,
 {
     async fn handle_block_proposal(
         &mut self,
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, Error> {
+        // println!("x: handle_block_proposal");
         let validator = self.0.clone();
         let mut validator = validator.lock().await;
-        if validator.is_faulty {
+        // println!("{}: handle_block_proposal [", validator.id);
+        let ret = if validator.is_faulty {
             Err(Error::SequenceOverflow)
         } else {
             validator.state.handle_block_proposal(proposal).await
-        }
+        };
+        // println!("{}: handle_block_proposal ]", validator.id);
+        ret
     }
 
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
     ) -> Result<ChainInfoResponse, Error> {
+        // println!("x: handle_certificate");
         let validator = self.0.clone();
         let mut validator = validator.lock().await;
-        validator.state.fully_handle_certificate(certificate).await
+        // println!("{}: handle_certificate [", validator.id);
+        let ret = validator.state.fully_handle_certificate(certificate).await;
+        // println!("{}: handle_certificate ]", validator.id);
+        ret
     }
 
     async fn handle_chain_info_query(
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, Error> {
-        self.0
-            .clone()
-            .lock()
-            .await
-            .state
-            .handle_chain_info_query(query)
-            .await
+        // println!("x: handle_chain_info_query");
+        let validator = self.0.clone();
+        let mut validator = validator.lock().await;
+        // println!("{}: handle_chain_info_query [", validator.id);
+        let ret = validator.state.handle_chain_info_query(query).await;
+        // println!("{}: handle_chain_info_query ]", validator.id);
+        ret
     }
 }
 
 impl<S> LocalValidatorClient<S> {
-    fn new(is_faulty: bool, state: WorkerState<S>) -> Self {
-        let validator = LocalValidator { is_faulty, state };
+    fn new(is_faulty: bool, state: WorkerState<S>, id: usize) -> Self {
+        let validator = LocalValidator {
+            is_faulty,
+            state,
+            id,
+        };
         Self(Arc::new(Mutex::new(validator)))
     }
 }
@@ -89,7 +107,7 @@ struct NodeProvider<S>(BTreeMap<ValidatorName, LocalValidatorClient<S>>);
 impl<S> ValidatorNodeProvider for NodeProvider<S>
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    Error: From<S::Error> + From<<<S as Store>::Context as Context>::Error>,
 {
     type Node = LocalValidatorClient<S>;
 
@@ -152,7 +170,7 @@ impl GenesisStoreBuilder {
     async fn build<S>(&self, store: S, initial_committee: Committee, admin_id: ChainId) -> S
     where
         S: Store + Clone + Send + Sync + 'static,
-        Error: From<S::Error>,
+        Error: From<S::Error> + From<<<S as Store>::Context as Context>::Error>,
     {
         for account in &self.accounts {
             store
@@ -173,7 +191,8 @@ impl GenesisStoreBuilder {
 impl<B> TestBuilder<B>
 where
     B: StoreBuilder,
-    Error: From<<B::Store as Store>::Error>,
+    Error:
+        From<<B::Store as Store>::Error> + From<<<B::Store as Store>::Context as Context>::Error>,
 {
     async fn new(
         mut store_builder: B,
@@ -199,9 +218,9 @@ where
                 .allow_inactive_chains(false);
             let validator = if i < with_faulty_validators {
                 faulty_validators.insert(name);
-                LocalValidatorClient::new(true, state)
+                LocalValidatorClient::new(true, state, i)
             } else {
-                LocalValidatorClient::new(false, state)
+                LocalValidatorClient::new(false, state, i)
             };
             validator_clients.push((name, validator));
             validator_stores.insert(name, store);
@@ -350,10 +369,10 @@ pub struct MakeMemoryStoreClient;
 
 #[async_trait]
 impl StoreBuilder for MakeMemoryStoreClient {
-    type Store = MemoryStoreClient;
+    type Store = Arc<Mutex<StorageView<MemoryContext>>>;
 
     async fn build(&mut self) -> Result<Self::Store, anyhow::Error> {
-        Ok(MemoryStoreClient::default())
+        Ok(MemoryStoreClient::new().await?)
     }
 }
 
@@ -364,13 +383,13 @@ pub struct MakeRocksdbStoreClient {
 
 #[async_trait]
 impl StoreBuilder for MakeRocksdbStoreClient {
-    type Store = RocksdbStoreClient;
+    type Store = Arc<Mutex<StorageView<RocksdbContext>>>;
 
     async fn build(&mut self) -> Result<Self::Store, anyhow::Error> {
         let dir = tempfile::TempDir::new()?;
         let path = dir.path().to_path_buf();
         self.temp_dirs.push(dir);
-        Ok(RocksdbStoreClient::new(path))
+        Ok(RocksdbStoreClient::new(path).await?)
     }
 }
 
@@ -382,7 +401,7 @@ pub struct MakeDynamoDbStoreClient {
 
 #[async_trait]
 impl StoreBuilder for MakeDynamoDbStoreClient {
-    type Store = DynamoDbStoreClient;
+    type Store = Arc<Mutex<StorageView<DynamoDbContext>>>;
 
     async fn build(&mut self) -> Result<Self::Store, anyhow::Error> {
         if self.localstack.is_none() {
@@ -416,7 +435,8 @@ async fn test_dynamo_db_initiating_valid_transfer() -> Result<(), anyhow::Error>
 async fn run_test_initiating_valid_transfer<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
-    Error: From<<B::Store as Store>::Error>,
+    Error:
+        From<<B::Store as Store>::Error> + From<<<B::Store as Store>::Context as Context>::Error>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut sender = builder
@@ -464,7 +484,8 @@ async fn test_dynamo_db_rotate_key_pair() -> Result<(), anyhow::Error> {
 async fn run_test_rotate_key_pair<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
-    Error: From<<B::Store as Store>::Error>,
+    Error:
+        From<<B::Store as Store>::Error> + From<<<B::Store as Store>::Context as Context>::Error>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut sender = builder
@@ -517,7 +538,8 @@ async fn test_dynamo_db_transfer_ownership() -> Result<(), anyhow::Error> {
 async fn run_test_transfer_ownership<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
-    Error: From<<B::Store as Store>::Error>,
+    Error:
+        From<<B::Store as Store>::Error> + From<<<B::Store as Store>::Context as Context>::Error>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut sender = builder
@@ -571,18 +593,28 @@ async fn test_dynamo_db_share_ownership() -> Result<(), anyhow::Error> {
 async fn run_test_share_ownership<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
-    Error: From<<B::Store as Store>::Error>,
+    Error:
+        From<<B::Store as Store>::Error> + From<<<B::Store as Store>::Context as Context>::Error>,
 {
+    dbg!(1);
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
+    dbg!(2);
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await?;
+    dbg!(5);
     let new_key_pair = KeyPair::generate();
+    dbg!(6);
     let new_owner = Owner(new_key_pair.public());
+    dbg!(7);
     let certificate = sender.share_ownership(new_owner).await.unwrap();
+    dbg!(8);
     assert_eq!(sender.next_block_height, BlockHeight::from(1));
+    dbg!(9);
     assert!(sender.pending_block.is_none());
+    dbg!(10);
     assert!(sender.key_pair().await.is_ok());
+    dbg!(11);
     assert_eq!(
         builder
             .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(0), 3)
@@ -591,18 +623,25 @@ where
             .value,
         certificate.value
     );
+    dbg!(19);
     assert_eq!(sender.local_balance().await.unwrap(), Balance::from(4));
+    dbg!(20);
     assert_eq!(
         sender.synchronize_balance().await.unwrap(),
         Balance::from(4)
     );
+    dbg!(24);
     // Can still use the chain with the old client.
+    dbg!(25);
     sender
         .transfer_to_chain(Amount::from(3), ChainId::root(2), UserData::default())
         .await
         .unwrap();
+    dbg!(29);
     assert_eq!(sender.next_block_height, BlockHeight::from(2));
+    dbg!(30);
     // Make a client to try the new key.
+    dbg!(31);
     let mut client = builder
         .make_client(
             sender.chain_id,
@@ -611,18 +650,25 @@ where
             BlockHeight::from(2),
         )
         .await?;
+    dbg!(39);
     // Local balance fails because the client has block height 2 but we haven't downloaded
+    dbg!(40);
     // the blocks yet.
+    dbg!(41);
     assert!(client.local_balance().await.is_err());
+    dbg!(42);
     assert_eq!(
         client.synchronize_balance().await.unwrap(),
         Balance::from(1)
     );
+    dbg!(46);
     assert_eq!(client.local_balance().await.unwrap(), Balance::from(1));
+    dbg!(47);
     client
         .transfer_to_chain(Amount::from(1), ChainId::root(3), UserData::default())
         .await
         .unwrap();
+    dbg!(51);
     Ok(())
 }
 
@@ -646,7 +692,8 @@ async fn test_dynamo_db_open_chain_then_close_it() -> Result<(), anyhow::Error> 
 async fn run_test_open_chain_then_close_it<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
-    Error: From<<B::Store as Store>::Error>,
+    Error:
+        From<<B::Store as Store>::Error> + From<<<B::Store as Store>::Context as Context>::Error>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     // New chains use the admin chain to verify their creation certificate.
@@ -700,7 +747,8 @@ async fn test_dynamo_db_transfer_then_open_chain() -> Result<(), anyhow::Error> 
 async fn run_test_transfer_then_open_chain<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
-    Error: From<<B::Store as Store>::Error>,
+    Error:
+        From<<B::Store as Store>::Error> + From<<<B::Store as Store>::Context as Context>::Error>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     // New chains use the admin chain to verify their creation certificate.
@@ -775,7 +823,8 @@ async fn test_dynamo_db_open_chain_then_transfer() -> Result<(), anyhow::Error> 
 async fn run_test_open_chain_then_transfer<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
-    Error: From<<B::Store as Store>::Error>,
+    Error:
+        From<<B::Store as Store>::Error> + From<<<B::Store as Store>::Context as Context>::Error>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     // New chains use the admin chain to verify their creation certificate.
@@ -840,7 +889,8 @@ async fn test_dynamo_db_close_chain() -> Result<(), anyhow::Error> {
 async fn run_test_close_chain<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
-    Error: From<<B::Store as Store>::Error>,
+    Error:
+        From<<B::Store as Store>::Error> + From<<<B::Store as Store>::Context as Context>::Error>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut sender = builder
@@ -898,7 +948,8 @@ async fn run_test_initiating_valid_transfer_too_many_faults<B>(
 ) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
-    Error: From<<B::Store as Store>::Error>,
+    Error:
+        From<<B::Store as Store>::Error> + From<<<B::Store as Store>::Context as Context>::Error>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 2).await?;
     let mut sender = builder
@@ -938,7 +989,8 @@ async fn test_dynamo_db_bidirectional_transfer() -> Result<(), anyhow::Error> {
 async fn run_test_bidirectional_transfer<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
-    Error: From<<B::Store as Store>::Error>,
+    Error:
+        From<<B::Store as Store>::Error> + From<<<B::Store as Store>::Context as Context>::Error>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut client1 = builder
@@ -1011,7 +1063,8 @@ async fn test_dynamo_db_receiving_unconfirmed_transfer() -> Result<(), anyhow::E
 async fn run_test_receiving_unconfirmed_transfer<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
-    Error: From<<B::Store as Store>::Error>,
+    Error:
+        From<<B::Store as Store>::Error> + From<<<B::Store as Store>::Context as Context>::Error>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut client1 = builder
@@ -1070,7 +1123,8 @@ async fn run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances<B>
 ) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
-    Error: From<<B::Store as Store>::Error>,
+    Error:
+        From<<B::Store as Store>::Error> + From<<<B::Store as Store>::Context as Context>::Error>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut client1 = builder
@@ -1167,7 +1221,8 @@ async fn test_dynamo_db_change_voting_rights() -> Result<(), anyhow::Error> {
 async fn run_test_change_voting_rights<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
-    Error: From<<B::Store as Store>::Error>,
+    Error:
+        From<<B::Store as Store>::Error> + From<<<B::Store as Store>::Context as Context>::Error>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut admin = builder

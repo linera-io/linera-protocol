@@ -19,6 +19,7 @@ use linera_base::{
     system::{Address, Amount, Balance, SystemExecutionState, SystemOperation, UserData},
 };
 use linera_storage2::Store;
+use linera_views::views::Context;
 use std::{
     collections::{BTreeMap, HashMap},
     time::Duration,
@@ -213,7 +214,7 @@ where
     P: ValidatorNodeProvider,
     P::Node: ValidatorNode + Send + Sync + 'static + Clone,
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    Error: From<S::Error> + From<<<S as Store>::Context as Context>::Error>,
 {
     async fn chain_info(&mut self) -> Result<ChainInfo, Error> {
         let query = ChainInfoQuery::new(self.chain_id);
@@ -352,7 +353,7 @@ where
     P: ValidatorNodeProvider + Send + 'static,
     P::Node: ValidatorNode + Send + Sync + 'static + Clone,
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    Error: From<S::Error> + From<<<S as Store>::Context as Context>::Error>,
 {
     /// Prepare the chain for the next operation.
     async fn prepare_chain(&mut self) -> Result<(), Error> {
@@ -400,10 +401,14 @@ where
         chain_id: ChainId,
         action: CommunicateAction,
     ) -> Result<Option<Certificate>> {
+        dbg!("communicate_chain_updates");
         let storage_client = self.node_client.storage_client().await;
+        dbg!("storage_client ok");
         let cross_chain_delay = self.cross_chain_delay;
         let cross_chain_retries = self.cross_chain_retries;
+        dbg!("make_validator_nodes");
         let nodes = self.make_validator_nodes(committee)?;
+        dbg!("communicate_with_quorum");
         let result = communicate_with_quorum(
             &nodes,
             committee,
@@ -421,10 +426,16 @@ where
                     retries: cross_chain_retries,
                 };
                 let action = action.clone();
-                Box::pin(async move { updater.send_chain_update(chain_id, action).await })
+                Box::pin(async move {
+                    dbg!("send_chain_update");
+                    let ret = updater.send_chain_update(chain_id, action).await;
+                    dbg!("send_chain_update ok");
+                    ret
+                })
             },
         )
         .await;
+        dbg!("communicated");
         let (effects_and_state_hash, votes): (Option<_>, Vec<_>) = match result {
             Ok(content) => content,
             Err(Some(Error::InactiveChain(id)))
@@ -748,10 +759,12 @@ where
             key_pair,
         );
         // Try to execute the block locally first.
+        dbg!("Execute locally");
         self.node_client
             .handle_block_proposal(proposal.clone())
             .await?;
         // Send the query to validators.
+        dbg!("Send query");
         let committee = self.committee().await?;
         let final_certificate = match self.chain_info().await?.manager {
             ChainManager::Multi(_) => {
@@ -788,34 +801,42 @@ where
             }
             ChainManager::None => unreachable!("chain is active"),
         };
+        dbg!("Sent query");
         // By now the block should be final.
         ensure!(
             final_certificate.value.confirmed_block() == Some(&proposal.content.block),
             "A different operation was executed in parallel (consider retrying the operation)"
         );
+        dbg!("Process certificate");
         self.process_certificate(final_certificate.clone()).await?;
+        dbg!("Processed");
         self.pending_block = None;
         // Communicate the new certificate now if needed.
         if with_confirmation {
+            dbg!("Communicate chani updates");
             self.communicate_chain_updates(
                 &committee,
                 self.chain_id,
                 CommunicateAction::AdvanceToNextBlockHeight(self.next_block_height),
             )
             .await?;
+            dbg!("Communicated chani updates");
             if let Ok(new_committee) = self.committee().await {
                 if new_committee != committee {
                     // If the configuration just changed, communicate to the new committee as well.
                     // (This is actually more important that updating the previous committee.)
+                    dbg!("Again");
                     self.communicate_chain_updates(
                         &new_committee,
                         self.chain_id,
                         CommunicateAction::AdvanceToNextBlockHeight(self.next_block_height),
                     )
                     .await?;
+                    dbg!("Done");
                 }
             }
         }
+        dbg!("Fini");
         Ok(final_certificate)
     }
 }
@@ -826,7 +847,7 @@ where
     P: ValidatorNodeProvider + Send + 'static,
     P::Node: ValidatorNode + Send + Sync + 'static + Clone,
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    Error: From<S::Error> + From<<<S as Store>::Context as Context>::Error>,
 {
     async fn local_balance(&mut self) -> Result<Balance> {
         ensure!(
@@ -948,8 +969,11 @@ where
     }
 
     async fn share_ownership(&mut self, new_owner: Owner) -> Result<Certificate> {
+        dbg!("prepare");
         self.prepare_chain().await?;
+        dbg!("identity");
         let owner = self.identity().await?;
+        dbg!("block");
         let block = Block {
             epoch: self.epoch().await?,
             chain_id: self.chain_id,
@@ -963,9 +987,11 @@ where
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
         };
+        dbg!("certificate");
         let certificate = self
             .propose_block(block, /* with_confirmation */ true)
             .await?;
+        dbg!("ok");
         Ok(certificate)
     }
 

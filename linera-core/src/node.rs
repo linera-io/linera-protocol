@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use futures::lock::Mutex;
 use linera_base::{error::Error, manager::ChainManager, messages::*};
 use linera_storage2::Store;
+use linera_views::views::Context;
 use rand::prelude::SliceRandom;
 use std::sync::Arc;
 
@@ -44,7 +45,7 @@ pub struct LocalNodeClient<S>(Arc<Mutex<LocalNode<S>>>);
 impl<S> ValidatorNode for LocalNodeClient<S>
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    Error: From<S::Error> + From<<<S as Store>::Context as Context>::Error>,
 {
     async fn handle_block_proposal(
         &mut self,
@@ -99,7 +100,7 @@ where
 impl<S> LocalNodeClient<S>
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    Error: From<S::Error> + From<<<S as Store>::Context as Context>::Error>,
 {
     pub(crate) async fn stage_block_execution(
         &self,

@@ -862,8 +862,8 @@ where
             .expect("Attempt to rollback a `SharedCollectionView` while an entry was still locked");
     }
 
-    async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        for (index, update) in self.updates {
+    async fn commit_and_reset(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+        for (index, update) in mem::take(&mut self.updates) {
             match update.lock().await.take() {
                 Some(view) => {
                     view.commit(batch).await?;
@@ -981,7 +981,12 @@ where
 }
 
 /// An active entry inside a [`SharedCollectionView`].
-pub struct SharedCollectionEntry<Context, Index, Entry> {
+pub struct SharedCollectionEntry<Context, Index, Entry>
+where
+    Context: CollectionOperations<Index>,
+    Index: Debug,
+    Entry: View<Context>,
+{
     context: Context,
     index: Index,
     entry: OwnedMutexGuard<Option<Entry>>,
@@ -990,8 +995,8 @@ pub struct SharedCollectionEntry<Context, Index, Entry> {
 impl<Context, Index, Entry> SharedCollectionEntry<Context, Index, Entry>
 where
     Context: CollectionOperations<Index>,
-    Entry: View<Context>,
-    Index: Debug,
+    Index: Clone + Debug,
+    Entry: View<Context> + Send,
 {
     /// The index of this entry.
     pub fn index(&self) -> &Index {
@@ -1001,19 +1006,24 @@ where
     /// Commit this entry.
     pub async fn commit(mut self, batch: &mut Context::Batch) -> Result<(), Context::Error> {
         // dbg!(format!("Committing entry: {:?}", &self.index));
-        if let Some(entry) = self.entry.take() {
-            entry.commit(batch).await?;
+        if let Some(entry) = self.entry.as_mut() {
+            entry.commit_and_reset(batch).await?;
             let entry_context = self.context.clone_with_scope(&self.index);
-            self.context.add_index(batch, self.index).await?;
+            self.context.add_index(batch, self.index.clone()).await?;
             *self.entry = Some(Entry::load(entry_context).await?);
         } else {
-            self.context.remove_index(batch, self.index).await?;
+            self.context.remove_index(batch, self.index.clone()).await?;
         }
         Ok(())
     }
 }
 
-impl<Context, Index, Entry> Deref for SharedCollectionEntry<Context, Index, Entry> {
+impl<Context, Index, Entry> Deref for SharedCollectionEntry<Context, Index, Entry>
+where
+    Context: CollectionOperations<Index>,
+    Index: Debug,
+    Entry: View<Context>,
+{
     type Target = Entry;
 
     fn deref(&self) -> &Self::Target {
@@ -1023,10 +1033,29 @@ impl<Context, Index, Entry> Deref for SharedCollectionEntry<Context, Index, Entr
     }
 }
 
-impl<Context, Index, Entry> DerefMut for SharedCollectionEntry<Context, Index, Entry> {
+impl<Context, Index, Entry> DerefMut for SharedCollectionEntry<Context, Index, Entry>
+where
+    Context: CollectionOperations<Index>,
+    Index: Debug,
+    Entry: View<Context>,
+{
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.entry
             .as_mut()
             .expect("Created a SharedCollectionEntry for a removed entry")
+    }
+}
+
+impl<Context, Index, Entry> Drop for SharedCollectionEntry<Context, Index, Entry>
+where
+    Context: CollectionOperations<Index>,
+    Index: Debug,
+    Entry: View<Context>,
+{
+    fn drop(&mut self) {
+        dbg!(format!("Dropping entry: {:?}", &self.index));
+        if let Some(entry) = self.entry.as_mut() {
+            entry.rollback();
+        }
     }
 }

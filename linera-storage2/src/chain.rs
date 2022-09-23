@@ -161,20 +161,28 @@ pub struct Event {
     pub effect: Effect,
 }
 
-pub struct ChainStateView<C>(SharedCollectionEntry<C, ChainId, InnerChainStateView<C>>);
+pub struct ChainStateView<C>(SharedCollectionEntry<C, ChainId, InnerChainStateView<C>>)
+where
+    C: InnerChainStateViewContext;
 
 pub trait ChainStateViewContext: InnerChainStateViewContext {}
 
 impl<AllContexts> ChainStateViewContext for AllContexts where AllContexts: InnerChainStateViewContext
 {}
 
-impl<C> From<SharedCollectionEntry<C, ChainId, InnerChainStateView<C>>> for ChainStateView<C> {
+impl<C> From<SharedCollectionEntry<C, ChainId, InnerChainStateView<C>>> for ChainStateView<C>
+where
+    C: InnerChainStateViewContext,
+{
     fn from(entry: SharedCollectionEntry<C, ChainId, InnerChainStateView<C>>) -> Self {
         ChainStateView(entry)
     }
 }
 
-impl<C> Deref for ChainStateView<C> {
+impl<C> Deref for ChainStateView<C>
+where
+    C: InnerChainStateViewContext,
+{
     type Target = InnerChainStateView<C>;
 
     fn deref(&self) -> &Self::Target {
@@ -182,7 +190,10 @@ impl<C> Deref for ChainStateView<C> {
     }
 }
 
-impl<C> DerefMut for ChainStateView<C> {
+impl<C> DerefMut for ChainStateView<C>
+where
+    C: InnerChainStateViewContext,
+{
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.0.deref_mut()
     }
