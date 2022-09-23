@@ -349,12 +349,10 @@ where
     pub async fn get(&mut self, index: usize) -> Result<Option<T>, C::Error> {
         if self.need_delete {
             Ok(self.new_values.get(index).cloned())
+        } else if index < self.stored_count {
+            self.context.get(index).await
         } else {
-            if index < self.stored_count {
-                self.context.get(index).await
-            } else {
-                Ok(self.new_values.get(index - self.stored_count).cloned())
-            }
+            Ok(self.new_values.get(index - self.stored_count).cloned())
         }
     }
 
@@ -751,7 +749,6 @@ pub enum CollectionViewEntry<W> {
     Replaced(W),
 }
 
-
 /// A view that supports accessing a collection of views of the same kind, indexed by a
 /// key.
 #[derive(Debug, Clone)]
@@ -845,7 +842,6 @@ where
     I: Eq + Ord + Sync + Clone + Send + Debug,
     W: View<C>,
 {
-
     /// Obtain a subview for the data at the given index in the collection. Return an
     /// error if `remove_entry` was used earlier on this index from the same [`CollectionView`].
     pub async fn load_entry(&mut self, index: I) -> Result<&mut W, C::Error> {

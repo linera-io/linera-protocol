@@ -400,11 +400,6 @@ async fn test_removal_api() -> anyhow::Result<()> {
     Ok(())
 }
 
-
-
-
-
-
 #[tokio::test]
 async fn test_views_in_memory() {
     let mut store = MemoryTestStore::default();
