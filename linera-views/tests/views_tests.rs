@@ -31,15 +31,18 @@ pub struct StateView<C> {
     pub collection: ScopedView<5, CollectionView<C, String, AppendOnlyLogView<C, u32>>>,
     pub collection2:
         ScopedView<6, CollectionView<C, String, CollectionView<C, String, RegisterView<C, u32>>>>,
+    pub collection3: ScopedView<7, CollectionView<C, String, QueueView<C, u64>>>,
 }
 
 // This also generates `trait StateViewContext: Context ... {}`
-impl_view!(StateView { x1, x2, log, map, queue, collection, collection2 };
+impl_view!(StateView { x1, x2, log, map, queue, collection, collection2, collection3 };
            RegisterOperations<u64>,
            RegisterOperations<u32>,
            AppendOnlyLogOperations<u32>,
            MapOperations<String, usize>,
            QueueOperations<u64>,
+           CollectionOperations<String>,
+           CollectionOperations<String>,
            CollectionOperations<String>
 );
 
@@ -262,6 +265,8 @@ where
         view.queue.delete_front();
         assert_eq!(view.queue.front().await.unwrap(), None);
         assert_eq!(view.queue.count(), 0);
+        view.queue.push_back(13);
+        view.queue.push_back(14);
         assert_eq!(view.map.get(&"Hello".to_string()).await.unwrap(), Some(5));
         assert_eq!(view.map.get(&"Hi".to_string()).await.unwrap(), None);
         {
@@ -389,6 +394,11 @@ async fn test_removal_api() -> anyhow::Result<()> {
     test_case(false, false).await?;
     Ok(())
 }
+
+
+
+
+
 
 #[tokio::test]
 async fn test_views_in_memory() {

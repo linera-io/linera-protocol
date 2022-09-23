@@ -328,7 +328,11 @@ where
 
     /// Read the size of the log.
     pub fn count(&self) -> usize {
-        self.stored_count + self.new_values.len()
+        if self.need_delete {
+            self.new_values.len()
+        } else {
+            self.stored_count + self.new_values.len()
+        }
     }
 
     pub fn extra(&self) -> &C::Extra {
@@ -343,15 +347,24 @@ where
 {
     /// Read the logged values in the given range (including staged ones).
     pub async fn get(&mut self, index: usize) -> Result<Option<T>, C::Error> {
-        if index < self.stored_count {
-            self.context.get(index).await
+        if self.need_delete {
+            Ok(self.new_values.get(index).cloned())
         } else {
-            Ok(self.new_values.get(index - self.stored_count).cloned())
+            if index < self.stored_count {
+                self.context.get(index).await
+            } else {
+                Ok(self.new_values.get(index - self.stored_count).cloned())
+            }
         }
     }
 
     /// Read the logged values in the given range (including staged ones).
     pub async fn read(&mut self, mut range: Range<usize>) -> Result<Vec<T>, C::Error> {
+        let stored_count_eff = if self.need_delete {
+            0
+        } else {
+            self.stored_count
+        };
         if range.end > self.count() {
             range.end = self.count();
         }
@@ -360,16 +373,16 @@ where
         }
         let mut values = Vec::new();
         values.reserve(range.end - range.start);
-        if range.start < self.stored_count {
-            if range.end <= self.stored_count {
+        if range.start < stored_count_eff {
+            if range.end <= stored_count_eff {
                 values.extend(self.context.read(range.start..range.end).await?);
             } else {
-                values.extend(self.context.read(range.start..self.stored_count).await?);
-                values.extend(self.new_values[0..(range.end - self.stored_count)].to_vec());
+                values.extend(self.context.read(range.start..stored_count_eff).await?);
+                values.extend(self.new_values[0..(range.end - stored_count_eff)].to_vec());
             }
         } else {
             values.extend(
-                self.new_values[(range.start - self.stored_count)..(range.end - self.stored_count)]
+                self.new_values[(range.start - stored_count_eff)..(range.end - stored_count_eff)]
                     .to_vec(),
             );
         }
