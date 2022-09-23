@@ -35,7 +35,7 @@ impl RocksdbStore {
     pub async fn new(dir: PathBuf) -> Result<Self, RocksdbViewError> {
         let mut options = rocksdb::Options::default();
         options.create_if_missing(true);
-        let db = Arc::new(rocksdb::DB::open(&options, dir).unwrap());
+        let db = Arc::new(DB::open(&options, dir).unwrap());
         let dummy_lock = Arc::new(Mutex::new(()));
         let context = RocksdbContext::new(db.clone(), dummy_lock.lock_owned().await, vec![]);
         let storage = StorageView::load(context).await?;

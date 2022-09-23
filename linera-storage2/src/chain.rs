@@ -19,7 +19,7 @@ use linera_views::{
     views::{
         AppendOnlyLogOperations, AppendOnlyLogView, CollectionOperations, CollectionView,
         MapOperations, MapView, QueueOperations, QueueView, RegisterOperations, RegisterView,
-        ScopedView, SharedCollectionEntry, View,
+        ScopedView, SharedCollectionEntry,
     },
 };
 use serde::{Deserialize, Serialize};

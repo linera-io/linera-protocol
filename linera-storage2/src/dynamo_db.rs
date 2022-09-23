@@ -9,13 +9,11 @@ use linera_base::{
     messages::{Certificate, ChainId},
 };
 use linera_views::{
-    dynamo_db::{
-        Config, CreateTableError, DynamoDbContext, DynamoDbContextError, LocalStackError,
-        TableName, TableStatus,
-    },
+    dynamo_db::{self, Config, DynamoDbContext, DynamoDbContextError, TableName, TableStatus},
     views::View,
 };
 use std::sync::Arc;
+use thiserror::Error;
 use tokio::sync::{Mutex, OwnedMutexGuard};
 
 struct DynamoDbStore {
@@ -26,14 +24,14 @@ struct DynamoDbStore {
 pub struct DynamoDbStoreClient(Arc<Mutex<DynamoDbStore>>);
 
 impl DynamoDbStoreClient {
-    pub async fn new(table: TableName) -> Result<(Self, TableStatus), CreateTableError> {
+    pub async fn new(table: TableName) -> Result<(Self, TableStatus), CreateStoreError> {
         Self::with_store(DynamoDbStore::new(table)).await
     }
 
     pub async fn from_config(
         config: impl Into<Config>,
         table: TableName,
-    ) -> Result<(Self, TableStatus), CreateTableError> {
+    ) -> Result<(Self, TableStatus), CreateStoreError> {
         let (store, table_status) = DynamoDbStore::from_config(config.into(), table).await?;
         let client = DynamoDbStoreClient(Arc::new(Mutex::new(store)));
         Ok((client, table_status))
@@ -55,14 +53,14 @@ impl DynamoDbStoreClient {
 }
 
 impl DynamoDbStore {
-    pub async fn new(table: TableName) -> Result<(Self, TableStatus), CreateTableError> {
+    pub async fn new(table: TableName) -> Result<(Self, TableStatus), CreateStoreError> {
         Self::with_context(|lock, key_prefix| DynamoDbContext::new(table, lock, key_prefix)).await
     }
 
     pub async fn from_config(
         config: Config,
         table: TableName,
-    ) -> Result<(Self, TableStatus), CreateTableError> {
+    ) -> Result<(Self, TableStatus), CreateStoreError> {
         Self::with_context(|lock, key_prefix| {
             DynamoDbContext::from_config(config, table, lock, key_prefix)
         })
@@ -76,11 +74,12 @@ impl DynamoDbStore {
         .await
     }
 
-    async fn with_context<F, E>(
+    async fn with_context<F, CreateContextError, StoreError>(
         create_context: impl FnOnce(OwnedMutexGuard<()>, Vec<u8>) -> F,
-    ) -> Result<(Self, TableStatus), E>
+    ) -> Result<(Self, TableStatus), StoreError>
     where
-        F: Future<Output = Result<(DynamoDbContext, TableStatus), E>>,
+        F: Future<Output = Result<(DynamoDbContext, TableStatus), CreateContextError>>,
+        StoreError: From<DynamoDbContextError> + From<CreateContextError>,
     {
         let dummy_lock = Arc::new(Mutex::new(())).lock_owned().await;
         let empty_prefix = vec![];
@@ -125,4 +124,24 @@ impl Store for DynamoDbStoreClient {
             .write_certificate(certificate)
             .await
     }
+}
+
+/// Error when creating a [`DynamoDbStore`] instance using a LocalStack instance.
+#[derive(Debug, Error)]
+pub enum LocalStackError {
+    #[error(transparent)]
+    Create(#[from] dynamo_db::LocalStackError),
+
+    #[error("Failed to load storage information")]
+    Load(#[from] DynamoDbContextError),
+}
+
+/// Error when creating a [`DynamoDbStore`] instance.
+#[derive(Debug, Error)]
+pub enum CreateStoreError {
+    #[error(transparent)]
+    Create(#[from] dynamo_db::CreateTableError),
+
+    #[error("Failed to load storage information")]
+    Load(#[from] DynamoDbContextError),
 }
