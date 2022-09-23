@@ -458,6 +458,7 @@ where
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, Error> {
         log::trace!("{} <-- {:?}", self.nickname, query);
+        dbg!("worker:461");
         let mut chain = self.storage.load_chain(query.chain_id).await?;
         let mut info = chain.make_chain_info(None).info;
         if query.request_system_execution_state {
@@ -553,6 +554,7 @@ where
                 recipient,
                 certificates,
             } => {
+                dbg!("worker:558");
                 let mut chain = self.storage.load_chain(recipient).await?;
                 let mut last_height = None;
                 let mut last_epoch = None;
@@ -654,6 +656,7 @@ where
                 recipient,
                 height,
             } => {
+                dbg!("worker:659");
                 let mut chain = self.storage.load_chain(chain_id).await?;
                 if chain
                     .mark_outbox_messages_as_received(application_id, recipient, height)
@@ -673,6 +676,7 @@ where
                 recipient,
                 height,
             } => {
+                dbg!("worker:679");
                 let mut chain = self.storage.load_chain(chain_id).await?;
                 if chain
                     .mark_channel_messages_as_received(&name, application_id, recipient, height)

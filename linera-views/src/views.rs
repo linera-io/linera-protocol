@@ -911,6 +911,7 @@ where
         &mut self,
         index: I,
     ) -> Result<SharedCollectionEntry<C, I, W>, C::Error> {
+        dbg!(format!("Loading entry: {index:?}"));
         let entry = match self.updates.entry(index.clone()) {
             btree_map::Entry::Occupied(entry) => entry.into_mut(),
             btree_map::Entry::Vacant(entry) => {
@@ -999,7 +1000,7 @@ where
 
     /// Commit this entry.
     pub async fn commit(mut self, batch: &mut Context::Batch) -> Result<(), Context::Error> {
-        dbg!(format!("Committing entry: {:?}", &self.index));
+        // dbg!(format!("Committing entry: {:?}", &self.index));
         if let Some(entry) = self.entry.take() {
             entry.commit(batch).await?;
             let entry_context = self.context.clone_with_scope(&self.index);

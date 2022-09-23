@@ -168,6 +168,7 @@ where
                 Ok(response) => {
                     response.check(self.name)?;
                     // Obtain the chain description from our local node.
+                    dbg!("updater:171");
                     let description = self
                         .store
                         .load_chain(chain_id)
@@ -200,6 +201,7 @@ where
             // Obtain chain state.
             let range = usize::from(initial_block_height)..usize::from(target_block_height);
             if !range.is_empty() {
+                dbg!("updater:204");
                 let mut chain = self.store.load_chain(chain_id).await?;
                 // Send the requested certificates in order.
                 let keys = chain.confirmed_log.read(range).await?;
@@ -218,6 +220,7 @@ where
     ) -> Result<(), Error> {
         let mut info = Vec::new();
         {
+            dbg!("updater:223");
             let mut chain = self.store.load_chain(chain_id).await?;
             for id in chain.communication_states.indices().await? {
                 let mut state = chain.communication_states.load_entry(id).await?;
