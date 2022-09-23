@@ -133,3 +133,24 @@ where
         Ok(hasher.finalize())
     }
 }
+
+#[async_trait]
+impl<C, I, W> HashView<C> for SharedCollectionView<C, I, W>
+where
+    C: HashingContext + CollectionOperations<I> + Clone + Send,
+    I: Eq + Ord + Clone + Debug + Send + Sync + Serialize + 'static,
+    W: HashView<C> + Send + 'static,
+{
+    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, C::Error> {
+        let mut hasher = C::Hasher::default();
+        let indices = self.indices().await?;
+        hasher.update_with_bcs_bytes(&indices.len())?;
+        for index in indices {
+            hasher.update_with_bcs_bytes(&index)?;
+            let mut view = self.load_entry(index).await?;
+            let hash = view.hash().await?;
+            hasher.write_all(hash.as_ref())?;
+        }
+        Ok(hasher.finalize())
+    }
+}

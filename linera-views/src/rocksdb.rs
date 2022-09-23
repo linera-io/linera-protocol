@@ -18,11 +18,10 @@ pub type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
 
 /// An implementation of [`crate::views::Context`] based on Rocksdb
 #[derive(Debug, Clone)]
-pub struct RocksdbContext<E> {
+pub struct RocksdbContext {
     db: Arc<DB>,
     lock: Arc<OwnedMutexGuard<()>>,
     base_key: Vec<u8>,
-    extra: E,
 }
 
 /// Low-level, asynchronous key-value operations. Useful for storage APIs not based on views.
@@ -137,13 +136,12 @@ impl<'a> WriteOperations for rocksdb::WriteBatchWithTransaction<false> {
     }
 }
 
-impl<E> RocksdbContext<E> {
-    pub fn new(db: Arc<DB>, lock: OwnedMutexGuard<()>, base_key: Vec<u8>, extra: E) -> Self {
+impl RocksdbContext {
+    pub fn new(db: Arc<DB>, lock: OwnedMutexGuard<()>, base_key: Vec<u8>) -> Self {
         Self {
             db,
             lock: Arc::new(lock),
             base_key,
-            extra,
         }
     }
 
@@ -177,17 +175,9 @@ impl std::ops::DerefMut for MyBatch {
 unsafe impl Sync for MyBatch {}
 
 #[async_trait]
-impl<E> Context for RocksdbContext<E>
-where
-    E: Clone + Send + Sync,
-{
+impl Context for RocksdbContext {
     type Batch = MyBatch;
-    type Extra = E;
     type Error = RocksdbViewError;
-
-    fn extra(&self) -> &E {
-        &self.extra
-    }
 
     async fn run_with_batch<F>(&self, builder: F) -> Result<(), Self::Error>
     where
@@ -204,25 +194,20 @@ where
 }
 
 #[async_trait]
-impl<E> ScopedOperations for RocksdbContext<E>
-where
-    E: Clone + Send + Sync,
-{
+impl ScopedOperations for RocksdbContext {
     fn clone_with_scope(&self, index: u64) -> Self {
         Self {
             db: self.db.clone(),
             lock: self.lock.clone(),
             base_key: self.derive_key(&index),
-            extra: self.extra.clone(),
         }
     }
 }
 
 #[async_trait]
-impl<E, T> RegisterOperations<T> for RocksdbContext<E>
+impl<T> RegisterOperations<T> for RocksdbContext
 where
     T: Default + Serialize + DeserializeOwned + Send + Sync + 'static,
-    E: Clone + Send + Sync,
 {
     async fn get(&mut self) -> Result<T, RocksdbViewError> {
         let value = self.db.read_key(&self.base_key).await?.unwrap_or_default();
@@ -241,10 +226,9 @@ where
 }
 
 #[async_trait]
-impl<E, T> AppendOnlyLogOperations<T> for RocksdbContext<E>
+impl<T> AppendOnlyLogOperations<T> for RocksdbContext
 where
     T: Serialize + DeserializeOwned + Send + Sync + 'static,
-    E: Clone + Send + Sync,
 {
     async fn count(&mut self) -> Result<usize, RocksdbViewError> {
         let count = self.db.read_key(&self.base_key).await?.unwrap_or_default();
@@ -302,10 +286,9 @@ where
 }
 
 #[async_trait]
-impl<E, T> QueueOperations<T> for RocksdbContext<E>
+impl<T> QueueOperations<T> for RocksdbContext
 where
     T: Serialize + DeserializeOwned + Send + Sync + 'static,
-    E: Clone + Send + Sync,
 {
     async fn indices(&mut self) -> Result<Range<usize>, Self::Error> {
         let range = self.db.read_key(&self.base_key).await?.unwrap_or_default();
@@ -379,11 +362,10 @@ where
 }
 
 #[async_trait]
-impl<E, I, V> MapOperations<I, V> for RocksdbContext<E>
+impl<I, V> MapOperations<I, V> for RocksdbContext
 where
     I: Eq + Ord + Send + Sync + Serialize + DeserializeOwned + Clone + 'static,
     V: Serialize + DeserializeOwned + Send + Sync + 'static,
-    E: Clone + Send + Sync,
 {
     async fn get(&mut self, index: &I) -> Result<Option<V>, RocksdbViewError> {
         Ok(self.db.read_key(&self.derive_key(index)).await?)
@@ -428,17 +410,15 @@ enum CollectionKey<I> {
 }
 
 #[async_trait]
-impl<E, I> CollectionOperations<I> for RocksdbContext<E>
+impl<I> CollectionOperations<I> for RocksdbContext
 where
     I: serde::Serialize + serde::de::DeserializeOwned + Send + Sync + 'static,
-    E: Clone + Send + Sync,
 {
     fn clone_with_scope(&self, index: &I) -> Self {
         Self {
             db: self.db.clone(),
             lock: self.lock.clone(),
             base_key: self.derive_key(&CollectionKey::Subview(index)),
-            extra: self.extra.clone(),
         }
     }
 
@@ -472,10 +452,7 @@ where
     }
 }
 
-impl<E> HashingContext for RocksdbContext<E>
-where
-    E: Clone + Send + Sync,
-{
+impl HashingContext for RocksdbContext {
     type Hasher = sha2::Sha512;
 }
 

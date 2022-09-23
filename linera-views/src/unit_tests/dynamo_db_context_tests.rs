@@ -20,7 +20,6 @@ async fn table_is_created() -> Result<(), Error> {
         table.clone(),
         dummy_lock().await,
         vec![],
-        (),
     )
     .await?;
 
@@ -49,7 +48,6 @@ async fn separate_tables_are_created() -> Result<(), Error> {
         first_table.clone(),
         dummy_lock().await,
         vec![],
-        (),
     )
     .await?;
     let (_storage, second_table_status) = DynamoDbContext::from_config(
@@ -57,7 +55,6 @@ async fn separate_tables_are_created() -> Result<(), Error> {
         second_table.clone(),
         dummy_lock().await,
         vec![],
-        (),
     )
     .await?;
 

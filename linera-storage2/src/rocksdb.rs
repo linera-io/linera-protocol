@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{chain::ChainStateView, Store};
+use crate::{chain::ChainStateView, view::StorageView, Store};
 use async_trait::async_trait;
 use linera_base::{
     crypto::HashValue,
@@ -12,32 +12,34 @@ use linera_views::{
     views::View,
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc};
 use tokio::sync::Mutex;
 
 struct RocksdbStore {
     db: Arc<DB>,
-    locks: HashMap<ChainId, Arc<Mutex<()>>>,
+    storage: StorageView<RocksdbContext>,
 }
 
 #[derive(Clone)]
 pub struct RocksdbStoreClient(Arc<Mutex<RocksdbStore>>);
 
 impl RocksdbStoreClient {
-    pub fn new(path: PathBuf) -> Self {
-        RocksdbStoreClient(Arc::new(Mutex::new(RocksdbStore::new(path))))
+    pub async fn new(path: PathBuf) -> Result<Self, RocksdbViewError> {
+        Ok(RocksdbStoreClient(Arc::new(Mutex::new(
+            RocksdbStore::new(path).await?,
+        ))))
     }
 }
 
 impl RocksdbStore {
-    pub fn new(dir: PathBuf) -> Self {
+    pub async fn new(dir: PathBuf) -> Result<Self, RocksdbViewError> {
         let mut options = rocksdb::Options::default();
         options.create_if_missing(true);
-        let db = DB::open(&options, dir).unwrap();
-        Self {
-            db: Arc::new(db),
-            locks: HashMap::new(),
-        }
+        let db = Arc::new(rocksdb::DB::open(&options, dir).unwrap());
+        let dummy_lock = Arc::new(Mutex::new(()));
+        let context = RocksdbContext::new(db.clone(), dummy_lock.lock_owned().await, vec![]);
+        let storage = StorageView::load(context).await?;
+        Ok(Self { db, storage })
     }
 }
 
@@ -49,30 +51,14 @@ enum BaseKey {
 
 #[async_trait]
 impl Store for RocksdbStoreClient {
-    type Context = RocksdbContext<ChainId>;
+    type Context = RocksdbContext;
     type Error = RocksdbViewError;
 
     async fn load_chain(
         &self,
         id: ChainId,
     ) -> Result<ChainStateView<Self::Context>, RocksdbViewError> {
-        let (db, lock) = {
-            let store = self.0.clone();
-            let mut store = store.lock().await;
-            // FIXME: we are never cleaning up locks.
-            (
-                store.db.clone(),
-                store
-                    .locks
-                    .entry(id)
-                    .or_insert_with(|| Arc::new(Mutex::new(())))
-                    .clone(),
-            )
-        };
-        log::trace!("Acquiring lock on {:?}", id);
-        let base_key = bcs::to_bytes(&BaseKey::ChainState(id))?;
-        let context = RocksdbContext::new(db, lock.lock_owned().await, base_key, id);
-        ChainStateView::load(context).await
+        self.0.lock().await.storage.load_chain(id).await
     }
 
     async fn read_certificate(&self, hash: HashValue) -> Result<Certificate, RocksdbViewError> {

@@ -149,6 +149,7 @@ where
     ) -> Result<Vec<CrossChainRequest>, Error> {
         let mut continuation = Vec::new();
         let chain_id = chain.chain_id();
+        let chain = &mut **chain;
         for application_id in chain.communication_states.indices().await? {
             let mut state = chain
                 .communication_states
@@ -317,12 +318,13 @@ where
         certificate
             .check(committee)
             .map_err(|_| Error::InvalidCertificate)?;
+        let next_block_height = chain.tip_state.get().next_block_height;
         if chain
             .execution_state
             .get_mut()
             .system
             .manager
-            .check_validated_block(chain.tip_state.get().next_block_height, block, round)?
+            .check_validated_block(next_block_height, block, round)?
             == Outcome::Skip
         {
             // If we just processed the same pending block, return the chain info

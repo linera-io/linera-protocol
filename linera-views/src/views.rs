@@ -26,14 +26,8 @@ pub trait Context {
     /// A batch of writes inside a transaction;
     type Batch: Send + Sync;
 
-    /// User provided data to be carried along.
-    type Extra: Clone + Send + Sync;
-
     /// The error type in use.
     type Error: std::error::Error + Debug + Send + Sync + From<ViewError> + From<std::io::Error>;
-
-    /// Getter for the user provided data.
-    fn extra(&self) -> &Self::Extra;
 
     /// Provide a reference to a new batch to the builder then execute the batch.
     async fn run_with_batch<F>(&self, builder: F) -> Result<(), Self::Error>
@@ -212,10 +206,6 @@ where
     pub fn set(&mut self, value: T) {
         self.update = Some(value);
     }
-
-    pub fn extra(&self) -> &C::Extra {
-        self.context.extra()
-    }
 }
 
 impl<C, T> RegisterView<C, T>
@@ -322,10 +312,6 @@ where
     /// Read the size of the log.
     pub fn count(&self) -> usize {
         self.stored_count + self.new_values.len()
-    }
-
-    pub fn extra(&self) -> &C::Extra {
-        self.context.extra()
     }
 }
 
@@ -457,10 +443,6 @@ where
     /// Remove a value.
     pub fn remove(&mut self, index: I) {
         self.updates.insert(index, None);
-    }
-
-    pub fn extra(&self) -> &C::Extra {
-        self.context.extra()
     }
 }
 
@@ -637,10 +619,6 @@ where
     /// Read the size of the queue.
     pub fn count(&self) -> usize {
         self.stored_indices.len() - self.front_delete_count + self.new_back_values.len()
-    }
-
-    pub fn extra(&self) -> &C::Extra {
-        self.context.extra()
     }
 
     /// Read the `count` next values in the queue (including staged ones).
@@ -820,10 +798,6 @@ where
         indices.sort();
         Ok(indices)
     }
-
-    pub fn extra(&self) -> &C::Extra {
-        self.context.extra()
-    }
 }
 
 /// An active entry inside a [`CollectionView`].
@@ -866,10 +840,14 @@ pub struct SharedCollectionView<C, I, W> {
 #[async_trait]
 impl<C, I, W> View<C> for SharedCollectionView<C, I, W>
 where
-    C: CollectionOperations<I> + Send,
+    C: CollectionOperations<I> + Send + Clone,
     I: Send + Sync + Debug + Clone + Ord,
     W: View<C> + Send,
 {
+    fn context(&self) -> &C {
+        &self.context
+    }
+
     async fn load(context: C) -> Result<Self, C::Error> {
         Ok(Self {
             context,
@@ -884,34 +862,34 @@ where
             .expect("Attempt to rollback a `SharedCollectionView` while an entry was still locked");
     }
 
-    async fn commit(mut self) -> Result<(), C::Error> {
+    async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         for (index, update) in self.updates {
             match update.lock().await.take() {
                 Some(view) => {
-                    view.commit().await?;
-                    self.context.add_index(index).await?;
+                    view.commit(batch).await?;
+                    self.context.add_index(batch, index).await?;
                 }
                 None => {
                     let context = self.context.clone_with_scope(&index);
-                    self.context.remove_index(index).await?;
+                    self.context.remove_index(batch, index).await?;
                     let view = W::load(context).await?;
-                    view.delete().await?;
+                    view.delete(batch).await?;
                 }
             }
         }
         Ok(())
     }
 
-    async fn delete(mut self) -> Result<(), C::Error> {
+    async fn delete(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         for index in self.context.indices().await? {
             let _guard = match self.updates.get(&index) {
                 Some(entry) => Some(entry.lock().await),
                 None => None,
             };
             let context = self.context.clone_with_scope(&index);
-            self.context.remove_index(index).await?;
+            self.context.remove_index(batch, index).await?;
             let view = W::load(context).await?;
-            view.delete().await?;
+            view.delete(batch).await?;
         }
         Ok(())
     }
@@ -919,7 +897,7 @@ where
 
 impl<C, I, W> SharedCollectionView<C, I, W>
 where
-    C: CollectionOperations<I> + Send,
+    C: CollectionOperations<I> + Clone + Send,
     I: Eq + Ord + Sync + Clone + Send + Debug,
     W: View<C>,
 {
@@ -929,7 +907,10 @@ where
     /// Note that the returned [`SharedCollectionEntry`] holds a lock on the entry, which means
     /// that subsequent calls to methods that access the same entry (or all entries, like `commit`,
     /// `rollback` and `delete`) won't complete until the lock is dropped.
-    pub async fn load_entry(&mut self, index: I) -> Result<SharedCollectionEntry<I, W>, C::Error> {
+    pub async fn load_entry(
+        &mut self,
+        index: I,
+    ) -> Result<SharedCollectionEntry<C, I, W>, C::Error> {
         let entry = match self.updates.entry(index.clone()) {
             btree_map::Entry::Occupied(entry) => entry.into_mut(),
             btree_map::Entry::Vacant(entry) => {
@@ -947,7 +928,12 @@ where
             C::Error::from(ViewError::RemovedEntry(format!("{:?}", index)))
         );
 
-        Ok(SharedCollectionEntry { index, entry })
+        dbg!(format!("Creating entry: {index:?}"));
+        Ok(SharedCollectionEntry {
+            context: self.context.clone(),
+            index,
+            entry,
+        })
     }
 
     /// Mark the entry so that it is removed in the next commit.
@@ -991,26 +977,42 @@ where
             update.lock().await;
         }
     }
-
-    pub fn extra(&self) -> &C::Extra {
-        self.context.extra()
-    }
 }
 
 /// An active entry inside a [`SharedCollectionView`].
-pub struct SharedCollectionEntry<Index, Entry> {
+pub struct SharedCollectionEntry<Context, Index, Entry> {
+    context: Context,
     index: Index,
     entry: OwnedMutexGuard<Option<Entry>>,
 }
 
-impl<Index, Entry> SharedCollectionEntry<Index, Entry> {
+impl<Context, Index, Entry> SharedCollectionEntry<Context, Index, Entry>
+where
+    Context: CollectionOperations<Index>,
+    Entry: View<Context>,
+    Index: Debug,
+{
     /// The index of this entry.
     pub fn index(&self) -> &Index {
         &self.index
     }
+
+    /// Commit this entry.
+    pub async fn commit(mut self, batch: &mut Context::Batch) -> Result<(), Context::Error> {
+        dbg!(format!("Committing entry: {:?}", &self.index));
+        if let Some(entry) = self.entry.take() {
+            entry.commit(batch).await?;
+            let entry_context = self.context.clone_with_scope(&self.index);
+            self.context.add_index(batch, self.index).await?;
+            *self.entry = Some(Entry::load(entry_context).await?);
+        } else {
+            self.context.remove_index(batch, self.index).await?;
+        }
+        Ok(())
+    }
 }
 
-impl<Index, Entry> Deref for SharedCollectionEntry<Index, Entry> {
+impl<Context, Index, Entry> Deref for SharedCollectionEntry<Context, Index, Entry> {
     type Target = Entry;
 
     fn deref(&self) -> &Self::Target {
@@ -1020,7 +1022,7 @@ impl<Index, Entry> Deref for SharedCollectionEntry<Index, Entry> {
     }
 }
 
-impl<Index, Entry> DerefMut for SharedCollectionEntry<Index, Entry> {
+impl<Context, Index, Entry> DerefMut for SharedCollectionEntry<Context, Index, Entry> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.entry
             .as_mut()

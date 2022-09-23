@@ -19,18 +19,18 @@ use linera_views::{
     views::{
         AppendOnlyLogOperations, AppendOnlyLogView, CollectionOperations, CollectionView,
         MapOperations, MapView, QueueOperations, QueueView, RegisterOperations, RegisterView,
-        ScopedView,
+        ScopedView, SharedCollectionEntry, View,
     },
 };
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
-    ops::DerefMut,
+    ops::{Deref, DerefMut},
 };
 
 /// A view accessing the state of a chain.
 #[derive(Debug)]
-pub struct ChainStateView<C> {
+pub struct InnerChainStateView<C> {
     /// Execution state, including system and user applications.
     pub execution_state: ScopedView<0, RegisterView<C, ExecutionState>>,
     /// Hash of the execution state.
@@ -51,7 +51,7 @@ pub struct ChainStateView<C> {
 }
 
 impl_view!(
-    ChainStateView {
+    InnerChainStateView {
         execution_state,
         execution_state_hash,
         tip_state,
@@ -161,13 +161,44 @@ pub struct Event {
     pub effect: Effect,
 }
 
+pub struct ChainStateView<C>(SharedCollectionEntry<C, ChainId, InnerChainStateView<C>>);
+
+pub trait ChainStateViewContext: InnerChainStateViewContext {}
+
+impl<AllContexts> ChainStateViewContext for AllContexts where AllContexts: InnerChainStateViewContext
+{}
+
+impl<C> From<SharedCollectionEntry<C, ChainId, InnerChainStateView<C>>> for ChainStateView<C> {
+    fn from(entry: SharedCollectionEntry<C, ChainId, InnerChainStateView<C>>) -> Self {
+        ChainStateView(entry)
+    }
+}
+
+impl<C> Deref for ChainStateView<C> {
+    type Target = InnerChainStateView<C>;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.deref()
+    }
+}
+
+impl<C> DerefMut for ChainStateView<C> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.0.deref_mut()
+    }
+}
+
 impl<C> ChainStateView<C>
 where
-    C: ChainStateViewContext<Extra = ChainId>,
+    C: ChainStateViewContext,
     Error: From<C::Error>,
 {
     pub fn chain_id(&self) -> ChainId {
-        *self.execution_state.extra()
+        *self.0.index()
+    }
+
+    pub async fn commit(self, batch: &mut C::Batch) -> Result<(), C::Error> {
+        self.0.commit(batch).await
     }
 
     async fn mark_messages_as_received(
@@ -304,7 +335,8 @@ where
         key: HashValue,
     ) -> Result<bool, Error> {
         let chain_id = self.chain_id();
-        let mut communication_state = self.communication_states.load_entry(application_id).await?;
+        let this = self.0.deref_mut();
+        let mut communication_state = this.communication_states.load_entry(application_id).await?;
         let mut inbox = communication_state
             .inboxes
             .load_entry(origin.clone())
@@ -327,7 +359,7 @@ where
         );
         // Mark the block as received.
         inbox.next_height_to_receive.set(height.try_add_one()?);
-        self.received_log.push(key);
+        this.received_log.push(key);
 
         let mut was_a_recipient = false;
         for (index, (app_id, destination, effect)) in effects.into_iter().enumerate() {
@@ -357,14 +389,14 @@ where
                     index,
                 };
                 // Handle special effects to be executed immediately.
-                if self
+                if this
                     .execution_state
                     .get_mut()
                     .system
                     .apply_immediate_effect(chain_id, effect_id, &effect)?
                 {
-                    let hash = HashValue::new(self.execution_state.get());
-                    self.execution_state_hash.set(Some(hash));
+                    let hash = HashValue::new(this.execution_state.get());
+                    this.execution_state_hash.set(Some(hash));
                 }
             }
             // Find if the message was executed ahead of time.
@@ -436,12 +468,13 @@ where
     ) -> Result<Vec<(ApplicationId, Destination, Effect)>, Error> {
         assert_eq!(block.chain_id, self.chain_id());
         let chain_id = self.chain_id();
+        let this = self.0.deref_mut();
         let mut effects = Vec::new();
         // First, process incoming messages.
         Self::check_incoming_messages(&block.incoming_messages)?;
 
         for message_group in &block.incoming_messages {
-            let mut communication_state = self
+            let mut communication_state = this
                 .communication_states
                 .load_entry(message_group.application_id)
                 .await?;
@@ -523,7 +556,7 @@ where
                         index: *message_index,
                     },
                 };
-                let result = self.execution_state.get_mut().apply_effect(
+                let result = this.execution_state.get_mut().apply_effect(
                     message_group.application_id,
                     &context,
                     message_effect,
@@ -541,7 +574,7 @@ where
         }
         // Second, execute the operations in the block and remember the recipients to notify.
         for (index, (application_id, operation)) in block.operations.iter().enumerate() {
-            let mut communication_state = self
+            let mut communication_state = this
                 .communication_states
                 .load_entry(*application_id)
                 .await?;
@@ -551,7 +584,7 @@ where
                 height: block.height,
                 index,
             };
-            let result = self.execution_state.get_mut().apply_operation(
+            let result = this.execution_state.get_mut().apply_operation(
                 *application_id,
                 &context,
                 operation,

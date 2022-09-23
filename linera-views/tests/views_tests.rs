@@ -45,7 +45,7 @@ impl_view!(StateView { x1, x2, log, map, queue, collection, collection2 };
 
 #[async_trait]
 pub trait StateStore {
-    type Context: StateViewContext<Extra = usize>;
+    type Context: StateViewContext;
 
     async fn load(
         &mut self,
@@ -60,7 +60,7 @@ pub struct MemoryTestStore {
 
 #[async_trait]
 impl StateStore for MemoryTestStore {
-    type Context = MemoryContext<usize>;
+    type Context = MemoryContext;
 
     async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, MemoryViewError> {
         let state = self
@@ -68,7 +68,7 @@ impl StateStore for MemoryTestStore {
             .entry(id)
             .or_insert_with(|| Arc::new(Mutex::new(BTreeMap::new())));
         log::trace!("Acquiring lock on {:?}", id);
-        let context = MemoryContext::new(state.clone().lock_owned().await, id);
+        let context = MemoryContext::new(state.clone().lock_owned().await);
         StateView::load(context).await
     }
 }
@@ -89,7 +89,7 @@ impl RocksdbTestStore {
 
 #[async_trait]
 impl StateStore for RocksdbTestStore {
-    type Context = RocksdbContext<usize>;
+    type Context = RocksdbContext;
 
     async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, RocksdbViewError> {
         let lock = self
@@ -101,7 +101,6 @@ impl StateStore for RocksdbTestStore {
             self.db.clone(),
             lock.clone().lock_owned().await,
             bcs::to_bytes(&id)?,
-            id,
         );
         StateView::load(context).await
     }
@@ -123,7 +122,7 @@ impl DynamoDbTestStore {
 
 #[async_trait]
 impl StateStore for DynamoDbTestStore {
-    type Context = DynamoDbContext<usize>;
+    type Context = DynamoDbContext;
 
     async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, DynamoDbContextError> {
         log::trace!("Acquiring lock on {:?}", id);
@@ -136,7 +135,6 @@ impl StateStore for DynamoDbTestStore {
             "test_table".parse().expect("Invalid table name"),
             lock.clone().lock_owned().await,
             vec![0],
-            id,
         )
         .await
         .expect("Failed to create DynamoDB context");
@@ -155,7 +153,6 @@ where
     };
     {
         let mut view = store.load(1).await.unwrap();
-        assert_eq!(view.x1.extra(), &1);
         let hash = view.hash().await.unwrap();
         assert_eq!(hash, default_hash);
         assert_eq!(view.x1.get(), &0);

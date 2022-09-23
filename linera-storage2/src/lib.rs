@@ -5,6 +5,7 @@ pub mod chain;
 mod dynamo_db;
 mod memory;
 mod rocksdb;
+pub mod view;
 
 pub use crate::{
     dynamo_db::DynamoDbStoreClient, memory::MemoryStoreClient, rocksdb::RocksdbStoreClient,
@@ -26,7 +27,7 @@ use std::fmt::Debug;
 #[async_trait]
 pub trait Store {
     /// The `context` data-type provided by the storage implementation in use.
-    type Context: chain::ChainStateViewContext<Extra = ChainId, Error = Self::Error>;
+    type Context: chain::ChainStateViewContext<Error = Self::Error>;
     type Error: std::error::Error + Debug + Sync + Send;
 
     /// Load the view of a chain state.

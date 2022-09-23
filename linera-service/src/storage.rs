@@ -43,18 +43,18 @@ impl StorageConfig {
         use StorageConfig::*;
         match self {
             Memory => {
-                let mut client = MemoryStoreClient::default();
+                let mut client = MemoryStoreClient::new().await?;
                 config.initialize_store(&mut client).await?;
                 job.run(client).await
             }
             Rocksdb { path } if path.is_dir() => {
                 log::warn!("Using existing database {:?}", path);
-                let client = RocksdbStoreClient::new(path.clone());
+                let client = RocksdbStoreClient::new(path.clone()).await?;
                 job.run(client).await
             }
             Rocksdb { path } => {
                 std::fs::create_dir_all(path)?;
-                let mut client = RocksdbStoreClient::new(path.clone());
+                let mut client = RocksdbStoreClient::new(path.clone()).await?;
                 config.initialize_store(&mut client).await?;
                 job.run(client).await
             }

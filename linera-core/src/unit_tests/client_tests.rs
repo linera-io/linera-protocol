@@ -19,6 +19,7 @@ use linera_storage2::{DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient
 use linera_views::test_utils::LocalStackTestContext;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
+    future::Future,
     str::FromStr,
     sync::Arc,
 };
@@ -656,10 +657,10 @@ where
         .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await?;
     let new_key_pair = KeyPair::generate();
-    let new_owner = Owner(new_key_pair.public());
+    let new_owner = dbg!(Owner(new_key_pair.public()));
     // Open the new chain.
     let (new_id, certificate) = sender.open_chain(new_owner).await.unwrap();
-    assert_eq!(sender.next_block_height, BlockHeight::from(1));
+    assert_eq!(sender.next_block_height, dbg!(BlockHeight::from(1)));
     assert!(sender.pending_block.is_none());
     assert!(sender.key_pair().await.is_ok());
     // Make a client to try the new chain.
@@ -669,9 +670,12 @@ where
     client.receive_certificate(certificate).await.unwrap();
     assert_eq!(
         client.synchronize_balance().await.unwrap(),
-        Balance::from(0)
+        dbg!(Balance::from(0))
     );
-    assert_eq!(client.local_balance().await.unwrap(), Balance::from(0));
+    assert_eq!(
+        client.local_balance().await.unwrap(),
+        dbg!(Balance::from(0))
+    );
     client.close_chain().await.unwrap();
     Ok(())
 }

@@ -177,11 +177,11 @@ struct MemoryContextFactory;
 
 #[async_trait]
 impl TestContextFactory for MemoryContextFactory {
-    type Context = MemoryContext<()>;
+    type Context = MemoryContext;
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
         let dummy_lock = Arc::new(Mutex::new(BTreeMap::new()));
-        Ok(MemoryContext::new(dummy_lock.lock_owned().await, ()))
+        Ok(MemoryContext::new(dummy_lock.lock_owned().await))
     }
 }
 
@@ -192,7 +192,7 @@ struct RocksdbContextFactory {
 
 #[async_trait]
 impl TestContextFactory for RocksdbContextFactory {
-    type Context = RocksdbContext<()>;
+    type Context = RocksdbContext;
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
         let directory = TempDir::new()?;
@@ -202,7 +202,7 @@ impl TestContextFactory for RocksdbContextFactory {
             rocksdb::DBWithThreadMode::<rocksdb::MultiThreaded>::open(&options, directory.path())?;
 
         let dummy_lock = Arc::new(Mutex::new(()));
-        let context = RocksdbContext::new(Arc::new(db), dummy_lock.lock_owned().await, vec![], ());
+        let context = RocksdbContext::new(Arc::new(db), dummy_lock.lock_owned().await, vec![]);
 
         self.temporary_directories.push(directory);
 
@@ -218,7 +218,7 @@ struct DynamoDbContextFactory {
 
 #[async_trait]
 impl TestContextFactory for DynamoDbContextFactory {
-    type Context = DynamoDbContext<()>;
+    type Context = DynamoDbContext;
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
         if self.localstack.is_none() {
@@ -236,7 +236,6 @@ impl TestContextFactory for DynamoDbContextFactory {
             table,
             dummy_lock.lock_owned().await,
             dummy_key_prefix,
-            (),
         )
         .await?;
 

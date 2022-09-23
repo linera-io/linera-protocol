@@ -23,10 +23,9 @@ use tokio::sync::{OwnedMutexGuard, RwLock};
 
 /// A context that stores all values in memory.
 #[derive(Clone, Debug)]
-pub struct MemoryContext<E> {
+pub struct MemoryContext {
     map: Arc<RwLock<OwnedMutexGuard<MemoryStoreMap>>>,
     base_key: Vec<u8>,
-    extra: E,
 }
 
 /// A Rust value stored in memory.
@@ -35,12 +34,11 @@ pub type MemoryStoreValue = Box<dyn Any + Send + Sync + 'static>;
 /// A map of Rust values indexed by their keys.
 pub type MemoryStoreMap = BTreeMap<Vec<u8>, MemoryStoreValue>;
 
-impl<E> MemoryContext<E> {
-    pub fn new(guard: OwnedMutexGuard<MemoryStoreMap>, extra: E) -> Self {
+impl MemoryContext {
+    pub fn new(guard: OwnedMutexGuard<MemoryStoreMap>) -> Self {
         Self {
             map: Arc::new(RwLock::new(guard)),
             base_key: Vec::new(),
-            extra,
         }
     }
 
@@ -90,17 +88,9 @@ impl<E> MemoryContext<E> {
 }
 
 #[async_trait]
-impl<E> Context for MemoryContext<E>
-where
-    E: Clone + Send + Sync,
-{
+impl Context for MemoryContext {
     type Batch = ();
-    type Extra = E;
     type Error = MemoryViewError;
-
-    fn extra(&self) -> &E {
-        &self.extra
-    }
 
     async fn run_with_batch<F>(&self, builder: F) -> Result<(), Self::Error>
     where
@@ -113,24 +103,19 @@ where
 }
 
 #[async_trait]
-impl<E> ScopedOperations for MemoryContext<E>
-where
-    E: Clone + Send + Sync,
-{
+impl ScopedOperations for MemoryContext {
     fn clone_with_scope(&self, index: u64) -> Self {
         Self {
             map: self.map.clone(),
             base_key: self.derive_key(&index),
-            extra: self.extra.clone(),
         }
     }
 }
 
 #[async_trait]
-impl<E, T> RegisterOperations<T> for MemoryContext<E>
+impl<T> RegisterOperations<T> for MemoryContext
 where
     T: Default + Clone + Send + Sync + 'static,
-    E: Clone + Send + Sync,
 {
     async fn get(&mut self) -> Result<T, MemoryViewError> {
         Ok(self
@@ -150,10 +135,9 @@ where
 }
 
 #[async_trait]
-impl<E, T> AppendOnlyLogOperations<T> for MemoryContext<E>
+impl<T> AppendOnlyLogOperations<T> for MemoryContext
 where
     T: Clone + Send + Sync + 'static,
-    E: Clone + Send + Sync,
 {
     async fn count(&mut self) -> Result<usize, MemoryViewError> {
         Ok(self
@@ -201,10 +185,9 @@ where
 }
 
 #[async_trait]
-impl<E, T> QueueOperations<T> for MemoryContext<E>
+impl<T> QueueOperations<T> for MemoryContext
 where
     T: Clone + Send + Sync + 'static,
-    E: Clone + Send + Sync,
 {
     async fn indices(&mut self) -> Result<Range<usize>, Self::Error> {
         Ok(self
@@ -270,11 +253,10 @@ where
 }
 
 #[async_trait]
-impl<E, I, V> MapOperations<I, V> for MemoryContext<E>
+impl<I, V> MapOperations<I, V> for MemoryContext
 where
     I: Eq + Ord + Send + Sync + Clone + 'static,
     V: Clone + Send + Sync + 'static,
-    E: Clone + Send + Sync,
 {
     async fn get(&mut self, index: &I) -> Result<Option<V>, MemoryViewError> {
         Ok(self
@@ -324,16 +306,14 @@ enum CollectionKey<I> {
 }
 
 #[async_trait]
-impl<E: Clone, I> CollectionOperations<I> for MemoryContext<E>
+impl<I> CollectionOperations<I> for MemoryContext
 where
     I: serde::Serialize + serde::de::DeserializeOwned + Send + Sync + Ord + Clone + 'static,
-    E: Clone + Send + Sync,
 {
     fn clone_with_scope(&self, index: &I) -> Self {
         Self {
             map: self.map.clone(),
             base_key: self.derive_key(&CollectionKey::Subview(index)),
-            extra: self.extra.clone(),
         }
     }
 
@@ -341,7 +321,6 @@ where
         let context = Self {
             map: self.map.clone(),
             base_key: self.derive_key(&CollectionKey::<I>::Indices),
-            extra: self.extra.clone(),
         };
         context
             .with_mut(|m: &mut BTreeSet<I>| {
@@ -359,7 +338,6 @@ where
         let mut context = Self {
             map: self.map.clone(),
             base_key: self.derive_key(&CollectionKey::<I>::Indices),
-            extra: self.extra.clone(),
         };
         let is_empty = context
             .with_mut(|m: &mut BTreeSet<I>| {
@@ -377,7 +355,6 @@ where
         let context = Self {
             map: self.map.clone(),
             base_key: self.derive_key(&CollectionKey::<I>::Indices),
-            extra: self.extra.clone(),
         };
         Ok(context
             .with_ref(|m: Option<&BTreeSet<I>>| match m {
@@ -388,10 +365,7 @@ where
     }
 }
 
-impl<E> HashingContext for MemoryContext<E>
-where
-    E: Clone + Send + Sync,
-{
+impl HashingContext for MemoryContext {
     type Hasher = sha2::Sha512;
 }
 
