@@ -381,7 +381,7 @@ where
 #[derive(Debug, Clone)]
 pub struct MapView<C, I, V> {
     context: C,
-    stored_indices: Vec<I>,
+    need_delete: bool,
     updates: BTreeMap<I, Option<V>>,
 }
 
@@ -422,11 +422,10 @@ where
         &self.context
     }
 
-    async fn load(mut context: C) -> Result<Self, C::Error> {
-        let stored_indices = context.indices().await?;
+    async fn load(context: C) -> Result<Self, C::Error> {
         Ok(Self {
             context,
-            stored_indices,
+            need_delete: false,
             updates: BTreeMap::new(),
         })
     }
@@ -436,13 +435,28 @@ where
     }
 
     async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        for (index, update) in self.updates {
-            match update {
-                None => {
-                    self.context.remove(batch, index).await?;
+        if self.need_delete {
+            let stored_indices = self.context.indices().await?;
+            for index in stored_indices {
+                self.context.remove(batch, index).await?;
+            }
+            for (index, update) in self.updates {
+                match update {
+                    None => {}
+                    Some(value) => {
+                        self.context.insert(batch, index, value).await?;
+                    }
                 }
-                Some(value) => {
-                    self.context.insert(batch, index, value).await?;
+            }
+        } else {
+            for (index, update) in self.updates {
+                match update {
+                    None => {
+                        self.context.remove(batch, index).await?;
+                    }
+                    Some(value) => {
+                        self.context.insert(batch, index, value).await?;
+                    }
                 }
             }
         }
@@ -454,9 +468,8 @@ where
     }
 
     fn reset_to_default(&mut self) {
-        for index in &self.stored_indices {
-            self.updates.insert(index.clone(), None);
-        }
+        self.need_delete = true;
+        self.updates.clear();
     }
 }
 
@@ -714,6 +727,13 @@ where
     }
 }
 
+pub enum CollectionViewEntry<W> {
+    Removed,
+    Changed(W),
+    Replaced(W),
+}
+
+
 /// A view that supports accessing a collection of views of the same kind, indexed by a
 /// key.
 #[derive(Debug, Clone)]
@@ -807,6 +827,7 @@ where
     I: Eq + Ord + Sync + Clone + Send + Debug,
     W: View<C>,
 {
+
     /// Obtain a subview for the data at the given index in the collection. Return an
     /// error if `remove_entry` was used earlier on this index from the same [`CollectionView`].
     pub async fn load_entry(&mut self, index: I) -> Result<&mut W, C::Error> {
@@ -817,7 +838,9 @@ where
                     Some(view) => Ok(view),
                     None => {
                         let context = self.context.clone_with_scope(&index);
-                        let view = W::load(context).await?;
+                        // Need to add the removal of entries before the loading.
+                        let mut view = W::load(context).await?;
+                        view.reset_to_default();
                         *f = Some(view);
                         Ok(f.as_mut().unwrap())
                     }
