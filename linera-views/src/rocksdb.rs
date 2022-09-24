@@ -185,14 +185,10 @@ impl Context for RocksdbContext {
             + Send
             + Sync,
     {
-        dbg!("run_with_batch");
         let mut batch = MyBatch(rocksdb::WriteBatchWithTransaction::default());
-        dbg!("building batch");
         builder(&mut batch).await?;
         let db = self.db.clone();
-        dbg!("applying batch");
         tokio::task::spawn_blocking(move || db.write(batch.0)).await??;
-        dbg!("done");
         Ok(())
     }
 }
@@ -215,15 +211,10 @@ where
 {
     async fn get(&mut self) -> Result<T, RocksdbViewError> {
         let value = self.db.read_key(&self.base_key).await?.unwrap_or_default();
-        println!("Read {:?} -> {:?}", self.base_key, value);
         Ok(value)
     }
 
     async fn set(&mut self, batch: &mut Self::Batch, value: T) -> Result<(), RocksdbViewError> {
-        println!(
-            "adding register value to batch: {:?} -> {:?}",
-            self.base_key, value
-        );
         batch.write_key(&self.base_key, &value)?;
         Ok(())
     }

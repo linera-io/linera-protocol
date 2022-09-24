@@ -244,13 +244,10 @@ where
 
     pub async fn committee(&mut self) -> Result<Committee, Error> {
         let mut state = self.execution_state().await?;
-        dbg!("committee");
-        let ret = state
+        state
             .committees
             .remove(&state.epoch.ok_or(Error::InactiveChain(self.chain_id))?)
-            .ok_or(Error::InactiveChain(self.chain_id));
-        dbg!(matches!(ret, Err(Error::InactiveChain(_))));
-        ret
+            .ok_or(Error::InactiveChain(self.chain_id))
     }
 
     async fn known_committees(&mut self) -> Result<(BTreeMap<Epoch, Committee>, Epoch), Error> {
@@ -299,14 +296,11 @@ where
     }
 
     async fn epoch(&mut self) -> Result<Epoch, anyhow::Error> {
-        dbg!("epoch");
-        let ret = Ok(self
+        Ok(self
             .chain_info()
             .await?
             .epoch
-            .ok_or(Error::InactiveChain(self.chain_id))?);
-        dbg!("not epoch");
-        ret
+            .ok_or(Error::InactiveChain(self.chain_id))?)
     }
 
     async fn identity(&mut self) -> Result<Owner, anyhow::Error> {
@@ -341,7 +335,7 @@ where
                 }
                 Ok(identities.pop().unwrap())
             }
-            ChainManager::None => dbg!(Err(Error::InactiveChain(self.chain_id).into())),
+            ChainManager::None => Err(Error::InactiveChain(self.chain_id).into()),
         }
     }
 
@@ -407,14 +401,10 @@ where
         chain_id: ChainId,
         action: CommunicateAction,
     ) -> Result<Option<Certificate>> {
-        dbg!("communicate_chain_updates");
         let storage_client = self.node_client.storage_client().await;
-        dbg!("storage_client ok");
         let cross_chain_delay = self.cross_chain_delay;
         let cross_chain_retries = self.cross_chain_retries;
-        dbg!("make_validator_nodes");
         let nodes = self.make_validator_nodes(committee)?;
-        dbg!("communicate_with_quorum");
         let result = communicate_with_quorum(
             &nodes,
             committee,
@@ -432,16 +422,10 @@ where
                     retries: cross_chain_retries,
                 };
                 let action = action.clone();
-                Box::pin(async move {
-                    dbg!("send_chain_update");
-                    let ret = updater.send_chain_update(chain_id, action).await;
-                    dbg!("send_chain_update ok");
-                    ret
-                })
+                Box::pin(async move { updater.send_chain_update(chain_id, action).await })
             },
         )
         .await;
-        dbg!("communicated");
         let (effects_and_state_hash, votes): (Option<_>, Vec<_>) = match result {
             Ok(content) => content,
             Err(Some(Error::InactiveChain(id)))
@@ -575,12 +559,10 @@ where
         // Use network information from the local chain.
         let chain_id = self.chain_id;
         let state = self.execution_state().await?;
-        dbg!("find_received_certificates");
         let local_committee = state
             .committees
             .get(&state.epoch.ok_or(Error::InactiveChain(chain_id))?)
             .ok_or(Error::InactiveChain(chain_id))?;
-        dbg!("not find_received_certificates");
         let nodes = self.make_validator_nodes(local_committee)?;
         // Use committess from the admin chain.
         self.node_client
@@ -767,12 +749,10 @@ where
             key_pair,
         );
         // Try to execute the block locally first.
-        dbg!("Execute locally");
         self.node_client
             .handle_block_proposal(proposal.clone())
             .await?;
         // Send the query to validators.
-        dbg!("Send query");
         let committee = self.committee().await?;
         let final_certificate = match self.chain_info().await?.manager {
             ChainManager::Multi(_) => {
@@ -809,42 +789,34 @@ where
             }
             ChainManager::None => unreachable!("chain is active"),
         };
-        dbg!("Sent query");
         // By now the block should be final.
         ensure!(
             final_certificate.value.confirmed_block() == Some(&proposal.content.block),
             "A different operation was executed in parallel (consider retrying the operation)"
         );
-        dbg!("Process certificate");
         self.process_certificate(final_certificate.clone()).await?;
-        dbg!("Processed");
         self.pending_block = None;
         // Communicate the new certificate now if needed.
         if with_confirmation {
-            dbg!("Communicate chani updates");
             self.communicate_chain_updates(
                 &committee,
                 self.chain_id,
                 CommunicateAction::AdvanceToNextBlockHeight(self.next_block_height),
             )
             .await?;
-            dbg!("Communicated chani updates");
             if let Ok(new_committee) = self.committee().await {
                 if new_committee != committee {
                     // If the configuration just changed, communicate to the new committee as well.
                     // (This is actually more important that updating the previous committee.)
-                    dbg!("Again");
                     self.communicate_chain_updates(
                         &new_committee,
                         self.chain_id,
                         CommunicateAction::AdvanceToNextBlockHeight(self.next_block_height),
                     )
                     .await?;
-                    dbg!("Done");
                 }
             }
         }
-        dbg!("Fini");
         Ok(final_certificate)
     }
 }
@@ -977,11 +949,8 @@ where
     }
 
     async fn share_ownership(&mut self, new_owner: Owner) -> Result<Certificate> {
-        dbg!("prepare");
         self.prepare_chain().await?;
-        dbg!("identity");
         let owner = self.identity().await?;
-        dbg!("block");
         let block = Block {
             epoch: self.epoch().await?,
             chain_id: self.chain_id,
@@ -995,11 +964,9 @@ where
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
         };
-        dbg!("certificate");
         let certificate = self
             .propose_block(block, /* with_confirmation */ true)
             .await?;
-        dbg!("ok");
         Ok(certificate)
     }
 
@@ -1011,11 +978,9 @@ where
             index: 0,
         });
         let state = self.execution_state().await?;
-        dbg!("open_chain");
         let admin_id = state.admin_id.ok_or(Error::InactiveChain(self.chain_id))?;
         let committees = state.committees;
         let epoch = state.epoch.ok_or(Error::InactiveChain(self.chain_id))?;
-        dbg!("not open_chain");
         let block = Block {
             epoch,
             chain_id: self.chain_id,
@@ -1152,9 +1117,7 @@ where
     async fn finalize_committee(&mut self) -> Result<Certificate> {
         self.prepare_chain().await?;
         let state = self.execution_state().await?;
-        dbg!("finalize_committee");
         let current_epoch = state.epoch.ok_or(Error::InactiveChain(self.chain_id))?;
-        dbg!("not finalize_committee");
         let operations = state
             .committees
             .keys()

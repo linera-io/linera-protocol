@@ -911,7 +911,6 @@ where
         &mut self,
         index: I,
     ) -> Result<SharedCollectionEntry<C, I, W>, C::Error> {
-        dbg!(format!("Loading entry: {index:?}"));
         let entry = match self.updates.entry(index.clone()) {
             btree_map::Entry::Occupied(entry) => entry.into_mut(),
             btree_map::Entry::Vacant(entry) => {
@@ -929,7 +928,6 @@ where
             C::Error::from(ViewError::RemovedEntry(format!("{:?}", index)))
         );
 
-        dbg!(format!("Creating entry: {index:?}"));
         Ok(SharedCollectionEntry {
             context: self.context.clone(),
             index,
@@ -1005,7 +1003,6 @@ where
 
     /// Commit this entry.
     pub async fn commit(mut self, batch: &mut Context::Batch) -> Result<(), Context::Error> {
-        // dbg!(format!("Committing entry: {:?}", &self.index));
         if let Some(entry) = self.entry.as_mut() {
             entry.commit_and_reset(batch).await?;
             self.context.add_index(batch, self.index.clone()).await?;
@@ -1051,7 +1048,6 @@ where
     Entry: View<Context>,
 {
     fn drop(&mut self) {
-        dbg!(format!("Dropping entry: {:?}", &self.index));
         if let Some(entry) = self.entry.as_mut() {
             entry.rollback();
         }

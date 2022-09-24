@@ -52,7 +52,6 @@ pub trait Store {
     where
         linera_base::error::Error: From<Self::Error> + From<<Self::Context as Context>::Error>,
     {
-        dbg!("lib:52");
         let chain = self.load_chain(id).await?;
         ensure!(
             chain.is_active(),
@@ -96,7 +95,6 @@ pub trait Store {
         linera_base::error::Error: From<Self::Error> + From<<Self::Context as Context>::Error>,
     {
         let id = description.into();
-        dbg!("lib:96");
         let mut chain = self.load_chain(id).await?;
         ensure!(
             !chain.is_active(),

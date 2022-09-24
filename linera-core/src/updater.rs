@@ -151,14 +151,11 @@ where
         mut chain_id: ChainId,
         mut target_block_height: BlockHeight,
     ) -> Result<(), Error> {
-        dbg!("in send_chain_information");
         let mut jobs = Vec::new();
         loop {
             // Figure out which certificates this validator is missing.
             let query = ChainInfoQuery::new(chain_id);
-            dbg!("Handle_chain_info_query");
             let ret = self.client.handle_chain_info_query(query).await;
-            dbg!("Handled_chain_info_query");
             match ret {
                 Ok(response) if response.info.description.is_some() => {
                     response.check(self.name)?;
@@ -173,7 +170,6 @@ where
                 Ok(response) => {
                     response.check(self.name)?;
                     // Obtain the chain description from our local node.
-                    dbg!("updater:176");
                     let description = self
                         .store
                         .load_chain(chain_id)
@@ -182,7 +178,6 @@ where
                         .get()
                         .system
                         .description;
-                    dbg!("loaded chain");
                     match description {
                         Some(ChainDescription::Child(EffectId {
                             chain_id: parent_id,
@@ -201,27 +196,21 @@ where
                 Err(e) => return Err(e),
             }
         }
-        dbg!("HERE");
         for (chain_id, initial_block_height, target_block_height, retryable) in
             jobs.into_iter().rev()
         {
             // Obtain chain state.
             let range = usize::from(initial_block_height)..usize::from(target_block_height);
             if !range.is_empty() {
-                dbg!("updater:211");
                 let keys = {
                     let mut chain = self.store.load_chain(chain_id).await?;
                     // Send the requested certificates in order.
-                    dbg!("reading log");
                     chain.confirmed_log.read(range).await?
                 };
-                dbg!("reading certificates");
                 let certs = self.store.read_certificates(keys.into_iter()).await?;
                 for cert in certs {
-                    dbg!("sending certificate");
                     self.send_certificate(cert, retryable).await?;
                 }
-                dbg!("job done");
             }
         }
         Ok(())
@@ -233,7 +222,6 @@ where
     ) -> Result<(), Error> {
         let mut info = Vec::new();
         {
-            dbg!("updater:234");
             let mut chain = self.store.load_chain(chain_id).await?;
             for id in chain.communication_states.indices().await? {
                 let mut state = chain.communication_states.load_entry(id).await?;
@@ -254,7 +242,6 @@ where
         chain_id: ChainId,
         action: CommunicateAction,
     ) -> Result<Option<Vote>, Error> {
-        dbg!("target_block_height");
         let target_block_height = match &action {
             CommunicateAction::SubmitBlockForValidation(proposal)
             | CommunicateAction::SubmitBlockForConfirmation(proposal) => {
@@ -266,11 +253,9 @@ where
             CommunicateAction::AdvanceToNextBlockHeight(seq) => *seq,
         };
         // Update the validator with missing information, if needed.
-        dbg!("send_chain_information");
         self.send_chain_information(chain_id, target_block_height)
             .await?;
         // Send the block proposal (if any) and return a vote.
-        dbg!("action");
         match action {
             CommunicateAction::SubmitBlockForValidation(proposal)
             | CommunicateAction::SubmitBlockForConfirmation(proposal) => {
@@ -311,7 +296,6 @@ where
             }
             CommunicateAction::AdvanceToNextBlockHeight(_) => (),
         }
-        dbg!("Finis");
         Ok(None)
     }
 }

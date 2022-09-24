@@ -105,7 +105,6 @@ where
         &mut self,
         block: &Block,
     ) -> Result<ChainInfoResponse, Error> {
-        dbg!("worker:108");
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
         chain.execute_block(block).await?;
         let info = chain.make_chain_info(None);
@@ -213,7 +212,6 @@ where
         // Obtain the sender's chain.
         let sender = block.chain_id;
         // Check that the chain is active and ready for this confirmation.
-        dbg!("worker:216");
         let mut chain = self.storage.load_active_chain(sender).await?;
         let tip = chain.tip_state.get();
         if tip.next_block_height < block.height {
@@ -295,7 +293,6 @@ where
             _ => panic!("Expecting a validation certificate"),
         };
         // Check that the chain is active and ready for this confirmation.
-        dbg!("worker:298");
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
         // Verify the certificate. Returns a catch-all error to make client code more robust.
         let epoch = chain
@@ -365,7 +362,6 @@ where
         log::trace!("{} <-- {:?}", self.nickname, proposal);
         // Obtain the sender's chain.
         let sender = proposal.content.block.chain_id;
-        dbg!("worker:368");
         let mut chain = self.storage.load_active_chain(sender).await?;
         // Check the epoch.
         let epoch = chain
@@ -462,9 +458,8 @@ where
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, Error> {
         log::trace!("{} <-- {:?}", self.nickname, query);
-        dbg!("worker:465");
         let mut chain = self.storage.load_chain(query.chain_id).await?;
-        let mut info = dbg!(chain.make_chain_info(None).info);
+        let mut info = chain.make_chain_info(None).info;
         if query.request_system_execution_state {
             info.requested_system_execution_state =
                 Some(chain.execution_state.get().system.clone());
@@ -558,7 +553,6 @@ where
                 recipient,
                 certificates,
             } => {
-                dbg!("worker:561");
                 let mut chain = self.storage.load_chain(recipient).await?;
                 let mut last_height = None;
                 let mut last_epoch = None;
@@ -660,7 +654,6 @@ where
                 recipient,
                 height,
             } => {
-                dbg!("worker:663");
                 let mut chain = self.storage.load_chain(chain_id).await?;
                 if chain
                     .mark_outbox_messages_as_received(application_id, recipient, height)
@@ -680,7 +673,6 @@ where
                 recipient,
                 height,
             } => {
-                dbg!("worker:683");
                 let mut chain = self.storage.load_chain(chain_id).await?;
                 if chain
                     .mark_channel_messages_as_received(&name, application_id, recipient, height)
