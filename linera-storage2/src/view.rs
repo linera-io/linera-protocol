@@ -33,6 +33,33 @@ impl_view! {
 }
 
 #[async_trait]
+impl<C> Store for (usize, Arc<Mutex<StorageView<C>>>)
+where
+    C: StorageViewContext,
+{
+    type Context = C;
+    type Error = StoreError<C::Error>;
+
+    async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<C>, Self::Error> {
+        dbg!("load_chain");
+        dbg!(self.0);
+        self.1.load_chain(id).await
+    }
+
+    async fn read_certificate(&self, hash: HashValue) -> Result<Certificate, Self::Error> {
+        dbg!("read_certificate");
+        dbg!(self.0);
+        self.1.read_certificate(hash).await
+    }
+
+    async fn write_certificate(&self, certificate: Certificate) -> Result<(), Self::Error> {
+        dbg!("write_certificate");
+        dbg!(self.0);
+        self.1.write_certificate(certificate).await
+    }
+}
+
+#[async_trait]
 impl<C> Store for Arc<Mutex<StorageView<C>>>
 where
     C: StorageViewContext,
