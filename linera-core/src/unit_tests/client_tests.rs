@@ -81,12 +81,12 @@ where
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, Error> {
-        // println!("x: handle_chain_info_query");
+        println!("x: handle_chain_info_query");
         let validator = self.0.clone();
         let mut validator = validator.lock().await;
-        // println!("{}: handle_chain_info_query [", validator.id);
+        println!("{}: handle_chain_info_query [", validator.id);
         let ret = validator.state.handle_chain_info_query(query).await;
-        // println!("{}: handle_chain_info_query ]", validator.id);
+        println!("{}: handle_chain_info_query ]", validator.id);
         ret
     }
 }
@@ -383,17 +383,19 @@ impl StoreBuilder for MakeMemoryStoreClient {
 #[derive(Default)]
 pub struct MakeRocksdbStoreClient {
     temp_dirs: Vec<tempfile::TempDir>,
+    counter: usize,
 }
 
 #[async_trait]
 impl StoreBuilder for MakeRocksdbStoreClient {
-    type Store = Arc<Mutex<StorageView<RocksdbContext>>>;
+    type Store = (usize, Arc<Mutex<StorageView<RocksdbContext>>>);
 
     async fn build(&mut self) -> Result<Self::Store, anyhow::Error> {
         let dir = tempfile::TempDir::new()?;
         let path = dir.path().to_path_buf();
         self.temp_dirs.push(dir);
-        Ok(RocksdbStoreClient::new(path).await?)
+        self.counter += 1;
+        Ok((self.counter, RocksdbStoreClient::new(path).await?))
     }
 }
 

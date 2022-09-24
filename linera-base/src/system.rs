@@ -136,11 +136,11 @@ pub enum SystemEffect {
 impl SystemExecutionState {
     /// Invariant for the states of active chains.
     pub fn is_active(&self) -> bool {
-        self.description.is_some()
-            && self.manager.is_active()
-            && self.epoch.is_some()
-            && self.committees.contains_key(self.epoch.as_ref().unwrap())
-            && self.admin_id.is_some()
+        dbg!(self.description.is_some())
+            && dbg!(self.manager.is_active())
+            && dbg!(self.epoch.is_some())
+            && dbg!(self.committees.contains_key(self.epoch.as_ref().unwrap()))
+            && dbg!(self.admin_id.is_some())
     }
 }
 

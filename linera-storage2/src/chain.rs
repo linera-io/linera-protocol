@@ -209,6 +209,7 @@ where
     }
 
     pub async fn commit(self) -> Result<(), C::Error> {
+        dbg!("commit");
         let context = self.0.context().clone();
         context
             .run_with_batch(move |batch| Box::pin(self.0.commit(batch)))

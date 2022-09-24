@@ -464,7 +464,7 @@ where
         log::trace!("{} <-- {:?}", self.nickname, query);
         dbg!("worker:465");
         let mut chain = self.storage.load_chain(query.chain_id).await?;
-        let mut info = chain.make_chain_info(None).info;
+        let mut info = dbg!(chain.make_chain_info(None).info);
         if query.request_system_execution_state {
             info.requested_system_execution_state =
                 Some(chain.execution_state.get().system.clone());

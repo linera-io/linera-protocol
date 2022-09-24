@@ -244,10 +244,13 @@ where
 
     pub async fn committee(&mut self) -> Result<Committee, Error> {
         let mut state = self.execution_state().await?;
-        state
+        dbg!("committee");
+        let ret = state
             .committees
             .remove(&state.epoch.ok_or(Error::InactiveChain(self.chain_id))?)
-            .ok_or(Error::InactiveChain(self.chain_id))
+            .ok_or(Error::InactiveChain(self.chain_id));
+        dbg!(matches!(ret, Err(Error::InactiveChain(_))));
+        ret
     }
 
     async fn known_committees(&mut self) -> Result<(BTreeMap<Epoch, Committee>, Epoch), Error> {
@@ -296,11 +299,14 @@ where
     }
 
     async fn epoch(&mut self) -> Result<Epoch, anyhow::Error> {
-        Ok(self
+        dbg!("epoch");
+        let ret = Ok(self
             .chain_info()
             .await?
             .epoch
-            .ok_or(Error::InactiveChain(self.chain_id))?)
+            .ok_or(Error::InactiveChain(self.chain_id))?);
+        dbg!("not epoch");
+        ret
     }
 
     async fn identity(&mut self) -> Result<Owner, anyhow::Error> {
@@ -335,7 +341,7 @@ where
                 }
                 Ok(identities.pop().unwrap())
             }
-            ChainManager::None => Err(Error::InactiveChain(self.chain_id).into()),
+            ChainManager::None => dbg!(Err(Error::InactiveChain(self.chain_id).into())),
         }
     }
 
@@ -569,10 +575,12 @@ where
         // Use network information from the local chain.
         let chain_id = self.chain_id;
         let state = self.execution_state().await?;
+        dbg!("find_received_certificates");
         let local_committee = state
             .committees
             .get(&state.epoch.ok_or(Error::InactiveChain(chain_id))?)
             .ok_or(Error::InactiveChain(chain_id))?;
+        dbg!("not find_received_certificates");
         let nodes = self.make_validator_nodes(local_committee)?;
         // Use committess from the admin chain.
         self.node_client
@@ -1003,9 +1011,11 @@ where
             index: 0,
         });
         let state = self.execution_state().await?;
+        dbg!("open_chain");
         let admin_id = state.admin_id.ok_or(Error::InactiveChain(self.chain_id))?;
         let committees = state.committees;
         let epoch = state.epoch.ok_or(Error::InactiveChain(self.chain_id))?;
+        dbg!("not open_chain");
         let block = Block {
             epoch,
             chain_id: self.chain_id,
@@ -1142,7 +1152,9 @@ where
     async fn finalize_committee(&mut self) -> Result<Certificate> {
         self.prepare_chain().await?;
         let state = self.execution_state().await?;
+        dbg!("finalize_committee");
         let current_epoch = state.epoch.ok_or(Error::InactiveChain(self.chain_id))?;
+        dbg!("not finalize_committee");
         let operations = state
             .committees
             .keys()
