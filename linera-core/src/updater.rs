@@ -209,12 +209,10 @@ where
             let range = usize::from(initial_block_height)..usize::from(target_block_height);
             if !range.is_empty() {
                 dbg!("updater:211");
-                let keys = {
-                    let mut chain = self.store.load_chain(chain_id).await?;
-                    // Send the requested certificates in order.
-                    dbg!("reading log");
-                    chain.confirmed_log.read(range).await?
-                };
+                let mut chain = self.store.load_chain(chain_id).await?;
+                // Send the requested certificates in order.
+                dbg!("reading log");
+                let keys = chain.confirmed_log.read(range).await?;
                 dbg!("reading certificates");
                 let certs = self.store.read_certificates(keys.into_iter()).await?;
                 for cert in certs {
