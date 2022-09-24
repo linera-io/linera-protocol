@@ -7,6 +7,9 @@ mod memory;
 mod rocksdb;
 pub mod view;
 
+#[cfg(test)]
+mod unit_tests;
+
 pub use crate::{
     dynamo_db::DynamoDbStoreClient, memory::MemoryStoreClient, rocksdb::RocksdbStoreClient,
 };

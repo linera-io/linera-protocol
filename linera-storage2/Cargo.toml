@@ -16,3 +16,7 @@ thiserror = "1.0.31"
 
 linera-base = { path = "../linera-base" }
 linera-views = { path = "../linera-views" }
+
+[dev-dependencies]
+anyhow = "1.0.57"
+tempfile = "3.2.0"

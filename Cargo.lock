@@ -1320,6 +1320,7 @@ dependencies = [
 name = "linera-storage2"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "bcs",
  "futures",
@@ -1328,6 +1329,7 @@ dependencies = [
  "log",
  "rocksdb",
  "serde",
+ "tempfile",
  "thiserror",
  "tokio",
 ]
