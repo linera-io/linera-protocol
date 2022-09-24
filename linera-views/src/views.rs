@@ -1008,9 +1008,7 @@ where
         // dbg!(format!("Committing entry: {:?}", &self.index));
         if let Some(entry) = self.entry.as_mut() {
             entry.commit_and_reset(batch).await?;
-            let entry_context = self.context.clone_with_scope(&self.index);
             self.context.add_index(batch, self.index.clone()).await?;
-            *self.entry = Some(Entry::load(entry_context).await?);
         } else {
             self.context.remove_index(batch, self.index.clone()).await?;
         }
