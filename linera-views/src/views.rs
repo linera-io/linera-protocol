@@ -238,7 +238,7 @@ pub struct AppendOnlyLogView<C, T> {
     context: C,
     stored_count: usize,
     new_values: Vec<T>,
-    need_delete: bool,
+    was_reset_to_default: bool,
 }
 
 /// The context operations supporting [`AppendOnlyLogView`].
@@ -285,7 +285,7 @@ where
             context,
             stored_count,
             new_values: Vec::new(),
-            need_delete: false,
+            was_reset_to_default: false,
         })
     }
 
@@ -294,7 +294,7 @@ where
     }
 
     async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        if self.need_delete && self.stored_count > 0 {
+        if self.was_reset_to_default && self.stored_count > 0 {
             self.context.delete(self.stored_count, batch).await?;
             self.stored_count = 0
         }
@@ -312,7 +312,7 @@ where
     }
 
     fn reset_to_default(&mut self) {
-        self.need_delete = true;
+        self.was_reset_to_default = true;
         self.new_values.clear();
     }
 }
@@ -328,7 +328,7 @@ where
 
     /// Read the size of the log.
     pub fn count(&self) -> usize {
-        if self.need_delete {
+        if self.was_reset_to_default {
             self.new_values.len()
         } else {
             self.stored_count + self.new_values.len()
@@ -347,7 +347,7 @@ where
 {
     /// Read the logged values in the given range (including staged ones).
     pub async fn get(&mut self, index: usize) -> Result<Option<T>, C::Error> {
-        if self.need_delete {
+        if self.was_reset_to_default {
             Ok(self.new_values.get(index).cloned())
         } else if index < self.stored_count {
             self.context.get(index).await
@@ -358,7 +358,7 @@ where
 
     /// Read the logged values in the given range (including staged ones).
     pub async fn read(&mut self, mut range: Range<usize>) -> Result<Vec<T>, C::Error> {
-        let stored_count_eff = if self.need_delete {
+        let stored_count_eff = if self.was_reset_to_default {
             0
         } else {
             self.stored_count
@@ -392,7 +392,7 @@ where
 #[derive(Debug, Clone)]
 pub struct MapView<C, I, V> {
     context: C,
-    need_delete: bool,
+    was_reset_to_default: bool,
     updates: BTreeMap<I, Option<V>>,
 }
 
@@ -436,7 +436,7 @@ where
     async fn load(context: C) -> Result<Self, C::Error> {
         Ok(Self {
             context,
-            need_delete: false,
+            was_reset_to_default: false,
             updates: BTreeMap::new(),
         })
     }
@@ -446,7 +446,7 @@ where
     }
 
     async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        if self.need_delete {
+        if self.was_reset_to_default {
             let stored_indices = self.context.indices().await?;
             for index in stored_indices {
                 self.context.remove(batch, index).await?;
@@ -479,7 +479,7 @@ where
     }
 
     fn reset_to_default(&mut self) {
-        self.need_delete = true;
+        self.was_reset_to_default = true;
         self.updates.clear();
     }
 }
@@ -515,7 +515,7 @@ where
         if let Some(update) = self.updates.get(index) {
             return Ok(update.as_ref().cloned());
         }
-        if self.need_delete {
+        if self.was_reset_to_default {
             return Ok(None);
         }
         self.context.get(index).await
@@ -524,7 +524,7 @@ where
     /// Return the list of indices in the map.
     pub async fn indices(&mut self) -> Result<Vec<I>, C::Error> {
         let mut indices = Vec::new();
-        if !self.need_delete {
+        if !self.was_reset_to_default {
             for index in self.context.indices().await? {
                 if !self.updates.contains_key(&index) {
                     indices.push(index);
@@ -846,7 +846,7 @@ where
                     Some(view) => Ok(view),
                     None => {
                         let context = self.context.clone_with_scope(&index);
-                        // Need to add the removal of entries before the loading.
+                        // Obtain a view and set its pending state to the default (e.g. empty) state
                         let mut view = W::load(context).await?;
                         view.reset_to_default();
                         *f = Some(view);
