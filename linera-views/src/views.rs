@@ -743,12 +743,6 @@ where
     }
 }
 
-pub enum CollectionViewEntry<W> {
-    Removed,
-    Changed(W),
-    Replaced(W),
-}
-
 /// A view that supports accessing a collection of views of the same kind, indexed by a
 /// key.
 #[derive(Debug, Clone)]
