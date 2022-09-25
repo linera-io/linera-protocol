@@ -397,10 +397,11 @@ async fn test_removal_api_first_second_condition(first_condition: bool, second_c
 
 #[tokio::test]
 async fn test_removal_api() -> anyhow::Result<()> {
-    test_removal_api_first_second_condition(true, true).await?;
-    test_removal_api_first_second_condition(false, true).await?;
-    test_removal_api_first_second_condition(true, false).await?;
-    test_removal_api_first_second_condition(false, false).await?;
+    for first_condition in vec![true, false] {
+        for second_condition in vec![true,false] {
+            test_removal_api_first_second_condition(first_condition, second_condition).await?;
+        }
+    }
     Ok(())
 }
 
