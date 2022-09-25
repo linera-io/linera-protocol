@@ -358,7 +358,7 @@ where
 
     /// Read the logged values in the given range (including staged ones).
     pub async fn read(&mut self, mut range: Range<usize>) -> Result<Vec<T>, C::Error> {
-        let stored_count_eff = if self.was_reset_to_default {
+        let effective_stored_count = if self.was_reset_to_default {
             0
         } else {
             self.stored_count
@@ -371,16 +371,16 @@ where
         }
         let mut values = Vec::new();
         values.reserve(range.end - range.start);
-        if range.start < stored_count_eff {
-            if range.end <= stored_count_eff {
+        if range.start < effective_stored_count {
+            if range.end <= effective_stored_count {
                 values.extend(self.context.read(range.start..range.end).await?);
             } else {
-                values.extend(self.context.read(range.start..stored_count_eff).await?);
-                values.extend(self.new_values[0..(range.end - stored_count_eff)].to_vec());
+                values.extend(self.context.read(range.start..effective_stored_count).await?);
+                values.extend(self.new_values[0..(range.end - effective_stored_count)].to_vec());
             }
         } else {
             values.extend(
-                self.new_values[(range.start - stored_count_eff)..(range.end - stored_count_eff)]
+                self.new_values[(range.start - effective_stored_count)..(range.end - effective_stored_count)]
                     .to_vec(),
             );
         }
