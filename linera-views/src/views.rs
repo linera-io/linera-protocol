@@ -868,7 +868,7 @@ where
     }
 
     /// Mark the entry so that it is removed in the next commit.
-    pub async fn clear_entry(&mut self, index: I) -> Result<(), C::Error> {
+    pub async fn reset_entry_to_default(&mut self, index: I) -> Result<(), C::Error> {
         let view = self.load_entry(index).await?;
         view.reset_to_default();
         Ok(())
