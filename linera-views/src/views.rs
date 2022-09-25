@@ -824,6 +824,7 @@ where
     }
 
     fn reset_to_default(&mut self) {
+        self.updates.clear();
         for index in &self.stored_indices {
             self.updates.insert(index.clone(), None);
         }
