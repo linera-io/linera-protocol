@@ -836,8 +836,8 @@ where
     I: Eq + Ord + Sync + Clone + Send + Debug,
     W: View<C>,
 {
-    /// Obtain a subview for the data at the given index in the collection. Return an
-    /// error if `remove_entry` was used earlier on this index from the same [`CollectionView`].
+    /// Obtain a subview for the data at the given index in the collection. If an entry
+    /// was removed before then a default entry is put on this index.
     pub async fn load_entry(&mut self, index: I) -> Result<&mut W, C::Error> {
         match self.updates.entry(index.clone()) {
             btree_map::Entry::Occupied(e) => {
