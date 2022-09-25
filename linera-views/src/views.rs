@@ -375,12 +375,17 @@ where
             if range.end <= effective_stored_count {
                 values.extend(self.context.read(range.start..range.end).await?);
             } else {
-                values.extend(self.context.read(range.start..effective_stored_count).await?);
+                values.extend(
+                    self.context
+                        .read(range.start..effective_stored_count)
+                        .await?,
+                );
                 values.extend(self.new_values[0..(range.end - effective_stored_count)].to_vec());
             }
         } else {
             values.extend(
-                self.new_values[(range.start - effective_stored_count)..(range.end - effective_stored_count)]
+                self.new_values
+                    [(range.start - effective_stored_count)..(range.end - effective_stored_count)]
                     .to_vec(),
             );
         }

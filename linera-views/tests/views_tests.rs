@@ -340,8 +340,10 @@ async fn test_collection_removal() -> anyhow::Result<()> {
     Ok(())
 }
 
-
-async fn test_removal_api_first_second_condition(first_condition: bool, second_condition: bool) -> anyhow::Result<()> {
+async fn test_removal_api_first_second_condition(
+    first_condition: bool,
+    second_condition: bool,
+) -> anyhow::Result<()> {
     type EntryType = RegisterView<MemoryContext<()>, u8>;
     type CollectionViewType = CollectionView<MemoryContext<()>, u8, EntryType>;
 
@@ -392,8 +394,6 @@ async fn test_removal_api_first_second_condition(first_condition: bool, second_c
     };
     Ok(())
 }
-
-
 
 #[tokio::test]
 async fn test_removal_api() -> anyhow::Result<()> {
