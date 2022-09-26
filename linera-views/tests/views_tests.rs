@@ -10,9 +10,8 @@ use linera_views::{
     rocksdb::{KeyValueOperations, RocksdbContext, RocksdbViewError, DB},
     test_utils::LocalStackTestContext,
     views::{
-        LogOperations, LogView, CollectionOperations, CollectionView, Context,
-        MapOperations, MapView, QueueOperations, QueueView, RegisterOperations, RegisterView,
-        ScopedView, View,
+        CollectionOperations, CollectionView, Context, LogOperations, LogView, MapOperations,
+        MapView, QueueOperations, QueueView, RegisterOperations, RegisterView, ScopedView, View,
     },
 };
 use std::{

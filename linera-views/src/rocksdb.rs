@@ -4,7 +4,7 @@
 use crate::{
     hash::HashingContext,
     views::{
-        LogOperations, CollectionOperations, Context, MapOperations, QueueOperations,
+        CollectionOperations, Context, LogOperations, MapOperations, QueueOperations,
         RegisterOperations, ScopedOperations, ViewError,
     },
 };

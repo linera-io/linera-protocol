@@ -5,7 +5,7 @@ use crate::{
     hash::HashingContext,
     localstack,
     views::{
-        LogOperations, CollectionOperations, Context, MapOperations, QueueOperations,
+        CollectionOperations, Context, LogOperations, MapOperations, QueueOperations,
         RegisterOperations, ScopedOperations, ViewError,
     },
 };

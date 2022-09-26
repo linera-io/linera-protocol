@@ -17,9 +17,8 @@ use linera_base::{
 use linera_views::{
     impl_view,
     views::{
-        LogOperations, LogView, CollectionOperations, CollectionView,
-        MapOperations, MapView, QueueOperations, QueueView, RegisterOperations, RegisterView,
-        ScopedView,
+        CollectionOperations, CollectionView, LogOperations, LogView, MapOperations, MapView,
+        QueueOperations, QueueView, RegisterOperations, RegisterView, ScopedView,
     },
 };
 use serde::{Deserialize, Serialize};
