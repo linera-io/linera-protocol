@@ -46,6 +46,10 @@ where
         $( self.$field.delete(batch).await?; )*
         Ok(())
     }
+
+    fn reset_to_default(&mut self) {
+        $( self.$field.reset_to_default(); )*
+    }
 }
 
 #[$crate::async_trait]
