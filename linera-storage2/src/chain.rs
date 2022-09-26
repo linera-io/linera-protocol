@@ -17,7 +17,7 @@ use linera_base::{
 use linera_views::{
     impl_view,
     views::{
-        AppendOnlyLogOperations, AppendOnlyLogView, CollectionOperations, CollectionView,
+        LogOperations, LogView, CollectionOperations, CollectionView,
         MapOperations, MapView, QueueOperations, QueueView, RegisterOperations, RegisterView,
         ScopedView,
     },
@@ -38,9 +38,9 @@ pub struct ChainStateView<C> {
 
     /// Hashes of all certified blocks for this sender.
     /// This ends with `block_hash` and has length `usize::from(next_block_height)`.
-    pub confirmed_log: ScopedView<3, AppendOnlyLogView<C, HashValue>>,
+    pub confirmed_log: ScopedView<3, LogView<C, HashValue>>,
     /// Hashes of all certified blocks known as a receiver (local ordering).
-    pub received_log: ScopedView<4, AppendOnlyLogView<C, HashValue>>,
+    pub received_log: ScopedView<4, LogView<C, HashValue>>,
 
     /// Communication state of applications.
     pub communication_states:
@@ -59,7 +59,7 @@ impl_view!(
     RegisterOperations<ExecutionState>,
     RegisterOperations<Option<HashValue>>,
     RegisterOperations<ChainTipState>,
-    AppendOnlyLogOperations<HashValue>,
+    LogOperations<HashValue>,
     CollectionOperations<ApplicationId>,
     CommunicationStateViewContext,
 );

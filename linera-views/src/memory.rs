@@ -4,7 +4,7 @@
 use crate::{
     hash::HashingContext,
     views::{
-        AppendOnlyLogOperations, CollectionOperations, Context, MapOperations, QueueOperations,
+        LogOperations, CollectionOperations, Context, MapOperations, QueueOperations,
         RegisterOperations, ScopedOperations, ViewError,
     },
 };
@@ -150,7 +150,7 @@ where
 }
 
 #[async_trait]
-impl<E, T> AppendOnlyLogOperations<T> for MemoryContext<E>
+impl<E, T> LogOperations<T> for MemoryContext<E>
 where
     T: Clone + Send + Sync + 'static,
     E: Clone + Send + Sync,

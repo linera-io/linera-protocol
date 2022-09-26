@@ -8,7 +8,7 @@ use linera_storage2::{
     chain::{ChainStateView, OutboxStateView},
     Store,
 };
-use linera_views::views::{AppendOnlyLogView, View};
+use linera_views::views::{LogView, View};
 use std::{collections::VecDeque, sync::Arc};
 
 #[cfg(test)]
@@ -119,7 +119,7 @@ where
 
     async fn make_cross_chain_request(
         &mut self,
-        confirmed_log: &mut AppendOnlyLogView<Client::Context, HashValue>,
+        confirmed_log: &mut LogView<Client::Context, HashValue>,
         application_id: ApplicationId,
         origin: Origin,
         recipient: ChainId,

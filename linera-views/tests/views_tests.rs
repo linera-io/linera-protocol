@@ -10,7 +10,7 @@ use linera_views::{
     rocksdb::{KeyValueOperations, RocksdbContext, RocksdbViewError, DB},
     test_utils::LocalStackTestContext,
     views::{
-        AppendOnlyLogOperations, AppendOnlyLogView, CollectionOperations, CollectionView, Context,
+        LogOperations, LogView, CollectionOperations, CollectionView, Context,
         MapOperations, MapView, QueueOperations, QueueView, RegisterOperations, RegisterView,
         ScopedView, View,
     },
@@ -25,10 +25,10 @@ use tokio::sync::Mutex;
 pub struct StateView<C> {
     pub x1: ScopedView<0, RegisterView<C, u64>>,
     pub x2: ScopedView<1, RegisterView<C, u32>>,
-    pub log: ScopedView<2, AppendOnlyLogView<C, u32>>,
+    pub log: ScopedView<2, LogView<C, u32>>,
     pub map: ScopedView<3, MapView<C, String, usize>>,
     pub queue: ScopedView<4, QueueView<C, u64>>,
-    pub collection: ScopedView<5, CollectionView<C, String, AppendOnlyLogView<C, u32>>>,
+    pub collection: ScopedView<5, CollectionView<C, String, LogView<C, u32>>>,
     pub collection2:
         ScopedView<6, CollectionView<C, String, CollectionView<C, String, RegisterView<C, u32>>>>,
     pub collection3: ScopedView<7, CollectionView<C, String, QueueView<C, u64>>>,
@@ -38,7 +38,7 @@ pub struct StateView<C> {
 impl_view!(StateView { x1, x2, log, map, queue, collection, collection2, collection3 };
            RegisterOperations<u64>,
            RegisterOperations<u32>,
-           AppendOnlyLogOperations<u32>,
+           LogOperations<u32>,
            MapOperations<String, usize>,
            QueueOperations<u64>,
            CollectionOperations<String>,
