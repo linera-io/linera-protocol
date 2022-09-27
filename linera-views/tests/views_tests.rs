@@ -10,9 +10,8 @@ use linera_views::{
     rocksdb::{KeyValueOperations, RocksdbContext, RocksdbViewError, DB},
     test_utils::LocalStackTestContext,
     views::{
-        AppendOnlyLogOperations, AppendOnlyLogView, CollectionOperations, CollectionView, Context,
-        MapOperations, MapView, QueueOperations, QueueView, RegisterOperations, RegisterView,
-        ScopedView, View,
+        CollectionOperations, CollectionView, Context, LogOperations, LogView, MapOperations,
+        MapView, QueueOperations, QueueView, RegisterOperations, RegisterView, ScopedView, View,
     },
 };
 use std::{
@@ -25,21 +24,24 @@ use tokio::sync::Mutex;
 pub struct StateView<C> {
     pub x1: ScopedView<0, RegisterView<C, u64>>,
     pub x2: ScopedView<1, RegisterView<C, u32>>,
-    pub log: ScopedView<2, AppendOnlyLogView<C, u32>>,
+    pub log: ScopedView<2, LogView<C, u32>>,
     pub map: ScopedView<3, MapView<C, String, usize>>,
     pub queue: ScopedView<4, QueueView<C, u64>>,
-    pub collection: ScopedView<5, CollectionView<C, String, AppendOnlyLogView<C, u32>>>,
+    pub collection: ScopedView<5, CollectionView<C, String, LogView<C, u32>>>,
     pub collection2:
         ScopedView<6, CollectionView<C, String, CollectionView<C, String, RegisterView<C, u32>>>>,
+    pub collection3: ScopedView<7, CollectionView<C, String, QueueView<C, u64>>>,
 }
 
 // This also generates `trait StateViewContext: Context ... {}`
-impl_view!(StateView { x1, x2, log, map, queue, collection, collection2 };
+impl_view!(StateView { x1, x2, log, map, queue, collection, collection2, collection3 };
            RegisterOperations<u64>,
            RegisterOperations<u32>,
-           AppendOnlyLogOperations<u32>,
+           LogOperations<u32>,
            MapOperations<String, usize>,
            QueueOperations<u64>,
+           CollectionOperations<String>,
+           CollectionOperations<String>,
            CollectionOperations<String>
 );
 
@@ -262,6 +264,7 @@ where
         view.queue.delete_front();
         assert_eq!(view.queue.front().await.unwrap(), None);
         assert_eq!(view.queue.count(), 0);
+        view.queue.push_back(13);
         assert_eq!(view.map.get(&"Hello".to_string()).await.unwrap(), Some(5));
         assert_eq!(view.map.get(&"Hi".to_string()).await.unwrap(), None);
         {
@@ -299,9 +302,106 @@ where
                 .unwrap();
             assert_eq!(subview.read(0..10).await.unwrap(), vec![]);
         }
+        {
+            assert_eq!(view.queue.front().await.unwrap(), Some(13));
+            view.queue.delete_front();
+            assert_eq!(view.queue.front().await.unwrap(), None);
+            assert_eq!(view.queue.count(), 0);
+        }
         view.write_delete().await.unwrap();
     }
     staged_hash
+}
+
+#[tokio::test]
+async fn test_collection_removal() -> anyhow::Result<()> {
+    type EntryType = RegisterView<MemoryContext<()>, u8>;
+    type CollectionViewType = CollectionView<MemoryContext<()>, u8, EntryType>;
+
+    let state = Arc::new(Mutex::new(BTreeMap::new()));
+    let context = MemoryContext::new(state.lock_owned().await, ());
+
+    // Write a dummy entry into the collection.
+    let mut collection = CollectionViewType::load(context.clone()).await?;
+    let entry = collection.load_entry(1).await?;
+    entry.set(1);
+    collection.commit(&mut ()).await?;
+
+    // Remove the entry from the collection.
+    let mut collection = CollectionViewType::load(context.clone()).await?;
+    collection.remove_entry(1);
+    collection.commit(&mut ()).await?;
+
+    // Check that the entry was removed.
+    let mut collection = CollectionViewType::load(context.clone()).await?;
+    assert!(!collection.indices().await?.contains(&1));
+
+    Ok(())
+}
+
+async fn test_removal_api_first_second_condition(
+    first_condition: bool,
+    second_condition: bool,
+) -> anyhow::Result<()> {
+    type EntryType = RegisterView<MemoryContext<()>, u8>;
+    type CollectionViewType = CollectionView<MemoryContext<()>, u8, EntryType>;
+
+    let state = Arc::new(Mutex::new(BTreeMap::new()));
+    let context = MemoryContext::new(state.lock_owned().await, ());
+
+    // First add an entry `1` with value `100` and commit
+    let mut collection: CollectionViewType = CollectionView::load(context.clone()).await?;
+    let entry = collection.load_entry(1).await?;
+    entry.set(100);
+    collection.commit(&mut ()).await?;
+
+    // Reload the collection view and remove the entry, but don't commit yet
+    let mut collection: CollectionViewType = CollectionView::load(context.clone()).await?;
+    collection.remove_entry(1);
+
+    // Now, read the entry with a different value if a certain condition is true
+    if first_condition {
+        let entry = collection.load_entry(1).await?;
+        entry.set(200);
+    }
+
+    // Finally, either commit or rollback based on some other condition
+    if second_condition {
+        // If rolling back, then the entry `1` still exists with value `100`.
+        collection.rollback();
+    }
+
+    // We commit
+    collection.commit(&mut ()).await?;
+
+    let mut collection: CollectionViewType = CollectionView::load(context.clone()).await?;
+    let expected_val = if second_condition {
+        Some(100)
+    } else if first_condition {
+        Some(200)
+    } else {
+        None
+    };
+    match expected_val {
+        Some(expected_val_i) => {
+            let subview = collection.load_entry(1).await?;
+            assert_eq!(subview.get(), &expected_val_i);
+        }
+        None => {
+            assert!(!collection.indices().await?.contains(&1));
+        }
+    };
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_removal_api() -> anyhow::Result<()> {
+    for first_condition in [true, false] {
+        for second_condition in [true, false] {
+            test_removal_api_first_second_condition(first_condition, second_condition).await?;
+        }
+    }
+    Ok(())
 }
 
 #[tokio::test]
