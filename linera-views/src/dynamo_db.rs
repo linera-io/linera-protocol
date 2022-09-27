@@ -5,7 +5,7 @@ use crate::{
     hash::HashingContext,
     localstack,
     views::{
-        AppendOnlyLogOperations, CollectionOperations, Context, MapOperations, QueueOperations,
+        CollectionOperations, Context, LogOperations, MapOperations, QueueOperations,
         RegisterOperations, ScopedOperations, ViewError,
     },
 };
@@ -457,7 +457,7 @@ where
 }
 
 #[async_trait]
-impl<E, T> AppendOnlyLogOperations<T> for DynamoDbContext<E>
+impl<E, T> LogOperations<T> for DynamoDbContext<E>
 where
     T: Serialize + DeserializeOwned + Send + Sync + 'static,
     E: Clone + Send + Sync,

@@ -60,9 +60,9 @@ where
 }
 
 #[async_trait]
-impl<C, T> HashView<C> for AppendOnlyLogView<C, T>
+impl<C, T> HashView<C> for LogView<C, T>
 where
-    C: HashingContext + AppendOnlyLogOperations<T> + Send + Sync,
+    C: HashingContext + LogOperations<T> + Send + Sync,
     T: Send + Sync + Clone + Serialize,
 {
     async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, C::Error> {

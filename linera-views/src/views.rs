@@ -61,6 +61,9 @@ pub trait View<C: Context>: Sized {
     /// subviews. Crash-resistant storage implementations are expected to accumulate the
     /// desired changes into the `batch` variable first.
     async fn delete(self, batch: &mut C::Batch) -> Result<(), C::Error>;
+
+    /// Reset to the default values. Needed by [`CollectionView::remove_entry`].
+    fn reset_to_default(&mut self);
 }
 
 #[derive(Error, Debug)]
@@ -124,6 +127,10 @@ where
     async fn delete(self, batch: &mut C::Batch) -> Result<(), C::Error> {
         self.view.delete(batch).await
     }
+
+    fn reset_to_default(&mut self) {
+        self.view.reset_to_default();
+    }
 }
 
 /// A view that supports modifying a single value of type `T`.
@@ -151,7 +158,7 @@ pub trait RegisterOperations<T>: Context {
 impl<C, T> View<C> for RegisterView<C, T>
 where
     C: RegisterOperations<T> + Send + Sync,
-    T: Send + Sync,
+    T: Send + Sync + Default,
 {
     fn context(&self) -> &C {
         &self.context
@@ -179,6 +186,10 @@ where
 
     async fn delete(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         self.context.delete(batch).await
+    }
+
+    fn reset_to_default(&mut self) {
+        self.update = Some(T::default())
     }
 }
 
@@ -223,15 +234,16 @@ where
 
 /// A view that supports logging values of type `T`.
 #[derive(Debug, Clone)]
-pub struct AppendOnlyLogView<C, T> {
+pub struct LogView<C, T> {
     context: C,
     stored_count: usize,
     new_values: Vec<T>,
+    was_reset_to_default: bool,
 }
 
-/// The context operations supporting [`AppendOnlyLogView`].
+/// The context operations supporting [`LogView`].
 #[async_trait]
-pub trait AppendOnlyLogOperations<T>: Context {
+pub trait LogOperations<T>: Context {
     /// Return the size of the log in storage.
     async fn count(&mut self) -> Result<usize, Self::Error>;
 
@@ -258,9 +270,9 @@ pub trait AppendOnlyLogOperations<T>: Context {
 }
 
 #[async_trait]
-impl<C, T> View<C> for AppendOnlyLogView<C, T>
+impl<C, T> View<C> for LogView<C, T>
 where
-    C: AppendOnlyLogOperations<T> + Send + Sync,
+    C: LogOperations<T> + Send + Sync,
     T: Send + Sync + Clone,
 {
     fn context(&self) -> &C {
@@ -273,6 +285,7 @@ where
             context,
             stored_count,
             new_values: Vec::new(),
+            was_reset_to_default: false,
         })
     }
 
@@ -281,6 +294,10 @@ where
     }
 
     async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+        if self.was_reset_to_default && self.stored_count > 0 {
+            self.context.delete(self.stored_count, batch).await?;
+            self.stored_count = 0
+        }
         if !self.new_values.is_empty() {
             self.context
                 .append(self.stored_count, batch, self.new_values)
@@ -293,9 +310,14 @@ where
     async fn delete(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         self.context.delete(self.stored_count, batch).await
     }
+
+    fn reset_to_default(&mut self) {
+        self.was_reset_to_default = true;
+        self.new_values.clear();
+    }
 }
 
-impl<C, T> AppendOnlyLogView<C, T>
+impl<C, T> LogView<C, T>
 where
     C: Context,
 {
@@ -306,7 +328,11 @@ where
 
     /// Read the size of the log.
     pub fn count(&self) -> usize {
-        self.stored_count + self.new_values.len()
+        if self.was_reset_to_default {
+            self.new_values.len()
+        } else {
+            self.stored_count + self.new_values.len()
+        }
     }
 
     pub fn extra(&self) -> &C::Extra {
@@ -314,14 +340,16 @@ where
     }
 }
 
-impl<C, T> AppendOnlyLogView<C, T>
+impl<C, T> LogView<C, T>
 where
-    C: AppendOnlyLogOperations<T> + Send + Sync,
+    C: LogOperations<T> + Send + Sync,
     T: Send + Sync + Clone,
 {
     /// Read the logged values in the given range (including staged ones).
     pub async fn get(&mut self, index: usize) -> Result<Option<T>, C::Error> {
-        if index < self.stored_count {
+        if self.was_reset_to_default {
+            Ok(self.new_values.get(index).cloned())
+        } else if index < self.stored_count {
             self.context.get(index).await
         } else {
             Ok(self.new_values.get(index - self.stored_count).cloned())
@@ -330,6 +358,11 @@ where
 
     /// Read the logged values in the given range (including staged ones).
     pub async fn read(&mut self, mut range: Range<usize>) -> Result<Vec<T>, C::Error> {
+        let effective_stored_count = if self.was_reset_to_default {
+            0
+        } else {
+            self.stored_count
+        };
         if range.end > self.count() {
             range.end = self.count();
         }
@@ -338,16 +371,21 @@ where
         }
         let mut values = Vec::new();
         values.reserve(range.end - range.start);
-        if range.start < self.stored_count {
-            if range.end <= self.stored_count {
+        if range.start < effective_stored_count {
+            if range.end <= effective_stored_count {
                 values.extend(self.context.read(range.start..range.end).await?);
             } else {
-                values.extend(self.context.read(range.start..self.stored_count).await?);
-                values.extend(self.new_values[0..(range.end - self.stored_count)].to_vec());
+                values.extend(
+                    self.context
+                        .read(range.start..effective_stored_count)
+                        .await?,
+                );
+                values.extend(self.new_values[0..(range.end - effective_stored_count)].to_vec());
             }
         } else {
             values.extend(
-                self.new_values[(range.start - self.stored_count)..(range.end - self.stored_count)]
+                self.new_values
+                    [(range.start - effective_stored_count)..(range.end - effective_stored_count)]
                     .to_vec(),
             );
         }
@@ -359,6 +397,7 @@ where
 #[derive(Debug, Clone)]
 pub struct MapView<C, I, V> {
     context: C,
+    was_reset_to_default: bool,
     updates: BTreeMap<I, Option<V>>,
 }
 
@@ -392,7 +431,7 @@ pub trait MapOperations<I, V>: Context {
 impl<C, I, V> View<C> for MapView<C, I, V>
 where
     C: MapOperations<I, V> + Send,
-    I: Eq + Ord + Send + Sync,
+    I: Eq + Ord + Send + Sync + Clone,
     V: Clone + Send + Sync,
 {
     fn context(&self) -> &C {
@@ -402,6 +441,7 @@ where
     async fn load(context: C) -> Result<Self, C::Error> {
         Ok(Self {
             context,
+            was_reset_to_default: false,
             updates: BTreeMap::new(),
         })
     }
@@ -411,13 +451,28 @@ where
     }
 
     async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        for (index, update) in self.updates {
-            match update {
-                None => {
-                    self.context.remove(batch, index).await?;
+        if self.was_reset_to_default {
+            let stored_indices = self.context.indices().await?;
+            for index in stored_indices {
+                self.context.remove(batch, index).await?;
+            }
+            for (index, update) in self.updates {
+                match update {
+                    None => {}
+                    Some(value) => {
+                        self.context.insert(batch, index, value).await?;
+                    }
                 }
-                Some(value) => {
-                    self.context.insert(batch, index, value).await?;
+            }
+        } else {
+            for (index, update) in self.updates {
+                match update {
+                    None => {
+                        self.context.remove(batch, index).await?;
+                    }
+                    Some(value) => {
+                        self.context.insert(batch, index, value).await?;
+                    }
                 }
             }
         }
@@ -426,6 +481,11 @@ where
 
     async fn delete(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         self.context.delete(batch).await
+    }
+
+    fn reset_to_default(&mut self) {
+        self.was_reset_to_default = true;
+        self.updates.clear();
     }
 }
 
@@ -460,15 +520,20 @@ where
         if let Some(update) = self.updates.get(index) {
             return Ok(update.as_ref().cloned());
         }
+        if self.was_reset_to_default {
+            return Ok(None);
+        }
         self.context.get(index).await
     }
 
     /// Return the list of indices in the map.
     pub async fn indices(&mut self) -> Result<Vec<I>, C::Error> {
         let mut indices = Vec::new();
-        for index in self.context.indices().await? {
-            if !self.updates.contains_key(&index) {
-                indices.push(index);
+        if !self.was_reset_to_default {
+            for index in self.context.indices().await? {
+                if !self.updates.contains_key(&index) {
+                    indices.push(index);
+                }
             }
         }
         for (index, entry) in &self.updates {
@@ -573,6 +638,11 @@ where
 
     async fn delete(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         self.context.delete(self.stored_indices, batch).await
+    }
+
+    fn reset_to_default(&mut self) {
+        self.front_delete_count = self.stored_indices.len();
+        self.new_back_values.clear();
     }
 }
 
@@ -683,6 +753,7 @@ where
 #[derive(Debug, Clone)]
 pub struct CollectionView<C, I, W> {
     context: C,
+    stored_indices: Vec<I>,
     updates: BTreeMap<I, Option<W>>,
 }
 
@@ -709,16 +780,18 @@ pub trait CollectionOperations<I>: Context {
 impl<C, I, W> View<C> for CollectionView<C, I, W>
 where
     C: CollectionOperations<I> + Send,
-    I: Send + Sync + Debug + Clone,
+    I: Send + Ord + Sync + Debug + Clone,
     W: View<C> + Send,
 {
     fn context(&self) -> &C {
         &self.context
     }
 
-    async fn load(context: C) -> Result<Self, C::Error> {
+    async fn load(mut context: C) -> Result<Self, C::Error> {
+        let stored_indices = context.indices().await?;
         Ok(Self {
             context,
+            stored_indices,
             updates: BTreeMap::new(),
         })
     }
@@ -746,13 +819,20 @@ where
     }
 
     async fn delete(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        for index in self.context.indices().await? {
-            let context = self.context.clone_with_scope(&index);
-            self.context.remove_index(batch, index).await?;
+        for index in &self.stored_indices {
+            let context = self.context.clone_with_scope(index);
+            self.context.remove_index(batch, index.clone()).await?;
             let view = W::load(context).await?;
             view.delete(batch).await?;
         }
         Ok(())
+    }
+
+    fn reset_to_default(&mut self) {
+        self.updates.clear();
+        for index in &self.stored_indices {
+            self.updates.insert(index.clone(), None);
+        }
     }
 }
 
@@ -762,17 +842,24 @@ where
     I: Eq + Ord + Sync + Clone + Send + Debug,
     W: View<C>,
 {
-    /// Obtain a subview for the data at the given index in the collection. Return an
-    /// error if `remove_entry` was used earlier on this index from the same [`CollectionView`].
+    /// Obtain a subview for the data at the given index in the collection. If an entry
+    /// was removed before then a default entry is put on this index.
     pub async fn load_entry(&mut self, index: I) -> Result<&mut W, C::Error> {
         match self.updates.entry(index.clone()) {
-            btree_map::Entry::Occupied(e) => match e.into_mut() {
-                Some(view) => Ok(view),
-                None => Err(C::Error::from(ViewError::RemovedEntry(format!(
-                    "{:?}",
-                    index
-                )))),
-            },
+            btree_map::Entry::Occupied(e) => {
+                let f = e.into_mut();
+                match f {
+                    Some(view) => Ok(view),
+                    None => {
+                        let context = self.context.clone_with_scope(&index);
+                        // Obtain a view and set its pending state to the default (e.g. empty) state
+                        let mut view = W::load(context).await?;
+                        view.reset_to_default();
+                        *f = Some(view);
+                        Ok(f.as_mut().unwrap())
+                    }
+                }
+            }
             btree_map::Entry::Vacant(e) => {
                 let context = self.context.clone_with_scope(&index);
                 let view = W::load(context).await?;
@@ -784,6 +871,13 @@ where
     /// Mark the entry so that it is removed in the next commit.
     pub fn remove_entry(&mut self, index: I) {
         self.updates.insert(index, None);
+    }
+
+    /// Mark the entry so that it is removed in the next commit.
+    pub async fn reset_entry_to_default(&mut self, index: I) -> Result<(), C::Error> {
+        let view = self.load_entry(index).await?;
+        view.reset_to_default();
+        Ok(())
     }
 
     /// Return the list of indices in the collection.
