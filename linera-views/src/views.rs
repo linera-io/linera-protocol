@@ -456,11 +456,8 @@ where
         if self.was_reset_to_default {
             self.context.delete(batch).await?;
             for (index, update) in self.updates {
-                match update {
-                    None => {}
-                    Some(value) => {
-                        self.context.insert(batch, index, value).await?;
-                    }
+                if let Some(value) = update {
+                    self.context.insert(batch, index, value).await?;
                 }
             }
         } else {
