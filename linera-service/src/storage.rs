@@ -4,7 +4,7 @@
 use crate::config::GenesisConfig;
 use anyhow::format_err;
 use async_trait::async_trait;
-use linera_storage2::{DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient};
+use linera_storage::{DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient};
 use linera_views::dynamo_db::{TableName, TableStatus};
 use std::{path::PathBuf, str::FromStr};
 

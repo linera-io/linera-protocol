@@ -15,7 +15,7 @@ tokio = { version = "1.12.0", features = ["full"] }
 log = "0.4.14"
 
 linera-base = { path = "../linera-base" }
-linera-storage2 = { path = "../linera-storage2" }
+linera-storage = { path = "../linera-storage" }
 linera-views = { path = "../linera-views" }
 
 [dev-dependencies]

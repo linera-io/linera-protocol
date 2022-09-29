@@ -11,7 +11,7 @@ use async_trait::async_trait;
 use futures::{channel::mpsc, sink::SinkExt, stream::StreamExt};
 use linera_base::{error::*, messages::*, rpc};
 use linera_core::{node::ValidatorNode, worker::*};
-use linera_storage2::Store;
+use linera_storage::Store;
 use log::*;
 use serde::{Deserialize, Serialize};
 use std::{io, time::Duration};

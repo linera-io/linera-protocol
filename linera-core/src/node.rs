@@ -6,7 +6,7 @@ use crate::worker::{ValidatorWorker, WorkerState};
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use linera_base::{error::Error, manager::ChainManager, messages::*};
-use linera_storage2::Store;
+use linera_storage::Store;
 use rand::prelude::SliceRandom;
 use std::sync::Arc;
 
