@@ -668,6 +668,13 @@ where
         self.remove_item(&CollectionKey::Index(index)).await
     }
 
+    async fn delete(&mut self, _batch: &mut Self::Batch) -> Result<(), Self::Error> {
+        for key in self.get_sub_keys::<I, _>(&()).await? {
+            self.remove_item(&key).await?;
+        }
+        Ok(())
+    }
+
     async fn indices(&mut self) -> Result<Vec<I>, Self::Error> {
         self.get_sub_keys(&CollectionKey::Index(())).await
     }

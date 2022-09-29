@@ -452,6 +452,24 @@ where
         Ok(())
     }
 
+    async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error> {
+        // Hack: the BCS-serialization of `CollectionKey::Index(value)` for any `value` must
+        // start with that of `CollectionKey::Index(())`, that is, the enum tag.
+        let base = self.derive_key(&CollectionKey::Index(()));
+        let len = base.len();
+        for bytes in self.db.find_keys_with_prefix(&base).await? {
+            match bcs::from_bytes(&bytes[len..]) {
+                Ok(key) => {
+                    batch.delete_key(key);
+                }
+                Err(e) => {
+                    return Err(e.into());
+                }
+            }
+        }
+        Ok(())
+    }
+
     async fn indices(&mut self) -> Result<Vec<I>, Self::Error> {
         // Hack: the BCS-serialization of `CollectionKey::Index(value)` for any `value` must
         // start with that of `CollectionKey::Index(())`, that is, the enum tag.

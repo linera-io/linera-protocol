@@ -237,9 +237,7 @@ where
         count: usize,
     ) -> Result<(), Self::Error> {
         self.with_mut(|v: &mut VecDeque<T>| {
-            for _ in 0..count {
-                v.pop_front();
-            }
+            drop(v.drain(..count));
         })
         .await;
         Ok(())
@@ -370,6 +368,16 @@ where
         if is_empty {
             context.erase().await?;
         }
+        Ok(())
+    }
+
+    async fn delete(&mut self, _batch: &mut Self::Batch) -> Result<(), Self::Error> {
+        let mut context = Self {
+            map: self.map.clone(),
+            base_key: self.derive_key(&CollectionKey::<I>::Indices),
+            extra: self.extra.clone(),
+        };
+        context.erase().await?;
         Ok(())
     }
 

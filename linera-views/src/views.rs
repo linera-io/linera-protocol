@@ -236,9 +236,9 @@ where
 #[derive(Debug, Clone)]
 pub struct LogView<C, T> {
     context: C,
+    was_reset_to_default: bool,
     stored_count: usize,
     new_values: Vec<T>,
-    was_reset_to_default: bool,
 }
 
 /// The context operations supporting [`LogView`].
@@ -262,6 +262,8 @@ pub trait LogOperations<T>: Context {
     ) -> Result<(), Self::Error>;
 
     /// Delete the log. Crash-resistant implementations should only write to `batch`.
+    /// The stored_count is an invariant of the structure. It is a leaky abstraction
+    /// but allows a priori better performance.
     async fn delete(
         &mut self,
         stored_count: usize,
@@ -283,9 +285,9 @@ where
         let stored_count = context.count().await?;
         Ok(Self {
             context,
+            was_reset_to_default: false,
             stored_count,
             new_values: Vec::new(),
-            was_reset_to_default: false,
         })
     }
 
@@ -452,10 +454,7 @@ where
 
     async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         if self.was_reset_to_default {
-            let stored_indices = self.context.indices().await?;
-            for index in stored_indices {
-                self.context.remove(batch, index).await?;
-            }
+            self.context.delete(batch).await?;
             for (index, update) in self.updates {
                 match update {
                     None => {}
@@ -753,7 +752,7 @@ where
 #[derive(Debug, Clone)]
 pub struct CollectionView<C, I, W> {
     context: C,
-    stored_indices: Vec<I>,
+    was_reset_to_default: bool,
     updates: BTreeMap<I, Option<W>>,
 }
 
@@ -774,6 +773,10 @@ pub trait CollectionOperations<I>: Context {
     /// Remove the index from the list of indices. Crash-resistant implementations should only
     /// write to `batch`.
     async fn remove_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error>;
+
+    /// Remove the index from the list of indices. Crash-resistant implementations should only
+    /// write to `batch`.
+    async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error>;
 }
 
 #[async_trait]
@@ -787,11 +790,10 @@ where
         &self.context
     }
 
-    async fn load(mut context: C) -> Result<Self, C::Error> {
-        let stored_indices = context.indices().await?;
+    async fn load(context: C) -> Result<Self, C::Error> {
         Ok(Self {
             context,
-            stored_indices,
+            was_reset_to_default: false,
             updates: BTreeMap::new(),
         })
     }
@@ -801,17 +803,30 @@ where
     }
 
     async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        for (index, update) in self.updates {
-            match update {
-                Some(view) => {
-                    view.commit(batch).await?;
-                    self.context.add_index(batch, index).await?;
+        if self.was_reset_to_default {
+            self.context.delete(batch).await?;
+            for (index, update) in self.updates {
+                match update {
+                    Some(view) => {
+                        view.commit(batch).await?;
+                        self.context.add_index(batch, index).await?;
+                    }
+                    None => {}
                 }
-                None => {
-                    let context = self.context.clone_with_scope(&index);
-                    self.context.remove_index(batch, index).await?;
-                    let view = W::load(context).await?;
-                    view.delete(batch).await?;
+            }
+        } else {
+            for (index, update) in self.updates {
+                match update {
+                    Some(view) => {
+                        view.commit(batch).await?;
+                        self.context.add_index(batch, index).await?;
+                    }
+                    None => {
+                        let context = self.context.clone_with_scope(&index);
+                        self.context.remove_index(batch, index).await?;
+                        let view = W::load(context).await?;
+                        view.delete(batch).await?;
+                    }
                 }
             }
         }
@@ -819,7 +834,8 @@ where
     }
 
     async fn delete(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        for index in &self.stored_indices {
+        let stored_indices = self.context.indices().await?;
+        for index in &stored_indices {
             let context = self.context.clone_with_scope(index);
             self.context.remove_index(batch, index.clone()).await?;
             let view = W::load(context).await?;
@@ -829,10 +845,8 @@ where
     }
 
     fn reset_to_default(&mut self) {
+        self.was_reset_to_default = true;
         self.updates.clear();
-        for index in &self.stored_indices {
-            self.updates.insert(index.clone(), None);
-        }
     }
 }
 
@@ -862,7 +876,10 @@ where
             }
             btree_map::Entry::Vacant(e) => {
                 let context = self.context.clone_with_scope(&index);
-                let view = W::load(context).await?;
+                let mut view = W::load(context).await?;
+                if self.was_reset_to_default {
+                    view.reset_to_default();
+                }
                 Ok(e.insert(Some(view)).as_mut().unwrap())
             }
         }
@@ -870,7 +887,11 @@ where
 
     /// Mark the entry so that it is removed in the next commit.
     pub fn remove_entry(&mut self, index: I) {
-        self.updates.insert(index, None);
+        if self.was_reset_to_default {
+            self.updates.remove(&index);
+        } else {
+            self.updates.insert(index, None);
+        }
     }
 
     /// Mark the entry so that it is removed in the next commit.
@@ -883,9 +904,11 @@ where
     /// Return the list of indices in the collection.
     pub async fn indices(&mut self) -> Result<Vec<I>, C::Error> {
         let mut indices = Vec::new();
-        for index in self.context.indices().await? {
-            if !self.updates.contains_key(&index) {
-                indices.push(index);
+        if !self.was_reset_to_default {
+            for index in self.context.indices().await? {
+                if !self.updates.contains_key(&index) {
+                    indices.push(index);
+                }
             }
         }
         for (index, entry) in &self.updates {
