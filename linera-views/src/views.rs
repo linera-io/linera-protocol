@@ -457,11 +457,8 @@ where
                 self.context.remove(batch, index).await?;
             }
             for (index, update) in self.updates {
-                match update {
-                    None => {}
-                    Some(value) => {
-                        self.context.insert(batch, index, value).await?;
-                    }
+                if let Some(value) = update {
+                    self.context.insert(batch, index, value).await?;
                 }
             }
         } else {
