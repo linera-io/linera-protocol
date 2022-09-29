@@ -18,7 +18,7 @@ use linera_base::{
     messages::*,
     system::{Address, Amount, Balance, SystemExecutionState, SystemOperation, UserData},
 };
-use linera_storage2::Store;
+use linera_storage::Store;
 use std::{
     collections::{BTreeMap, HashMap},
     time::Duration,

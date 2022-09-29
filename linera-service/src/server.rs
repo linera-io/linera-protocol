@@ -16,7 +16,7 @@ use linera_service::{
     storage::{Runnable, StorageConfig},
     transport,
 };
-use linera_storage2::Store;
+use linera_storage::Store;
 use log::*;
 use std::{
     path::{Path, PathBuf},

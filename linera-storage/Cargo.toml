@@ -1,5 +1,5 @@
 [package]
-name = "linera-storage2"
+name = "linera-storage"
 version = "0.1.0"
 authors = ["Linera <contact@linera.io>"]
 edition = "2021"

@@ -4,7 +4,7 @@
 
 use async_trait::async_trait;
 use linera_base::{crypto::*, ensure, error::Error, manager::Outcome, messages::*};
-use linera_storage2::{
+use linera_storage::{
     chain::{ChainStateView, OutboxStateView},
     Store,
 };

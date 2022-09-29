@@ -25,7 +25,7 @@ use linera_service::{
     network::ValidatorPublicNetworkConfig,
     storage::{Runnable, StorageConfig},
 };
-use linera_storage2::Store;
+use linera_storage::Store;
 use log::*;
 use std::{
     collections::{HashMap, HashSet},

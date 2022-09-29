@@ -1152,7 +1152,7 @@ dependencies = [
  "env_logger",
  "futures",
  "linera-base",
- "linera-storage2",
+ "linera-storage",
  "linera-views",
  "log",
  "once_cell",
@@ -1179,7 +1179,7 @@ dependencies = [
  "futures",
  "linera-base",
  "linera-core",
- "linera-storage2",
+ "linera-storage",
  "linera-views",
  "log",
  "net2",
@@ -1195,7 +1195,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "linera-storage2"
+name = "linera-storage"
 version = "0.1.0"
 dependencies = [
  "async-trait",

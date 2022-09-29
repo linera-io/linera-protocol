@@ -15,7 +15,7 @@ use linera_base::{
         ADMIN_CHANNEL,
     },
 };
-use linera_storage2::{
+use linera_storage::{
     chain::Event, DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient, Store,
 };
 use linera_views::test_utils::LocalStackTestContext;

@@ -5,7 +5,7 @@
 use crate::node::ValidatorNode;
 use futures::{future, StreamExt};
 use linera_base::{committee::Committee, error::Error, messages::*};
-use linera_storage2::Store;
+use linera_storage::Store;
 use std::{collections::HashMap, hash::Hash, time::Duration};
 
 /// Used for `communicate_chain_updates`

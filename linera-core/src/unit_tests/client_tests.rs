@@ -15,7 +15,7 @@ use linera_base::{
     messages::*,
     system::{Amount, Balance, SystemOperation, UserData},
 };
-use linera_storage2::{DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient, Store};
+use linera_storage::{DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient, Store};
 use linera_views::test_utils::LocalStackTestContext;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},

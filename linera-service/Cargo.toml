@@ -26,7 +26,7 @@ tokio-util = { version = "0.6.9", features = ["codec", "net"] }
 
 linera-core = { path = "../linera-core" }
 linera-base = { path = "../linera-base" }
-linera-storage2 = { path = "../linera-storage2" }
+linera-storage = { path = "../linera-storage" }
 linera-views = { path = "../linera-views" }
 
 [dev-dependencies]

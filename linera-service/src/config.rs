@@ -13,7 +13,7 @@ use linera_core::{
     client::{ChainClientState, ValidatorNodeProvider},
     node::ValidatorNode,
 };
-use linera_storage2::Store;
+use linera_storage::Store;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
