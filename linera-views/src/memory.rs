@@ -371,16 +371,6 @@ where
         Ok(())
     }
 
-    async fn delete(&mut self, _batch: &mut Self::Batch) -> Result<(), Self::Error> {
-        let mut context = Self {
-            map: self.map.clone(),
-            base_key: self.derive_key(&CollectionKey::<I>::Indices),
-            extra: self.extra.clone(),
-        };
-        context.erase().await?;
-        Ok(())
-    }
-
     async fn indices(&mut self) -> Result<Vec<I>, Self::Error> {
         let context = Self {
             map: self.map.clone(),

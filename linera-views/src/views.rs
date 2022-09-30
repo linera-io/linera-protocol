@@ -774,9 +774,8 @@ pub trait CollectionOperations<I>: Context {
     /// write to `batch`.
     async fn remove_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error>;
 
-    /// Remove the index from the list of indices. Crash-resistant implementations should only
-    /// write to `batch`.
-    async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error>;
+    // In contrast to other views, there is no delete operation for CollectionOperation
+    // This is because of the recursive nature, they have to be implemented differently.
 }
 
 #[async_trait]
@@ -804,7 +803,13 @@ where
 
     async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         if self.was_reset_to_default {
-            self.context.delete(batch).await?;
+            let stored_indices = self.context.indices().await?;
+            for index in &stored_indices {
+                let context = self.context.clone_with_scope(index);
+                self.context.remove_index(batch, index.clone()).await?;
+                let view = W::load(context).await?;
+                view.delete(batch).await?;
+            }
             for (index, update) in self.updates {
                 match update {
                     Some(view) => {
