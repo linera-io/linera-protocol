@@ -500,7 +500,11 @@ where
 
     /// Remove a value.
     pub fn remove(&mut self, index: I) {
-        self.updates.insert(index, None);
+        if self.was_reset_to_default {
+            self.updates.remove(&index);
+        } else {
+            self.updates.insert(index, None);
+        }
     }
 
     pub fn extra(&self) -> &C::Extra {
