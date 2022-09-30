@@ -237,9 +237,7 @@ where
         count: usize,
     ) -> Result<(), Self::Error> {
         self.with_mut(|v: &mut VecDeque<T>| {
-            for _ in 0..count {
-                v.pop_front();
-            }
+            v.drain(..count);
         })
         .await;
         Ok(())
