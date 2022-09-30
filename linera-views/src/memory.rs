@@ -237,7 +237,7 @@ where
         count: usize,
     ) -> Result<(), Self::Error> {
         self.with_mut(|v: &mut VecDeque<T>| {
-            drop(v.drain(..count));
+            v.drain(..count);
         })
         .await;
         Ok(())
