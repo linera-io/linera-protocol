@@ -596,51 +596,47 @@ where
                         need_update = true;
                     }
                 }
-                if need_update {
-                    if !self.allow_inactive_chains {
-                        // Validator nodes are more strict than clients when it comes to
-                        // processing cross-chain messages.
-                        if !chain.is_active() {
-                            // Refuse to create the chain state if it is still inactive by
-                            // now. Accordingly, do not send a confirmation, so that the
-                            // message is retried later.
-                            log::warn!(
-                                "{}: refusing to store inactive chain {recipient:?}",
-                                self.nickname
-                            );
-                            return Ok(Vec::new());
-                        }
-                        let epoch = last_epoch.expect("need_update implies epoch.is_some()");
-                        if Some(epoch) < chain.execution_state.get().system.epoch
-                            && !chain
-                                .execution_state
-                                .get()
-                                .system
-                                .committees
-                                .contains_key(&epoch)
-                        {
-                            // Refuse to persist the chain state if the latest epoch in
-                            // the received blocks from this recipient is not recognized
-                            // any more by the receiving chain. (Future epochs are ok.)
-                            log::warn!("Refusing updates from untrusted epoch {epoch:?}");
-                            return Ok(Vec::new());
-                        }
-                    }
-                    chain.write_commit().await?;
+                if !need_update {
+                    // Nothing happened.
+                    return Ok(Vec::new());
                 }
-                match last_height {
-                    Some(height) => {
-                        // We have processed at least one certificate successfully: send back
-                        // an acknowledgment.
-                        Ok(vec![CrossChainRequest::ConfirmUpdatedRecipient {
-                            application_id,
-                            origin,
-                            recipient,
-                            height,
-                        }])
+                if !self.allow_inactive_chains {
+                    // Validator nodes are more strict than clients when it comes to
+                    // processing cross-chain messages.
+                    if !chain.is_active() {
+                        // Refuse to create the chain state if it is still inactive by
+                        // now. Accordingly, do not send a confirmation, so that the
+                        // message is retried later.
+                        log::warn!(
+                            "{}: refusing to store inactive chain {recipient:?}",
+                            self.nickname
+                        );
+                        return Ok(Vec::new());
                     }
-                    None => Ok(Vec::new()),
+                    let epoch = last_epoch.expect("need_update implies epoch.is_some()");
+                    if Some(epoch) < chain.execution_state.get().system.epoch
+                        && !chain
+                            .execution_state
+                            .get()
+                            .system
+                            .committees
+                            .contains_key(&epoch)
+                    {
+                        // Refuse to persist the chain state if the latest epoch in
+                        // the received blocks from this recipient is not recognized
+                        // any more by the receiving chain. (Future epochs are ok.)
+                        log::warn!("Refusing updates from untrusted epoch {epoch:?}");
+                        return Ok(Vec::new());
+                    }
                 }
+                chain.write_commit().await?;
+                // Acknowledge the highest processed block height.
+                Ok(vec![CrossChainRequest::ConfirmUpdatedRecipient {
+                    application_id,
+                    origin,
+                    recipient,
+                    height: last_height.expect("we have processed at least one certificate"),
+                }])
             }
             CrossChainRequest::ConfirmUpdatedRecipient {
                 application_id,
