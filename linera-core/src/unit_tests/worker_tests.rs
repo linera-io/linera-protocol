@@ -2104,8 +2104,7 @@ where
             BlockHeight::from(1),
             admin_chain.tip_state.get().next_block_height
         );
-        // FIXME: we do not clean up empty outboxes yet.
-        assert!(!admin_chain
+        assert!(admin_chain
             .communication_states
             .load_entry(SYSTEM)
             .await

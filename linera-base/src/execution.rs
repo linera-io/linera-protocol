@@ -86,7 +86,7 @@ impl<Effect> Default for RawApplicationResult<Effect> {
     }
 }
 
-/// The authentication execution state of all applications.
+/// The execution state of all applications.
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct ExecutionState {

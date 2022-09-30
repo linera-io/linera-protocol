@@ -59,7 +59,7 @@ impl Store for RocksdbStoreClient {
         let (db, lock) = {
             let store = self.0.clone();
             let mut store = store.lock().await;
-            // FIXME: we are never cleaning up locks.
+            // FIXME(#119): we are never cleaning up locks.
             (
                 store.db.clone(),
                 store
