@@ -185,8 +185,7 @@ where
         }
         let updated = outbox.mark_messages_as_received(height).await?;
         if updated && outbox.queue.count() == 0 {
-            // FIXME: We'd like to call remove_entry but then calling load_entry is not supported yet.
-            // outboxes.remove_entry(recipient).await?;
+            outboxes.remove_entry(recipient);
         }
         Ok(updated)
     }
