@@ -314,18 +314,6 @@ where
     }
 }
 
-// Beware: This low-level API does not guarantee that hashes were produced correctly (e.g.
-// with a type tag).
-impl From<generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Digest>::OutputSize>>
-    for HashValue
-{
-    fn from(
-        value: generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Digest>::OutputSize>,
-    ) -> Self {
-        Self(value)
-    }
-}
-
 impl HashValue {
     pub fn new<T>(value: &T) -> Self
     where

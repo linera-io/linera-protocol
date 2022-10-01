@@ -130,6 +130,26 @@ where
         $( + $ops_trait )*
 {}
 
+impl<C> $name<C>
+where
+    C: [< $name Context >]
+{
+    pub async fn hash_value(&mut self) -> Result<$crate::crypto::HashValue, C::Error> {
+        use $crate::crypto::{BcsSignable, HashValue};
+        use $crate::generic_array::GenericArray;
+        use $crate::hash::HashView;
+        use $crate::serde::{Serialize, Deserialize};
+        use $crate::sha2::{Sha512, Digest};
+
+        #[derive(Serialize, Deserialize)]
+        struct [< $name Hash >](GenericArray<u8, <Sha512 as Digest>::OutputSize>);
+        impl BcsSignable for [< $name Hash >] {}
+
+        let hash = self.hash().await?;
+        Ok(HashValue::new(&[< $name Hash >](hash)))
+    }
+}
+
 }
 
     }

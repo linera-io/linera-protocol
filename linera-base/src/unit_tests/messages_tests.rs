@@ -32,7 +32,7 @@ fn test_signed_values() {
     let value = Value::ConfirmedBlock {
         block,
         effects: Vec::new(),
-        state_hash: HashValue::from(generic_array::GenericArray::default()),
+        state_hash: HashValue::new(&Dummy),
     };
 
     let v = Vote::new(value.clone(), &key1);
@@ -70,7 +70,7 @@ fn test_certificates() {
     let value = Value::ConfirmedBlock {
         block,
         effects: Vec::new(),
-        state_hash: HashValue::from(generic_array::GenericArray::default()),
+        state_hash: HashValue::new(&Dummy),
     };
 
     let v1 = Vote::new(value.clone(), &key1);
@@ -94,3 +94,8 @@ fn test_certificates() {
         .is_none());
     assert!(builder.append(v3.validator, v3.signature).is_err());
 }
+
+#[derive(Serialize, Deserialize)]
+struct Dummy;
+
+impl BcsSignable for Dummy {}
