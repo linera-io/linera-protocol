@@ -32,5 +32,8 @@ pub mod test_utils;
 
 /// For macros.
 pub use async_trait::async_trait;
+pub use generic_array;
+pub use linera_base::crypto;
 pub use paste::paste;
+pub use serde;
 pub use sha2;

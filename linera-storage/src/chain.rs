@@ -13,7 +13,6 @@ use linera_base::{
     },
 };
 use linera_views::{
-    hash::HashView,
     impl_view,
     views::{
         CollectionOperations, CollectionView, LogOperations, LogView, MapOperations, MapView,
@@ -357,7 +356,7 @@ where
                     .get_mut()
                     .apply_immediate_effect(chain_id, effect_id, &effect)?
                 {
-                    let hash = HashValue::from(self.execution_state.hash().await?);
+                    let hash = self.execution_state.hash_value().await?;
                     self.execution_state_hash.set(Some(hash));
                 }
             }
@@ -557,7 +556,7 @@ where
             .await?;
         }
         // Last, recompute the state hash.
-        let hash = HashValue::from(self.execution_state.hash().await?);
+        let hash = self.execution_state.hash_value().await?;
         self.execution_state_hash.set(Some(hash));
         Ok(effects)
     }

@@ -19,7 +19,7 @@ use linera_storage::{
     chain::Event, execution::ExecutionStateView, DynamoDbStoreClient, MemoryStoreClient,
     RocksdbStoreClient, Store,
 };
-use linera_views::{hash::HashView, test_utils::LocalStackTestContext};
+use linera_views::test_utils::LocalStackTestContext;
 use std::collections::BTreeMap;
 use test_log::test;
 
@@ -188,13 +188,11 @@ async fn make_transfer_certificate<S>(
         )],
         Address::Burn => Vec::new(),
     };
-    let state_hash = HashValue::from(
-        ExecutionStateView::from_system_state(system_state)
-            .await
-            .hash()
-            .await
-            .expect("hashing from memory should not fail"),
-    );
+    let state_hash = ExecutionStateView::from_system_state(system_state)
+        .await
+        .hash_value()
+        .await
+        .expect("hashing from memory should not fail");
     let value = Value::ConfirmedBlock {
         block,
         effects,
@@ -651,10 +649,9 @@ where
                 balance: Balance::from(3),
             })
             .await
-            .hash()
+            .hash_value()
             .await
-            .unwrap()
-            .into(),
+            .unwrap(),
         },
     );
 
@@ -695,10 +692,9 @@ where
                 balance: Balance::from(0),
             })
             .await
-            .hash()
+            .hash_value()
             .await
-            .unwrap()
-            .into(),
+            .unwrap(),
         },
     );
     // Missing earlier blocks
@@ -916,10 +912,9 @@ where
                     balance: Balance::from(0),
                 })
                 .await
-                .hash()
+                .hash_value()
                 .await
-                .unwrap()
-                .into(),
+                .unwrap(),
             },
         );
         worker
@@ -2126,10 +2121,9 @@ where
                 balance: Balance::from(2),
             })
             .await
-            .hash()
+            .hash_value()
             .await
-            .unwrap()
-            .into(),
+            .unwrap(),
         },
     );
     worker
@@ -2236,10 +2230,9 @@ where
                 balance: Balance::from(0),
             })
             .await
-            .hash()
+            .hash_value()
             .await
-            .unwrap()
-            .into(),
+            .unwrap(),
         },
     );
     worker
@@ -2287,10 +2280,9 @@ where
                 balance: Balance::from(0),
             })
             .await
-            .hash()
+            .hash_value()
             .await
-            .unwrap()
-            .into(),
+            .unwrap(),
         },
     );
     worker
@@ -2464,10 +2456,9 @@ where
                 balance: Balance::from(2),
             })
             .await
-            .hash()
+            .hash_value()
             .await
-            .unwrap()
-            .into(),
+            .unwrap(),
         },
     );
     worker.fully_handle_certificate(certificate3).await.unwrap();
@@ -2608,10 +2599,9 @@ where
                 balance: Balance::from(2),
             })
             .await
-            .hash()
+            .hash_value()
             .await
-            .unwrap()
-            .into(),
+            .unwrap(),
         },
     );
     // Have the admin chain create a new epoch without retiring the old one.
@@ -2659,10 +2649,9 @@ where
                 balance: Balance::from(0),
             })
             .await
-            .hash()
+            .hash_value()
             .await
-            .unwrap()
-            .into(),
+            .unwrap(),
         },
     );
     worker
@@ -2817,10 +2806,9 @@ where
                 balance: Balance::from(2),
             })
             .await
-            .hash()
+            .hash_value()
             .await
-            .unwrap()
-            .into(),
+            .unwrap(),
         },
     );
     // Have the admin chain create a new epoch and retire the old one immediately.
@@ -2889,10 +2877,9 @@ where
                 balance: Balance::from(0),
             })
             .await
-            .hash()
+            .hash_value()
             .await
-            .unwrap()
-            .into(),
+            .unwrap(),
         },
     );
     worker
