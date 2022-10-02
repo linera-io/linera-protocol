@@ -162,7 +162,7 @@ where
     Error: From<C::Error>,
 {
     pub fn chain_id(&self) -> ChainId {
-        *self.execution_state.system.extra()
+        *self.execution_state.system.description.extra()
     }
 
     async fn mark_messages_as_received(
@@ -238,21 +238,21 @@ where
 
     /// Invariant for the states of active chains.
     pub fn is_active(&self) -> bool {
-        self.execution_state.system.get().is_active()
+        self.execution_state.system.is_active()
     }
 
     pub fn make_chain_info(&self, key_pair: Option<&KeyPair>) -> ChainInfoResponse {
-        let system_state = self.execution_state.system.get();
+        let system_state = &self.execution_state.system;
         let ChainTipState {
             block_hash,
             next_block_height,
         } = self.tip_state.get();
         let info = ChainInfo {
             chain_id: self.chain_id(),
-            epoch: system_state.epoch,
-            description: system_state.description,
-            manager: system_state.manager.clone(),
-            system_balance: system_state.balance,
+            epoch: *system_state.epoch.get(),
+            description: *system_state.description.get(),
+            manager: system_state.manager.get().clone(),
+            system_balance: *system_state.balance.get(),
             block_hash: *block_hash,
             next_block_height: *next_block_height,
             state_hash: *self.execution_state_hash.get(),
@@ -354,7 +354,6 @@ where
                 if self
                     .execution_state
                     .system
-                    .get_mut()
                     .apply_immediate_effect(chain_id, effect_id, &effect)?
                 {
                     let hash = self.execution_state.hash_value().await?;

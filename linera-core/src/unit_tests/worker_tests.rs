@@ -18,7 +18,7 @@ use linera_storage::{
     MemoryStoreClient, RocksdbStoreClient, Store,
 };
 use linera_views::test_utils::LocalStackTestContext;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use test_log::test;
 
 /// Instantiate the protocol with a single validator. Returns the corresponding committee
@@ -159,7 +159,7 @@ async fn make_transfer_certificate<S>(
         epoch: Some(Epoch::from(0)),
         description: Some(chain_description),
         admin_id: Some(ChainId::root(0)),
-        subscriptions: BTreeMap::new(),
+        subscriptions: BTreeSet::new(),
         committees: [(Epoch::from(0), committee.clone())].into_iter().collect(),
         manager: ChainManager::single(key_pair.public().into()),
         balance,
@@ -269,8 +269,8 @@ where
         .unwrap()
         .execution_state
         .system
-        .get()
         .manager
+        .get()
         .pending()
         .is_none());
 }
@@ -342,8 +342,8 @@ where
         .unwrap()
         .execution_state
         .system
-        .get()
         .manager
+        .get()
         .pending()
         .is_none());
 }
@@ -417,8 +417,8 @@ where
         .unwrap()
         .execution_state
         .system
-        .get()
         .manager
+        .get()
         .pending()
         .is_none());
 }
@@ -503,8 +503,8 @@ where
         .unwrap()
         .execution_state
         .system
-        .get()
         .manager
+        .get()
         .pending()
         .is_none());
 
@@ -519,8 +519,8 @@ where
         .unwrap()
         .execution_state
         .system
-        .get()
         .manager
+        .get()
         .pending()
         .is_some());
     worker.handle_certificate(certificate0).await.unwrap();
@@ -532,8 +532,8 @@ where
         .unwrap()
         .execution_state
         .system
-        .get()
         .manager
+        .get()
         .pending()
         .is_some());
     assert!(worker.handle_block_proposal(block_proposal0).await.is_err());
@@ -641,7 +641,7 @@ where
                 epoch: Some(epoch),
                 description: Some(ChainDescription::Root(1)),
                 admin_id: Some(ChainId::root(0)),
-                subscriptions: BTreeMap::new(),
+                subscriptions: BTreeSet::new(),
                 committees: [(epoch, committee.clone())].into_iter().collect(),
                 manager: ChainManager::single(sender_key_pair.public().into()),
                 balance: Balance::from(3),
@@ -684,7 +684,7 @@ where
                 epoch: Some(epoch),
                 description: Some(ChainDescription::Root(1)),
                 admin_id: Some(ChainId::root(0)),
-                subscriptions: BTreeMap::new(),
+                subscriptions: BTreeSet::new(),
                 committees: [(epoch, committee.clone())].into_iter().collect(),
                 manager: ChainManager::single(sender_key_pair.public().into()),
                 balance: Balance::from(0),
@@ -904,7 +904,7 @@ where
                     epoch: Some(epoch),
                     description: Some(ChainDescription::Root(2)),
                     admin_id: Some(ChainId::root(0)),
-                    subscriptions: BTreeMap::new(),
+                    subscriptions: BTreeSet::new(),
                     committees: [(epoch, committee.clone())].into_iter().collect(),
                     manager: ChainManager::single(recipient_key_pair.public().into()),
                     balance: Balance::from(0),
@@ -1009,8 +1009,8 @@ where
         .unwrap()
         .execution_state
         .system
-        .get()
         .manager
+        .get()
         .pending()
         .is_none());
 }
@@ -1075,8 +1075,8 @@ where
         .unwrap()
         .execution_state
         .system
-        .get()
         .manager
+        .get()
         .pending()
         .cloned()
         .unwrap();
@@ -1358,7 +1358,10 @@ where
         .load_active_chain(ChainId::root(1))
         .await
         .unwrap();
-    assert_eq!(Balance::from(0), chain.execution_state.system.get().balance);
+    assert_eq!(
+        Balance::from(0),
+        *chain.execution_state.system.balance.get()
+    );
     assert_eq!(
         BlockHeight::from(1),
         chain.tip_state.get().next_block_height
@@ -1475,7 +1478,7 @@ where
         .unwrap();
     assert_eq!(
         Balance::from(0),
-        new_sender_chain.execution_state.system.get().balance
+        *new_sender_chain.execution_state.system.balance.get()
     );
     assert_eq!(
         BlockHeight::from(1),
@@ -1493,7 +1496,7 @@ where
         .unwrap();
     assert_eq!(
         Balance::max(),
-        new_recipient_chain.execution_state.system.get().balance
+        *new_recipient_chain.execution_state.system.balance.get()
     );
 }
 
@@ -1552,7 +1555,10 @@ where
         .load_active_chain(ChainId::root(1))
         .await
         .unwrap();
-    assert_eq!(Balance::from(0), chain.execution_state.system.get().balance);
+    assert_eq!(
+        Balance::from(0),
+        *chain.execution_state.system.balance.get()
+    );
     assert_eq!(
         BlockHeight::from(1),
         *chain
@@ -1644,7 +1650,10 @@ where
         .load_active_chain(ChainId::root(2))
         .await
         .unwrap();
-    assert_eq!(Balance::from(1), chain.execution_state.system.get().balance);
+    assert_eq!(
+        Balance::from(1),
+        *chain.execution_state.system.balance.get()
+    );
     assert_eq!(
         BlockHeight::from(0),
         chain.tip_state.get().next_block_height
@@ -1918,14 +1927,14 @@ where
             .await
             .unwrap();
         assert_eq!(
-            recipient_chain.execution_state.system.get().balance,
+            *recipient_chain.execution_state.system.balance.get(),
             Balance::from(4)
         );
         assert!(recipient_chain
             .execution_state
             .system
-            .get()
             .manager
+            .get()
             .has_owner(&recipient_key_pair.public().into()));
         assert_eq!(recipient_chain.confirmed_log.count(), 1);
         assert_eq!(
@@ -2113,7 +2122,7 @@ where
                 epoch: Some(Epoch::from(0)),
                 description: Some(ChainDescription::Root(0)),
                 admin_id: Some(admin_id),
-                subscriptions: BTreeMap::new(),
+                subscriptions: BTreeSet::new(),
                 committees: committees.clone(),
                 manager: ChainManager::single(key_pair.public().into()),
                 balance: Balance::from(2),
@@ -2146,7 +2155,7 @@ where
             .unwrap()
             .is_empty());
         assert_eq!(
-            admin_chain.execution_state.system.get().admin_id,
+            *admin_chain.execution_state.system.admin_id.get(),
             Some(admin_id)
         );
         // The root chain has no subscribers yet.
@@ -2221,7 +2230,7 @@ where
                 epoch: Some(Epoch::from(1)),
                 description: Some(ChainDescription::Root(0)),
                 admin_id: Some(admin_id),
-                subscriptions: BTreeMap::new(),
+                subscriptions: BTreeSet::new(),
                 // The root chain knows both committees at the end.
                 committees: committees2.clone(),
                 manager: ChainManager::single(key_pair.public().into()),
@@ -2271,7 +2280,7 @@ where
                 epoch: Some(Epoch::from(1)),
                 description: Some(ChainDescription::Root(0)),
                 admin_id: Some(admin_id),
-                subscriptions: BTreeMap::new(),
+                subscriptions: BTreeSet::new(),
                 // The root chain knows both committees at the end.
                 committees: committees2.clone(),
                 manager: ChainManager::single(key_pair.public().into()),
@@ -2317,11 +2326,18 @@ where
             user_chain.tip_state.get().next_block_height
         );
         assert_eq!(
-            user_chain.execution_state.system.get().admin_id,
+            *user_chain.execution_state.system.admin_id.get(),
             Some(admin_id)
         );
         assert_eq!(
-            user_chain.execution_state.system.get().subscriptions.len(),
+            user_chain
+                .execution_state
+                .system
+                .subscriptions
+                .indices()
+                .await
+                .unwrap()
+                .len(),
             1
         );
         user_chain.validate_incoming_messages().await.unwrap();
@@ -2387,7 +2403,7 @@ where
                 .count(),
             0
         );
-        assert_eq!(user_chain.execution_state.system.get().committees.len(), 1);
+        assert_eq!(user_chain.execution_state.system.committees.get().len(), 1);
     }
     // Make the child receive the pending messages.
     let certificate3 = make_certificate(
@@ -2439,13 +2455,10 @@ where
                 epoch: Some(Epoch::from(1)),
                 description: Some(user_description),
                 admin_id: Some(admin_id),
-                subscriptions: [(
-                    ChannelId {
-                        chain_id: admin_id,
-                        name: ADMIN_CHANNEL.into(),
-                    },
-                    (),
-                )]
+                subscriptions: [ChannelId {
+                    chain_id: admin_id,
+                    name: ADMIN_CHANNEL.into(),
+                }]
                 .into_iter()
                 .collect(),
                 // Finally the child knows about both committees and has the money.
@@ -2467,14 +2480,21 @@ where
             user_chain.tip_state.get().next_block_height
         );
         assert_eq!(
-            user_chain.execution_state.system.get().admin_id,
+            *user_chain.execution_state.system.admin_id.get(),
             Some(admin_id)
         );
         assert_eq!(
-            user_chain.execution_state.system.get().subscriptions.len(),
+            user_chain
+                .execution_state
+                .system
+                .subscriptions
+                .indices()
+                .await
+                .unwrap()
+                .len(),
             1
         );
-        assert_eq!(user_chain.execution_state.system.get().committees.len(), 2);
+        assert_eq!(user_chain.execution_state.system.committees.get().len(), 2);
         user_chain.validate_incoming_messages().await.unwrap();
         {
             let inbox = user_chain
@@ -2591,7 +2611,7 @@ where
                 epoch: Some(Epoch::from(0)),
                 description: Some(ChainDescription::Root(1)),
                 admin_id: Some(admin_id),
-                subscriptions: BTreeMap::new(),
+                subscriptions: BTreeSet::new(),
                 committees: committees.clone(),
                 manager: ChainManager::single(key_pair1.public().into()),
                 balance: Balance::from(2),
@@ -2641,7 +2661,7 @@ where
                 epoch: Some(Epoch::from(1)),
                 description: Some(ChainDescription::Root(0)),
                 admin_id: Some(admin_id),
-                subscriptions: BTreeMap::new(),
+                subscriptions: BTreeSet::new(),
                 committees: committees2.clone(),
                 manager: ChainManager::single(key_pair0.public().into()),
                 balance: Balance::from(0),
@@ -2670,11 +2690,11 @@ where
         user_chain.tip_state.get().next_block_height
     );
     assert_eq!(
-        user_chain.execution_state.system.get().balance,
+        *user_chain.execution_state.system.balance.get(),
         Balance::from(2)
     );
     assert_eq!(
-        user_chain.execution_state.system.get().epoch,
+        *user_chain.execution_state.system.epoch.get(),
         Some(Epoch::from(0))
     );
 
@@ -2798,7 +2818,7 @@ where
                 epoch: Some(Epoch::from(0)),
                 description: Some(ChainDescription::Root(1)),
                 admin_id: Some(admin_id),
-                subscriptions: BTreeMap::new(),
+                subscriptions: BTreeSet::new(),
                 committees: committees.clone(),
                 manager: ChainManager::single(key_pair1.public().into()),
                 balance: Balance::from(2),
@@ -2869,7 +2889,7 @@ where
                 epoch: Some(Epoch::from(1)),
                 description: Some(ChainDescription::Root(0)),
                 admin_id: Some(admin_id),
-                subscriptions: BTreeMap::new(),
+                subscriptions: BTreeSet::new(),
                 committees: committees3.clone(),
                 manager: ChainManager::single(key_pair0.public().into()),
                 balance: Balance::from(0),
@@ -2898,11 +2918,11 @@ where
         user_chain.tip_state.get().next_block_height
     );
     assert_eq!(
-        user_chain.execution_state.system.get().balance,
+        *user_chain.execution_state.system.balance.get(),
         Balance::from(2)
     );
     assert_eq!(
-        user_chain.execution_state.system.get().epoch,
+        *user_chain.execution_state.system.epoch.get(),
         Some(Epoch::from(0))
     );
 

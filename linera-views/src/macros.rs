@@ -23,7 +23,7 @@ where
     }
 
     async fn load(context: C) -> Result<Self, C::Error> {
-        $( let $field = ScopedView::load(context.clone()).await?; )*
+        $( let $field = $crate::views::ScopedView::load(context.clone()).await?; )*
         Ok(Self {
             $( $field ),*
         })
