@@ -1,11 +1,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-pub mod chain;
 mod dynamo_db;
-pub mod execution;
 mod memory;
 mod rocksdb;
+
+pub mod chain;
+pub mod execution;
+pub mod system;
 
 pub use crate::{
     dynamo_db::DynamoDbStoreClient, memory::MemoryStoreClient, rocksdb::RocksdbStoreClient,

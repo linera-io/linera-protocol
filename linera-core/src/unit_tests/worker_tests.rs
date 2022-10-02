@@ -10,14 +10,11 @@ use linera_base::{
     execution::SYSTEM,
     manager::ChainManager,
     messages::*,
-    system::{
-        Address, Amount, Balance, SystemEffect, SystemExecutionState, SystemOperation, UserData,
-        ADMIN_CHANNEL,
-    },
+    system::{Address, Amount, Balance, SystemEffect, SystemOperation, UserData, ADMIN_CHANNEL},
 };
 use linera_storage::{
-    chain::Event, execution::ExecutionStateView, DynamoDbStoreClient, MemoryStoreClient,
-    RocksdbStoreClient, Store,
+    chain::Event, execution::ExecutionStateView, system::SystemExecutionState, DynamoDbStoreClient,
+    MemoryStoreClient, RocksdbStoreClient, Store,
 };
 use linera_views::test_utils::LocalStackTestContext;
 use std::collections::BTreeMap;
