@@ -16,7 +16,7 @@ use linera_base::{
     execution::SYSTEM,
     manager::ChainManager,
     messages::*,
-    system::{Address, Amount, Balance, SystemExecutionState, SystemOperation, UserData},
+    system::{Address, Amount, Balance, SystemOperation, UserData},
 };
 use linera_storage::Store;
 use std::{
@@ -236,31 +236,44 @@ where
         Ok(pending_messages)
     }
 
+    pub async fn committees(&mut self) -> Result<BTreeMap<Epoch, Committee>, Error> {
+        let query = ChainInfoQuery::new(self.chain_id).with_committees();
+        let info = self.node_client.handle_chain_info_query(query).await?.info;
+        info.requested_committees
+            .ok_or(Error::InvalidChainInfoResponse)
+    }
+
+    pub async fn epoch_and_committees(
+        &mut self,
+        chain_id: ChainId,
+    ) -> Result<(Option<Epoch>, BTreeMap<Epoch, Committee>), Error> {
+        let query = ChainInfoQuery::new(chain_id).with_committees();
+        let info = self.node_client.handle_chain_info_query(query).await?.info;
+        let epoch = info.epoch;
+        let committees = info
+            .requested_committees
+            .ok_or(Error::InvalidChainInfoResponse)?;
+        Ok((epoch, committees))
+    }
+
     pub async fn epochs(&mut self) -> Result<Vec<Epoch>, Error> {
-        let state = self.execution_state().await?;
-        Ok(state.committees.into_keys().collect())
+        let committees = self.committees().await?;
+        Ok(committees.into_keys().collect())
     }
 
     pub async fn committee(&mut self) -> Result<Committee, Error> {
-        let mut state = self.execution_state().await?;
-        state
-            .committees
-            .remove(&state.epoch.ok_or(Error::InactiveChain(self.chain_id))?)
+        let (epoch, mut committees) = self.epoch_and_committees(self.chain_id).await?;
+        committees
+            .remove(epoch.as_ref().ok_or(Error::InactiveChain(self.chain_id))?)
             .ok_or(Error::InactiveChain(self.chain_id))
     }
 
     async fn known_committees(&mut self) -> Result<(BTreeMap<Epoch, Committee>, Epoch), Error> {
-        let local_state = self.execution_state().await?;
-        let mut committees = local_state.committees;
-        let mut max_epoch = local_state.epoch.unwrap_or_default();
-        let query = ChainInfoQuery::new(self.admin_id).with_system_execution_state();
-        let info = self.node_client.handle_chain_info_query(query).await?.info;
-        let system_state = info
-            .requested_system_execution_state
-            .ok_or(Error::InvalidChainInfoResponse)?;
-        committees.extend(system_state.committees);
-        max_epoch = std::cmp::max(max_epoch, system_state.epoch.unwrap_or_default());
-        Ok((committees, max_epoch))
+        let (epoch, mut committees) = self.epoch_and_committees(self.chain_id).await?;
+        let (admin_epoch, admin_committees) = self.epoch_and_committees(self.admin_id).await?;
+        committees.extend(admin_committees);
+        let epoch = std::cmp::max(epoch.unwrap_or_default(), admin_epoch.unwrap_or_default());
+        Ok((committees, epoch))
     }
 
     async fn validator_nodes(&mut self) -> Result<Vec<(ValidatorName, P::Node)>, Error> {
@@ -283,15 +296,6 @@ where
             nodes.push((*name, node));
         }
         Ok(nodes)
-    }
-
-    async fn execution_state(&mut self) -> Result<SystemExecutionState, Error> {
-        let query = ChainInfoQuery::new(self.chain_id).with_system_execution_state();
-        let info = self.node_client.handle_chain_info_query(query).await?.info;
-        let state = info
-            .requested_system_execution_state
-            .ok_or(Error::InvalidChainInfoResponse)?;
-        Ok(state)
     }
 
     async fn epoch(&mut self) -> Result<Epoch, anyhow::Error> {
@@ -557,22 +561,19 @@ where
     async fn find_received_certificates(&mut self) -> Result<()> {
         // Use network information from the local chain.
         let chain_id = self.chain_id;
-        let state = self.execution_state().await?;
-        let local_committee = state
-            .committees
-            .get(&state.epoch.ok_or(Error::InactiveChain(chain_id))?)
-            .ok_or(Error::InactiveChain(chain_id))?;
-        let nodes = self.make_validator_nodes(local_committee)?;
-        // Use committess from the admin chain.
+        let local_committee = self.committee().await?;
+        let nodes = self.make_validator_nodes(&local_committee)?;
+        // Synchronize the state of the admin chain from the network.
         self.node_client
             .synchronize_chain_state(nodes.clone(), self.admin_id)
             .await?;
+        // Now we should have a complete view of all committees in the system.
         let (committees, max_epoch) = self.known_committees().await?;
         // Proceed to downloading received certificates.
         let trackers = self.received_certificate_trackers.clone();
         let result = communicate_with_quorum(
             &nodes,
-            local_committee,
+            &local_committee,
             |_| (),
             |name, mut client| {
                 let tracker = *trackers.get(&name).unwrap_or(&0);
@@ -976,10 +977,8 @@ where
             height: self.next_block_height,
             index: 0,
         });
-        let state = self.execution_state().await?;
-        let admin_id = state.admin_id.ok_or(Error::InactiveChain(self.chain_id))?;
-        let committees = state.committees;
-        let epoch = state.epoch.ok_or(Error::InactiveChain(self.chain_id))?;
+        let (epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
+        let epoch = epoch.ok_or(Error::InactiveChain(self.chain_id))?;
         let block = Block {
             epoch,
             chain_id: self.chain_id,
@@ -990,7 +989,7 @@ where
                     id,
                     owner,
                     committees,
-                    admin_id,
+                    admin_id: self.admin_id,
                     epoch,
                 }),
             )],
@@ -1115,10 +1114,9 @@ where
 
     async fn finalize_committee(&mut self) -> Result<Certificate> {
         self.prepare_chain().await?;
-        let state = self.execution_state().await?;
-        let current_epoch = state.epoch.ok_or(Error::InactiveChain(self.chain_id))?;
-        let operations = state
-            .committees
+        let (current_epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
+        let current_epoch = current_epoch.ok_or(Error::InactiveChain(self.chain_id))?;
+        let operations = committees
             .keys()
             .filter_map(|epoch| {
                 if *epoch != current_epoch {
