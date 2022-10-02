@@ -413,6 +413,15 @@ where
         Ok(keys)
     }
 
+    async fn for_each<F>(&mut self, _f: F) -> Result<(),RocksdbViewError>
+    where
+        F: FnMut(&mut i32) -> ()
+            + Send
+            + Sync,
+    {
+        Ok(())
+    }
+
     async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), RocksdbViewError> {
         for key in self.db.find_keys_with_prefix(&self.base_key).await? {
             batch.delete_key(&key);

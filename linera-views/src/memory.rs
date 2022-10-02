@@ -310,6 +310,15 @@ where
             .await)
     }
 
+    async fn for_each<F>(&mut self, _f: F) -> Result<(),MemoryViewError>
+    where
+        F: FnMut(&mut i32) -> ()
+            + Send
+            + Sync,
+    {
+        Ok(())
+    }
+
     async fn delete(&mut self, _batch: &mut Self::Batch) -> Result<(), MemoryViewError> {
         self.erase().await
     }
