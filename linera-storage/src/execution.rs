@@ -1,11 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::system::SystemExecutionState;
 use linera_base::{
     error::Error,
     execution::{ApplicationResult, EffectContext, OperationContext, SYSTEM},
     messages::*,
-    system::SystemExecutionState,
 };
 use linera_views::{
     impl_view,
