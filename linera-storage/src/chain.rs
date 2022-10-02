@@ -256,6 +256,7 @@ where
             next_block_height: *next_block_height,
             state_hash: *self.execution_state_hash.get(),
             requested_system_execution_state: None,
+            requested_committees: None,
             requested_pending_messages: Vec::new(),
             requested_sent_certificates: Vec::new(),
             count_received_certificates: self.received_log.count(),

@@ -462,6 +462,9 @@ where
             info.requested_system_execution_state =
                 Some(chain.execution_state.system.get().clone());
         }
+        if query.request_committees {
+            info.requested_committees = Some(chain.execution_state.system.get().committees.clone());
+        }
         if let Some(next_block_height) = query.test_next_block_height {
             ensure!(
                 chain.tip_state.get().next_block_height == next_block_height,

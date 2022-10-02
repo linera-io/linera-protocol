@@ -11,7 +11,10 @@ use crate::{
     system::{Balance, SystemEffect, SystemExecutionState, SystemOperation},
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::HashSet, str::FromStr};
+use std::{
+    collections::{BTreeMap, HashSet},
+    str::FromStr,
+};
 
 #[cfg(any(test, feature = "test"))]
 use test_strategy::Arbitrary;
@@ -264,6 +267,8 @@ pub struct ChainInfoQuery {
     pub test_next_block_height: Option<BlockHeight>,
     /// Query the full system execution state (may not supported by all validators).
     pub request_system_execution_state: bool,
+    /// Query the current committees.
+    pub request_committees: bool,
     /// Query the received messages that are waiting be picked in the next block.
     pub request_pending_messages: bool,
     /// Query a range of certificates sent from the chain.
@@ -278,6 +283,7 @@ impl ChainInfoQuery {
             chain_id,
             test_next_block_height: None,
             request_system_execution_state: false,
+            request_committees: false,
             request_pending_messages: false,
             request_sent_certificates_in_range: None,
             request_received_certificates_excluding_first_nth: None,
@@ -291,6 +297,11 @@ impl ChainInfoQuery {
 
     pub fn with_system_execution_state(mut self) -> Self {
         self.request_system_execution_state = true;
+        self
+    }
+
+    pub fn with_committees(mut self) -> Self {
+        self.request_committees = true;
         self
     }
 
@@ -331,6 +342,8 @@ pub struct ChainInfo {
     pub state_hash: Option<HashValue>,
     /// The full execution state.
     pub requested_system_execution_state: Option<SystemExecutionState>,
+    /// The current committees.
+    pub requested_committees: Option<BTreeMap<Epoch, Committee>>,
     /// The received messages that are waiting be picked in the next block (if requested).
     pub requested_pending_messages: Vec<MessageGroup>,
     /// The response to `request_sent_certificates_in_range`

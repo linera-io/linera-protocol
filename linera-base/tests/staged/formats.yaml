@@ -100,6 +100,13 @@ ChainInfo:
     - requested_system_execution_state:
         OPTION:
           TYPENAME: SystemExecutionState
+    - requested_committees:
+        OPTION:
+          MAP:
+            KEY:
+              TYPENAME: Epoch
+            VALUE:
+              TYPENAME: Committee
     - requested_pending_messages:
         SEQ:
           TYPENAME: MessageGroup
@@ -118,6 +125,7 @@ ChainInfoQuery:
         OPTION:
           TYPENAME: BlockHeight
     - request_system_execution_state: BOOL
+    - request_committees: BOOL
     - request_pending_messages: BOOL
     - request_sent_certificates_in_range:
         OPTION:
