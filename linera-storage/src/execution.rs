@@ -2,11 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::system::SystemExecutionState;
-use linera_base::{
-    error::Error,
-    execution::{ApplicationResult, EffectContext, OperationContext, SYSTEM},
-    messages::*,
-};
+use linera_base::{error::Error, messages::*, system::SYSTEM};
+use linera_execution::{ApplicationResult, EffectContext, OperationContext};
 use linera_views::{
     impl_view,
     views::{CollectionOperations, CollectionView, RegisterOperations, RegisterView, ScopedView},
@@ -75,7 +72,7 @@ where
                 _ => Err(Error::InvalidOperation),
             }
         } else {
-            let application = linera_base::execution::get_user_application(application_id)?;
+            let application = linera_execution::get_user_application(application_id)?;
             let state = self.users.load_entry(application_id).await?;
             match operation {
                 Operation::System(_) => Err(Error::InvalidOperation),
@@ -103,7 +100,7 @@ where
                 _ => Err(Error::InvalidEffect),
             }
         } else {
-            let application = linera_base::execution::get_user_application(application_id)?;
+            let application = linera_execution::get_user_application(application_id)?;
             let state = self.users.load_entry(application_id).await?;
             match effect {
                 Effect::System(_) => Err(Error::InvalidEffect),

@@ -1,14 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{error::Error, messages::*, system::SystemEffect};
+use linera_base::{error::Error, messages::*, system::SystemEffect};
 use once_cell::sync::Lazy;
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
 };
-
-pub static SYSTEM: ApplicationId = ApplicationId(0);
 
 pub static USER_APPLICATIONS: Lazy<
     Mutex<HashMap<ApplicationId, Arc<dyn UserApplication + Send + Sync + 'static>>>,

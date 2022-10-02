@@ -2,6 +2,7 @@
 members = [
         "linera-base",
         "linera-core",
+        "linera-execution",
         "linera-service",
         "linera-storage",
         "linera-views",

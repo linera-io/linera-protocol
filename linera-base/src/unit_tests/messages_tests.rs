@@ -3,10 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use crate::{
-    execution::SYSTEM,
-    system::{Address, Amount, SystemOperation, UserData},
-};
+use crate::system::{Address, Amount, SystemOperation, UserData, SYSTEM};
 
 #[test]
 fn test_signed_values() {

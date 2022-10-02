@@ -6,12 +6,13 @@ use linera_base::{
     crypto::{HashValue, KeyPair},
     ensure,
     error::Error,
-    execution::{ApplicationResult, EffectContext, OperationContext, RawApplicationResult, SYSTEM},
     messages::{
         ApplicationId, Block, BlockHeight, ChainId, ChainInfo, ChainInfoResponse, Destination,
         Effect, EffectId, Medium, MessageGroup, Origin,
     },
+    system::SYSTEM,
 };
+use linera_execution::{ApplicationResult, EffectContext, OperationContext, RawApplicationResult};
 use linera_views::{
     impl_view,
     views::{
