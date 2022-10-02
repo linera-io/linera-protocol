@@ -11,45 +11,84 @@ use linera_base::{
     system::{Address, Amount, Balance, SystemEffect, SystemOperation, ADMIN_CHANNEL},
 };
 use linera_execution::{EffectContext, OperationContext, RawApplicationResult};
+use linera_views::{
+    impl_view,
+    views::{MapOperations, MapView, RegisterOperations, RegisterView, ScopedView, View},
+};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
-/// The execution state of the system of a chain.
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub struct SystemExecutionState {
+/// A view accessing the execution state of the system of a chain.
+#[derive(Debug)]
+pub struct SystemExecutionStateView<C> {
     /// How the chain was created. May be unknown for inactive chains.
-    pub description: Option<ChainDescription>,
+    pub description: ScopedView<0, RegisterView<C, Option<ChainDescription>>>,
     /// The number identifying the current configuration.
-    pub epoch: Option<Epoch>,
+    pub epoch: ScopedView<1, RegisterView<C, Option<Epoch>>>,
     /// The admin of the chain.
-    pub admin_id: Option<ChainId>,
+    pub admin_id: ScopedView<2, RegisterView<C, Option<ChainId>>>,
     /// Track the channels that we have subscribed to.
     /// We avoid BTreeSet<String> because of a Serde/BCS limitation.
-    pub subscriptions: BTreeMap<ChannelId, ()>,
+    pub subscriptions: ScopedView<3, MapView<C, ChannelId, ()>>,
     /// The committees that we trust, indexed by epoch number.
-    pub committees: BTreeMap<Epoch, Committee>,
-    /// Manager of the chain.
-    pub manager: ChainManager,
+    pub committees: ScopedView<4, RegisterView<C, BTreeMap<Epoch, Committee>>>,
+    /// Manager of the chain.>
+    pub manager: ScopedView<5, RegisterView<C, ChainManager>>,
     /// Balance of the chain.
+    pub balance: ScopedView<6, RegisterView<C, Balance>>,
+}
+
+/// For testing only.
+#[cfg(any(test, feature = "test"))]
+pub struct SystemExecutionState {
+    pub description: Option<ChainDescription>,
+    pub epoch: Option<Epoch>,
+    pub admin_id: Option<ChainId>,
+    pub subscriptions: BTreeSet<ChannelId>,
+    pub committees: BTreeMap<Epoch, Committee>,
+    pub manager: ChainManager,
     pub balance: Balance,
 }
 
-impl SystemExecutionState {
+impl_view!(
+    SystemExecutionStateView {
+        description,
+        epoch,
+        admin_id,
+        subscriptions,
+        committees,
+        manager,
+        balance,
+    };
+    RegisterOperations<Option<ChainDescription>>,
+    RegisterOperations<Option<Epoch>>,
+    RegisterOperations<Option<ChainId>>,
+    MapOperations<ChannelId, ()>,
+    RegisterOperations<BTreeMap<Epoch, Committee>>,
+    RegisterOperations<ChainManager>,
+    RegisterOperations<Balance>,
+);
+
+impl<C> SystemExecutionStateView<C>
+where
+    C: SystemExecutionStateViewContext,
+    Error: From<C::Error>,
+{
     /// Invariant for the states of active chains.
     pub fn is_active(&self) -> bool {
-        self.description.is_some()
-            && self.manager.is_active()
-            && self.epoch.is_some()
-            && self.committees.contains_key(self.epoch.as_ref().unwrap())
-            && self.admin_id.is_some()
+        self.description.get().is_some()
+            && self.manager.get().is_active()
+            && self.epoch.get().is_some()
+            && self
+                .committees
+                .get()
+                .contains_key(&self.epoch.get().unwrap())
+            && self.admin_id.get().is_some()
     }
-}
 
-impl SystemExecutionState {
     /// Execute the sender's side of the operation.
     /// Return a list of recipients who need to be notified.
-    pub fn apply_operation(
+    pub async fn apply_operation(
         &mut self,
         context: &OperationContext,
         operation: &SystemOperation,
@@ -66,12 +105,15 @@ impl SystemExecutionState {
                 let expected_id = ChainId::child(context.clone().into());
                 ensure!(id == &expected_id, Error::InvalidNewChainId(*id));
                 ensure!(
-                    self.admin_id.as_ref() == Some(admin_id),
+                    self.admin_id.get().as_ref() == Some(admin_id),
                     Error::InvalidNewChainAdminId(*id)
                 );
-                ensure!(&self.committees == committees, Error::InvalidCommittees);
                 ensure!(
-                    self.epoch.as_ref() == Some(epoch),
+                    self.committees.get() == committees,
+                    Error::InvalidCommittees
+                );
+                ensure!(
+                    self.epoch.get().as_ref() == Some(epoch),
                     Error::InvalidEpoch {
                         chain_id: *id,
                         epoch: *epoch
@@ -105,19 +147,19 @@ impl SystemExecutionState {
                 Ok(application)
             }
             ChangeOwner { new_owner } => {
-                self.manager = ChainManager::single(*new_owner);
+                self.manager.set(ChainManager::single(*new_owner));
                 Ok(RawApplicationResult::default())
             }
             ChangeMultipleOwners { new_owners } => {
-                self.manager = ChainManager::multiple(new_owners.clone());
+                self.manager.set(ChainManager::multiple(new_owners.clone()));
                 Ok(RawApplicationResult::default())
             }
             CloseChain => {
-                self.manager = ChainManager::default();
+                self.manager.set(ChainManager::default());
                 // Unsubscribe to all channels.
-                let subscriptions = std::mem::take(&mut self.subscriptions);
+                let subscriptions = self.subscriptions.indices().await?;
                 let mut effects = Vec::new();
-                for (channel, ()) in subscriptions {
+                for channel in subscriptions {
                     effects.push((
                         Destination::Recipient(channel.chain_id),
                         SystemEffect::Unsubscribe {
@@ -126,6 +168,7 @@ impl SystemExecutionState {
                         },
                     ));
                 }
+                self.subscriptions.reset_to_default();
                 let application = RawApplicationResult {
                     effects,
                     subscribe: None,
@@ -138,12 +181,12 @@ impl SystemExecutionState {
             } => {
                 ensure!(*amount > Amount::zero(), Error::IncorrectTransferAmount);
                 ensure!(
-                    self.balance >= (*amount).into(),
+                    *self.balance.get() >= (*amount).into(),
                     Error::InsufficientFunding {
-                        current_balance: self.balance
+                        current_balance: *self.balance.get()
                     }
                 );
-                self.balance.try_sub_assign((*amount).into())?;
+                self.balance.get_mut().try_sub_assign((*amount).into())?;
                 let application = match recipient {
                     Address::Burn => RawApplicationResult::default(),
                     Address::Account(id) => RawApplicationResult {
@@ -171,22 +214,22 @@ impl SystemExecutionState {
                     Error::InvalidCommitteeCreation
                 );
                 ensure!(
-                    Some(admin_id) == self.admin_id.as_ref(),
+                    Some(admin_id) == self.admin_id.get().as_ref(),
                     Error::InvalidCommitteeCreation
                 );
                 ensure!(
-                    *epoch == self.epoch.expect("chain is active").try_add_one()?,
+                    *epoch == self.epoch.get().expect("chain is active").try_add_one()?,
                     Error::InvalidCommitteeCreation
                 );
-                self.committees.insert(*epoch, committee.clone());
-                self.epoch = Some(*epoch);
+                self.committees.get_mut().insert(*epoch, committee.clone());
+                self.epoch.set(Some(*epoch));
                 let application = RawApplicationResult {
                     effects: vec![(
                         Destination::Subscribers(ADMIN_CHANNEL.into()),
                         SystemEffect::SetCommittees {
                             admin_id: *admin_id,
-                            epoch: self.epoch.expect("chain is active"),
-                            committees: self.committees.clone(),
+                            epoch: self.epoch.get().expect("chain is active"),
+                            committees: self.committees.get().clone(),
                         },
                     )],
                     subscribe: None,
@@ -201,11 +244,11 @@ impl SystemExecutionState {
                     Error::InvalidCommitteeRemoval
                 );
                 ensure!(
-                    Some(admin_id) == self.admin_id.as_ref(),
+                    Some(admin_id) == self.admin_id.get().as_ref(),
                     Error::InvalidCommitteeRemoval
                 );
                 ensure!(
-                    self.committees.remove(epoch).is_some(),
+                    self.committees.get_mut().remove(epoch).is_some(),
                     Error::InvalidCommitteeRemoval
                 );
                 let application = RawApplicationResult {
@@ -213,8 +256,8 @@ impl SystemExecutionState {
                         Destination::Subscribers(ADMIN_CHANNEL.into()),
                         SystemEffect::SetCommittees {
                             admin_id: *admin_id,
-                            epoch: self.epoch.expect("chain is active"),
-                            committees: self.committees.clone(),
+                            epoch: self.epoch.get().expect("chain is active"),
+                            committees: self.committees.get().clone(),
                         },
                     )],
                     subscribe: None,
@@ -229,7 +272,7 @@ impl SystemExecutionState {
                     Error::InvalidSubscriptionToNewCommittees(context.chain_id)
                 );
                 ensure!(
-                    self.admin_id.as_ref() == Some(admin_id),
+                    self.admin_id.get().as_ref() == Some(admin_id),
                     Error::InvalidSubscriptionToNewCommittees(context.chain_id)
                 );
                 let channel_id = ChannelId {
@@ -237,7 +280,7 @@ impl SystemExecutionState {
                     name: ADMIN_CHANNEL.into(),
                 };
                 ensure!(
-                    !self.subscriptions.contains_key(&channel_id),
+                    self.subscriptions.get(&channel_id).await?.is_none(),
                     Error::InvalidSubscriptionToNewCommittees(context.chain_id)
                 );
                 self.subscriptions.insert(channel_id, ());
@@ -263,10 +306,10 @@ impl SystemExecutionState {
                     name: ADMIN_CHANNEL.into(),
                 };
                 ensure!(
-                    self.subscriptions.contains_key(&channel_id),
+                    self.subscriptions.get(&channel_id).await?.is_some(),
                     Error::InvalidUnsubscriptionToNewCommittees(context.chain_id)
                 );
-                self.subscriptions.remove(&channel_id);
+                self.subscriptions.remove(channel_id);
                 let application = RawApplicationResult {
                     effects: vec![(
                         Destination::Recipient(*admin_id),
@@ -296,24 +339,26 @@ impl SystemExecutionState {
         use SystemEffect::*;
         match effect {
             Credit { amount, recipient } if context.chain_id == *recipient => {
-                self.balance = self
+                let new_balance = self
                     .balance
+                    .get()
                     .try_add((*amount).into())
                     .unwrap_or_else(|_| Balance::max());
+                self.balance.set(new_balance);
                 Ok(RawApplicationResult::default())
             }
             SetCommittees {
                 admin_id,
                 epoch,
                 committees,
-            } if self.admin_id.as_ref() == Some(admin_id) => {
+            } if self.admin_id.get().as_ref() == Some(admin_id) => {
                 // This chain was not yet subscribed at the time earlier epochs were broadcast.
                 ensure!(
-                    *epoch >= self.epoch.expect("chain is active"),
+                    *epoch >= self.epoch.get().expect("chain is active"),
                     Error::InvalidCrossChainRequest
                 );
-                self.epoch = Some(*epoch);
-                self.committees = committees.clone();
+                self.epoch.set(Some(*epoch));
+                self.committees.set(committees.clone());
                 Ok(RawApplicationResult::default())
             }
             Subscribe { id, channel } if channel.chain_id == context.chain_id => {
@@ -370,15 +415,15 @@ impl SystemExecutionState {
                 admin_id,
             }) if id == &this_chain_id => {
                 // Guaranteed under BFT assumptions.
-                assert!(self.description.is_none());
-                assert!(!self.manager.is_active());
-                assert!(self.committees.is_empty());
+                assert!(self.description.get().is_none());
+                assert!(!self.manager.get().is_active());
+                assert!(self.committees.get().is_empty());
                 let description = ChainDescription::Child(effect_id);
                 assert_eq!(this_chain_id, description.into());
-                self.description = Some(description);
-                self.epoch = Some(*epoch);
-                self.committees = committees.clone();
-                self.admin_id = Some(*admin_id);
+                self.description.set(Some(description));
+                self.epoch.set(Some(*epoch));
+                self.committees.set(committees.clone());
+                self.admin_id.set(Some(*admin_id));
                 self.subscriptions.insert(
                     ChannelId {
                         chain_id: *admin_id,
@@ -386,7 +431,7 @@ impl SystemExecutionState {
                     },
                     (),
                 );
-                self.manager = ChainManager::single(*owner);
+                self.manager.set(ChainManager::single(*owner));
                 Ok(true)
             }
             _ => Ok(false),

@@ -98,13 +98,16 @@ pub trait Store {
             !chain.is_active(),
             linera_base::error::Error::InactiveChain(id)
         );
-        let system_state = chain.execution_state.system.get_mut();
-        system_state.description = Some(description);
-        system_state.epoch = Some(Epoch::from(0));
-        system_state.admin_id = Some(admin_id);
-        system_state.committees.insert(Epoch::from(0), committee);
-        system_state.manager = ChainManager::single(owner);
-        system_state.balance = balance;
+        let system_state = &mut chain.execution_state.system;
+        system_state.description.set(Some(description));
+        system_state.epoch.set(Some(Epoch::from(0)));
+        system_state.admin_id.set(Some(admin_id));
+        system_state
+            .committees
+            .get_mut()
+            .insert(Epoch::from(0), committee);
+        system_state.manager.set(ChainManager::single(owner));
+        system_state.balance.set(balance);
         let state_hash = chain.execution_state.hash_value().await?;
         chain.execution_state_hash.set(Some(state_hash));
         chain.write_commit().await?;

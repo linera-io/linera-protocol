@@ -168,14 +168,14 @@ where
                 Ok(response) => {
                     response.check(self.name)?;
                     // Obtain the chain description from our local node.
-                    let description = self
+                    let description = *self
                         .store
                         .load_chain(chain_id)
                         .await?
                         .execution_state
                         .system
-                        .get()
-                        .description;
+                        .description
+                        .get();
                     match description {
                         Some(ChainDescription::Child(EffectId {
                             chain_id: parent_id,
