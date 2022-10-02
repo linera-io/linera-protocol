@@ -413,12 +413,15 @@ where
         Ok(keys)
     }
 
-    async fn for_each<F>(&mut self, _f: F) -> Result<(),RocksdbViewError>
+    async fn for_each<F>(&mut self, mut f: F) -> Result<(),RocksdbViewError>
     where
-        F: FnMut(&mut i32) -> ()
-            + Send
-            + Sync,
+        F: FnMut(I) -> () + Send + Sync,
     {
+        let len = self.base_key.len();
+        for key in self.db.find_keys_with_prefix(&self.base_key).await? {
+            let key = bcs::from_bytes(&key[len..])?;
+            f(key);
+        }
         Ok(())
     }
 
