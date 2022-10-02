@@ -8,7 +8,7 @@ use crate::{
     ensure,
     error::Error,
     manager::ChainManager,
-    system::{Balance, SystemEffect, SystemExecutionState, SystemOperation},
+    system::{Balance, SystemEffect, SystemOperation},
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -265,8 +265,6 @@ pub struct ChainInfoQuery {
     pub chain_id: ChainId,
     /// Optionally test that the block height is the one expected.
     pub test_next_block_height: Option<BlockHeight>,
-    /// Query the full system execution state (may not supported by all validators).
-    pub request_system_execution_state: bool,
     /// Query the current committees.
     pub request_committees: bool,
     /// Query the received messages that are waiting be picked in the next block.
@@ -282,7 +280,6 @@ impl ChainInfoQuery {
         Self {
             chain_id,
             test_next_block_height: None,
-            request_system_execution_state: false,
             request_committees: false,
             request_pending_messages: false,
             request_sent_certificates_in_range: None,
@@ -292,11 +289,6 @@ impl ChainInfoQuery {
 
     pub fn test_next_block_height(mut self, height: BlockHeight) -> Self {
         self.test_next_block_height = Some(height);
-        self
-    }
-
-    pub fn with_system_execution_state(mut self) -> Self {
-        self.request_system_execution_state = true;
         self
     }
 
@@ -340,8 +332,6 @@ pub struct ChainInfo {
     pub next_block_height: BlockHeight,
     /// The hash of the current execution state.
     pub state_hash: Option<HashValue>,
-    /// The full execution state.
-    pub requested_system_execution_state: Option<SystemExecutionState>,
     /// The current committees.
     pub requested_committees: Option<BTreeMap<Epoch, Committee>>,
     /// The received messages that are waiting be picked in the next block (if requested).

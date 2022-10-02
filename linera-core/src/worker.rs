@@ -458,10 +458,6 @@ where
         log::trace!("{} <-- {:?}", self.nickname, query);
         let mut chain = self.storage.load_chain(query.chain_id).await?;
         let mut info = chain.make_chain_info(None).info;
-        if query.request_system_execution_state {
-            info.requested_system_execution_state =
-                Some(chain.execution_state.system.get().clone());
-        }
         if query.request_committees {
             info.requested_committees = Some(chain.execution_state.system.get().committees.clone());
         }

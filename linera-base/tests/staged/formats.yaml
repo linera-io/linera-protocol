@@ -97,9 +97,6 @@ ChainInfo:
     - state_hash:
         OPTION:
           TYPENAME: HashValue
-    - requested_system_execution_state:
-        OPTION:
-          TYPENAME: SystemExecutionState
     - requested_committees:
         OPTION:
           MAP:
@@ -124,7 +121,6 @@ ChainInfoQuery:
     - test_next_block_height:
         OPTION:
           TYPENAME: BlockHeight
-    - request_system_execution_state: BOOL
     - request_committees: BOOL
     - request_pending_messages: BOOL
     - request_sent_certificates_in_range:
@@ -583,32 +579,6 @@ SystemEffect:
         STRUCT:
           - id:
               TYPENAME: ChainId
-SystemExecutionState:
-  STRUCT:
-    - description:
-        OPTION:
-          TYPENAME: ChainDescription
-    - epoch:
-        OPTION:
-          TYPENAME: Epoch
-    - admin_id:
-        OPTION:
-          TYPENAME: ChainId
-    - subscriptions:
-        MAP:
-          KEY:
-            TYPENAME: ChannelId
-          VALUE: UNIT
-    - committees:
-        MAP:
-          KEY:
-            TYPENAME: Epoch
-          VALUE:
-            TYPENAME: Committee
-    - manager:
-        TYPENAME: ChainManager
-    - balance:
-        TYPENAME: Balance
 SystemOperation:
   ENUM:
     0:
