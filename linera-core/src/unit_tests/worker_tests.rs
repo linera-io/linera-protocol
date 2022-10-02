@@ -7,10 +7,11 @@ use linera_base::{
     committee::Committee,
     crypto::*,
     error::Error,
-    execution::SYSTEM,
     manager::ChainManager,
     messages::*,
-    system::{Address, Amount, Balance, SystemEffect, SystemOperation, UserData, ADMIN_CHANNEL},
+    system::{
+        Address, Amount, Balance, SystemEffect, SystemOperation, UserData, ADMIN_CHANNEL, SYSTEM,
+    },
 };
 use linera_storage::{
     chain::Event, execution::ExecutionStateView, system::SystemExecutionState, DynamoDbStoreClient,

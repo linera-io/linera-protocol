@@ -5,10 +5,12 @@
 use crate::{
     committee::Committee,
     error::Error,
-    messages::{ChainId, ChannelId, Epoch, Owner},
+    messages::{ApplicationId, ChainId, ChannelId, Epoch, Owner},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+
+pub static SYSTEM: ApplicationId = ApplicationId(0);
 
 /// A recipient's address.
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Serialize, Deserialize)]

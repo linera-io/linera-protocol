@@ -6,11 +6,11 @@ use linera_base::{
     committee::Committee,
     ensure,
     error::Error,
-    execution::{EffectContext, OperationContext, RawApplicationResult},
     manager::ChainManager,
     messages::{ChainDescription, ChainId, ChannelId, Destination, Effect, EffectId, Epoch},
     system::{Address, Amount, Balance, SystemEffect, SystemOperation, ADMIN_CHANNEL},
 };
+use linera_execution::{EffectContext, OperationContext, RawApplicationResult};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 

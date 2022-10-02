@@ -9,10 +9,9 @@ use linera_base::{
     committee::ValidatorState,
     crypto::*,
     error::Error,
-    execution::SYSTEM,
     messages::*,
     rpc,
-    system::{Address, Amount, Balance, SystemOperation, UserData},
+    system::{Address, Amount, Balance, SystemOperation, UserData, SYSTEM},
 };
 use linera_core::{
     client::*,

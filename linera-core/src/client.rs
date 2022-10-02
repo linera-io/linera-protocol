@@ -13,10 +13,9 @@ use linera_base::{
     committee::{Committee, ValidatorState},
     crypto::*,
     error::Error,
-    execution::SYSTEM,
     manager::ChainManager,
     messages::*,
-    system::{Address, Amount, Balance, SystemOperation, UserData},
+    system::{Address, Amount, Balance, SystemOperation, UserData, SYSTEM},
 };
 use linera_storage::Store;
 use std::{

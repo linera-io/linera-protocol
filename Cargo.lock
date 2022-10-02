@@ -1164,6 +1164,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "linera-execution"
+version = "0.1.0"
+dependencies = [
+ "linera-base",
+ "log",
+ "once_cell",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
 name = "linera-service"
 version = "0.1.0"
 dependencies = [
@@ -1202,6 +1213,7 @@ dependencies = [
  "bcs",
  "futures",
  "linera-base",
+ "linera-execution",
  "linera-views",
  "log",
  "rocksdb",
