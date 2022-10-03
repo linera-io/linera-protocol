@@ -314,14 +314,14 @@ where
     where
         F: FnMut(I) -> () + Send,
     {
-        self.with_ref(|m: Option<&BTreeMap<I, V>>| match m {
-            None => {},
-            Some(m) => {
-                for index in m.keys() {
+        self.with_ref(|maybe_map: Option<&BTreeMap<I, V>>| {
+            if let Some(map) = maybe_map {
+                for index in map.keys() {
                     f(index.clone());
                 }
-            },
-        }).await;
+            }
+        })
+        .await;
         Ok(())
     }
 
