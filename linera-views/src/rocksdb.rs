@@ -415,7 +415,7 @@ where
 
     async fn for_each<F>(&mut self, mut f: F) -> Result<(),RocksdbViewError>
     where
-        F: FnMut(I) -> () + Send + Sync,
+        F: FnMut(I) -> () + Send,
     {
         let len = self.base_key.len();
         for key in self.db.find_keys_with_prefix(&self.base_key).await? {

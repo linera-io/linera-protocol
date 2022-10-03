@@ -312,7 +312,7 @@ where
 
     async fn for_each<F>(&mut self, mut f: F) -> Result<(),MemoryViewError>
     where
-        F: FnMut(I) -> () + Send + Sync,
+        F: FnMut(I) -> () + Send,
     {
         self.with_ref(|m: Option<&BTreeMap<I, V>>| match m {
             None => {},

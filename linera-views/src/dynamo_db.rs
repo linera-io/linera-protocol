@@ -608,7 +608,7 @@ where
 
     async fn for_each<F>(&mut self, mut f: F) -> Result<(),Self::Error>
     where
-        F: FnMut(I) -> () + Send + Sync,
+        F: FnMut(I) -> () + Send,
     {
         for index in self.get_sub_keys(&()).await? {
             f(index);
