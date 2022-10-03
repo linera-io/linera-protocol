@@ -412,7 +412,7 @@ pub trait MapOperations<I, V>: Context {
     /// Return the list of indices in the map.
     async fn indices(&mut self) -> Result<Vec<I>, Self::Error>;
 
-    /// A function taking the indices 
+    /// Execute a function on each index.
     async fn for_each<F>(&mut self, mut f: F) -> Result<(),Self::Error>
     where
         F: FnMut(I) -> () + Send;
