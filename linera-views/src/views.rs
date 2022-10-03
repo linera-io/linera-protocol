@@ -292,6 +292,7 @@ where
     }
 
     fn rollback(&mut self) {
+        self.was_reset_to_default = false;
         self.new_values.clear();
     }
 
@@ -449,6 +450,7 @@ where
     }
 
     fn rollback(&mut self) {
+        self.was_reset_to_default = false;
         self.updates.clear();
     }
 
@@ -799,6 +801,7 @@ where
     }
 
     fn rollback(&mut self) {
+        self.was_reset_to_default = false;
         self.updates.clear();
     }
 
