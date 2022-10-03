@@ -40,6 +40,13 @@ where
         Ok(())
     }
 
+    async fn commit_and_reset(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+        use $crate::views::View;
+
+        $( self.$field.commit_and_reset(batch).await?; )*
+        Ok(())
+    }
+
     async fn delete(self, batch: &mut C::Batch) -> Result<(), C::Error> {
         use $crate::views::View;
 
