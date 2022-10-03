@@ -353,10 +353,8 @@ async fn test_views_in_dynamo_db() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-
-
 #[cfg(test)]
-async fn test_store_rollback_kernel<S>(store: &mut S) -> ()
+async fn test_store_rollback_kernel<S>(store: &mut S)
 where
     S: StateStore,
 {
@@ -417,10 +415,6 @@ async fn test_store_rollback() {
     let mut store = RocksdbTestStore::new(db);
     test_store_rollback_kernel(&mut store).await;
 }
-
-
-
-
 
 #[tokio::test]
 async fn test_collection_removal() -> anyhow::Result<()> {
@@ -512,4 +506,3 @@ async fn test_removal_api() -> anyhow::Result<()> {
     }
     Ok(())
 }
-
