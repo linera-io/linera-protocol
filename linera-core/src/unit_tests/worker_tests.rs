@@ -16,10 +16,10 @@ use linera_base::{
     },
 };
 use linera_storage::{
-    chain::Event, execution::ExecutionState, DynamoDbStoreClient, MemoryStoreClient,
+    chain::Event, execution::ExecutionStateView, DynamoDbStoreClient, MemoryStoreClient,
     RocksdbStoreClient, Store,
 };
-use linera_views::test_utils::LocalStackTestContext;
+use linera_views::{hash::HashView, test_utils::LocalStackTestContext};
 use std::collections::BTreeMap;
 use test_log::test;
 
@@ -145,7 +145,7 @@ fn make_certificate<S>(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn make_transfer_certificate<S>(
+async fn make_transfer_certificate<S>(
     chain_description: ChainDescription,
     key_pair: &KeyPair,
     recipient: Address,
@@ -157,7 +157,7 @@ fn make_transfer_certificate<S>(
     previous_confirmed_block: Option<&Certificate>,
 ) -> Certificate {
     let chain_id = chain_description.into();
-    let state = ExecutionState::from(SystemExecutionState {
+    let system_state = SystemExecutionState {
         epoch: Some(Epoch::from(0)),
         description: Some(chain_description),
         admin_id: Some(ChainId::root(0)),
@@ -165,7 +165,7 @@ fn make_transfer_certificate<S>(
         committees: [(Epoch::from(0), committee.clone())].into_iter().collect(),
         manager: ChainManager::single(key_pair.public().into()),
         balance,
-    });
+    };
     let block = make_block(
         Epoch::from(0),
         chain_id,
@@ -188,7 +188,13 @@ fn make_transfer_certificate<S>(
         )],
         Address::Burn => Vec::new(),
     };
-    let state_hash = HashValue::new(&state);
+    let state_hash = HashValue::from(
+        ExecutionStateView::from_system_state(system_state)
+            .await
+            .hash()
+            .await
+            .expect("hashing from memory should not fail"),
+    );
     let value = Value::ConfirmedBlock {
         block,
         effects,
@@ -266,8 +272,8 @@ where
         .await
         .unwrap()
         .execution_state
-        .get()
         .system
+        .get()
         .manager
         .pending()
         .is_none());
@@ -339,8 +345,8 @@ where
         .await
         .unwrap()
         .execution_state
-        .get()
         .system
+        .get()
         .manager
         .pending()
         .is_none());
@@ -414,8 +420,8 @@ where
         .await
         .unwrap()
         .execution_state
-        .get()
         .system
+        .get()
         .manager
         .pending()
         .is_none());
@@ -479,7 +485,8 @@ where
         Balance::from(4),
         &worker,
         None,
-    );
+    )
+    .await;
     let block_proposal1 = make_transfer_block_proposal(
         ChainId::root(1),
         &sender_key_pair,
@@ -499,8 +506,8 @@ where
         .await
         .unwrap()
         .execution_state
-        .get()
         .system
+        .get()
         .manager
         .pending()
         .is_none());
@@ -515,8 +522,8 @@ where
         .await
         .unwrap()
         .execution_state
-        .get()
         .system
+        .get()
         .manager
         .pending()
         .is_some());
@@ -528,8 +535,8 @@ where
         .await
         .unwrap()
         .execution_state
-        .get()
         .system
+        .get()
         .manager
         .pending()
         .is_some());
@@ -634,7 +641,7 @@ where
                     }),
                 ),
             ],
-            state_hash: HashValue::new(&ExecutionState::from(SystemExecutionState {
+            state_hash: ExecutionStateView::from_system_state(SystemExecutionState {
                 epoch: Some(epoch),
                 description: Some(ChainDescription::Root(1)),
                 admin_id: Some(ChainId::root(0)),
@@ -642,7 +649,12 @@ where
                 committees: [(epoch, committee.clone())].into_iter().collect(),
                 manager: ChainManager::single(sender_key_pair.public().into()),
                 balance: Balance::from(3),
-            })),
+            })
+            .await
+            .hash()
+            .await
+            .unwrap()
+            .into(),
         },
     );
 
@@ -673,7 +685,7 @@ where
                     amount: Amount::from(3),
                 }),
             )],
-            state_hash: HashValue::new(&ExecutionState::from(SystemExecutionState {
+            state_hash: ExecutionStateView::from_system_state(SystemExecutionState {
                 epoch: Some(epoch),
                 description: Some(ChainDescription::Root(1)),
                 admin_id: Some(ChainId::root(0)),
@@ -681,7 +693,12 @@ where
                 committees: [(epoch, committee.clone())].into_iter().collect(),
                 manager: ChainManager::single(sender_key_pair.public().into()),
                 balance: Balance::from(0),
-            })),
+            })
+            .await
+            .hash()
+            .await
+            .unwrap()
+            .into(),
         },
     );
     // Missing earlier blocks
@@ -889,7 +906,7 @@ where
                         amount: Amount::from(1),
                     }),
                 )],
-                state_hash: HashValue::new(&ExecutionState::from(SystemExecutionState {
+                state_hash: ExecutionStateView::from_system_state(SystemExecutionState {
                     epoch: Some(epoch),
                     description: Some(ChainDescription::Root(2)),
                     admin_id: Some(ChainId::root(0)),
@@ -897,7 +914,12 @@ where
                     committees: [(epoch, committee.clone())].into_iter().collect(),
                     manager: ChainManager::single(recipient_key_pair.public().into()),
                     balance: Balance::from(0),
-                })),
+                })
+                .await
+                .hash()
+                .await
+                .unwrap()
+                .into(),
             },
         );
         worker
@@ -993,8 +1015,8 @@ where
         .await
         .unwrap()
         .execution_state
-        .get()
         .system
+        .get()
         .manager
         .pending()
         .is_none());
@@ -1059,8 +1081,8 @@ where
         .await
         .unwrap()
         .execution_state
-        .get()
         .system
+        .get()
         .manager
         .pending()
         .cloned()
@@ -1192,7 +1214,8 @@ where
         Balance::from(0),
         &worker,
         None,
-    );
+    )
+    .await;
     assert!(worker.fully_handle_certificate(certificate).await.is_err());
 }
 
@@ -1252,7 +1275,8 @@ where
         Balance::from(0),
         &worker,
         None,
-    );
+    )
+    .await;
     // Replays are ignored.
     worker
         .fully_handle_certificate(certificate.clone())
@@ -1330,7 +1354,8 @@ where
         Balance::from(0),
         &worker,
         None,
-    );
+    )
+    .await;
     worker
         .fully_handle_certificate(certificate.clone())
         .await
@@ -1340,7 +1365,7 @@ where
         .load_active_chain(ChainId::root(1))
         .await
         .unwrap();
-    assert_eq!(Balance::from(0), chain.execution_state.get().system.balance);
+    assert_eq!(Balance::from(0), chain.execution_state.system.get().balance);
     assert_eq!(
         BlockHeight::from(1),
         chain.tip_state.get().next_block_height
@@ -1444,7 +1469,8 @@ where
         Balance::from(0),
         &worker,
         None,
-    );
+    )
+    .await;
     worker
         .fully_handle_certificate(certificate.clone())
         .await
@@ -1456,7 +1482,7 @@ where
         .unwrap();
     assert_eq!(
         Balance::from(0),
-        new_sender_chain.execution_state.get().system.balance
+        new_sender_chain.execution_state.system.get().balance
     );
     assert_eq!(
         BlockHeight::from(1),
@@ -1474,7 +1500,7 @@ where
         .unwrap();
     assert_eq!(
         Balance::max(),
-        new_recipient_chain.execution_state.get().system.balance
+        new_recipient_chain.execution_state.system.get().balance
     );
 }
 
@@ -1522,7 +1548,8 @@ where
         Balance::from(0),
         &worker,
         None,
-    );
+    )
+    .await;
     worker
         .fully_handle_certificate(certificate.clone())
         .await
@@ -1532,7 +1559,7 @@ where
         .load_active_chain(ChainId::root(1))
         .await
         .unwrap();
-    assert_eq!(Balance::from(0), chain.execution_state.get().system.balance);
+    assert_eq!(Balance::from(0), chain.execution_state.system.get().balance);
     assert_eq!(
         BlockHeight::from(1),
         *chain
@@ -1608,7 +1635,8 @@ where
         Balance::from(0),
         &worker,
         None,
-    );
+    )
+    .await;
     worker
         .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
             application_id: SYSTEM,
@@ -1623,7 +1651,7 @@ where
         .load_active_chain(ChainId::root(2))
         .await
         .unwrap();
-    assert_eq!(Balance::from(1), chain.execution_state.get().system.balance);
+    assert_eq!(Balance::from(1), chain.execution_state.system.get().balance);
     assert_eq!(
         BlockHeight::from(0),
         chain.tip_state.get().next_block_height
@@ -1693,7 +1721,8 @@ where
         Balance::from(0),
         &worker,
         None,
-    );
+    )
+    .await;
     assert!(worker
         .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
             application_id: SYSTEM,
@@ -1760,7 +1789,8 @@ async fn run_test_handle_cross_chain_request_no_recipient_chain_with_inactive_ch
         Balance::from(0),
         &worker,
         None,
-    );
+    )
+    .await;
     // An inactive target chain is created and it acknowledges the message.
     assert!(matches!(
         worker
@@ -1845,7 +1875,8 @@ where
         Balance::from(0),
         &worker,
         None,
-    );
+    )
+    .await;
 
     let info = worker
         .fully_handle_certificate(certificate.clone())
@@ -1880,7 +1911,8 @@ where
         Balance::from(4),
         &worker,
         None,
-    );
+    )
+    .await;
     worker
         .fully_handle_certificate(certificate.clone())
         .await
@@ -1893,13 +1925,13 @@ where
             .await
             .unwrap();
         assert_eq!(
-            recipient_chain.execution_state.get().system.balance,
+            recipient_chain.execution_state.system.get().balance,
             Balance::from(4)
         );
         assert!(recipient_chain
             .execution_state
-            .get()
             .system
+            .get()
             .manager
             .has_owner(&recipient_key_pair.public().into()));
         assert_eq!(recipient_chain.confirmed_log.count(), 1);
@@ -1969,7 +2001,8 @@ where
         Balance::from(0),
         &worker,
         None,
-    );
+    )
+    .await;
 
     let info = worker
         .fully_handle_certificate(certificate.clone())
@@ -2083,7 +2116,7 @@ where
                     }),
                 ),
             ],
-            state_hash: HashValue::new(&ExecutionState::from(SystemExecutionState {
+            state_hash: ExecutionStateView::from_system_state(SystemExecutionState {
                 epoch: Some(Epoch::from(0)),
                 description: Some(ChainDescription::Root(0)),
                 admin_id: Some(admin_id),
@@ -2091,7 +2124,12 @@ where
                 committees: committees.clone(),
                 manager: ChainManager::single(key_pair.public().into()),
                 balance: Balance::from(2),
-            })),
+            })
+            .await
+            .hash()
+            .await
+            .unwrap()
+            .into(),
         },
     );
     worker
@@ -2116,7 +2154,7 @@ where
             .unwrap()
             .is_empty());
         assert_eq!(
-            admin_chain.execution_state.get().system.admin_id,
+            admin_chain.execution_state.system.get().admin_id,
             Some(admin_id)
         );
         // The root chain has no subscribers yet.
@@ -2187,7 +2225,7 @@ where
                     }),
                 ),
             ],
-            state_hash: HashValue::new(&ExecutionState::from(SystemExecutionState {
+            state_hash: ExecutionStateView::from_system_state(SystemExecutionState {
                 epoch: Some(Epoch::from(1)),
                 description: Some(ChainDescription::Root(0)),
                 admin_id: Some(admin_id),
@@ -2196,7 +2234,12 @@ where
                 committees: committees2.clone(),
                 manager: ChainManager::single(key_pair.public().into()),
                 balance: Balance::from(0),
-            })),
+            })
+            .await
+            .hash()
+            .await
+            .unwrap()
+            .into(),
         },
     );
     worker
@@ -2233,7 +2276,7 @@ where
                 Destination::Recipient(user_id),
                 Effect::System(SystemEffect::Notify { id: user_id }),
             )],
-            state_hash: HashValue::new(&ExecutionState::from(SystemExecutionState {
+            state_hash: ExecutionStateView::from_system_state(SystemExecutionState {
                 epoch: Some(Epoch::from(1)),
                 description: Some(ChainDescription::Root(0)),
                 admin_id: Some(admin_id),
@@ -2242,7 +2285,12 @@ where
                 committees: committees2.clone(),
                 manager: ChainManager::single(key_pair.public().into()),
                 balance: Balance::from(0),
-            })),
+            })
+            .await
+            .hash()
+            .await
+            .unwrap()
+            .into(),
         },
     );
     worker
@@ -2279,11 +2327,11 @@ where
             user_chain.tip_state.get().next_block_height
         );
         assert_eq!(
-            user_chain.execution_state.get().system.admin_id,
+            user_chain.execution_state.system.get().admin_id,
             Some(admin_id)
         );
         assert_eq!(
-            user_chain.execution_state.get().system.subscriptions.len(),
+            user_chain.execution_state.system.get().subscriptions.len(),
             1
         );
         user_chain.validate_incoming_messages().await.unwrap();
@@ -2349,7 +2397,7 @@ where
                 .count(),
             0
         );
-        assert_eq!(user_chain.execution_state.get().system.committees.len(), 1);
+        assert_eq!(user_chain.execution_state.system.get().committees.len(), 1);
     }
     // Make the child receive the pending messages.
     let certificate3 = make_certificate(
@@ -2397,7 +2445,7 @@ where
                 height: BlockHeight::from(0),
             },
             effects: Vec::new(),
-            state_hash: HashValue::new(&ExecutionState::from(SystemExecutionState {
+            state_hash: ExecutionStateView::from_system_state(SystemExecutionState {
                 epoch: Some(Epoch::from(1)),
                 description: Some(user_description),
                 admin_id: Some(admin_id),
@@ -2414,7 +2462,12 @@ where
                 committees: committees2.clone(),
                 manager: ChainManager::single(key_pair.public().into()),
                 balance: Balance::from(2),
-            })),
+            })
+            .await
+            .hash()
+            .await
+            .unwrap()
+            .into(),
         },
     );
     worker.fully_handle_certificate(certificate3).await.unwrap();
@@ -2425,14 +2478,14 @@ where
             user_chain.tip_state.get().next_block_height
         );
         assert_eq!(
-            user_chain.execution_state.get().system.admin_id,
+            user_chain.execution_state.system.get().admin_id,
             Some(admin_id)
         );
         assert_eq!(
-            user_chain.execution_state.get().system.subscriptions.len(),
+            user_chain.execution_state.system.get().subscriptions.len(),
             1
         );
-        assert_eq!(user_chain.execution_state.get().system.committees.len(), 2);
+        assert_eq!(user_chain.execution_state.system.get().committees.len(), 2);
         user_chain.validate_incoming_messages().await.unwrap();
         {
             let inbox = user_chain
@@ -2545,7 +2598,7 @@ where
                     amount: Amount::from(1),
                 }),
             )],
-            state_hash: HashValue::new(&ExecutionState::from(SystemExecutionState {
+            state_hash: ExecutionStateView::from_system_state(SystemExecutionState {
                 epoch: Some(Epoch::from(0)),
                 description: Some(ChainDescription::Root(1)),
                 admin_id: Some(admin_id),
@@ -2553,7 +2606,12 @@ where
                 committees: committees.clone(),
                 manager: ChainManager::single(key_pair1.public().into()),
                 balance: Balance::from(2),
-            })),
+            })
+            .await
+            .hash()
+            .await
+            .unwrap()
+            .into(),
         },
     );
     // Have the admin chain create a new epoch without retiring the old one.
@@ -2591,7 +2649,7 @@ where
                     committees: committees2.clone(),
                 }),
             )],
-            state_hash: HashValue::new(&ExecutionState::from(SystemExecutionState {
+            state_hash: ExecutionStateView::from_system_state(SystemExecutionState {
                 epoch: Some(Epoch::from(1)),
                 description: Some(ChainDescription::Root(0)),
                 admin_id: Some(admin_id),
@@ -2599,7 +2657,12 @@ where
                 committees: committees2.clone(),
                 manager: ChainManager::single(key_pair0.public().into()),
                 balance: Balance::from(0),
-            })),
+            })
+            .await
+            .hash()
+            .await
+            .unwrap()
+            .into(),
         },
     );
     worker
@@ -2620,11 +2683,11 @@ where
         user_chain.tip_state.get().next_block_height
     );
     assert_eq!(
-        user_chain.execution_state.get().system.balance,
+        user_chain.execution_state.system.get().balance,
         Balance::from(2)
     );
     assert_eq!(
-        user_chain.execution_state.get().system.epoch,
+        user_chain.execution_state.system.get().epoch,
         Some(Epoch::from(0))
     );
 
@@ -2744,7 +2807,7 @@ where
                     amount: Amount::from(1),
                 }),
             )],
-            state_hash: HashValue::new(&ExecutionState::from(SystemExecutionState {
+            state_hash: ExecutionStateView::from_system_state(SystemExecutionState {
                 epoch: Some(Epoch::from(0)),
                 description: Some(ChainDescription::Root(1)),
                 admin_id: Some(admin_id),
@@ -2752,7 +2815,12 @@ where
                 committees: committees.clone(),
                 manager: ChainManager::single(key_pair1.public().into()),
                 balance: Balance::from(2),
-            })),
+            })
+            .await
+            .hash()
+            .await
+            .unwrap()
+            .into(),
         },
     );
     // Have the admin chain create a new epoch and retire the old one immediately.
@@ -2811,7 +2879,7 @@ where
                     }),
                 ),
             ],
-            state_hash: HashValue::new(&ExecutionState::from(SystemExecutionState {
+            state_hash: ExecutionStateView::from_system_state(SystemExecutionState {
                 epoch: Some(Epoch::from(1)),
                 description: Some(ChainDescription::Root(0)),
                 admin_id: Some(admin_id),
@@ -2819,7 +2887,12 @@ where
                 committees: committees3.clone(),
                 manager: ChainManager::single(key_pair0.public().into()),
                 balance: Balance::from(0),
-            })),
+            })
+            .await
+            .hash()
+            .await
+            .unwrap()
+            .into(),
         },
     );
     worker
@@ -2840,11 +2913,11 @@ where
         user_chain.tip_state.get().next_block_height
     );
     assert_eq!(
-        user_chain.execution_state.get().system.balance,
+        user_chain.execution_state.system.get().balance,
         Balance::from(2)
     );
     assert_eq!(
-        user_chain.execution_state.get().system.epoch,
+        user_chain.execution_state.system.get().epoch,
         Some(Epoch::from(0))
     );
 

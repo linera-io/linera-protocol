@@ -110,7 +110,7 @@ where
 
 linera_views::paste! {
 
-pub trait [< $name Context >]: $crate::hash::HashingContext
+pub trait [< $name Context >]: $crate::hash::HashingContext<Hasher = $crate::sha2::Sha512>
     + Send
     + Sync
     + Clone
@@ -121,7 +121,7 @@ pub trait [< $name Context >]: $crate::hash::HashingContext
 
 impl<AnyContext> [< $name Context >] for AnyContext
 where
-    AnyContext: $crate::hash::HashingContext
+    AnyContext: $crate::hash::HashingContext<Hasher = $crate::sha2::Sha512>
         + Send
         + Sync
         + Clone
