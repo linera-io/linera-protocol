@@ -606,14 +606,14 @@ where
         self.get_sub_keys(&()).await
     }
 
-    async fn for_each<F>(&mut self, mut f: F) -> Result<(),Self::Error>
+    async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), Self::Error>
     where
-        F: FnMut(I) -> () + Send,
+        F: FnMut(I) + Send,
     {
         for index in self.get_sub_keys(&()).await? {
             f(index);
         }
-	Ok(())
+        Ok(())
     }
 
     async fn delete(&mut self, _batch: &mut Self::Batch) -> Result<(), Self::Error> {

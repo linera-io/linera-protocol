@@ -310,9 +310,9 @@ where
             .await)
     }
 
-    async fn for_each<F>(&mut self, mut f: F) -> Result<(),MemoryViewError>
+    async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), MemoryViewError>
     where
-        F: FnMut(I) -> () + Send,
+        F: FnMut(I) + Send,
     {
         self.with_ref(|maybe_map: Option<&BTreeMap<I, V>>| {
             if let Some(map) = maybe_map {

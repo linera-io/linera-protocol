@@ -413,9 +413,9 @@ pub trait MapOperations<I, V>: Context {
     async fn indices(&mut self) -> Result<Vec<I>, Self::Error>;
 
     /// Execute a function on each index.
-    async fn for_each<F>(&mut self, mut f: F) -> Result<(),Self::Error>
+    async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), Self::Error>
     where
-        F: FnMut(I) -> () + Send;
+        F: FnMut(I) + Send;
 
     /// Set a value. Crash-resistant implementations should only write to `batch`.
     async fn insert(
@@ -535,11 +535,13 @@ where
     pub async fn indices(&mut self) -> Result<Vec<I>, C::Error> {
         let mut indices = Vec::new();
         if !self.was_reset_to_default {
-            self.context.for_each(|index: I| {
-                if !self.updates.contains_key(&index) {
-                    indices.push(index);
-                }
-            }).await?;
+            self.context
+                .for_each_index(|index: I| {
+                    if !self.updates.contains_key(&index) {
+                        indices.push(index);
+                    }
+                })
+                .await?;
         }
         for (index, entry) in &self.updates {
             if entry.is_some() {
