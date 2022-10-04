@@ -4,7 +4,7 @@
 
 use async_trait::async_trait;
 use linera_base::{crypto::*, ensure, error::Error, manager::Outcome, messages::*};
-use linera_chain::{ChainStateView, OutboxStateView};
+use linera_chain::ChainStateView;
 use linera_storage::Store;
 use linera_views::views::{LogView, View};
 use std::{collections::VecDeque, sync::Arc};
@@ -121,13 +121,11 @@ where
         application_id: ApplicationId,
         origin: Origin,
         recipient: ChainId,
-        outbox: &mut OutboxStateView<Client::Context>,
+        heights: &[BlockHeight],
     ) -> Result<CrossChainRequest, Error> {
-        let count = outbox.queue.count();
-        let heights = outbox.queue.read_front(count).await?;
         let mut keys = Vec::new();
         for height in heights {
-            if let Some(key) = confirmed_log.get(usize::from(height)).await? {
+            if let Some(key) = confirmed_log.get(usize::from(*height)).await? {
                 keys.push(key);
             }
         }
@@ -154,6 +152,7 @@ where
                 .await?;
             for recipient in state.outboxes.indices().await? {
                 let outbox = state.outboxes.load_entry(recipient).await?;
+                let heights = outbox.block_heights().await?;
                 let origin = Origin {
                     chain_id,
                     medium: Medium::Direct,
@@ -164,7 +163,7 @@ where
                         application_id,
                         origin,
                         recipient,
-                        outbox,
+                        &heights,
                     )
                     .await?;
                 continuation.push(request);
@@ -173,6 +172,7 @@ where
                 let channel = state.channels.load_entry(name.clone()).await?;
                 for recipient in channel.outboxes.indices().await? {
                     let outbox = channel.outboxes.load_entry(recipient).await?;
+                    let heights = outbox.block_heights().await?;
                     let origin = Origin {
                         chain_id,
                         medium: Medium::Channel(name.clone()),
@@ -183,7 +183,7 @@ where
                             application_id,
                             origin,
                             recipient,
-                            outbox,
+                            &heights,
                         )
                         .await?;
                     continuation.push(request);

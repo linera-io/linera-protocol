@@ -3,6 +3,4 @@
 
 mod chain;
 
-pub use chain::{
-    ChainStateView, ChainStateViewContext, Event, OutboxStateView, OutboxStateViewContext,
-};
+pub use chain::{ChainStateView, ChainStateViewContext, Event};

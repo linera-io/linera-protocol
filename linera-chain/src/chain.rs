@@ -109,6 +109,18 @@ impl_view!(
     QueueOperations<BlockHeight>
 );
 
+impl<C> OutboxStateView<C>
+where
+    C: OutboxStateViewContext<Extra = ChainId>,
+    Error: From<C::Error>,
+{
+    pub async fn block_heights(&mut self) -> Result<Vec<BlockHeight>, Error> {
+        let count = self.queue.count();
+        let heights = self.queue.read_front(count).await?;
+        Ok(heights)
+    }
+}
+
 /// An inbox used to receive and execute messages from another chain.
 #[derive(Debug)]
 pub struct InboxStateView<C> {
