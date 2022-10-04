@@ -1,7 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::execution::{ExecutionStateView, ExecutionStateViewContext};
 use linera_base::{
     crypto::{HashValue, KeyPair},
     ensure,
@@ -12,7 +11,10 @@ use linera_base::{
     },
     system::SYSTEM,
 };
-use linera_execution::{ApplicationResult, EffectContext, OperationContext, RawApplicationResult};
+use linera_execution::{
+    ApplicationResult, EffectContext, ExecutionStateView, ExecutionStateViewContext,
+    OperationContext, RawApplicationResult,
+};
 use linera_views::{
     impl_view,
     views::{

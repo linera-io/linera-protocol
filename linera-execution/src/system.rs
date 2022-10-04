@@ -2,6 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::{EffectContext, OperationContext, RawApplicationResult};
 use linera_base::{
     committee::Committee,
     ensure,
@@ -10,13 +11,15 @@ use linera_base::{
     messages::{ChainDescription, ChainId, ChannelId, Destination, Effect, EffectId, Epoch},
     system::{Address, Amount, Balance, SystemEffect, SystemOperation, ADMIN_CHANNEL},
 };
-use linera_execution::{EffectContext, OperationContext, RawApplicationResult};
 use linera_views::{
     impl_view,
     views::{MapOperations, MapView, RegisterOperations, RegisterView, ScopedView, View},
 };
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
+
+#[cfg(any(test, feature = "test"))]
+use std::collections::BTreeSet;
 
 /// A view accessing the execution state of the system of a chain.
 #[derive(Debug)]
