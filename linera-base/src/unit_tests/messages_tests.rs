@@ -4,7 +4,7 @@
 
 use super::*;
 use crate::{
-    execution::{ExecutionState, SYSTEM},
+    execution::SYSTEM,
     system::{Address, Amount, SystemOperation, UserData},
 };
 
@@ -32,7 +32,7 @@ fn test_signed_values() {
     let value = Value::ConfirmedBlock {
         block,
         effects: Vec::new(),
-        state_hash: HashValue::new(&ExecutionState::default()),
+        state_hash: HashValue::from(generic_array::GenericArray::default()),
     };
 
     let v = Vote::new(value.clone(), &key1);
@@ -70,7 +70,7 @@ fn test_certificates() {
     let value = Value::ConfirmedBlock {
         block,
         effects: Vec::new(),
-        state_hash: HashValue::new(&ExecutionState::default()),
+        state_hash: HashValue::from(generic_array::GenericArray::default()),
     };
 
     let v1 = Vote::new(value.clone(), &key1);

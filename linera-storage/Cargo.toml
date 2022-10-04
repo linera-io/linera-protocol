@@ -4,6 +4,9 @@ version = "0.1.0"
 authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 
+[features]
+test = []
+
 [dependencies]
 async-trait = "0.1.52"
 bcs = "0.1.3"

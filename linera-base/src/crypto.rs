@@ -40,7 +40,7 @@ pub struct HashValue(generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Dige
 pub struct Signature(dalek::Signature);
 
 impl PublicKey {
-    // For testing only
+    #[cfg(any(test, feature = "test"))]
     pub fn debug(name: u8) -> PublicKey {
         let addr = [name; dalek::PUBLIC_KEY_LENGTH];
         PublicKey(addr)
@@ -311,6 +311,18 @@ where
 
     fn type_name() -> &'static str {
         serde_name::trace_name::<Self>().expect("Self must be a struct or an enum")
+    }
+}
+
+// Beware: This low-level API does not guarantee that hashes were produced correctly (e.g.
+// with a type tag).
+impl From<generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Digest>::OutputSize>>
+    for HashValue
+{
+    fn from(
+        value: generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Digest>::OutputSize>,
+    ) -> Self {
+        Self(value)
     }
 }
 

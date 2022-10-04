@@ -3,6 +3,7 @@
 
 pub mod chain;
 mod dynamo_db;
+pub mod execution;
 mod memory;
 mod rocksdb;
 
