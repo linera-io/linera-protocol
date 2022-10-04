@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{chain::ChainStateView, Store};
+use crate::{ChainStateView, Store};
 use async_trait::async_trait;
 use linera_base::{
     crypto::HashValue,

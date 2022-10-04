@@ -4,10 +4,8 @@
 
 use async_trait::async_trait;
 use linera_base::{crypto::*, ensure, error::Error, manager::Outcome, messages::*};
-use linera_storage::{
-    chain::{ChainStateView, OutboxStateView},
-    Store,
-};
+use linera_chain::{ChainStateView, OutboxStateView};
+use linera_storage::Store;
 use linera_views::views::{LogView, View};
 use std::{collections::VecDeque, sync::Arc};
 

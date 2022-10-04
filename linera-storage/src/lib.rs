@@ -5,8 +5,6 @@ mod dynamo_db;
 mod memory;
 mod rocksdb;
 
-pub mod chain;
-
 pub use crate::{
     dynamo_db::DynamoDbStoreClient, memory::MemoryStoreClient, rocksdb::RocksdbStoreClient,
 };
@@ -21,20 +19,18 @@ use linera_base::{
     messages::{Certificate, ChainDescription, ChainId, Epoch, Owner},
     system::Balance,
 };
+use linera_chain::{ChainStateView, ChainStateViewContext};
 use std::fmt::Debug;
 
 /// Communicate with a persistent storage using the "views" abstraction.
 #[async_trait]
 pub trait Store {
     /// The `context` data-type provided by the storage implementation in use.
-    type Context: chain::ChainStateViewContext<Extra = ChainId, Error = Self::Error>;
+    type Context: ChainStateViewContext<Extra = ChainId, Error = Self::Error>;
     type Error: std::error::Error + Debug + Sync + Send;
 
     /// Load the view of a chain state.
-    async fn load_chain(
-        &self,
-        id: ChainId,
-    ) -> Result<chain::ChainStateView<Self::Context>, Self::Error>;
+    async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, Self::Error>;
 
     async fn read_certificate(&self, hash: HashValue) -> Result<Certificate, Self::Error>;
 
@@ -44,7 +40,7 @@ pub trait Store {
     async fn load_active_chain(
         &self,
         id: ChainId,
-    ) -> Result<chain::ChainStateView<Self::Context>, linera_base::error::Error>
+    ) -> Result<ChainStateView<Self::Context>, linera_base::error::Error>
     where
         linera_base::error::Error: From<Self::Error>,
     {

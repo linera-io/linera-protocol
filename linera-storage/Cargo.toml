@@ -14,5 +14,6 @@ log = "0.4.14"
 rocksdb = "0.19.0"
 
 linera-base = { path = "../linera-base" }
+linera-chain = { path = "../linera-chain" }
 linera-execution = { path = "../linera-execution" }
 linera-views = { path = "../linera-views" }

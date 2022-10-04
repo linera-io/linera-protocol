@@ -1,6 +1,7 @@
 [workspace]
 members = [
         "linera-base",
+        "linera-chain",
         "linera-core",
         "linera-execution",
         "linera-service",

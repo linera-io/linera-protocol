@@ -13,10 +13,9 @@ use linera_base::{
         Address, Amount, Balance, SystemEffect, SystemOperation, UserData, ADMIN_CHANNEL, SYSTEM,
     },
 };
+use linera_chain::Event;
 use linera_execution::{ExecutionStateView, SystemExecutionState};
-use linera_storage::{
-    chain::Event, DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient, Store,
-};
+use linera_storage::{DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient, Store};
 use linera_views::test_utils::LocalStackTestContext;
 use std::collections::{BTreeMap, BTreeSet};
 use test_log::test;
