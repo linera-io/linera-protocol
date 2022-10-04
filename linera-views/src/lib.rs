@@ -33,3 +33,4 @@ pub mod test_utils;
 /// For macros.
 pub use async_trait::async_trait;
 pub use paste::paste;
+pub use sha2;

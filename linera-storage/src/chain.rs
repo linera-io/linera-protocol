@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::execution::ExecutionState;
+use crate::execution::{ExecutionStateView, ExecutionStateViewContext};
 use linera_base::{
     crypto::{HashValue, KeyPair},
     ensure,
@@ -13,6 +13,7 @@ use linera_base::{
     },
 };
 use linera_views::{
+    hash::HashView,
     impl_view,
     views::{
         CollectionOperations, CollectionView, LogOperations, LogView, MapOperations, MapView,
@@ -26,7 +27,7 @@ use std::collections::{HashMap, HashSet};
 #[derive(Debug)]
 pub struct ChainStateView<C> {
     /// Execution state, including system and user applications.
-    pub execution_state: ScopedView<0, RegisterView<C, ExecutionState>>,
+    pub execution_state: ScopedView<0, ExecutionStateView<C>>,
     /// Hash of the execution state.
     pub execution_state_hash: ScopedView<1, RegisterView<C, Option<HashValue>>>,
 
@@ -53,12 +54,12 @@ impl_view!(
         received_log,
         communication_states,
     };
-    RegisterOperations<ExecutionState>,
     RegisterOperations<Option<HashValue>>,
     RegisterOperations<ChainTipState>,
     LogOperations<HashValue>,
     CollectionOperations<ApplicationId>,
     CommunicationStateViewContext,
+    ExecutionStateViewContext,
 );
 
 /// Block-chaining state.
@@ -161,7 +162,7 @@ where
     Error: From<C::Error>,
 {
     pub fn chain_id(&self) -> ChainId {
-        *self.execution_state.extra()
+        *self.execution_state.system.extra()
     }
 
     async fn mark_messages_as_received(
@@ -237,21 +238,21 @@ where
 
     /// Invariant for the states of active chains.
     pub fn is_active(&self) -> bool {
-        self.execution_state.get().system.is_active()
+        self.execution_state.system.get().is_active()
     }
 
     pub fn make_chain_info(&self, key_pair: Option<&KeyPair>) -> ChainInfoResponse {
-        let state = self.execution_state.get();
+        let system_state = self.execution_state.system.get();
         let ChainTipState {
             block_hash,
             next_block_height,
         } = self.tip_state.get();
         let info = ChainInfo {
             chain_id: self.chain_id(),
-            epoch: state.system.epoch,
-            description: state.system.description,
-            manager: state.system.manager.clone(),
-            system_balance: state.system.balance,
+            epoch: system_state.epoch,
+            description: system_state.description,
+            manager: system_state.manager.clone(),
+            system_balance: system_state.balance,
             block_hash: *block_hash,
             next_block_height: *next_block_height,
             state_hash: *self.execution_state_hash.get(),
@@ -352,11 +353,11 @@ where
                 // Handle special effects to be executed immediately.
                 if self
                     .execution_state
-                    .get_mut()
                     .system
+                    .get_mut()
                     .apply_immediate_effect(chain_id, effect_id, &effect)?
                 {
-                    let hash = HashValue::new(self.execution_state.get());
+                    let hash = HashValue::from(self.execution_state.hash().await?);
                     self.execution_state_hash.set(Some(hash));
                 }
             }
@@ -515,11 +516,10 @@ where
                         index: *message_index,
                     },
                 };
-                let result = self.execution_state.get_mut().apply_effect(
-                    message_group.application_id,
-                    &context,
-                    message_effect,
-                )?;
+                let result = self
+                    .execution_state
+                    .apply_effect(message_group.application_id, &context, message_effect)
+                    .await?;
                 Self::process_application_result(
                     message_group.application_id,
                     &mut communication_state.outboxes,
@@ -542,11 +542,10 @@ where
                 height: block.height,
                 index,
             };
-            let result = self.execution_state.get_mut().apply_operation(
-                *application_id,
-                &context,
-                operation,
-            )?;
+            let result = self
+                .execution_state
+                .apply_operation(*application_id, &context, operation)
+                .await?;
             Self::process_application_result(
                 *application_id,
                 &mut communication_state.outboxes,
@@ -558,7 +557,7 @@ where
             .await?;
         }
         // Last, recompute the state hash.
-        let hash = HashValue::new(self.execution_state.get());
+        let hash = HashValue::from(self.execution_state.hash().await?);
         self.execution_state_hash.set(Some(hash));
         Ok(effects)
     }

@@ -173,8 +173,8 @@ where
                         .load_chain(chain_id)
                         .await?
                         .execution_state
-                        .get()
                         .system
+                        .get()
                         .description;
                     match description {
                         Some(ChainDescription::Child(EffectId {

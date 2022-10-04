@@ -227,8 +227,8 @@ where
         // Verify the certificate. Returns a catch-all error to make client code more robust.
         let epoch = chain
             .execution_state
-            .get()
             .system
+            .get()
             .epoch
             .expect("chain is active");
         ensure!(
@@ -240,8 +240,8 @@ where
         );
         let committee = chain
             .execution_state
-            .get()
             .system
+            .get()
             .committees
             .get(&epoch)
             .expect("chain is active");
@@ -256,7 +256,7 @@ where
         // Persist certificate.
         self.storage.write_certificate(certificate.clone()).await?;
         // Make sure temporary manager information are cleared.
-        chain.execution_state.get_mut().system.manager.reset();
+        chain.execution_state.system.get_mut().manager.reset();
         // Execute the block.
         let verified_effects = chain.execute_block(block).await?;
         ensure!(effects == verified_effects, Error::IncorrectEffects);
@@ -296,8 +296,8 @@ where
         // Verify the certificate. Returns a catch-all error to make client code more robust.
         let epoch = chain
             .execution_state
-            .get()
             .system
+            .get()
             .epoch
             .expect("chain is active");
         ensure!(
@@ -309,8 +309,8 @@ where
         );
         let committee = chain
             .execution_state
-            .get_mut()
             .system
+            .get_mut()
             .committees
             .get(&epoch)
             .expect("chain is active");
@@ -319,8 +319,8 @@ where
             .map_err(|_| Error::InvalidCertificate)?;
         if chain
             .execution_state
-            .get_mut()
             .system
+            .get_mut()
             .manager
             .check_validated_block(chain.tip_state.get().next_block_height, block, round)?
             == Outcome::Skip
@@ -331,8 +331,8 @@ where
         }
         chain
             .execution_state
-            .get_mut()
             .system
+            .get_mut()
             .manager
             .create_final_vote(
                 block.clone(),
@@ -364,8 +364,8 @@ where
         // Check the epoch.
         let epoch = chain
             .execution_state
-            .get()
             .system
+            .get()
             .epoch
             .expect("chain is active");
         ensure!(
@@ -379,8 +379,8 @@ where
         ensure!(
             chain
                 .execution_state
-                .get()
                 .system
+                .get()
                 .manager
                 .has_owner(&proposal.owner),
             Error::InvalidOwner
@@ -392,8 +392,8 @@ where
         // This should always pass for nodes without voting key.
         if chain
             .execution_state
-            .get()
             .system
+            .get()
             .manager
             .check_proposed_block(
                 chain.tip_state.get().block_hash,
@@ -410,7 +410,7 @@ where
         let (effects, state_hash) = {
             // Make sure the clear round information in the state so that it is not
             // hashed.
-            chain.execution_state.get_mut().system.manager.reset();
+            chain.execution_state.system.get_mut().manager.reset();
             let effects = chain.execute_block(&proposal.content.block).await?;
             let hash = chain.execution_state_hash.get().expect("was just computed");
             // Verify that the resulting chain would have no unconfirmed incoming
@@ -421,7 +421,7 @@ where
             (effects, hash)
         };
         // Create the vote and store it in the chain state.
-        chain.execution_state.get_mut().system.manager.create_vote(
+        chain.execution_state.system.get_mut().manager.create_vote(
             proposal,
             effects,
             state_hash,
@@ -460,7 +460,7 @@ where
         let mut info = chain.make_chain_info(None).info;
         if query.request_system_execution_state {
             info.requested_system_execution_state =
-                Some(chain.execution_state.get().system.clone());
+                Some(chain.execution_state.system.get().clone());
         }
         if let Some(next_block_height) = query.test_next_block_height {
             ensure!(
@@ -614,11 +614,11 @@ where
                         return Ok(Vec::new());
                     }
                     let epoch = last_epoch.expect("need_update implies epoch.is_some()");
-                    if Some(epoch) < chain.execution_state.get().system.epoch
+                    if Some(epoch) < chain.execution_state.system.get().epoch
                         && !chain
                             .execution_state
-                            .get()
                             .system
+                            .get()
                             .committees
                             .contains_key(&epoch)
                     {
