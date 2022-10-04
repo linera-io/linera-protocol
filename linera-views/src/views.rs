@@ -292,6 +292,7 @@ where
     }
 
     fn rollback(&mut self) {
+        self.was_reset_to_default = false;
         self.new_values.clear();
     }
 
@@ -449,6 +450,7 @@ where
     }
 
     fn rollback(&mut self) {
+        self.was_reset_to_default = false;
         self.updates.clear();
     }
 
@@ -799,6 +801,7 @@ where
     }
 
     fn rollback(&mut self) {
+        self.was_reset_to_default = false;
         self.updates.clear();
     }
 
@@ -812,12 +815,9 @@ where
                 view.delete(batch).await?;
             }
             for (index, update) in self.updates {
-                match update {
-                    Some(view) => {
-                        view.commit(batch).await?;
-                        self.context.add_index(batch, index).await?;
-                    }
-                    None => {}
+                if let Some(view) = update {
+                    view.commit(batch).await?;
+                    self.context.add_index(batch, index).await?;
                 }
             }
         } else {

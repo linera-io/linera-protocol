@@ -314,6 +314,109 @@ where
 }
 
 #[tokio::test]
+async fn test_views_in_memory() {
+    let mut store = MemoryTestStore::default();
+    test_store(&mut store).await;
+    assert_eq!(store.states.len(), 1);
+    let entry = store.states.get(&1).unwrap().clone();
+    assert!(entry.lock().await.is_empty());
+}
+
+#[tokio::test]
+async fn test_views_in_rocksdb() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let mut options = rocksdb::Options::default();
+    options.create_if_missing(true);
+
+    let db = DB::open(&options, &dir).unwrap();
+    let mut store = RocksdbTestStore::new(db);
+    let hash = test_store(&mut store).await;
+    assert_eq!(store.locks.len(), 1);
+    assert_eq!(store.db.count_keys().await.unwrap(), 0);
+
+    let mut store = MemoryTestStore::default();
+    let hash2 = test_store(&mut store).await;
+    assert_eq!(hash, hash2);
+}
+
+#[tokio::test]
+#[ignore]
+async fn test_views_in_dynamo_db() -> Result<(), anyhow::Error> {
+    let mut store = DynamoDbTestStore::new().await?;
+    let hash = test_store(&mut store).await;
+    assert_eq!(store.locks.len(), 1);
+
+    let mut store = MemoryTestStore::default();
+    let hash2 = test_store(&mut store).await;
+    assert_eq!(hash, hash2);
+
+    Ok(())
+}
+
+#[cfg(test)]
+async fn test_store_rollback_kernel<S>(store: &mut S)
+where
+    S: StateStore,
+{
+    {
+        let mut view = store.load(1).await.unwrap();
+        view.queue.push_back(8);
+        view.map.insert("Hello".to_string(), 5);
+        let subview = view
+            .collection
+            .load_entry("hola".to_string())
+            .await
+            .unwrap();
+        subview.push(17);
+        view.write_commit().await.unwrap();
+    }
+    {
+        let mut view = store.load(1).await.unwrap();
+        view.queue.push_back(7);
+        view.map.insert("Hello".to_string(), 4);
+        let subview = view
+            .collection
+            .load_entry("DobryDen".to_string())
+            .await
+            .unwrap();
+        subview.push(16);
+        view.rollback();
+        view.write_commit().await.unwrap();
+    }
+    {
+        let mut view = store.load(1).await.unwrap();
+        view.queue.reset_to_default();
+        view.map.reset_to_default();
+        view.collection.reset_to_default();
+        view.rollback();
+        view.write_commit().await.unwrap();
+    }
+    {
+        let mut view = store.load(1).await.unwrap();
+        assert_eq!(view.queue.front().await.unwrap(), Some(8));
+        assert_eq!(view.map.get(&"Hello".to_string()).await.unwrap(), Some(5));
+        assert_eq!(
+            view.collection.indices().await.unwrap(),
+            vec!["hola".to_string()]
+        );
+    };
+}
+
+#[tokio::test]
+async fn test_store_rollback() {
+    let mut store = MemoryTestStore::default();
+    test_store_rollback_kernel(&mut store).await;
+
+    let dir = tempfile::TempDir::new().unwrap();
+    let mut options = rocksdb::Options::default();
+    options.create_if_missing(true);
+
+    let db = DB::open(&options, &dir).unwrap();
+    let mut store = RocksdbTestStore::new(db);
+    test_store_rollback_kernel(&mut store).await;
+}
+
+#[tokio::test]
 async fn test_collection_removal() -> anyhow::Result<()> {
     type EntryType = RegisterView<MemoryContext<()>, u8>;
     type CollectionViewType = CollectionView<MemoryContext<()>, u8, EntryType>;
@@ -401,45 +504,5 @@ async fn test_removal_api() -> anyhow::Result<()> {
             test_removal_api_first_second_condition(first_condition, second_condition).await?;
         }
     }
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_views_in_memory() {
-    let mut store = MemoryTestStore::default();
-    test_store(&mut store).await;
-    assert_eq!(store.states.len(), 1);
-    let entry = store.states.get(&1).unwrap().clone();
-    assert!(entry.lock().await.is_empty());
-}
-
-#[tokio::test]
-async fn test_views_in_rocksdb() {
-    let dir = tempfile::TempDir::new().unwrap();
-    let mut options = rocksdb::Options::default();
-    options.create_if_missing(true);
-
-    let db = DB::open(&options, &dir).unwrap();
-    let mut store = RocksdbTestStore::new(db);
-    let hash = test_store(&mut store).await;
-    assert_eq!(store.locks.len(), 1);
-    assert_eq!(store.db.count_keys().await.unwrap(), 0);
-
-    let mut store = MemoryTestStore::default();
-    let hash2 = test_store(&mut store).await;
-    assert_eq!(hash, hash2);
-}
-
-#[tokio::test]
-#[ignore]
-async fn test_views_in_dynamo_db() -> Result<(), anyhow::Error> {
-    let mut store = DynamoDbTestStore::new().await?;
-    let hash = test_store(&mut store).await;
-    assert_eq!(store.locks.len(), 1);
-
-    let mut store = MemoryTestStore::default();
-    let hash2 = test_store(&mut store).await;
-    assert_eq!(hash, hash2);
-
     Ok(())
 }
