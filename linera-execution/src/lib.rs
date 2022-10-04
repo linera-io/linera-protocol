@@ -1,6 +1,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod execution;
+mod system;
+
+pub use execution::{ExecutionStateView, ExecutionStateViewContext};
+#[cfg(any(test, feature = "test"))]
+pub use system::SystemExecutionState;
+pub use system::{SystemExecutionStateView, SystemExecutionStateViewContext};
+
 use linera_base::{error::Error, messages::*, system::SystemEffect};
 use once_cell::sync::Lazy;
 use std::{
@@ -8,14 +16,15 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-pub static USER_APPLICATIONS: Lazy<
+/// Temporary map to hold a fixed set of prototyped smart-contracts.
+static USER_APPLICATIONS: Lazy<
     Mutex<HashMap<ApplicationId, Arc<dyn UserApplication + Send + Sync + 'static>>>,
 > = Lazy::new(|| {
     let m = HashMap::new();
     Mutex::new(m)
 });
 
-pub fn get_user_application(
+fn get_user_application(
     application_id: ApplicationId,
 ) -> Result<Arc<dyn UserApplication + Send + Sync + 'static>, Error> {
     let applications = USER_APPLICATIONS.lock().unwrap();
@@ -25,7 +34,7 @@ pub fn get_user_application(
         .clone())
 }
 
-pub trait UserApplication {
+trait UserApplication {
     fn apply_operation(
         &self,
         context: &OperationContext,

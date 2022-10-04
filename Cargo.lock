@@ -1152,6 +1152,7 @@ dependencies = [
  "env_logger",
  "futures",
  "linera-base",
+ "linera-execution",
  "linera-storage",
  "linera-views",
  "log",
@@ -1168,10 +1169,12 @@ name = "linera-execution"
 version = "0.1.0"
 dependencies = [
  "linera-base",
+ "linera-views",
  "log",
  "once_cell",
  "serde",
  "thiserror",
+ "tokio",
 ]
 
 [[package]]
