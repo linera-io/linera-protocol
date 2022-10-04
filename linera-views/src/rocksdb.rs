@@ -482,25 +482,6 @@ where
         }
         Ok(keys)
     }
-
-    async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), Self::Error>
-    where
-        F: FnMut(I) + Send
-    {
-        let base = self.derive_key(&CollectionKey::Index(()));
-        let len = base.len();
-        for bytes in self.db.find_keys_with_prefix(&base).await? {
-            match bcs::from_bytes(&bytes[len..]) {
-                Ok(key) => {
-                    f(key);
-                }
-                Err(e) => {
-                    return Err(e.into());
-                }
-            }
-        }
-        Ok(())
-    }
 }
 
 impl<E> HashingContext for RocksdbContext<E>

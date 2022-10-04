@@ -774,11 +774,6 @@ pub trait CollectionOperations<I>: Context {
     /// Return the list of indices in the collection.
     async fn indices(&mut self) -> Result<Vec<I>, Self::Error>;
 
-    /// Call a function on the indices
-    async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), Self::Error>
-    where
-        F: FnMut(I) + Send;
-
     /// Add the index to the list of indices. Crash-resistant implementations should only write
     /// to `batch`.
     async fn add_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error>;
