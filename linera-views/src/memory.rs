@@ -314,15 +314,14 @@ where
     where
         F: FnMut(I) + Send,
     {
-        self.with_ref(|maybe_map: Option<&BTreeMap<I, V>>| {
+        Ok(self.with_ref(|maybe_map: Option<&BTreeMap<I, V>>| {
             if let Some(map) = maybe_map {
                 for index in map.keys() {
                     f(index.clone());
                 }
             }
         })
-        .await;
-        Ok(())
+        .await)
     }
 
     async fn delete(&mut self, _batch: &mut Self::Batch) -> Result<(), MemoryViewError> {
@@ -398,6 +397,25 @@ where
                 Some(m) => m.iter().cloned().collect(),
             })
             .await)
+    }
+
+    async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), Self::Error>
+    where
+        F: FnMut(I) + Send
+    {
+        let context = Self {
+            map: self.map.clone(),
+            base_key: self.derive_key(&CollectionKey::<I>::Indices),
+            extra: self.extra.clone(),
+        };
+        Ok(context
+           .with_ref(|maybe_tree: Option<&BTreeSet<I>>| {
+               if let Some(tree) = maybe_tree {
+                   for index in tree {
+                       f(index.clone());
+                   }
+               }
+           }).await)
     }
 }
 
