@@ -1,14 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::execution::ExecutionState;
 use linera_base::{
     crypto::{HashValue, KeyPair},
     ensure,
     error::Error,
-    execution::{
-        ApplicationResult, EffectContext, ExecutionState, OperationContext, RawApplicationResult,
-        SYSTEM,
-    },
+    execution::{ApplicationResult, EffectContext, OperationContext, RawApplicationResult, SYSTEM},
     messages::{
         ApplicationId, Block, BlockHeight, ChainId, ChainInfo, ChainInfoResponse, Destination,
         Effect, EffectId, Medium, MessageGroup, Origin,

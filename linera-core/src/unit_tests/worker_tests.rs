@@ -7,7 +7,7 @@ use linera_base::{
     committee::Committee,
     crypto::*,
     error::Error,
-    execution::{ExecutionState, SYSTEM},
+    execution::SYSTEM,
     manager::ChainManager,
     messages::*,
     system::{
@@ -16,7 +16,8 @@ use linera_base::{
     },
 };
 use linera_storage::{
-    chain::Event, DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient, Store,
+    chain::Event, execution::ExecutionState, DynamoDbStoreClient, MemoryStoreClient,
+    RocksdbStoreClient, Store,
 };
 use linera_views::test_utils::LocalStackTestContext;
 use std::collections::BTreeMap;

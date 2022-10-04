@@ -147,7 +147,7 @@ impl SystemExecutionState {
 impl SystemExecutionState {
     /// Execute the sender's side of the operation.
     /// Return a list of recipients who need to be notified.
-    pub(crate) fn apply_operation(
+    pub fn apply_operation(
         &mut self,
         context: &OperationContext,
         operation: &SystemOperation,
@@ -386,7 +386,7 @@ impl SystemExecutionState {
 
     /// Execute the recipient's side of an operation, aka a "remote effect".
     /// Effects must be executed by order of heights in the sender's chain.
-    pub(crate) fn apply_effect(
+    pub fn apply_effect(
         &mut self,
         context: &EffectContext,
         effect: &SystemEffect,
