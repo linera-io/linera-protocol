@@ -34,6 +34,9 @@ pub struct SystemExecutionStateView<C> {
     /// We avoid BTreeSet<String> because of a Serde/BCS limitation.
     pub subscriptions: ScopedView<3, MapView<C, ChannelId, ()>>,
     /// The committees that we trust, indexed by epoch number.
+    /// Not using a `MapView` because the set active of committees is supposed to be
+    /// small. Plus, currently, we would create the `BTreeMap` anyway in various places
+    /// (e.g. the `OpenChain` operation).
     pub committees: ScopedView<4, RegisterView<C, BTreeMap<Epoch, Committee>>>,
     /// Manager of the chain.
     pub manager: ScopedView<5, RegisterView<C, ChainManager>>,
