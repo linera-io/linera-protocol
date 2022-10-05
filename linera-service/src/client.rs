@@ -635,7 +635,7 @@ where
                 );
                 info!("Starting operation to query validators");
                 let time_start = Instant::now();
-                let committee = client_state.committee().await.unwrap();
+                let committee = client_state.local_committee().await.unwrap();
                 let time_total = time_start.elapsed().as_micros();
                 info!("Validators obtained after {} us", time_total);
                 info!("{:?}", committee.validators);
@@ -664,7 +664,7 @@ where
                 log::info!("Subscribed {} chains to new committees", n);
 
                 // Create the new committee.
-                let committee = admin_state.committee().await.unwrap();
+                let committee = admin_state.local_committee().await.unwrap();
                 let mut validators = committee.validators;
                 match command {
                     SetValidator {
