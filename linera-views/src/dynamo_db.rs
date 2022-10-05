@@ -389,7 +389,7 @@ impl<E> DynamoDbContext<E> {
             .into_iter()
             .flatten()
             .map(|item| self.extract_key(item, Some(extra_prefix_bytes_count)))
-            .collect::<Result<_, _>>()
+            .collect()
     }
 }
 
