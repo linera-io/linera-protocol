@@ -35,7 +35,7 @@ pub struct SystemExecutionStateView<C> {
     pub subscriptions: ScopedView<3, MapView<C, ChannelId, ()>>,
     /// The committees that we trust, indexed by epoch number.
     pub committees: ScopedView<4, RegisterView<C, BTreeMap<Epoch, Committee>>>,
-    /// Manager of the chain.>
+    /// Manager of the chain.
     pub manager: ScopedView<5, RegisterView<C, ChainManager>>,
     /// Balance of the chain.
     pub balance: ScopedView<6, RegisterView<C, Balance>>,
