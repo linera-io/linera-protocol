@@ -236,10 +236,8 @@ where
     }
 
     pub async fn committees(&mut self) -> Result<BTreeMap<Epoch, Committee>, Error> {
-        let query = ChainInfoQuery::new(self.chain_id).with_committees();
-        let info = self.node_client.handle_chain_info_query(query).await?.info;
-        info.requested_committees
-            .ok_or(Error::InvalidChainInfoResponse)
+        let (_epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
+        Ok(committees)
     }
 
     pub async fn epoch_and_committees(
