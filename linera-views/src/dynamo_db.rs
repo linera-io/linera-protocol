@@ -384,14 +384,12 @@ impl<E> DynamoDbContext<E> {
             .send()
             .await?;
 
-        let keys = response
+        response
             .items()
             .into_iter()
             .flatten()
             .map(|item| self.extract_key(item, Some(extra_prefix_bytes_count)))
-            .collect::<Result<_, _>>()?;
-
-        Ok(keys)
+            .collect()
     }
 }
 
@@ -606,6 +604,16 @@ where
 
     async fn indices(&mut self) -> Result<Vec<I>, Self::Error> {
         self.get_sub_keys(&()).await
+    }
+
+    async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), Self::Error>
+    where
+        F: FnMut(I) + Send,
+    {
+        for index in self.get_sub_keys(&()).await? {
+            f(index);
+        }
+        Ok(())
     }
 
     async fn delete(&mut self, _batch: &mut Self::Batch) -> Result<(), Self::Error> {

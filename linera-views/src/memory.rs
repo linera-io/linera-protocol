@@ -310,6 +310,22 @@ where
             .await)
     }
 
+    #[allow(clippy::unit_arg)]
+    async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), MemoryViewError>
+    where
+        F: FnMut(I) + Send,
+    {
+        Ok(self
+            .with_ref(|maybe_map: Option<&BTreeMap<I, V>>| {
+                if let Some(map) = maybe_map {
+                    for index in map.keys() {
+                        f(index.clone());
+                    }
+                }
+            })
+            .await)
+    }
+
     async fn delete(&mut self, _batch: &mut Self::Batch) -> Result<(), MemoryViewError> {
         self.erase().await
     }

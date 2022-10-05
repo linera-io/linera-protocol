@@ -413,6 +413,18 @@ where
         Ok(keys)
     }
 
+    async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), RocksdbViewError>
+    where
+        F: FnMut(I) + Send,
+    {
+        let len = self.base_key.len();
+        for key in self.db.find_keys_with_prefix(&self.base_key).await? {
+            let key = bcs::from_bytes(&key[len..])?;
+            f(key);
+        }
+        Ok(())
+    }
+
     async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), RocksdbViewError> {
         for key in self.db.find_keys_with_prefix(&self.base_key).await? {
             batch.delete_key(&key);

@@ -413,6 +413,11 @@ pub trait MapOperations<I, V>: Context {
     /// Return the list of indices in the map.
     async fn indices(&mut self) -> Result<Vec<I>, Self::Error>;
 
+    /// Execute a function on each index.
+    async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), Self::Error>
+    where
+        F: FnMut(I) + Send;
+
     /// Set a value. Crash-resistant implementations should only write to `batch`.
     async fn insert(
         &mut self,
@@ -514,8 +519,8 @@ where
 impl<C, I, V> MapView<C, I, V>
 where
     C: MapOperations<I, V>,
-    I: Eq + Ord + Sync + Clone,
-    V: Clone,
+    I: Eq + Ord + Sync + Clone + Send,
+    V: Clone + Sync,
 {
     /// Read the value at the given position, if any.
     pub async fn get(&mut self, index: &I) -> Result<Option<V>, C::Error> {
@@ -532,11 +537,13 @@ where
     pub async fn indices(&mut self) -> Result<Vec<I>, C::Error> {
         let mut indices = Vec::new();
         if !self.was_reset_to_default {
-            for index in self.context.indices().await? {
-                if !self.updates.contains_key(&index) {
-                    indices.push(index);
-                }
-            }
+            self.context
+                .for_each_index(|index: I| {
+                    if !self.updates.contains_key(&index) {
+                        indices.push(index);
+                    }
+                })
+                .await?;
         }
         for (index, entry) in &self.updates {
             if entry.is_some() {
