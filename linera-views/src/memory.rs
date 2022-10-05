@@ -310,6 +310,7 @@ where
             .await)
     }
 
+    #[allow(clippy::unit_arg)]
     async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), MemoryViewError>
     where
         F: FnMut(I) + Send,
