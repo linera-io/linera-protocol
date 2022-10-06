@@ -190,6 +190,7 @@ where
             view.collection.indices().await.unwrap(),
             vec!["hola".to_string()]
         );
+        assert_eq!(view.collection.count().await.unwrap(),1);
         {
             let subview = view
                 .collection
@@ -288,6 +289,7 @@ where
             view.collection.indices().await.unwrap(),
             vec!["hola".to_string()]
         );
+        assert_eq!(view.collection.count().await.unwrap(),1);
         view.collection.remove_entry("hola".to_string());
         assert_ne!(view.hash().await.unwrap(), stored_hash);
         view.write_commit().await.unwrap();
@@ -399,6 +401,7 @@ where
             view.collection.indices().await.unwrap(),
             vec!["hola".to_string()]
         );
+        assert_eq!(view.collection.count().await.unwrap(),1);
     };
 }
 
@@ -438,6 +441,7 @@ async fn test_collection_removal() -> anyhow::Result<()> {
     // Check that the entry was removed.
     let mut collection = CollectionViewType::load(context.clone()).await?;
     assert!(!collection.indices().await?.contains(&1));
+    assert_eq!(collection.count().await?, 0);
 
     Ok(())
 }
@@ -489,9 +493,11 @@ async fn test_removal_api_first_second_condition(
         Some(expected_val_i) => {
             let subview = collection.load_entry(1).await?;
             assert_eq!(subview.get(), &expected_val_i);
+            assert_eq!(collection.count().await?, 1);
         }
         None => {
             assert!(!collection.indices().await?.contains(&1));
+            assert_eq!(collection.count().await?, 0);
         }
     };
     Ok(())

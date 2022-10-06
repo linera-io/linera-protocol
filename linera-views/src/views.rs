@@ -553,6 +553,26 @@ where
         indices.sort();
         Ok(indices)
     }
+
+    /// Return the number of entries in the map.
+    pub async fn count(&mut self) -> Result<usize, C::Error> {
+        let mut n_ent = 0;
+        if !self.was_reset_to_default {
+            self.context
+                .for_each_index(|index: I| {
+                    if !self.updates.contains_key(&index) {
+                        n_ent += 1;
+                    }
+                })
+                .await?;
+        }
+        for (_index, entry) in &self.updates {
+            if entry.is_some() {
+                n_ent += 1;
+            }
+        }
+        Ok(n_ent)
+    }
 }
 
 /// A view that supports a FIFO queue for values of type `T`.
@@ -931,6 +951,24 @@ where
         }
         indices.sort();
         Ok(indices)
+    }
+
+    /// Return the number of entries in the collection.
+    pub async fn count(&mut self) -> Result<usize, C::Error> {
+        let mut n_ent = 0;
+        if !self.was_reset_to_default {
+            for index in self.context.indices().await? {
+                if !self.updates.contains_key(&index) {
+                    n_ent += 1;
+                }
+            }
+        }
+        for (_index, entry) in &self.updates {
+            if entry.is_some() {
+                n_ent += 1;
+            }
+        }
+        Ok(n_ent)
     }
 
     pub fn extra(&self) -> &C::Extra {
