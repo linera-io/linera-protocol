@@ -710,10 +710,8 @@ where
                 )
                 .await?;
         }
-        // TODO: check of the arrays
         self.stored_indices.start = self.front_delete_count;
         self.stored_indices.end = self.new_back_values.len();
-        self.front_delete_count = 0;
         self.new_back_values.clear();
         Ok(())
     }
@@ -923,6 +921,7 @@ where
 
     async fn commit_and_reset(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         if self.was_reset_to_default {
+            self.was_reset_to_default = false;
             let stored_indices = self.context.indices().await?;
             for index in &stored_indices {
                 let context = self.context.clone_with_scope(index);
@@ -930,14 +929,10 @@ where
                 let view = W::load(context).await?;
                 view.delete(batch).await?;
             }
-            self.was_reset_to_default = false;
             for (index, update) in mem::take(&mut self.updates) {
-                match update {
-                    Some(view) => {
-                        view.commit(batch).await?;
-                        self.context.add_index(batch, index).await?;
-                    }
-                    None => {}
+                if let Some(view) = update {
+                    view.commit(batch).await?;
+                    self.context.add_index(batch, index).await?;
                 }
             }
         } else {
