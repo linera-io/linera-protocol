@@ -113,6 +113,8 @@ do
     done
 done
 
+sleep 1
+
 ${CLIENT[@]} set_validator --name "$NAME5" --address 127.0.0.1:9500 --votes 100
 
 ${CLIENT[@]} query_balance "$CHAIN1"
@@ -120,6 +122,8 @@ ${CLIENT[@]} query_validators
 ${CLIENT[@]} query_validators "$CHAIN1"
 
 ${CLIENT[@]} set_validator --name "$NAME6" --address 127.0.0.1:9600 --votes 1
+sleep 2
+
 ${CLIENT[@]} remove_validator --name "$NAME5"
 kill "$PID5"
 
