@@ -12,15 +12,12 @@ use linera_views::{
     memory::{MemoryContext, MemoryStoreMap, MemoryViewError},
     views::View,
 };
-use std::{
-    collections::{BTreeMap, HashMap},
-    sync::Arc,
-};
+use std::{collections::BTreeMap, sync::Arc};
 use tokio::sync::Mutex;
 
 #[derive(Default, Clone)]
 struct MemoryStore {
-    chains: HashMap<ChainId, Arc<Mutex<MemoryStoreMap>>>,
+    chains: DashMap<ChainId, Arc<Mutex<MemoryStoreMap>>>,
     certificates: DashMap<HashValue, Certificate>,
 }
 
@@ -38,12 +35,12 @@ impl Store for MemoryStoreClient {
     ) -> Result<ChainStateView<Self::Context>, MemoryViewError> {
         let state = {
             let store = self.0.clone();
-            let mut store = store.lock().await;
-            store
+            let store = store.lock().await;
+            let state = store
                 .chains
                 .entry(id)
-                .or_insert_with(|| Arc::new(Mutex::new(BTreeMap::new())))
-                .clone()
+                .or_insert_with(|| Arc::new(Mutex::new(BTreeMap::new())));
+            state.clone()
         };
         log::trace!("Acquiring lock on {:?}", id);
         let context = MemoryContext::new(state.lock_owned().await, id);
