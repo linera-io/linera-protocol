@@ -190,7 +190,7 @@ where
             view.collection.indices().await.unwrap(),
             vec!["hola".to_string()]
         );
-        assert_eq!(view.collection.count().await.unwrap(),1);
+        assert_eq!(view.collection.count().await.unwrap(), 1);
         {
             let subview = view
                 .collection
@@ -289,7 +289,7 @@ where
             view.collection.indices().await.unwrap(),
             vec!["hola".to_string()]
         );
-        assert_eq!(view.collection.count().await.unwrap(),1);
+        assert_eq!(view.collection.count().await.unwrap(), 1);
         view.collection.remove_entry("hola".to_string());
         assert_ne!(view.hash().await.unwrap(), stored_hash);
         view.write_commit().await.unwrap();
@@ -401,7 +401,7 @@ where
             view.collection.indices().await.unwrap(),
             vec!["hola".to_string()]
         );
-        assert_eq!(view.collection.count().await.unwrap(),1);
+        assert_eq!(view.collection.count().await.unwrap(), 1);
     };
 }
 

@@ -566,8 +566,8 @@ where
                 })
                 .await?;
         }
-        for (_index, entry) in &self.updates {
-            if entry.is_some() {
+        for entry in &self.updates {
+            if entry.1.is_some() {
                 n_ent += 1;
             }
         }
@@ -963,8 +963,8 @@ where
                 }
             }
         }
-        for (_index, entry) in &self.updates {
-            if entry.is_some() {
+        for entry in &self.updates {
+            if entry.1.is_some() {
                 n_ent += 1;
             }
         }
