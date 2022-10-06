@@ -3,6 +3,7 @@
 
 use crate::{ChainStateView, Store};
 use async_trait::async_trait;
+use dashmap::DashMap;
 use linera_base::{
     crypto::HashValue,
     messages::{Certificate, ChainId},
@@ -20,7 +21,7 @@ use tokio::sync::Mutex;
 #[derive(Default, Clone)]
 struct MemoryStore {
     chains: HashMap<ChainId, Arc<Mutex<MemoryStoreMap>>>,
-    certificates: HashMap<HashValue, Certificate>,
+    certificates: DashMap<HashValue, Certificate>,
 }
 
 #[derive(Clone, Default)]
@@ -52,16 +53,16 @@ impl Store for MemoryStoreClient {
     async fn read_certificate(&self, hash: HashValue) -> Result<Certificate, MemoryViewError> {
         let store = self.0.clone();
         let store = store.lock().await;
-        store
+        let entry = store
             .certificates
             .get(&hash)
-            .cloned()
-            .ok_or_else(|| MemoryViewError::NotFound(format!("certificate for hash {:?}", hash)))
+            .ok_or_else(|| MemoryViewError::NotFound(format!("certificate for hash {:?}", hash)))?;
+        Ok(entry.value().clone())
     }
 
     async fn write_certificate(&self, certificate: Certificate) -> Result<(), MemoryViewError> {
         let store = self.0.clone();
-        let mut store = store.lock().await;
+        let store = store.lock().await;
         store.certificates.insert(certificate.hash, certificate);
         Ok(())
     }

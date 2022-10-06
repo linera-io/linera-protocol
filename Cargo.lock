@@ -1231,6 +1231,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "bcs",
+ "dashmap",
  "futures",
  "linera-base",
  "linera-chain",
