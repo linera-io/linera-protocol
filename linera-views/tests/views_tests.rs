@@ -325,11 +325,13 @@ async fn test_collection_removal() -> anyhow::Result<()> {
     let mut collection = CollectionViewType::load(context.clone()).await?;
     let entry = collection.load_entry(1).await?;
     entry.set(1);
+    collection.commit_and_reset(&mut ()).await?;
     collection.commit(&mut ()).await?;
 
     // Remove the entry from the collection.
     let mut collection = CollectionViewType::load(context.clone()).await?;
     collection.remove_entry(1);
+    collection.commit_and_reset(&mut ()).await?;
     collection.commit(&mut ()).await?;
 
     // Check that the entry was removed.
