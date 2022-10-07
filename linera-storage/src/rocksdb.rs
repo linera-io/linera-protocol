@@ -57,15 +57,14 @@ impl Store for RocksdbStoreClient {
         &self,
         id: ChainId,
     ) -> Result<ChainStateView<Self::Context>, RocksdbViewError> {
-        let (db, lock) = {
-            let chain_guard = self
-                .0
-                .locks
-                .entry(id)
-                .or_insert_with(|| Arc::new(Mutex::new(())));
-            // FIXME(#119): we are never cleaning up locks.
-            (self.0.db.clone(), chain_guard.clone())
-        };
+        let db = self.0.db.clone();
+        let lock = self
+            .0
+            .locks
+            .entry(id)
+            .or_insert_with(|| Arc::new(Mutex::new(())))
+            .clone();
+        // FIXME(#119): we are never cleaning up locks.
         log::trace!("Acquiring lock on {:?}", id);
         let base_key = bcs::to_bytes(&BaseKey::ChainState(id))?;
         let context = RocksdbContext::new(db, lock.lock_owned().await, base_key, id);
