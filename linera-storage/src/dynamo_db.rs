@@ -26,7 +26,7 @@ struct DynamoDbStore {
 }
 
 #[derive(Clone)]
-pub struct DynamoDbStoreClient(Arc<Mutex<DynamoDbStore>>);
+pub struct DynamoDbStoreClient(Arc<DynamoDbStore>);
 
 impl DynamoDbStoreClient {
     pub async fn new(table: TableName) -> Result<(Self, TableStatus), CreateTableError> {
@@ -38,13 +38,13 @@ impl DynamoDbStoreClient {
         table: TableName,
     ) -> Result<(Self, TableStatus), CreateTableError> {
         let (store, table_status) = DynamoDbStore::from_config(config.into(), table).await?;
-        let client = DynamoDbStoreClient(Arc::new(Mutex::new(store)));
+        let client = DynamoDbStoreClient(Arc::new(store));
         Ok((client, table_status))
     }
 
     pub async fn with_localstack(table: TableName) -> Result<(Self, TableStatus), LocalStackError> {
         let (store, table_status) = DynamoDbStore::with_localstack(table).await?;
-        let client = DynamoDbStoreClient(Arc::new(Mutex::new(store)));
+        let client = DynamoDbStoreClient(Arc::new(store));
         Ok((client, table_status))
     }
 
@@ -52,7 +52,7 @@ impl DynamoDbStoreClient {
         store_creator: impl Future<Output = Result<(DynamoDbStore, TableStatus), E>>,
     ) -> Result<(Self, TableStatus), E> {
         let (store, table_status) = store_creator.await?;
-        let client = DynamoDbStoreClient(Arc::new(Mutex::new(store)));
+        let client = DynamoDbStoreClient(Arc::new(store));
         Ok((client, table_status))
     }
 }
@@ -135,8 +135,6 @@ impl Store for DynamoDbStoreClient {
     ) -> Result<ChainStateView<Self::Context>, DynamoDbContextError> {
         let lock = self
             .0
-            .lock()
-            .await
             .locks
             .entry(id)
             .or_insert_with(|| Arc::new(Mutex::new(())))
@@ -145,16 +143,13 @@ impl Store for DynamoDbStoreClient {
         let locked = lock.lock_owned().await;
         let chain_context =
             self.0
-                .lock()
-                .await
                 .context
                 .clone_with_sub_scope(locked, &BaseKey::ChainState(id), id);
         ChainStateView::load(chain_context).await
     }
 
     async fn read_certificate(&self, hash: HashValue) -> Result<Certificate, DynamoDbContextError> {
-        let store = self.0.lock().await;
-        store
+        self.0
             .certificates()
             .await?
             .get(&hash)
@@ -168,8 +163,7 @@ impl Store for DynamoDbStoreClient {
         &self,
         certificate: Certificate,
     ) -> Result<(), DynamoDbContextError> {
-        let store = self.0.lock().await;
-        let mut certificates = store.certificates().await?;
+        let mut certificates = self.0.certificates().await?;
         certificates.insert(certificate.hash, certificate);
         certificates.commit(&mut ()).await
     }
