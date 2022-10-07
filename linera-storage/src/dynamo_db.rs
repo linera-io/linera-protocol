@@ -3,6 +3,7 @@
 
 use crate::{ChainStateView, Store};
 use async_trait::async_trait;
+use dashmap::DashMap;
 use futures::Future;
 use linera_base::{
     crypto::HashValue,
@@ -16,12 +17,12 @@ use linera_views::{
     views::{MapView, View},
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 use tokio::sync::{Mutex, OwnedMutexGuard};
 
 struct DynamoDbStore {
     context: DynamoDbContext<()>,
-    locks: HashMap<ChainId, Arc<Mutex<()>>>,
+    locks: DashMap<ChainId, Arc<Mutex<()>>>,
 }
 
 #[derive(Clone)]
@@ -94,7 +95,7 @@ impl DynamoDbStore {
         Ok((
             Self {
                 context,
-                locks: HashMap::new(),
+                locks: DashMap::new(),
             },
             table_status,
         ))
