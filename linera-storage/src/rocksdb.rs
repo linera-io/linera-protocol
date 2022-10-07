@@ -3,6 +3,7 @@
 
 use crate::{ChainStateView, Store};
 use async_trait::async_trait;
+use dashmap::DashMap;
 use linera_base::{
     crypto::HashValue,
     messages::{Certificate, ChainId},
@@ -12,12 +13,12 @@ use linera_views::{
     views::View,
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc};
 use tokio::sync::Mutex;
 
 struct RocksdbStore {
     db: Arc<DB>,
-    locks: HashMap<ChainId, Arc<Mutex<()>>>,
+    locks: DashMap<ChainId, Arc<Mutex<()>>>,
 }
 
 #[derive(Clone)]
@@ -36,7 +37,7 @@ impl RocksdbStore {
         let db = DB::open(&options, dir).unwrap();
         Self {
             db: Arc::new(db),
-            locks: HashMap::new(),
+            locks: DashMap::new(),
         }
     }
 }
@@ -58,16 +59,13 @@ impl Store for RocksdbStoreClient {
     ) -> Result<ChainStateView<Self::Context>, RocksdbViewError> {
         let (db, lock) = {
             let store = self.0.clone();
-            let mut store = store.lock().await;
+            let store = store.lock().await;
+            let chain_guard = store
+                .locks
+                .entry(id)
+                .or_insert_with(|| Arc::new(Mutex::new(())));
             // FIXME(#119): we are never cleaning up locks.
-            (
-                store.db.clone(),
-                store
-                    .locks
-                    .entry(id)
-                    .or_insert_with(|| Arc::new(Mutex::new(())))
-                    .clone(),
-            )
+            (store.db.clone(), chain_guard.clone())
         };
         log::trace!("Acquiring lock on {:?}", id);
         let base_key = bcs::to_bytes(&BaseKey::ChainState(id))?;
