@@ -22,11 +22,11 @@ struct RocksdbStore {
 }
 
 #[derive(Clone)]
-pub struct RocksdbStoreClient(Arc<Mutex<RocksdbStore>>);
+pub struct RocksdbStoreClient(Arc<RocksdbStore>);
 
 impl RocksdbStoreClient {
     pub fn new(path: PathBuf) -> Self {
-        RocksdbStoreClient(Arc::new(Mutex::new(RocksdbStore::new(path))))
+        RocksdbStoreClient(Arc::new(RocksdbStore::new(path)))
     }
 }
 
@@ -58,14 +58,13 @@ impl Store for RocksdbStoreClient {
         id: ChainId,
     ) -> Result<ChainStateView<Self::Context>, RocksdbViewError> {
         let (db, lock) = {
-            let store = self.0.clone();
-            let store = store.lock().await;
-            let chain_guard = store
+            let chain_guard = self
+                .0
                 .locks
                 .entry(id)
                 .or_insert_with(|| Arc::new(Mutex::new(())));
             // FIXME(#119): we are never cleaning up locks.
-            (store.db.clone(), chain_guard.clone())
+            (self.0.db.clone(), chain_guard.clone())
         };
         log::trace!("Acquiring lock on {:?}", id);
         let base_key = bcs::to_bytes(&BaseKey::ChainState(id))?;
@@ -75,9 +74,7 @@ impl Store for RocksdbStoreClient {
 
     async fn read_certificate(&self, hash: HashValue) -> Result<Certificate, RocksdbViewError> {
         let key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
-        let store = self.0.clone();
-        let store = store.lock().await;
-        let value = store.db.read_key(&key).await?.ok_or_else(|| {
+        let value = self.0.db.read_key(&key).await?.ok_or_else(|| {
             RocksdbViewError::NotFound(format!("certificate for hash {:?}", hash))
         })?;
         Ok(value)
@@ -85,8 +82,6 @@ impl Store for RocksdbStoreClient {
 
     async fn write_certificate(&self, certificate: Certificate) -> Result<(), RocksdbViewError> {
         let key = bcs::to_bytes(&BaseKey::Certificate(certificate.hash))?;
-        let store = self.0.clone();
-        let store = store.lock().await;
-        store.db.write_key(&key, &certificate).await
+        self.0.db.write_key(&key, &certificate).await
     }
 }
