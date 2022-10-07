@@ -575,7 +575,6 @@ where
         }
         Ok(())
     }
-
 }
 
 /// A view that supports a FIFO queue for values of type `T`.

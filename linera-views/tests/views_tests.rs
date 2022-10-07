@@ -172,12 +172,12 @@ where
         view.queue.push_back(7);
         view.queue.delete_front();
         view.map.insert("Hello".to_string(), 5);
-        assert_eq!(
-            view.map.indices().await.unwrap(),
-            vec!["Hello".to_string()]
-        );
+        assert_eq!(view.map.indices().await.unwrap(), vec!["Hello".to_string()]);
         let mut n_ent = 0;
-        view.map.for_each_index(|_index: String| { n_ent += 1}).await.unwrap();
+        view.map
+            .for_each_index(|_index: String| n_ent += 1)
+            .await
+            .unwrap();
         assert_eq!(n_ent, 1);
         assert_eq!(view.x1.get(), &0);
         assert_eq!(view.x2.get(), &2);
@@ -198,7 +198,10 @@ where
             vec!["hola".to_string()]
         );
         let mut n_ent = 0;
-        view.collection.for_each_index(|_index: String| { n_ent += 1}).await.unwrap();
+        view.collection
+            .for_each_index(|_index: String| n_ent += 1)
+            .await
+            .unwrap();
         assert_eq!(n_ent, 1);
         {
             let subview = view
