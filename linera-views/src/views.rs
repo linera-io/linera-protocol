@@ -553,6 +553,29 @@ where
         indices.sort();
         Ok(indices)
     }
+
+    /// Execute a function on each index.
+    pub async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), C::Error>
+    where
+        F: FnMut(I) + Send,
+    {
+        if !self.was_reset_to_default {
+            self.context
+                .for_each_index(|index: I| {
+                    if !self.updates.contains_key(&index) {
+                        f(index);
+                    }
+                })
+                .await?;
+        }
+        for (index, entry) in &self.updates {
+            if entry.is_some() {
+                f(index.clone());
+            }
+        }
+        Ok(())
+    }
+
 }
 
 /// A view that supports a FIFO queue for values of type `T`.
@@ -935,5 +958,32 @@ where
 
     pub fn extra(&self) -> &C::Extra {
         self.context.extra()
+    }
+}
+
+impl<C, I, W> CollectionView<C, I, W>
+where
+    C: CollectionOperations<I> + Send,
+    I: Eq + Ord + Sync + Clone + Send + Debug,
+    W: View<C> + Sync,
+{
+    /// Execute a function on each index.
+    pub async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), C::Error>
+    where
+        F: FnMut(I) + Send,
+    {
+        if !self.was_reset_to_default {
+            for index in self.context.indices().await? {
+                if !self.updates.contains_key(&index) {
+                    f(index);
+                }
+            }
+        }
+        for (index, entry) in &self.updates {
+            if entry.is_some() {
+                f(index.clone());
+            }
+        }
+        Ok(())
     }
 }
