@@ -103,7 +103,7 @@ impl DynamoDbStore {
 
     /// Obtain a [`MapView`] of certificates.
     async fn certificates(
-        &mut self,
+        &self,
     ) -> Result<MapView<DynamoDbContext<()>, HashValue, Certificate>, DynamoDbContextError> {
         let dummy_lock = Arc::new(Mutex::new(())).lock_owned().await;
         MapView::load(
@@ -153,7 +153,7 @@ impl Store for DynamoDbStoreClient {
     }
 
     async fn read_certificate(&self, hash: HashValue) -> Result<Certificate, DynamoDbContextError> {
-        let mut store = self.0.lock().await;
+        let store = self.0.lock().await;
         store
             .certificates()
             .await?
@@ -168,7 +168,7 @@ impl Store for DynamoDbStoreClient {
         &self,
         certificate: Certificate,
     ) -> Result<(), DynamoDbContextError> {
-        let mut store = self.0.lock().await;
+        let store = self.0.lock().await;
         let mut certificates = store.certificates().await?;
         certificates.insert(certificate.hash, certificate);
         certificates.commit(&mut ()).await
