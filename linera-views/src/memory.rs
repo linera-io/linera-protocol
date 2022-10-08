@@ -400,6 +400,22 @@ where
             })
             .await)
     }
+
+    #[allow(clippy::unit_arg)]
+    async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), Self::Error>
+    where
+        F: FnMut(I) + Send,
+    {
+        Ok(self
+            .with_ref(|maybe_tree: Option<&BTreeSet<I>>| {
+                if let Some(tree) = maybe_tree {
+                    for index in tree {
+                        f(index.clone());
+                    }
+                }
+            })
+            .await)
+    }
 }
 
 impl<E> HashingContext for MemoryContext<E>
