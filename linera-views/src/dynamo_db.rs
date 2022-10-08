@@ -679,6 +679,16 @@ where
     async fn indices(&mut self) -> Result<Vec<I>, Self::Error> {
         self.get_sub_keys(&CollectionKey::Index(())).await
     }
+
+    async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), Self::Error>
+    where
+        F: FnMut(I) + Send,
+    {
+        for index in self.get_sub_keys(&()).await? {
+            f(index);
+        }
+        Ok(())
+    }
 }
 
 /// Status of a table at the creation time of a [`DynamoDbContext`] instance.

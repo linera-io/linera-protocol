@@ -798,6 +798,11 @@ pub trait CollectionOperations<I>: Context {
     /// Return the list of indices in the collection.
     async fn indices(&mut self) -> Result<Vec<I>, Self::Error>;
 
+    /// Execute a function on each index.
+    async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), Self::Error>
+    where
+        F: FnMut(I) + Send;
+
     /// Add the index to the list of indices. Crash-resistant implementations should only write
     /// to `batch`.
     async fn add_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error>;
@@ -972,11 +977,13 @@ where
         F: FnMut(I) + Send,
     {
         if !self.was_reset_to_default {
-            for index in self.context.indices().await? {
-                if !self.updates.contains_key(&index) {
-                    f(index);
-                }
-            }
+            self.context
+                .for_each_index(|index: I| {
+                    if !self.updates.contains_key(&index) {
+                        f(index);
+                    }
+                })
+                .await?;
         }
         for (index, entry) in &self.updates {
             if entry.is_some() {
