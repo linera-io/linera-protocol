@@ -209,13 +209,12 @@ where
             let mut inner_batch = rocksdb::WriteBatchWithTransaction::default();
             for e_ent in batch.0 {
                 match e_ent {
-                    WriteOp::Delete(_key) => {},
-                    WriteOp::Put(_key,_value) => {},
+                    WriteOp::Delete(key) => { inner_batch.delete(&key); },
+                    WriteOp::Put(key, value) => { inner_batch.put(&key, value); },
                 }
             }
             db.write(inner_batch)
         }).await??;
-//        tokio::task::spawn_blocking(move || db.write(batch.0)).await??;
         Ok(())
     }
 }
