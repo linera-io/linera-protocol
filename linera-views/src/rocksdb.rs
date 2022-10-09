@@ -125,15 +125,15 @@ impl KeyValueOperations for Arc<DB> {
 }
 
 #[async_trait]
-impl<'a> WriteOperations for rocksdb::WriteBatchWithTransaction<false> {
+impl<'a> WriteOperations for MyBatch {
     fn write_key<V: Serialize>(&mut self, key: &[u8], value: &V) -> Result<(), RocksdbViewError> {
         let bytes = bcs::to_bytes(value)?;
-        self.put(&key, bytes);
+        self.0.push(WriteOp::Put(key.to_vec(), bytes));
         Ok(())
     }
 
     fn delete_key(&mut self, key: &[u8]) {
-        self.delete(&key);
+        self.0.push(WriteOp::Delete(key.to_vec()));
     }
 }
 
@@ -158,10 +158,16 @@ impl<E> RocksdbContext<E> {
     }
 }
 
-pub struct MyBatch(rocksdb::WriteBatchWithTransaction<false>);
+enum WriteOp {
+    Delete(Vec<u8>),
+    Put(Vec<u8>, Vec<u8>),
+}
+
+
+pub struct MyBatch(Vec<WriteOp>);
 
 impl std::ops::Deref for MyBatch {
-    type Target = rocksdb::WriteBatchWithTransaction<false>;
+    type Target = Vec<WriteOp>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -174,7 +180,8 @@ impl std::ops::DerefMut for MyBatch {
     }
 }
 
-unsafe impl Sync for MyBatch {}
+
+
 
 #[async_trait]
 impl<E> Context for RocksdbContext<E>
@@ -195,10 +202,14 @@ where
             + Send
             + Sync,
     {
-        let mut batch = MyBatch(rocksdb::WriteBatchWithTransaction::default());
+        let mut batch = MyBatch(Vec::<WriteOp>::new());
         builder(&mut batch).await?;
         let db = self.db.clone();
-        tokio::task::spawn_blocking(move || db.write(batch.0)).await??;
+        tokio::task::spawn_blocking(move || {
+            println!("Do nothing");
+            Ok(())
+        }).await??;
+//        tokio::task::spawn_blocking(move || db.write(batch.0)).await??;
         Ok(())
     }
 }
