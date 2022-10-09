@@ -46,7 +46,7 @@ trait UserApplication {
         &self,
         context: &EffectContext,
         state: &mut Vec<u8>,
-        operation: &[u8],
+        effect: &[u8],
     ) -> Result<RawApplicationResult<Vec<u8>>, Error>;
 }
 
