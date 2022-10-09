@@ -158,7 +158,7 @@ impl<E> RocksdbContext<E> {
     }
 }
 
-enum WriteOp {
+pub enum WriteOp {
     Delete(Vec<u8>),
     Put(Vec<u8>, Vec<u8>),
 }
@@ -206,8 +206,14 @@ where
         builder(&mut batch).await?;
         let db = self.db.clone();
         tokio::task::spawn_blocking(move || {
-            println!("Do nothing");
-            Ok(())
+            let mut inner_batch = rocksdb::WriteBatchWithTransaction::default();
+            for e_ent in batch.0 {
+                match e_ent {
+                    WriteOp::Delete(_key) => {},
+                    WriteOp::Put(_key,_value) => {},
+                }
+            }
+            db.write(inner_batch)
         }).await??;
 //        tokio::task::spawn_blocking(move || db.write(batch.0)).await??;
         Ok(())
