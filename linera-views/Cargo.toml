@@ -16,6 +16,7 @@ aws-sdk-s3 = "0.14.0"
 aws-smithy-http = "0.44.0"
 aws-types = "0.14.0"
 bcs = "0.1.3"
+dashmap = "5.3.4"
 futures = "0.3.17"
 generic-array = { version = "0.14.4", features = ["serde"] }
 http = "0.2.7"

@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    chain_guards::{ChainGuard, ChainGuards},
     codec,
     transport::{MessageHandler, NetworkProtocol, SpawnedServer},
 };
@@ -18,6 +17,7 @@ use linera_core::{
 };
 use linera_rpc::Message;
 use linera_storage::Store;
+use linera_views::chain_guards::{ChainGuard, ChainGuards};
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::{io, time::Duration};
