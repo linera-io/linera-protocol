@@ -163,7 +163,6 @@ pub enum WriteOp {
     Put(Vec<u8>, Vec<u8>),
 }
 
-
 pub struct MyBatch(Vec<WriteOp>);
 
 impl std::ops::Deref for MyBatch {
@@ -179,9 +178,6 @@ impl std::ops::DerefMut for MyBatch {
         &mut self.0
     }
 }
-
-
-
 
 #[async_trait]
 impl<E> Context for RocksdbContext<E>
@@ -209,12 +205,17 @@ where
             let mut inner_batch = rocksdb::WriteBatchWithTransaction::default();
             for e_ent in batch.0 {
                 match e_ent {
-                    WriteOp::Delete(key) => { inner_batch.delete(&key); },
-                    WriteOp::Put(key, value) => { inner_batch.put(&key, value); },
+                    WriteOp::Delete(key) => {
+                        inner_batch.delete(&key);
+                    }
+                    WriteOp::Put(key, value) => {
+                        inner_batch.put(&key, value);
+                    }
                 }
             }
             db.write(inner_batch)
-        }).await??;
+        })
+        .await??;
         Ok(())
     }
 }
