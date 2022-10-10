@@ -163,17 +163,18 @@ where
             CloseChain => {
                 self.manager.set(ChainManager::default());
                 // Unsubscribe to all channels.
-                let subscriptions = self.subscriptions.indices().await?;
                 let mut effects = Vec::new();
-                for channel in subscriptions {
-                    effects.push((
-                        Destination::Recipient(channel.chain_id),
-                        SystemEffect::Unsubscribe {
-                            id: context.chain_id,
-                            channel,
-                        },
-                    ));
-                }
+                self.subscriptions
+                    .for_each_index(|channel| {
+                        effects.push((
+                            Destination::Recipient(channel.chain_id),
+                            SystemEffect::Unsubscribe {
+                                id: context.chain_id,
+                                channel,
+                            },
+                        ));
+                    })
+                    .await?;
                 self.subscriptions.reset_to_default();
                 let application = RawApplicationResult {
                     effects,
