@@ -532,17 +532,16 @@ where
                         index: *message_index,
                     },
                 };
-                let result = self
+                let results = self
                     .execution_state
                     .apply_effect(message_group.application_id, &context, message_effect)
                     .await?;
-                Self::process_application_result(
-                    message_group.application_id,
+                Self::process_application_results(
                     &mut communication_state.outboxes,
                     &mut communication_state.channels,
                     &mut effects,
                     context.height,
-                    result,
+                    results,
                 )
                 .await?;
             }
@@ -558,17 +557,16 @@ where
                 height: block.height,
                 index,
             };
-            let result = self
+            let results = self
                 .execution_state
                 .apply_operation(*application_id, &context, operation)
                 .await?;
-            Self::process_application_result(
-                *application_id,
+            Self::process_application_results(
                 &mut communication_state.outboxes,
                 &mut communication_state.channels,
                 &mut effects,
                 context.height,
-                result,
+                results,
             )
             .await?;
         }
@@ -578,38 +576,35 @@ where
         Ok(effects)
     }
 
-    async fn process_application_result(
-        application_id: ApplicationId,
+    async fn process_application_results(
         outboxes: &mut CollectionView<C, ChainId, OutboxStateView<C>>,
         channels: &mut CollectionView<C, String, ChannelStateView<C>>,
         effects: &mut Vec<(ApplicationId, Destination, Effect)>,
         height: BlockHeight,
-        application: ApplicationResult,
+        results: Vec<ApplicationResult>,
     ) -> Result<(), C::Error> {
-        match application {
-            ApplicationResult::System(raw) => {
-                Self::process_raw_application_result(
-                    application_id,
-                    outboxes,
-                    channels,
-                    effects,
-                    height,
-                    raw,
-                )
-                .await
-            }
-            ApplicationResult::User(raw) => {
-                Self::process_raw_application_result(
-                    application_id,
-                    outboxes,
-                    channels,
-                    effects,
-                    height,
-                    raw,
-                )
-                .await
+        for result in results {
+            match result {
+                ApplicationResult::System(raw) => {
+                    Self::process_raw_application_result(
+                        SYSTEM, outboxes, channels, effects, height, raw,
+                    )
+                    .await?;
+                }
+                ApplicationResult::User(application_id, raw) => {
+                    Self::process_raw_application_result(
+                        application_id,
+                        outboxes,
+                        channels,
+                        effects,
+                        height,
+                        raw,
+                    )
+                    .await?;
+                }
             }
         }
+        Ok(())
     }
 
     async fn process_raw_application_result<E: Into<Effect>>(
