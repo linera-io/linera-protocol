@@ -75,12 +75,12 @@ where
         application_id: ApplicationId,
         context: &OperationContext,
         operation: &Operation,
-    ) -> Result<ApplicationResult, Error> {
+    ) -> Result<Vec<ApplicationResult>, Error> {
         if application_id == SYSTEM {
             match operation {
                 Operation::System(op) => {
                     let result = self.system.apply_operation(context, op).await?;
-                    Ok(ApplicationResult::System(result))
+                    Ok(vec![ApplicationResult::System(result)])
                 }
                 _ => Err(Error::InvalidOperation),
             }
@@ -91,10 +91,9 @@ where
             let mut map = [(application_id, Arc::new(RwLock::new(state.get().clone())))]
                 .into_iter()
                 .collect::<HashMap<_, _>>();
-            // TODO: do not ignore effects from inner calls
             let results = Arc::default();
             let storage_context =
-                StorageContext::new(context.chain_id, application_id, &map, results);
+                StorageContext::new(context.chain_id, application_id, &map, Arc::clone(&results));
             match operation {
                 Operation::System(_) => Err(Error::InvalidOperation),
                 Operation::User(operation) => {
@@ -106,7 +105,9 @@ where
                             .unwrap()
                             .into_inner(),
                     );
-                    Ok(ApplicationResult::User(result))
+                    let mut results = Arc::try_unwrap(results).unwrap().into_inner().unwrap();
+                    results.push(ApplicationResult::User(application_id, result));
+                    Ok(results)
                 }
             }
         }
@@ -117,12 +118,12 @@ where
         application_id: ApplicationId,
         context: &EffectContext,
         effect: &Effect,
-    ) -> Result<ApplicationResult, Error> {
+    ) -> Result<Vec<ApplicationResult>, Error> {
         if application_id == SYSTEM {
             match effect {
                 Effect::System(effect) => {
                     let result = self.system.apply_effect(context, effect)?;
-                    Ok(ApplicationResult::System(result))
+                    Ok(vec![ApplicationResult::System(result)])
                 }
                 _ => Err(Error::InvalidEffect),
             }
@@ -133,10 +134,9 @@ where
             let mut map = [(application_id, Arc::new(RwLock::new(state.get().clone())))]
                 .into_iter()
                 .collect::<HashMap<_, _>>();
-            // TODO: do not ignore effects from inner calls
             let results = Arc::default();
             let storage_context =
-                StorageContext::new(context.chain_id, application_id, &map, results);
+                StorageContext::new(context.chain_id, application_id, &map, Arc::clone(&results));
             match effect {
                 Effect::System(_) => Err(Error::InvalidEffect),
                 Effect::User(effect) => {
@@ -148,7 +148,9 @@ where
                             .unwrap()
                             .into_inner(),
                     );
-                    Ok(ApplicationResult::User(result))
+                    let mut results = Arc::try_unwrap(results).unwrap().into_inner().unwrap();
+                    results.push(ApplicationResult::User(application_id, result));
+                    Ok(results)
                 }
             }
         }

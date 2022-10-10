@@ -108,7 +108,7 @@ pub struct StorageContext<'a, const WRITABLE: bool> {
     application_id: ApplicationId,
     // TODO: use a proper shared collection view
     states: &'a HashMap<ApplicationId, Arc<RwLock<Vec<u8>>>>,
-    results: Arc<Mutex<Vec<TaggedRawApplicationResult<Vec<u8>>>>>,
+    results: Arc<Mutex<Vec<ApplicationResult>>>,
 }
 
 #[derive(Debug)]
@@ -119,15 +119,9 @@ pub struct RawApplicationResult<Effect> {
 }
 
 #[derive(Debug)]
-pub struct TaggedRawApplicationResult<Effect> {
-    pub callee_id: ApplicationId,
-    pub result: RawApplicationResult<Effect>,
-}
-
-#[derive(Debug)]
 pub enum ApplicationResult {
     System(RawApplicationResult<SystemEffect>),
-    User(RawApplicationResult<Vec<u8>>),
+    User(ApplicationId, RawApplicationResult<Vec<u8>>),
 }
 
 impl<Effect> Default for RawApplicationResult<Effect> {
@@ -155,7 +149,7 @@ impl<'a, const W: bool> StorageContext<'a, W> {
         chain_id: ChainId,
         application_id: ApplicationId,
         states: &'a HashMap<ApplicationId, Arc<RwLock<Vec<u8>>>>,
-        results: Arc<Mutex<Vec<TaggedRawApplicationResult<Vec<u8>>>>>,
+        results: Arc<Mutex<Vec<ApplicationResult>>>,
     ) -> Self {
         Self {
             chain_id,
@@ -227,7 +221,7 @@ impl<'a> StorageContext<'a, true> {
         self.results
             .try_lock()
             .unwrap()
-            .push(TaggedRawApplicationResult { callee_id, result });
+            .push(ApplicationResult::User(callee_id, result));
         Ok(value)
     }
 }
