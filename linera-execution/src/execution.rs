@@ -87,8 +87,9 @@ where
             match operation {
                 Operation::System(_) => Err(Error::InvalidOperation),
                 Operation::User(operation) => {
-                    let result =
-                        application.apply_operation(context, state.get_mut(), operation)?;
+                    let result = application
+                        .apply_operation(context, state.get_mut(), operation)
+                        .await?;
                     Ok(ApplicationResult::User(result))
                 }
             }
@@ -115,7 +116,9 @@ where
             match effect {
                 Effect::System(_) => Err(Error::InvalidEffect),
                 Effect::User(effect) => {
-                    let result = application.apply_effect(context, state.get_mut(), effect)?;
+                    let result = application
+                        .apply_effect(context, state.get_mut(), effect)
+                        .await?;
                     Ok(ApplicationResult::User(result))
                 }
             }
