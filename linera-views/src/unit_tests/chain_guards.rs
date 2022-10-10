@@ -14,7 +14,7 @@ use tokio::{sync::Barrier, time::sleep};
 #[tokio::test]
 async fn guard_can_be_obtained_later_again() {
     let chain_id = ChainId::root(0);
-    let mut guards = ChainGuards::default();
+    let guards = ChainGuards::default();
     // Obtain the guard the first time and drop it immediately
     let _ = guards.guard(chain_id).await;
     // It should be available immediately on the second time
@@ -90,7 +90,7 @@ impl ConcurrentAccessTest {
     /// After the guard is obtained it synchronizes on `after_first_guard_is_obtained`, sleeps for
     /// a while to ensure the other task runs as much as it can, then marks `first_task_finished`
     /// and drops the guard.
-    async fn run_first_task(mut self, chain_id: ChainId) {
+    async fn run_first_task(self, chain_id: ChainId) {
         let _guard = self.guards.guard(chain_id).await;
         self.after_first_guard_is_obtained.wait().await;
 
@@ -105,7 +105,7 @@ impl ConcurrentAccessTest {
     /// Waits until the first task acquires the lock, then immediately tries to acquire it. By the
     /// time it manages to acquire it, it will check if the first task has already finished to
     /// determine if the access was concurrent or sequential.
-    async fn run_second_task(mut self, chain_id: ChainId) -> Access {
+    async fn run_second_task(self, chain_id: ChainId) -> Access {
         self.after_first_guard_is_obtained.wait().await;
         let _guard = self.guards.guard(chain_id).await;
 

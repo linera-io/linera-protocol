@@ -42,7 +42,7 @@ impl ChainGuards {
     /// stored, because the goal is to remove the map entry as soon as possible, and the weak
     /// reference can only be upgraded if there's another attempt waiting to create a guard for
     /// the same chain.
-    pub async fn guard(&mut self, chain_id: ChainId) -> ChainGuard {
+    pub async fn guard(&self, chain_id: ChainId) -> ChainGuard {
         let guard = self.get_or_create_lock(chain_id);
         ChainGuard {
             chain_id,
@@ -66,7 +66,7 @@ impl ChainGuards {
     /// It's important that the returned lock is only locked after the write lock for the map entry
     /// is released at the end of this method, to avoid deadlocks. See [`ChainGuard::drop`] for
     /// more details.
-    fn get_or_create_lock(&mut self, chain_id: ChainId) -> Arc<Mutex<()>> {
+    fn get_or_create_lock(&self, chain_id: ChainId) -> Arc<Mutex<()>> {
         let mut new_guard_holder = None;
         let mut guard_reference = self.guards.entry(chain_id).or_insert_with(|| {
             let (new_guard, weak_reference) = Self::create_new_mutex();
