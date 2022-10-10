@@ -128,12 +128,12 @@ impl KeyValueOperations for Arc<DB> {
 impl<'a> WriteOperations for MyBatch {
     fn write_key<V: Serialize>(&mut self, key: Vec<u8>, value: &V) -> Result<(), RocksdbViewError> {
         let bytes = bcs::to_bytes(value)?;
-        self.0.push(WriteOp::Put {key: key, value: bytes});
+        self.0.push(WriteOp::Put { key, value: bytes });
         Ok(())
     }
 
     fn delete_key(&mut self, key: Vec<u8>) {
-        self.0.push(WriteOp::Delete {key: key.to_vec()});
+        self.0.push(WriteOp::Delete { key: key.to_vec() });
     }
 }
 
@@ -159,8 +159,8 @@ impl<E> RocksdbContext<E> {
 }
 
 pub enum WriteOp {
-    Delete {key: Vec<u8> },
-    Put {key: Vec<u8>, value: Vec<u8>},
+    Delete { key: Vec<u8> },
+    Put { key: Vec<u8>, value: Vec<u8> },
 }
 
 pub struct MyBatch(Vec<WriteOp>);
@@ -205,10 +205,10 @@ where
             let mut inner_batch = rocksdb::WriteBatchWithTransaction::default();
             for e_ent in batch.0 {
                 match e_ent {
-                    WriteOp::Delete {key} => {
+                    WriteOp::Delete { key } => {
                         inner_batch.delete(&key);
                     }
-                    WriteOp::Put {key, value} => {
+                    WriteOp::Put { key, value } => {
                         inner_batch.put(&key, value);
                     }
                 }
