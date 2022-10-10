@@ -3,13 +3,16 @@
 
 use crate::{
     system::{SystemExecutionStateView, SystemExecutionStateViewContext},
-    ApplicationResult, EffectContext, OperationContext,
+    ApplicationResult, EffectContext, OperationContext, StorageContext,
 };
 use linera_base::{error::Error, messages::*, system::SYSTEM};
 use linera_views::{
     impl_view,
     views::{CollectionOperations, CollectionView, RegisterOperations, RegisterView, ScopedView},
 };
+use std::collections::HashMap;
+use tokio::sync::RwLock;
+
 #[cfg(any(test, feature = "test"))]
 use {
     crate::system::SystemExecutionState, linera_views::memory::MemoryContext,
@@ -84,12 +87,25 @@ where
         } else {
             let application = crate::get_user_application(application_id)?;
             let state = self.users.load_entry(application_id).await?;
+            // TODO: use a proper shared collection.
+            let mut map = [(application_id, Arc::new(RwLock::new(state.get().clone())))]
+                .into_iter()
+                .collect::<HashMap<_, _>>();
+            // TODO: do not ignore effects from inner calls
+            let results = Arc::default();
+            let storage_context =
+                StorageContext::new(context.chain_id, application_id, &map, results);
             match operation {
                 Operation::System(_) => Err(Error::InvalidOperation),
                 Operation::User(operation) => {
                     let result = application
-                        .apply_operation(context, state.get_mut(), operation)
+                        .apply_operation(context, storage_context, operation)
                         .await?;
+                    state.set(
+                        Arc::try_unwrap(map.remove(&application_id).unwrap())
+                            .unwrap()
+                            .into_inner(),
+                    );
                     Ok(ApplicationResult::User(result))
                 }
             }
@@ -113,12 +129,25 @@ where
         } else {
             let application = crate::get_user_application(application_id)?;
             let state = self.users.load_entry(application_id).await?;
+            // TODO: use a proper shared collection.
+            let mut map = [(application_id, Arc::new(RwLock::new(state.get().clone())))]
+                .into_iter()
+                .collect::<HashMap<_, _>>();
+            // TODO: do not ignore effects from inner calls
+            let results = Arc::default();
+            let storage_context =
+                StorageContext::new(context.chain_id, application_id, &map, results);
             match effect {
                 Effect::System(_) => Err(Error::InvalidEffect),
                 Effect::User(effect) => {
                     let result = application
-                        .apply_effect(context, state.get_mut(), effect)
+                        .apply_effect(context, storage_context, effect)
                         .await?;
+                    state.set(
+                        Arc::try_unwrap(map.remove(&application_id).unwrap())
+                            .unwrap()
+                            .into_inner(),
+                    );
                     Ok(ApplicationResult::User(result))
                 }
             }
