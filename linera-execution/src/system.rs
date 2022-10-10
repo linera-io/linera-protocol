@@ -147,8 +147,8 @@ where
                 );
                 let application = RawApplicationResult {
                     effects: vec![e1, e2],
-                    subscribe: None,
-                    unsubscribe: None,
+                    subscribe: vec![],
+                    unsubscribe: vec![],
                 };
                 Ok(application)
             }
@@ -178,8 +178,8 @@ where
                 self.subscriptions.reset_to_default();
                 let application = RawApplicationResult {
                     effects,
-                    subscribe: None,
-                    unsubscribe: None,
+                    subscribe: vec![],
+                    unsubscribe: vec![],
                 };
                 Ok(application)
             }
@@ -204,8 +204,8 @@ where
                                 recipient: *id,
                             },
                         )],
-                        subscribe: None,
-                        unsubscribe: None,
+                        subscribe: vec![],
+                        unsubscribe: vec![],
                     },
                 };
                 Ok(application)
@@ -239,8 +239,8 @@ where
                             committees: self.committees.get().clone(),
                         },
                     )],
-                    subscribe: None,
-                    unsubscribe: None,
+                    subscribe: vec![],
+                    unsubscribe: vec![],
                 };
                 Ok(application)
             }
@@ -267,8 +267,8 @@ where
                             committees: self.committees.get().clone(),
                         },
                     )],
-                    subscribe: None,
-                    unsubscribe: None,
+                    subscribe: vec![],
+                    unsubscribe: vec![],
                 };
                 Ok(application)
             }
@@ -302,8 +302,8 @@ where
                             },
                         },
                     )],
-                    subscribe: None,
-                    unsubscribe: None,
+                    subscribe: vec![],
+                    unsubscribe: vec![],
                 };
                 Ok(application)
             }
@@ -328,8 +328,8 @@ where
                             },
                         },
                     )],
-                    subscribe: None,
-                    unsubscribe: None,
+                    subscribe: vec![],
+                    unsubscribe: vec![],
                 };
                 Ok(application)
             }
@@ -376,8 +376,8 @@ where
                         Destination::Recipient(*id),
                         SystemEffect::Notify { id: *id },
                     )],
-                    subscribe: Some((channel.name.clone(), *id)),
-                    unsubscribe: None,
+                    subscribe: vec![(channel.name.clone(), *id)],
+                    unsubscribe: vec![],
                 };
                 Ok(application)
             }
@@ -387,8 +387,8 @@ where
                         Destination::Recipient(*id),
                         SystemEffect::Notify { id: *id },
                     )],
-                    subscribe: None,
-                    unsubscribe: Some((channel.name.clone(), *id)),
+                    subscribe: vec![],
+                    unsubscribe: vec![(channel.name.clone(), *id)],
                 };
                 Ok(application)
             }

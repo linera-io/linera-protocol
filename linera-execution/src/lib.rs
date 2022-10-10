@@ -114,8 +114,8 @@ pub struct StorageContext<'a, const WRITABLE: bool> {
 #[derive(Debug)]
 pub struct RawApplicationResult<Effect> {
     pub effects: Vec<(Destination, Effect)>,
-    pub subscribe: Option<(String, ChainId)>,
-    pub unsubscribe: Option<(String, ChainId)>,
+    pub subscribe: Vec<(String, ChainId)>,
+    pub unsubscribe: Vec<(String, ChainId)>,
 }
 
 #[derive(Debug)]
@@ -134,8 +134,8 @@ impl<Effect> Default for RawApplicationResult<Effect> {
     fn default() -> Self {
         Self {
             effects: Vec::new(),
-            subscribe: None,
-            unsubscribe: None,
+            subscribe: Vec::new(),
+            unsubscribe: Vec::new(),
         }
     }
 }
