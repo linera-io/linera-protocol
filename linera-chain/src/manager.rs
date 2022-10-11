@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_base::{crypto::*, ensure, error::Error, messages::*};
+use linera_execution::ChainOwnership;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -93,25 +94,16 @@ impl MultiOwnerManager {
 }
 
 impl ChainManager {
-    pub fn single(owner: Owner) -> Self {
-        ChainManager::Single(Box::new(SingleOwnerManager::new(owner)))
-    }
-
-    pub fn multiple(owners: Vec<Owner>) -> Self {
-        ChainManager::Multi(Box::new(MultiOwnerManager::new(
-            owners.into_iter().map(|o| (o, ())).collect(),
-        )))
-    }
-
-    pub fn reset(&mut self) {
-        match self {
-            ChainManager::None => (),
-            ChainManager::Single(manager) => {
-                *manager = Box::new(SingleOwnerManager::new(manager.owner));
+    pub fn reset(&mut self, ownership: &ChainOwnership) {
+        match ownership {
+            ChainOwnership::None => {
+                *self = ChainManager::None;
             }
-            ChainManager::Multi(manager) => {
-                let owners = std::mem::take(&mut manager.owners);
-                *manager = Box::new(MultiOwnerManager::new(owners));
+            ChainOwnership::Single { owner } => {
+                *self = ChainManager::Single(Box::new(SingleOwnerManager::new(*owner)));
+            }
+            ChainOwnership::Multi { owners } => {
+                *self = ChainManager::Multi(Box::new(MultiOwnerManager::new(owners.clone())));
             }
         }
     }

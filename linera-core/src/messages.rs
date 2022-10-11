@@ -3,8 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_base::{committee::Committee, crypto::*, error::Error, messages::*, system::Balance};
-use linera_chain::{ChainStateView, ChainStateViewContext};
-use linera_execution::ChainManager;
+use linera_chain::{ChainManager, ChainStateView, ChainStateViewContext};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -155,13 +154,14 @@ where
     Error: From<C::Error>,
 {
     fn from(view: &ChainStateView<C>) -> Self {
+        let manager = view.manager.get().clone();
         let system_state = &view.execution_state.system;
         let tip_state = view.tip_state.get();
         ChainInfo {
             chain_id: view.chain_id(),
             epoch: *system_state.epoch.get(),
             description: *system_state.description.get(),
-            manager: system_state.manager.get().clone(),
+            manager,
             system_balance: *system_state.balance.get(),
             block_hash: tip_state.block_hash,
             next_block_height: tip_state.next_block_height,

@@ -17,7 +17,7 @@ use linera_base::{
     messages::*,
     system::{Address, Amount, Balance, SystemOperation, UserData, SYSTEM},
 };
-use linera_execution::ChainManager;
+use linera_chain::ChainManager;
 use linera_storage::Store;
 use std::{
     collections::{BTreeMap, HashMap},

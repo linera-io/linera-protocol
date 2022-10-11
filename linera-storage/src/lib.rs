@@ -19,7 +19,7 @@ use linera_base::{
     system::Balance,
 };
 use linera_chain::{ChainStateView, ChainStateViewContext};
-use linera_execution::ChainManager;
+use linera_execution::ChainOwnership;
 use std::fmt::Debug;
 
 /// Communicate with a persistent storage using the "views" abstraction.
@@ -100,10 +100,14 @@ pub trait Store {
             .committees
             .get_mut()
             .insert(Epoch::from(0), committee);
-        system_state.manager.set(ChainManager::single(owner));
+        system_state.ownership.set(ChainOwnership::single(owner));
         system_state.balance.set(balance);
         let state_hash = chain.execution_state.hash_value().await?;
         chain.execution_state_hash.set(Some(state_hash));
+        chain
+            .manager
+            .get_mut()
+            .reset(&ChainOwnership::single(owner));
         chain.write_commit().await?;
         Ok(())
     }

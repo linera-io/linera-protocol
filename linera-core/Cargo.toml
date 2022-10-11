@@ -26,6 +26,7 @@ linera-storage = { path = "../linera-storage" }
 linera-views = { path = "../linera-views" }
 
 [dev-dependencies]
+linera-chain = { path = "../linera-chain", features = ["test"] }
 linera-execution = { path = "../linera-execution", features = ["test"] }
 linera-storage = { path = "../linera-storage" }
 proptest = { version = "1.0.0" }

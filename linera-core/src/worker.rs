@@ -5,8 +5,7 @@
 use crate::messages::*;
 use async_trait::async_trait;
 use linera_base::{crypto::*, ensure, error::Error, messages::*};
-use linera_chain::ChainStateView;
-use linera_execution::ChainManagerOutcome;
+use linera_chain::{ChainManagerOutcome, ChainStateView};
 use linera_storage::Store;
 use linera_views::views::{LogView, View};
 use std::{collections::VecDeque, sync::Arc};
@@ -255,8 +254,6 @@ where
         );
         // Persist certificate.
         self.storage.write_certificate(certificate.clone()).await?;
-        // Make sure temporary manager information are cleared.
-        chain.execution_state.system.manager.get_mut().reset();
         // Execute the block.
         let verified_effects = chain.execute_block(block).await?;
         ensure!(effects == verified_effects, Error::IncorrectEffects);
@@ -317,30 +314,23 @@ where
         certificate
             .check(committee)
             .map_err(|_| Error::InvalidCertificate)?;
-        if chain
-            .execution_state
-            .system
-            .manager
-            .get_mut()
-            .check_validated_block(chain.tip_state.get().next_block_height, block, round)?
-            == ChainManagerOutcome::Skip
+        if chain.manager.get_mut().check_validated_block(
+            chain.tip_state.get().next_block_height,
+            block,
+            round,
+        )? == ChainManagerOutcome::Skip
         {
             // If we just processed the same pending block, return the chain info
             // unchanged.
             return Ok(ChainInfoResponse::new(&chain, self.key_pair()));
         }
-        chain
-            .execution_state
-            .system
-            .manager
-            .get_mut()
-            .create_final_vote(
-                block.clone(),
-                effects,
-                state_hash,
-                certificate,
-                self.key_pair(),
-            );
+        chain.manager.get_mut().create_final_vote(
+            block.clone(),
+            effects,
+            state_hash,
+            certificate,
+            self.key_pair(),
+        );
         let info = ChainInfoResponse::new(&chain, self.key_pair());
         chain.write_commit().await?;
         Ok(info)
@@ -377,12 +367,7 @@ where
         );
         // Check authentication of the block.
         ensure!(
-            chain
-                .execution_state
-                .system
-                .manager
-                .get()
-                .has_owner(&proposal.owner),
+            chain.manager.get().has_owner(&proposal.owner),
             Error::InvalidOwner
         );
         proposal
@@ -390,27 +375,18 @@ where
             .check(&proposal.content, proposal.owner.0)?;
         // Check if the chain is ready for this new block proposal.
         // This should always pass for nodes without voting key.
-        if chain
-            .execution_state
-            .system
-            .manager
-            .get()
-            .check_proposed_block(
-                chain.tip_state.get().block_hash,
-                chain.tip_state.get().next_block_height,
-                &proposal.content.block,
-                proposal.content.round,
-            )?
-            == ChainManagerOutcome::Skip
+        if chain.manager.get().check_proposed_block(
+            chain.tip_state.get().block_hash,
+            chain.tip_state.get().next_block_height,
+            &proposal.content.block,
+            proposal.content.round,
+        )? == ChainManagerOutcome::Skip
         {
             // If we just processed the same pending block, return the chain info
             // unchanged.
             return Ok(ChainInfoResponse::new(&chain, self.key_pair()));
         }
         let (effects, state_hash) = {
-            // Make sure the clear round information in the state so that it is not
-            // hashed.
-            chain.execution_state.system.manager.get_mut().reset();
             let effects = chain.execute_block(&proposal.content.block).await?;
             let hash = chain.execution_state_hash.get().expect("was just computed");
             // Verify that the resulting chain would have no unconfirmed incoming
@@ -421,12 +397,10 @@ where
             (effects, hash)
         };
         // Create the vote and store it in the chain state.
-        chain.execution_state.system.manager.get_mut().create_vote(
-            proposal,
-            effects,
-            state_hash,
-            self.key_pair(),
-        );
+        chain
+            .manager
+            .get_mut()
+            .create_vote(proposal, effects, state_hash, self.key_pair());
         let info = ChainInfoResponse::new(&chain, self.key_pair());
         chain.write_commit().await?;
         Ok(info)

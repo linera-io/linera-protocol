@@ -59,7 +59,7 @@ impl ExecutionStateView<MemoryContext<ChainId>> {
             view.system.subscriptions.insert(channel_id, ());
         }
         view.system.committees.set(state.committees);
-        view.system.manager.set(state.manager);
+        view.system.ownership.set(state.ownership);
         view.system.balance.set(state.balance);
         view
     }
