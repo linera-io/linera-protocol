@@ -48,7 +48,7 @@ const VALUE_ATTRIBUTE: &str = "item_value";
 pub struct DynamoDbContext<E> {
     client: Client,
     table: TableName,
-    lock: Arc<OwnedMutexGuard<()>>,
+    lock: Option<Arc<OwnedMutexGuard<()>>>,
     key_prefix: Vec<u8>,
     extra: E,
 }
@@ -57,7 +57,7 @@ impl<E> DynamoDbContext<E> {
     /// Create a new [`DynamoDbContext`] instance.
     pub async fn new(
         table: TableName,
-        lock: OwnedMutexGuard<()>,
+        lock: impl Into<Option<OwnedMutexGuard<()>>>,
         key_prefix: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), CreateTableError> {
@@ -70,14 +70,14 @@ impl<E> DynamoDbContext<E> {
     pub async fn from_config(
         config: impl Into<Config>,
         table: TableName,
-        lock: OwnedMutexGuard<()>,
+        lock: impl Into<Option<OwnedMutexGuard<()>>>,
         key_prefix: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), CreateTableError> {
         let storage = DynamoDbContext {
             client: Client::from_conf(config.into()),
             table,
-            lock: Arc::new(lock),
+            lock: lock.into().map(Arc::new),
             key_prefix,
             extra,
         };
@@ -94,7 +94,7 @@ impl<E> DynamoDbContext<E> {
     /// [`TableStatus`] to indicate if the table was created or if it already exists.
     pub async fn with_localstack(
         table: TableName,
-        lock: OwnedMutexGuard<()>,
+        lock: impl Into<Option<OwnedMutexGuard<()>>>,
         key_prefix: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), LocalStackError> {
@@ -113,14 +113,14 @@ impl<E> DynamoDbContext<E> {
     /// extra data.
     pub fn clone_with_sub_scope<NewE>(
         &self,
-        new_lock: OwnedMutexGuard<()>,
+        new_lock: impl Into<Option<OwnedMutexGuard<()>>>,
         scope_prefix: &impl Serialize,
         new_extra: NewE,
     ) -> DynamoDbContext<NewE> {
         DynamoDbContext {
             client: self.client.clone(),
             table: self.table.clone(),
-            lock: Arc::new(new_lock),
+            lock: new_lock.into().map(Arc::new),
             key_prefix: self.extend_prefix(scope_prefix),
             extra: new_extra,
         }
