@@ -205,11 +205,7 @@ impl<'a> StorageContext<'a, true> {
         name: &str,
         argument: &[u8],
     ) -> Result<Vec<u8>, Error> {
-        let authenticated_caller_id = if authenticated {
-            Some(self.application_id)
-        } else {
-            None
-        };
+        let authenticated_caller_id = authenticated.then_some(self.application_id);
         let application = get_user_application(callee_id)?;
         let callee_context = CalleeContext {
             chain_id: self.chain_id,

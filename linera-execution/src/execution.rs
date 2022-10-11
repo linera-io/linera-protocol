@@ -88,9 +88,8 @@ where
             let application = crate::get_user_application(application_id)?;
             let state = self.users.load_entry(application_id).await?;
             // TODO: use a proper shared collection.
-            let mut map = [(application_id, Arc::new(RwLock::new(state.get().clone())))]
-                .into_iter()
-                .collect::<HashMap<_, _>>();
+            let mut map =
+                HashMap::from([(application_id, Arc::new(RwLock::new(state.get().clone())))]);
             let results = Arc::default();
             let storage_context =
                 StorageContext::new(context.chain_id, application_id, &map, Arc::clone(&results));
