@@ -9,7 +9,10 @@ use crate::{
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use linera_base::{error::Error, messages::*};
-use linera_chain::ChainManager;
+use linera_chain::{
+    messages::{Block, BlockProposal, Certificate, Value},
+    ChainManager,
+};
 use linera_storage::Store;
 use rand::prelude::SliceRandom;
 use std::sync::Arc;

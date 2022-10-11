@@ -5,7 +5,10 @@
 use crate::messages::*;
 use async_trait::async_trait;
 use linera_base::{crypto::*, ensure, error::Error, messages::*};
-use linera_chain::{ChainManagerOutcome, ChainStateView};
+use linera_chain::{
+    messages::{Block, BlockProposal, Certificate, MessageGroup, Value},
+    ChainManagerOutcome, ChainStateView,
+};
 use linera_storage::Store;
 use linera_views::views::{LogView, View};
 use std::{collections::VecDeque, sync::Arc};

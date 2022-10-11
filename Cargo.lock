@@ -1240,6 +1240,7 @@ dependencies = [
  "env_logger",
  "futures",
  "linera-base",
+ "linera-chain",
  "linera-core",
  "linera-rpc",
  "linera-storage",

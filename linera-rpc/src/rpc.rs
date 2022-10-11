@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_base::{error::*, messages::*};
+use linera_chain::messages::{BlockProposal, Certificate, Vote};
 use linera_core::messages::*;
 
 use serde::{Deserialize, Serialize};

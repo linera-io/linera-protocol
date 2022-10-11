@@ -17,7 +17,10 @@ use linera_base::{
     messages::*,
     system::{Address, Amount, Balance, SystemOperation, UserData, SYSTEM},
 };
-use linera_chain::ChainManager;
+use linera_chain::{
+    messages::{Block, BlockAndRound, BlockProposal, Certificate, MessageGroup, Value, Vote},
+    ChainManager,
+};
 use linera_storage::Store;
 use std::{
     collections::{BTreeMap, HashMap},

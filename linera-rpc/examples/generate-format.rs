@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_base::{error, messages, system};
-use linera_chain::ChainManager;
+use linera_chain::{messages::Value, ChainManager};
 use linera_core::messages::CrossChainRequest;
 use linera_rpc::Message;
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
@@ -24,7 +24,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<system::SystemEffect>(&samples)?;
     tracer.trace_type::<messages::Operation>(&samples)?;
     tracer.trace_type::<messages::Effect>(&samples)?;
-    tracer.trace_type::<messages::Value>(&samples)?;
+    tracer.trace_type::<Value>(&samples)?;
     tracer.trace_type::<messages::Medium>(&samples)?;
     tracer.trace_type::<messages::Destination>(&samples)?;
     tracer.trace_type::<messages::ChainDescription>(&samples)?;

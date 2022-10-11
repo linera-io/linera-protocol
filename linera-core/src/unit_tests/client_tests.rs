@@ -16,6 +16,7 @@ use linera_base::{
     messages::*,
     system::{Amount, Balance, SystemOperation, UserData},
 };
+use linera_chain::messages::{Block, BlockProposal, Certificate, Value};
 use linera_storage::{DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient, Store};
 use linera_views::test_utils::LocalStackTestContext;
 use std::{

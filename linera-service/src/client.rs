@@ -12,6 +12,9 @@ use linera_base::{
     messages::*,
     system::{Address, Amount, Balance, SystemOperation, UserData, SYSTEM},
 };
+use linera_chain::messages::{
+    Block, BlockAndRound, BlockProposal, Certificate, SignatureAggregator, Vote,
+};
 use linera_core::{
     client::*,
     messages::{ChainInfoQuery, ChainInfoResponse},

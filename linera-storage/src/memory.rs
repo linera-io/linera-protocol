@@ -4,10 +4,8 @@
 use crate::{ChainStateView, Store};
 use async_trait::async_trait;
 use dashmap::DashMap;
-use linera_base::{
-    crypto::HashValue,
-    messages::{Certificate, ChainId},
-};
+use linera_base::{crypto::HashValue, messages::ChainId};
+use linera_chain::messages::Certificate;
 use linera_views::{
     memory::{MemoryContext, MemoryStoreMap, MemoryViewError},
     views::View,

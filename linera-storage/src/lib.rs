@@ -15,10 +15,10 @@ use linera_base::{
     committee::Committee,
     crypto::HashValue,
     ensure,
-    messages::{Certificate, ChainDescription, ChainId, Epoch, Owner},
+    messages::{ChainDescription, ChainId, Epoch, Owner},
     system::Balance,
 };
-use linera_chain::{ChainStateView, ChainStateViewContext};
+use linera_chain::{messages::Certificate, ChainStateView, ChainStateViewContext};
 use linera_execution::ChainOwnership;
 use std::fmt::Debug;
 
