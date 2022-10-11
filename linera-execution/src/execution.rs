@@ -100,11 +100,17 @@ where
                         .apply_operation(context, storage_context, operation)
                         .await?;
                     state.set(
-                        Arc::try_unwrap(map.remove(&application_id).unwrap())
-                            .unwrap()
-                            .into_inner(),
+                        Arc::try_unwrap(
+                            map.remove(&application_id)
+                                .expect("Entry should still be in the map"),
+                        )
+                        .expect("All nested calls should have returned by now")
+                        .into_inner(),
                     );
-                    let mut results = Arc::try_unwrap(results).unwrap().into_inner().unwrap();
+                    let mut results = Arc::try_unwrap(results)
+                        .expect("All nested calls should have returned by now")
+                        .into_inner()
+                        .expect("Mutex should not taken");
                     results.push(ApplicationResult::User(application_id, result));
                     Ok(results)
                 }
@@ -143,11 +149,17 @@ where
                         .apply_effect(context, storage_context, effect)
                         .await?;
                     state.set(
-                        Arc::try_unwrap(map.remove(&application_id).unwrap())
-                            .unwrap()
-                            .into_inner(),
+                        Arc::try_unwrap(
+                            map.remove(&application_id)
+                                .expect("Entry should still be in the map"),
+                        )
+                        .expect("All nested calls should have returned by now")
+                        .into_inner(),
                     );
-                    let mut results = Arc::try_unwrap(results).unwrap().into_inner().unwrap();
+                    let mut results = Arc::try_unwrap(results)
+                        .expect("All nested calls should have returned by now")
+                        .into_inner()
+                        .expect("Mutex should not taken");
                     results.push(ApplicationResult::User(application_id, result));
                     Ok(results)
                 }

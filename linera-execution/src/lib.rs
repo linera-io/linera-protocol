@@ -216,7 +216,7 @@ impl<'a> StorageContext<'a, true> {
             .await?;
         self.results
             .try_lock()
-            .unwrap()
+            .expect("Execution should be single-threaded")
             .push(ApplicationResult::User(callee_id, result));
         Ok(value)
     }
