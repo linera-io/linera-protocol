@@ -699,7 +699,6 @@ where
             self.context
                 .delete_front(&mut self.stored_indices, batch, self.front_delete_count)
                 .await?;
-            self.front_delete_count = 0;
         }
         if !self.new_back_values.is_empty() {
             self.context
@@ -710,9 +709,10 @@ where
                 )
                 .await?;
         }
-        self.stored_indices.start = self.front_delete_count;
-        self.stored_indices.end = self.new_back_values.len();
+        self.stored_indices.start += self.front_delete_count;
+        self.stored_indices.end += self.new_back_values.len();
         self.new_back_values.clear();
+        self.front_delete_count = 0;
         Ok(())
     }
 
