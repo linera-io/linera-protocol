@@ -89,8 +89,7 @@ impl DynamoDbStore {
     {
         let dummy_lock = Arc::new(Mutex::new(())).lock_owned().await;
         let empty_prefix = vec![];
-        let dummy_extra = ();
-        let (context, table_status) = create_context(dummy_lock, empty_prefix, dummy_extra).await?;
+        let (context, table_status) = create_context(dummy_lock, empty_prefix, ()).await?;
         Ok((
             Self {
                 context,
