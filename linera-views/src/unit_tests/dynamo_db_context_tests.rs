@@ -1,8 +1,6 @@
 use super::{DynamoDbContext, TableName, TableStatus};
 use crate::test_utils::{list_tables, LocalStackTestContext};
 use anyhow::Error;
-use std::sync::Arc;
-use tokio::sync::{Mutex, OwnedMutexGuard};
 
 /// Test if the table for the storage is created when needed.
 #[tokio::test]
@@ -18,7 +16,7 @@ async fn table_is_created() -> Result<(), Error> {
     let (_storage, table_status) = DynamoDbContext::from_config(
         localstack.dynamo_db_config(),
         table.clone(),
-        dummy_lock().await,
+        None,
         vec![],
         (),
     )
@@ -47,7 +45,7 @@ async fn separate_tables_are_created() -> Result<(), Error> {
     let (_storage, first_table_status) = DynamoDbContext::from_config(
         localstack.dynamo_db_config(),
         first_table.clone(),
-        dummy_lock().await,
+        None,
         vec![],
         (),
     )
@@ -55,7 +53,7 @@ async fn separate_tables_are_created() -> Result<(), Error> {
     let (_storage, second_table_status) = DynamoDbContext::from_config(
         localstack.dynamo_db_config(),
         second_table.clone(),
-        dummy_lock().await,
+        None,
         vec![],
         (),
     )
@@ -68,11 +66,4 @@ async fn separate_tables_are_created() -> Result<(), Error> {
     assert_eq!(second_table_status, TableStatus::New);
 
     Ok(())
-}
-
-/// Create a dummy [`OwnedMutexGuard`].
-async fn dummy_lock() -> OwnedMutexGuard<()> {
-    let dummy_mutex = Arc::new(Mutex::new(()));
-
-    dummy_mutex.lock_owned().await
 }

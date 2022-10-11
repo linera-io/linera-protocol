@@ -229,16 +229,9 @@ impl TestContextFactory for DynamoDbContextFactory {
         let table = format!("linera{}", self.table_counter).parse()?;
         self.table_counter += 1;
 
-        let dummy_lock = Arc::new(Mutex::new(()));
         let dummy_key_prefix = vec![0];
-        let (context, _) = DynamoDbContext::from_config(
-            config,
-            table,
-            dummy_lock.lock_owned().await,
-            dummy_key_prefix,
-            (),
-        )
-        .await?;
+        let (context, _) =
+            DynamoDbContext::from_config(config, table, None, dummy_key_prefix, ()).await?;
 
         Ok(context)
     }
