@@ -87,6 +87,12 @@ impl ChainGuards {
         let weak_reference = Arc::downgrade(&new_guard);
         (new_guard, weak_reference)
     }
+
+    /// Obtain the current number of active guards.
+    #[cfg(any(test, feature = "test"))]
+    pub fn active_guards(&self) -> usize {
+        self.guards.len()
+    }
 }
 
 /// A guard for a specific chain.
