@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{ChainManager, EffectContext, OperationContext, RawApplicationResult};
+use crate::{ChainOwnership, EffectContext, OperationContext, RawApplicationResult};
 use linera_base::{
     committee::Committee,
     ensure,
@@ -36,8 +36,8 @@ pub struct SystemExecutionStateView<C> {
     /// small. Plus, currently, we would create the `BTreeMap` anyway in various places
     /// (e.g. the `OpenChain` operation).
     pub committees: ScopedView<4, RegisterView<C, BTreeMap<Epoch, Committee>>>,
-    /// Manager of the chain.
-    pub manager: ScopedView<5, RegisterView<C, ChainManager>>,
+    /// Ownership of the chain.
+    pub ownership: ScopedView<5, RegisterView<C, ChainOwnership>>,
     /// Balance of the chain.
     pub balance: ScopedView<6, RegisterView<C, Balance>>,
 }
@@ -50,7 +50,7 @@ pub struct SystemExecutionState {
     pub admin_id: Option<ChainId>,
     pub subscriptions: BTreeSet<ChannelId>,
     pub committees: BTreeMap<Epoch, Committee>,
-    pub manager: ChainManager,
+    pub ownership: ChainOwnership,
     pub balance: Balance,
 }
 
@@ -61,7 +61,7 @@ impl_view!(
         admin_id,
         subscriptions,
         committees,
-        manager,
+        ownership,
         balance,
     };
     RegisterOperations<Option<ChainDescription>>,
@@ -69,7 +69,7 @@ impl_view!(
     RegisterOperations<Option<ChainId>>,
     MapOperations<ChannelId, ()>,
     RegisterOperations<BTreeMap<Epoch, Committee>>,
-    RegisterOperations<ChainManager>,
+    RegisterOperations<ChainOwnership>,
     RegisterOperations<Balance>,
 );
 
@@ -81,7 +81,7 @@ where
     /// Invariant for the states of active chains.
     pub fn is_active(&self) -> bool {
         self.description.get().is_some()
-            && self.manager.get().is_active()
+            && self.ownership.get().is_active()
             && self.epoch.get().is_some()
             && self
                 .committees
@@ -151,15 +151,16 @@ where
                 Ok(application)
             }
             ChangeOwner { new_owner } => {
-                self.manager.set(ChainManager::single(*new_owner));
+                self.ownership.set(ChainOwnership::single(*new_owner));
                 Ok(RawApplicationResult::default())
             }
             ChangeMultipleOwners { new_owners } => {
-                self.manager.set(ChainManager::multiple(new_owners.clone()));
+                self.ownership
+                    .set(ChainOwnership::multiple(new_owners.clone()));
                 Ok(RawApplicationResult::default())
             }
             CloseChain => {
-                self.manager.set(ChainManager::default());
+                self.ownership.set(ChainOwnership::default());
                 // Unsubscribe to all channels.
                 let mut effects = Vec::new();
                 self.subscriptions
@@ -421,7 +422,7 @@ where
             }) if id == &this_chain_id => {
                 // Guaranteed under BFT assumptions.
                 assert!(self.description.get().is_none());
-                assert!(!self.manager.get().is_active());
+                assert!(!self.ownership.get().is_active());
                 assert!(self.committees.get().is_empty());
                 let description = ChainDescription::Child(effect_id);
                 assert_eq!(this_chain_id, description.into());
@@ -436,7 +437,7 @@ where
                     },
                     (),
                 );
-                self.manager.set(ChainManager::single(*owner));
+                self.ownership.set(ChainOwnership::single(*owner));
                 Ok(true)
             }
             _ => Ok(false),

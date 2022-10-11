@@ -1,6 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::ChainManager;
 use linera_base::{
     crypto::HashValue,
     ensure,
@@ -36,15 +37,18 @@ pub struct ChainStateView<C> {
     /// Block-chaining state.
     pub tip_state: ScopedView<2, RegisterView<C, ChainTipState>>,
 
+    /// Consensus state.
+    pub manager: ScopedView<3, RegisterView<C, ChainManager>>,
+
     /// Hashes of all certified blocks for this sender.
     /// This ends with `block_hash` and has length `usize::from(next_block_height)`.
-    pub confirmed_log: ScopedView<3, LogView<C, HashValue>>,
+    pub confirmed_log: ScopedView<4, LogView<C, HashValue>>,
     /// Hashes of all certified blocks known as a receiver (local ordering).
-    pub received_log: ScopedView<4, LogView<C, HashValue>>,
+    pub received_log: ScopedView<5, LogView<C, HashValue>>,
 
     /// Communication state of applications.
     pub communication_states:
-        ScopedView<5, CollectionView<C, ApplicationId, CommunicationStateView<C>>>,
+        ScopedView<6, CollectionView<C, ApplicationId, CommunicationStateView<C>>>,
 }
 
 impl_view!(
@@ -52,12 +56,14 @@ impl_view!(
         execution_state,
         execution_state_hash,
         tip_state,
+        manager,
         confirmed_log,
         received_log,
         communication_states,
     };
     RegisterOperations<Option<HashValue>>,
     RegisterOperations<ChainTipState>,
+    RegisterOperations<ChainManager>,
     LogOperations<HashValue>,
     CollectionOperations<ApplicationId>,
     CommunicationStateViewContext,
@@ -346,8 +352,13 @@ where
                     .system
                     .apply_immediate_effect(chain_id, effect_id, &effect)?
                 {
+                    // Recompute the state hash.
                     let hash = self.execution_state.hash_value().await?;
                     self.execution_state_hash.set(Some(hash));
+                    // Last, reset the consensus state based on the current ownership.
+                    self.manager
+                        .get_mut()
+                        .reset(self.execution_state.system.ownership.get());
                 }
             }
             // Find if the message was executed ahead of time.
@@ -546,9 +557,13 @@ where
             )
             .await?;
         }
-        // Last, recompute the state hash.
+        // Recompute the state hash.
         let hash = self.execution_state.hash_value().await?;
         self.execution_state_hash.set(Some(hash));
+        // Last, reset the consensus state based on the current ownership.
+        self.manager
+            .get_mut()
+            .reset(self.execution_state.system.ownership.get());
         Ok(effects)
     }
 

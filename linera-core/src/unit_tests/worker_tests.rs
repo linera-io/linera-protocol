@@ -16,7 +16,7 @@ use linera_base::{
     },
 };
 use linera_chain::Event;
-use linera_execution::{ChainManager, ExecutionStateView, SystemExecutionState};
+use linera_execution::{ChainOwnership, ExecutionStateView, SystemExecutionState};
 use linera_storage::{DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient, Store};
 use linera_views::test_utils::LocalStackTestContext;
 use std::collections::{BTreeMap, BTreeSet};
@@ -162,7 +162,7 @@ async fn make_transfer_certificate<S>(
         admin_id: Some(ChainId::root(0)),
         subscriptions: BTreeSet::new(),
         committees: [(Epoch::from(0), committee.clone())].into_iter().collect(),
-        manager: ChainManager::single(key_pair.public().into()),
+        ownership: ChainOwnership::single(key_pair.public().into()),
         balance,
     };
     let block = make_block(
@@ -268,8 +268,6 @@ where
         .load_active_chain(ChainId::root(1))
         .await
         .unwrap()
-        .execution_state
-        .system
         .manager
         .get()
         .pending()
@@ -341,8 +339,6 @@ where
         .load_active_chain(ChainId::root(1))
         .await
         .unwrap()
-        .execution_state
-        .system
         .manager
         .get()
         .pending()
@@ -416,8 +412,6 @@ where
         .load_active_chain(ChainId::root(1))
         .await
         .unwrap()
-        .execution_state
-        .system
         .manager
         .get()
         .pending()
@@ -502,8 +496,6 @@ where
         .load_active_chain(ChainId::root(1))
         .await
         .unwrap()
-        .execution_state
-        .system
         .manager
         .get()
         .pending()
@@ -518,8 +510,6 @@ where
         .load_active_chain(ChainId::root(1))
         .await
         .unwrap()
-        .execution_state
-        .system
         .manager
         .get()
         .pending()
@@ -531,8 +521,6 @@ where
         .load_active_chain(ChainId::root(1))
         .await
         .unwrap()
-        .execution_state
-        .system
         .manager
         .get()
         .pending()
@@ -644,7 +632,7 @@ where
                 admin_id: Some(ChainId::root(0)),
                 subscriptions: BTreeSet::new(),
                 committees: [(epoch, committee.clone())].into_iter().collect(),
-                manager: ChainManager::single(sender_key_pair.public().into()),
+                ownership: ChainOwnership::single(sender_key_pair.public().into()),
                 balance: Balance::from(3),
             })
             .await
@@ -687,7 +675,7 @@ where
                 admin_id: Some(ChainId::root(0)),
                 subscriptions: BTreeSet::new(),
                 committees: [(epoch, committee.clone())].into_iter().collect(),
-                manager: ChainManager::single(sender_key_pair.public().into()),
+                ownership: ChainOwnership::single(sender_key_pair.public().into()),
                 balance: Balance::from(0),
             })
             .await
@@ -907,7 +895,7 @@ where
                     admin_id: Some(ChainId::root(0)),
                     subscriptions: BTreeSet::new(),
                     committees: [(epoch, committee.clone())].into_iter().collect(),
-                    manager: ChainManager::single(recipient_key_pair.public().into()),
+                    ownership: ChainOwnership::single(recipient_key_pair.public().into()),
                     balance: Balance::from(0),
                 })
                 .await
@@ -1008,8 +996,6 @@ where
         .load_active_chain(ChainId::root(1))
         .await
         .unwrap()
-        .execution_state
-        .system
         .manager
         .get()
         .pending()
@@ -1074,8 +1060,6 @@ where
         .load_active_chain(ChainId::root(1))
         .await
         .unwrap()
-        .execution_state
-        .system
         .manager
         .get()
         .pending()
@@ -1932,8 +1916,6 @@ where
             Balance::from(4)
         );
         assert!(recipient_chain
-            .execution_state
-            .system
             .manager
             .get()
             .has_owner(&recipient_key_pair.public().into()));
@@ -2125,7 +2107,7 @@ where
                 admin_id: Some(admin_id),
                 subscriptions: BTreeSet::new(),
                 committees: committees.clone(),
-                manager: ChainManager::single(key_pair.public().into()),
+                ownership: ChainOwnership::single(key_pair.public().into()),
                 balance: Balance::from(2),
             })
             .await
@@ -2234,7 +2216,7 @@ where
                 subscriptions: BTreeSet::new(),
                 // The root chain knows both committees at the end.
                 committees: committees2.clone(),
-                manager: ChainManager::single(key_pair.public().into()),
+                ownership: ChainOwnership::single(key_pair.public().into()),
                 balance: Balance::from(0),
             })
             .await
@@ -2284,7 +2266,7 @@ where
                 subscriptions: BTreeSet::new(),
                 // The root chain knows both committees at the end.
                 committees: committees2.clone(),
-                manager: ChainManager::single(key_pair.public().into()),
+                ownership: ChainOwnership::single(key_pair.public().into()),
                 balance: Balance::from(0),
             })
             .await
@@ -2464,7 +2446,7 @@ where
                 .collect(),
                 // Finally the child knows about both committees and has the money.
                 committees: committees2.clone(),
-                manager: ChainManager::single(key_pair.public().into()),
+                ownership: ChainOwnership::single(key_pair.public().into()),
                 balance: Balance::from(2),
             })
             .await
@@ -2614,7 +2596,7 @@ where
                 admin_id: Some(admin_id),
                 subscriptions: BTreeSet::new(),
                 committees: committees.clone(),
-                manager: ChainManager::single(key_pair1.public().into()),
+                ownership: ChainOwnership::single(key_pair1.public().into()),
                 balance: Balance::from(2),
             })
             .await
@@ -2664,7 +2646,7 @@ where
                 admin_id: Some(admin_id),
                 subscriptions: BTreeSet::new(),
                 committees: committees2.clone(),
-                manager: ChainManager::single(key_pair0.public().into()),
+                ownership: ChainOwnership::single(key_pair0.public().into()),
                 balance: Balance::from(0),
             })
             .await
@@ -2821,7 +2803,7 @@ where
                 admin_id: Some(admin_id),
                 subscriptions: BTreeSet::new(),
                 committees: committees.clone(),
-                manager: ChainManager::single(key_pair1.public().into()),
+                ownership: ChainOwnership::single(key_pair1.public().into()),
                 balance: Balance::from(2),
             })
             .await
@@ -2892,7 +2874,7 @@ where
                 admin_id: Some(admin_id),
                 subscriptions: BTreeSet::new(),
                 committees: committees3.clone(),
-                manager: ChainManager::single(key_pair0.public().into()),
+                ownership: ChainOwnership::single(key_pair0.public().into()),
                 balance: Balance::from(0),
             })
             .await

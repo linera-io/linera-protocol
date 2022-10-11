@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_base::{error, messages, system};
+use linera_chain::ChainManager;
 use linera_core::messages::CrossChainRequest;
-use linera_execution::ChainManager;
 use linera_rpc::Message;
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use std::{fs::File, io::Write};
