@@ -14,6 +14,7 @@ use linera_base::{
 };
 use linera_core::{
     client::*,
+    messages::{ChainInfoQuery, ChainInfoResponse},
     node::{LocalNodeClient, ValidatorNode},
     worker::WorkerState,
 };

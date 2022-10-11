@@ -2,7 +2,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::worker::{ValidatorWorker, WorkerState};
+use crate::{
+    messages::*,
+    worker::{ValidatorWorker, WorkerState},
+};
 use linera_base::{
     committee::Committee,
     crypto::*,

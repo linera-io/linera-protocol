@@ -1174,10 +1174,12 @@ dependencies = [
  "linera-views",
  "log",
  "once_cell",
+ "proptest",
  "rand 0.7.3",
  "serde",
  "tempfile",
  "test-log",
+ "test-strategy",
  "tokio",
 ]
 
@@ -1206,6 +1208,7 @@ dependencies = [
  "generic-array",
  "hex",
  "linera-base",
+ "linera-core",
  "log",
  "once_cell",
  "proptest",

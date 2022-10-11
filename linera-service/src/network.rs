@@ -10,7 +10,7 @@ use crate::{
 use async_trait::async_trait;
 use futures::{channel::mpsc, sink::SinkExt, stream::StreamExt};
 use linera_base::{error::*, messages::*};
-use linera_core::{node::ValidatorNode, worker::*};
+use linera_core::{messages::*, node::ValidatorNode, worker::*};
 use linera_rpc::Message;
 use linera_storage::Store;
 use log::*;

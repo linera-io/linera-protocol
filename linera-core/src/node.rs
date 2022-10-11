@@ -2,7 +2,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::worker::{ValidatorWorker, WorkerState};
+use crate::{
+    messages::*,
+    worker::{ValidatorWorker, WorkerState},
+};
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use linera_base::{error::Error, manager::ChainManager, messages::*};

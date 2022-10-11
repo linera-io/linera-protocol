@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    messages::*,
     node::{LocalNodeClient, ValidatorNode},
     updater::{communicate_with_quorum, CommunicateAction, ValidatorUpdater},
     worker::WorkerState,
