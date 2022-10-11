@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{crypto::*, ensure, error::Error, messages::*};
+use linera_base::{crypto::*, ensure, error::Error, messages::*};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

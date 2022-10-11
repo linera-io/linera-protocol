@@ -15,11 +15,11 @@ use linera_base::{
     committee::Committee,
     crypto::HashValue,
     ensure,
-    manager::ChainManager,
     messages::{Certificate, ChainDescription, ChainId, Epoch, Owner},
     system::Balance,
 };
 use linera_chain::{ChainStateView, ChainStateViewContext};
+use linera_execution::ChainManager;
 use std::fmt::Debug;
 
 /// Communicate with a persistent storage using the "views" abstraction.

@@ -10,14 +10,13 @@ use linera_base::{
     committee::Committee,
     crypto::*,
     error::Error,
-    manager::ChainManager,
     messages::*,
     system::{
         Address, Amount, Balance, SystemEffect, SystemOperation, UserData, ADMIN_CHANNEL, SYSTEM,
     },
 };
 use linera_chain::Event;
-use linera_execution::{ExecutionStateView, SystemExecutionState};
+use linera_execution::{ChainManager, ExecutionStateView, SystemExecutionState};
 use linera_storage::{DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient, Store};
 use linera_views::test_utils::LocalStackTestContext;
 use std::collections::{BTreeMap, BTreeSet};
