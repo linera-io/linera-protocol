@@ -30,7 +30,6 @@ pub struct SystemExecutionStateView<C> {
     /// The admin of the chain.
     pub admin_id: ScopedView<2, RegisterView<C, Option<ChainId>>>,
     /// Track the channels that we have subscribed to.
-    /// We avoid BTreeSet<String> because of a Serde/BCS limitation.
     pub subscriptions: ScopedView<3, MapView<C, ChannelId, ()>>,
     /// The committees that we trust, indexed by epoch number.
     /// Not using a `MapView` because the set active of committees is supposed to be
