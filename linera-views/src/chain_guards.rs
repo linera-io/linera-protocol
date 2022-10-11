@@ -9,7 +9,10 @@
 
 use dashmap::DashMap;
 use linera_base::messages::ChainId;
-use std::sync::{Arc, Weak};
+use std::{
+    fmt::{self, Debug, Formatter},
+    sync::{Arc, Weak},
+};
 use tokio::sync::{Mutex, OwnedMutexGuard};
 
 #[cfg(test)]
@@ -134,6 +137,15 @@ impl Drop for ChainGuard {
             ));
             mutex.upgrade().is_none()
         });
+    }
+}
+
+impl Debug for ChainGuard {
+    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
+        formatter
+            .debug_struct("ChainGuard")
+            .field("chain_id", &self.chain_id)
+            .finish_non_exhaustive()
     }
 }
 
