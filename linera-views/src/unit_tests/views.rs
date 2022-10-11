@@ -1,4 +1,5 @@
 use crate::{
+    chain_guards::ChainGuard,
     dynamo_db::DynamoDbContext,
     memory::MemoryContext,
     rocksdb::RocksdbContext,
@@ -201,8 +202,7 @@ impl TestContextFactory for RocksdbContextFactory {
         let db =
             rocksdb::DBWithThreadMode::<rocksdb::MultiThreaded>::open(&options, directory.path())?;
 
-        let dummy_lock = Arc::new(Mutex::new(()));
-        let context = RocksdbContext::new(Arc::new(db), dummy_lock.lock_owned().await, vec![], ());
+        let context = RocksdbContext::new(Arc::new(db), ChainGuard::dummy().await, vec![], ());
 
         self.temporary_directories.push(directory);
 

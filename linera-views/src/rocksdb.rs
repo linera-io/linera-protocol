@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    chain_guards::ChainGuard,
     hash::HashingContext,
     views::{
         CollectionOperations, Context, LogOperations, MapOperations, QueueOperations,
@@ -12,7 +13,6 @@ use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{ops::Range, sync::Arc};
 use thiserror::Error;
-use tokio::sync::OwnedMutexGuard;
 
 pub type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
 
@@ -20,7 +20,7 @@ pub type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
 #[derive(Debug, Clone)]
 pub struct RocksdbContext<E> {
     db: Arc<DB>,
-    lock: Arc<OwnedMutexGuard<()>>,
+    guard: Arc<ChainGuard>,
     base_key: Vec<u8>,
     extra: E,
 }
@@ -138,10 +138,10 @@ impl WriteOperations for MyBatch {
 }
 
 impl<E> RocksdbContext<E> {
-    pub fn new(db: Arc<DB>, lock: OwnedMutexGuard<()>, base_key: Vec<u8>, extra: E) -> Self {
+    pub fn new(db: Arc<DB>, guard: ChainGuard, base_key: Vec<u8>, extra: E) -> Self {
         Self {
             db,
-            lock: Arc::new(lock),
+            guard: Arc::new(guard),
             base_key,
             extra,
         }
@@ -228,7 +228,7 @@ where
     fn clone_with_scope(&self, index: u64) -> Self {
         Self {
             db: self.db.clone(),
-            lock: self.lock.clone(),
+            guard: self.guard.clone(),
             base_key: self.derive_key(&index),
             extra: self.extra.clone(),
         }
@@ -465,7 +465,7 @@ where
     fn clone_with_scope(&self, index: &I) -> Self {
         Self {
             db: self.db.clone(),
-            lock: self.lock.clone(),
+            guard: self.guard.clone(),
             base_key: self.derive_key(&CollectionKey::Subview(index)),
             extra: self.extra.clone(),
         }

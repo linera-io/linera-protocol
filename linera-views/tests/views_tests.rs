@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
+use linera_base::messages::ChainId;
 use linera_views::{
+    chain_guards::ChainGuards,
     dynamo_db::{DynamoDbContext, DynamoDbContextError},
     hash::{HashView, Hasher, HashingContext},
     impl_view,
@@ -77,7 +79,7 @@ impl StateStore for MemoryTestStore {
 
 pub struct RocksdbTestStore {
     db: Arc<DB>,
-    locks: HashMap<usize, Arc<Mutex<()>>>,
+    guards: ChainGuards,
     accessed_chains: BTreeSet<usize>,
 }
 
@@ -85,7 +87,7 @@ impl RocksdbTestStore {
     fn new(db: DB) -> Self {
         Self {
             db: Arc::new(db),
-            locks: HashMap::new(),
+            guards: ChainGuards::default(),
             accessed_chains: BTreeSet::new(),
         }
     }
@@ -97,14 +99,10 @@ impl StateStore for RocksdbTestStore {
 
     async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, RocksdbViewError> {
         self.accessed_chains.insert(id);
-        let lock = self
-            .locks
-            .entry(id)
-            .or_insert_with(|| Arc::new(Mutex::new(())));
         log::trace!("Acquiring lock on {:?}", id);
         let context = RocksdbContext::new(
             self.db.clone(),
-            lock.clone().lock_owned().await,
+            self.guards.guard(ChainId::root(id)).await,
             bcs::to_bytes(&id)?,
             id,
         );

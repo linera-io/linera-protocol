@@ -3,20 +3,19 @@
 
 use crate::{ChainStateView, Store};
 use async_trait::async_trait;
-use dashmap::DashMap;
 use linera_base::{crypto::HashValue, messages::ChainId};
 use linera_chain::messages::Certificate;
 use linera_views::{
+    chain_guards::ChainGuards,
     rocksdb::{KeyValueOperations, RocksdbContext, RocksdbViewError, DB},
     views::View,
 };
 use serde::{Deserialize, Serialize};
 use std::{path::PathBuf, sync::Arc};
-use tokio::sync::Mutex;
 
 struct RocksdbStore {
     db: Arc<DB>,
-    locks: DashMap<ChainId, Arc<Mutex<()>>>,
+    guards: ChainGuards,
 }
 
 #[derive(Clone)]
@@ -35,7 +34,7 @@ impl RocksdbStore {
         let db = DB::open(&options, dir).unwrap();
         Self {
             db: Arc::new(db),
-            locks: DashMap::new(),
+            guards: ChainGuards::default(),
         }
     }
 }
@@ -56,16 +55,10 @@ impl Store for RocksdbStoreClient {
         id: ChainId,
     ) -> Result<ChainStateView<Self::Context>, RocksdbViewError> {
         let db = self.0.db.clone();
-        let lock = self
-            .0
-            .locks
-            .entry(id)
-            .or_insert_with(|| Arc::new(Mutex::new(())))
-            .clone();
-        // FIXME(#119): we are never cleaning up locks.
-        log::trace!("Acquiring lock on {:?}", id);
         let base_key = bcs::to_bytes(&BaseKey::ChainState(id))?;
-        let context = RocksdbContext::new(db, lock.lock_owned().await, base_key, id);
+        log::trace!("Acquiring lock on {:?}", id);
+        let chain_guard = self.0.guards.guard(id).await;
+        let context = RocksdbContext::new(db, chain_guard, base_key, id);
         ChainStateView::load(context).await
     }
 
