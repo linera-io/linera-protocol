@@ -3,6 +3,7 @@
 
 mod chain;
 mod manager;
+pub mod messages;
 
 pub use chain::{ChainStateView, ChainStateViewContext, Event};
 pub use manager::{ChainManager, Outcome as ChainManagerOutcome};

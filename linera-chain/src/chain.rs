@@ -1,14 +1,16 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::ChainManager;
+use crate::{
+    messages::{Block, MessageGroup},
+    ChainManager,
+};
 use linera_base::{
     crypto::HashValue,
     ensure,
     error::Error,
     messages::{
-        ApplicationId, Block, BlockHeight, ChainId, Destination, Effect, EffectId, Medium,
-        MessageGroup, Origin,
+        ApplicationId, BlockHeight, ChainId, Destination, Effect, EffectId, Medium, Origin,
     },
     system::SYSTEM,
 };
