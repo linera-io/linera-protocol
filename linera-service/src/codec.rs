@@ -1,5 +1,5 @@
 use bytes::{Buf, BufMut, BytesMut};
-use linera_base::rpc;
+use linera_rpc::Message;
 use std::{io, mem, ops::DerefMut};
 use thiserror::Error;
 use tokio_util::codec::{Decoder, Encoder};
@@ -7,17 +7,17 @@ use tokio_util::codec::{Decoder, Encoder};
 /// The size of the frame prefix that contains the payload size.
 const PREFIX_SIZE: u8 = mem::size_of::<u32>() as u8;
 
-/// An encoder/decoder of [`rpc::Message`]s for the RPC protocol.
+/// An encoder/decoder of [`linera_rpc::Message`]s for the RPC protocol.
 ///
 /// The frames are length-delimited by a [`u32`] prefix, and the payload is deserialized by
 /// [`bincode`].
 #[derive(Clone, Copy, Debug)]
 pub struct Codec;
 
-impl Encoder<rpc::Message> for Codec {
+impl Encoder<Message> for Codec {
     type Error = Error;
 
-    fn encode(&mut self, message: rpc::Message, buffer: &mut BytesMut) -> Result<(), Self::Error> {
+    fn encode(&mut self, message: Message, buffer: &mut BytesMut) -> Result<(), Self::Error> {
         let mut frame_buffer = buffer.split_off(buffer.len());
 
         frame_buffer.put_u32_le(0);
@@ -46,7 +46,7 @@ impl Encoder<rpc::Message> for Codec {
 }
 
 impl Decoder for Codec {
-    type Item = rpc::Message;
+    type Item = Message;
     type Error = Error;
 
     fn decode(&mut self, buffer: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
@@ -77,7 +77,7 @@ impl Decoder for Codec {
     }
 }
 
-/// Errors that can arise during transmission or reception of [`rpc::Message`]s.
+/// Errors that can arise during transmission or reception of [`linera_rpc::Message`]s.
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("IO error in the underlying transport")]
@@ -99,14 +99,15 @@ pub enum Error {
 mod tests {
     use super::{Codec, PREFIX_SIZE};
     use bytes::{BufMut, BytesMut};
-    use linera_base::{messages::ChainInfoQuery, rpc};
+    use linera_base::messages::ChainInfoQuery;
+    use linera_rpc::Message;
     use test_strategy::proptest;
     use tokio_util::codec::{Decoder, Encoder};
 
     /// Test decoding of a frame from a buffer.
     ///
     /// The buffer may contain leading or trailing bytes around the frame. The frame contains the
-    /// size of the payload, and the payload is a serialized dummy [`rpc::Message`].
+    /// size of the payload, and the payload is a serialized dummy [`linera_rpc::Message`].
     ///
     /// The decoder should produce the exact same message as used as the test input, and it should
     /// ignore the leading and trailing bytes.
@@ -116,7 +117,7 @@ mod tests {
         message_contents: ChainInfoQuery,
         trailing_bytes: Vec<u8>,
     ) {
-        let message = rpc::Message::from(message_contents);
+        let message = Message::from(message_contents);
         let payload = bincode::serialize(&message).expect("Message is serializable");
 
         let mut buffer = BytesMut::with_capacity(
@@ -153,7 +154,7 @@ mod tests {
         leading_bytes: Vec<u8>,
         message_contents: ChainInfoQuery,
     ) {
-        let message = rpc::Message::from(message_contents);
+        let message = Message::from(message_contents);
         let serialized_message =
             bincode::serialize(&message).expect("Serialization should succeed");
 

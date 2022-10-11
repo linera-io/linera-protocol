@@ -10,7 +10,6 @@ use linera_base::{
     crypto::*,
     error::Error,
     messages::*,
-    rpc,
     system::{Address, Amount, Balance, SystemOperation, UserData, SYSTEM},
 };
 use linera_core::{
@@ -18,6 +17,7 @@ use linera_core::{
     node::{LocalNodeClient, ValidatorNode},
     worker::WorkerState,
 };
+use linera_rpc::Message;
 use linera_service::{
     config::*,
     network,
@@ -155,7 +155,7 @@ impl ClientContext {
     }
 
     /// Make one block proposal per chain, up to `max_proposals` blocks.
-    fn make_benchmark_block_proposals(&mut self, max_proposals: usize) -> Vec<rpc::Message> {
+    fn make_benchmark_block_proposals(&mut self, max_proposals: usize) -> Vec<Message> {
         let mut proposals = Vec::new();
         let mut next_recipient = self.wallet_state.last_chain().unwrap().chain_id;
         for chain in self.wallet_state.chains_mut() {
@@ -237,8 +237,8 @@ impl ClientContext {
         &self,
         phase: &'static str,
         max_in_flight: u64,
-        proposals: Vec<rpc::Message>,
-    ) -> Vec<rpc::Message> {
+        proposals: Vec<Message>,
+    ) -> Vec<Message> {
         let time_start = Instant::now();
         info!("Broadcasting {} {}", proposals.len(), phase);
         let mut handles = Vec::new();
@@ -256,7 +256,7 @@ impl ClientContext {
             .into_iter()
             .flatten()
             .flatten()
-            .collect::<Vec<rpc::Message>>();
+            .collect::<Vec<Message>>();
         let time_elapsed = time_start.elapsed();
         warn!(
             "Received {} responses in {} ms.",
@@ -363,10 +363,10 @@ impl ClientContext {
     }
 }
 
-fn deserialize_response(response: rpc::Message) -> Option<ChainInfoResponse> {
+fn deserialize_response(response: Message) -> Option<ChainInfoResponse> {
     match response {
-        rpc::Message::ChainInfoResponse(info) => Some(*info),
-        rpc::Message::Error(error) => {
+        Message::ChainInfoResponse(info) => Some(*info),
+        Message::Error(error) => {
             error!("Received error value: {}", error);
             None
         }

@@ -1196,6 +1196,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "linera-rpc"
+version = "0.1.0"
+dependencies = [
+ "bcs",
+ "bincode",
+ "ed25519",
+ "ed25519-dalek",
+ "generic-array",
+ "hex",
+ "linera-base",
+ "log",
+ "once_cell",
+ "proptest",
+ "rand 0.7.3",
+ "serde",
+ "serde-name",
+ "serde-reflection",
+ "serde_json",
+ "serde_yaml",
+ "sha2",
+ "similar-asserts",
+ "structopt",
+ "thiserror",
+]
+
+[[package]]
 name = "linera-service"
 version = "0.1.0"
 dependencies = [
@@ -1211,6 +1237,7 @@ dependencies = [
  "futures",
  "linera-base",
  "linera-core",
+ "linera-rpc",
  "linera-storage",
  "linera-views",
  "log",
