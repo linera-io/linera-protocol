@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::node::ValidatorNode;
+use crate::{messages::*, node::ValidatorNode};
 use futures::{future, StreamExt};
 use linera_base::{committee::Committee, error::Error, messages::*};
 use linera_storage::Store;

@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_base::{
-    crypto::{HashValue, KeyPair},
+    crypto::HashValue,
     ensure,
     error::Error,
     messages::{
-        ApplicationId, Block, BlockHeight, ChainId, ChainInfo, ChainInfoResponse, Destination,
-        Effect, EffectId, Medium, MessageGroup, Origin,
+        ApplicationId, Block, BlockHeight, ChainId, Destination, Effect, EffectId, Medium,
+        MessageGroup, Origin,
     },
     system::SYSTEM,
 };
@@ -253,30 +253,6 @@ where
     /// Invariant for the states of active chains.
     pub fn is_active(&self) -> bool {
         self.execution_state.system.is_active()
-    }
-
-    pub fn make_chain_info(&self, key_pair: Option<&KeyPair>) -> ChainInfoResponse {
-        let system_state = &self.execution_state.system;
-        let ChainTipState {
-            block_hash,
-            next_block_height,
-        } = self.tip_state.get();
-        let info = ChainInfo {
-            chain_id: self.chain_id(),
-            epoch: *system_state.epoch.get(),
-            description: *system_state.description.get(),
-            manager: system_state.manager.get().clone(),
-            system_balance: *system_state.balance.get(),
-            block_hash: *block_hash,
-            next_block_height: *next_block_height,
-            state_hash: *self.execution_state_hash.get(),
-            requested_committees: None,
-            requested_pending_messages: Vec::new(),
-            requested_sent_certificates: Vec::new(),
-            count_received_certificates: self.received_log.count(),
-            requested_received_certificates: Vec::new(),
-        };
-        ChainInfoResponse::new(info, key_pair)
     }
 
     /// Verify that this chain is up-to-date and all the messages executed ahead of time

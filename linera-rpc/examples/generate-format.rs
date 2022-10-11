@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_base::{error, manager, messages, system};
+use linera_core::messages::CrossChainRequest;
 use linera_rpc::Message;
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use std::{fs::File, io::Write};
@@ -27,7 +28,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<messages::Destination>(&samples)?;
     tracer.trace_type::<messages::ChainDescription>(&samples)?;
     tracer.trace_type::<manager::ChainManager>(&samples)?;
-    tracer.trace_type::<messages::CrossChainRequest>(&samples)?;
+    tracer.trace_type::<CrossChainRequest>(&samples)?;
     tracer.trace_type::<error::Error>(&samples)?;
     tracer.trace_type::<Message>(&samples)?;
     tracer.registry()

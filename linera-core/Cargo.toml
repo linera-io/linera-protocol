@@ -4,15 +4,20 @@ version = "0.1.0"
 authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 
+[features]
+test = ["test-strategy", "proptest"]
+
 [dependencies]
 anyhow = "1.0.57"
 async-trait = "0.1.52"
 futures = "0.3.17"
 once_cell = "1.13.0"
+proptest = { version = "1.0.0", optional = true }
 rand = "0.7.3"
 serde = { version = "1.0.130", features = ["derive"] }
 tokio = "1.12.0"
 log = "0.4.14"
+test-strategy = { version = "0.2.0", optional = true }
 
 linera-base = { path = "../linera-base" }
 linera-chain = { path = "../linera-chain" }
@@ -23,6 +28,8 @@ linera-views = { path = "../linera-views" }
 [dev-dependencies]
 linera-execution = { path = "../linera-execution", features = ["test"] }
 linera-storage = { path = "../linera-storage" }
+proptest = { version = "1.0.0" }
+test-strategy = { version = "0.2.0" }
 env_logger = "0.9.0"
 test-log = "0.2.10"
 tempfile = "3.2.0"

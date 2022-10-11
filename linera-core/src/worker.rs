@@ -2,6 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::messages::*;
 use async_trait::async_trait;
 use linera_base::{crypto::*, ensure, error::Error, manager::Outcome, messages::*};
 use linera_chain::ChainStateView;
@@ -105,7 +106,7 @@ where
     ) -> Result<ChainInfoResponse, Error> {
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
         chain.execute_block(block).await?;
-        let info = chain.make_chain_info(None);
+        let info = ChainInfoResponse::new(&chain, None);
         // Do not save the new state.
         Ok(info)
     }
@@ -218,7 +219,7 @@ where
         }
         if tip.next_block_height > block.height {
             // Block was already confirmed.
-            let info = chain.make_chain_info(self.key_pair());
+            let info = ChainInfoResponse::new(&chain, self.key_pair());
             let continuation = self.make_continuation(&mut chain).await?;
             return Ok((info, continuation));
         }
@@ -268,7 +269,7 @@ where
             *chain.execution_state_hash.get() == Some(state_hash),
             Error::IncorrectStateHash
         );
-        let info = chain.make_chain_info(self.key_pair());
+        let info = ChainInfoResponse::new(&chain, self.key_pair());
         let continuation = self.make_continuation(&mut chain).await?;
         // Persist chain.
         chain.write_commit().await?;
@@ -325,7 +326,7 @@ where
         {
             // If we just processed the same pending block, return the chain info
             // unchanged.
-            return Ok(chain.make_chain_info(self.key_pair()));
+            return Ok(ChainInfoResponse::new(&chain, self.key_pair()));
         }
         chain
             .execution_state
@@ -339,7 +340,7 @@ where
                 certificate,
                 self.key_pair(),
             );
-        let info = chain.make_chain_info(self.key_pair());
+        let info = ChainInfoResponse::new(&chain, self.key_pair());
         chain.write_commit().await?;
         Ok(info)
     }
@@ -403,7 +404,7 @@ where
         {
             // If we just processed the same pending block, return the chain info
             // unchanged.
-            return Ok(chain.make_chain_info(self.key_pair()));
+            return Ok(ChainInfoResponse::new(&chain, self.key_pair()));
         }
         let (effects, state_hash) = {
             // Make sure the clear round information in the state so that it is not
@@ -425,7 +426,7 @@ where
             state_hash,
             self.key_pair(),
         );
-        let info = chain.make_chain_info(self.key_pair());
+        let info = ChainInfoResponse::new(&chain, self.key_pair());
         chain.write_commit().await?;
         Ok(info)
     }
@@ -455,7 +456,7 @@ where
     ) -> Result<ChainInfoResponse, Error> {
         log::trace!("{} <-- {:?}", self.nickname, query);
         let mut chain = self.storage.load_chain(query.chain_id).await?;
-        let mut info = chain.make_chain_info(None).info;
+        let mut info = ChainInfo::from(&chain);
         if query.request_committees {
             info.requested_committees = Some(chain.execution_state.system.committees.get().clone());
         }
