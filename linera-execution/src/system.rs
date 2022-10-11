@@ -2,12 +2,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{EffectContext, OperationContext, RawApplicationResult};
+use crate::{ChainManager, EffectContext, OperationContext, RawApplicationResult};
 use linera_base::{
     committee::Committee,
     ensure,
     error::Error,
-    manager::ChainManager,
     messages::{ChainDescription, ChainId, ChannelId, Destination, Effect, EffectId, Epoch},
     system::{Address, Amount, Balance, SystemEffect, SystemOperation, ADMIN_CHANNEL},
 };

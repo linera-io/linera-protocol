@@ -14,10 +14,10 @@ use linera_base::{
     committee::{Committee, ValidatorState},
     crypto::*,
     error::Error,
-    manager::ChainManager,
     messages::*,
     system::{Address, Amount, Balance, SystemOperation, UserData, SYSTEM},
 };
+use linera_execution::ChainManager;
 use linera_storage::Store;
 use std::{
     collections::{BTreeMap, HashMap},

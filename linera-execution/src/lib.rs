@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod execution;
+mod manager;
 mod system;
 
 pub use execution::{ExecutionStateView, ExecutionStateViewContext};
+pub use manager::{ChainManager, Outcome as ChainManagerOutcome};
 #[cfg(any(test, feature = "test"))]
 pub use system::SystemExecutionState;
 pub use system::{SystemExecutionStateView, SystemExecutionStateViewContext};

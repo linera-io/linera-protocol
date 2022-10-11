@@ -5,6 +5,5 @@
 pub mod committee;
 pub mod crypto;
 pub mod error;
-pub mod manager;
 pub mod messages;
 pub mod system;

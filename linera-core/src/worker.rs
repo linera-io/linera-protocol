@@ -4,8 +4,9 @@
 
 use crate::messages::*;
 use async_trait::async_trait;
-use linera_base::{crypto::*, ensure, error::Error, manager::Outcome, messages::*};
+use linera_base::{crypto::*, ensure, error::Error, messages::*};
 use linera_chain::ChainStateView;
+use linera_execution::ChainManagerOutcome;
 use linera_storage::Store;
 use linera_views::views::{LogView, View};
 use std::{collections::VecDeque, sync::Arc};
@@ -322,7 +323,7 @@ where
             .manager
             .get_mut()
             .check_validated_block(chain.tip_state.get().next_block_height, block, round)?
-            == Outcome::Skip
+            == ChainManagerOutcome::Skip
         {
             // If we just processed the same pending block, return the chain info
             // unchanged.
@@ -400,7 +401,7 @@ where
                 &proposal.content.block,
                 proposal.content.round,
             )?
-            == Outcome::Skip
+            == ChainManagerOutcome::Skip
         {
             // If we just processed the same pending block, return the chain info
             // unchanged.

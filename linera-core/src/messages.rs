@@ -2,11 +2,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::{
-    committee::Committee, crypto::*, error::Error, manager::ChainManager, messages::*,
-    system::Balance,
-};
+use linera_base::{committee::Committee, crypto::*, error::Error, messages::*, system::Balance};
 use linera_chain::{ChainStateView, ChainStateViewContext};
+use linera_execution::ChainManager;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
