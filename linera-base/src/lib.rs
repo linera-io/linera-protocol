@@ -7,5 +7,4 @@ pub mod crypto;
 pub mod error;
 pub mod manager;
 pub mod messages;
-pub mod rpc;
 pub mod system;

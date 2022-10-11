@@ -5,7 +5,7 @@
 use crate::codec::{self, Codec};
 use clap::arg_enum;
 use futures::{future, Sink, SinkExt, Stream, StreamExt, TryStreamExt};
-use linera_base::rpc;
+use linera_rpc::Message;
 use log::*;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, io, net::ToSocketAddrs};
@@ -28,7 +28,7 @@ arg_enum! {
 pub trait ConnectionPool: Send {
     fn send_message_to<'a>(
         &'a mut self,
-        message: rpc::Message,
+        message: Message,
         address: &'a str,
     ) -> future::BoxFuture<'a, Result<(), codec::Error>>;
 }
@@ -39,7 +39,7 @@ pub trait ConnectionPool: Send {
 /// cloned instances, where each cloned instance handles a single request. Multiple cloned instances
 /// may exist at the same time and handle separate requests concurrently.
 pub trait MessageHandler: Clone {
-    fn handle_message(&mut self, message: rpc::Message) -> future::BoxFuture<Option<rpc::Message>>;
+    fn handle_message(&mut self, message: Message) -> future::BoxFuture<Option<Message>>;
 }
 
 /// The result of spawning a server is oneshot channel to kill it and a handle to track completion.
@@ -65,14 +65,14 @@ impl SpawnedServer {
 /// A trait alias for a protocol transport.
 ///
 /// A transport is an active connection that can be used to send and receive
-/// [`rpc::Message`]s.
+/// [`linera_rpc::Message`]s.
 pub trait Transport:
-    Stream<Item = Result<rpc::Message, codec::Error>> + Sink<rpc::Message, Error = codec::Error>
+    Stream<Item = Result<Message, codec::Error>> + Sink<Message, Error = codec::Error>
 {
 }
 
 impl<T> Transport for T where
-    T: Stream<Item = Result<rpc::Message, codec::Error>> + Sink<rpc::Message, Error = codec::Error>
+    T: Stream<Item = Result<Message, codec::Error>> + Sink<Message, Error = codec::Error>
 {
 }
 
@@ -156,7 +156,7 @@ impl UdpConnectionPool {
 impl ConnectionPool for UdpConnectionPool {
     fn send_message_to<'a>(
         &'a mut self,
-        message: rpc::Message,
+        message: Message,
         address: &'a str,
     ) -> future::BoxFuture<'a, Result<(), codec::Error>> {
         Box::pin(async move {
@@ -240,7 +240,7 @@ impl TcpConnectionPool {
 impl ConnectionPool for TcpConnectionPool {
     fn send_message_to<'a>(
         &'a mut self,
-        message: rpc::Message,
+        message: Message,
         address: &'a str,
     ) -> future::BoxFuture<'a, Result<(), codec::Error>> {
         Box::pin(async move {

@@ -2,7 +2,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::{error, manager, messages, rpc, system};
+use linera_base::{error, manager, messages, system};
+use linera_rpc::Message;
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use std::{fs::File, io::Write};
 use structopt::{clap::arg_enum, StructOpt};
@@ -28,7 +29,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<manager::ChainManager>(&samples)?;
     tracer.trace_type::<messages::CrossChainRequest>(&samples)?;
     tracer.trace_type::<error::Error>(&samples)?;
-    tracer.trace_type::<rpc::Message>(&samples)?;
+    tracer.trace_type::<Message>(&samples)?;
     tracer.registry()
 }
 
@@ -51,7 +52,7 @@ struct Options {
     action: Action,
 }
 
-const FILE_PATH: &str = "linera-base/tests/staged/formats.yaml";
+const FILE_PATH: &str = "linera-rpc/tests/staged/formats.yaml";
 
 fn main() {
     let options = Options::from_args();

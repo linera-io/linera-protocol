@@ -9,8 +9,9 @@ use crate::{
 };
 use async_trait::async_trait;
 use futures::{channel::mpsc, sink::SinkExt, stream::StreamExt};
-use linera_base::{error::*, messages::*, rpc};
+use linera_base::{error::*, messages::*};
 use linera_core::{node::ValidatorNode, worker::*};
+use linera_rpc::Message;
 use linera_storage::Store;
 use log::*;
 use serde::{Deserialize, Serialize};
@@ -152,7 +153,7 @@ where
         cross_chain_max_retries: usize,
         cross_chain_retry_delay: Duration,
         this_shard: ShardId,
-        mut receiver: mpsc::Receiver<(rpc::Message, ShardId)>,
+        mut receiver: mpsc::Receiver<(Message, ShardId)>,
     ) {
         let mut pool = network
             .protocol
@@ -230,7 +231,7 @@ where
 struct RunningServerState<S> {
     chain_guards: ChainGuards,
     server: Server<S>,
-    cross_chain_sender: mpsc::Sender<(rpc::Message, ShardId)>,
+    cross_chain_sender: mpsc::Sender<(Message, ShardId)>,
 }
 
 impl<S> MessageHandler for RunningServerState<S>
@@ -238,20 +239,17 @@ where
     S: Store + Clone + Send + Sync + 'static,
     Error: From<S::Error>,
 {
-    fn handle_message(
-        &mut self,
-        message: rpc::Message,
-    ) -> futures::future::BoxFuture<Option<rpc::Message>> {
+    fn handle_message(&mut self, message: Message) -> futures::future::BoxFuture<Option<Message>> {
         Box::pin(async move {
             let _guard = self.obtain_chain_guard_for(&message).await;
             let reply = match message {
-                rpc::Message::BlockProposal(message) => self
+                Message::BlockProposal(message) => self
                     .server
                     .state
                     .handle_block_proposal(*message)
                     .await
                     .map(|info| Some(info.into())),
-                rpc::Message::Certificate(message) => {
+                Message::Certificate(message) => {
                     match self.server.state.handle_certificate(*message).await {
                         Ok((info, continuation)) => {
                             // Cross-shard requests
@@ -262,13 +260,13 @@ where
                         Err(error) => Err(error),
                     }
                 }
-                rpc::Message::ChainInfoQuery(message) => self
+                Message::ChainInfoQuery(message) => self
                     .server
                     .state
                     .handle_chain_info_query(*message)
                     .await
                     .map(|info| Some(info.into())),
-                rpc::Message::CrossChainRequest(request) => {
+                Message::CrossChainRequest(request) => {
                     match self.server.state.handle_cross_chain_request(*request).await {
                         Ok(continuation) => {
                             self.handle_continuation(continuation).await;
@@ -280,9 +278,9 @@ where
                     // No user to respond to.
                     Ok(None)
                 }
-                rpc::Message::Vote(_)
-                | rpc::Message::Error(_)
-                | rpc::Message::ChainInfoResponse(_) => Err(Error::UnexpectedMessage),
+                Message::Vote(_) | Message::Error(_) | Message::ChainInfoResponse(_) => {
+                    Err(Error::UnexpectedMessage)
+                }
             };
 
             self.server.packets_processed += 1;
@@ -312,7 +310,7 @@ impl<S> RunningServerState<S>
 where
     S: Send,
 {
-    async fn obtain_chain_guard_for(&mut self, message: &rpc::Message) -> Option<ChainGuard> {
+    async fn obtain_chain_guard_for(&mut self, message: &Message) -> Option<ChainGuard> {
         let chain_id = message.target_chain_id()?;
         Some(self.chain_guards.guard(chain_id).await)
     }
@@ -357,10 +355,7 @@ impl Client {
         }
     }
 
-    async fn send_recv_internal(
-        &mut self,
-        message: rpc::Message,
-    ) -> Result<rpc::Message, codec::Error> {
+    async fn send_recv_internal(&mut self, message: Message) -> Result<Message, codec::Error> {
         let address = format!("{}:{}", self.network.host, self.network.port);
         let mut stream = NetworkProtocol::Tcp.connect(address).await?;
         // Send message
@@ -375,13 +370,10 @@ impl Client {
             .ok_or_else(|| codec::Error::Io(std::io::ErrorKind::UnexpectedEof.into()))
     }
 
-    pub async fn send_recv_info(
-        &mut self,
-        message: rpc::Message,
-    ) -> Result<ChainInfoResponse, Error> {
+    pub async fn send_recv_info(&mut self, message: Message) -> Result<ChainInfoResponse, Error> {
         match self.send_recv_internal(message).await {
-            Ok(rpc::Message::ChainInfoResponse(response)) => Ok(*response),
-            Ok(rpc::Message::Error(error)) => Err(*error),
+            Ok(Message::ChainInfoResponse(response)) => Ok(*response),
+            Ok(Message::Error(error)) => Err(*error),
             Ok(_) => Err(Error::UnexpectedMessage),
             Err(error) => match error {
                 codec::Error::Io(io_error) => Err(Error::ClientIoError {
@@ -443,7 +435,7 @@ impl MassClient {
         }
     }
 
-    pub async fn send(&self, requests: Vec<rpc::Message>) -> Result<Vec<rpc::Message>, io::Error> {
+    pub async fn send(&self, requests: Vec<Message>) -> Result<Vec<Message>, io::Error> {
         let address = format!("{}:{}", self.network.host, self.network.port);
         let mut stream = NetworkProtocol::Tcp.connect(address).await?;
         let mut requests = requests.into_iter();

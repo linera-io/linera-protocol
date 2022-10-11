@@ -2,8 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::messages::*;
-use crate::error::*;
+use linera_base::{error::*, messages::*};
 
 use serde::{Deserialize, Serialize};
 
