@@ -3,11 +3,11 @@
 
 use crate::{ChainStateView, Store};
 use async_trait::async_trait;
-use dashmap::DashMap;
 use futures::Future;
 use linera_base::{crypto::HashValue, messages::ChainId};
 use linera_chain::messages::Certificate;
 use linera_views::{
+    chain_guards::{ChainGuard, ChainGuards},
     dynamo_db::{
         Config, CreateTableError, DynamoDbContext, DynamoDbContextError, LocalStackError,
         TableName, TableStatus,
@@ -16,11 +16,10 @@ use linera_views::{
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tokio::sync::{Mutex, OwnedMutexGuard};
 
 struct DynamoDbStore {
     context: DynamoDbContext<()>,
-    locks: DashMap<ChainId, Arc<Mutex<()>>>,
+    guards: ChainGuards,
 }
 
 #[derive(Clone)]
@@ -81,7 +80,7 @@ impl DynamoDbStore {
     }
 
     async fn with_context<F, E>(
-        create_context: impl FnOnce(Option<OwnedMutexGuard<()>>, Vec<u8>, ()) -> F,
+        create_context: impl FnOnce(Option<ChainGuard>, Vec<u8>, ()) -> F,
     ) -> Result<(Self, TableStatus), E>
     where
         F: Future<Output = Result<(DynamoDbContext<()>, TableStatus), E>>,
@@ -91,7 +90,7 @@ impl DynamoDbStore {
         Ok((
             Self {
                 context,
-                locks: DashMap::new(),
+                guards: ChainGuards::default(),
             },
             table_status,
         ))
@@ -128,18 +127,12 @@ impl Store for DynamoDbStoreClient {
         &self,
         id: ChainId,
     ) -> Result<ChainStateView<Self::Context>, DynamoDbContextError> {
-        let lock = self
-            .0
-            .locks
-            .entry(id)
-            .or_insert_with(|| Arc::new(Mutex::new(())))
-            .clone();
         log::trace!("Acquiring lock on {:?}", id);
-        let locked = lock.lock_owned().await;
+        let guard = self.0.guards.guard(id).await;
         let chain_context =
             self.0
                 .context
-                .clone_with_sub_scope(locked, &BaseKey::ChainState(id), id);
+                .clone_with_sub_scope(guard, &BaseKey::ChainState(id), id);
         ChainStateView::load(chain_context).await
     }
 

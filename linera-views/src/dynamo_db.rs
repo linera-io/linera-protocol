@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    chain_guards::ChainGuard,
     hash::HashingContext,
     localstack,
     views::{
@@ -22,7 +23,6 @@ use linera_base::ensure;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{collections::HashMap, io, ops::Range, str::FromStr, sync::Arc};
 use thiserror::Error;
-use tokio::sync::OwnedMutexGuard;
 
 /// The configuration to connect to DynamoDB.
 pub use aws_sdk_dynamodb::Config;
@@ -48,7 +48,7 @@ const VALUE_ATTRIBUTE: &str = "item_value";
 pub struct DynamoDbContext<E> {
     client: Client,
     table: TableName,
-    lock: Option<Arc<OwnedMutexGuard<()>>>,
+    guard: Option<Arc<ChainGuard>>,
     key_prefix: Vec<u8>,
     extra: E,
 }
@@ -57,27 +57,27 @@ impl<E> DynamoDbContext<E> {
     /// Create a new [`DynamoDbContext`] instance.
     pub async fn new(
         table: TableName,
-        lock: impl Into<Option<OwnedMutexGuard<()>>>,
+        guard: impl Into<Option<ChainGuard>>,
         key_prefix: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), CreateTableError> {
         let config = aws_config::load_from_env().await;
 
-        DynamoDbContext::from_config(&config, table, lock, key_prefix, extra).await
+        DynamoDbContext::from_config(&config, table, guard, key_prefix, extra).await
     }
 
     /// Create a new [`DynamoDbContext`] instance using the provided `config` parameters.
     pub async fn from_config(
         config: impl Into<Config>,
         table: TableName,
-        lock: impl Into<Option<OwnedMutexGuard<()>>>,
+        guard: impl Into<Option<ChainGuard>>,
         key_prefix: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), CreateTableError> {
         let storage = DynamoDbContext {
             client: Client::from_conf(config.into()),
             table,
-            lock: lock.into().map(Arc::new),
+            guard: guard.into().map(Arc::new),
             key_prefix,
             extra,
         };
@@ -94,7 +94,7 @@ impl<E> DynamoDbContext<E> {
     /// [`TableStatus`] to indicate if the table was created or if it already exists.
     pub async fn with_localstack(
         table: TableName,
-        lock: impl Into<Option<OwnedMutexGuard<()>>>,
+        guard: impl Into<Option<ChainGuard>>,
         key_prefix: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), LocalStackError> {
@@ -103,24 +103,24 @@ impl<E> DynamoDbContext<E> {
             .endpoint_resolver(localstack::get_endpoint()?)
             .build();
 
-        Ok(DynamoDbContext::from_config(config, table, lock, key_prefix, extra).await?)
+        Ok(DynamoDbContext::from_config(config, table, guard, key_prefix, extra).await?)
     }
 
     /// Clone this [`DynamoDbContext`] while entering a sub-scope.
     ///
-    /// The return context uses the `new_lock` instead of the current internal lock, and has its key
-    /// prefix extended with `scope_prefix` and uses the `new_extra` instead of cloning the current
-    /// extra data.
+    /// The return context uses the `new_guard` instead of the current internal guard, and has its
+    /// key prefix extended with `scope_prefix` and uses the `new_extra` instead of cloning the
+    /// current extra data.
     pub fn clone_with_sub_scope<NewE>(
         &self,
-        new_lock: impl Into<Option<OwnedMutexGuard<()>>>,
+        new_guard: impl Into<Option<ChainGuard>>,
         scope_prefix: &impl Serialize,
         new_extra: NewE,
     ) -> DynamoDbContext<NewE> {
         DynamoDbContext {
             client: self.client.clone(),
             table: self.table.clone(),
-            lock: new_lock.into().map(Arc::new),
+            guard: new_guard.into().map(Arc::new),
             key_prefix: self.extend_prefix(scope_prefix),
             extra: new_extra,
         }
@@ -425,7 +425,7 @@ where
         DynamoDbContext {
             client: self.client.clone(),
             table: self.table.clone(),
-            lock: self.lock.clone(),
+            guard: self.guard.clone(),
             key_prefix: self.extend_prefix(&index),
             extra: self.extra.clone(),
         }
@@ -658,7 +658,7 @@ where
         DynamoDbContext {
             client: self.client.clone(),
             table: self.table.clone(),
-            lock: self.lock.clone(),
+            guard: self.guard.clone(),
             key_prefix: self.extend_prefix(&CollectionKey::Subview(index)),
             extra: self.extra.clone(),
         }
