@@ -464,11 +464,13 @@ where
             );
             for (message_index, message_effect) in &message_group.effects {
                 // Receivers are allowed to skip events from the received queue.
-                while let Some(Event {
-                    height,
-                    index,
-                    effect: _,
-                }) = inbox.received_events.front().await?
+                while let Some(
+                    event @ Event {
+                        height,
+                        index,
+                        effect: _,
+                    },
+                ) = inbox.received_events.front().await?
                 {
                     if height > message_group.height
                         || (height == message_group.height && index >= *message_index)
@@ -476,18 +478,19 @@ where
                         break;
                     }
                     assert!((height, index) < (message_group.height, *message_index));
-                    let event = inbox.received_events.delete_front();
+                    inbox.received_events.delete_front();
                     log::trace!("Skipping received event {:?}", event);
                 }
                 // Reconcile the event with the received queue, or mark it as "expected".
                 match inbox.received_events.front().await? {
-                    Some(Event {
-                        height,
-                        index,
-                        effect,
-                    }) => {
+                    Some(event) => {
+                        let Event {
+                            height,
+                            index,
+                            ref effect,
+                        } = event;
                         ensure!(
-                            message_group.height == height && *message_index == index,
+                            message_group.height == height && message_index == &index,
                             Error::InvalidMessage {
                                 application_id: message_group.application_id,
                                 origin: message_group.origin.clone(),
@@ -498,7 +501,7 @@ where
                             }
                         );
                         ensure!(
-                            *message_effect == effect,
+                            message_effect == effect,
                             Error::InvalidMessageContent {
                                 application_id: message_group.application_id,
                                 origin: message_group.origin.clone(),
@@ -506,7 +509,7 @@ where
                                 index: *message_index,
                             }
                         );
-                        let event = inbox.received_events.delete_front();
+                        inbox.received_events.delete_front();
                         log::trace!("Consuming event {:?}", event);
                     }
                     None => {

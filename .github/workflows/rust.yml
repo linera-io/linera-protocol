@@ -19,7 +19,7 @@ jobs:
     - uses: actions-rs/toolchain@v1
       with:
         profile: minimal
-        toolchain: 1.60.0
+        toolchain: 1.64.0
         components: clippy, rustfmt
     - name: Report warnings as errors
       run: echo 'RUSTFLAGS=-D warnings' >> $GITHUB_ENV

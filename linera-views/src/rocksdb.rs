@@ -125,7 +125,7 @@ impl KeyValueOperations for Arc<DB> {
 }
 
 #[async_trait]
-impl<'a> WriteOperations for MyBatch {
+impl WriteOperations for MyBatch {
     fn write_key<V: Serialize>(&mut self, key: Vec<u8>, value: &V) -> Result<(), RocksdbViewError> {
         let bytes = bcs::to_bytes(value)?;
         self.0.push(WriteOp::Put { key, value: bytes });
