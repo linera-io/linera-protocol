@@ -102,18 +102,6 @@ where
         }).await
     }
 
-    pub async fn write_commit_and_reset(&mut self) -> Result<(), C::Error> {
-        use $crate::views::View;
-
-        let context = self.context().clone();
-        context.run_with_batch(move |batch| {
-            Box::pin(async move {
-                $( self.$field.commit_and_reset(batch).await?; )*
-                Ok(())
-            })
-        }).await
-    }
-
     pub async fn write_delete(self) -> Result<(), C::Error> {
         use $crate::views::View;
 
