@@ -2,6 +2,7 @@ use super::ChainGuards;
 use futures::FutureExt;
 use linera_base::messages::ChainId;
 use std::{
+    mem,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -9,6 +10,19 @@ use std::{
     time::Duration,
 };
 use tokio::{sync::Barrier, time::sleep};
+
+/// Test if a released chain guard does not stay in memory.
+#[tokio::test]
+async fn dropped_guard_does_not_leak() {
+    let chain_id = ChainId::root(0);
+    let guards = ChainGuards::default();
+    // Obtain the guard
+    let guard = guards.guard(chain_id).await;
+    assert_eq!(guards.active_guards(), 1);
+    // Drop the guard
+    mem::drop(guard);
+    assert_eq!(guards.active_guards(), 0);
+}
 
 /// Test if a chain guard can be obtained again after it has been dropped.
 #[tokio::test]
