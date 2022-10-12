@@ -41,18 +41,21 @@ fn get_user_application(
         .clone())
 }
 
-/// An operation.
-// TODO: we may want to unify user and system operations under Vec<u8> eventually.
+/// An operation to be executed in a block.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Operation {
+    /// A system operation.
     System(SystemOperation),
+    /// A user operation (in serialized form).
     User(Vec<u8>),
 }
 
-/// An effect.
+/// An effect to be sent and possibly executed in the receiver's block.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Effect {
+    /// A system effect.
     System(SystemEffect),
+    /// A user effect (in serialized form).
     User(Vec<u8>),
 }
 
