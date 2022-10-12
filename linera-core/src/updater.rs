@@ -2,9 +2,16 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{messages::*, node::ValidatorNode};
+use crate::{
+    messages::{ChainInfo, ChainInfoQuery},
+    node::ValidatorNode,
+};
 use futures::{future, StreamExt};
-use linera_base::{committee::Committee, error::Error, messages::*};
+use linera_base::{
+    committee::Committee,
+    error::Error,
+    messages::{BlockHeight, ChainDescription, ChainId, EffectId, ValidatorName},
+};
 use linera_chain::messages::{BlockProposal, Certificate, Vote};
 use linera_storage::Store;
 use std::{collections::HashMap, hash::Hash, time::Duration};

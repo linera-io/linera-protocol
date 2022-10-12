@@ -2,7 +2,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::{committee::Committee, crypto::*, error::Error, messages::*};
+use linera_base::{
+    committee::Committee,
+    crypto::{BcsSignable, HashValue, KeyPair, Signature},
+    error::Error,
+    messages::{
+        ApplicationId, BlockHeight, ChainDescription, ChainId, Epoch, Origin, ValidatorName,
+    },
+};
 use linera_chain::{
     messages::{Certificate, MessageGroup},
     ChainManager, ChainStateView, ChainStateViewContext,

@@ -6,7 +6,7 @@ use crate::codec::{self, Codec};
 use clap::arg_enum;
 use futures::{future, Sink, SinkExt, Stream, StreamExt, TryStreamExt};
 use linera_rpc::Message;
-use log::*;
+use log::{error, warn};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, io, net::ToSocketAddrs};
 use tokio::net::{TcpListener, TcpStream, UdpSocket};

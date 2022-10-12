@@ -5,16 +5,20 @@
 use crate::{
     chain_guards::{ChainGuard, ChainGuards},
     codec,
-    transport::*,
+    transport::{MessageHandler, NetworkProtocol, SpawnedServer},
 };
 use async_trait::async_trait;
 use futures::{channel::mpsc, sink::SinkExt, stream::StreamExt};
-use linera_base::{error::*, messages::*};
+use linera_base::{error::Error, messages::ChainId};
 use linera_chain::messages::{BlockProposal, Certificate};
-use linera_core::{messages::*, node::ValidatorNode, worker::*};
+use linera_core::{
+    messages::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
+    node::ValidatorNode,
+    worker::{ValidatorWorker, WorkerState},
+};
 use linera_rpc::Message;
 use linera_storage::Store;
-use log::*;
+use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::{io, time::Duration};
 use structopt::StructOpt;

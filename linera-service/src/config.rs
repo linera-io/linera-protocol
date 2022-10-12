@@ -5,7 +5,7 @@
 use crate::network::{ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig};
 use linera_base::{
     committee::{Committee, ValidatorState},
-    crypto::*,
+    crypto::{HashValue, KeyPair},
     messages::{BlockHeight, ChainDescription, ChainId, Owner, ValidatorName},
 };
 use linera_core::{

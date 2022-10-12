@@ -3,12 +3,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    messages::*,
+    messages::{BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse},
     worker::{ValidatorWorker, WorkerState},
 };
 use async_trait::async_trait;
 use futures::lock::Mutex;
-use linera_base::{error::Error, messages::*};
+use linera_base::{
+    error::Error,
+    messages::{BlockHeight, ChainId, ValidatorName},
+};
 use linera_chain::{
     messages::{Block, BlockProposal, Certificate, Value},
     ChainManager,

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    crypto::*,
+    crypto::HashValue,
     messages::{ApplicationId, BlockHeight, ChainId, Epoch, Origin, RoundNumber},
 };
 use serde::{Deserialize, Serialize};

@@ -14,7 +14,10 @@ pub use system::{
 };
 
 use async_trait::async_trait;
-use linera_base::{error::Error, messages::*};
+use linera_base::{
+    error::Error,
+    messages::{ApplicationId, BlockHeight, ChainId, Destination, EffectId},
+};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::{

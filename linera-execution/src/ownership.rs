@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::messages::*;
+use linera_base::messages::Owner;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

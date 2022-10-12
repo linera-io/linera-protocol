@@ -7,17 +7,19 @@
 use anyhow::{anyhow, ensure};
 use async_trait::async_trait;
 use futures::future::join_all;
-use linera_base::{crypto::*, error::Error, messages::ValidatorName};
-use linera_core::worker::*;
+use linera_base::{crypto::KeyPair, error::Error, messages::ValidatorName};
+use linera_core::worker::WorkerState;
 use linera_service::{
-    config::*,
+    config::{
+        CommitteeConfig, Export, GenesisConfig, Import, ValidatorConfig, ValidatorServerConfig,
+    },
     network,
     network::{ShardConfig, ShardId, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig},
     storage::{Runnable, StorageConfig},
     transport,
 };
 use linera_storage::Store;
-use log::*;
+use log::{error, info};
 use std::{
     path::{Path, PathBuf},
     str::FromStr,
