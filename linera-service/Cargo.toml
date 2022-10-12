@@ -27,6 +27,7 @@ tokio-util = { version = "0.6.9", features = ["codec", "net"] }
 linera-core = { path = "../linera-core" }
 linera-base = { path = "../linera-base" }
 linera-chain = { path = "../linera-chain" }
+linera-execution = { path = "../linera-execution" }
 linera-rpc = { path = "../linera-rpc" }
 linera-storage = { path = "../linera-storage" }
 linera-views = { path = "../linera-views" }
@@ -38,6 +39,7 @@ test-strategy = "0.2.0"
 tokio = { version = "1.12.0", features = ["full", "test-util"] }
 
 linera-base = { path = "../linera-base", features = ["test"] }
+linera-execution = { path = "../linera-execution", features = ["test"] }
 linera-chain = { path = "../linera-chain", features = ["test"] }
 linera-rpc = { path = "../linera-rpc", features = ["test"] }
 linera-views = { path = "../linera-views", features = ["test"] }

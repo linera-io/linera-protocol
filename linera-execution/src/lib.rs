@@ -3,17 +3,20 @@
 
 mod execution;
 mod ownership;
-mod system;
+pub mod system;
 
 pub use execution::{ExecutionStateView, ExecutionStateViewContext};
 pub use ownership::ChainOwnership;
 #[cfg(any(test, feature = "test"))]
 pub use system::SystemExecutionState;
-pub use system::{SystemExecutionStateView, SystemExecutionStateViewContext};
+pub use system::{
+    SystemEffect, SystemExecutionStateView, SystemExecutionStateViewContext, SystemOperation,
+};
 
 use async_trait::async_trait;
-use linera_base::{error::Error, messages::*, system::SystemEffect};
+use linera_base::{error::Error, messages::*};
 use once_cell::sync::Lazy;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -36,6 +39,33 @@ fn get_user_application(
         .get(&application_id)
         .ok_or(Error::UnknownApplication)?
         .clone())
+}
+
+/// An operation.
+// TODO: we may want to unify user and system operations under Vec<u8> eventually.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub enum Operation {
+    System(SystemOperation),
+    User(Vec<u8>),
+}
+
+/// An effect.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub enum Effect {
+    System(SystemEffect),
+    User(Vec<u8>),
+}
+
+impl From<SystemEffect> for Effect {
+    fn from(effect: SystemEffect) -> Self {
+        Effect::System(effect)
+    }
+}
+
+impl From<Vec<u8>> for Effect {
+    fn from(effect: Vec<u8>) -> Self {
+        Effect::User(effect)
+    }
 }
 
 #[async_trait]

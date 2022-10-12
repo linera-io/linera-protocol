@@ -7,12 +7,12 @@ use linera_base::{
     committee::{Committee, ValidatorState},
     crypto::*,
     messages::{BlockHeight, ChainDescription, ChainId, Owner, ValidatorName},
-    system::Balance,
 };
 use linera_core::{
     client::{ChainClientState, ValidatorNodeProvider},
     node::ValidatorNode,
 };
+use linera_execution::system::Balance;
 use linera_storage::Store;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{

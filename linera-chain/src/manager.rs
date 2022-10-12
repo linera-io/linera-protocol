@@ -3,7 +3,7 @@
 
 use crate::messages::*;
 use linera_base::{crypto::*, ensure, error::Error, messages::*};
-use linera_execution::ChainOwnership;
+use linera_execution::{ChainOwnership, Effect};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

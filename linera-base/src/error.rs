@@ -5,7 +5,6 @@
 use crate::{
     crypto::*,
     messages::{ApplicationId, BlockHeight, ChainId, Epoch, Origin, RoundNumber},
-    system::Balance,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -83,7 +82,7 @@ pub enum Error {
     #[error(
         "The transferred amount must be not exceed the current chain balance: {current_balance:?}"
     )]
-    InsufficientFunding { current_balance: Balance },
+    InsufficientFunding { current_balance: u128 },
     #[error("Invalid new chain id: {0}")]
     InvalidNewChainId(ChainId),
     #[error("Invalid admin id in new chain: {0}")]
