@@ -7,7 +7,7 @@ use tokio_util::codec::{Decoder, Encoder};
 /// The size of the frame prefix that contains the payload size.
 const PREFIX_SIZE: u8 = mem::size_of::<u32>() as u8;
 
-/// An encoder/decoder of [`linera_rpc::Message`]s for the RPC protocol.
+/// An encoder/decoder of [`Message`]s for the RPC protocol.
 ///
 /// The frames are length-delimited by a [`u32`] prefix, and the payload is deserialized by
 /// [`bincode`].
@@ -77,7 +77,7 @@ impl Decoder for Codec {
     }
 }
 
-/// Errors that can arise during transmission or reception of [`linera_rpc::Message`]s.
+/// Errors that can arise during transmission or reception of [`Message`]s.
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("IO error in the underlying transport")]
@@ -107,7 +107,7 @@ mod tests {
     /// Test decoding of a frame from a buffer.
     ///
     /// The buffer may contain leading or trailing bytes around the frame. The frame contains the
-    /// size of the payload, and the payload is a serialized dummy [`linera_rpc::Message`].
+    /// size of the payload, and the payload is a serialized dummy [`Message`].
     ///
     /// The decoder should produce the exact same message as used as the test input, and it should
     /// ignore the leading and trailing bytes.
