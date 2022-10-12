@@ -80,7 +80,7 @@ pub enum Error {
     #[error("Transfers must have positive amount")]
     IncorrectTransferAmount,
     #[error(
-        "The transferred amount must be not exceed the current chain balance: {current_balance:?}"
+        "The transferred amount must be not exceed the current chain balance: {current_balance}"
     )]
     InsufficientFunding { current_balance: u128 },
     #[error("Invalid new chain id: {0}")]

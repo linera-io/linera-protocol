@@ -29,8 +29,8 @@ linera-views = { path = "../linera-views" }
 linera-chain = { path = "../linera-chain", features = ["test"] }
 linera-execution = { path = "../linera-execution", features = ["test"] }
 linera-storage = { path = "../linera-storage" }
-proptest = { version = "1.0.0" }
-test-strategy = { version = "0.2.0" }
+proptest = "1.0.0"
+test-strategy = "0.2.0"
 env_logger = "0.9.0"
 test-log = "0.2.10"
 tempfile = "3.2.0"
