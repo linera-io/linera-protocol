@@ -2,11 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    crypto::*,
-    error::Error,
-    system::{SystemEffect, SystemOperation},
-};
+use crate::{crypto::*, error::Error};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
@@ -67,33 +63,6 @@ pub struct EffectId {
     pub chain_id: ChainId,
     pub height: BlockHeight,
     pub index: usize,
-}
-
-/// An operation.
-// TODO: we may want to unify user and system operations under Vec<u8> eventually.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub enum Operation {
-    System(SystemOperation),
-    User(Vec<u8>),
-}
-
-/// An effect.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub enum Effect {
-    System(SystemEffect),
-    User(Vec<u8>),
-}
-
-impl From<SystemEffect> for Effect {
-    fn from(effect: SystemEffect) -> Self {
-        Effect::System(effect)
-    }
-}
-
-impl From<Vec<u8>> for Effect {
-    fn from(effect: Vec<u8>) -> Self {
-        Effect::User(effect)
-    }
 }
 
 /// The identifier of a channel, relative to a particular application.

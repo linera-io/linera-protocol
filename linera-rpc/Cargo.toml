@@ -28,6 +28,7 @@ thiserror = "1.0.31"
 linera-base = { path = "../linera-base" }
 linera-chain = { path = "../linera-chain" }
 linera-core = { path = "../linera-core" }
+linera-execution = { path = "../linera-execution" }
 
 [dev-dependencies]
 similar-asserts = "1.1.0"
@@ -37,3 +38,4 @@ serde_yaml = "0.8.21"
 linera-base = { path = "../linera-base", features = ["test"] }
 linera-chain = { path = "../linera-chain", features = ["test"] }
 linera-core = { path = "../linera-core", features = ["test"] }
+linera-execution = { path = "../linera-execution", features = ["test"] }

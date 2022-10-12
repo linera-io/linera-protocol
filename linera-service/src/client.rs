@@ -5,13 +5,7 @@
 #![deny(warnings)]
 
 use async_trait::async_trait;
-use linera_base::{
-    committee::ValidatorState,
-    crypto::*,
-    error::Error,
-    messages::*,
-    system::{Address, Amount, Balance, SystemOperation, UserData, SYSTEM},
-};
+use linera_base::{committee::ValidatorState, crypto::*, error::Error, messages::*};
 use linera_chain::messages::{
     Block, BlockAndRound, BlockProposal, Certificate, SignatureAggregator, Vote,
 };
@@ -20,6 +14,10 @@ use linera_core::{
     messages::{ChainInfoQuery, ChainInfoResponse},
     node::{LocalNodeClient, ValidatorNode},
     worker::WorkerState,
+};
+use linera_execution::{
+    system::{Address, Amount, Balance, SystemOperation, UserData, SYSTEM},
+    Operation,
 };
 use linera_rpc::Message;
 use linera_service::{

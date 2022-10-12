@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    system::{SystemExecutionStateView, SystemExecutionStateViewContext},
-    ApplicationResult, EffectContext, OperationContext, StorageContext,
+    system::{SystemExecutionStateView, SystemExecutionStateViewContext, SYSTEM},
+    ApplicationResult, Effect, EffectContext, Operation, OperationContext, StorageContext,
 };
-use linera_base::{error::Error, messages::*, system::SYSTEM};
+use linera_base::{error::Error, messages::*};
 use linera_views::{
     impl_view,
     views::{CollectionOperations, CollectionView, RegisterOperations, RegisterView, ScopedView},

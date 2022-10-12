@@ -15,11 +15,14 @@ use linera_base::{
     crypto::*,
     error::Error,
     messages::*,
-    system::{Address, Amount, Balance, SystemOperation, UserData, SYSTEM},
 };
 use linera_chain::{
     messages::{Block, BlockAndRound, BlockProposal, Certificate, MessageGroup, Value, Vote},
     ChainManager,
+};
+use linera_execution::{
+    system::{Address, Amount, Balance, SystemOperation, UserData, SYSTEM},
+    Operation,
 };
 use linera_storage::Store;
 use std::{

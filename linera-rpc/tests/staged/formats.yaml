@@ -283,8 +283,7 @@ Error:
     22:
       InsufficientFunding:
         STRUCT:
-          - current_balance:
-              TYPENAME: Balance
+          - current_balance: U128
     23:
       InvalidNewChainId:
         NEWTYPE:

@@ -16,10 +16,9 @@ use linera_base::{
     crypto::HashValue,
     ensure,
     messages::{ChainDescription, ChainId, Epoch, Owner},
-    system::Balance,
 };
 use linera_chain::{messages::Certificate, ChainStateView, ChainStateViewContext};
-use linera_execution::ChainOwnership;
+use linera_execution::{system::Balance, ChainOwnership};
 use std::fmt::Debug;
 
 /// Communicate with a persistent storage using the "views" abstraction.

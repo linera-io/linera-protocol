@@ -9,14 +9,11 @@ use linera_base::{
     crypto::HashValue,
     ensure,
     error::Error,
-    messages::{
-        ApplicationId, BlockHeight, ChainId, Destination, Effect, EffectId, Medium, Origin,
-    },
-    system::SYSTEM,
+    messages::{ApplicationId, BlockHeight, ChainId, Destination, EffectId, Medium, Origin},
 };
 use linera_execution::{
-    ApplicationResult, EffectContext, ExecutionStateView, ExecutionStateViewContext,
-    OperationContext, RawApplicationResult,
+    system::SYSTEM, ApplicationResult, Effect, EffectContext, ExecutionStateView,
+    ExecutionStateViewContext, OperationContext, RawApplicationResult,
 };
 use linera_views::{
     impl_view,
