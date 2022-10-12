@@ -5,12 +5,17 @@
 #![deny(warnings)]
 
 use async_trait::async_trait;
-use linera_base::{committee::ValidatorState, crypto::*, error::Error, messages::*};
+use linera_base::{
+    committee::ValidatorState,
+    crypto::KeyPair,
+    error::Error,
+    messages::{BlockHeight, ChainDescription, ChainId, Epoch, Owner, RoundNumber, ValidatorName},
+};
 use linera_chain::messages::{
     Block, BlockAndRound, BlockProposal, Certificate, SignatureAggregator, Vote,
 };
 use linera_core::{
-    client::*,
+    client::{ChainClient, ChainClientState, ValidatorNodeProvider},
     messages::{ChainInfoQuery, ChainInfoResponse},
     node::{LocalNodeClient, ValidatorNode},
     worker::WorkerState,
@@ -21,13 +26,13 @@ use linera_execution::{
 };
 use linera_rpc::Message;
 use linera_service::{
-    config::*,
+    config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain, WalletState},
     network,
     network::ValidatorPublicNetworkConfig,
     storage::{Runnable, StorageConfig},
 };
 use linera_storage::Store;
-use log::*;
+use log::{debug, error, info, warn};
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
