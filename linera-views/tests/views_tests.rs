@@ -137,7 +137,7 @@ impl StateStore for DynamoDbTestStore {
         let (context, _) = DynamoDbContext::from_config(
             self.localstack.dynamo_db_config(),
             "test_table".parse().expect("Invalid table name"),
-            guard,
+            Some(guard),
             vec![0],
             id,
         )

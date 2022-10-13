@@ -136,7 +136,7 @@ impl Store for DynamoDbStoreClient {
         let chain_context =
             self.0
                 .context
-                .clone_with_sub_scope(guard, &BaseKey::ChainState(id), id);
+                .clone_with_sub_scope(Some(guard), &BaseKey::ChainState(id), id);
         ChainStateView::load(chain_context).await
     }
 

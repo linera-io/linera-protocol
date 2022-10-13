@@ -57,7 +57,7 @@ impl<E> DynamoDbContext<E> {
     /// Create a new [`DynamoDbContext`] instance.
     pub async fn new(
         table: TableName,
-        guard: impl Into<Option<ChainGuard>>,
+        guard: Option<ChainGuard>,
         key_prefix: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), CreateTableError> {
@@ -70,14 +70,14 @@ impl<E> DynamoDbContext<E> {
     pub async fn from_config(
         config: impl Into<Config>,
         table: TableName,
-        guard: impl Into<Option<ChainGuard>>,
+        guard: Option<ChainGuard>,
         key_prefix: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), CreateTableError> {
         let storage = DynamoDbContext {
             client: Client::from_conf(config.into()),
             table,
-            guard: guard.into().map(Arc::new),
+            guard: guard.map(Arc::new),
             key_prefix,
             extra,
         };
@@ -94,7 +94,7 @@ impl<E> DynamoDbContext<E> {
     /// [`TableStatus`] to indicate if the table was created or if it already exists.
     pub async fn with_localstack(
         table: TableName,
-        guard: impl Into<Option<ChainGuard>>,
+        guard: Option<ChainGuard>,
         key_prefix: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), LocalStackError> {
@@ -113,14 +113,14 @@ impl<E> DynamoDbContext<E> {
     /// current extra data.
     pub fn clone_with_sub_scope<NewE>(
         &self,
-        new_guard: impl Into<Option<ChainGuard>>,
+        new_guard: Option<ChainGuard>,
         scope_prefix: &impl Serialize,
         new_extra: NewE,
     ) -> DynamoDbContext<NewE> {
         DynamoDbContext {
             client: self.client.clone(),
             table: self.table.clone(),
-            guard: new_guard.into().map(Arc::new),
+            guard: new_guard.map(Arc::new),
             key_prefix: self.extend_prefix(scope_prefix),
             extra: new_extra,
         }
