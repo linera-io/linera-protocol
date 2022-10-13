@@ -15,7 +15,7 @@ use linera_views::{
     },
 };
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     sync::Arc,
 };
 use tokio::sync::Mutex;
@@ -78,6 +78,7 @@ impl StateStore for MemoryTestStore {
 pub struct RocksdbTestStore {
     db: Arc<DB>,
     locks: HashMap<usize, Arc<Mutex<()>>>,
+    accessed_chains: BTreeSet<usize>,
 }
 
 impl RocksdbTestStore {
@@ -85,6 +86,7 @@ impl RocksdbTestStore {
         Self {
             db: Arc::new(db),
             locks: HashMap::new(),
+            accessed_chains: BTreeSet::new(),
         }
     }
 }
@@ -94,6 +96,7 @@ impl StateStore for RocksdbTestStore {
     type Context = RocksdbContext<usize>;
 
     async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, RocksdbViewError> {
+        self.accessed_chains.insert(id);
         let lock = self
             .locks
             .entry(id)
@@ -112,6 +115,7 @@ impl StateStore for RocksdbTestStore {
 pub struct DynamoDbTestStore {
     localstack: LocalStackTestContext,
     locks: HashMap<usize, Arc<Mutex<()>>>,
+    accessed_chains: BTreeSet<usize>,
 }
 
 impl DynamoDbTestStore {
@@ -119,6 +123,7 @@ impl DynamoDbTestStore {
         Ok(DynamoDbTestStore {
             localstack: LocalStackTestContext::new().await?,
             locks: HashMap::new(),
+            accessed_chains: BTreeSet::new(),
         })
     }
 }
@@ -128,6 +133,7 @@ impl StateStore for DynamoDbTestStore {
     type Context = DynamoDbContext<usize>;
 
     async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, DynamoDbContextError> {
+        self.accessed_chains.insert(id);
         log::trace!("Acquiring lock on {:?}", id);
         let lock = self
             .locks
@@ -344,7 +350,7 @@ async fn test_views_in_rocksdb() {
     let db = DB::open(&options, &dir).unwrap();
     let mut store = RocksdbTestStore::new(db);
     let hash = test_store(&mut store).await;
-    assert_eq!(store.locks.len(), 1);
+    assert_eq!(store.accessed_chains.len(), 1);
     assert_eq!(store.db.count_keys().await.unwrap(), 0);
 
     let mut store = MemoryTestStore::default();
@@ -357,7 +363,7 @@ async fn test_views_in_rocksdb() {
 async fn test_views_in_dynamo_db() -> Result<(), anyhow::Error> {
     let mut store = DynamoDbTestStore::new().await?;
     let hash = test_store(&mut store).await;
-    assert_eq!(store.locks.len(), 1);
+    assert_eq!(store.accessed_chains.len(), 1);
 
     let mut store = MemoryTestStore::default();
     let hash2 = test_store(&mut store).await;
