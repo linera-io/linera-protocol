@@ -197,6 +197,14 @@ impl<E> DynamoDbContext<E> {
         .concat()
     }
 
+    fn put_item_batch(&self, batch: &mut MyBatch, key: &impl Serialize, value: &impl Serialize) {
+        batch.0.push(WriteOp::Put {key: self.extend_prefix(key), value: self.extend_value(value) });
+    }
+
+    fn remove_item_batch(&self, batch: &mut MyBatch, key: &impl Serialize) {
+        batch.0.push(WriteOp::Delete {key: self.extend_prefix(key) });
+    }
+
     /// Build the key attributes for a table item.
     ///
     /// The key is composed of two attributes that are both binary blobs. The first attribute is a
@@ -220,14 +228,6 @@ impl<E> DynamoDbContext<E> {
     }
 
 
-    fn put_item_batch(&self, batch: &mut MyBatch, key: &impl Serialize, value: &impl Serialize) {
-        batch.0.push(WriteOp::Put {key: self.extend_prefix(key), value: self.extend_value(value) });
-    }
-
-    fn remove_item_batch(&self, batch: &mut MyBatch, key: &impl Serialize) {
-        batch.0.push(WriteOp::Delete {key: self.extend_prefix(key) });
-    }
-
     fn build_key_u8(&self, key: Vec<u8>) -> HashMap<String, AttributeValue> {
         [
             (
@@ -247,7 +247,7 @@ impl<E> DynamoDbContext<E> {
     }
 
     /// Build the value attribute for storing a table item.
-    fn build_value_u8(&self, value: Vec<u8>) -> (String, AttributeValue) {
+    fn build_value(&self, value: Vec<u8>) -> (String, AttributeValue) {
         (
             VALUE_ATTRIBUTE.to_owned(),
             AttributeValue::B(Blob::new(value)),
@@ -353,13 +353,13 @@ impl<E> DynamoDbContext<E> {
 
     /// Store a generic `value` into the table using the provided `key` prefixed by the current
     /// context.
-    async fn put_item_u8(
+    async fn process_put(
         &self,
         key: Vec<u8>,
         value: Vec<u8>,
     ) -> Result<(), DynamoDbContextError> {
         let mut item = self.build_key_u8(key);
-        item.extend([self.build_value_u8(value)]);
+        item.extend([self.build_value(value)]);
 
         self.client
             .put_item()
@@ -372,7 +372,7 @@ impl<E> DynamoDbContext<E> {
     }
 
     /// Remove an item with the provided `key` prefixed with `prefix` from the table.
-    async fn remove_item_u8(&self, key: Vec<u8>) -> Result<(), DynamoDbContextError> {
+    async fn process_delete(&self, key: Vec<u8>) -> Result<(), DynamoDbContextError> {
         self.client
             .delete_item()
             .table_name(self.table.as_ref())
@@ -452,10 +452,10 @@ where
         for e_ent in batch.0 {
             match e_ent {
                 WriteOp::Delete { key } => {
-                    self.remove_item_u8(key).await?;
+                    self.process_delete(key).await?;
                 }
                 WriteOp::Put { key, value } => {
-                    self.put_item_u8(key, value).await?;
+                    self.process_put(key, value).await?;
                 }
             }
         }
