@@ -43,17 +43,12 @@ const KEY_ATTRIBUTE: &str = "item_key";
 /// The attribute name of the table value blob.
 const VALUE_ATTRIBUTE: &str = "item_value";
 
-
 pub enum WriteOp {
     Delete { key: Vec<u8> },
     Put { key: Vec<u8>, value: Vec<u8> },
 }
 
 pub struct MyBatch(Vec<WriteOp>);
-
-
-
-
 
 /// A implementation of [`Context`] based on DynamoDB.
 #[derive(Debug, Clone)]
@@ -198,11 +193,16 @@ impl<E> DynamoDbContext<E> {
     }
 
     fn put_item_batch(&self, batch: &mut MyBatch, key: &impl Serialize, value: &impl Serialize) {
-        batch.0.push(WriteOp::Put {key: self.extend_prefix(key), value: self.extend_value(value) });
+        batch.0.push(WriteOp::Put {
+            key: self.extend_prefix(key),
+            value: self.extend_value(value),
+        });
     }
 
     fn remove_item_batch(&self, batch: &mut MyBatch, key: &impl Serialize) {
-        batch.0.push(WriteOp::Delete {key: self.extend_prefix(key) });
+        batch.0.push(WriteOp::Delete {
+            key: self.extend_prefix(key),
+        });
     }
 
     /// Build the key attributes for a table item.
@@ -219,10 +219,7 @@ impl<E> DynamoDbContext<E> {
                 PARTITION_ATTRIBUTE.to_owned(),
                 AttributeValue::B(Blob::new(DUMMY_PARTITION_KEY)),
             ),
-            (
-                KEY_ATTRIBUTE.to_owned(),
-                AttributeValue::B(Blob::new(key)),
-            ),
+            (KEY_ATTRIBUTE.to_owned(), AttributeValue::B(Blob::new(key))),
         ]
         .into()
     }
@@ -338,11 +335,7 @@ impl<E> DynamoDbContext<E> {
 
     /// Store a generic `value` into the table using the provided `key` prefixed by the current
     /// context.
-    async fn process_put(
-        &self,
-        key: Vec<u8>,
-        value: Vec<u8>,
-    ) -> Result<(), DynamoDbContextError> {
+    async fn process_put(&self, key: Vec<u8>, value: Vec<u8>) -> Result<(), DynamoDbContextError> {
         let mut item = self.build_key(key);
         item.extend([self.build_value(value)]);
 
@@ -702,11 +695,7 @@ where
         Ok(())
     }
 
-    async fn remove_index(
-        &mut self,
-        batch: &mut Self::Batch,
-        index: I,
-    ) -> Result<(), Self::Error> {
+    async fn remove_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
         self.remove_item_batch(batch, &CollectionKey::Index(index));
         Ok(())
     }
