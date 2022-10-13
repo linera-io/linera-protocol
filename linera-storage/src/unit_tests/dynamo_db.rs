@@ -6,6 +6,7 @@ use std::mem;
 
 /// Test if released guards don't use memory.
 #[tokio::test]
+#[ignore]
 async fn guards_dont_leak() -> Result<(), anyhow::Error> {
     let localstack = LocalStackTestContext::new().await?;
     let table = "linera".parse()?;
