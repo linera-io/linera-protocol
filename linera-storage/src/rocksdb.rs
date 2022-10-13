@@ -13,6 +13,10 @@ use linera_views::{
 use serde::{Deserialize, Serialize};
 use std::{path::PathBuf, sync::Arc};
 
+#[cfg(test)]
+#[path = "unit_tests/rocksdb.rs"]
+mod tests;
+
 struct RocksdbStore {
     db: Arc<DB>,
     guards: ChainGuards,
