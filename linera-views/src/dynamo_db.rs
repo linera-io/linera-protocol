@@ -43,6 +43,18 @@ const KEY_ATTRIBUTE: &str = "item_key";
 /// The attribute name of the table value blob.
 const VALUE_ATTRIBUTE: &str = "item_value";
 
+
+pub enum WriteOp {
+    Delete { key: Vec<u8> },
+    Put { key: Vec<u8>, value: Vec<u8> },
+}
+
+pub struct MyBatch(Vec<WriteOp>);
+
+
+
+
+
 /// A implementation of [`Context`] based on DynamoDB.
 #[derive(Debug, Clone)]
 pub struct DynamoDbContext<E> {
@@ -207,13 +219,46 @@ impl<E> DynamoDbContext<E> {
         .into()
     }
 
+
+    fn put_item_batch(&self, batch: &mut MyBatch, key: &impl Serialize, value: &impl Serialize) {
+        batch.0.push(WriteOp::Put {key: self.extend_prefix(key), value: self.extend_value(value) });
+    }
+
+    fn remove_item_batch(&self, batch: &mut MyBatch, key: &impl Serialize) {
+        batch.0.push(WriteOp::Delete {key: self.extend_prefix(key) });
+    }
+
+    fn build_key_u8(&self, key: Vec<u8>) -> HashMap<String, AttributeValue> {
+        [
+            (
+                PARTITION_ATTRIBUTE.to_owned(),
+                AttributeValue::B(Blob::new(DUMMY_PARTITION_KEY)),
+            ),
+            (
+                KEY_ATTRIBUTE.to_owned(),
+                AttributeValue::B(Blob::new(key)),
+            ),
+        ]
+        .into()
+    }
+
+    fn extend_value(&self, value: &impl Serialize) -> Vec<u8> {
+        bcs::to_bytes(value).expect("Serialization failed")
+    }
+
     /// Build the value attribute for storing a table item.
     fn build_value(&self, value: &impl Serialize) -> (String, AttributeValue) {
         (
             VALUE_ATTRIBUTE.to_owned(),
-            AttributeValue::B(Blob::new(
-                bcs::to_bytes(value).expect("Serialization failed"),
-            )),
+            AttributeValue::B(Blob::new(self.extend_value(value))),
+        )
+    }
+
+    /// Build the value attribute for storing a table item.
+    fn build_value_u8(&self, value: Vec<u8>) -> (String, AttributeValue) {
+        (
+            VALUE_ATTRIBUTE.to_owned(),
+            AttributeValue::B(Blob::new(value)),
         )
     }
 
@@ -336,12 +381,41 @@ impl<E> DynamoDbContext<E> {
         Ok(())
     }
 
+    async fn put_item_u8(
+        &self,
+        key: Vec<u8>,
+        value: Vec<u8>,
+    ) -> Result<(), DynamoDbContextError> {
+        let mut item = self.build_key_u8(key);
+        item.extend([self.build_value_u8(value)]);
+
+        self.client
+            .put_item()
+            .table_name(self.table.as_ref())
+            .set_item(Some(item))
+            .send()
+            .await?;
+
+        Ok(())
+    }
+
     /// Remove an item with the provided `key` prefixed with `prefix` from the table.
     async fn remove_item(&self, key: &impl Serialize) -> Result<(), DynamoDbContextError> {
         self.client
             .delete_item()
             .table_name(self.table.as_ref())
             .set_key(Some(self.build_key(key)))
+            .send()
+            .await?;
+
+        Ok(())
+    }
+
+    async fn remove_item_u8(&self, key: Vec<u8>) -> Result<(), DynamoDbContextError> {
+        self.client
+            .delete_item()
+            .table_name(self.table.as_ref())
+            .set_key(Some(self.build_key_u8(key)))
             .send()
             .await?;
 
@@ -398,7 +472,7 @@ impl<E> Context for DynamoDbContext<E>
 where
     E: Clone + Send + Sync,
 {
-    type Batch = ();
+    type Batch = MyBatch;
     type Extra = E;
     type Error = DynamoDbContextError;
 
@@ -412,7 +486,19 @@ where
             + Send
             + Sync,
     {
-        builder(&mut ()).await
+        let mut batch = MyBatch(Vec::new());
+        builder(&mut batch).await?;
+        for e_ent in batch.0 {
+            match e_ent {
+                WriteOp::Delete { key } => {
+                    self.remove_item_u8(key).await?;
+                }
+                WriteOp::Put { key, value } => {
+                    self.put_item_u8(key, value).await?;
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -443,8 +529,8 @@ where
         Ok(value)
     }
 
-    async fn set(&mut self, _batch: &mut Self::Batch, value: T) -> Result<(), Self::Error> {
-        self.put_item(&(), &value).await?;
+    async fn set(&mut self, batch: &mut Self::Batch, value: T) -> Result<(), Self::Error> {
+        self.put_item_batch(batch, &(), &value);
         Ok(())
     }
 
@@ -484,15 +570,15 @@ where
     async fn append(
         &mut self,
         stored_count: usize,
-        _batch: &mut Self::Batch,
+        batch: &mut Self::Batch,
         values: Vec<T>,
     ) -> Result<(), Self::Error> {
         let mut count = stored_count;
         for value in values {
-            self.put_item(&count, &value).await?;
+            self.put_item_batch(batch, &count, &value);
             count += 1;
         }
-        self.put_item(&(), &count).await?;
+        self.put_item_batch(batch, &(), &count);
         Ok(())
     }
 
@@ -538,12 +624,12 @@ where
     async fn delete_front(
         &mut self,
         stored_indices: &mut Range<usize>,
-        _batch: &mut Self::Batch,
+        batch: &mut Self::Batch,
         count: usize,
     ) -> Result<(), Self::Error> {
         let deletion_range = stored_indices.clone().take(count);
         stored_indices.start += count;
-        self.put_item(&(), &stored_indices).await?;
+        self.put_item_batch(batch, &(), &stored_indices);
         for index in deletion_range {
             self.remove_item(&index).await?;
         }
@@ -553,14 +639,15 @@ where
     async fn append_back(
         &mut self,
         stored_indices: &mut Range<usize>,
-        _batch: &mut Self::Batch,
+        batch: &mut Self::Batch,
         values: Vec<T>,
     ) -> Result<(), Self::Error> {
         for value in values {
-            self.put_item(&stored_indices.end, &value).await?;
+            self.put_item_batch(batch, &stored_indices.end, &value);
             stored_indices.end += 1;
         }
-        self.put_item(&(), &stored_indices).await
+        self.put_item_batch(batch, &(), &stored_indices);
+        Ok(())
     }
 
     async fn delete(
@@ -589,11 +676,11 @@ where
 
     async fn insert(
         &mut self,
-        _batch: &mut Self::Batch,
+        batch: &mut Self::Batch,
         index: I,
         value: V,
     ) -> Result<(), Self::Error> {
-        self.put_item(&index, &value).await?;
+        self.put_item_batch(batch, &index, &value);
         Ok(())
     }
 
@@ -664,8 +751,9 @@ where
         }
     }
 
-    async fn add_index(&mut self, _batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
-        self.put_item(&CollectionKey::Index(index), &()).await
+    async fn add_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
+        self.put_item_batch(batch, &CollectionKey::Index(index), &());
+        Ok(())
     }
 
     async fn remove_index(

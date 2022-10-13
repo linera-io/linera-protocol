@@ -164,6 +164,7 @@ impl Store for DynamoDbStoreClient {
     ) -> Result<(), DynamoDbContextError> {
         let mut certificates = self.0.certificates().await?;
         certificates.insert(certificate.hash, certificate);
-        certificates.commit(&mut ()).await
+        Ok(())
+//        certificates.write_commit().await
     }
 }
