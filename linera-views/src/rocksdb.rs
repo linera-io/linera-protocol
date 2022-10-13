@@ -350,16 +350,16 @@ where
 
     async fn delete_front(
         &mut self,
-        range: &mut Range<usize>,
+        stored_indices: &mut Range<usize>,
         batch: &mut Self::Batch,
         count: usize,
     ) -> Result<(), Self::Error> {
         if count == 0 {
             return Ok(());
         }
-        let deletion_range = range.clone().take(count);
-        range.start += count;
-        batch.write_key(self.base_key.clone(), &range)?;
+        let deletion_range = stored_indices.clone().take(count);
+        stored_indices.start += count;
+        batch.write_key(self.base_key.clone(), &stored_indices)?;
         for i in deletion_range {
             batch.delete_key(self.derive_key(&i));
         }
