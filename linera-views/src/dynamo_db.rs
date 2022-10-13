@@ -247,14 +247,6 @@ impl<E> DynamoDbContext<E> {
     }
 
     /// Build the value attribute for storing a table item.
-    fn build_value(&self, value: &impl Serialize) -> (String, AttributeValue) {
-        (
-            VALUE_ATTRIBUTE.to_owned(),
-            AttributeValue::B(Blob::new(self.extend_value(value))),
-        )
-    }
-
-    /// Build the value attribute for storing a table item.
     fn build_value_u8(&self, value: Vec<u8>) -> (String, AttributeValue) {
         (
             VALUE_ATTRIBUTE.to_owned(),
@@ -361,26 +353,6 @@ impl<E> DynamoDbContext<E> {
 
     /// Store a generic `value` into the table using the provided `key` prefixed by the current
     /// context.
-    ///
-    /// The value is serialized using [`bcs`].
-    async fn put_item(
-        &self,
-        key: &impl Serialize,
-        value: &impl Serialize,
-    ) -> Result<(), DynamoDbContextError> {
-        let mut item = self.build_key(key);
-        item.extend([self.build_value(value)]);
-
-        self.client
-            .put_item()
-            .table_name(self.table.as_ref())
-            .set_item(Some(item))
-            .send()
-            .await?;
-
-        Ok(())
-    }
-
     async fn put_item_u8(
         &self,
         key: Vec<u8>,
@@ -400,17 +372,6 @@ impl<E> DynamoDbContext<E> {
     }
 
     /// Remove an item with the provided `key` prefixed with `prefix` from the table.
-    async fn remove_item(&self, key: &impl Serialize) -> Result<(), DynamoDbContextError> {
-        self.client
-            .delete_item()
-            .table_name(self.table.as_ref())
-            .set_key(Some(self.build_key(key)))
-            .send()
-            .await?;
-
-        Ok(())
-    }
-
     async fn remove_item_u8(&self, key: Vec<u8>) -> Result<(), DynamoDbContextError> {
         self.client
             .delete_item()
