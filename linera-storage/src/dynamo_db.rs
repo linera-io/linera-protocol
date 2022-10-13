@@ -17,6 +17,10 @@ use linera_views::{
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
+#[cfg(test)]
+#[path = "unit_tests/dynamo_db.rs"]
+mod tests;
+
 struct DynamoDbStore {
     context: DynamoDbContext<()>,
     guards: ChainGuards,
