@@ -165,14 +165,9 @@ impl Store for DynamoDbStoreClient {
         use linera_views::views::Context;
         let mut certificates = self.0.certificates().await?;
         certificates.insert(certificate.hash, certificate);
-        let context = self.0.context.clone();
-        context
-            .run_with_batch(move |batch| {
-                Box::pin(async move {
-                    certificates.commit(batch).await?;
-                    Ok(())
-                })
-            })
+        self.0
+            .context
+            .run_with_batch(|batch| Box::pin(certificates.commit(batch)))
             .await
     }
 }
