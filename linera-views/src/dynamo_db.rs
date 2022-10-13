@@ -534,8 +534,8 @@ where
         Ok(())
     }
 
-    async fn delete(&mut self, _batch: &mut Self::Batch) -> Result<(), Self::Error> {
-        self.remove_item(&()).await?;
+    async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error> {
+        self.remove_item_batch(batch, &());
         Ok(())
     }
 }
@@ -585,11 +585,11 @@ where
     async fn delete(
         &mut self,
         stored_count: usize,
-        _batch: &mut Self::Batch,
+        batch: &mut Self::Batch,
     ) -> Result<(), Self::Error> {
-        self.remove_item(&()).await?;
+        self.remove_item_batch(batch, &());
         for index in 0..stored_count {
-            self.remove_item(&index).await?;
+            self.remove_item_batch(batch, &index);
         }
         Ok(())
     }
@@ -631,7 +631,7 @@ where
         stored_indices.start += count;
         self.put_item_batch(batch, &(), &stored_indices);
         for index in deletion_range {
-            self.remove_item(&index).await?;
+            self.remove_item_batch(batch, &index);
         }
         Ok(())
     }
@@ -653,11 +653,11 @@ where
     async fn delete(
         &mut self,
         stored_indices: Range<usize>,
-        _batch: &mut Self::Batch,
+        batch: &mut Self::Batch,
     ) -> Result<(), Self::Error> {
-        self.remove_item(&()).await?;
+        self.remove_item_batch(batch, &());
         for index in stored_indices {
-            self.remove_item(&index).await?;
+            self.remove_item_batch(batch, &index);
         }
         Ok(())
     }
@@ -684,8 +684,8 @@ where
         Ok(())
     }
 
-    async fn remove(&mut self, _batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
-        self.remove_item(&index).await?;
+    async fn remove(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
+        self.remove_item_batch(batch, &index);
         Ok(())
     }
 
@@ -703,9 +703,9 @@ where
         Ok(())
     }
 
-    async fn delete(&mut self, _batch: &mut Self::Batch) -> Result<(), Self::Error> {
+    async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error> {
         for key in self.get_sub_keys::<I, _>(&()).await? {
-            self.remove_item(&key).await?;
+            self.remove_item_batch(batch, &key);
         }
 
         Ok(())
@@ -758,10 +758,11 @@ where
 
     async fn remove_index(
         &mut self,
-        _batch: &mut Self::Batch,
+        batch: &mut Self::Batch,
         index: I,
     ) -> Result<(), Self::Error> {
-        self.remove_item(&CollectionKey::Index(index)).await
+        self.remove_item_batch(batch, &CollectionKey::Index(index));
+        Ok(())
     }
 
     async fn indices(&mut self) -> Result<Vec<I>, Self::Error> {
