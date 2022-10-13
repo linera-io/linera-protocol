@@ -427,14 +427,10 @@ where
     {
         let mut batch = MyBatch(Vec::new());
         builder(&mut batch).await?;
-        for e_ent in batch.0 {
-            match e_ent {
-                WriteOp::Delete { key } => {
-                    self.process_delete(key).await?;
-                }
-                WriteOp::Put { key, value } => {
-                    self.process_put(key, value).await?;
-                }
+        for operation in batch.0 {
+            match operation {
+                WriteOp::Delete { key } => self.process_delete(key).await?,
+                WriteOp::Put { key, value } => self.process_put(key, value).await?,
             }
         }
         Ok(())
