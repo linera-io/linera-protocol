@@ -43,12 +43,12 @@ const KEY_ATTRIBUTE: &str = "item_key";
 /// The attribute name of the table value blob.
 const VALUE_ATTRIBUTE: &str = "item_value";
 
-pub enum WriteOp {
+pub enum WriteOperation {
     Delete { key: Vec<u8> },
     Put { key: Vec<u8>, value: Vec<u8> },
 }
 
-pub struct MyBatch(Vec<WriteOp>);
+pub struct MyBatch(Vec<WriteOperation>);
 
 /// A implementation of [`Context`] based on DynamoDB.
 #[derive(Debug, Clone)]
@@ -193,14 +193,14 @@ impl<E> DynamoDbContext<E> {
     }
 
     fn put_item_batch(&self, batch: &mut MyBatch, key: &impl Serialize, value: &impl Serialize) {
-        batch.0.push(WriteOp::Put {
+        batch.0.push(WriteOperation::Put {
             key: self.extend_prefix(key),
             value: bcs::to_bytes(value).expect("Serialization failed"),
         });
     }
 
     fn remove_item_batch(&self, batch: &mut MyBatch, key: &impl Serialize) {
-        batch.0.push(WriteOp::Delete {
+        batch.0.push(WriteOperation::Delete {
             key: self.extend_prefix(key),
         });
     }
@@ -425,8 +425,8 @@ where
         builder(&mut batch).await?;
         for operation in batch.0 {
             match operation {
-                WriteOp::Delete { key } => self.process_delete(key).await?,
-                WriteOp::Put { key, value } => self.process_put(key, value).await?,
+                WriteOperation::Delete { key } => self.process_delete(key).await?,
+                WriteOperation::Put { key, value } => self.process_put(key, value).await?,
             }
         }
         Ok(())
