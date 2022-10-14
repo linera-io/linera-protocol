@@ -877,13 +877,7 @@ where
 
     async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         if self.was_reset_to_default {
-            let stored_indices = self.context.indices().await?;
-            for index in &stored_indices {
-                let context = self.context.clone_with_scope(index);
-                self.context.remove_index(batch, index.clone()).await?;
-                let view = W::load(context).await?;
-                view.delete(batch).await?;
-            }
+            self.delete_entries(batch).await?;
             for (index, update) in self.updates {
                 match update {
                     Some(view) => {
@@ -915,13 +909,7 @@ where
     async fn commit_and_reset(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         if self.was_reset_to_default {
             self.was_reset_to_default = false;
-            let stored_indices = self.context.indices().await?;
-            for index in &stored_indices {
-                let context = self.context.clone_with_scope(index);
-                self.context.remove_index(batch, index.clone()).await?;
-                let view = W::load(context).await?;
-                view.delete(batch).await?;
-            }
+            self.delete_entries(batch).await?;
             for (index, update) in mem::take(&mut self.updates) {
                 if let Some(view) = update {
                     view.commit(batch).await?;
@@ -949,14 +937,7 @@ where
     }
 
     async fn delete(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        let stored_indices = self.context.indices().await?;
-        for index in &stored_indices {
-            let context = self.context.clone_with_scope(index);
-            self.context.remove_index(batch, index.clone()).await?;
-            let view = W::load(context).await?;
-            view.delete(batch).await?;
-        }
-        Ok(())
+        self.delete_entries(batch).await
     }
 
     fn reset_to_default(&mut self) {
@@ -971,6 +952,18 @@ where
     I: Eq + Ord + Sync + Clone + Send + Debug,
     W: View<C>,
 {
+    /// Delete all entries in this [`Collection`].
+    async fn delete_entries(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+        let stored_indices = self.context.indices().await?;
+        for index in &stored_indices {
+            let context = self.context.clone_with_scope(index);
+            self.context.remove_index(batch, index.clone()).await?;
+            let view = W::load(context).await?;
+            view.delete(batch).await?;
+        }
+        Ok(())
+    }
+
     /// Obtain a subview for the data at the given index in the collection. If an entry
     /// was removed before then a default entry is put on this index.
     pub async fn load_entry(&mut self, index: I) -> Result<&mut W, C::Error> {
