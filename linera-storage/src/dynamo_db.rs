@@ -14,7 +14,7 @@ use linera_views::{
         Config, CreateTableError, DynamoDbContext, DynamoDbContextError, LocalStackError,
         TableName, TableStatus,
     },
-    views::{MapView, View},
+    views::{Context, MapView, View},
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -162,7 +162,6 @@ impl Store for DynamoDbStoreClient {
         &self,
         certificate: Certificate,
     ) -> Result<(), DynamoDbContextError> {
-        use linera_views::views::Context;
         let mut certificates = self.0.certificates().await?;
         certificates.insert(certificate.hash, certificate);
         self.0
