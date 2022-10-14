@@ -48,7 +48,7 @@ pub enum WriteOperation {
     Put { key: Vec<u8>, value: Vec<u8> },
 }
 
-pub struct MyBatch(Vec<WriteOperation>);
+pub struct Batch(Vec<WriteOperation>);
 
 /// A implementation of [`Context`] based on DynamoDB.
 #[derive(Debug, Clone)]
@@ -192,14 +192,14 @@ impl<E> DynamoDbContext<E> {
         .concat()
     }
 
-    fn put_item_batch(&self, batch: &mut MyBatch, key: &impl Serialize, value: &impl Serialize) {
+    fn put_item_batch(&self, batch: &mut Batch, key: &impl Serialize, value: &impl Serialize) {
         batch.0.push(WriteOperation::Put {
             key: self.extend_prefix(key),
             value: bcs::to_bytes(value).expect("Serialization failed"),
         });
     }
 
-    fn remove_item_batch(&self, batch: &mut MyBatch, key: &impl Serialize) {
+    fn remove_item_batch(&self, batch: &mut Batch, key: &impl Serialize) {
         batch.0.push(WriteOperation::Delete {
             key: self.extend_prefix(key),
         });
@@ -407,7 +407,7 @@ impl<E> Context for DynamoDbContext<E>
 where
     E: Clone + Send + Sync,
 {
-    type Batch = MyBatch;
+    type Batch = Batch;
     type Extra = E;
     type Error = DynamoDbContextError;
 
@@ -421,7 +421,7 @@ where
             + Send
             + Sync,
     {
-        let mut batch = MyBatch(Vec::new());
+        let mut batch = Batch(Vec::new());
         builder(&mut batch).await?;
         for operation in batch.0 {
             match operation {

@@ -125,15 +125,15 @@ impl KeyValueOperations for Arc<DB> {
 }
 
 #[async_trait]
-impl WriteOperations for MyBatch {
+impl WriteOperations for Batch {
     fn write_key<V: Serialize>(&mut self, key: Vec<u8>, value: &V) -> Result<(), RocksdbViewError> {
         let bytes = bcs::to_bytes(value)?;
-        self.0.push(WriteOp::Put { key, value: bytes });
+        self.0.push(WriteOperation::Put { key, value: bytes });
         Ok(())
     }
 
     fn delete_key(&mut self, key: Vec<u8>) {
-        self.0.push(WriteOp::Delete { key: key.to_vec() });
+        self.0.push(WriteOperation::Delete { key: key.to_vec() });
     }
 }
 
@@ -158,22 +158,22 @@ impl<E> RocksdbContext<E> {
     }
 }
 
-pub enum WriteOp {
+pub enum WriteOperation {
     Delete { key: Vec<u8> },
     Put { key: Vec<u8>, value: Vec<u8> },
 }
 
-pub struct MyBatch(Vec<WriteOp>);
+pub struct Batch(Vec<WriteOperation>);
 
-impl std::ops::Deref for MyBatch {
-    type Target = Vec<WriteOp>;
+impl std::ops::Deref for Batch {
+    type Target = Vec<WriteOperation>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl std::ops::DerefMut for MyBatch {
+impl std::ops::DerefMut for Batch {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
@@ -184,7 +184,7 @@ impl<E> Context for RocksdbContext<E>
 where
     E: Clone + Send + Sync,
 {
-    type Batch = MyBatch;
+    type Batch = Batch;
     type Extra = E;
     type Error = RocksdbViewError;
 
@@ -198,17 +198,17 @@ where
             + Send
             + Sync,
     {
-        let mut batch = MyBatch(Vec::new());
+        let mut batch = Batch(Vec::new());
         builder(&mut batch).await?;
         let db = self.db.clone();
         tokio::task::spawn_blocking(move || {
             let mut inner_batch = rocksdb::WriteBatchWithTransaction::default();
             for e_ent in batch.0 {
                 match e_ent {
-                    WriteOp::Delete { key } => {
+                    WriteOperation::Delete { key } => {
                         inner_batch.delete(&key);
                     }
-                    WriteOp::Put { key, value } => {
+                    WriteOperation::Put { key, value } => {
                         inner_batch.put(&key, value);
                     }
                 }
