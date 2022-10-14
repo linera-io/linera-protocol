@@ -58,7 +58,7 @@ pub trait View<C: Context>: Sized {
     /// are simply lost.
     async fn commit(self, batch: &mut C::Batch) -> Result<(), C::Error>;
 
-    /// The same as commit but then it remains usable
+    /// A more efficient alternative to calling [`View::commit`] immediately followed by a [`View::load`].
     async fn commit_and_reset(&mut self, batch: &mut C::Batch) -> Result<(), C::Error>;
 
     /// Instead of persisting changes, clear all the data that belong to this view and its
