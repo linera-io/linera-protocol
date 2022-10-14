@@ -931,7 +931,6 @@ where
                 }
             }
         }
-        self.updates.clear();
         Ok(())
     }
 
