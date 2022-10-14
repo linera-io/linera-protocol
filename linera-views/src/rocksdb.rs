@@ -201,6 +201,16 @@ where
         tokio::task::spawn_blocking(move || db.write(batch.0)).await??;
         Ok(())
     }
+
+    fn create_batch(&self) -> Self::Batch {
+        MyBatch(rocksdb::WriteBatchWithTransaction::default())
+    }
+
+    async fn write_batch(&self, batch: Self::Batch) -> Result<(), Self::Error> {
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || db.write(batch.0)).await??;
+        Ok(())
+    }
 }
 
 #[async_trait]

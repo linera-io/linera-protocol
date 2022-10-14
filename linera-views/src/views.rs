@@ -36,7 +36,13 @@ pub trait Context {
     where
         F: FnOnce(&mut Self::Batch) -> futures::future::BoxFuture<Result<(), Self::Error>>
             + Send
-            + Sync;
+        + Sync;
+
+    /// Create a new [`Self::Batch`] to collect write operations.
+    fn create_batch(&self) -> Self::Batch;
+
+    /// Apply the operations from the `batch`, persisting the changes.
+    async fn write_batch(&self, batch: Self::Batch) -> Result<(), Self::Error>;
 }
 
 /// A view gives an exclusive access to read and write the data stored at an underlying
@@ -703,7 +709,6 @@ where
                 )
                 .await?;
         }
-        self.new_back_values.clear();
         self.front_delete_count = 0;
         Ok(())
     }
