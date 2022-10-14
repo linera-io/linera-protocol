@@ -519,7 +519,7 @@ where
         } else {
             for (index, update) in mem::take(&mut self.updates) {
                 match update {
-                    None => self.context.remove(batch, index).await?
+                    None => self.context.remove(batch, index).await?,
                     Some(value) => self.context.insert(batch, index, value).await?
                 }
             }
