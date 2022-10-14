@@ -17,7 +17,6 @@ use linera_core::{
 };
 use linera_rpc::Message;
 use linera_storage::Store;
-use linera_views::chain_guards::{ChainGuard, ChainGuards};
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::{io, time::Duration};
@@ -225,7 +224,6 @@ where
         let state = RunningServerState {
             server: self,
             cross_chain_sender,
-            chain_guards: ChainGuards::default(),
         };
         // Launch server for the appropriate protocol.
         protocol.spawn_server(&address, state).await
@@ -234,7 +232,6 @@ where
 
 #[derive(Clone)]
 struct RunningServerState<S> {
-    chain_guards: ChainGuards,
     server: Server<S>,
     cross_chain_sender: mpsc::Sender<(Message, ShardId)>,
 }
@@ -246,7 +243,6 @@ where
 {
     fn handle_message(&mut self, message: Message) -> futures::future::BoxFuture<Option<Message>> {
         Box::pin(async move {
-            let _guard = self.obtain_chain_guard_for(&message).await;
             let reply = match message {
                 Message::BlockProposal(message) => self
                     .server
@@ -315,11 +311,6 @@ impl<S> RunningServerState<S>
 where
     S: Send,
 {
-    async fn obtain_chain_guard_for(&mut self, message: &Message) -> Option<ChainGuard> {
-        let chain_id = message.target_chain_id()?;
-        Some(self.chain_guards.guard(chain_id).await)
-    }
-
     fn handle_continuation(
         &mut self,
         requests: Vec<CrossChainRequest>,
