@@ -193,10 +193,9 @@ where
     }
 
     async fn commit_and_reset(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        if let Some(value) = &self.update {
+        if let Some(value) = self.update.take() {
             self.context.set(batch, value.clone()).await?;
-            self.stored_value = value.clone();
-            self.update = None;
+            self.stored_value = value;
         }
         Ok(())
     }
