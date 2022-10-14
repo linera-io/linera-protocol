@@ -704,8 +704,6 @@ where
                 )
                 .await?;
         }
-        self.stored_indices.start += self.front_delete_count;
-        self.stored_indices.end += self.new_back_values.len();
         self.new_back_values.clear();
         self.front_delete_count = 0;
         Ok(())
