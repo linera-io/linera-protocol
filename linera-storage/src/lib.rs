@@ -24,15 +24,18 @@ use std::fmt::Debug;
 /// Communicate with a persistent storage using the "views" abstraction.
 #[async_trait]
 pub trait Store {
-    /// The `context` data-type provided by the storage implementation in use.
+    /// The low-level storage implementation in use.
     type Context: ChainStateViewContext<Extra = ChainId, Error = Self::Error>;
+    /// The error type for this store.
     type Error: std::error::Error + Debug + Sync + Send;
 
     /// Load the view of a chain state.
     async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, Self::Error>;
 
+    /// Read the certificate with the given hash.
     async fn read_certificate(&self, hash: HashValue) -> Result<Certificate, Self::Error>;
 
+    /// Write the given certificate.
     async fn write_certificate(&self, certificate: Certificate) -> Result<(), Self::Error>;
 
     /// Load the view of a chain state and check that it is active.
@@ -51,6 +54,7 @@ pub trait Store {
         Ok(chain)
     }
 
+    /// Read a number of certificates in parallel.
     async fn read_certificates<I: IntoIterator<Item = HashValue> + Send>(
         &self,
         keys: I,
@@ -74,6 +78,7 @@ pub trait Store {
         Ok(certs)
     }
 
+    /// Initialize a chain in a simple way (used for testing and to create a genesis state).
     async fn create_chain(
         &self,
         committee: Committee,
