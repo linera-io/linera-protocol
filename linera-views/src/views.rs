@@ -847,8 +847,7 @@ pub trait CollectionOperations<I>: Context {
     /// write to `batch`.
     async fn remove_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error>;
 
-    // In contrast to other views, there is no delete operation for CollectionOperation
-    // This is because of the recursive nature, they have to be implemented differently.
+    // TODO(#149): In contrast to other views, there is no delete operation for CollectionOperation.
 }
 
 #[async_trait]
