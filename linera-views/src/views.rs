@@ -36,7 +36,7 @@ pub trait Context {
     where
         F: FnOnce(&mut Self::Batch) -> futures::future::BoxFuture<Result<(), Self::Error>>
             + Send
-        + Sync;
+            + Sync;
 
     /// Create a new [`Self::Batch`] to collect write operations.
     fn create_batch(&self) -> Self::Batch;
@@ -533,7 +533,7 @@ where
             for (index, update) in mem::take(&mut self.updates) {
                 match update {
                     None => self.context.remove(batch, index).await?,
-                    Some(value) => self.context.insert(batch, index, value).await?
+                    Some(value) => self.context.insert(batch, index, value).await?,
                 }
             }
         }

@@ -148,7 +148,10 @@ impl StateStore for DynamoDbTestStore {
 }
 
 #[cfg(test)]
-async fn test_store<S>(store: &mut S, do_flush: bool) -> <<S::Context as HashingContext>::Hasher as Hasher>::Output
+async fn test_store<S>(
+    store: &mut S,
+    do_flush: bool,
+) -> <<S::Context as HashingContext>::Hasher as Hasher>::Output
 where
     S: StateStore,
 {
@@ -366,7 +369,6 @@ where
     staged_hash
 }
 
-
 #[cfg(test)]
 async fn test_views_in_memory_param(do_flush: bool) {
     let mut store = MemoryTestStore::default();
@@ -375,8 +377,6 @@ async fn test_views_in_memory_param(do_flush: bool) {
     let entry = store.states.get(&1).unwrap().clone();
     assert!(entry.lock().await.is_empty());
 }
-
-
 
 #[tokio::test]
 async fn test_views_in_memory() {
@@ -408,7 +408,6 @@ async fn test_views_in_rocksdb() {
         test_views_in_rocksdb_param(do_flush).await
     }
 }
-
 
 #[tokio::test]
 #[ignore]
