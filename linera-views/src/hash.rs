@@ -54,7 +54,7 @@ where
 impl<C, T> HashView<C> for RegisterView<C, T>
 where
     C: HashingContext + RegisterOperations<T> + Send + Sync,
-    T: Default + Send + Sync + Serialize,
+    T: Clone + Default + Send + Sync + Serialize,
 {
     async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, C::Error> {
         let mut hasher = C::Hasher::default();

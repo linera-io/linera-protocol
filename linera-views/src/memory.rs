@@ -110,6 +110,12 @@ where
     {
         builder(&mut ()).await
     }
+
+    fn create_batch(&self) -> Self::Batch {}
+
+    async fn write_batch(&self, (): Self::Batch) -> Result<(), Self::Error> {
+        Ok(())
+    }
 }
 
 #[async_trait]

@@ -423,6 +423,14 @@ where
     {
         let mut batch = Batch(Vec::new());
         builder(&mut batch).await?;
+        self.write_batch(batch).await
+    }
+
+    fn create_batch(&self) -> Self::Batch {
+        Batch(Vec::new())
+    }
+
+    async fn write_batch(&self, batch: Self::Batch) -> Result<(), Self::Error> {
         for operation in batch.0 {
             match operation {
                 WriteOperation::Delete { key } => self.process_delete(key).await?,

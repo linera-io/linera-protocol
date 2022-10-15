@@ -200,6 +200,14 @@ where
     {
         let mut batch = Batch(Vec::new());
         builder(&mut batch).await?;
+        self.write_batch(batch).await
+    }
+
+    fn create_batch(&self) -> Self::Batch {
+        Batch(Vec::new())
+    }
+
+    async fn write_batch(&self, batch: Self::Batch) -> Result<(), Self::Error> {
         let db = self.db.clone();
         tokio::task::spawn_blocking(move || {
             let mut inner_batch = rocksdb::WriteBatchWithTransaction::default();
