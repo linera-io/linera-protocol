@@ -88,9 +88,8 @@ where
         action: UserAction<'_>,
     ) -> Result<Vec<ApplicationResult>, Error> {
         let application = crate::get_user_application(application_id)?;
-        let results = Arc::default();
-        let storage_context =
-            StorageContext::new(chain_id, application_id, self, Arc::clone(&results));
+        let mut results = Vec::new();
+        let storage_context = StorageContext::new(chain_id, application_id, self, &mut results);
         let result = match action {
             UserAction::Operation(context, operation) => {
                 application
@@ -103,9 +102,6 @@ where
                     .await?
             }
         };
-        let mut results = Arc::try_unwrap(results)
-            .expect("All nested calls should have returned by now")
-            .into_inner();
         results.push(ApplicationResult::User(application_id, result));
         Ok(results)
     }
@@ -177,7 +173,7 @@ pub struct StorageContext<'a, C, const WRITABLE: bool> {
     application_id: ApplicationId,
     execution_state: Arc<Mutex<&'a mut ExecutionStateView<C>>>,
     active_user_states: Arc<Mutex<ActiveUserStates<C>>>,
-    results: Arc<Mutex<Vec<ApplicationResult>>>,
+    results: Arc<Mutex<&'a mut Vec<ApplicationResult>>>,
 }
 
 impl<'a, C, const W: bool> StorageContext<'a, C, W> {
@@ -185,14 +181,14 @@ impl<'a, C, const W: bool> StorageContext<'a, C, W> {
         chain_id: ChainId,
         application_id: ApplicationId,
         execution_state: &'a mut ExecutionStateView<C>,
-        results: Arc<Mutex<Vec<ApplicationResult>>>,
+        results: &'a mut Vec<ApplicationResult>,
     ) -> Self {
         Self {
             chain_id,
             application_id,
             execution_state: Arc::new(Mutex::new(execution_state)),
             active_user_states: Arc::default(),
-            results,
+            results: Arc::new(Mutex::new(results)),
         }
     }
 }
