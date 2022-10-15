@@ -548,6 +548,9 @@ pub enum RocksdbViewError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 
+    #[error("Failed to lock collection entry: {0}")]
+    TryLockError(#[from] tokio::sync::TryLockError),
+
     #[error("Rocksdb error: {0}")]
     Rocksdb(#[from] rocksdb::Error),
 

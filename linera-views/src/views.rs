@@ -8,8 +8,10 @@ use std::{
     fmt::Debug,
     mem,
     ops::Range,
+    sync::Arc,
 };
 use thiserror::Error;
+use tokio::sync::{Mutex, OwnedMutexGuard};
 
 #[cfg(test)]
 #[path = "unit_tests/views.rs"]
@@ -26,7 +28,13 @@ pub trait Context {
     type Extra: Clone + Send + Sync;
 
     /// The error type in use.
-    type Error: std::error::Error + Debug + Send + Sync + From<ViewError> + From<std::io::Error>;
+    type Error: std::error::Error
+        + Debug
+        + Send
+        + Sync
+        + From<ViewError>
+        + From<std::io::Error>
+        + From<tokio::sync::TryLockError>;
 
     /// Getter for the user provided data.
     fn extra(&self) -> &Self::Extra;
@@ -58,6 +66,9 @@ pub trait View<C: Context>: Sized {
     /// Discard all pending changes. After that `commit` should have no effect to storage.
     fn rollback(&mut self);
 
+    /// Reset to the default values.
+    fn reset_to_default(&mut self);
+
     /// Persist changes to storage. This consumes the view. Crash-resistant storage
     /// implementations are expected to accumulate the desired changes in the `batch`
     /// variable first. If the view is dropped without calling `commit`, staged changes
@@ -71,9 +82,6 @@ pub trait View<C: Context>: Sized {
     /// subviews. Crash-resistant storage implementations are expected to accumulate the
     /// desired changes into the `batch` variable first.
     async fn delete(self, batch: &mut C::Batch) -> Result<(), C::Error>;
-
-    /// Reset to the default values. Needed by [`CollectionView::remove_entry`].
-    fn reset_to_default(&mut self);
 }
 
 #[derive(Error, Debug)]
@@ -83,6 +91,11 @@ pub enum ViewError {
 
     #[error("failed to serialize value to calculate its hash")]
     Serialization(#[from] bcs::Error),
+
+    #[error(
+        "trying to commit or delete a collection view while some entries are still being accessed"
+    )]
+    CannotAcquireCollectionEntry,
 }
 
 /// A view that adds a prefix to all the keys of the contained view.
@@ -816,12 +829,21 @@ where
 }
 
 /// A view that supports accessing a collection of views of the same kind, indexed by a
-/// key.
+/// key, one subview at a time.
 #[derive(Debug, Clone)]
 pub struct CollectionView<C, I, W> {
     context: C,
     was_reset_to_default: bool,
     updates: BTreeMap<I, Option<W>>,
+}
+
+/// A view that supports accessing a collection of views of the same kind, indexed by a
+/// key, possibly several subviews at a time.
+#[derive(Debug)]
+pub struct ReentrantCollectionView<C, I, W> {
+    context: C,
+    was_reset_to_default: bool,
+    updates: BTreeMap<I, Option<Arc<Mutex<W>>>>,
 }
 
 /// The context operations supporting [`CollectionView`].
@@ -1007,13 +1029,205 @@ where
 impl<C, I, W> CollectionView<C, I, W>
 where
     C: CollectionOperations<I> + Send,
-    I: Eq + Ord + Sync + Clone + Send + Debug,
+    I: Eq + Ord + Clone + Debug + Sync,
     W: View<C> + Sync,
 {
     /// Execute a function on each index.
     pub async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), C::Error>
     where
         F: FnMut(I) + Send,
+    {
+        if !self.was_reset_to_default {
+            self.context
+                .for_each_index(|index: I| {
+                    if !self.updates.contains_key(&index) {
+                        f(index);
+                    }
+                })
+                .await?;
+        }
+        for (index, entry) in &self.updates {
+            if entry.is_some() {
+                f(index.clone());
+            }
+        }
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl<C, I, W> View<C> for ReentrantCollectionView<C, I, W>
+where
+    C: CollectionOperations<I> + Send,
+    I: Send + Ord + Sync + Debug + Clone,
+    W: View<C> + Send,
+{
+    fn context(&self) -> &C {
+        &self.context
+    }
+
+    async fn load(context: C) -> Result<Self, C::Error> {
+        Ok(Self {
+            context,
+            was_reset_to_default: false,
+            updates: BTreeMap::new(),
+        })
+    }
+
+    fn rollback(&mut self) {
+        self.was_reset_to_default = false;
+        self.updates.clear();
+    }
+
+    async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+        self.flush(batch).await
+    }
+
+    async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+        if self.was_reset_to_default {
+            self.was_reset_to_default = false;
+            self.delete_entries(batch).await?;
+            for (index, update) in mem::take(&mut self.updates) {
+                if let Some(view) = update {
+                    let view = Arc::try_unwrap(view)
+                        .map_err(|_| ViewError::CannotAcquireCollectionEntry)?
+                        .into_inner();
+                    view.commit(batch).await?;
+                    self.context.add_index(batch, index).await?;
+                }
+            }
+        } else {
+            for (index, update) in mem::take(&mut self.updates) {
+                match update {
+                    Some(view) => {
+                        let view = Arc::try_unwrap(view)
+                            .map_err(|_| ViewError::CannotAcquireCollectionEntry)?
+                            .into_inner();
+                        view.commit(batch).await?;
+                        self.context.add_index(batch, index).await?;
+                    }
+                    None => {
+                        let context = self.context.clone_with_scope(&index);
+                        self.context.remove_index(batch, index).await?;
+                        let view = W::load(context).await?;
+                        view.delete(batch).await?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    async fn delete(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+        self.delete_entries(batch).await
+    }
+
+    fn reset_to_default(&mut self) {
+        self.was_reset_to_default = true;
+        self.updates.clear();
+    }
+}
+
+impl<C, I, W> ReentrantCollectionView<C, I, W>
+where
+    C: CollectionOperations<I> + Send,
+    I: Eq + Ord + Sync + Clone + Send + Debug,
+    W: View<C>,
+{
+    /// Delete all entries in this [`Collection`].
+    async fn delete_entries(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+        let stored_indices = self.context.indices().await?;
+        for index in &stored_indices {
+            let context = self.context.clone_with_scope(index);
+            self.context.remove_index(batch, index.clone()).await?;
+            let view = W::load(context).await?;
+            view.delete(batch).await?;
+        }
+        Ok(())
+    }
+
+    /// Obtain a subview for the data at the given index in the collection. If an entry
+    /// was removed before then a default entry is put on this index.
+    pub async fn try_load_entry(&mut self, index: I) -> Result<OwnedMutexGuard<W>, C::Error> {
+        match self.updates.entry(index.clone()) {
+            btree_map::Entry::Occupied(e) => {
+                let f = e.into_mut();
+                match f {
+                    Some(view) => Ok(view.clone().try_lock_owned()?),
+                    None => {
+                        let context = self.context.clone_with_scope(&index);
+                        // Obtain a view and set its pending state to the default (e.g. empty) state
+                        let mut view = W::load(context).await?;
+                        view.reset_to_default();
+                        let wrapped_view = Arc::new(Mutex::new(view));
+                        *f = Some(wrapped_view.clone());
+                        Ok(wrapped_view.try_lock_owned()?)
+                    }
+                }
+            }
+            btree_map::Entry::Vacant(e) => {
+                let context = self.context.clone_with_scope(&index);
+                let mut view = W::load(context).await?;
+                if self.was_reset_to_default {
+                    view.reset_to_default();
+                }
+                let wrapped_view = Arc::new(Mutex::new(view));
+                e.insert(Some(wrapped_view.clone()));
+                Ok(wrapped_view.try_lock_owned()?)
+            }
+        }
+    }
+
+    /// Mark the entry so that it is removed in the next commit.
+    pub fn remove_entry(&mut self, index: I) {
+        if self.was_reset_to_default {
+            self.updates.remove(&index);
+        } else {
+            self.updates.insert(index, None);
+        }
+    }
+
+    /// Mark the entry so that it is removed in the next commit.
+    pub async fn try_reset_entry_to_default(&mut self, index: I) -> Result<(), C::Error> {
+        let mut view = self.try_load_entry(index).await?;
+        view.reset_to_default();
+        Ok(())
+    }
+
+    /// Return the list of indices in the collection.
+    pub async fn indices(&mut self) -> Result<Vec<I>, C::Error> {
+        let mut indices = Vec::new();
+        if !self.was_reset_to_default {
+            for index in self.context.indices().await? {
+                if !self.updates.contains_key(&index) {
+                    indices.push(index);
+                }
+            }
+        }
+        for (index, entry) in &self.updates {
+            if entry.is_some() {
+                indices.push(index.clone());
+            }
+        }
+        indices.sort();
+        Ok(indices)
+    }
+
+    pub fn extra(&self) -> &C::Extra {
+        self.context.extra()
+    }
+}
+
+impl<C, I, W> ReentrantCollectionView<C, I, W>
+where
+    C: CollectionOperations<I> + Send,
+    I: Eq + Ord + Clone + Debug + Send + Sync,
+    W: View<C> + Send + Sync,
+{
+    /// Execute a function on each index.
+    pub async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), C::Error>
+    where
+        F: FnMut(I) + Send + Sync,
     {
         if !self.was_reset_to_default {
             self.context
