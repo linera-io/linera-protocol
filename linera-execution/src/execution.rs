@@ -194,11 +194,22 @@ impl<'a, C, const W: bool> StorageContext<'a, C, W> {
 }
 
 #[async_trait]
-impl<'a, C> QueryableStorageContext for StorageContext<'a, C, false>
+impl<'a, C, const W: bool> crate::StorageContext for StorageContext<'a, C, W>
 where
     C: ExecutionStateViewContext<Extra = ChainId>,
     Error: From<C::Error>,
 {
+    async fn try_read_system_balance(&self) -> Result<crate::system::Balance, Error> {
+        let value = *self
+            .execution_state
+            .try_lock()
+            .map_err(C::Error::from)?
+            .system
+            .balance
+            .get();
+        Ok(value)
+    }
+
     async fn try_read_my_state(&self) -> Result<Vec<u8>, Error> {
         let state = self
             .execution_state
@@ -211,7 +222,14 @@ where
             .to_vec();
         Ok(state)
     }
+}
 
+#[async_trait]
+impl<'a, C> QueryableStorageContext for StorageContext<'a, C, false>
+where
+    C: ExecutionStateViewContext<Extra = ChainId>,
+    Error: From<C::Error>,
+{
     /// Note that queries are not available from writable contexts.
     async fn try_query_application(
         &self,

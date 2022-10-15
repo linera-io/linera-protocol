@@ -140,9 +140,17 @@ pub struct QueryContext {
 }
 
 #[async_trait]
-pub trait QueryableStorageContext: Send + Sync {
-    async fn try_read_my_state(&self) -> Result<Vec<u8>, Error>;
+pub trait StorageContext: Send + Sync {
+    /// Read the system balance.
+    async fn try_read_system_balance(&self) -> Result<crate::system::Balance, Error>;
 
+    /// Read the application state.
+    async fn try_read_my_state(&self) -> Result<Vec<u8>, Error>;
+}
+
+#[async_trait]
+pub trait QueryableStorageContext: StorageContext {
+    /// Query another application.
     async fn try_query_application(
         &self,
         callee_id: ApplicationId,
@@ -152,11 +160,14 @@ pub trait QueryableStorageContext: Send + Sync {
 }
 
 #[async_trait]
-pub trait CallableStorageContext: Send + Sync {
+pub trait CallableStorageContext: StorageContext {
+    /// Read the application state and prevent further reading/loading until the state is saved.
     async fn try_load_my_state(&self) -> Result<Vec<u8>, Error>;
 
+    /// Save the application state and allow reading/loading the state again.
     async fn try_save_my_state(&self, state: Vec<u8>) -> Result<(), Error>;
 
+    /// Call another application.
     async fn try_call_application(
         &self,
         authenticated: bool,
