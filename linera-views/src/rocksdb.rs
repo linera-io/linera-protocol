@@ -197,7 +197,9 @@ where
     {
         let mut batch = MyBatch(rocksdb::WriteBatchWithTransaction::default());
         builder(&mut batch).await?;
-        self.write_batch(batch).await
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || db.write(batch.0)).await??;
+        Ok(())
     }
 
     fn create_batch(&self) -> Self::Batch {
