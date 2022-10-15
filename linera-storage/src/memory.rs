@@ -4,8 +4,12 @@
 use crate::{ChainStateView, Store};
 use async_trait::async_trait;
 use dashmap::DashMap;
-use linera_base::{crypto::HashValue, messages::ChainId};
+use linera_base::{
+    crypto::HashValue,
+    messages::{ApplicationId, ChainId},
+};
 use linera_chain::messages::Certificate;
+use linera_execution::{ChainRuntimeContext, UserApplicationCode};
 use linera_views::{
     memory::{MemoryContext, MemoryStoreMap, MemoryViewError},
     views::View,
@@ -17,6 +21,7 @@ use tokio::sync::Mutex;
 struct MemoryStore {
     chains: DashMap<ChainId, Arc<Mutex<MemoryStoreMap>>>,
     certificates: DashMap<HashValue, Certificate>,
+    user_applications: Arc<DashMap<ApplicationId, UserApplicationCode>>,
 }
 
 #[derive(Clone, Default)]
@@ -24,7 +29,7 @@ pub struct MemoryStoreClient(Arc<MemoryStore>);
 
 #[async_trait]
 impl Store for MemoryStoreClient {
-    type Context = MemoryContext<ChainId>;
+    type Context = MemoryContext<ChainRuntimeContext>;
     type Error = MemoryViewError;
 
     async fn load_chain(
@@ -38,8 +43,12 @@ impl Store for MemoryStoreClient {
             .or_insert_with(|| Arc::new(Mutex::new(BTreeMap::new())))
             .clone();
         log::trace!("Acquiring lock on {:?}", id);
-        let context = MemoryContext::new(state.lock_owned().await, id);
-        ChainStateView::load(context).await
+        let runtime_context = ChainRuntimeContext {
+            chain_id: id,
+            user_applications: self.0.user_applications.clone(),
+        };
+        let db_context = MemoryContext::new(state.lock_owned().await, runtime_context);
+        ChainStateView::load(db_context).await
     }
 
     async fn read_certificate(&self, hash: HashValue) -> Result<Certificate, MemoryViewError> {

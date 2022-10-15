@@ -14,33 +14,20 @@ pub use system::{
 };
 
 use async_trait::async_trait;
+use dashmap::DashMap;
 use linera_base::{
     error::Error,
     messages::{ApplicationId, BlockHeight, ChainId, Destination, EffectId},
 };
-use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-};
+use std::sync::Arc;
 
-/// Temporary map to hold a fixed set of prototyped smart-contracts.
-static USER_APPLICATIONS: Lazy<
-    Mutex<HashMap<ApplicationId, Arc<dyn UserApplication + Send + Sync + 'static>>>,
-> = Lazy::new(|| {
-    let m = HashMap::new();
-    Mutex::new(m)
-});
+pub type UserApplicationCode = Arc<dyn UserApplication + Send + Sync + 'static>;
 
-fn get_user_application(
-    application_id: ApplicationId,
-) -> Result<Arc<dyn UserApplication + Send + Sync + 'static>, Error> {
-    let applications = USER_APPLICATIONS.lock().unwrap();
-    Ok(applications
-        .get(&application_id)
-        .ok_or(Error::UnknownApplication)?
-        .clone())
+#[derive(Clone)]
+pub struct ChainRuntimeContext {
+    pub chain_id: ChainId,
+    pub user_applications: Arc<DashMap<ApplicationId, UserApplicationCode>>,
 }
 
 /// An operation to be executed in a block.
@@ -74,7 +61,7 @@ impl From<Vec<u8>> for Effect {
 }
 
 #[async_trait]
-trait UserApplication {
+pub trait UserApplication {
     /// Apply an operation from the current block.
     async fn apply_operation(
         &self,
@@ -207,5 +194,18 @@ impl From<OperationContext> for EffectId {
             height: context.height,
             index: context.index,
         }
+    }
+}
+
+impl ChainRuntimeContext {
+    pub fn get_user_application(
+        &self,
+        application_id: ApplicationId,
+    ) -> Result<UserApplicationCode, Error> {
+        Ok(self
+            .user_applications
+            .get(&application_id)
+            .ok_or(Error::UnknownApplication)?
+            .clone())
     }
 }

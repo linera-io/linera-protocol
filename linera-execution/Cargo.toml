@@ -14,6 +14,7 @@ once_cell = "1.13.0"
 serde = { version = "1.0.130", features = ["derive"] }
 thiserror = "1.0.31"
 tokio = "1.12.0"
+dashmap = "5.3.4"
 
 linera-base = { path = "../linera-base" }
 linera-views = { path = "../linera-views" }

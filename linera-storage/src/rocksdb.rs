@@ -3,8 +3,13 @@
 
 use crate::{ChainStateView, Store};
 use async_trait::async_trait;
-use linera_base::{crypto::HashValue, messages::ChainId};
+use dashmap::DashMap;
+use linera_base::{
+    crypto::HashValue,
+    messages::{ApplicationId, ChainId},
+};
 use linera_chain::messages::Certificate;
+use linera_execution::{ChainRuntimeContext, UserApplicationCode};
 use linera_views::{
     chain_guards::ChainGuards,
     rocksdb::{KeyValueOperations, RocksdbContext, RocksdbViewError, DB},
@@ -20,6 +25,7 @@ mod tests;
 struct RocksdbStore {
     db: Arc<DB>,
     guards: ChainGuards,
+    user_applications: Arc<DashMap<ApplicationId, UserApplicationCode>>,
 }
 
 #[derive(Clone)]
@@ -39,6 +45,7 @@ impl RocksdbStore {
         Self {
             db: Arc::new(db),
             guards: ChainGuards::default(),
+            user_applications: Arc::default(),
         }
     }
 }
@@ -51,7 +58,7 @@ enum BaseKey {
 
 #[async_trait]
 impl Store for RocksdbStoreClient {
-    type Context = RocksdbContext<ChainId>;
+    type Context = RocksdbContext<ChainRuntimeContext>;
     type Error = RocksdbViewError;
 
     async fn load_chain(
@@ -62,8 +69,12 @@ impl Store for RocksdbStoreClient {
         let base_key = bcs::to_bytes(&BaseKey::ChainState(id))?;
         log::trace!("Acquiring lock on {:?}", id);
         let chain_guard = self.0.guards.guard(id).await;
-        let context = RocksdbContext::new(db, chain_guard, base_key, id);
-        ChainStateView::load(context).await
+        let runtime_context = ChainRuntimeContext {
+            chain_id: id,
+            user_applications: self.0.user_applications.clone(),
+        };
+        let db_context = RocksdbContext::new(db, chain_guard, base_key, runtime_context);
+        ChainStateView::load(db_context).await
     }
 
     async fn read_certificate(&self, hash: HashValue) -> Result<Certificate, RocksdbViewError> {

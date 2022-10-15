@@ -18,14 +18,14 @@ use linera_base::{
     messages::{ChainDescription, ChainId, Epoch, Owner},
 };
 use linera_chain::{messages::Certificate, ChainStateView, ChainStateViewContext};
-use linera_execution::{system::Balance, ChainOwnership};
+use linera_execution::{system::Balance, ChainOwnership, ChainRuntimeContext};
 use std::fmt::Debug;
 
 /// Communicate with a persistent storage using the "views" abstraction.
 #[async_trait]
 pub trait Store {
     /// The low-level storage implementation in use.
-    type Context: ChainStateViewContext<Extra = ChainId, Error = Self::Error>;
+    type Context: ChainStateViewContext<Extra = ChainRuntimeContext, Error = Self::Error>;
     /// The error type for this store.
     type Error: std::error::Error + Debug + Sync + Send;
 
