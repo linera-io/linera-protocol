@@ -242,7 +242,7 @@ where
         _batch: &mut Self::Batch,
         count: usize,
     ) -> Result<(), Self::Error> {
-        stored_indices.start += count;
+        stored_indices.end -= count;
         self.with_mut(|v: &mut VecDeque<T>| {
             v.drain(..count);
         })

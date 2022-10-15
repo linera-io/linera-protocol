@@ -152,9 +152,9 @@ async fn test_store<S>(store: &mut S, do_flush: bool) -> <<S::Context as Hashing
 where
     S: StateStore,
 {
-    let do_map = false;
+    let do_map = true;
     let do_queue = true;
-    let do_log = false;
+    let do_log = true;
     let default_hash = {
         let mut view = store.load(1).await.unwrap();
         view.hash().await.unwrap()
@@ -325,6 +325,9 @@ where
                 .unwrap();
             assert_eq!(subview.read(0..10).await.unwrap(), vec![17, 18]);
         }
+        if do_flush {
+            view.write_commit_and_reset().await.unwrap();
+        }
         {
             let subview = view
                 .collection2
@@ -382,22 +385,30 @@ async fn test_views_in_memory() {
     }
 }
 
-#[tokio::test]
-async fn test_views_in_rocksdb() {
+#[cfg(test)]
+async fn test_views_in_rocksdb_param(do_flush: bool) {
     let dir = tempfile::TempDir::new().unwrap();
     let mut options = rocksdb::Options::default();
     options.create_if_missing(true);
 
     let db = DB::open(&options, &dir).unwrap();
     let mut store = RocksdbTestStore::new(db);
-    let hash = test_store(&mut store, false).await;
+    let hash = test_store(&mut store, do_flush).await;
     assert_eq!(store.accessed_chains.len(), 1);
     assert_eq!(store.db.count_keys().await.unwrap(), 0);
 
     let mut store = MemoryTestStore::default();
-    let hash2 = test_store(&mut store, false).await;
+    let hash2 = test_store(&mut store, do_flush).await;
     assert_eq!(hash, hash2);
 }
+
+#[tokio::test]
+async fn test_views_in_rocksdb() {
+    for do_flush in [true, false] {
+        test_views_in_rocksdb_param(do_flush).await
+    }
+}
+
 
 #[tokio::test]
 #[ignore]
