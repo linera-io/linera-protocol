@@ -12,8 +12,8 @@ use linera_base::{
     messages::{ApplicationId, BlockHeight, ChainId, Destination, EffectId, Medium, Origin},
 };
 use linera_execution::{
-    system::SYSTEM, ApplicationResult, Effect, EffectContext, ExecutionStateView,
-    ExecutionStateViewContext, OperationContext, RawApplicationResult,
+    system::SYSTEM, ApplicationResult, ChainRuntimeContext, Effect, EffectContext,
+    ExecutionStateView, ExecutionStateViewContext, OperationContext, RawApplicationResult,
 };
 use linera_views::{
     impl_view,
@@ -116,7 +116,7 @@ impl_view!(
 
 impl<C> OutboxStateView<C>
 where
-    C: OutboxStateViewContext<Extra = ChainId>,
+    C: OutboxStateViewContext<Extra = ChainRuntimeContext>,
     Error: From<C::Error>,
 {
     pub async fn block_heights(&mut self) -> Result<Vec<BlockHeight>, Error> {
@@ -177,11 +177,11 @@ pub struct Event {
 
 impl<C> ChainStateView<C>
 where
-    C: ChainStateViewContext<Extra = ChainId>,
+    C: ChainStateViewContext<Extra = ChainRuntimeContext>,
     Error: From<C::Error>,
 {
     pub fn chain_id(&self) -> ChainId {
-        *self.execution_state.system.description.extra()
+        self.execution_state.system.description.extra().chain_id
     }
 
     async fn mark_messages_as_received(

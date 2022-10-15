@@ -3,9 +3,14 @@
 
 use crate::{ChainStateView, Store};
 use async_trait::async_trait;
+use dashmap::DashMap;
 use futures::Future;
-use linera_base::{crypto::HashValue, messages::ChainId};
+use linera_base::{
+    crypto::HashValue,
+    messages::{ApplicationId, ChainId},
+};
 use linera_chain::messages::Certificate;
+use linera_execution::{ChainRuntimeContext, UserApplicationCode};
 use linera_views::{
     chain_guards::{ChainGuard, ChainGuards},
     dynamo_db::{
@@ -24,6 +29,7 @@ mod tests;
 struct DynamoDbStore {
     context: DynamoDbContext<()>,
     guards: ChainGuards,
+    user_applications: Arc<DashMap<ApplicationId, UserApplicationCode>>,
 }
 
 #[derive(Clone)]
@@ -95,6 +101,7 @@ impl DynamoDbStore {
             Self {
                 context,
                 guards: ChainGuards::default(),
+                user_applications: Arc::new(DashMap::new()),
             },
             table_status,
         ))
@@ -124,7 +131,7 @@ enum BaseKey {
 
 #[async_trait]
 impl Store for DynamoDbStoreClient {
-    type Context = DynamoDbContext<ChainId>;
+    type Context = DynamoDbContext<ChainRuntimeContext>;
     type Error = DynamoDbContextError;
 
     async fn load_chain(
@@ -133,11 +140,16 @@ impl Store for DynamoDbStoreClient {
     ) -> Result<ChainStateView<Self::Context>, DynamoDbContextError> {
         log::trace!("Acquiring lock on {:?}", id);
         let guard = self.0.guards.guard(id).await;
-        let chain_context =
-            self.0
-                .context
-                .clone_with_sub_scope(Some(guard), &BaseKey::ChainState(id), id);
-        ChainStateView::load(chain_context).await
+        let runtime_context = ChainRuntimeContext {
+            chain_id: id,
+            user_applications: self.0.user_applications.clone(),
+        };
+        let db_context = self.0.context.clone_with_sub_scope(
+            Some(guard),
+            &BaseKey::ChainState(id),
+            runtime_context,
+        );
+        ChainStateView::load(db_context).await
     }
 
     async fn read_certificate(&self, hash: HashValue) -> Result<Certificate, DynamoDbContextError> {
