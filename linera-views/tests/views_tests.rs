@@ -148,7 +148,7 @@ impl StateStore for DynamoDbTestStore {
 }
 
 #[cfg(test)]
-async fn test_store<S>(store: &mut S) -> <<S::Context as HashingContext>::Hasher as Hasher>::Output
+async fn test_store<S>(store: &mut S, do_flush: bool) -> <<S::Context as HashingContext>::Hasher as Hasher>::Output
 where
     S: StateStore,
 {
@@ -254,6 +254,9 @@ where
             subview.push(17);
             subview.push(18);
         }
+        if do_flush {
+            view.write_commit_and_reset().await.unwrap();
+        }
         let hash = view.hash().await.unwrap();
         view.write_commit().await.unwrap();
         hash
@@ -275,6 +278,11 @@ where
         assert_eq!(view.queue.count(), 2);
         view.queue.delete_front();
         assert_eq!(view.queue.front().await.unwrap(), Some(8));
+        /*
+        if do_flush {
+            view.write_commit_and_reset().await.unwrap();
+    }
+        */
         view.queue.delete_front();
         assert_eq!(view.queue.front().await.unwrap(), None);
         assert_eq!(view.queue.count(), 0);
@@ -327,13 +335,23 @@ where
     staged_hash
 }
 
-#[tokio::test]
-async fn test_views_in_memory() {
+
+#[cfg(test)]
+async fn test_views_in_memory_param(do_flush: bool) {
     let mut store = MemoryTestStore::default();
-    test_store(&mut store).await;
+    test_store(&mut store, do_flush).await;
     assert_eq!(store.states.len(), 1);
     let entry = store.states.get(&1).unwrap().clone();
     assert!(entry.lock().await.is_empty());
+}
+
+
+
+#[tokio::test]
+async fn test_views_in_memory() {
+    for do_flush in [true, false] {
+        test_views_in_memory_param(do_flush).await
+    }
 }
 
 #[tokio::test]
@@ -344,12 +362,12 @@ async fn test_views_in_rocksdb() {
 
     let db = DB::open(&options, &dir).unwrap();
     let mut store = RocksdbTestStore::new(db);
-    let hash = test_store(&mut store).await;
+    let hash = test_store(&mut store, false).await;
     assert_eq!(store.accessed_chains.len(), 1);
     assert_eq!(store.db.count_keys().await.unwrap(), 0);
 
     let mut store = MemoryTestStore::default();
-    let hash2 = test_store(&mut store).await;
+    let hash2 = test_store(&mut store, false).await;
     assert_eq!(hash, hash2);
 }
 
@@ -357,11 +375,11 @@ async fn test_views_in_rocksdb() {
 #[ignore]
 async fn test_views_in_dynamo_db() -> Result<(), anyhow::Error> {
     let mut store = DynamoDbTestStore::new().await?;
-    let hash = test_store(&mut store).await;
+    let hash = test_store(&mut store, false).await;
     assert_eq!(store.accessed_chains.len(), 1);
 
     let mut store = MemoryTestStore::default();
-    let hash2 = test_store(&mut store).await;
+    let hash2 = test_store(&mut store, false).await;
     assert_eq!(hash, hash2);
 
     Ok(())
