@@ -13,7 +13,8 @@ use linera_views::{
     test_utils::LocalStackTestContext,
     views::{
         CollectionOperations, CollectionView, Context, LogOperations, LogView, MapOperations,
-        MapView, QueueOperations, QueueView, RegisterOperations, RegisterView, ScopedView, View,
+        MapView, QueueOperations, QueueView, ReentrantCollectionView, RegisterOperations,
+        RegisterView, ScopedView, View,
     },
 };
 use std::{
@@ -33,10 +34,11 @@ pub struct StateView<C> {
     pub collection2:
         ScopedView<6, CollectionView<C, String, CollectionView<C, String, RegisterView<C, u32>>>>,
     pub collection3: ScopedView<7, CollectionView<C, String, QueueView<C, u64>>>,
+    pub collection4: ScopedView<8, ReentrantCollectionView<C, String, QueueView<C, u64>>>,
 }
 
 // This also generates `trait StateViewContext: Context ... {}`
-impl_view!(StateView { x1, x2, log, map, queue, collection, collection2, collection3 };
+impl_view!(StateView { x1, x2, log, map, queue, collection, collection2, collection3, collection4 };
            RegisterOperations<u64>,
            RegisterOperations<u32>,
            LogOperations<u32>,
@@ -401,6 +403,29 @@ where
         view.collection.remove_entry("hola".to_string());
         assert_ne!(view.hash().await.unwrap(), stored_hash);
         view.write_commit().await.unwrap();
+    }
+    {
+        let mut view = store.load(1).await.unwrap();
+        {
+            let mut subview = view
+                .collection4
+                .try_load_entry("hola".to_string())
+                .await
+                .unwrap();
+            assert_eq!(subview.read_front(10).await.unwrap(), vec![]);
+            assert!(view
+                .collection4
+                .try_load_entry("hola".to_string())
+                .await
+                .is_err());
+            if config.with_queue {
+                subview.push_back(13);
+                assert_eq!(subview.front().await.unwrap(), Some(13));
+                subview.delete_front();
+                assert_eq!(subview.front().await.unwrap(), None);
+                assert_eq!(subview.count(), 0);
+            }
+        }
     }
     {
         let mut view = store.load(1).await.unwrap();

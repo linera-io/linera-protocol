@@ -807,6 +807,9 @@ pub enum DynamoDbContextError {
     #[error("IO error")]
     Io(#[from] io::Error),
 
+    #[error("Failed to lock collection entry: {0}")]
+    TryLockError(#[from] tokio::sync::TryLockError),
+
     #[error(transparent)]
     View(#[from] ViewError),
 

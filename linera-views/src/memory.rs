@@ -441,6 +441,9 @@ pub enum MemoryViewError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 
+    #[error("Failed to lock collection entry: {0}")]
+    TryLockError(#[from] tokio::sync::TryLockError),
+
     #[error("BCS error: {0}")]
     Bcs(#[from] bcs::Error),
 
