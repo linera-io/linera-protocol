@@ -24,7 +24,6 @@ use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
 };
-use tokio::sync::{OwnedRwLockReadGuard, OwnedRwLockWriteGuard, RwLock, TryLockError};
 
 /// Temporary map to hold a fixed set of prototyped smart-contracts.
 static USER_APPLICATIONS: Lazy<
@@ -80,7 +79,7 @@ trait UserApplication {
     async fn apply_operation(
         &self,
         context: &OperationContext,
-        storage: StorageContext<'_, true>,
+        storage: &dyn CallableStorageContext,
         operation: &[u8],
     ) -> Result<RawApplicationResult<Vec<u8>>, Error>;
 
@@ -88,7 +87,7 @@ trait UserApplication {
     async fn apply_effect(
         &self,
         context: &EffectContext,
-        storage: StorageContext<'_, true>,
+        storage: &dyn CallableStorageContext,
         effect: &[u8],
     ) -> Result<RawApplicationResult<Vec<u8>>, Error>;
 
@@ -97,7 +96,7 @@ trait UserApplication {
     async fn call(
         &self,
         context: &CalleeContext,
-        storage: StorageContext<'_, true>,
+        storage: &dyn CallableStorageContext,
         name: &str,
         argument: &[u8],
     ) -> Result<(Vec<u8>, RawApplicationResult<Vec<u8>>), Error>;
@@ -107,7 +106,7 @@ trait UserApplication {
     async fn query(
         &self,
         context: &QueryContext,
-        storage: StorageContext<'_, false>,
+        storage: &dyn QueryableStorageContext,
         name: &str,
         argument: &[u8],
     ) -> Result<Vec<u8>, Error>;
@@ -140,13 +139,31 @@ pub struct QueryContext {
     pub chain_id: ChainId,
 }
 
-#[derive(Debug, Clone)]
-pub struct StorageContext<'a, const WRITABLE: bool> {
-    chain_id: ChainId,
-    application_id: ApplicationId,
-    // TODO: use a proper shared collection view
-    states: &'a HashMap<ApplicationId, Arc<RwLock<Vec<u8>>>>,
-    results: Arc<Mutex<Vec<ApplicationResult>>>,
+#[async_trait]
+pub trait QueryableStorageContext: Send + Sync {
+    async fn try_read_my_state(&self) -> Result<Vec<u8>, Error>;
+
+    async fn try_query_application(
+        &self,
+        callee_id: ApplicationId,
+        name: &str,
+        argument: &[u8],
+    ) -> Result<Vec<u8>, Error>;
+}
+
+#[async_trait]
+pub trait CallableStorageContext: Send + Sync {
+    async fn try_load_my_state(&self) -> Result<Vec<u8>, Error>;
+
+    async fn try_save_my_state(&self, state: Vec<u8>) -> Result<(), Error>;
+
+    async fn try_call_application(
+        &self,
+        authenticated: bool,
+        callee_id: ApplicationId,
+        name: &str,
+        argument: &[u8],
+    ) -> Result<Vec<u8>, Error>;
 }
 
 #[derive(Debug)]
@@ -179,83 +196,5 @@ impl From<OperationContext> for EffectId {
             height: context.height,
             index: context.index,
         }
-    }
-}
-
-impl<'a, const W: bool> StorageContext<'a, W> {
-    pub fn new(
-        chain_id: ChainId,
-        application_id: ApplicationId,
-        states: &'a HashMap<ApplicationId, Arc<RwLock<Vec<u8>>>>,
-        results: Arc<Mutex<Vec<ApplicationResult>>>,
-    ) -> Self {
-        Self {
-            chain_id,
-            application_id,
-            states,
-            results,
-        }
-    }
-
-    pub fn try_read_my_state(&self) -> Result<OwnedRwLockReadGuard<Vec<u8>>, TryLockError> {
-        let rc = self
-            .states
-            .get(&self.application_id)
-            .expect("active applications should have a state in the map")
-            .clone();
-        rc.try_read_owned()
-    }
-}
-
-impl<'a> StorageContext<'a, false> {
-    /// Note that queries are not available from writable contexts.
-    pub async fn try_query_application(
-        &self,
-        callee_id: ApplicationId,
-        name: &str,
-        argument: &[u8],
-    ) -> Result<Vec<u8>, Error> {
-        let application = get_user_application(callee_id)?;
-        let query_context = QueryContext {
-            chain_id: self.chain_id,
-        };
-        let value = application
-            .query(&query_context, self.clone(), name, argument)
-            .await?;
-        Ok(value)
-    }
-}
-
-impl<'a> StorageContext<'a, true> {
-    pub fn try_write_my_state(&self) -> Result<OwnedRwLockWriteGuard<Vec<u8>>, TryLockError> {
-        let rc = self
-            .states
-            .get(&self.application_id)
-            .expect("active applications should have a state in the map")
-            .clone();
-        rc.try_write_owned()
-    }
-
-    pub async fn try_call_application(
-        &self,
-        authenticated: bool,
-        callee_id: ApplicationId,
-        name: &str,
-        argument: &[u8],
-    ) -> Result<Vec<u8>, Error> {
-        let authenticated_caller_id = authenticated.then_some(self.application_id);
-        let application = get_user_application(callee_id)?;
-        let callee_context = CalleeContext {
-            chain_id: self.chain_id,
-            authenticated_caller_id,
-        };
-        let (value, result) = application
-            .call(&callee_context, self.clone(), name, argument)
-            .await?;
-        self.results
-            .try_lock()
-            .expect("Execution should be single-threaded")
-            .push(ApplicationResult::User(callee_id, result));
-        Ok(value)
     }
 }
