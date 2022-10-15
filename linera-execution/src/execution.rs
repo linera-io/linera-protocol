@@ -3,18 +3,21 @@
 
 use crate::{
     system::{SystemExecutionStateView, SystemExecutionStateViewContext, SYSTEM},
-    ApplicationResult, Effect, EffectContext, Operation, OperationContext, StorageContext,
+    ApplicationResult, CallableStorageContext, Effect, EffectContext, Operation, OperationContext,
+    QueryableStorageContext,
 };
+use async_trait::async_trait;
 use linera_base::{
     error::Error,
     messages::{ApplicationId, ChainId},
 };
 use linera_views::{
     impl_view,
-    views::{CollectionOperations, CollectionView, RegisterOperations, RegisterView, ScopedView},
+    views::{
+        CollectionOperations, ReentrantCollectionView, RegisterOperations, RegisterView, ScopedView,
+    },
 };
-use std::collections::HashMap;
-use tokio::sync::RwLock;
+use tokio::sync::OwnedMutexGuard;
 
 #[cfg(any(test, feature = "test"))]
 use {
@@ -28,7 +31,7 @@ pub struct ExecutionStateView<C> {
     /// System application.
     pub system: ScopedView<0, SystemExecutionStateView<C>>,
     /// User applications.
-    pub users: ScopedView<1, CollectionView<C, ApplicationId, RegisterView<C, Vec<u8>>>>,
+    pub users: ScopedView<1, ReentrantCollectionView<C, ApplicationId, RegisterView<C, Vec<u8>>>>,
 }
 
 impl_view!(
@@ -85,36 +88,24 @@ where
         action: UserAction<'_>,
     ) -> Result<Vec<ApplicationResult>, Error> {
         let application = crate::get_user_application(application_id)?;
-        let state = self.users.load_entry(application_id).await?;
-        // TODO: use a proper shared collection.
-        let mut map = HashMap::from([(application_id, Arc::new(RwLock::new(state.get().clone())))]);
         let results = Arc::default();
         let storage_context =
-            StorageContext::new(chain_id, application_id, &map, Arc::clone(&results));
+            StorageContext::new(chain_id, application_id, self, Arc::clone(&results));
         let result = match action {
             UserAction::Operation(context, operation) => {
                 application
-                    .apply_operation(context, storage_context, operation)
+                    .apply_operation(context, &storage_context, operation)
                     .await?
             }
             UserAction::Effect(context, effect) => {
                 application
-                    .apply_effect(context, storage_context, effect)
+                    .apply_effect(context, &storage_context, effect)
                     .await?
             }
         };
-        state.set(
-            Arc::try_unwrap(
-                map.remove(&application_id)
-                    .expect("Entry should still be in the map"),
-            )
-            .expect("All nested calls should have returned by now")
-            .into_inner(),
-        );
         let mut results = Arc::try_unwrap(results)
             .expect("All nested calls should have returned by now")
-            .into_inner()
-            .expect("Mutex should not taken");
+            .into_inner();
         results.push(ApplicationResult::User(application_id, result));
         Ok(results)
     }
@@ -175,5 +166,129 @@ where
                 }
             }
         }
+    }
+}
+
+type ActiveUserStates<C> = BTreeMap<ApplicationId, OwnedMutexGuard<RegisterView<C, Vec<u8>>>>;
+
+#[derive(Debug, Clone)]
+pub struct StorageContext<'a, C, const WRITABLE: bool> {
+    chain_id: ChainId,
+    application_id: ApplicationId,
+    execution_state: Arc<Mutex<&'a mut ExecutionStateView<C>>>,
+    active_user_states: Arc<Mutex<ActiveUserStates<C>>>,
+    results: Arc<Mutex<Vec<ApplicationResult>>>,
+}
+
+impl<'a, C, const W: bool> StorageContext<'a, C, W> {
+    pub fn new(
+        chain_id: ChainId,
+        application_id: ApplicationId,
+        execution_state: &'a mut ExecutionStateView<C>,
+        results: Arc<Mutex<Vec<ApplicationResult>>>,
+    ) -> Self {
+        Self {
+            chain_id,
+            application_id,
+            execution_state: Arc::new(Mutex::new(execution_state)),
+            active_user_states: Arc::default(),
+            results,
+        }
+    }
+}
+
+#[async_trait]
+impl<'a, C> QueryableStorageContext for StorageContext<'a, C, false>
+where
+    C: ExecutionStateViewContext<Extra = ChainId>,
+    Error: From<C::Error>,
+{
+    async fn try_read_my_state(&self) -> Result<Vec<u8>, Error> {
+        let state = self
+            .execution_state
+            .try_lock()
+            .map_err(C::Error::from)?
+            .users
+            .try_load_entry(self.application_id)
+            .await?
+            .get()
+            .to_vec();
+        Ok(state)
+    }
+
+    /// Note that queries are not available from writable contexts.
+    async fn try_query_application(
+        &self,
+        callee_id: ApplicationId,
+        name: &str,
+        argument: &[u8],
+    ) -> Result<Vec<u8>, Error> {
+        let application = crate::get_user_application(callee_id)?;
+        let query_context = crate::QueryContext {
+            chain_id: self.chain_id,
+        };
+        let value = application
+            .query(&query_context, self, name, argument)
+            .await?;
+        Ok(value)
+    }
+}
+
+#[async_trait]
+impl<'a, C> CallableStorageContext for StorageContext<'a, C, true>
+where
+    C: ExecutionStateViewContext<Extra = ChainId>,
+    Error: From<C::Error>,
+{
+    async fn try_load_my_state(&self) -> Result<Vec<u8>, Error> {
+        let view = self
+            .execution_state
+            .try_lock()
+            .map_err(C::Error::from)?
+            .users
+            .try_load_entry(self.application_id)
+            .await?;
+        let state = view.get().to_vec();
+        // Remember the view. This will prevent reentrancy.
+        self.active_user_states
+            .try_lock()
+            .map_err(C::Error::from)?
+            .insert(self.application_id, view);
+        Ok(state)
+    }
+
+    async fn try_save_my_state(&self, state: Vec<u8>) -> Result<(), Error> {
+        if let Some(mut view) = self
+            .active_user_states
+            .try_lock()
+            .map_err(C::Error::from)?
+            .remove(&self.application_id)
+        {
+            view.set(state);
+        }
+        Ok(())
+    }
+
+    async fn try_call_application(
+        &self,
+        authenticated: bool,
+        callee_id: ApplicationId,
+        name: &str,
+        argument: &[u8],
+    ) -> Result<Vec<u8>, Error> {
+        let authenticated_caller_id = authenticated.then_some(self.application_id);
+        let application = crate::get_user_application(callee_id)?;
+        let callee_context = crate::CalleeContext {
+            chain_id: self.chain_id,
+            authenticated_caller_id,
+        };
+        let (value, result) = application
+            .call(&callee_context, self, name, argument)
+            .await?;
+        self.results
+            .try_lock()
+            .expect("Execution should be single-threaded")
+            .push(ApplicationResult::User(callee_id, result));
+        Ok(value)
     }
 }
