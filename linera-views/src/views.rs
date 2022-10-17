@@ -319,17 +319,7 @@ where
     }
 
     async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        if self.was_reset_to_default && self.stored_count > 0 {
-            self.context.delete(self.stored_count, batch).await?;
-            self.stored_count = 0
-        }
-        if !self.new_values.is_empty() {
-            self.context
-                .append(self.stored_count, batch, self.new_values)
-                .await
-        } else {
-            Ok(())
-        }
+        self.flush(batch).await
     }
 
     async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
@@ -498,26 +488,7 @@ where
     }
 
     async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        if self.was_reset_to_default {
-            self.context.delete(batch).await?;
-            for (index, update) in self.updates {
-                if let Some(value) = update {
-                    self.context.insert(batch, index, value).await?;
-                }
-            }
-        } else {
-            for (index, update) in self.updates {
-                match update {
-                    None => {
-                        self.context.remove(batch, index).await?;
-                    }
-                    Some(value) => {
-                        self.context.insert(batch, index, value).await?;
-                    }
-                }
-            }
-        }
-        Ok(())
+        self.flush(batch).await
     }
 
     async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
@@ -708,21 +679,7 @@ where
     }
 
     async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        if self.front_delete_count > 0 {
-            self.context
-                .delete_front(&mut self.stored_indices, batch, self.front_delete_count)
-                .await?;
-        }
-        if !self.new_back_values.is_empty() {
-            self.context
-                .append_back(
-                    &mut self.stored_indices,
-                    batch,
-                    self.new_back_values.into_iter().collect(),
-                )
-                .await?;
-        }
-        Ok(())
+        self.flush(batch).await
     }
 
     async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
@@ -917,31 +874,7 @@ where
     }
 
     async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        if self.was_reset_to_default {
-            self.delete_entries(batch).await?;
-            for (index, update) in self.updates {
-                if let Some(view) = update {
-                    view.commit(batch).await?;
-                    self.context.add_index(batch, index).await?;
-                }
-            }
-        } else {
-            for (index, update) in self.updates {
-                match update {
-                    Some(view) => {
-                        view.commit(batch).await?;
-                        self.context.add_index(batch, index).await?;
-                    }
-                    None => {
-                        let context = self.context.clone_with_scope(&index);
-                        self.context.remove_index(batch, index).await?;
-                        let view = W::load(context).await?;
-                        view.delete(batch).await?;
-                    }
-                }
-            }
-        }
-        Ok(())
+        self.flush(batch).await
     }
 
     async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
