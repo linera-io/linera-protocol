@@ -24,10 +24,24 @@ use std::sync::Arc;
 
 pub type UserApplicationCode = Arc<dyn UserApplication + Send + Sync + 'static>;
 
-#[derive(Clone)]
-pub struct ChainRuntimeContext {
-    pub chain_id: ChainId,
-    pub user_applications: Arc<DashMap<ApplicationId, UserApplicationCode>>,
+pub trait ExecutionRuntimeContext {
+    #[cfg(any(test, feature = "test"))]
+    fn new(chain_id: ChainId) -> Self;
+
+    fn chain_id(&self) -> ChainId;
+
+    fn user_applications(&self) -> &Arc<DashMap<ApplicationId, UserApplicationCode>>;
+
+    fn get_user_application(
+        &self,
+        application_id: ApplicationId,
+    ) -> Result<UserApplicationCode, Error> {
+        Ok(self
+            .user_applications()
+            .get(&application_id)
+            .ok_or(Error::UnknownApplication)?
+            .clone())
+    }
 }
 
 /// An operation to be executed in a block.
@@ -194,18 +208,5 @@ impl From<OperationContext> for EffectId {
             height: context.height,
             index: context.index,
         }
-    }
-}
-
-impl ChainRuntimeContext {
-    pub fn get_user_application(
-        &self,
-        application_id: ApplicationId,
-    ) -> Result<UserApplicationCode, Error> {
-        Ok(self
-            .user_applications
-            .get(&application_id)
-            .ok_or(Error::UnknownApplication)?
-            .clone())
     }
 }

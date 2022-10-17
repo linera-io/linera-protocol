@@ -13,14 +13,9 @@ async fn table_is_created() -> Result<(), Error> {
     let initial_tables = list_tables(&client).await?;
     assert!(!initial_tables.contains(table.as_ref()));
 
-    let (_storage, table_status) = DynamoDbContext::from_config(
-        localstack.dynamo_db_config(),
-        table.clone(),
-        None,
-        vec![],
-        (),
-    )
-    .await?;
+    let (_storage, table_status) =
+        DynamoDbContext::from_config(localstack.dynamo_db_config(), table.clone(), vec![], ())
+            .await?;
 
     let tables = list_tables(&client).await?;
     assert!(tables.contains(table.as_ref()));
@@ -45,7 +40,6 @@ async fn separate_tables_are_created() -> Result<(), Error> {
     let (_storage, first_table_status) = DynamoDbContext::from_config(
         localstack.dynamo_db_config(),
         first_table.clone(),
-        None,
         vec![],
         (),
     )
@@ -53,7 +47,6 @@ async fn separate_tables_are_created() -> Result<(), Error> {
     let (_storage, second_table_status) = DynamoDbContext::from_config(
         localstack.dynamo_db_config(),
         second_table.clone(),
-        None,
         vec![],
         (),
     )

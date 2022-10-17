@@ -4,6 +4,9 @@ version = "0.1.0"
 authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 
+[features]
+test = []
+
 [dependencies]
 async-trait = "0.1.52"
 bcs = "0.1.3"
@@ -22,3 +25,4 @@ linera-views = { path = "../linera-views" }
 [dev-dependencies]
 anyhow = "1.0.57"
 tempfile = "3.2.0"
+linera-execution = { path = "../linera-execution", features = ["test"] }

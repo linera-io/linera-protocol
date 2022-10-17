@@ -1,6 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod chain_guards;
 mod dynamo_db;
 mod memory;
 mod rocksdb;
@@ -10,16 +11,20 @@ pub use crate::{
 };
 
 use async_trait::async_trait;
+use chain_guards::ChainGuard;
+use dashmap::DashMap;
 use futures::future;
 use linera_base::{
     committee::Committee,
     crypto::HashValue,
     ensure,
-    messages::{ChainDescription, ChainId, Epoch, Owner},
+    messages::{ApplicationId, ChainDescription, ChainId, Epoch, Owner},
 };
 use linera_chain::{messages::Certificate, ChainStateView, ChainStateViewContext};
-use linera_execution::{system::Balance, ChainOwnership, ChainRuntimeContext};
-use std::fmt::Debug;
+use linera_execution::{
+    system::Balance, ChainOwnership, ExecutionRuntimeContext, UserApplicationCode,
+};
+use std::{fmt::Debug, sync::Arc};
 
 /// Communicate with a persistent storage using the "views" abstraction.
 #[async_trait]
@@ -114,5 +119,31 @@ pub trait Store {
             .reset(&ChainOwnership::single(owner));
         chain.write_commit().await?;
         Ok(())
+    }
+}
+
+#[derive(Clone)]
+pub struct ChainRuntimeContext {
+    pub chain_id: ChainId,
+    pub user_applications: Arc<DashMap<ApplicationId, UserApplicationCode>>,
+    pub chain_guard: Option<Arc<ChainGuard>>,
+}
+
+impl ExecutionRuntimeContext for ChainRuntimeContext {
+    #[cfg(any(test, feature = "test"))]
+    fn new(chain_id: ChainId) -> Self {
+        Self {
+            chain_id,
+            user_applications: Arc::default(),
+            chain_guard: None,
+        }
+    }
+
+    fn chain_id(&self) -> ChainId {
+        self.chain_id
+    }
+
+    fn user_applications(&self) -> &Arc<DashMap<ApplicationId, UserApplicationCode>> {
+        &self.user_applications
     }
 }

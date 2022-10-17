@@ -20,10 +20,20 @@ use linera_execution::{
     },
     ChainOwnership, Effect, ExecutionStateView, Operation, SystemExecutionState,
 };
-use linera_storage::{DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient, Store};
-use linera_views::test_utils::LocalStackTestContext;
+use linera_storage::{
+    ChainRuntimeContext, DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient, Store,
+};
+use linera_views::{memory::MemoryContext, test_utils::LocalStackTestContext};
 use std::collections::{BTreeMap, BTreeSet};
 use test_log::test;
+
+async fn make_state_hash(state: SystemExecutionState) -> HashValue {
+    ExecutionStateView::<MemoryContext<ChainRuntimeContext>>::from_system_state(state)
+        .await
+        .hash_value()
+        .await
+        .expect("hashing from memory should not fail")
+}
 
 /// Instantiate the protocol with a single validator. Returns the corresponding committee
 /// and the (non-sharded, in-memory) "worker" that we can interact with.
@@ -190,11 +200,7 @@ async fn make_transfer_certificate<S>(
         )],
         Address::Burn => Vec::new(),
     };
-    let state_hash = ExecutionStateView::from_system_state(system_state)
-        .await
-        .hash_value()
-        .await
-        .expect("hashing from memory should not fail");
+    let state_hash = make_state_hash(system_state).await;
     let value = Value::ConfirmedBlock {
         block,
         effects,
@@ -629,7 +635,7 @@ where
                     }),
                 ),
             ],
-            state_hash: ExecutionStateView::from_system_state(SystemExecutionState {
+            state_hash: make_state_hash(SystemExecutionState {
                 epoch: Some(epoch),
                 description: Some(ChainDescription::Root(1)),
                 admin_id: Some(ChainId::root(0)),
@@ -638,10 +644,7 @@ where
                 ownership: ChainOwnership::single(sender_key_pair.public().into()),
                 balance: Balance::from(3),
             })
-            .await
-            .hash_value()
-            .await
-            .unwrap(),
+            .await,
         },
     );
 
@@ -672,7 +675,7 @@ where
                     amount: Amount::from(3),
                 }),
             )],
-            state_hash: ExecutionStateView::from_system_state(SystemExecutionState {
+            state_hash: make_state_hash(SystemExecutionState {
                 epoch: Some(epoch),
                 description: Some(ChainDescription::Root(1)),
                 admin_id: Some(ChainId::root(0)),
@@ -681,10 +684,7 @@ where
                 ownership: ChainOwnership::single(sender_key_pair.public().into()),
                 balance: Balance::from(0),
             })
-            .await
-            .hash_value()
-            .await
-            .unwrap(),
+            .await,
         },
     );
     // Missing earlier blocks
@@ -892,7 +892,7 @@ where
                         amount: Amount::from(1),
                     }),
                 )],
-                state_hash: ExecutionStateView::from_system_state(SystemExecutionState {
+                state_hash: make_state_hash(SystemExecutionState {
                     epoch: Some(epoch),
                     description: Some(ChainDescription::Root(2)),
                     admin_id: Some(ChainId::root(0)),
@@ -901,10 +901,7 @@ where
                     ownership: ChainOwnership::single(recipient_key_pair.public().into()),
                     balance: Balance::from(0),
                 })
-                .await
-                .hash_value()
-                .await
-                .unwrap(),
+                .await,
             },
         );
         worker
@@ -2104,7 +2101,7 @@ where
                     }),
                 ),
             ],
-            state_hash: ExecutionStateView::from_system_state(SystemExecutionState {
+            state_hash: make_state_hash(SystemExecutionState {
                 epoch: Some(Epoch::from(0)),
                 description: Some(ChainDescription::Root(0)),
                 admin_id: Some(admin_id),
@@ -2113,10 +2110,7 @@ where
                 ownership: ChainOwnership::single(key_pair.public().into()),
                 balance: Balance::from(2),
             })
-            .await
-            .hash_value()
-            .await
-            .unwrap(),
+            .await,
         },
     );
     worker
@@ -2212,7 +2206,7 @@ where
                     }),
                 ),
             ],
-            state_hash: ExecutionStateView::from_system_state(SystemExecutionState {
+            state_hash: make_state_hash(SystemExecutionState {
                 epoch: Some(Epoch::from(1)),
                 description: Some(ChainDescription::Root(0)),
                 admin_id: Some(admin_id),
@@ -2222,10 +2216,7 @@ where
                 ownership: ChainOwnership::single(key_pair.public().into()),
                 balance: Balance::from(0),
             })
-            .await
-            .hash_value()
-            .await
-            .unwrap(),
+            .await,
         },
     );
     worker
@@ -2262,7 +2253,7 @@ where
                 Destination::Recipient(user_id),
                 Effect::System(SystemEffect::Notify { id: user_id }),
             )],
-            state_hash: ExecutionStateView::from_system_state(SystemExecutionState {
+            state_hash: make_state_hash(SystemExecutionState {
                 epoch: Some(Epoch::from(1)),
                 description: Some(ChainDescription::Root(0)),
                 admin_id: Some(admin_id),
@@ -2272,10 +2263,7 @@ where
                 ownership: ChainOwnership::single(key_pair.public().into()),
                 balance: Balance::from(0),
             })
-            .await
-            .hash_value()
-            .await
-            .unwrap(),
+            .await,
         },
     );
     worker
@@ -2437,7 +2425,7 @@ where
                 height: BlockHeight::from(0),
             },
             effects: Vec::new(),
-            state_hash: ExecutionStateView::from_system_state(SystemExecutionState {
+            state_hash: make_state_hash(SystemExecutionState {
                 epoch: Some(Epoch::from(1)),
                 description: Some(user_description),
                 admin_id: Some(admin_id),
@@ -2452,10 +2440,7 @@ where
                 ownership: ChainOwnership::single(key_pair.public().into()),
                 balance: Balance::from(2),
             })
-            .await
-            .hash_value()
-            .await
-            .unwrap(),
+            .await,
         },
     );
     worker.fully_handle_certificate(certificate3).await.unwrap();
@@ -2593,7 +2578,7 @@ where
                     amount: Amount::from(1),
                 }),
             )],
-            state_hash: ExecutionStateView::from_system_state(SystemExecutionState {
+            state_hash: make_state_hash(SystemExecutionState {
                 epoch: Some(Epoch::from(0)),
                 description: Some(ChainDescription::Root(1)),
                 admin_id: Some(admin_id),
@@ -2602,10 +2587,7 @@ where
                 ownership: ChainOwnership::single(key_pair1.public().into()),
                 balance: Balance::from(2),
             })
-            .await
-            .hash_value()
-            .await
-            .unwrap(),
+            .await,
         },
     );
     // Have the admin chain create a new epoch without retiring the old one.
@@ -2643,7 +2625,7 @@ where
                     committees: committees2.clone(),
                 }),
             )],
-            state_hash: ExecutionStateView::from_system_state(SystemExecutionState {
+            state_hash: make_state_hash(SystemExecutionState {
                 epoch: Some(Epoch::from(1)),
                 description: Some(ChainDescription::Root(0)),
                 admin_id: Some(admin_id),
@@ -2652,10 +2634,7 @@ where
                 ownership: ChainOwnership::single(key_pair0.public().into()),
                 balance: Balance::from(0),
             })
-            .await
-            .hash_value()
-            .await
-            .unwrap(),
+            .await,
         },
     );
     worker
@@ -2800,7 +2779,7 @@ where
                     amount: Amount::from(1),
                 }),
             )],
-            state_hash: ExecutionStateView::from_system_state(SystemExecutionState {
+            state_hash: make_state_hash(SystemExecutionState {
                 epoch: Some(Epoch::from(0)),
                 description: Some(ChainDescription::Root(1)),
                 admin_id: Some(admin_id),
@@ -2809,10 +2788,7 @@ where
                 ownership: ChainOwnership::single(key_pair1.public().into()),
                 balance: Balance::from(2),
             })
-            .await
-            .hash_value()
-            .await
-            .unwrap(),
+            .await,
         },
     );
     // Have the admin chain create a new epoch and retire the old one immediately.
@@ -2871,7 +2847,7 @@ where
                     }),
                 ),
             ],
-            state_hash: ExecutionStateView::from_system_state(SystemExecutionState {
+            state_hash: make_state_hash(SystemExecutionState {
                 epoch: Some(Epoch::from(1)),
                 description: Some(ChainDescription::Root(0)),
                 admin_id: Some(admin_id),
@@ -2880,10 +2856,7 @@ where
                 ownership: ChainOwnership::single(key_pair0.public().into()),
                 balance: Balance::from(0),
             })
-            .await
-            .hash_value()
-            .await
-            .unwrap(),
+            .await,
         },
     );
     worker

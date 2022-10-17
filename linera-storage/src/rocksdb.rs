@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{ChainStateView, Store};
+use crate::{chain_guards::ChainGuards, ChainRuntimeContext, ChainStateView, Store};
 use async_trait::async_trait;
 use dashmap::DashMap;
 use linera_base::{
@@ -9,9 +9,8 @@ use linera_base::{
     messages::{ApplicationId, ChainId},
 };
 use linera_chain::messages::Certificate;
-use linera_execution::{ChainRuntimeContext, UserApplicationCode};
+use linera_execution::UserApplicationCode;
 use linera_views::{
-    chain_guards::ChainGuards,
     rocksdb::{KeyValueOperations, RocksdbContext, RocksdbViewError, DB},
     views::View,
 };
@@ -68,12 +67,13 @@ impl Store for RocksdbStoreClient {
         let db = self.0.db.clone();
         let base_key = bcs::to_bytes(&BaseKey::ChainState(id))?;
         log::trace!("Acquiring lock on {:?}", id);
-        let chain_guard = self.0.guards.guard(id).await;
+        let guard = self.0.guards.guard(id).await;
         let runtime_context = ChainRuntimeContext {
             chain_id: id,
             user_applications: self.0.user_applications.clone(),
+            chain_guard: Some(Arc::new(guard)),
         };
-        let db_context = RocksdbContext::new(db, chain_guard, base_key, runtime_context);
+        let db_context = RocksdbContext::new(db, base_key, runtime_context);
         ChainStateView::load(db_context).await
     }
 

@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{ChainStateView, Store};
+use crate::{ChainRuntimeContext, ChainStateView, Store};
 use async_trait::async_trait;
 use dashmap::DashMap;
 use linera_base::{
@@ -9,7 +9,7 @@ use linera_base::{
     messages::{ApplicationId, ChainId},
 };
 use linera_chain::messages::Certificate;
-use linera_execution::{ChainRuntimeContext, UserApplicationCode};
+use linera_execution::UserApplicationCode;
 use linera_views::{
     memory::{MemoryContext, MemoryStoreMap, MemoryViewError},
     views::View,
@@ -46,6 +46,7 @@ impl Store for MemoryStoreClient {
         let runtime_context = ChainRuntimeContext {
             chain_id: id,
             user_applications: self.0.user_applications.clone(),
+            chain_guard: None,
         };
         let db_context = MemoryContext::new(state.lock_owned().await, runtime_context);
         ChainStateView::load(db_context).await

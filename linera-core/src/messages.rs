@@ -14,7 +14,8 @@ use linera_chain::{
     messages::{Certificate, MessageGroup},
     ChainManager, ChainStateView, ChainStateViewContext,
 };
-use linera_execution::{system::Balance, ChainRuntimeContext};
+use linera_execution::system::Balance;
+use linera_storage::ChainRuntimeContext;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 

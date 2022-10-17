@@ -26,8 +26,6 @@ mod macros;
 /// Helper types for interfacing with a LocalStack instance.
 pub mod localstack;
 
-pub mod chain_guards;
-
 /// Helper types for tests.
 #[cfg(any(test, feature = "test"))]
 pub mod test_utils;

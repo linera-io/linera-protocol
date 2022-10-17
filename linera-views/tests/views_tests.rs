@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use linera_base::messages::ChainId;
 use linera_views::{
-    chain_guards::ChainGuards,
     dynamo_db::{DynamoDbContext, DynamoDbContextError},
     hash::{HashView, Hasher, HashingContext},
     impl_view,
@@ -81,7 +79,6 @@ impl StateStore for MemoryTestStore {
 
 pub struct RocksdbTestStore {
     db: Arc<DB>,
-    guards: ChainGuards,
     accessed_chains: BTreeSet<usize>,
 }
 
@@ -89,7 +86,6 @@ impl RocksdbTestStore {
     fn new(db: DB) -> Self {
         Self {
             db: Arc::new(db),
-            guards: ChainGuards::default(),
             accessed_chains: BTreeSet::new(),
         }
     }
@@ -102,19 +98,13 @@ impl StateStore for RocksdbTestStore {
     async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, RocksdbViewError> {
         self.accessed_chains.insert(id);
         log::trace!("Acquiring lock on {:?}", id);
-        let context = RocksdbContext::new(
-            self.db.clone(),
-            self.guards.guard(ChainId::root(id)).await,
-            bcs::to_bytes(&id)?,
-            id,
-        );
+        let context = RocksdbContext::new(self.db.clone(), bcs::to_bytes(&id)?, id);
         StateView::load(context).await
     }
 }
 
 pub struct DynamoDbTestStore {
     localstack: LocalStackTestContext,
-    guards: ChainGuards,
     accessed_chains: BTreeSet<usize>,
 }
 
@@ -122,7 +112,6 @@ impl DynamoDbTestStore {
     pub async fn new() -> Result<Self, anyhow::Error> {
         Ok(DynamoDbTestStore {
             localstack: LocalStackTestContext::new().await?,
-            guards: ChainGuards::default(),
             accessed_chains: BTreeSet::new(),
         })
     }
@@ -135,11 +124,9 @@ impl StateStore for DynamoDbTestStore {
     async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, DynamoDbContextError> {
         self.accessed_chains.insert(id);
         log::trace!("Acquiring lock on {:?}", id);
-        let guard = self.guards.guard(ChainId::root(id)).await;
         let (context, _) = DynamoDbContext::from_config(
             self.localstack.dynamo_db_config(),
             "test_table".parse().expect("Invalid table name"),
-            Some(guard),
             vec![0],
             id,
         )
