@@ -24,56 +24,6 @@ use std::sync::Arc;
 
 pub type UserApplicationCode = Arc<dyn UserApplication + Send + Sync + 'static>;
 
-pub trait ExecutionRuntimeContext {
-    #[cfg(any(test, feature = "test"))]
-    fn new(chain_id: ChainId) -> Self;
-
-    fn chain_id(&self) -> ChainId;
-
-    fn user_applications(&self) -> &Arc<DashMap<ApplicationId, UserApplicationCode>>;
-
-    fn get_user_application(
-        &self,
-        application_id: ApplicationId,
-    ) -> Result<UserApplicationCode, Error> {
-        Ok(self
-            .user_applications()
-            .get(&application_id)
-            .ok_or(Error::UnknownApplication)?
-            .clone())
-    }
-}
-
-/// An operation to be executed in a block.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub enum Operation {
-    /// A system operation.
-    System(SystemOperation),
-    /// A user operation (in serialized form).
-    User(Vec<u8>),
-}
-
-/// An effect to be sent and possibly executed in the receiver's block.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub enum Effect {
-    /// A system effect.
-    System(SystemEffect),
-    /// A user effect (in serialized form).
-    User(Vec<u8>),
-}
-
-impl From<SystemEffect> for Effect {
-    fn from(effect: SystemEffect) -> Self {
-        Effect::System(effect)
-    }
-}
-
-impl From<Vec<u8>> for Effect {
-    fn from(effect: Vec<u8>) -> Self {
-        Effect::User(effect)
-    }
-}
-
 #[async_trait]
 pub trait UserApplication {
     /// Apply an operation from the current block.
@@ -103,7 +53,7 @@ pub trait UserApplication {
     ) -> Result<(Vec<u8>, RawApplicationResult<Vec<u8>>), Error>;
 
     /// Allow an end user to execute read-only queries on the state of this application.
-    /// NOTE: This is not meant to be metered and may not be exposed by validators.
+    /// NOTE: This is not meant to be metered and may not be exposed by all validators.
     async fn query(
         &self,
         context: &QueryContext,
@@ -111,6 +61,28 @@ pub trait UserApplication {
         name: &str,
         argument: &[u8],
     ) -> Result<Vec<u8>, Error>;
+}
+
+/// Requirements for the `extra` field in our state views (and notably the
+/// [`ExecutionStateView`]).
+pub trait ExecutionRuntimeContext {
+    #[cfg(any(test, feature = "test"))]
+    fn new(chain_id: ChainId) -> Self;
+
+    fn chain_id(&self) -> ChainId;
+
+    fn user_applications(&self) -> &Arc<DashMap<ApplicationId, UserApplicationCode>>;
+
+    fn get_user_application(
+        &self,
+        application_id: ApplicationId,
+    ) -> Result<UserApplicationCode, Error> {
+        Ok(self
+            .user_applications()
+            .get(&application_id)
+            .ok_or(Error::UnknownApplication)?
+            .clone())
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -176,6 +148,36 @@ pub trait CallableStorageContext: StorageContext {
         name: &str,
         argument: &[u8],
     ) -> Result<Vec<u8>, Error>;
+}
+
+/// An operation to be executed in a block.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub enum Operation {
+    /// A system operation.
+    System(SystemOperation),
+    /// A user operation (in serialized form).
+    User(Vec<u8>),
+}
+
+/// An effect to be sent and possibly executed in the receiver's block.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub enum Effect {
+    /// A system effect.
+    System(SystemEffect),
+    /// A user effect (in serialized form).
+    User(Vec<u8>),
+}
+
+impl From<SystemEffect> for Effect {
+    fn from(effect: SystemEffect) -> Self {
+        Effect::System(effect)
+    }
+}
+
+impl From<Vec<u8>> for Effect {
+    fn from(effect: Vec<u8>) -> Self {
+        Effect::User(effect)
+    }
 }
 
 #[derive(Debug)]
