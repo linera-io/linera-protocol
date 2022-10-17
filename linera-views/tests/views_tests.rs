@@ -285,7 +285,7 @@ where
             subview.push(18);
         }
         if do_flush {
-            view.write_commit_and_reset().await.unwrap();
+            view.do_flush().await.unwrap();
         }
         let hash = view.hash().await.unwrap();
         view.write_commit().await.unwrap();
@@ -329,7 +329,7 @@ where
             assert_eq!(subview.read(0..10).await.unwrap(), vec![17, 18]);
         }
         if do_flush {
-            view.write_commit_and_reset().await.unwrap();
+            view.do_flush().await.unwrap();
         }
         {
             let subview = view

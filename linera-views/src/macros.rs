@@ -40,10 +40,10 @@ where
         Ok(())
     }
 
-    async fn commit_and_reset(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+    async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         use $crate::views::View;
 
-        $( self.$field.commit_and_reset(batch).await?; )*
+        $( self.$field.flush(batch).await?; )*
         Ok(())
     }
 
@@ -102,11 +102,11 @@ where
         }).await
     }
 
-    pub async fn write_commit_and_reset(&mut self) -> Result<(), C::Error> {
+    pub async fn do_flush(&mut self) -> Result<(), C::Error> {
         use $crate::views::View;
 
         let mut batch = self.context().create_batch();
-        $( self.$field.commit_and_reset(&mut batch).await?; )*
+        $( self.$field.flush(&mut batch).await?; )*
         self.context().write_batch(batch).await
      }
 

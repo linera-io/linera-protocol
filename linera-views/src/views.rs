@@ -65,7 +65,7 @@ pub trait View<C: Context>: Sized {
     async fn commit(self, batch: &mut C::Batch) -> Result<(), C::Error>;
 
     /// A more efficient alternative to calling [`View::commit`] immediately followed by a [`View::load`].
-    async fn commit_and_reset(&mut self, batch: &mut C::Batch) -> Result<(), C::Error>;
+    async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error>;
 
     /// Instead of persisting changes, clear all the data that belong to this view and its
     /// subviews. Crash-resistant storage implementations are expected to accumulate the
@@ -134,8 +134,8 @@ where
         self.view.commit(batch).await
     }
 
-    async fn commit_and_reset(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        self.view.commit_and_reset(batch).await
+    async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+        self.view.flush(batch).await
     }
 
     async fn delete(self, batch: &mut C::Batch) -> Result<(), C::Error> {
@@ -198,7 +198,7 @@ where
         Ok(())
     }
 
-    async fn commit_and_reset(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+    async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         if let Some(value) = self.update.take() {
             self.context.set(batch, value.clone()).await?;
             self.stored_value = value;
@@ -332,7 +332,7 @@ where
         }
     }
 
-    async fn commit_and_reset(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+    async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         if self.was_reset_to_default && self.stored_count > 0 {
             self.context.delete(self.stored_count, batch).await?;
             self.stored_count = 0;
@@ -520,7 +520,7 @@ where
         Ok(())
     }
 
-    async fn commit_and_reset(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+    async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         if self.was_reset_to_default {
             self.was_reset_to_default = false;
             self.context.delete(batch).await?;
@@ -725,7 +725,7 @@ where
         Ok(())
     }
 
-    async fn commit_and_reset(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+    async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         if self.front_delete_count > 0 {
             self.context
                 .delete_front(&mut self.stored_indices, batch, self.front_delete_count)
@@ -944,7 +944,7 @@ where
         Ok(())
     }
 
-    async fn commit_and_reset(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+    async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         if self.was_reset_to_default {
             self.was_reset_to_default = false;
             self.delete_entries(batch).await?;
