@@ -409,7 +409,6 @@ where
     async fn try_query_application(
         &self,
         callee_id: ApplicationId,
-        name: &str,
         argument: &[u8],
     ) -> Result<Vec<u8>, Error> {
         let application = self
@@ -420,9 +419,7 @@ where
         let query_context = crate::QueryContext {
             chain_id: self.chain_id,
         };
-        let value = application
-            .query(&query_context, self, name, argument)
-            .await?;
+        let value = application.query(&query_context, self, argument).await?;
         Ok(value)
     }
 }
@@ -462,8 +459,7 @@ where
         &self,
         authenticated: bool,
         callee_id: ApplicationId,
-        method_name: &str,
-        method_argument: &[u8],
+        argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<CallResult, Error> {
         // Load the application.
@@ -481,13 +477,7 @@ where
             authenticated_caller_id,
         };
         let raw_result = application
-            .call(
-                &callee_context,
-                self,
-                method_name,
-                method_argument,
-                forwarded_sessions,
-            )
+            .call(&callee_context, self, argument, forwarded_sessions)
             .await?;
         // Interprete the results of the call.
         self.try_lock_application_results()?
@@ -505,8 +495,7 @@ where
         &self,
         authenticated: bool,
         session_id: SessionId,
-        method_name: &str,
-        method_argument: &[u8],
+        argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<CallResult, Error> {
         // Load the application.
@@ -532,8 +521,7 @@ where
                 self,
                 session_id.kind,
                 &mut session_data,
-                method_name,
-                method_argument,
+                argument,
                 forwarded_sessions,
             )
             .await?;

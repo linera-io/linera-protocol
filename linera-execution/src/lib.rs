@@ -48,21 +48,18 @@ pub trait UserApplication {
         &self,
         context: &CalleeContext,
         storage: &dyn CallableStorageContext,
-        method_name: &str,
-        method_argument: &[u8],
+        argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<RawCallResult, Error>;
 
     /// Allow an operation or an effect of other applications to call into a session that we previously created.
-    #[allow(clippy::too_many_arguments)]
     async fn call_session(
         &self,
         context: &CalleeContext,
         storage: &dyn CallableStorageContext,
         session_kind: u64,
         session_data: &mut Vec<u8>,
-        method_name: &str,
-        method_argument: &[u8],
+        argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<RawCallResult, Error>;
 
@@ -72,8 +69,7 @@ pub trait UserApplication {
         &self,
         context: &QueryContext,
         storage: &dyn QueryableStorageContext,
-        method_name: &str,
-        method_argument: &[u8],
+        argument: &[u8],
     ) -> Result<Vec<u8>, Error>;
 }
 
@@ -158,7 +154,6 @@ pub trait QueryableStorageContext: StorageContext {
     async fn try_query_application(
         &self,
         callee_id: ApplicationId,
-        name: &str,
         argument: &[u8],
     ) -> Result<Vec<u8>, Error>;
 }
@@ -193,8 +188,7 @@ pub trait CallableStorageContext: StorageContext {
         &self,
         authenticated: bool,
         callee_id: ApplicationId,
-        method_name: &str,
-        method_argument: &[u8],
+        argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<CallResult, Error>;
 
@@ -204,8 +198,7 @@ pub trait CallableStorageContext: StorageContext {
         &self,
         authenticated: bool,
         session_id: SessionId,
-        method_name: &str,
-        method_argument: &[u8],
+        argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<CallResult, Error>;
 }
