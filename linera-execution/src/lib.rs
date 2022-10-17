@@ -48,9 +48,23 @@ pub trait UserApplication {
         &self,
         context: &CalleeContext,
         storage: &dyn CallableStorageContext,
-        name: &str,
-        argument: &[u8],
-    ) -> Result<(Vec<u8>, RawApplicationResult<Vec<u8>>), Error>;
+        method_name: &str,
+        method_argument: &[u8],
+        forwarded_sessions: Vec<SessionId>,
+    ) -> Result<RawCallResult, Error>;
+
+    /// Allow an operation or an effect of other applications to call into a session that we previously created.
+    #[allow(clippy::too_many_arguments)]
+    async fn call_session(
+        &self,
+        context: &CalleeContext,
+        storage: &dyn CallableStorageContext,
+        session_kind: u64,
+        session_data: &mut Vec<u8>,
+        method_name: &str,
+        method_argument: &[u8],
+        forwarded_sessions: Vec<SessionId>,
+    ) -> Result<RawCallResult, Error>;
 
     /// Allow an end user to execute read-only queries on the state of this application.
     /// NOTE: This is not meant to be metered and may not be exposed by all validators.
@@ -58,9 +72,26 @@ pub trait UserApplication {
         &self,
         context: &QueryContext,
         storage: &dyn QueryableStorageContext,
-        name: &str,
-        argument: &[u8],
+        method_name: &str,
+        method_argument: &[u8],
     ) -> Result<Vec<u8>, Error>;
+}
+
+/// The result of calling into an application (or one of its open sessions).
+pub struct RawCallResult {
+    return_value: Vec<u8>,
+    chain_effect: RawApplicationResult<Vec<u8>>,
+    new_sessions: Vec<NewSession>,
+    /// If `call_session` was called, this tells the system to clean up the session.
+    close_session: bool,
+}
+
+/// Syscall to request creating a new session.
+pub struct NewSession {
+    /// A kind provided by the creator (meant to be visible to other applications).
+    kind: u64,
+    /// The data associated to the session.
+    data: Vec<u8>,
 }
 
 /// Requirements for the `extra` field in our state views (and notably the
@@ -132,6 +163,22 @@ pub trait QueryableStorageContext: StorageContext {
     ) -> Result<Vec<u8>, Error>;
 }
 
+/// The identifier of a session.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+pub struct SessionId {
+    pub application_id: ApplicationId,
+    pub kind: u64,
+    index: u64,
+}
+
+/// The result of calling into an application or a session.
+pub struct CallResult {
+    /// The return value.
+    pub value: Vec<u8>,
+    /// The new sessions now visible to the caller.
+    pub sessions: Vec<SessionId>,
+}
+
 #[async_trait]
 pub trait CallableStorageContext: StorageContext {
     /// Read the application state and prevent further reading/loading until the state is saved.
@@ -140,14 +187,27 @@ pub trait CallableStorageContext: StorageContext {
     /// Save the application state and allow reading/loading the state again.
     async fn try_save_my_state(&self, state: Vec<u8>) -> Result<(), Error>;
 
-    /// Call another application.
+    /// Call another application. Forwarded sessions will now be visible to
+    /// `callee_id` (but not to the caller any more).
     async fn try_call_application(
         &self,
         authenticated: bool,
         callee_id: ApplicationId,
-        name: &str,
-        argument: &[u8],
-    ) -> Result<Vec<u8>, Error>;
+        method_name: &str,
+        method_argument: &[u8],
+        forwarded_sessions: Vec<SessionId>,
+    ) -> Result<CallResult, Error>;
+
+    /// Call into a session that is in our scope. Forwarded sessions will be visible to
+    /// the application that runs `session_id`.
+    async fn try_call_session(
+        &self,
+        authenticated: bool,
+        session_id: SessionId,
+        method_name: &str,
+        method_argument: &[u8],
+        forwarded_sessions: Vec<SessionId>,
+    ) -> Result<CallResult, Error>;
 }
 
 /// An operation to be executed in a block.
