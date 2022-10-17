@@ -110,6 +110,12 @@ where
     {
         builder(&mut ()).await
     }
+
+    fn create_batch(&self) -> Self::Batch {}
+
+    async fn write_batch(&self, (): Self::Batch) -> Result<(), Self::Error> {
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -232,10 +238,11 @@ where
 
     async fn delete_front(
         &mut self,
-        _stored_indices: &mut Range<usize>,
+        stored_indices: &mut Range<usize>,
         _batch: &mut Self::Batch,
         count: usize,
     ) -> Result<(), Self::Error> {
+        stored_indices.end -= count;
         self.with_mut(|v: &mut VecDeque<T>| {
             v.drain(..count);
         })
@@ -245,10 +252,11 @@ where
 
     async fn append_back(
         &mut self,
-        _stored_indices: &mut Range<usize>,
+        stored_indices: &mut Range<usize>,
         _batch: &mut Self::Batch,
         values: Vec<T>,
     ) -> Result<(), Self::Error> {
+        stored_indices.end += values.len();
         self.with_mut(|v: &mut VecDeque<T>| {
             for value in values {
                 v.push_back(value);

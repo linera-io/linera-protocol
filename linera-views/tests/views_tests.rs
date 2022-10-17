@@ -148,10 +148,16 @@ impl StateStore for DynamoDbTestStore {
 }
 
 #[cfg(test)]
-async fn test_store<S>(store: &mut S) -> <<S::Context as HashingContext>::Hasher as Hasher>::Output
+async fn test_store<S>(
+    store: &mut S,
+    do_flush: bool,
+) -> <<S::Context as HashingContext>::Hasher as Hasher>::Output
 where
     S: StateStore,
 {
+    let do_map = true;
+    let do_queue = true;
+    let do_log = true;
     let default_hash = {
         let mut view = store.load(1).await.unwrap();
         view.hash().await.unwrap()
@@ -167,24 +173,36 @@ where
         assert_eq!(view.hash().await.unwrap(), hash);
         view.x2.set(2);
         assert_ne!(view.hash().await.unwrap(), hash);
-        view.log.push(4);
-        view.queue.push_back(8);
-        assert_eq!(view.queue.front().await.unwrap(), Some(8));
-        view.queue.push_back(7);
-        view.queue.delete_front();
-        view.map.insert("Hello".to_string(), 5);
-        assert_eq!(view.map.indices().await.unwrap(), vec!["Hello".to_string()]);
-        let mut n_ent = 0;
-        view.map
-            .for_each_index(|_index: String| n_ent += 1)
-            .await
-            .unwrap();
-        assert_eq!(n_ent, 1);
+        if do_log {
+            view.log.push(4);
+        }
+        if do_queue {
+            view.queue.push_back(8);
+            assert_eq!(view.queue.front().await.unwrap(), Some(8));
+            view.queue.push_back(7);
+            view.queue.delete_front();
+        }
+        if do_map {
+            view.map.insert("Hello".to_string(), 5);
+            assert_eq!(view.map.indices().await.unwrap(), vec!["Hello".to_string()]);
+            let mut n_ent = 0;
+            view.map
+                .for_each_index(|_index: String| n_ent += 1)
+                .await
+                .unwrap();
+            assert_eq!(n_ent, 1);
+        }
         assert_eq!(view.x1.get(), &0);
         assert_eq!(view.x2.get(), &2);
-        assert_eq!(view.log.read(0..10).await.unwrap(), vec![4]);
-        assert_eq!(view.queue.read_front(10).await.unwrap(), vec![7]);
-        assert_eq!(view.map.get(&"Hello".to_string()).await.unwrap(), Some(5));
+        if do_log {
+            assert_eq!(view.log.read(0..10).await.unwrap(), vec![4]);
+        }
+        if do_queue {
+            assert_eq!(view.queue.read_front(10).await.unwrap(), vec![7]);
+        }
+        if do_map {
+            assert_eq!(view.map.get(&"Hello".to_string()).await.unwrap(), Some(5));
+        }
         {
             let subview = view
                 .collection
@@ -218,9 +236,15 @@ where
         assert_eq!(view.hash().await.unwrap(), default_hash);
         assert_eq!(view.x1.get(), &0);
         assert_eq!(view.x2.get(), &0);
-        assert_eq!(view.log.read(0..10).await.unwrap(), vec![]);
-        assert_eq!(view.queue.read_front(10).await.unwrap(), vec![]);
-        assert_eq!(view.map.get(&"Hello".to_string()).await.unwrap(), None);
+        if do_log {
+            assert_eq!(view.log.read(0..10).await.unwrap(), vec![]);
+        }
+        if do_queue {
+            assert_eq!(view.queue.read_front(10).await.unwrap(), vec![]);
+        }
+        if do_map {
+            assert_eq!(view.map.get(&"Hello".to_string()).await.unwrap(), None);
+        }
         {
             let subview = view
                 .collection
@@ -240,11 +264,17 @@ where
             assert_eq!(subsubview.get(), &3);
         }
         view.x1.set(1);
-        view.log.push(4);
-        view.queue.push_back(7);
-        view.map.insert("Hello".to_string(), 5);
-        view.map.insert("Hi".to_string(), 2);
-        view.map.remove("Hi".to_string());
+        if do_log {
+            view.log.push(4);
+        }
+        if do_queue {
+            view.queue.push_back(7);
+        }
+        if do_map {
+            view.map.insert("Hello".to_string(), 5);
+            view.map.insert("Hi".to_string(), 2);
+            view.map.remove("Hi".to_string());
+        }
         {
             let subview = view
                 .collection
@@ -253,6 +283,9 @@ where
                 .unwrap();
             subview.push(17);
             subview.push(18);
+        }
+        if do_flush {
+            view.do_flush().await.unwrap();
         }
         let hash = view.hash().await.unwrap();
         view.write_commit().await.unwrap();
@@ -264,23 +297,29 @@ where
         assert_eq!(staged_hash, stored_hash);
         assert_eq!(view.x1.get(), &1);
         assert_eq!(view.x2.get(), &0);
-        assert_eq!(view.log.read(0..10).await.unwrap(), vec![4]);
-        view.queue.push_back(8);
-        assert_eq!(view.queue.read_front(10).await.unwrap(), vec![7, 8]);
-        assert_eq!(view.queue.read_front(1).await.unwrap(), vec![7]);
-        assert_eq!(view.queue.read_back(10).await.unwrap(), vec![7, 8]);
-        assert_eq!(view.queue.read_back(1).await.unwrap(), vec![8]);
-        assert_eq!(view.queue.front().await.unwrap(), Some(7));
-        assert_eq!(view.queue.back().await.unwrap(), Some(8));
-        assert_eq!(view.queue.count(), 2);
-        view.queue.delete_front();
-        assert_eq!(view.queue.front().await.unwrap(), Some(8));
-        view.queue.delete_front();
-        assert_eq!(view.queue.front().await.unwrap(), None);
-        assert_eq!(view.queue.count(), 0);
-        view.queue.push_back(13);
-        assert_eq!(view.map.get(&"Hello".to_string()).await.unwrap(), Some(5));
-        assert_eq!(view.map.get(&"Hi".to_string()).await.unwrap(), None);
+        if do_log {
+            assert_eq!(view.log.read(0..10).await.unwrap(), vec![4]);
+        }
+        if do_queue {
+            view.queue.push_back(8);
+            assert_eq!(view.queue.read_front(10).await.unwrap(), vec![7, 8]);
+            assert_eq!(view.queue.read_front(1).await.unwrap(), vec![7]);
+            assert_eq!(view.queue.read_back(10).await.unwrap(), vec![7, 8]);
+            assert_eq!(view.queue.read_back(1).await.unwrap(), vec![8]);
+            assert_eq!(view.queue.front().await.unwrap(), Some(7));
+            assert_eq!(view.queue.back().await.unwrap(), Some(8));
+            assert_eq!(view.queue.count(), 2);
+            view.queue.delete_front();
+            assert_eq!(view.queue.front().await.unwrap(), Some(8));
+            view.queue.delete_front();
+            assert_eq!(view.queue.front().await.unwrap(), None);
+            assert_eq!(view.queue.count(), 0);
+            view.queue.push_back(13);
+        }
+        if do_map {
+            assert_eq!(view.map.get(&"Hello".to_string()).await.unwrap(), Some(5));
+            assert_eq!(view.map.get(&"Hi".to_string()).await.unwrap(), None);
+        }
         {
             let subview = view
                 .collection
@@ -288,6 +327,9 @@ where
                 .await
                 .unwrap();
             assert_eq!(subview.read(0..10).await.unwrap(), vec![17, 18]);
+        }
+        if do_flush {
+            view.do_flush().await.unwrap();
         }
         {
             let subview = view
@@ -316,7 +358,7 @@ where
                 .unwrap();
             assert_eq!(subview.read(0..10).await.unwrap(), vec![]);
         }
-        {
+        if do_queue {
             assert_eq!(view.queue.front().await.unwrap(), Some(13));
             view.queue.delete_front();
             assert_eq!(view.queue.front().await.unwrap(), None);
@@ -327,41 +369,55 @@ where
     staged_hash
 }
 
-#[tokio::test]
-async fn test_views_in_memory() {
+#[cfg(test)]
+async fn test_views_in_memory_param(do_flush: bool) {
     let mut store = MemoryTestStore::default();
-    test_store(&mut store).await;
+    test_store(&mut store, do_flush).await;
     assert_eq!(store.states.len(), 1);
     let entry = store.states.get(&1).unwrap().clone();
     assert!(entry.lock().await.is_empty());
 }
 
 #[tokio::test]
-async fn test_views_in_rocksdb() {
+async fn test_views_in_memory() {
+    for do_flush in [true, false] {
+        test_views_in_memory_param(do_flush).await
+    }
+}
+
+#[cfg(test)]
+async fn test_views_in_rocksdb_param(do_flush: bool) {
     let dir = tempfile::TempDir::new().unwrap();
     let mut options = rocksdb::Options::default();
     options.create_if_missing(true);
 
     let db = DB::open(&options, &dir).unwrap();
     let mut store = RocksdbTestStore::new(db);
-    let hash = test_store(&mut store).await;
+    let hash = test_store(&mut store, do_flush).await;
     assert_eq!(store.accessed_chains.len(), 1);
     assert_eq!(store.db.count_keys().await.unwrap(), 0);
 
     let mut store = MemoryTestStore::default();
-    let hash2 = test_store(&mut store).await;
+    let hash2 = test_store(&mut store, do_flush).await;
     assert_eq!(hash, hash2);
+}
+
+#[tokio::test]
+async fn test_views_in_rocksdb() {
+    for do_flush in [true, false] {
+        test_views_in_rocksdb_param(do_flush).await
+    }
 }
 
 #[tokio::test]
 #[ignore]
 async fn test_views_in_dynamo_db() -> Result<(), anyhow::Error> {
     let mut store = DynamoDbTestStore::new().await?;
-    let hash = test_store(&mut store).await;
+    let hash = test_store(&mut store, false).await;
     assert_eq!(store.accessed_chains.len(), 1);
 
     let mut store = MemoryTestStore::default();
-    let hash2 = test_store(&mut store).await;
+    let hash2 = test_store(&mut store, false).await;
     assert_eq!(hash, hash2);
 
     Ok(())

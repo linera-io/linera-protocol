@@ -40,6 +40,13 @@ where
         Ok(())
     }
 
+    async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+        use $crate::views::View;
+
+        $( self.$field.flush(batch).await?; )*
+        Ok(())
+    }
+
     async fn delete(self, batch: &mut C::Batch) -> Result<(), C::Error> {
         use $crate::views::View;
 
@@ -94,6 +101,14 @@ where
             })
         }).await
     }
+
+    pub async fn do_flush(&mut self) -> Result<(), C::Error> {
+        use $crate::views::View;
+
+        let mut batch = self.context().create_batch();
+        $( self.$field.flush(&mut batch).await?; )*
+        self.context().write_batch(batch).await
+     }
 
     pub async fn write_delete(self) -> Result<(), C::Error> {
         use $crate::views::View;

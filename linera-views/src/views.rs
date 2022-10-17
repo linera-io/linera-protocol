@@ -6,6 +6,7 @@ use std::{
     cmp::Eq,
     collections::{btree_map, BTreeMap, VecDeque},
     fmt::Debug,
+    mem,
     ops::Range,
 };
 use thiserror::Error;
@@ -36,6 +37,12 @@ pub trait Context {
         F: FnOnce(&mut Self::Batch) -> futures::future::BoxFuture<Result<(), Self::Error>>
             + Send
             + Sync;
+
+    /// Create a new [`Self::Batch`] to collect write operations.
+    fn create_batch(&self) -> Self::Batch;
+
+    /// Apply the operations from the `batch`, persisting the changes.
+    async fn write_batch(&self, batch: Self::Batch) -> Result<(), Self::Error>;
 }
 
 /// A view gives an exclusive access to read and write the data stored at an underlying
@@ -56,6 +63,9 @@ pub trait View<C: Context>: Sized {
     /// variable first. If the view is dropped without calling `commit`, staged changes
     /// are simply lost.
     async fn commit(self, batch: &mut C::Batch) -> Result<(), C::Error>;
+
+    /// A more efficient alternative to calling [`View::commit`] immediately followed by a [`View::load`].
+    async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error>;
 
     /// Instead of persisting changes, clear all the data that belong to this view and its
     /// subviews. Crash-resistant storage implementations are expected to accumulate the
@@ -124,6 +134,10 @@ where
         self.view.commit(batch).await
     }
 
+    async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+        self.view.flush(batch).await
+    }
+
     async fn delete(self, batch: &mut C::Batch) -> Result<(), C::Error> {
         self.view.delete(batch).await
     }
@@ -158,7 +172,7 @@ pub trait RegisterOperations<T>: Context {
 impl<C, T> View<C> for RegisterView<C, T>
 where
     C: RegisterOperations<T> + Send + Sync,
-    T: Send + Sync + Default,
+    T: Clone + Send + Sync + Default,
 {
     fn context(&self) -> &C {
         &self.context
@@ -180,6 +194,14 @@ where
     async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         if let Some(value) = self.update {
             self.context.set(batch, value).await?;
+        }
+        Ok(())
+    }
+
+    async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+        if let Some(value) = self.update.take() {
+            self.context.set(batch, value.clone()).await?;
+            self.stored_value = value;
         }
         Ok(())
     }
@@ -297,17 +319,25 @@ where
     }
 
     async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        if self.was_reset_to_default && self.stored_count > 0 {
-            self.context.delete(self.stored_count, batch).await?;
-            self.stored_count = 0
+        self.flush(batch).await
+    }
+
+    async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+        if self.was_reset_to_default {
+            self.was_reset_to_default = false;
+            if self.stored_count > 0 {
+                self.context.delete(self.stored_count, batch).await?;
+                self.stored_count = 0;
+            }
         }
         if !self.new_values.is_empty() {
+            let count = self.new_values.len();
             self.context
-                .append(self.stored_count, batch, self.new_values)
-                .await
-        } else {
-            Ok(())
+                .append(self.stored_count, batch, mem::take(&mut self.new_values))
+                .await?;
+            self.stored_count += count;
         }
+        Ok(())
     }
 
     async fn delete(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
@@ -460,22 +490,23 @@ where
     }
 
     async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+        self.flush(batch).await
+    }
+
+    async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         if self.was_reset_to_default {
+            self.was_reset_to_default = false;
             self.context.delete(batch).await?;
-            for (index, update) in self.updates {
+            for (index, update) in mem::take(&mut self.updates) {
                 if let Some(value) = update {
                     self.context.insert(batch, index, value).await?;
                 }
             }
         } else {
-            for (index, update) in self.updates {
+            for (index, update) in mem::take(&mut self.updates) {
                 match update {
-                    None => {
-                        self.context.remove(batch, index).await?;
-                    }
-                    Some(value) => {
-                        self.context.insert(batch, index, value).await?;
-                    }
+                    None => self.context.remove(batch, index).await?,
+                    Some(value) => self.context.insert(batch, index, value).await?,
                 }
             }
         }
@@ -650,6 +681,10 @@ where
     }
 
     async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+        self.flush(batch).await
+    }
+
+    async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         if self.front_delete_count > 0 {
             self.context
                 .delete_front(&mut self.stored_indices, batch, self.front_delete_count)
@@ -660,10 +695,11 @@ where
                 .append_back(
                     &mut self.stored_indices,
                     batch,
-                    self.new_back_values.into_iter().collect(),
+                    mem::take(&mut self.new_back_values).into_iter().collect(),
                 )
                 .await?;
         }
+        self.front_delete_count = 0;
         Ok(())
     }
 
@@ -840,22 +876,21 @@ where
     }
 
     async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+        self.flush(batch).await
+    }
+
+    async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         if self.was_reset_to_default {
-            let stored_indices = self.context.indices().await?;
-            for index in &stored_indices {
-                let context = self.context.clone_with_scope(index);
-                self.context.remove_index(batch, index.clone()).await?;
-                let view = W::load(context).await?;
-                view.delete(batch).await?;
-            }
-            for (index, update) in self.updates {
+            self.was_reset_to_default = false;
+            self.delete_entries(batch).await?;
+            for (index, update) in mem::take(&mut self.updates) {
                 if let Some(view) = update {
                     view.commit(batch).await?;
                     self.context.add_index(batch, index).await?;
                 }
             }
         } else {
-            for (index, update) in self.updates {
+            for (index, update) in mem::take(&mut self.updates) {
                 match update {
                     Some(view) => {
                         view.commit(batch).await?;
@@ -874,14 +909,7 @@ where
     }
 
     async fn delete(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        let stored_indices = self.context.indices().await?;
-        for index in &stored_indices {
-            let context = self.context.clone_with_scope(index);
-            self.context.remove_index(batch, index.clone()).await?;
-            let view = W::load(context).await?;
-            view.delete(batch).await?;
-        }
-        Ok(())
+        self.delete_entries(batch).await
     }
 
     fn reset_to_default(&mut self) {
@@ -896,6 +924,18 @@ where
     I: Eq + Ord + Sync + Clone + Send + Debug,
     W: View<C>,
 {
+    /// Delete all entries in this [`Collection`].
+    async fn delete_entries(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
+        let stored_indices = self.context.indices().await?;
+        for index in &stored_indices {
+            let context = self.context.clone_with_scope(index);
+            self.context.remove_index(batch, index.clone()).await?;
+            let view = W::load(context).await?;
+            view.delete(batch).await?;
+        }
+        Ok(())
+    }
+
     /// Obtain a subview for the data at the given index in the collection. If an entry
     /// was removed before then a default entry is put on this index.
     pub async fn load_entry(&mut self, index: I) -> Result<&mut W, C::Error> {
