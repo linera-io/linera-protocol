@@ -323,10 +323,12 @@ where
     }
 
     async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        if self.was_reset_to_default && self.stored_count > 0 {
-            self.context.delete(self.stored_count, batch).await?;
-            self.stored_count = 0;
+        if self.was_reset_to_default {
             self.was_reset_to_default = false;
+            if self.stored_count > 0 {
+                self.context.delete(self.stored_count, batch).await?;
+                self.stored_count = 0;
+            }
         }
         if !self.new_values.is_empty() {
             let count = self.new_values.len();
