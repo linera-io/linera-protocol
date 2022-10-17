@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{ChainStateView, Store};
+use crate::{chain_guards::ChainGuards, ChainRuntimeContext, ChainStateView, Store};
 use async_trait::async_trait;
 use dashmap::DashMap;
 use futures::Future;
@@ -10,9 +10,8 @@ use linera_base::{
     messages::{ApplicationId, ChainId},
 };
 use linera_chain::messages::Certificate;
-use linera_execution::{ChainRuntimeContext, UserApplicationCode};
+use linera_execution::UserApplicationCode;
 use linera_views::{
-    chain_guards::{ChainGuard, ChainGuards},
     dynamo_db::{
         Config, CreateTableError, DynamoDbContext, DynamoDbContextError, LocalStackError,
         TableName, TableStatus,
@@ -66,37 +65,34 @@ impl DynamoDbStoreClient {
 
 impl DynamoDbStore {
     pub async fn new(table: TableName) -> Result<(Self, TableStatus), CreateTableError> {
-        Self::with_context(|lock, key_prefix, extra| {
-            DynamoDbContext::new(table, lock, key_prefix, extra)
-        })
-        .await
+        Self::with_context(|key_prefix, extra| DynamoDbContext::new(table, key_prefix, extra)).await
     }
 
     pub async fn from_config(
         config: Config,
         table: TableName,
     ) -> Result<(Self, TableStatus), CreateTableError> {
-        Self::with_context(|lock, key_prefix, extra| {
-            DynamoDbContext::from_config(config, table, lock, key_prefix, extra)
+        Self::with_context(|key_prefix, extra| {
+            DynamoDbContext::from_config(config, table, key_prefix, extra)
         })
         .await
     }
 
     pub async fn with_localstack(table: TableName) -> Result<(Self, TableStatus), LocalStackError> {
-        Self::with_context(|lock, key_prefix, extra| {
-            DynamoDbContext::with_localstack(table, lock, key_prefix, extra)
+        Self::with_context(|key_prefix, extra| {
+            DynamoDbContext::with_localstack(table, key_prefix, extra)
         })
         .await
     }
 
     async fn with_context<F, E>(
-        create_context: impl FnOnce(Option<ChainGuard>, Vec<u8>, ()) -> F,
+        create_context: impl FnOnce(Vec<u8>, ()) -> F,
     ) -> Result<(Self, TableStatus), E>
     where
         F: Future<Output = Result<(DynamoDbContext<()>, TableStatus), E>>,
     {
         let empty_prefix = vec![];
-        let (context, table_status) = create_context(None, empty_prefix, ()).await?;
+        let (context, table_status) = create_context(empty_prefix, ()).await?;
         Ok((
             Self {
                 context,
@@ -111,11 +107,7 @@ impl DynamoDbStore {
     async fn certificates(
         &self,
     ) -> Result<MapView<DynamoDbContext<()>, HashValue, Certificate>, DynamoDbContextError> {
-        MapView::load(
-            self.context
-                .clone_with_sub_scope(None, &BaseKey::Certificate, ()),
-        )
-        .await
+        MapView::load(self.context.clone_with_sub_scope(&BaseKey::Certificate, ())).await
     }
 }
 
@@ -143,12 +135,12 @@ impl Store for DynamoDbStoreClient {
         let runtime_context = ChainRuntimeContext {
             chain_id: id,
             user_applications: self.0.user_applications.clone(),
+            chain_guard: Some(Arc::new(guard)),
         };
-        let db_context = self.0.context.clone_with_sub_scope(
-            Some(guard),
-            &BaseKey::ChainState(id),
-            runtime_context,
-        );
+        let db_context = self
+            .0
+            .context
+            .clone_with_sub_scope(&BaseKey::ChainState(id), runtime_context);
         ChainStateView::load(db_context).await
     }
 

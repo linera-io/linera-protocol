@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    chain_guards::ChainGuard,
     hash::HashingContext,
     views::{
         CollectionOperations, Context, LogOperations, MapOperations, QueueOperations,
@@ -20,7 +19,6 @@ pub type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
 #[derive(Debug, Clone)]
 pub struct RocksdbContext<E> {
     db: Arc<DB>,
-    guard: Arc<ChainGuard>,
     base_key: Vec<u8>,
     extra: E,
 }
@@ -138,10 +136,9 @@ impl WriteOperations for Batch {
 }
 
 impl<E> RocksdbContext<E> {
-    pub fn new(db: Arc<DB>, guard: ChainGuard, base_key: Vec<u8>, extra: E) -> Self {
+    pub fn new(db: Arc<DB>, base_key: Vec<u8>, extra: E) -> Self {
         Self {
             db,
-            guard: Arc::new(guard),
             base_key,
             extra,
         }
@@ -236,7 +233,6 @@ where
     fn clone_with_scope(&self, index: u64) -> Self {
         Self {
             db: self.db.clone(),
-            guard: self.guard.clone(),
             base_key: self.derive_key(&index),
             extra: self.extra.clone(),
         }
@@ -473,7 +469,6 @@ where
     fn clone_with_scope(&self, index: &I) -> Self {
         Self {
             db: self.db.clone(),
-            guard: self.guard.clone(),
             base_key: self.derive_key(&CollectionKey::Subview(index)),
             extra: self.extra.clone(),
         }

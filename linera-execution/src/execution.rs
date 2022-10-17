@@ -3,7 +3,7 @@
 
 use crate::{
     system::{SystemExecutionStateView, SystemExecutionStateViewContext, SYSTEM},
-    ApplicationResult, CallableStorageContext, ChainRuntimeContext, Effect, EffectContext,
+    ApplicationResult, CallableStorageContext, Effect, EffectContext, ExecutionRuntimeContext,
     Operation, OperationContext, QueryableStorageContext,
 };
 use async_trait::async_trait;
@@ -45,18 +45,21 @@ impl_view!(
 );
 
 #[cfg(any(test, feature = "test"))]
-impl ExecutionStateView<MemoryContext<ChainRuntimeContext>> {
+impl<R> ExecutionStateView<MemoryContext<R>>
+where
+    R: ExecutionRuntimeContext,
+    MemoryContext<R>: ExecutionStateViewContext,
+{
     /// Create an in-memory view where the system state is set. This is used notably to
     /// generate state hashes in tests.
     pub async fn from_system_state(state: SystemExecutionState) -> Self {
         let guard = Arc::new(Mutex::new(BTreeMap::new())).lock_owned().await;
-        let extra = ChainRuntimeContext {
-            chain_id: state
+        let extra = ExecutionRuntimeContext::new(
+            state
                 .description
                 .expect("Chain description should be set")
                 .into(),
-            user_applications: Arc::default(),
-        };
+        );
         let context = MemoryContext::new(guard, extra);
         let mut view = Self::load(context)
             .await
@@ -81,7 +84,8 @@ enum UserAction<'a> {
 
 impl<C> ExecutionStateView<C>
 where
-    C: ExecutionStateViewContext<Extra = ChainRuntimeContext>,
+    C: ExecutionStateViewContext,
+    C::Extra: ExecutionRuntimeContext,
     Error: From<C::Error>,
 {
     async fn run_user_action(
@@ -202,7 +206,8 @@ impl<'a, C, const W: bool> StorageContext<'a, C, W> {
 #[async_trait]
 impl<'a, C, const W: bool> crate::StorageContext for StorageContext<'a, C, W>
 where
-    C: ExecutionStateViewContext<Extra = ChainRuntimeContext>,
+    C: ExecutionStateViewContext,
+    C::Extra: ExecutionRuntimeContext,
     Error: From<C::Error>,
 {
     async fn try_read_system_balance(&self) -> Result<crate::system::Balance, Error> {
@@ -233,7 +238,8 @@ where
 #[async_trait]
 impl<'a, C> QueryableStorageContext for StorageContext<'a, C, false>
 where
-    C: ExecutionStateViewContext<Extra = ChainRuntimeContext>,
+    C: ExecutionStateViewContext,
+    C::Extra: ExecutionRuntimeContext,
     Error: From<C::Error>,
 {
     /// Note that queries are not available from writable contexts.
@@ -263,7 +269,8 @@ where
 #[async_trait]
 impl<'a, C> CallableStorageContext for StorageContext<'a, C, true>
 where
-    C: ExecutionStateViewContext<Extra = ChainRuntimeContext>,
+    C: ExecutionStateViewContext,
+    C::Extra: ExecutionRuntimeContext,
     Error: From<C::Error>,
 {
     async fn try_load_my_state(&self) -> Result<Vec<u8>, Error> {
