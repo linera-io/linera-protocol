@@ -194,6 +194,12 @@ pub enum Error {
     InvalidOperation,
     #[error("Invalid effect for this application")]
     InvalidEffect,
+    #[error("Session does not exist or was already closed")]
+    InvalidSession,
+    #[error("Session is not accessible by this owner")]
+    InvalidSessionOwner,
+    #[error("A session is still opened at the end of a transaction")]
+    SessionWasNotClosed,
 }
 
 impl Error {

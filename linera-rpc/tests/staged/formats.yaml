@@ -411,6 +411,12 @@ Error:
       InvalidOperation: UNIT
     55:
       InvalidEffect: UNIT
+    56:
+      InvalidSession: UNIT
+    57:
+      InvalidSessionOwner: UNIT
+    58:
+      SessionWasNotClosed: UNIT
 HashValue:
   NEWTYPESTRUCT:
     TUPLEARRAY:
