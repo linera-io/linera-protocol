@@ -339,11 +339,11 @@ where
             self.was_reset_to_default = false;
         }
         if !self.new_values.is_empty() {
-            let n_elt = self.new_values.len();
+            let count = self.new_values.len();
             self.context
                 .append(self.stored_count, batch, mem::take(&mut self.new_values))
                 .await?;
-            self.stored_count += n_elt;
+            self.stored_count += count;
         }
         Ok(())
     }
