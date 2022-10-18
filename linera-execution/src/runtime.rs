@@ -55,7 +55,11 @@ pub(crate) struct SessionState {
     data: Vec<u8>,
 }
 
-impl<'a, C, const W: bool> ExecutionRuntime<'a, C, W> {
+impl<'a, C, const W: bool> ExecutionRuntime<'a, C, W>
+where
+    C: ExecutionStateViewContext,
+    C::Extra: ExecutionRuntimeContext,
+{
     pub(crate) fn new(
         chain_id: ChainId,
         application_ids: &'a mut Vec<ApplicationId>,
@@ -63,6 +67,7 @@ impl<'a, C, const W: bool> ExecutionRuntime<'a, C, W> {
         session_manager: &'a mut SessionManager,
         application_results: &'a mut Vec<ApplicationResult>,
     ) -> Self {
+        assert_eq!(chain_id, execution_state.context().extra().chain_id());
         Self {
             chain_id,
             application_ids: Arc::new(Mutex::new(application_ids)),
@@ -73,13 +78,7 @@ impl<'a, C, const W: bool> ExecutionRuntime<'a, C, W> {
             application_results: Arc::new(Mutex::new(application_results)),
         }
     }
-}
 
-impl<'a, C, const W: bool> ExecutionRuntime<'a, C, W>
-where
-    C: ExecutionStateViewContext,
-    C::Extra: ExecutionRuntimeContext,
-{
     fn application_ids_mut(&self) -> MutexGuard<'_, &'a mut Vec<ApplicationId>> {
         self.application_ids
             .try_lock()

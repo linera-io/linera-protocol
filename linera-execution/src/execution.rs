@@ -139,6 +139,7 @@ where
         context: &OperationContext,
         operation: &Operation,
     ) -> Result<Vec<ApplicationResult>, Error> {
+        assert_eq!(context.chain_id, self.context().extra().chain_id());
         if application_id == SYSTEM {
             match operation {
                 Operation::System(op) => {
@@ -168,6 +169,7 @@ where
         context: &EffectContext,
         effect: &Effect,
     ) -> Result<Vec<ApplicationResult>, Error> {
+        assert_eq!(context.chain_id, self.context().extra().chain_id());
         if application_id == SYSTEM {
             match effect {
                 Effect::System(effect) => {
@@ -197,6 +199,7 @@ where
         context: &QueryContext,
         query: &Query,
     ) -> Result<Response, Error> {
+        assert_eq!(context.chain_id, self.context().extra().chain_id());
         if application_id == SYSTEM {
             match query {
                 Query::System(query) => {
