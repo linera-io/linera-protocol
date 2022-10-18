@@ -147,17 +147,71 @@ impl StateStore for DynamoDbTestStore {
     }
 }
 
+#[derive(Debug)]
+pub struct TestConfig {
+    with_flush: bool,
+    with_map: bool,
+    with_queue: bool,
+    with_log: bool,
+}
+
+impl Default for TestConfig {
+    fn default() -> Self {
+        Self {
+            with_flush: true,
+            with_map: true,
+            with_queue: true,
+            with_log: true,
+        }
+    }
+}
+
+impl TestConfig {
+    fn samples() -> Vec<TestConfig> {
+        vec![
+            TestConfig {
+                with_flush: false,
+                with_map: false,
+                with_queue: false,
+                with_log: false,
+            },
+            TestConfig {
+                with_flush: true,
+                with_map: false,
+                with_queue: false,
+                with_log: false,
+            },
+            TestConfig {
+                with_flush: false,
+                with_map: true,
+                with_queue: false,
+                with_log: false,
+            },
+            TestConfig {
+                with_flush: false,
+                with_map: false,
+                with_queue: true,
+                with_log: false,
+            },
+            TestConfig {
+                with_flush: false,
+                with_map: false,
+                with_queue: false,
+                with_log: true,
+            },
+            TestConfig::default(),
+        ]
+    }
+}
+
 #[cfg(test)]
 async fn test_store<S>(
     store: &mut S,
-    do_flush: bool,
+    config: &TestConfig,
 ) -> <<S::Context as HashingContext>::Hasher as Hasher>::Output
 where
     S: StateStore,
 {
-    let do_map = true;
-    let do_queue = true;
-    let do_log = true;
     let default_hash = {
         let mut view = store.load(1).await.unwrap();
         view.hash().await.unwrap()
@@ -173,34 +227,34 @@ where
         assert_eq!(view.hash().await.unwrap(), hash);
         view.x2.set(2);
         assert_ne!(view.hash().await.unwrap(), hash);
-        if do_log {
+        if config.with_log {
             view.log.push(4);
         }
-        if do_queue {
+        if config.with_queue {
             view.queue.push_back(8);
             assert_eq!(view.queue.front().await.unwrap(), Some(8));
             view.queue.push_back(7);
             view.queue.delete_front();
         }
-        if do_map {
+        if config.with_map {
             view.map.insert("Hello".to_string(), 5);
             assert_eq!(view.map.indices().await.unwrap(), vec!["Hello".to_string()]);
-            let mut n_ent = 0;
+            let mut count = 0;
             view.map
-                .for_each_index(|_index: String| n_ent += 1)
+                .for_each_index(|_index: String| count += 1)
                 .await
                 .unwrap();
-            assert_eq!(n_ent, 1);
+            assert_eq!(count, 1);
         }
         assert_eq!(view.x1.get(), &0);
         assert_eq!(view.x2.get(), &2);
-        if do_log {
+        if config.with_log {
             assert_eq!(view.log.read(0..10).await.unwrap(), vec![4]);
         }
-        if do_queue {
+        if config.with_queue {
             assert_eq!(view.queue.read_front(10).await.unwrap(), vec![7]);
         }
-        if do_map {
+        if config.with_map {
             assert_eq!(view.map.get(&"Hello".to_string()).await.unwrap(), Some(5));
         }
         {
@@ -216,12 +270,12 @@ where
             view.collection.indices().await.unwrap(),
             vec!["hola".to_string()]
         );
-        let mut n_ent = 0;
+        let mut count = 0;
         view.collection
-            .for_each_index(|_index: String| n_ent += 1)
+            .for_each_index(|_index: String| count += 1)
             .await
             .unwrap();
-        assert_eq!(n_ent, 1);
+        assert_eq!(count, 1);
         {
             let subview = view
                 .collection
@@ -236,13 +290,13 @@ where
         assert_eq!(view.hash().await.unwrap(), default_hash);
         assert_eq!(view.x1.get(), &0);
         assert_eq!(view.x2.get(), &0);
-        if do_log {
+        if config.with_log {
             assert_eq!(view.log.read(0..10).await.unwrap(), vec![]);
         }
-        if do_queue {
+        if config.with_queue {
             assert_eq!(view.queue.read_front(10).await.unwrap(), vec![]);
         }
-        if do_map {
+        if config.with_map {
             assert_eq!(view.map.get(&"Hello".to_string()).await.unwrap(), None);
         }
         {
@@ -264,13 +318,13 @@ where
             assert_eq!(subsubview.get(), &3);
         }
         view.x1.set(1);
-        if do_log {
+        if config.with_log {
             view.log.push(4);
         }
-        if do_queue {
+        if config.with_queue {
             view.queue.push_back(7);
         }
-        if do_map {
+        if config.with_map {
             view.map.insert("Hello".to_string(), 5);
             view.map.insert("Hi".to_string(), 2);
             view.map.remove("Hi".to_string());
@@ -284,7 +338,7 @@ where
             subview.push(17);
             subview.push(18);
         }
-        if do_flush {
+        if config.with_flush {
             view.do_flush().await.unwrap();
         }
         let hash = view.hash().await.unwrap();
@@ -297,10 +351,10 @@ where
         assert_eq!(staged_hash, stored_hash);
         assert_eq!(view.x1.get(), &1);
         assert_eq!(view.x2.get(), &0);
-        if do_log {
+        if config.with_log {
             assert_eq!(view.log.read(0..10).await.unwrap(), vec![4]);
         }
-        if do_queue {
+        if config.with_queue {
             view.queue.push_back(8);
             assert_eq!(view.queue.read_front(10).await.unwrap(), vec![7, 8]);
             assert_eq!(view.queue.read_front(1).await.unwrap(), vec![7]);
@@ -316,7 +370,7 @@ where
             assert_eq!(view.queue.count(), 0);
             view.queue.push_back(13);
         }
-        if do_map {
+        if config.with_map {
             assert_eq!(view.map.get(&"Hello".to_string()).await.unwrap(), Some(5));
             assert_eq!(view.map.get(&"Hi".to_string()).await.unwrap(), None);
         }
@@ -328,7 +382,7 @@ where
                 .unwrap();
             assert_eq!(subview.read(0..10).await.unwrap(), vec![17, 18]);
         }
-        if do_flush {
+        if config.with_flush {
             view.do_flush().await.unwrap();
         }
         {
@@ -358,7 +412,7 @@ where
                 .unwrap();
             assert_eq!(subview.read(0..10).await.unwrap(), vec![]);
         }
-        if do_queue {
+        if config.with_queue {
             assert_eq!(view.queue.front().await.unwrap(), Some(13));
             view.queue.delete_front();
             assert_eq!(view.queue.front().await.unwrap(), None);
@@ -370,9 +424,10 @@ where
 }
 
 #[cfg(test)]
-async fn test_views_in_memory_param(do_flush: bool) {
+async fn test_views_in_memory_param(config: &TestConfig) {
+    log::warn!("Testing config {:?} with memory", config);
     let mut store = MemoryTestStore::default();
-    test_store(&mut store, do_flush).await;
+    test_store(&mut store, config).await;
     assert_eq!(store.states.len(), 1);
     let entry = store.states.get(&1).unwrap().clone();
     assert!(entry.lock().await.is_empty());
@@ -380,32 +435,33 @@ async fn test_views_in_memory_param(do_flush: bool) {
 
 #[tokio::test]
 async fn test_views_in_memory() {
-    for do_flush in [true, false] {
-        test_views_in_memory_param(do_flush).await
+    for config in TestConfig::samples() {
+        test_views_in_memory_param(&config).await
     }
 }
 
 #[cfg(test)]
-async fn test_views_in_rocksdb_param(do_flush: bool) {
+async fn test_views_in_rocksdb_param(config: &TestConfig) {
+    log::warn!("Testing config {:?} with rocksdb", config);
     let dir = tempfile::TempDir::new().unwrap();
     let mut options = rocksdb::Options::default();
     options.create_if_missing(true);
 
     let db = DB::open(&options, &dir).unwrap();
     let mut store = RocksdbTestStore::new(db);
-    let hash = test_store(&mut store, do_flush).await;
+    let hash = test_store(&mut store, config).await;
     assert_eq!(store.accessed_chains.len(), 1);
     assert_eq!(store.db.count_keys().await.unwrap(), 0);
 
     let mut store = MemoryTestStore::default();
-    let hash2 = test_store(&mut store, do_flush).await;
+    let hash2 = test_store(&mut store, config).await;
     assert_eq!(hash, hash2);
 }
 
 #[tokio::test]
 async fn test_views_in_rocksdb() {
-    for do_flush in [true, false] {
-        test_views_in_rocksdb_param(do_flush).await
+    for config in TestConfig::samples() {
+        test_views_in_rocksdb_param(&config).await
     }
 }
 
@@ -413,11 +469,12 @@ async fn test_views_in_rocksdb() {
 #[ignore]
 async fn test_views_in_dynamo_db() -> Result<(), anyhow::Error> {
     let mut store = DynamoDbTestStore::new().await?;
-    let hash = test_store(&mut store, false).await;
+    let config = TestConfig::default();
+    let hash = test_store(&mut store, &config).await;
     assert_eq!(store.accessed_chains.len(), 1);
 
     let mut store = MemoryTestStore::default();
-    let hash2 = test_store(&mut store, false).await;
+    let hash2 = test_store(&mut store, &config).await;
     assert_eq!(hash, hash2);
 
     Ok(())
