@@ -77,6 +77,7 @@ pub trait UserApplication {
 }
 
 /// The result of calling into an application (or one of its open sessions).
+#[derive(Default)]
 pub struct RawCallResult {
     return_value: Vec<u8>,
     chain_effect: RawApplicationResult<Vec<u8>>,
@@ -86,6 +87,7 @@ pub struct RawCallResult {
 }
 
 /// Syscall to request creating a new session.
+#[derive(Default)]
 pub struct NewSession {
     /// A kind provided by the creator (meant to be visible to other applications).
     kind: u64,
@@ -242,6 +244,7 @@ impl From<Vec<u8>> for Effect {
 /// Externally visible results of an execution. These results are meant in the context of
 /// the application that created them.
 #[derive(Debug)]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct RawApplicationResult<Effect> {
     /// Send messages to the given destinations.
     pub effects: Vec<(Destination, Effect)>,
@@ -253,6 +256,7 @@ pub struct RawApplicationResult<Effect> {
 
 /// Externally visible results of an execution, tagged by their application.
 #[derive(Debug)]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub enum ApplicationResult {
     System(RawApplicationResult<SystemEffect>),
     User(ApplicationId, RawApplicationResult<Vec<u8>>),
@@ -275,5 +279,30 @@ impl From<OperationContext> for EffectId {
             height: context.height,
             index: context.index,
         }
+    }
+}
+
+#[cfg(any(test, feature = "test"))]
+#[derive(Clone)]
+pub struct TestExecutionRuntimeContext {
+    chain_id: ChainId,
+    user_applications: Arc<DashMap<ApplicationId, UserApplicationCode>>,
+}
+
+#[cfg(any(test, feature = "test"))]
+impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
+    fn new(chain_id: ChainId) -> Self {
+        Self {
+            chain_id,
+            user_applications: Arc::default(),
+        }
+    }
+
+    fn chain_id(&self) -> ChainId {
+        self.chain_id
+    }
+
+    fn user_applications(&self) -> &Arc<DashMap<ApplicationId, UserApplicationCode>> {
+        &self.user_applications
     }
 }
