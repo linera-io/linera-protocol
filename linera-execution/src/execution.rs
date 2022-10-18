@@ -94,19 +94,23 @@ where
         chain_id: ChainId,
         action: UserAction<'_>,
     ) -> Result<Vec<ApplicationResult>, Error> {
+        // Load the application.
         let application = self
             .context()
             .extra()
             .get_user_application(application_id)?;
+        // Create the execution runtime for this transaction.
         let mut session_manager = SessionManager::default();
         let mut results = Vec::new();
+        let mut application_ids = vec![application_id];
         let runtime = ExecutionRuntime::new(
             chain_id,
-            application_id,
+            &mut application_ids,
             self,
             &mut session_manager,
             &mut results,
         );
+        // Make the call to user code.
         let result = match action {
             UserAction::Operation(context, operation) => {
                 application
@@ -117,7 +121,10 @@ where
                 application.apply_effect(context, &runtime, effect).await?
             }
         };
+        assert_eq!(application_ids, vec![application_id]);
+        // Update externally-visible results.
         results.push(ApplicationResult::User(application_id, result));
+        // Check that all sessions were properly closed.
         ensure!(
             session_manager.states.is_empty(),
             Error::SessionWasNotClosed

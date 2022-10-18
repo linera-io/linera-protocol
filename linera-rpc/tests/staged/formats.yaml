@@ -414,8 +414,12 @@ Error:
     56:
       InvalidSession: UNIT
     57:
-      InvalidSessionOwner: UNIT
+      ApplicationIsInUse: UNIT
     58:
+      SessionIsInUse: UNIT
+    59:
+      InvalidSessionOwner: UNIT
+    60:
       SessionWasNotClosed: UNIT
 HashValue:
   NEWTYPESTRUCT:
