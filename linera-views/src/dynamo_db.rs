@@ -468,8 +468,8 @@ where
         Ok(value)
     }
 
-    async fn set(&mut self, batch: &mut Self::Batch, value: T) -> Result<(), Self::Error> {
-        self.put_item_batch(batch, &(), &value);
+    async fn set(&mut self, batch: &mut Self::Batch, value: &T) -> Result<(), Self::Error> {
+        self.put_item_batch(batch, &(), value);
         Ok(())
     }
 
