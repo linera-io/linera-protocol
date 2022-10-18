@@ -48,9 +48,14 @@ impl UserApplication for TestApplication {
         storage: &dyn WritableStorage,
         operation: &[u8],
     ) -> Result<RawApplicationResult<Vec<u8>>, Error> {
+        // Modify our state.
         let mut state = storage.try_load_my_state().await?;
         state.extend(operation);
         storage.try_save_my_state(state).await?;
+        // Call ourselves after the state => ok.
+        storage
+            .try_call_application(/* authenticate */ true, ApplicationId(1), &[], vec![])
+            .await?;
         Ok(RawApplicationResult::default())
     }
 
@@ -58,9 +63,15 @@ impl UserApplication for TestApplication {
     async fn apply_effect(
         &self,
         _context: &EffectContext,
-        _storage: &dyn WritableStorage,
+        storage: &dyn WritableStorage,
         _effect: &[u8],
     ) -> Result<RawApplicationResult<Vec<u8>>, Error> {
+        let state = storage.try_load_my_state().await?;
+        // Call ourselves while the state is locked => not ok.
+        storage
+            .try_call_application(/* authenticate */ true, ApplicationId(1), &[], vec![])
+            .await?;
+        storage.try_save_my_state(state).await?;
         Ok(RawApplicationResult::default())
     }
 
@@ -126,10 +137,10 @@ async fn test_simple_user_operation() {
         .unwrap();
     assert_eq!(
         result,
-        vec![ApplicationResult::User(
-            app_id,
-            RawApplicationResult::default()
-        )]
+        vec![
+            ApplicationResult::User(app_id, RawApplicationResult::default()),
+            ApplicationResult::User(app_id, RawApplicationResult::default())
+        ]
     );
 
     let context = QueryContext {
