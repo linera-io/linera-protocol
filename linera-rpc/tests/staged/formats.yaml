@@ -412,14 +412,16 @@ Error:
     55:
       InvalidEffect: UNIT
     56:
-      InvalidSession: UNIT
+      InvalidQuery: UNIT
     57:
-      ApplicationIsInUse: UNIT
+      InvalidSession: UNIT
     58:
-      SessionIsInUse: UNIT
+      ApplicationIsInUse: UNIT
     59:
-      InvalidSessionOwner: UNIT
+      SessionIsInUse: UNIT
     60:
+      InvalidSessionOwner: UNIT
+    61:
       SessionWasNotClosed: UNIT
 HashValue:
   NEWTYPESTRUCT:

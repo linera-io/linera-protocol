@@ -194,6 +194,8 @@ pub enum Error {
     InvalidOperation,
     #[error("Invalid effect for this application")]
     InvalidEffect,
+    #[error("Invalid query for this application")]
+    InvalidQuery,
     #[error("Session does not exist or was already closed")]
     InvalidSession,
     #[error("Attempted to call an application while the state is locked")]

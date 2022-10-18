@@ -269,17 +269,21 @@ where
         callee_id: ApplicationId,
         argument: &[u8],
     ) -> Result<Vec<u8>, Error> {
+        // Load the application.
         let application = self
             .execution_state_mut()
             .context()
             .extra()
             .get_user_application(callee_id)?;
+        // Make the call to user code.
         let query_context = crate::QueryContext {
             chain_id: self.chain_id,
         };
+        self.application_ids_mut().push(callee_id);
         let value = application
             .query_application(&query_context, self, argument)
             .await?;
+        self.application_ids_mut().pop();
         Ok(value)
     }
 }

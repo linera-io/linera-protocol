@@ -7,8 +7,8 @@ use linera_base::messages::{BlockHeight, ChainDescription, ChainId, EffectId};
 use linera_execution::{
     system::{Address, Amount, Balance, UserData, SYSTEM},
     ApplicationResult, Effect, EffectContext, ExecutionStateView, Operation, OperationContext,
-    RawApplicationResult, SystemEffect, SystemExecutionState, SystemOperation,
-    TestExecutionRuntimeContext,
+    Query, QueryContext, RawApplicationResult, Response, SystemEffect, SystemExecutionState,
+    SystemOperation, SystemQuery, SystemResponse, TestExecutionRuntimeContext,
 };
 use linera_views::memory::MemoryContext;
 
@@ -69,5 +69,29 @@ async fn test_simple_system_effect() {
     assert_eq!(
         result,
         vec![ApplicationResult::System(RawApplicationResult::default())]
+    );
+}
+
+#[tokio::test]
+async fn test_simple_system_query() {
+    let mut state = SystemExecutionState::default();
+    state.description = Some(ChainDescription::Root(0));
+    state.balance = Balance::from(4);
+    let mut view =
+        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(state)
+            .await;
+    let context = QueryContext {
+        chain_id: ChainId::root(0),
+    };
+    let response = view
+        .query_application(SYSTEM, &context, &Query::System(SystemQuery))
+        .await
+        .unwrap();
+    assert_eq!(
+        response,
+        Response::System(SystemResponse {
+            chain_id: ChainId::root(0),
+            balance: Balance::from(4)
+        })
     );
 }

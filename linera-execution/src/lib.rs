@@ -12,6 +12,7 @@ pub use ownership::ChainOwnership;
 pub use system::SystemExecutionState;
 pub use system::{
     SystemEffect, SystemExecutionStateView, SystemExecutionStateViewContext, SystemOperation,
+    SystemQuery, SystemResponse,
 };
 
 use async_trait::async_trait;
@@ -229,16 +230,22 @@ pub enum Effect {
     User(Vec<u8>),
 }
 
-impl From<SystemEffect> for Effect {
-    fn from(effect: SystemEffect) -> Self {
-        Effect::System(effect)
-    }
+/// An query to be sent and possibly executed in the receiver's block.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub enum Query {
+    /// A system query.
+    System(SystemQuery),
+    /// A user query (in serialized form).
+    User(Vec<u8>),
 }
 
-impl From<Vec<u8>> for Effect {
-    fn from(effect: Vec<u8>) -> Self {
-        Effect::User(effect)
-    }
+/// The response to a query.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub enum Response {
+    /// A system response.
+    System(SystemResponse),
+    /// A user response (in serialized form).
+    User(Vec<u8>),
 }
 
 /// Externally visible results of an execution. These results are meant in the context of
@@ -304,5 +311,53 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
 
     fn user_applications(&self) -> &Arc<DashMap<ApplicationId, UserApplicationCode>> {
         &self.user_applications
+    }
+}
+
+impl From<SystemOperation> for Operation {
+    fn from(operation: SystemOperation) -> Self {
+        Operation::System(operation)
+    }
+}
+
+impl From<Vec<u8>> for Operation {
+    fn from(operation: Vec<u8>) -> Self {
+        Operation::User(operation)
+    }
+}
+
+impl From<SystemEffect> for Effect {
+    fn from(effect: SystemEffect) -> Self {
+        Effect::System(effect)
+    }
+}
+
+impl From<Vec<u8>> for Effect {
+    fn from(effect: Vec<u8>) -> Self {
+        Effect::User(effect)
+    }
+}
+
+impl From<SystemQuery> for Query {
+    fn from(query: SystemQuery) -> Self {
+        Query::System(query)
+    }
+}
+
+impl From<Vec<u8>> for Query {
+    fn from(query: Vec<u8>) -> Self {
+        Query::User(query)
+    }
+}
+
+impl From<SystemResponse> for Response {
+    fn from(response: SystemResponse) -> Self {
+        Response::System(response)
+    }
+}
+
+impl From<Vec<u8>> for Response {
+    fn from(response: Vec<u8>) -> Self {
+        Response::User(response)
     }
 }
