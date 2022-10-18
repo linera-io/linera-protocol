@@ -86,13 +86,6 @@ where
             .expect("single-threaded execution should not lock `application_ids`")
     }
 
-    fn application_id(&self) -> ApplicationId {
-        *self
-            .application_ids_mut()
-            .last()
-            .expect("at least one application id")
-    }
-
     fn execution_state_mut(&self) -> MutexGuard<'_, &'a mut ExecutionStateView<C>> {
         self.execution_state
             .try_lock()
@@ -236,6 +229,17 @@ where
     C: ExecutionStateViewContext,
     C::Extra: ExecutionRuntimeContext,
 {
+    fn chain_id(&self) -> ChainId {
+        self.chain_id
+    }
+
+    fn application_id(&self) -> ApplicationId {
+        *self
+            .application_ids_mut()
+            .last()
+            .expect("at least one application id should be present in the stack")
+    }
+
     async fn try_read_system_balance(&self) -> Result<crate::system::Balance, Error> {
         let value = *self.execution_state_mut().system.balance.get();
         Ok(value)
@@ -346,12 +350,14 @@ where
             .await?;
         self.application_ids_mut().pop();
         // Interprete the results of the call.
-        self.application_results_mut()
-            .push(ApplicationResult::User(callee_id, raw_result.chain_effect));
+        self.application_results_mut().push(ApplicationResult::User(
+            callee_id,
+            raw_result.application_result,
+        ));
         let sessions =
-            self.make_sessions(raw_result.new_sessions, callee_id, self.application_id())?;
+            self.make_sessions(raw_result.create_sessions, callee_id, self.application_id())?;
         let result = CallResult {
-            value: raw_result.return_value,
+            value: raw_result.value,
             sessions,
         };
         Ok(result)
@@ -401,12 +407,14 @@ where
             // Save the session.
             self.try_save_session(session_id, self.application_id(), session_data)?;
         }
-        self.application_results_mut()
-            .push(ApplicationResult::User(callee_id, raw_result.chain_effect));
+        self.application_results_mut().push(ApplicationResult::User(
+            callee_id,
+            raw_result.application_result,
+        ));
         let sessions =
-            self.make_sessions(raw_result.new_sessions, callee_id, self.application_id())?;
+            self.make_sessions(raw_result.create_sessions, callee_id, self.application_id())?;
         let result = CallResult {
-            value: raw_result.return_value,
+            value: raw_result.value,
             sessions,
         };
         Ok(result)
