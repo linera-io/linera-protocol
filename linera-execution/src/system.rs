@@ -2,7 +2,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{ChainOwnership, Effect, EffectContext, OperationContext, RawApplicationResult};
+use crate::{
+    ChainOwnership, Effect, EffectContext, OperationContext, QueryContext, RawApplicationResult,
+};
 use linera_base::{
     committee::Committee,
     ensure,
@@ -56,7 +58,7 @@ pub struct SystemExecutionState {
     pub balance: Balance,
 }
 
-/// A chain operation.
+/// A system operation.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum SystemOperation {
     /// Transfer `amount` units of value to the recipient.
@@ -100,7 +102,7 @@ pub enum SystemOperation {
     RemoveCommittee { admin_id: ChainId, epoch: Epoch },
 }
 
-/// The effect of an operation to be performed on a remote chain.
+/// The effect of a system operation to be performed on a remote chain.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum SystemEffect {
     /// Credit `amount` units of value to the recipient.
@@ -125,6 +127,17 @@ pub enum SystemEffect {
     Unsubscribe { id: ChainId, channel: ChannelId },
     /// Does nothing. Used to debug the intended recipients of a block.
     Notify { id: ChainId },
+}
+
+/// A query to the system state.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct SystemQuery;
+
+/// The response to a system query.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct SystemResponse {
+    pub chain_id: ChainId,
+    pub balance: Balance,
 }
 
 /// The id of the "system" application.
@@ -546,6 +559,18 @@ where
             }
             _ => Ok(false),
         }
+    }
+
+    pub async fn query_application(
+        &mut self,
+        context: &QueryContext,
+        _query: &SystemQuery,
+    ) -> Result<SystemResponse, Error> {
+        let response = SystemResponse {
+            chain_id: context.chain_id,
+            balance: *self.balance.get(),
+        };
+        Ok(response)
     }
 }
 

@@ -5,6 +5,7 @@ use crate::{
     runtime::{ExecutionRuntime, SessionManager},
     system::{SystemExecutionStateView, SystemExecutionStateViewContext, SYSTEM},
     ApplicationResult, Effect, EffectContext, ExecutionRuntimeContext, Operation, OperationContext,
+    Query, QueryContext, Response,
 };
 use linera_base::{
     ensure,
@@ -185,6 +186,51 @@ where
                         UserAction::Effect(context, effect),
                     )
                     .await
+                }
+            }
+        }
+    }
+
+    pub async fn query_application(
+        &mut self,
+        application_id: ApplicationId,
+        context: &QueryContext,
+        query: &Query,
+    ) -> Result<Response, Error> {
+        if application_id == SYSTEM {
+            match query {
+                Query::System(query) => {
+                    let response = self.system.query_application(context, query).await?;
+                    Ok(Response::System(response))
+                }
+                _ => Err(Error::InvalidQuery),
+            }
+        } else {
+            match query {
+                Query::System(_) => Err(Error::InvalidQuery),
+                Query::User(query) => {
+                    // Load the application.
+                    let application = self
+                        .context()
+                        .extra()
+                        .get_user_application(application_id)?;
+                    // Create the execution runtime for this transaction.
+                    let mut session_manager = SessionManager::default();
+                    let mut results = Vec::new();
+                    let mut application_ids = vec![application_id];
+                    let runtime = ExecutionRuntime::new(
+                        context.chain_id,
+                        &mut application_ids,
+                        self,
+                        &mut session_manager,
+                        &mut results,
+                    );
+                    // Run the query.
+                    let response = application
+                        .query_application(context, &runtime, query)
+                        .await?;
+                    assert_eq!(application_ids, vec![application_id]);
+                    Ok(Response::User(response))
                 }
             }
         }

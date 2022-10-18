@@ -44,19 +44,22 @@ impl UserApplication for TestApplication {
     /// Apply an operation from the current block.
     async fn apply_operation(
         &self,
-        context: &OperationContext,
+        _context: &OperationContext,
         storage: &dyn WritableStorageContext,
         operation: &[u8],
     ) -> Result<RawApplicationResult<Vec<u8>>, Error> {
+        let mut state = storage.try_load_my_state().await?;
+        state.extend(operation);
+        storage.try_save_my_state(state).await?;
         Ok(RawApplicationResult::default())
     }
 
     /// Apply an effect originating from a cross-chain message.
     async fn apply_effect(
         &self,
-        context: &EffectContext,
-        storage: &dyn WritableStorageContext,
-        effect: &[u8],
+        _context: &EffectContext,
+        _storage: &dyn WritableStorageContext,
+        _effect: &[u8],
     ) -> Result<RawApplicationResult<Vec<u8>>, Error> {
         Ok(RawApplicationResult::default())
     }
@@ -65,10 +68,10 @@ impl UserApplication for TestApplication {
     /// application.
     async fn call_application(
         &self,
-        context: &CalleeContext,
-        storage: &dyn WritableStorageContext,
-        argument: &[u8],
-        forwarded_sessions: Vec<SessionId>,
+        _context: &CalleeContext,
+        _storage: &dyn WritableStorageContext,
+        _argument: &[u8],
+        _forwarded_sessions: Vec<SessionId>,
     ) -> Result<RawCallResult, Error> {
         Ok(RawCallResult::default())
     }
@@ -76,12 +79,12 @@ impl UserApplication for TestApplication {
     /// Allow an operation or an effect of other applications to call into a session that we previously created.
     async fn call_session(
         &self,
-        context: &CalleeContext,
-        storage: &dyn WritableStorageContext,
-        session_kind: u64,
-        session_data: &mut Vec<u8>,
-        argument: &[u8],
-        forwarded_sessions: Vec<SessionId>,
+        _context: &CalleeContext,
+        _storage: &dyn WritableStorageContext,
+        _session_kind: u64,
+        _session_data: &mut Vec<u8>,
+        _argument: &[u8],
+        _forwarded_sessions: Vec<SessionId>,
     ) -> Result<RawCallResult, Error> {
         Ok(RawCallResult::default())
     }
@@ -90,11 +93,12 @@ impl UserApplication for TestApplication {
     /// NOTE: This is not meant to be metered and may not be exposed by all validators.
     async fn query_application(
         &self,
-        context: &QueryContext,
+        _context: &QueryContext,
         storage: &dyn QueryableStorageContext,
-        argument: &[u8],
+        _argument: &[u8],
     ) -> Result<Vec<u8>, Error> {
-        Ok(vec![])
+        let state = storage.try_read_my_state().await?;
+        Ok(state)
     }
 }
 
@@ -117,7 +121,7 @@ async fn test_simple_user_operation() {
         index: 0,
     };
     let result = view
-        .apply_operation(app_id, &context, &Operation::User(vec![]))
+        .apply_operation(app_id, &context, &Operation::User(vec![1]))
         .await
         .unwrap();
     assert_eq!(
@@ -126,5 +130,15 @@ async fn test_simple_user_operation() {
             app_id,
             RawApplicationResult::default()
         )]
+    );
+
+    let context = QueryContext {
+        chain_id: ChainId::root(0),
+    };
+    assert_eq!(
+        view.query_application(app_id, &context, &Query::User(vec![]))
+            .await
+            .unwrap(),
+        Response::User(vec![1])
     );
 }
