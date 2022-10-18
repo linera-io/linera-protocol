@@ -144,9 +144,9 @@ where
             .await)
     }
 
-    async fn set(&mut self, _batch: &mut Self::Batch, value: T) -> Result<(), MemoryViewError> {
+    async fn set(&mut self, _batch: &mut Self::Batch, value: &T) -> Result<(), MemoryViewError> {
         let mut map = self.map.write().await;
-        map.insert(self.base_key.clone(), Box::new(value));
+        map.insert(self.base_key.clone(), Box::new(value.clone()));
         Ok(())
     }
 

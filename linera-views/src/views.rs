@@ -162,7 +162,7 @@ pub trait RegisterOperations<T>: Context {
     async fn get(&mut self) -> Result<T, Self::Error>;
 
     /// Set the value in the register. Crash-resistant implementations should only write to `batch`.
-    async fn set(&mut self, batch: &mut Self::Batch, value: T) -> Result<(), Self::Error>;
+    async fn set(&mut self, batch: &mut Self::Batch, value: &T) -> Result<(), Self::Error>;
 
     /// Delete the register. Crash-resistant implementations should only write to `batch`.
     async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error>;
@@ -193,14 +193,14 @@ where
 
     async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         if let Some(value) = self.update {
-            self.context.set(batch, value).await?;
+            self.context.set(batch, &value).await?;
         }
         Ok(())
     }
 
     async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         if let Some(value) = self.update.take() {
-            self.context.set(batch, value.clone()).await?;
+            self.context.set(batch, &value).await?;
             self.stored_value = value;
         }
         Ok(())

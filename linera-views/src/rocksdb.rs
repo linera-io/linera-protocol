@@ -254,8 +254,8 @@ where
         Ok(value)
     }
 
-    async fn set(&mut self, batch: &mut Self::Batch, value: T) -> Result<(), RocksdbViewError> {
-        batch.write_key(self.base_key.clone(), &value)?;
+    async fn set(&mut self, batch: &mut Self::Batch, value: &T) -> Result<(), RocksdbViewError> {
+        batch.write_key(self.base_key.clone(), value)?;
         Ok(())
     }
 
