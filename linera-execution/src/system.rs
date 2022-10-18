@@ -45,6 +45,7 @@ pub struct SystemExecutionStateView<C> {
 
 /// For testing only.
 #[cfg(any(test, feature = "test"))]
+#[derive(Default, Debug, PartialEq, Eq, Clone)]
 pub struct SystemExecutionState {
     pub description: Option<ChainDescription>,
     pub epoch: Option<Epoch>,
