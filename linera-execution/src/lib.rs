@@ -23,15 +23,17 @@ use linera_base::{
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
+/// An implementation of [`UserApplication`]
 pub type UserApplicationCode = Arc<dyn UserApplication + Send + Sync + 'static>;
 
+/// The public entry points provided by an application.
 #[async_trait]
 pub trait UserApplication {
     /// Apply an operation from the current block.
     async fn apply_operation(
         &self,
         context: &OperationContext,
-        storage: &dyn CallableStorageContext,
+        storage: &dyn WritableStorageContext,
         operation: &[u8],
     ) -> Result<RawApplicationResult<Vec<u8>>, Error>;
 
@@ -39,16 +41,16 @@ pub trait UserApplication {
     async fn apply_effect(
         &self,
         context: &EffectContext,
-        storage: &dyn CallableStorageContext,
+        storage: &dyn WritableStorageContext,
         effect: &[u8],
     ) -> Result<RawApplicationResult<Vec<u8>>, Error>;
 
     /// Allow an operation or an effect of other applications to call into this
     /// application.
-    async fn call(
+    async fn call_application(
         &self,
         context: &CalleeContext,
-        storage: &dyn CallableStorageContext,
+        storage: &dyn WritableStorageContext,
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<RawCallResult, Error>;
@@ -57,7 +59,7 @@ pub trait UserApplication {
     async fn call_session(
         &self,
         context: &CalleeContext,
-        storage: &dyn CallableStorageContext,
+        storage: &dyn WritableStorageContext,
         session_kind: u64,
         session_data: &mut Vec<u8>,
         argument: &[u8],
@@ -66,7 +68,7 @@ pub trait UserApplication {
 
     /// Allow an end user to execute read-only queries on the state of this application.
     /// NOTE: This is not meant to be metered and may not be exposed by all validators.
-    async fn query(
+    async fn query_application(
         &self,
         context: &QueryContext,
         storage: &dyn QueryableStorageContext,
@@ -141,7 +143,7 @@ pub struct QueryContext {
 }
 
 #[async_trait]
-pub trait StorageContext: Send + Sync {
+pub trait ReadableStorageContext: Send + Sync {
     /// Read the system balance.
     async fn try_read_system_balance(&self) -> Result<crate::system::Balance, Error>;
 
@@ -150,7 +152,7 @@ pub trait StorageContext: Send + Sync {
 }
 
 #[async_trait]
-pub trait QueryableStorageContext: StorageContext {
+pub trait QueryableStorageContext: ReadableStorageContext {
     /// Query another application.
     async fn try_query_application(
         &self,
@@ -176,7 +178,7 @@ pub struct CallResult {
 }
 
 #[async_trait]
-pub trait CallableStorageContext: StorageContext {
+pub trait WritableStorageContext: ReadableStorageContext {
     /// Read the application state and prevent further reading/loading until the state is saved.
     async fn try_load_my_state(&self) -> Result<Vec<u8>, Error>;
 

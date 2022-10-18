@@ -3,8 +3,8 @@
 
 use crate::{
     execution::{ExecutionStateView, ExecutionStateViewContext},
-    ApplicationResult, CallResult, CallableStorageContext, ExecutionRuntimeContext, NewSession,
-    QueryableStorageContext, SessionId,
+    ApplicationResult, CallResult, ExecutionRuntimeContext, NewSession, QueryableStorageContext,
+    ReadableStorageContext, SessionId, WritableStorageContext,
 };
 use async_trait::async_trait;
 use linera_base::{
@@ -203,7 +203,7 @@ where
 }
 
 #[async_trait]
-impl<'a, C, const W: bool> crate::StorageContext for ExecutionRuntime<'a, C, W>
+impl<'a, C, const W: bool> ReadableStorageContext for ExecutionRuntime<'a, C, W>
 where
     C: ExecutionStateViewContext,
     C::Extra: ExecutionRuntimeContext,
@@ -247,13 +247,15 @@ where
         let query_context = crate::QueryContext {
             chain_id: self.chain_id,
         };
-        let value = application.query(&query_context, self, argument).await?;
+        let value = application
+            .query_application(&query_context, self, argument)
+            .await?;
         Ok(value)
     }
 }
 
 #[async_trait]
-impl<'a, C> CallableStorageContext for ExecutionRuntime<'a, C, true>
+impl<'a, C> WritableStorageContext for ExecutionRuntime<'a, C, true>
 where
     C: ExecutionStateViewContext,
     C::Extra: ExecutionRuntimeContext,
@@ -305,7 +307,7 @@ where
             authenticated_caller_id,
         };
         let raw_result = application
-            .call(&callee_context, self, argument, forwarded_sessions)
+            .call_application(&callee_context, self, argument, forwarded_sessions)
             .await?;
         // Interprete the results of the call.
         self.try_lock_application_results()?
