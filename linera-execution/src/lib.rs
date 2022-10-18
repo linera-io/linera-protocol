@@ -34,7 +34,7 @@ pub trait UserApplication {
     async fn apply_operation(
         &self,
         context: &OperationContext,
-        storage: &dyn WritableStorageContext,
+        storage: &dyn WritableStorage,
         operation: &[u8],
     ) -> Result<RawApplicationResult<Vec<u8>>, Error>;
 
@@ -42,7 +42,7 @@ pub trait UserApplication {
     async fn apply_effect(
         &self,
         context: &EffectContext,
-        storage: &dyn WritableStorageContext,
+        storage: &dyn WritableStorage,
         effect: &[u8],
     ) -> Result<RawApplicationResult<Vec<u8>>, Error>;
 
@@ -51,7 +51,7 @@ pub trait UserApplication {
     async fn call_application(
         &self,
         context: &CalleeContext,
-        storage: &dyn WritableStorageContext,
+        storage: &dyn WritableStorage,
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<RawCallResult, Error>;
@@ -60,7 +60,7 @@ pub trait UserApplication {
     async fn call_session(
         &self,
         context: &CalleeContext,
-        storage: &dyn WritableStorageContext,
+        storage: &dyn WritableStorage,
         session_kind: u64,
         session_data: &mut Vec<u8>,
         argument: &[u8],
@@ -72,7 +72,7 @@ pub trait UserApplication {
     async fn query_application(
         &self,
         context: &QueryContext,
-        storage: &dyn QueryableStorageContext,
+        storage: &dyn QueryableStorage,
         argument: &[u8],
     ) -> Result<Vec<u8>, Error>;
 }
@@ -146,7 +146,7 @@ pub struct QueryContext {
 }
 
 #[async_trait]
-pub trait ReadableStorageContext: Send + Sync {
+pub trait ReadableStorage: Send + Sync {
     /// Read the system balance.
     async fn try_read_system_balance(&self) -> Result<crate::system::Balance, Error>;
 
@@ -155,7 +155,7 @@ pub trait ReadableStorageContext: Send + Sync {
 }
 
 #[async_trait]
-pub trait QueryableStorageContext: ReadableStorageContext {
+pub trait QueryableStorage: ReadableStorage {
     /// Query another application.
     async fn try_query_application(
         &self,
@@ -184,7 +184,7 @@ pub struct CallResult {
 }
 
 #[async_trait]
-pub trait WritableStorageContext: ReadableStorageContext {
+pub trait WritableStorage: ReadableStorage {
     /// Read the application state and prevent further reading/loading until the state is saved.
     async fn try_load_my_state(&self) -> Result<Vec<u8>, Error>;
 
