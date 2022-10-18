@@ -196,6 +196,10 @@ pub enum Error {
     InvalidEffect,
     #[error("Session does not exist or was already closed")]
     InvalidSession,
+    #[error("Attempted to call an application while the state is locked")]
+    ApplicationIsInUse,
+    #[error("Attempted to call or forward an active session")]
+    SessionIsInUse,
     #[error("Session is not accessible by this owner")]
     InvalidSessionOwner,
     #[error("A session is still opened at the end of a transaction")]

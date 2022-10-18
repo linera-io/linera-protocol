@@ -16,14 +16,22 @@ use linera_views::views::{RegisterView, View};
 use std::{collections::BTreeMap, sync::Arc};
 use tokio::sync::{Mutex, MutexGuard, OwnedMutexGuard};
 
+/// Runtime data tracked during the execution of a transaction.
 #[derive(Debug, Clone)]
 pub(crate) struct ExecutionRuntime<'a, C, const WRITABLE: bool> {
+    /// The current chain ID.
     chain_id: ChainId,
-    application_id: ApplicationId,
+    /// The current stack of application IDs.
+    application_ids: Arc<Mutex<&'a mut Vec<ApplicationId>>>,
+    /// The storage view on the execution state.
     execution_state: Arc<Mutex<&'a mut ExecutionStateView<C>>>,
+    /// All the sessions and their IDs.
     session_manager: Arc<Mutex<&'a mut SessionManager>>,
+    /// Track active (i.e. locked) applications for which re-entrancy is disallowed.
     active_user_states: Arc<Mutex<ActiveUserStates<C>>>,
+    /// Track active (i.e. locked) sessions for which re-entrancy is disallowed.
     active_sessions: Arc<Mutex<ActiveSessions>>,
+    /// Accumulate the externally visible results (e.g. cross-chain messages) of applications.
     application_results: Arc<Mutex<&'a mut Vec<ApplicationResult>>>,
 }
 
@@ -33,28 +41,31 @@ type ActiveSessions = BTreeMap<SessionId, OwnedMutexGuard<SessionState>>;
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct SessionManager {
+    /// Track the next session index to be used for each application.
     pub(crate) counters: BTreeMap<ApplicationId, u64>,
-    // We prevent all re-entrant calls and changes of ownership when a session is being called.
+    /// Track the current state (owner and data) of each session.
     pub(crate) states: BTreeMap<SessionId, Arc<Mutex<SessionState>>>,
 }
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct SessionState {
+    /// Track which application can call into the session.
     owner: ApplicationId,
+    /// The internal state of the session.
     data: Vec<u8>,
 }
 
 impl<'a, C, const W: bool> ExecutionRuntime<'a, C, W> {
-    pub fn new(
+    pub(crate) fn new(
         chain_id: ChainId,
-        application_id: ApplicationId,
+        application_ids: &'a mut Vec<ApplicationId>,
         execution_state: &'a mut ExecutionStateView<C>,
         session_manager: &'a mut SessionManager,
         application_results: &'a mut Vec<ApplicationResult>,
     ) -> Self {
         Self {
             chain_id,
-            application_id,
+            application_ids: Arc::new(Mutex::new(application_ids)),
             execution_state: Arc::new(Mutex::new(execution_state)),
             session_manager: Arc::new(Mutex::new(session_manager)),
             active_user_states: Arc::default(),
@@ -68,30 +79,48 @@ impl<'a, C, const W: bool> ExecutionRuntime<'a, C, W>
 where
     C: ExecutionStateViewContext,
     C::Extra: ExecutionRuntimeContext,
-    Error: From<C::Error>,
 {
-    fn try_lock_execution_state(
-        &self,
-    ) -> Result<MutexGuard<'_, &'a mut ExecutionStateView<C>>, C::Error> {
-        Ok(self.execution_state.try_lock()?)
+    fn application_ids_mut(&self) -> MutexGuard<'_, &'a mut Vec<ApplicationId>> {
+        self.application_ids
+            .try_lock()
+            .expect("single-threaded execution should not lock `application_ids`")
     }
 
-    fn try_lock_session_manager(&self) -> Result<MutexGuard<'_, &'a mut SessionManager>, C::Error> {
-        Ok(self.session_manager.try_lock()?)
+    fn application_id(&self) -> ApplicationId {
+        *self
+            .application_ids_mut()
+            .last()
+            .expect("at least one application id")
     }
 
-    fn try_lock_active_user_states(&self) -> Result<MutexGuard<'_, ActiveUserStates<C>>, C::Error> {
-        Ok(self.active_user_states.try_lock()?)
+    fn execution_state_mut(&self) -> MutexGuard<'_, &'a mut ExecutionStateView<C>> {
+        self.execution_state
+            .try_lock()
+            .expect("single-threaded execution should not lock `execution_state`")
     }
 
-    fn try_lock_active_sessions(&self) -> Result<MutexGuard<'_, ActiveSessions>, C::Error> {
-        Ok(self.active_sessions.try_lock()?)
+    fn session_manager_mut(&self) -> MutexGuard<'_, &'a mut SessionManager> {
+        self.session_manager
+            .try_lock()
+            .expect("single-threaded execution should not lock `session_manager`")
     }
 
-    fn try_lock_application_results(
-        &self,
-    ) -> Result<MutexGuard<'_, &'a mut Vec<ApplicationResult>>, C::Error> {
-        Ok(self.application_results.try_lock()?)
+    fn active_user_states_mut(&self) -> MutexGuard<'_, ActiveUserStates<C>> {
+        self.active_user_states
+            .try_lock()
+            .expect("single-threaded execution should not lock `active_user_states`")
+    }
+
+    fn active_sessions_mut(&self) -> MutexGuard<'_, ActiveSessions> {
+        self.active_sessions
+            .try_lock()
+            .expect("single-threaded execution should not lock `active_sessions`")
+    }
+
+    fn application_results_mut(&self) -> MutexGuard<'_, &'a mut Vec<ApplicationResult>> {
+        self.application_results
+            .try_lock()
+            .expect("single-threaded execution should not lock `application_results`")
     }
 
     fn forward_sessions(
@@ -100,14 +129,14 @@ where
         from_id: ApplicationId,
         to_id: ApplicationId,
     ) -> Result<(), Error> {
-        let states = &self.try_lock_session_manager()?.states;
+        let states = &self.session_manager_mut().states;
         for id in session_ids {
             let mut state = states
                 .get(id)
                 .ok_or(Error::InvalidSession)?
                 .clone()
                 .try_lock_owned()
-                .map_err(C::Error::from)?;
+                .map_err(|_| Error::SessionIsInUse)?;
             // Verify ownership.
             ensure!(state.owner == from_id, Error::InvalidSessionOwner);
             // Transfer the session.
@@ -122,7 +151,7 @@ where
         creator_id: ApplicationId,
         receiver_id: ApplicationId,
     ) -> Result<Vec<SessionId>, Error> {
-        let mut manager = self.try_lock_session_manager()?;
+        let mut manager = self.session_manager_mut();
         let mut counter = manager
             .counters
             .get(&creator_id)
@@ -154,19 +183,18 @@ where
         application_id: ApplicationId,
     ) -> Result<Vec<u8>, Error> {
         let guard = self
-            .try_lock_session_manager()
-            .map_err(C::Error::from)?
+            .session_manager_mut()
             .states
             .get(&session_id)
             .ok_or(Error::InvalidSession)?
             .clone()
             .try_lock_owned()
-            .map_err(C::Error::from)?;
+            .map_err(|_| Error::SessionIsInUse)?;
         let state = guard.data.clone();
         // Verify ownership.
         ensure!(guard.owner == application_id, Error::InvalidSessionOwner);
         // Remember the guard. This will prevent reentrancy.
-        self.try_lock_active_sessions()?.insert(session_id, guard);
+        self.active_sessions_mut().insert(session_id, guard);
         Ok(state)
     }
 
@@ -177,7 +205,7 @@ where
         state: Vec<u8>,
     ) -> Result<(), Error> {
         // Remove the guard.
-        if let Some(mut guard) = self.try_lock_active_sessions()?.remove(&session_id) {
+        if let Some(mut guard) = self.active_sessions_mut().remove(&session_id) {
             // Verify ownership.
             ensure!(guard.owner == application_id, Error::InvalidSessionOwner);
             // Save the state and unlock the session for future calls.
@@ -192,11 +220,11 @@ where
         application_id: ApplicationId,
     ) -> Result<(), Error> {
         // Remove the guard.
-        if let Some(guard) = self.try_lock_active_sessions()?.remove(&session_id) {
+        if let Some(guard) = self.active_sessions_mut().remove(&session_id) {
             // Verify ownership.
             ensure!(guard.owner == application_id, Error::InvalidSessionOwner);
             // Delete the session.
-            self.try_lock_active_sessions()?.remove(&session_id);
+            self.active_sessions_mut().remove(&session_id);
         }
         Ok(())
     }
@@ -207,19 +235,22 @@ impl<'a, C, const W: bool> ReadableStorageContext for ExecutionRuntime<'a, C, W>
 where
     C: ExecutionStateViewContext,
     C::Extra: ExecutionRuntimeContext,
-    Error: From<C::Error>,
 {
     async fn try_read_system_balance(&self) -> Result<crate::system::Balance, Error> {
-        let value = *self.try_lock_execution_state()?.system.balance.get();
+        let value = *self.execution_state_mut().system.balance.get();
         Ok(value)
     }
 
     async fn try_read_my_state(&self) -> Result<Vec<u8>, Error> {
         let state = self
-            .try_lock_execution_state()?
+            .execution_state_mut()
             .users
-            .try_load_entry(self.application_id)
-            .await?
+            .try_load_entry(self.application_id())
+            .await
+            .map_err(|_| {
+                // FIXME(#152): This remapping is too coarse as the error could be network-related.
+                Error::ApplicationIsInUse
+            })?
             .get()
             .to_vec();
         Ok(state)
@@ -231,7 +262,6 @@ impl<'a, C> QueryableStorageContext for ExecutionRuntime<'a, C, false>
 where
     C: ExecutionStateViewContext,
     C::Extra: ExecutionRuntimeContext,
-    Error: From<C::Error>,
 {
     /// Note that queries are not available from writable contexts.
     async fn try_query_application(
@@ -240,7 +270,7 @@ where
         argument: &[u8],
     ) -> Result<Vec<u8>, Error> {
         let application = self
-            .try_lock_execution_state()?
+            .execution_state_mut()
             .context()
             .extra()
             .get_user_application(callee_id)?;
@@ -259,26 +289,26 @@ impl<'a, C> WritableStorageContext for ExecutionRuntime<'a, C, true>
 where
     C: ExecutionStateViewContext,
     C::Extra: ExecutionRuntimeContext,
-    Error: From<C::Error>,
 {
     async fn try_load_my_state(&self) -> Result<Vec<u8>, Error> {
         let view = self
-            .try_lock_execution_state()?
+            .execution_state_mut()
             .users
-            .try_load_entry(self.application_id)
-            .await?;
+            .try_load_entry(self.application_id())
+            .await
+            .map_err(|_| {
+                // FIXME(#152): This remapping is too coarse as the error could be network-related.
+                Error::ApplicationIsInUse
+            })?;
         let state = view.get().to_vec();
         // Remember the view. This will prevent reentrancy.
-        self.try_lock_active_user_states()?
-            .insert(self.application_id, view);
+        self.active_user_states_mut()
+            .insert(self.application_id(), view);
         Ok(state)
     }
 
     async fn try_save_my_state(&self, state: Vec<u8>) -> Result<(), Error> {
-        if let Some(mut view) = self
-            .try_lock_active_user_states()?
-            .remove(&self.application_id)
-        {
+        if let Some(mut view) = self.active_user_states_mut().remove(&self.application_id()) {
             // Make the view available again.
             view.set(state);
         }
@@ -294,26 +324,28 @@ where
     ) -> Result<CallResult, Error> {
         // Load the application.
         let application = self
-            .try_lock_execution_state()?
+            .execution_state_mut()
             .context()
             .extra()
             .get_user_application(callee_id)?;
         // Change the owners of forwarded sessions.
-        self.forward_sessions(&forwarded_sessions, self.application_id, callee_id)?;
+        self.forward_sessions(&forwarded_sessions, self.application_id(), callee_id)?;
         // Make the call to user code.
-        let authenticated_caller_id = authenticated.then_some(self.application_id);
+        let authenticated_caller_id = authenticated.then_some(self.application_id());
         let callee_context = crate::CalleeContext {
             chain_id: self.chain_id,
             authenticated_caller_id,
         };
+        self.application_ids_mut().push(callee_id);
         let raw_result = application
             .call_application(&callee_context, self, argument, forwarded_sessions)
             .await?;
+        self.application_ids_mut().pop();
         // Interprete the results of the call.
-        self.try_lock_application_results()?
+        self.application_results_mut()
             .push(ApplicationResult::User(callee_id, raw_result.chain_effect));
         let sessions =
-            self.make_sessions(raw_result.new_sessions, callee_id, self.application_id)?;
+            self.make_sessions(raw_result.new_sessions, callee_id, self.application_id())?;
         let result = CallResult {
             value: raw_result.return_value,
             sessions,
@@ -331,20 +363,21 @@ where
         // Load the application.
         let callee_id = session_id.application_id;
         let application = self
-            .try_lock_execution_state()?
+            .execution_state_mut()
             .context()
             .extra()
             .get_user_application(callee_id)?;
         // Change the owners of forwarded sessions.
-        self.forward_sessions(&forwarded_sessions, self.application_id, callee_id)?;
+        self.forward_sessions(&forwarded_sessions, self.application_id(), callee_id)?;
         // Load the session.
-        let mut session_data = self.try_load_session(session_id, self.application_id)?;
+        let mut session_data = self.try_load_session(session_id, self.application_id())?;
         // Make the call to user code.
-        let authenticated_caller_id = authenticated.then_some(self.application_id);
+        let authenticated_caller_id = authenticated.then_some(self.application_id());
         let callee_context = crate::CalleeContext {
             chain_id: self.chain_id,
             authenticated_caller_id,
         };
+        self.application_ids_mut().push(callee_id);
         let raw_result = application
             .call_session(
                 &callee_context,
@@ -355,18 +388,19 @@ where
                 forwarded_sessions,
             )
             .await?;
+        self.application_ids_mut().pop();
         // Interprete the results of the call.
         if raw_result.close_session {
             // Terminate the session.
-            self.try_close_session(session_id, self.application_id)?;
+            self.try_close_session(session_id, self.application_id())?;
         } else {
             // Save the session.
-            self.try_save_session(session_id, self.application_id, session_data)?;
+            self.try_save_session(session_id, self.application_id(), session_data)?;
         }
-        self.try_lock_application_results()?
+        self.application_results_mut()
             .push(ApplicationResult::User(callee_id, raw_result.chain_effect));
         let sessions =
-            self.make_sessions(raw_result.new_sessions, callee_id, self.application_id)?;
+            self.make_sessions(raw_result.new_sessions, callee_id, self.application_id())?;
         let result = CallResult {
             value: raw_result.return_value,
             sessions,

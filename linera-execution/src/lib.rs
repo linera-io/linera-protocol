@@ -164,8 +164,11 @@ pub trait QueryableStorageContext: ReadableStorageContext {
 /// The identifier of a session.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
 pub struct SessionId {
+    /// The application that runs the session.
     pub application_id: ApplicationId,
+    /// User-defined tag.
     pub kind: u64,
+    /// Unique index set by the runtime.
     index: u64,
 }
 
@@ -236,13 +239,19 @@ impl From<Vec<u8>> for Effect {
     }
 }
 
+/// Externally visible results of an execution. These results are meant in the context of
+/// the application that created them.
 #[derive(Debug)]
 pub struct RawApplicationResult<Effect> {
+    /// Send messages to the given destinations.
     pub effects: Vec<(Destination, Effect)>,
+    /// Subscribe chains to channels.
     pub subscribe: Vec<(String, ChainId)>,
+    /// Unsubscribe chains to channels.
     pub unsubscribe: Vec<(String, ChainId)>,
 }
 
+/// Externally visible results of an execution, tagged by their application.
 #[derive(Debug)]
 pub enum ApplicationResult {
     System(RawApplicationResult<SystemEffect>),
