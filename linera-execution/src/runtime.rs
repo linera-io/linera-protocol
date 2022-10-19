@@ -367,7 +367,7 @@ where
             .call_application(&callee_context, self, argument, forwarded_sessions)
             .await?;
         self.application_ids_mut().pop();
-        // Interprete the results of the call.
+        // Interpret the results of the call.
         self.application_results_mut().push(ApplicationResult::User(
             callee_id,
             raw_result.application_result,
@@ -417,7 +417,7 @@ where
             )
             .await?;
         self.application_ids_mut().pop();
-        // Interprete the results of the call.
+        // Interpret the results of the call.
         if raw_result.close_session {
             // Terminate the session.
             self.try_close_session(session_id, self.application_id())?;
@@ -425,14 +425,18 @@ where
             // Save the session.
             self.try_save_session(session_id, self.application_id(), session_data)?;
         }
+        let inner_result = raw_result.inner;
         self.application_results_mut().push(ApplicationResult::User(
             callee_id,
-            raw_result.application_result,
+            inner_result.application_result,
         ));
-        let sessions =
-            self.make_sessions(raw_result.create_sessions, callee_id, self.application_id())?;
+        let sessions = self.make_sessions(
+            inner_result.create_sessions,
+            callee_id,
+            self.application_id(),
+        )?;
         let result = CallResult {
-            value: raw_result.value,
+            value: inner_result.value,
             sessions,
         };
         Ok(result)

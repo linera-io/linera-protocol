@@ -41,7 +41,10 @@ struct TestApplication;
 
 #[async_trait]
 impl UserApplication for TestApplication {
-    /// Apply an operation from the current block.
+    /// Extend the application state with the `operation` bytes.
+    ///
+    /// Calls itself during the operation, opening a session. The session is intentionally
+    /// leaked if the operation is empty.
     async fn apply_operation(
         &self,
         _context: &OperationContext,
@@ -70,7 +73,7 @@ impl UserApplication for TestApplication {
         Ok(RawApplicationResult::default())
     }
 
-    /// Apply an effect originating from a cross-chain message.
+    /// Attempt to call ourself while the state is locked.
     async fn apply_effect(
         &self,
         _context: &EffectContext,
@@ -88,25 +91,24 @@ impl UserApplication for TestApplication {
         Ok(RawApplicationResult::default())
     }
 
-    /// Allow an operation or an effect of other applications to call into this
-    /// application.
+    /// Create a session.
     async fn call_application(
         &self,
         _context: &CalleeContext,
         _storage: &dyn WritableStorage,
         _argument: &[u8],
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<RawCallResult, Error> {
-        Ok(RawCallResult {
+    ) -> Result<ApplicationCallResult, Error> {
+        Ok(ApplicationCallResult {
             create_sessions: vec![NewSession {
                 kind: 0,
                 data: vec![1],
             }],
-            ..RawCallResult::default()
+            ..ApplicationCallResult::default()
         })
     }
 
-    /// Allow an operation or an effect of other applications to call into a session that we previously created.
+    /// Close the session.
     async fn call_session(
         &self,
         _context: &CalleeContext,
@@ -115,15 +117,14 @@ impl UserApplication for TestApplication {
         _session_data: &mut Vec<u8>,
         _argument: &[u8],
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<RawCallResult, Error> {
-        Ok(RawCallResult {
+    ) -> Result<SessionCallResult, Error> {
+        Ok(SessionCallResult {
+            inner: ApplicationCallResult::default(),
             close_session: true,
-            ..RawCallResult::default()
         })
     }
 
-    /// Allow an end user to execute read-only queries on the state of this application.
-    /// NOTE: This is not meant to be metered and may not be exposed by all validators.
+    /// Return the application state.
     async fn query_application(
         &self,
         _context: &QueryContext,
