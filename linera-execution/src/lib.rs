@@ -47,16 +47,17 @@ pub trait UserApplication {
     ) -> Result<RawApplicationResult<Vec<u8>>, Error>;
 
     /// Allow an operation or an effect of other applications to call into this
-    /// application.
+    /// user application.
     async fn call_application(
         &self,
         context: &CalleeContext,
         storage: &dyn WritableStorage,
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<RawCallResult, Error>;
+    ) -> Result<ApplicationCallResult, Error>;
 
-    /// Allow an operation or an effect of other applications to call into a session that we previously created.
+    /// Allow an operation or an effect of other applications to call into a session that
+    /// we previously created.
     async fn call_session(
         &self,
         context: &CalleeContext,
@@ -65,7 +66,7 @@ pub trait UserApplication {
         session_data: &mut Vec<u8>,
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<RawCallResult, Error>;
+    ) -> Result<SessionCallResult, Error>;
 
     /// Allow an end user to execute read-only queries on the state of this application.
     /// NOTE: This is not meant to be metered and may not be exposed by all validators.
@@ -77,15 +78,22 @@ pub trait UserApplication {
     ) -> Result<Vec<u8>, Error>;
 }
 
-/// The result of calling into an application (or one of its open sessions).
+/// The result of calling into a user application.
 #[derive(Default)]
-pub struct RawCallResult {
+pub struct ApplicationCallResult {
     /// The return value.
     pub value: Vec<u8>,
     /// The externally-visible result.
     pub application_result: RawApplicationResult<Vec<u8>>,
     /// The new sessions that were just created by the callee for us.
     pub create_sessions: Vec<NewSession>,
+}
+
+/// The result of calling into a session.
+#[derive(Default)]
+pub struct SessionCallResult {
+    /// The application result.
+    pub inner: ApplicationCallResult,
     /// If `call_session` was called, this tells the system to clean up the session.
     pub close_session: bool,
 }
