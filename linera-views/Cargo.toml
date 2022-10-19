@@ -20,6 +20,7 @@ dashmap = "5.3.4"
 futures = "0.3.17"
 generic-array = { version = "0.14.4", features = ["serde"] }
 http = "0.2.7"
+linera-base = { path = "../linera-base" }
 log = "0.4.14"
 paste = "1.0.8"
 rocksdb = "0.19.0"
@@ -27,8 +28,6 @@ serde = { version = "1.0.130", features = ["derive"] }
 sha2 = "0.9.8"
 thiserror = "1.0.31"
 tokio = "1.12.0"
-
-linera-base = { path = "../linera-base" }
 
 [dev-dependencies]
 anyhow = "1.0.57"
