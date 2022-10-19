@@ -48,14 +48,25 @@ impl UserApplication for TestApplication {
         storage: &dyn WritableStorage,
         operation: &[u8],
     ) -> Result<RawApplicationResult<Vec<u8>>, Error> {
+        // Who we are.
+        let app_id = storage.application_id();
         // Modify our state.
         let mut state = storage.try_load_my_state().await?;
         state.extend(operation);
         storage.try_save_my_state(state).await?;
         // Call ourselves after the state => ok.
-        storage
-            .try_call_application(/* authenticate */ true, ApplicationId(1), &[], vec![])
+        let call_result = storage
+            .try_call_application(/* authenticate */ true, app_id, &[], vec![])
             .await?;
+        assert_eq!(call_result.value, vec![]);
+        assert_eq!(call_result.sessions.len(), 1);
+        if !operation.is_empty() {
+            // Call the session to close it.
+            let session_id = call_result.sessions[0];
+            storage
+                .try_call_session(/* authenticate */ true, session_id, &[], vec![])
+                .await?;
+        }
         Ok(RawApplicationResult::default())
     }
 
@@ -66,10 +77,12 @@ impl UserApplication for TestApplication {
         storage: &dyn WritableStorage,
         _effect: &[u8],
     ) -> Result<RawApplicationResult<Vec<u8>>, Error> {
+        // Who we are.
+        let app_id = storage.application_id();
         let state = storage.try_load_my_state().await?;
         // Call ourselves while the state is locked => not ok.
         storage
-            .try_call_application(/* authenticate */ true, ApplicationId(1), &[], vec![])
+            .try_call_application(/* authenticate */ true, app_id, &[], vec![])
             .await?;
         storage.try_save_my_state(state).await?;
         Ok(RawApplicationResult::default())
@@ -84,7 +97,13 @@ impl UserApplication for TestApplication {
         _argument: &[u8],
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<RawCallResult, Error> {
-        Ok(RawCallResult::default())
+        Ok(RawCallResult {
+            create_sessions: vec![NewSession {
+                kind: 0,
+                data: vec![1],
+            }],
+            ..RawCallResult::default()
+        })
     }
 
     /// Allow an operation or an effect of other applications to call into a session that we previously created.
@@ -97,7 +116,10 @@ impl UserApplication for TestApplication {
         _argument: &[u8],
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<RawCallResult, Error> {
-        Ok(RawCallResult::default())
+        Ok(RawCallResult {
+            close_session: true,
+            ..RawCallResult::default()
+        })
     }
 
     /// Allow an end user to execute read-only queries on the state of this application.
@@ -139,6 +161,7 @@ async fn test_simple_user_operation() {
         result,
         vec![
             ApplicationResult::User(app_id, RawApplicationResult::default()),
+            ApplicationResult::User(app_id, RawApplicationResult::default()),
             ApplicationResult::User(app_id, RawApplicationResult::default())
         ]
     );
@@ -151,5 +174,30 @@ async fn test_simple_user_operation() {
             .await
             .unwrap(),
         Response::User(vec![1])
+    );
+}
+
+#[tokio::test]
+async fn test_simple_user_operation_with_leaking_session() {
+    let mut state = SystemExecutionState::default();
+    state.description = Some(ChainDescription::Root(0));
+    let mut view =
+        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(state)
+            .await;
+    let app_id = ApplicationId(1);
+    view.context()
+        .extra()
+        .user_applications()
+        .insert(app_id, Arc::new(TestApplication));
+
+    let context = OperationContext {
+        chain_id: ChainId::root(0),
+        height: BlockHeight(0),
+        index: 0,
+    };
+    assert_eq!(
+        view.apply_operation(app_id, &context, &Operation::User(vec![]))
+            .await,
+        Err(Error::SessionWasNotClosed)
     );
 }

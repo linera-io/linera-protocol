@@ -13,7 +13,10 @@ use linera_base::{
     messages::{ApplicationId, ChainId},
 };
 use linera_views::views::{RegisterView, View};
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{btree_map, BTreeMap},
+    sync::Arc,
+};
 use tokio::sync::{Mutex, MutexGuard, OwnedMutexGuard};
 
 /// Runtime data tracked during the execution of a transaction.
@@ -197,11 +200,17 @@ where
         state: Vec<u8>,
     ) -> Result<(), Error> {
         // Remove the guard.
-        if let Some(mut guard) = self.active_sessions_mut().remove(&session_id) {
+        if let btree_map::Entry::Occupied(mut guard) = self.active_sessions_mut().entry(session_id)
+        {
             // Verify ownership.
-            ensure!(guard.owner == application_id, Error::InvalidSessionOwner);
+            ensure!(
+                guard.get().owner == application_id,
+                Error::InvalidSessionOwner
+            );
             // Save the state and unlock the session for future calls.
-            guard.data = state;
+            guard.get_mut().data = state;
+            // Remove the entry from the set of active sessions.
+            guard.remove();
         }
         Ok(())
     }
@@ -211,12 +220,19 @@ where
         session_id: SessionId,
         application_id: ApplicationId,
     ) -> Result<(), Error> {
-        // Remove the guard.
-        if let Some(guard) = self.active_sessions_mut().remove(&session_id) {
+        if let btree_map::Entry::Occupied(guard) = self.active_sessions_mut().entry(session_id) {
             // Verify ownership.
-            ensure!(guard.owner == application_id, Error::InvalidSessionOwner);
-            // Delete the session.
-            self.active_sessions_mut().remove(&session_id);
+            ensure!(
+                guard.get().owner == application_id,
+                Error::InvalidSessionOwner
+            );
+            // Remove the entry from the set of active sessions.
+            guard.remove();
+            // Delete the session entirely.
+            self.session_manager_mut()
+                .states
+                .remove(&session_id)
+                .ok_or(Error::InvalidSession)?;
         }
         Ok(())
     }

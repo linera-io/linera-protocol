@@ -94,9 +94,9 @@ pub struct RawCallResult {
 #[derive(Default)]
 pub struct NewSession {
     /// A kind provided by the creator (meant to be visible to other applications).
-    kind: u64,
+    pub kind: u64,
     /// The data associated to the session.
-    data: Vec<u8>,
+    pub data: Vec<u8>,
 }
 
 /// Requirements for the `extra` field in our state views (and notably the
