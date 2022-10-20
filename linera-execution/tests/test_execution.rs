@@ -51,9 +51,9 @@ impl UserApplication for TestApplication {
         // Who we are.
         let app_id = storage.application_id();
         // Modify our state.
-        let mut state = storage.try_load_my_state().await?;
+        let mut state = storage.try_read_and_lock_my_state().await?;
         state.extend(operation);
-        storage.try_save_my_state(state).await?;
+        storage.save_and_unlock_my_state(state);
         // Call ourselves after the state => ok.
         let call_result = storage
             .try_call_application(/* authenticate */ true, app_id, &[], vec![])
@@ -79,12 +79,12 @@ impl UserApplication for TestApplication {
     ) -> Result<RawApplicationResult<Vec<u8>>, Error> {
         // Who we are.
         let app_id = storage.application_id();
-        let state = storage.try_load_my_state().await?;
+        storage.try_read_and_lock_my_state().await?;
         // Call ourselves while the state is locked => not ok.
         storage
             .try_call_application(/* authenticate */ true, app_id, &[], vec![])
             .await?;
-        storage.try_save_my_state(state).await?;
+        storage.unlock_my_state();
         Ok(RawApplicationResult::default())
     }
 

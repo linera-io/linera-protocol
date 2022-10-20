@@ -166,7 +166,7 @@ pub trait ReadableStorage: Send + Sync {
     fn application_id(&self) -> ApplicationId;
 
     /// Read the system balance.
-    async fn try_read_system_balance(&self) -> Result<crate::system::Balance, Error>;
+    fn read_system_balance(&self) -> crate::system::Balance;
 
     /// Read the application state.
     async fn try_read_my_state(&self) -> Result<Vec<u8>, Error>;
@@ -177,7 +177,7 @@ pub trait QueryableStorage: ReadableStorage {
     /// Query another application.
     async fn try_query_application(
         &self,
-        callee_id: ApplicationId,
+        queried_id: ApplicationId,
         argument: &[u8],
     ) -> Result<Vec<u8>, Error>;
 }
@@ -204,10 +204,13 @@ pub struct CallResult {
 #[async_trait]
 pub trait WritableStorage: ReadableStorage {
     /// Read the application state and prevent further reading/loading until the state is saved.
-    async fn try_load_my_state(&self) -> Result<Vec<u8>, Error>;
+    async fn try_read_and_lock_my_state(&self) -> Result<Vec<u8>, Error>;
 
     /// Save the application state and allow reading/loading the state again.
-    async fn try_save_my_state(&self, state: Vec<u8>) -> Result<(), Error>;
+    fn save_and_unlock_my_state(&self, state: Vec<u8>);
+
+    /// Allow reading/loading the state again (without saving anything).
+    fn unlock_my_state(&self);
 
     /// Call another application. Forwarded sessions will now be visible to
     /// `callee_id` (but not to the caller any more).
