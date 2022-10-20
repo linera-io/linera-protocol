@@ -84,7 +84,7 @@ pub struct ApplicationCallResult {
     /// The return value.
     pub value: Vec<u8>,
     /// The externally-visible result.
-    pub application_result: RawExecutionResult<Vec<u8>>,
+    pub execution_result: RawExecutionResult<Vec<u8>>,
     /// The new sessions that were just created by the callee for us.
     pub create_sessions: Vec<NewSession>,
 }

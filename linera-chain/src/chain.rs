@@ -523,7 +523,7 @@ where
                     .execution_state
                     .execute_effect(message_group.application_id, &context, message_effect)
                     .await?;
-                Self::process_application_results(
+                Self::process_execution_results(
                     &mut communication_state.outboxes,
                     &mut communication_state.channels,
                     &mut effects,
@@ -548,7 +548,7 @@ where
                 .execution_state
                 .execute_operation(*application_id, &context, operation)
                 .await?;
-            Self::process_application_results(
+            Self::process_execution_results(
                 &mut communication_state.outboxes,
                 &mut communication_state.channels,
                 &mut effects,
@@ -567,7 +567,7 @@ where
         Ok(effects)
     }
 
-    async fn process_application_results(
+    async fn process_execution_results(
         outboxes: &mut CollectionView<C, ChainId, OutboxStateView<C>>,
         channels: &mut CollectionView<C, String, ChannelStateView<C>>,
         effects: &mut Vec<(ApplicationId, Destination, Effect)>,
@@ -577,13 +577,13 @@ where
         for result in results {
             match result {
                 ExecutionResult::System(raw) => {
-                    Self::process_raw_application_result(
+                    Self::process_raw_execution_result(
                         SYSTEM, outboxes, channels, effects, height, raw,
                     )
                     .await?;
                 }
                 ExecutionResult::User(application_id, raw) => {
-                    Self::process_raw_application_result(
+                    Self::process_raw_execution_result(
                         application_id,
                         outboxes,
                         channels,
@@ -598,7 +598,7 @@ where
         Ok(())
     }
 
-    async fn process_raw_application_result<E: Into<Effect>>(
+    async fn process_raw_execution_result<E: Into<Effect>>(
         application_id: ApplicationId,
         outboxes: &mut CollectionView<C, ChainId, OutboxStateView<C>>,
         channels: &mut CollectionView<C, String, ChannelStateView<C>>,

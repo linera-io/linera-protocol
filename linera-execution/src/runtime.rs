@@ -36,7 +36,7 @@ pub(crate) struct ExecutionRuntime<'a, C, const WRITABLE: bool> {
     /// Track active (i.e. locked) sessions for which re-entrancy is disallowed.
     active_sessions: Arc<Mutex<ActiveSessions>>,
     /// Accumulate the externally visible results (e.g. cross-chain messages) of applications.
-    application_results: Arc<Mutex<&'a mut Vec<ExecutionResult>>>,
+    execution_results: Arc<Mutex<&'a mut Vec<ExecutionResult>>>,
 }
 
 type ActiveUserStates<C> = BTreeMap<ApplicationId, OwnedMutexGuard<RegisterView<C, Vec<u8>>>>;
@@ -69,7 +69,7 @@ where
         application_ids: &'a mut Vec<ApplicationId>,
         execution_state: &'a mut ExecutionStateView<C>,
         session_manager: &'a mut SessionManager,
-        application_results: &'a mut Vec<ExecutionResult>,
+        execution_results: &'a mut Vec<ExecutionResult>,
     ) -> Self {
         assert_eq!(chain_id, execution_state.context().extra().chain_id());
         Self {
@@ -79,7 +79,7 @@ where
             session_manager: Arc::new(Mutex::new(session_manager)),
             active_user_states: Arc::default(),
             active_sessions: Arc::default(),
-            application_results: Arc::new(Mutex::new(application_results)),
+            execution_results: Arc::new(Mutex::new(execution_results)),
         }
     }
 
@@ -113,10 +113,10 @@ where
             .expect("single-threaded execution should not lock `active_sessions`")
     }
 
-    fn application_results_mut(&self) -> MutexGuard<'_, &'a mut Vec<ExecutionResult>> {
-        self.application_results
+    fn execution_results_mut(&self) -> MutexGuard<'_, &'a mut Vec<ExecutionResult>> {
+        self.execution_results
             .try_lock()
-            .expect("single-threaded execution should not lock `application_results`")
+            .expect("single-threaded execution should not lock `execution_results`")
     }
 
     fn forward_sessions(
@@ -365,9 +365,9 @@ where
             .await?;
         self.application_ids_mut().pop();
         // Interpret the results of the call.
-        self.application_results_mut().push(ExecutionResult::User(
+        self.execution_results_mut().push(ExecutionResult::User(
             callee_id,
-            raw_result.application_result,
+            raw_result.execution_result,
         ));
         let sessions =
             self.make_sessions(raw_result.create_sessions, callee_id, self.application_id());
@@ -423,9 +423,9 @@ where
             self.try_save_session(session_id, self.application_id(), session_data)?;
         }
         let inner_result = raw_result.inner;
-        self.application_results_mut().push(ExecutionResult::User(
+        self.execution_results_mut().push(ExecutionResult::User(
             callee_id,
-            inner_result.application_result,
+            inner_result.execution_result,
         ));
         let sessions = self.make_sessions(
             inner_result.create_sessions,
