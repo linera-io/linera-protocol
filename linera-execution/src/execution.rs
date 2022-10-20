@@ -4,7 +4,7 @@
 use crate::{
     runtime::{ExecutionRuntime, SessionManager},
     system::{SystemExecutionStateView, SystemExecutionStateViewContext, SYSTEM},
-    ApplicationResult, Effect, EffectContext, ExecutionRuntimeContext, Operation, OperationContext,
+    Effect, EffectContext, ExecutionResult, ExecutionRuntimeContext, Operation, OperationContext,
     Query, QueryContext, Response,
 };
 use linera_base::{
@@ -94,7 +94,7 @@ where
         application_id: ApplicationId,
         chain_id: ChainId,
         action: UserAction<'_>,
-    ) -> Result<Vec<ApplicationResult>, Error> {
+    ) -> Result<Vec<ExecutionResult>, Error> {
         // Load the application.
         let application = self
             .context()
@@ -115,16 +115,18 @@ where
         let result = match action {
             UserAction::Operation(context, operation) => {
                 application
-                    .apply_operation(context, &runtime, operation)
+                    .execute_operation(context, &runtime, operation)
                     .await?
             }
             UserAction::Effect(context, effect) => {
-                application.apply_effect(context, &runtime, effect).await?
+                application
+                    .execute_effect(context, &runtime, effect)
+                    .await?
             }
         };
         assert_eq!(application_ids, vec![application_id]);
         // Update externally-visible results.
-        results.push(ApplicationResult::User(application_id, result));
+        results.push(ExecutionResult::User(application_id, result));
         // Check that all sessions were properly closed.
         ensure!(
             session_manager.states.is_empty(),
@@ -133,18 +135,18 @@ where
         Ok(results)
     }
 
-    pub async fn apply_operation(
+    pub async fn execute_operation(
         &mut self,
         application_id: ApplicationId,
         context: &OperationContext,
         operation: &Operation,
-    ) -> Result<Vec<ApplicationResult>, Error> {
+    ) -> Result<Vec<ExecutionResult>, Error> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         if application_id == SYSTEM {
             match operation {
                 Operation::System(op) => {
-                    let result = self.system.apply_operation(context, op).await?;
-                    Ok(vec![ApplicationResult::System(result)])
+                    let result = self.system.execute_operation(context, op).await?;
+                    Ok(vec![ExecutionResult::System(result)])
                 }
                 _ => Err(Error::InvalidOperation),
             }
@@ -163,18 +165,18 @@ where
         }
     }
 
-    pub async fn apply_effect(
+    pub async fn execute_effect(
         &mut self,
         application_id: ApplicationId,
         context: &EffectContext,
         effect: &Effect,
-    ) -> Result<Vec<ApplicationResult>, Error> {
+    ) -> Result<Vec<ExecutionResult>, Error> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         if application_id == SYSTEM {
             match effect {
                 Effect::System(effect) => {
-                    let result = self.system.apply_effect(context, effect)?;
-                    Ok(vec![ApplicationResult::System(result)])
+                    let result = self.system.execute_effect(context, effect)?;
+                    Ok(vec![ExecutionResult::System(result)])
                 }
                 _ => Err(Error::InvalidEffect),
             }

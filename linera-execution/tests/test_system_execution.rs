@@ -6,8 +6,8 @@
 use linera_base::messages::{BlockHeight, ChainDescription, ChainId, EffectId};
 use linera_execution::{
     system::{Address, Amount, Balance, UserData, SYSTEM},
-    ApplicationResult, Effect, EffectContext, ExecutionStateView, Operation, OperationContext,
-    Query, QueryContext, RawApplicationResult, Response, SystemEffect, SystemExecutionState,
+    Effect, EffectContext, ExecutionResult, ExecutionStateView, Operation, OperationContext, Query,
+    QueryContext, RawExecutionResult, Response, SystemEffect, SystemExecutionState,
     SystemOperation, SystemQuery, SystemResponse, TestExecutionRuntimeContext,
 };
 use linera_views::memory::MemoryContext;
@@ -31,13 +31,13 @@ async fn test_simple_system_operation() {
         index: 0,
     };
     let result = view
-        .apply_operation(SYSTEM, &context, &Operation::System(operation))
+        .execute_operation(SYSTEM, &context, &Operation::System(operation))
         .await
         .unwrap();
     assert_eq!(view.system.balance.get(), &Balance::from(0));
     assert_eq!(
         result,
-        vec![ApplicationResult::System(RawApplicationResult::default())]
+        vec![ExecutionResult::System(RawExecutionResult::default())]
     );
 }
 
@@ -62,13 +62,13 @@ async fn test_simple_system_effect() {
         },
     };
     let result = view
-        .apply_effect(SYSTEM, &context, &Effect::System(effect))
+        .execute_effect(SYSTEM, &context, &Effect::System(effect))
         .await
         .unwrap();
     assert_eq!(view.system.balance.get(), &Balance::from(4));
     assert_eq!(
         result,
-        vec![ApplicationResult::System(RawApplicationResult::default())]
+        vec![ExecutionResult::System(RawExecutionResult::default())]
     );
 }
 
