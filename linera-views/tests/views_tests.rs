@@ -6,7 +6,7 @@ use linera_views::{
     dynamo_db::{DynamoDbContext, DynamoDbContextError},
     hash::{HashView, Hasher, HashingContext},
     impl_view,
-    memory::{MemoryContext, Batch, MemoryStoreMap, MemoryViewError},
+    memory::{Batch, MemoryContext, MemoryStoreMap, MemoryViewError},
     rocksdb::{KeyValueOperations, RocksdbContext, RocksdbViewError, DB},
     test_utils::LocalStackTestContext,
     views::{
