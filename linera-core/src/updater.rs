@@ -34,6 +34,16 @@ pub struct ValidatorUpdater<A, S> {
     pub retries: usize,
 }
 
+/// An error result for [`communicate_with_quorum`].
+pub enum CommunicationError<E> {
+    /// A single error that was returned by a sufficient number of nodes to be trusted as
+    /// valid.
+    Trusted(E),
+    /// No single error reached the validity threshold so we're returning a sample of
+    /// errors for debugging purposes.
+    Sample(Vec<E>),
+}
+
 /// Execute a sequence of actions in parallel for all validators.
 /// Try to stop early when a quorum is reached.
 pub async fn communicate_with_quorum<'a, A, V, K, F, G>(
@@ -41,7 +51,7 @@ pub async fn communicate_with_quorum<'a, A, V, K, F, G>(
     committee: &Committee,
     group_by: G,
     execute: F,
-) -> Result<(K, Vec<V>), Option<Error>>
+) -> Result<(K, Vec<V>), CommunicationError<Error>>
 where
     A: ValidatorNode + Send + Sync + 'static + Clone,
     F: Fn(ValidatorName, A) -> future::BoxFuture<'a, Result<V, Error>> + Clone,
@@ -84,14 +94,17 @@ where
                 if *entry >= committee.validity_threshold() {
                     // At least one honest node returned this error.
                     // No quorum can be reached, so return early.
-                    return Err(Some(err));
+                    return Err(CommunicationError::Trusted(err));
                 }
             }
         }
     }
 
     // No specific error is available to report reliably.
-    Err(None)
+    let mut sample = error_scores.into_iter().collect::<Vec<_>>();
+    sample.sort_by_key(|(_, score)| std::cmp::Reverse(*score));
+    let sample = sample.into_iter().map(|(error, _)| error).take(4).collect();
+    Err(CommunicationError::Sample(sample))
 }
 
 impl<A, S> ValidatorUpdater<A, S>
