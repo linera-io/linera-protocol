@@ -15,6 +15,7 @@ use linera_base::{
 use linera_views::views::{RegisterView, View};
 use std::{
     collections::{btree_map, BTreeMap},
+    ops::DerefMut,
     sync::Arc,
 };
 use tokio::sync::{Mutex, MutexGuard, OwnedMutexGuard};
@@ -145,31 +146,27 @@ where
         new_sessions: Vec<NewSession>,
         creator_id: ApplicationId,
         receiver_id: ApplicationId,
-    ) -> Result<Vec<SessionId>, Error> {
+    ) -> Vec<SessionId> {
         let mut manager = self.session_manager_mut();
-        let mut counter = manager
-            .counters
-            .get(&creator_id)
-            .copied()
-            .unwrap_or_default();
+        let manager = manager.deref_mut();
         let states = &mut manager.states;
+        let counter = manager.counters.entry(creator_id).or_default();
         let mut session_ids = Vec::new();
         for session in new_sessions {
             let id = SessionId {
                 application_id: creator_id,
                 kind: session.kind,
-                index: counter,
+                index: *counter,
             };
+            *counter += 1;
             session_ids.push(id);
-            counter += 1;
             let state = SessionState {
                 owner: receiver_id,
                 data: session.data,
             };
             states.insert(id, Arc::new(Mutex::new(state)));
         }
-        manager.counters.insert(creator_id, counter);
-        Ok(session_ids)
+        session_ids
     }
 
     fn try_load_session(
@@ -373,7 +370,7 @@ where
             raw_result.application_result,
         ));
         let sessions =
-            self.make_sessions(raw_result.create_sessions, callee_id, self.application_id())?;
+            self.make_sessions(raw_result.create_sessions, callee_id, self.application_id());
         let result = CallResult {
             value: raw_result.value,
             sessions,
@@ -434,7 +431,7 @@ where
             inner_result.create_sessions,
             callee_id,
             self.application_id(),
-        )?;
+        );
         let result = CallResult {
             value: inner_result.value,
             sessions,
