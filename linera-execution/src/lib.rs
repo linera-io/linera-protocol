@@ -31,20 +31,20 @@ pub type UserApplicationCode = Arc<dyn UserApplication + Send + Sync + 'static>;
 #[async_trait]
 pub trait UserApplication {
     /// Apply an operation from the current block.
-    async fn apply_operation(
+    async fn execute_operation(
         &self,
         context: &OperationContext,
         storage: &dyn WritableStorage,
         operation: &[u8],
-    ) -> Result<RawApplicationResult<Vec<u8>>, Error>;
+    ) -> Result<RawExecutionResult<Vec<u8>>, Error>;
 
     /// Apply an effect originating from a cross-chain message.
-    async fn apply_effect(
+    async fn execute_effect(
         &self,
         context: &EffectContext,
         storage: &dyn WritableStorage,
         effect: &[u8],
-    ) -> Result<RawApplicationResult<Vec<u8>>, Error>;
+    ) -> Result<RawExecutionResult<Vec<u8>>, Error>;
 
     /// Allow an operation or an effect of other applications to call into this
     /// user application.
@@ -84,7 +84,7 @@ pub struct ApplicationCallResult {
     /// The return value.
     pub value: Vec<u8>,
     /// The externally-visible result.
-    pub application_result: RawApplicationResult<Vec<u8>>,
+    pub application_result: RawExecutionResult<Vec<u8>>,
     /// The new sessions that were just created by the callee for us.
     pub create_sessions: Vec<NewSession>,
 }
@@ -281,7 +281,7 @@ pub enum Response {
 /// the application that created them.
 #[derive(Debug)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub struct RawApplicationResult<Effect> {
+pub struct RawExecutionResult<Effect> {
     /// Send messages to the given destinations.
     pub effects: Vec<(Destination, Effect)>,
     /// Subscribe chains to channels.
@@ -293,12 +293,12 @@ pub struct RawApplicationResult<Effect> {
 /// Externally visible results of an execution, tagged by their application.
 #[derive(Debug)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub enum ApplicationResult {
-    System(RawApplicationResult<SystemEffect>),
-    User(ApplicationId, RawApplicationResult<Vec<u8>>),
+pub enum ExecutionResult {
+    System(RawExecutionResult<SystemEffect>),
+    User(ApplicationId, RawExecutionResult<Vec<u8>>),
 }
 
-impl<Effect> Default for RawApplicationResult<Effect> {
+impl<Effect> Default for RawExecutionResult<Effect> {
     fn default() -> Self {
         Self {
             effects: Vec::new(),

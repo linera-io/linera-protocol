@@ -12,8 +12,8 @@ use linera_base::{
     messages::{ApplicationId, BlockHeight, ChainId, Destination, EffectId, Medium, Origin},
 };
 use linera_execution::{
-    system::SYSTEM, ApplicationResult, Effect, EffectContext, ExecutionRuntimeContext,
-    ExecutionStateView, ExecutionStateViewContext, OperationContext, RawApplicationResult,
+    system::SYSTEM, Effect, EffectContext, ExecutionResult, ExecutionRuntimeContext,
+    ExecutionStateView, ExecutionStateViewContext, OperationContext, RawExecutionResult,
 };
 use linera_views::{
     impl_view,
@@ -521,7 +521,7 @@ where
                 };
                 let results = self
                     .execution_state
-                    .apply_effect(message_group.application_id, &context, message_effect)
+                    .execute_effect(message_group.application_id, &context, message_effect)
                     .await?;
                 Self::process_application_results(
                     &mut communication_state.outboxes,
@@ -546,7 +546,7 @@ where
             };
             let results = self
                 .execution_state
-                .apply_operation(*application_id, &context, operation)
+                .execute_operation(*application_id, &context, operation)
                 .await?;
             Self::process_application_results(
                 &mut communication_state.outboxes,
@@ -572,17 +572,17 @@ where
         channels: &mut CollectionView<C, String, ChannelStateView<C>>,
         effects: &mut Vec<(ApplicationId, Destination, Effect)>,
         height: BlockHeight,
-        results: Vec<ApplicationResult>,
+        results: Vec<ExecutionResult>,
     ) -> Result<(), C::Error> {
         for result in results {
             match result {
-                ApplicationResult::System(raw) => {
+                ExecutionResult::System(raw) => {
                     Self::process_raw_application_result(
                         SYSTEM, outboxes, channels, effects, height, raw,
                     )
                     .await?;
                 }
-                ApplicationResult::User(application_id, raw) => {
+                ExecutionResult::User(application_id, raw) => {
                     Self::process_raw_application_result(
                         application_id,
                         outboxes,
@@ -604,7 +604,7 @@ where
         channels: &mut CollectionView<C, String, ChannelStateView<C>>,
         effects: &mut Vec<(ApplicationId, Destination, Effect)>,
         height: BlockHeight,
-        application: RawApplicationResult<E>,
+        application: RawExecutionResult<E>,
     ) -> Result<(), C::Error> {
         // Record the effects of the execution. Effects are understood within an
         // application.

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    ChainOwnership, Effect, EffectContext, OperationContext, QueryContext, RawApplicationResult,
+    ChainOwnership, Effect, EffectContext, OperationContext, QueryContext, RawExecutionResult,
 };
 use linera_base::{
     committee::Committee,
@@ -209,11 +209,11 @@ where
 
     /// Execute the sender's side of the operation.
     /// Return a list of recipients who need to be notified.
-    pub async fn apply_operation(
+    pub async fn execute_operation(
         &mut self,
         context: &OperationContext,
         operation: &SystemOperation,
-    ) -> Result<RawApplicationResult<SystemEffect>, Error> {
+    ) -> Result<RawExecutionResult<SystemEffect>, Error> {
         use SystemOperation::*;
         match operation {
             OpenChain {
@@ -260,7 +260,7 @@ where
                         },
                     },
                 );
-                let application = RawApplicationResult {
+                let application = RawExecutionResult {
                     effects: vec![e1, e2],
                     subscribe: vec![],
                     unsubscribe: vec![],
@@ -269,12 +269,12 @@ where
             }
             ChangeOwner { new_owner } => {
                 self.ownership.set(ChainOwnership::single(*new_owner));
-                Ok(RawApplicationResult::default())
+                Ok(RawExecutionResult::default())
             }
             ChangeMultipleOwners { new_owners } => {
                 self.ownership
                     .set(ChainOwnership::multiple(new_owners.clone()));
-                Ok(RawApplicationResult::default())
+                Ok(RawExecutionResult::default())
             }
             CloseChain => {
                 self.ownership.set(ChainOwnership::default());
@@ -292,7 +292,7 @@ where
                     })
                     .await?;
                 self.subscriptions.reset_to_default();
-                let application = RawApplicationResult {
+                let application = RawExecutionResult {
                     effects,
                     subscribe: vec![],
                     unsubscribe: vec![],
@@ -311,8 +311,8 @@ where
                 );
                 self.balance.get_mut().try_sub_assign((*amount).into())?;
                 let application = match recipient {
-                    Address::Burn => RawApplicationResult::default(),
-                    Address::Account(id) => RawApplicationResult {
+                    Address::Burn => RawExecutionResult::default(),
+                    Address::Account(id) => RawExecutionResult {
                         effects: vec![(
                             Destination::Recipient(*id),
                             SystemEffect::Credit {
@@ -346,7 +346,7 @@ where
                 );
                 self.committees.get_mut().insert(*epoch, committee.clone());
                 self.epoch.set(Some(*epoch));
-                let application = RawApplicationResult {
+                let application = RawExecutionResult {
                     effects: vec![(
                         Destination::Subscribers(ADMIN_CHANNEL.into()),
                         SystemEffect::SetCommittees {
@@ -374,7 +374,7 @@ where
                     self.committees.get_mut().remove(epoch).is_some(),
                     Error::InvalidCommitteeRemoval
                 );
-                let application = RawApplicationResult {
+                let application = RawExecutionResult {
                     effects: vec![(
                         Destination::Subscribers(ADMIN_CHANNEL.into()),
                         SystemEffect::SetCommittees {
@@ -407,7 +407,7 @@ where
                     Error::InvalidSubscriptionToNewCommittees(context.chain_id)
                 );
                 self.subscriptions.insert(channel_id, ());
-                let application = RawApplicationResult {
+                let application = RawExecutionResult {
                     effects: vec![(
                         Destination::Recipient(*admin_id),
                         SystemEffect::Subscribe {
@@ -433,7 +433,7 @@ where
                     Error::InvalidUnsubscriptionToNewCommittees(context.chain_id)
                 );
                 self.subscriptions.remove(channel_id);
-                let application = RawApplicationResult {
+                let application = RawExecutionResult {
                     effects: vec![(
                         Destination::Recipient(*admin_id),
                         SystemEffect::Unsubscribe {
@@ -454,11 +454,11 @@ where
 
     /// Execute the recipient's side of an operation, aka a "remote effect".
     /// Effects must be executed by order of heights in the sender's chain.
-    pub fn apply_effect(
+    pub fn execute_effect(
         &mut self,
         context: &EffectContext,
         effect: &SystemEffect,
-    ) -> Result<RawApplicationResult<SystemEffect>, Error> {
+    ) -> Result<RawExecutionResult<SystemEffect>, Error> {
         use SystemEffect::*;
         match effect {
             Credit { amount, recipient } if context.chain_id == *recipient => {
@@ -468,7 +468,7 @@ where
                     .try_add((*amount).into())
                     .unwrap_or_else(|_| Balance::max());
                 self.balance.set(new_balance);
-                Ok(RawApplicationResult::default())
+                Ok(RawExecutionResult::default())
             }
             SetCommittees {
                 admin_id,
@@ -482,12 +482,12 @@ where
                 );
                 self.epoch.set(Some(*epoch));
                 self.committees.set(committees.clone());
-                Ok(RawApplicationResult::default())
+                Ok(RawExecutionResult::default())
             }
             Subscribe { id, channel } if channel.chain_id == context.chain_id => {
                 // Notify the subscriber about this block, so that it is included in the
                 // receive_log of the subscriber and correctly synchronized.
-                let application = RawApplicationResult {
+                let application = RawExecutionResult {
                     effects: vec![(
                         Destination::Recipient(*id),
                         SystemEffect::Notify { id: *id },
@@ -498,7 +498,7 @@ where
                 Ok(application)
             }
             Unsubscribe { id, channel } if channel.chain_id == context.chain_id => {
-                let application = RawApplicationResult {
+                let application = RawExecutionResult {
                     effects: vec![(
                         Destination::Recipient(*id),
                         SystemEffect::Notify { id: *id },
@@ -508,14 +508,14 @@ where
                 };
                 Ok(application)
             }
-            Notify { .. } => Ok(RawApplicationResult::default()),
+            Notify { .. } => Ok(RawExecutionResult::default()),
             OpenChain { .. } => {
                 // This special effect is executed immediately when cross-chain requests are received.
-                Ok(RawApplicationResult::default())
+                Ok(RawExecutionResult::default())
             }
             _ => {
                 log::error!("Skipping unexpected received effect: {effect:?}");
-                Ok(RawApplicationResult::default())
+                Ok(RawExecutionResult::default())
             }
         }
     }

@@ -31,7 +31,7 @@ async fn test_missing_user_application() {
         index: 0,
     };
     assert_eq!(
-        view.apply_operation(app_id, &context, &Operation::User(vec![]))
+        view.execute_operation(app_id, &context, &Operation::User(vec![]))
             .await,
         Err(Error::UnknownApplication)
     );
@@ -45,12 +45,12 @@ impl UserApplication for TestApplication {
     ///
     /// Calls itself during the operation, opening a session. The session is intentionally
     /// leaked if the operation is empty.
-    async fn apply_operation(
+    async fn execute_operation(
         &self,
         _context: &OperationContext,
         storage: &dyn WritableStorage,
         operation: &[u8],
-    ) -> Result<RawApplicationResult<Vec<u8>>, Error> {
+    ) -> Result<RawExecutionResult<Vec<u8>>, Error> {
         // Who we are.
         let app_id = storage.application_id();
         // Modify our state.
@@ -70,16 +70,16 @@ impl UserApplication for TestApplication {
                 .try_call_session(/* authenticate */ true, session_id, &[], vec![])
                 .await?;
         }
-        Ok(RawApplicationResult::default())
+        Ok(RawExecutionResult::default())
     }
 
     /// Attempt to call ourself while the state is locked.
-    async fn apply_effect(
+    async fn execute_effect(
         &self,
         _context: &EffectContext,
         storage: &dyn WritableStorage,
         _effect: &[u8],
-    ) -> Result<RawApplicationResult<Vec<u8>>, Error> {
+    ) -> Result<RawExecutionResult<Vec<u8>>, Error> {
         // Who we are.
         let app_id = storage.application_id();
         storage.try_read_and_lock_my_state().await?;
@@ -88,7 +88,7 @@ impl UserApplication for TestApplication {
             .try_call_application(/* authenticate */ true, app_id, &[], vec![])
             .await?;
         storage.unlock_my_state();
-        Ok(RawApplicationResult::default())
+        Ok(RawExecutionResult::default())
     }
 
     /// Create a session.
@@ -155,15 +155,15 @@ async fn test_simple_user_operation() {
         index: 0,
     };
     let result = view
-        .apply_operation(app_id, &context, &Operation::User(vec![1]))
+        .execute_operation(app_id, &context, &Operation::User(vec![1]))
         .await
         .unwrap();
     assert_eq!(
         result,
         vec![
-            ApplicationResult::User(app_id, RawApplicationResult::default()),
-            ApplicationResult::User(app_id, RawApplicationResult::default()),
-            ApplicationResult::User(app_id, RawApplicationResult::default())
+            ExecutionResult::User(app_id, RawExecutionResult::default()),
+            ExecutionResult::User(app_id, RawExecutionResult::default()),
+            ExecutionResult::User(app_id, RawExecutionResult::default())
         ]
     );
 
@@ -197,7 +197,7 @@ async fn test_simple_user_operation_with_leaking_session() {
         index: 0,
     };
     assert_eq!(
-        view.apply_operation(app_id, &context, &Operation::User(vec![]))
+        view.execute_operation(app_id, &context, &Operation::User(vec![]))
             .await,
         Err(Error::SessionWasNotClosed)
     );
