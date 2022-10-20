@@ -255,9 +255,8 @@ where
             .expect("at least one application id should be present in the stack")
     }
 
-    async fn try_read_system_balance(&self) -> Result<crate::system::Balance, Error> {
-        let value = *self.execution_state_mut().system.balance.get();
-        Ok(value)
+    fn read_system_balance(&self) -> crate::system::Balance {
+        *self.execution_state_mut().system.balance.get()
     }
 
     async fn try_read_my_state(&self) -> Result<Vec<u8>, Error> {
@@ -285,7 +284,7 @@ where
     /// Note that queries are not available from writable contexts.
     async fn try_query_application(
         &self,
-        callee_id: ApplicationId,
+        queried_id: ApplicationId,
         argument: &[u8],
     ) -> Result<Vec<u8>, Error> {
         // Load the application.
@@ -293,12 +292,12 @@ where
             .execution_state_mut()
             .context()
             .extra()
-            .get_user_application(callee_id)?;
+            .get_user_application(queried_id)?;
         // Make the call to user code.
         let query_context = crate::QueryContext {
             chain_id: self.chain_id,
         };
-        self.application_ids_mut().push(callee_id);
+        self.application_ids_mut().push(queried_id);
         let value = application
             .query_application(&query_context, self, argument)
             .await?;
@@ -313,7 +312,7 @@ where
     C: ExecutionStateViewContext,
     C::Extra: ExecutionRuntimeContext,
 {
-    async fn try_load_my_state(&self) -> Result<Vec<u8>, Error> {
+    async fn try_read_and_lock_my_state(&self) -> Result<Vec<u8>, Error> {
         let view = self
             .execution_state_mut()
             .users
@@ -330,12 +329,16 @@ where
         Ok(state)
     }
 
-    async fn try_save_my_state(&self, state: Vec<u8>) -> Result<(), Error> {
+    fn save_and_unlock_my_state(&self, state: Vec<u8>) {
+        // Make the view available again.
         if let Some(mut view) = self.active_user_states_mut().remove(&self.application_id()) {
-            // Make the view available again.
+            // Set the state.
             view.set(state);
         }
-        Ok(())
+    }
+
+    fn unlock_my_state(&self) {
+        self.active_user_states_mut().remove(&self.application_id());
     }
 
     async fn try_call_application(
