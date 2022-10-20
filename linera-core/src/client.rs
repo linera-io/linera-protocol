@@ -5,7 +5,7 @@
 use crate::{
     messages::{ChainInfo, ChainInfoQuery},
     node::{LocalNodeClient, ValidatorNode},
-    updater::{communicate_with_quorum, CommunicateAction, ValidatorUpdater},
+    updater::{communicate_with_quorum, CommunicateAction, CommunicationError, ValidatorUpdater},
     worker::WorkerState,
 };
 use anyhow::{anyhow, bail, ensure, Result};
@@ -450,7 +450,7 @@ where
         .await;
         let (effects_and_state_hash, votes): (Option<_>, Vec<_>) = match result {
             Ok(content) => content,
-            Err(Some(Error::InactiveChain(id)))
+            Err(CommunicationError::Trusted(Error::InactiveChain(id)))
                 if id == chain_id
                     && matches!(action, CommunicateAction::AdvanceToNextBlockHeight(_)) =>
             {
@@ -458,9 +458,14 @@ where
                 // to synchronize block heights.
                 return Ok(None);
             }
-            Err(Some(err)) => bail!("Failed to communicate with a quorum of validators: {}", err),
-            Err(None) => {
-                bail!("Failed to communicate with a quorum of validators (multiple errors)")
+            Err(CommunicationError::Trusted(err)) => {
+                bail!("Failed to communicate with a quorum of validators: {}", err)
+            }
+            Err(CommunicationError::Sample(errors)) => {
+                bail!(
+                    "Failed to communicate with a quorum of validators:\n{:#?}",
+                    errors
+                )
             }
         };
         let signatures: Vec<_> = votes
@@ -654,14 +659,19 @@ where
         .await;
         let responses = match result {
             Ok(((), responses)) => responses,
-            Err(Some(Error::InactiveChain(id))) if id == chain_id => {
+            Err(CommunicationError::Trusted(Error::InactiveChain(id))) if id == chain_id => {
                 // The chain is visibly not active (yet or any more) so there is no need
                 // to synchronize received certificates.
                 return Ok(());
             }
-            Err(Some(err)) => bail!("Failed to communicate with a quorum of validators: {}", err),
-            Err(None) => {
-                bail!("Failed to communicate with a quorum of validators (multiple errors)")
+            Err(CommunicationError::Trusted(err)) => {
+                bail!("Failed to communicate with a quorum of validators: {}", err)
+            }
+            Err(CommunicationError::Sample(errors)) => {
+                bail!(
+                    "Failed to communicate with a quorum of validators:\n{:#?}",
+                    errors
+                )
             }
         };
         'outer: for (name, tracker, certificates) in responses {
