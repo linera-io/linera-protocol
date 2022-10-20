@@ -9,17 +9,17 @@ use crate::{
     },
 };
 use async_trait::async_trait;
-use serde::Serialize;
-use std::{
-    any::Any,
-    cmp::Eq,
-    collections::{BTreeMap, BTreeSet, VecDeque},
-    fmt::Debug,
-    ops::Range,
-    sync::Arc,
-};
+use serde::{de::DeserializeOwned, Serialize};
+use std::{cmp::Eq, collections::BTreeMap, fmt::Debug, ops::Range, sync::Arc};
 use thiserror::Error;
 use tokio::sync::{OwnedMutexGuard, RwLock};
+
+/// The data is serialized in memory just like for rocksdb / dynamodb
+/// Tha analogue of the database is the BTreeMap
+pub type MemoryStoreValue = Vec<u8>;
+
+/// A map of Rust values indexed by their keys.
+pub type MemoryStoreMap = BTreeMap<Vec<u8>, MemoryStoreValue>;
 
 /// A context that stores all values in memory.
 #[derive(Clone, Debug)]
@@ -29,11 +29,31 @@ pub struct MemoryContext<E> {
     extra: E,
 }
 
-/// A Rust value stored in memory.
-pub type MemoryStoreValue = Box<dyn Any + Send + Sync + 'static>;
+pub enum WriteOperation {
+    Delete { key: Vec<u8> },
+    Put { key: Vec<u8>, value: Vec<u8> },
+}
 
-/// A map of Rust values indexed by their keys.
-pub type MemoryStoreMap = BTreeMap<Vec<u8>, MemoryStoreValue>;
+#[derive(Default)]
+pub struct Batch(Vec<WriteOperation>);
+
+trait WriteOperations {
+    fn write_key<V: Serialize>(&mut self, key: Vec<u8>, value: &V) -> Result<(), MemoryViewError>;
+
+    fn delete_key(&mut self, key: Vec<u8>);
+}
+
+impl WriteOperations for Batch {
+    fn write_key<V: Serialize>(&mut self, key: Vec<u8>, value: &V) -> Result<(), MemoryViewError> {
+        let bytes = bcs::to_bytes(value)?;
+        self.0.push(WriteOperation::Put { key, value: bytes });
+        Ok(())
+    }
+
+    fn delete_key(&mut self, key: Vec<u8>) {
+        self.0.push(WriteOperation::Delete { key });
+    }
+}
 
 impl<E> MemoryContext<E> {
     pub fn new(guard: OwnedMutexGuard<MemoryStoreMap>, extra: E) -> Self {
@@ -50,42 +70,29 @@ impl<E> MemoryContext<E> {
         key
     }
 
-    async fn with_ref<F, T, V>(&self, f: F) -> V
-    where
-        F: Send + FnOnce(Option<&T>) -> V,
-        T: 'static,
-    {
+    async fn read_key<V: DeserializeOwned>(
+        &mut self,
+        key: &Vec<u8>,
+    ) -> Result<Option<V>, MemoryViewError> {
         let map = self.map.read().await;
-        match map.get(&self.base_key) {
-            None => f(None),
-            Some(blob) => {
-                let value = blob
-                    .downcast_ref::<T>()
-                    .expect("downcast to &T should not fail");
-                f(Some(value))
-            }
+        match map.get(key) {
+            None => Ok(None),
+            Some(bytes) => Ok(Some(bcs::from_bytes(bytes)?)),
         }
     }
 
-    async fn with_mut<F, T, V>(&self, f: F) -> V
-    where
-        F: Send + FnOnce(&mut T) -> V,
-        T: Default + Send + Sync + 'static,
-    {
-        let mut map = self.map.write().await;
-        let blob = map
-            .entry(self.base_key.clone())
-            .or_insert_with(|| Box::new(T::default()));
-        let value = blob
-            .downcast_mut::<T>()
-            .expect("downcast to &mut T should not fail");
-        f(value)
-    }
-
-    async fn erase(&mut self) -> Result<(), MemoryViewError> {
-        let mut map = self.map.write().await;
-        map.remove(&self.base_key);
-        Ok(())
+    async fn find_keys_with_prefix(
+        &mut self,
+        key_prefix: &[u8],
+    ) -> Result<Vec<Vec<u8>>, MemoryViewError> {
+        let map = self.map.read().await;
+        let mut vals = Vec::new();
+        for key in map.keys() {
+            if key.starts_with(key_prefix) {
+                vals.push(key.clone())
+            }
+        }
+        Ok(vals)
     }
 }
 
@@ -94,7 +101,7 @@ impl<E> Context for MemoryContext<E>
 where
     E: Clone + Send + Sync,
 {
-    type Batch = ();
+    type Batch = Batch;
     type Extra = E;
     type Error = MemoryViewError;
 
@@ -108,12 +115,27 @@ where
             + Send
             + Sync,
     {
-        builder(&mut ()).await
+        let mut batch = Batch(Vec::new());
+        builder(&mut batch).await?;
+        self.write_batch(batch).await
     }
 
-    fn create_batch(&self) -> Self::Batch {}
+    fn create_batch(&self) -> Self::Batch {
+        Batch(Vec::new())
+    }
 
-    async fn write_batch(&self, (): Self::Batch) -> Result<(), Self::Error> {
+    async fn write_batch(&self, batch: Self::Batch) -> Result<(), Self::Error> {
+        let mut map = self.map.write().await;
+        for ent in batch.0 {
+            match ent {
+                WriteOperation::Put { key, value } => {
+                    map.insert(key, value);
+                }
+                WriteOperation::Delete { key } => {
+                    map.remove(&key);
+                }
+            }
+        }
         Ok(())
     }
 }
@@ -135,187 +157,192 @@ where
 #[async_trait]
 impl<E, T> RegisterOperations<T> for MemoryContext<E>
 where
-    T: Default + Clone + Send + Sync + 'static,
+    T: Serialize + DeserializeOwned + Default + Clone + Send + Sync + 'static,
     E: Clone + Send + Sync,
 {
     async fn get(&mut self) -> Result<T, MemoryViewError> {
-        Ok(self
-            .with_ref(|value: Option<&T>| value.cloned().unwrap_or_default())
-            .await)
+        let value = self
+            .read_key(&self.base_key.clone())
+            .await?
+            .unwrap_or_default();
+        Ok(value)
     }
 
-    async fn set(&mut self, _batch: &mut Self::Batch, value: &T) -> Result<(), MemoryViewError> {
-        let mut map = self.map.write().await;
-        map.insert(self.base_key.clone(), Box::new(value.clone()));
+    async fn set(&mut self, batch: &mut Self::Batch, value: &T) -> Result<(), MemoryViewError> {
+        batch.write_key(self.base_key.clone(), value)
+    }
+
+    async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), MemoryViewError> {
+        batch.delete_key(self.base_key.clone());
         Ok(())
-    }
-
-    async fn delete(&mut self, _batch: &mut Self::Batch) -> Result<(), MemoryViewError> {
-        self.erase().await
     }
 }
 
 #[async_trait]
 impl<E, T> LogOperations<T> for MemoryContext<E>
 where
-    T: Clone + Send + Sync + 'static,
+    T: Serialize + DeserializeOwned + Clone + Send + Sync + 'static,
     E: Clone + Send + Sync,
 {
     async fn count(&mut self) -> Result<usize, MemoryViewError> {
-        Ok(self
-            .with_ref(|v: Option<&Vec<T>>| match v {
-                None => 0,
-                Some(x) => x.len(),
-            })
-            .await)
+        let count = self
+            .read_key(&self.base_key.clone())
+            .await?
+            .unwrap_or_default();
+        Ok(count)
     }
 
     async fn get(&mut self, index: usize) -> Result<Option<T>, MemoryViewError> {
-        Ok(self
-            .with_ref(|v: Option<&Vec<T>>| v?.get(index).cloned())
-            .await)
+        self.read_key(&self.derive_key(&index)).await
     }
 
     async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, MemoryViewError> {
-        Ok(self
-            .with_ref(|v: Option<&Vec<T>>| match v {
-                None => Vec::new(),
-                Some(x) => x[range].to_vec(),
-            })
-            .await)
+        let mut items = Vec::with_capacity(range.len());
+        for index in range {
+            let item = match self.read_key(&self.derive_key(&index)).await? {
+                Some(item) => item,
+                None => return Ok(items),
+            };
+            items.push(item);
+        }
+        Ok(items)
     }
 
     async fn append(
         &mut self,
-        _stored_count: usize,
-        _batch: &mut Self::Batch,
-        mut values: Vec<T>,
+        stored_count: usize,
+        batch: &mut Self::Batch,
+        values: Vec<T>,
     ) -> Result<(), MemoryViewError> {
-        if !values.is_empty() {
-            self.with_mut(|v: &mut Vec<T>| v.append(&mut values)).await;
+        if values.is_empty() {
+            return Ok(());
         }
+        let mut count = stored_count;
+        for value in values {
+            batch.write_key(self.derive_key(&count), &value)?;
+            count += 1;
+        }
+        batch.write_key(self.base_key.clone(), &count)?;
         Ok(())
     }
 
     async fn delete(
         &mut self,
-        _stored_count: usize,
-        _batch: &mut Self::Batch,
+        stored_count: usize,
+        batch: &mut Self::Batch,
     ) -> Result<(), MemoryViewError> {
-        self.erase().await
+        batch.delete_key(self.base_key.clone());
+        for index in 0..stored_count {
+            batch.delete_key(self.derive_key(&index));
+        }
+        Ok(())
     }
 }
 
 #[async_trait]
 impl<E, T> QueueOperations<T> for MemoryContext<E>
 where
-    T: Clone + Send + Sync + 'static,
+    T: Clone + Send + Sync + Serialize + DeserializeOwned + 'static,
     E: Clone + Send + Sync,
 {
     async fn indices(&mut self) -> Result<Range<usize>, Self::Error> {
-        Ok(self
-            .with_ref(|v: Option<&VecDeque<T>>| match v {
-                None => 0..0,
-                Some(x) => 0..x.len(),
-            })
-            .await)
+        let range = self
+            .read_key(&self.base_key.clone())
+            .await?
+            .unwrap_or_default();
+        Ok(range)
     }
 
     async fn get(&mut self, index: usize) -> Result<Option<T>, Self::Error> {
-        Ok(self
-            .with_ref(|v: Option<&VecDeque<T>>| v?.get(index).cloned())
-            .await)
+        Ok(self.read_key(&self.derive_key(&index)).await?)
     }
 
     async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error> {
-        Ok(self
-            .with_ref(|v: Option<&VecDeque<T>>| match v {
-                None => Vec::new(),
-                Some(x) => x.range(range).cloned().collect(),
-            })
-            .await)
+        let mut values = Vec::new();
+        for index in range {
+            match self.read_key(&self.derive_key(&index)).await? {
+                None => return Ok(values),
+                Some(value) => values.push(value),
+            }
+        }
+        Ok(values)
     }
 
     async fn delete_front(
         &mut self,
         stored_indices: &mut Range<usize>,
-        _batch: &mut Self::Batch,
+        batch: &mut Self::Batch,
         count: usize,
     ) -> Result<(), Self::Error> {
-        stored_indices.end -= count;
-        self.with_mut(|v: &mut VecDeque<T>| {
-            v.drain(..count);
-        })
-        .await;
+        let deletion_range = stored_indices.clone().take(count);
+        stored_indices.start += count;
+        batch.write_key(self.base_key.clone(), &stored_indices)?;
+        for index in deletion_range {
+            batch.delete_key(self.derive_key(&index));
+        }
         Ok(())
     }
 
     async fn append_back(
         &mut self,
         stored_indices: &mut Range<usize>,
-        _batch: &mut Self::Batch,
+        batch: &mut Self::Batch,
         values: Vec<T>,
     ) -> Result<(), Self::Error> {
-        stored_indices.end += values.len();
-        self.with_mut(|v: &mut VecDeque<T>| {
-            for value in values {
-                v.push_back(value);
-            }
-        })
-        .await;
+        for value in values {
+            batch.write_key(self.derive_key(&stored_indices.end), &value)?;
+            stored_indices.end += 1;
+        }
+        batch.write_key(self.base_key.clone(), &stored_indices)?;
         Ok(())
     }
 
     async fn delete(
         &mut self,
-        _stored_indices: Range<usize>,
-        _batch: &mut Self::Batch,
+        stored_indices: Range<usize>,
+        batch: &mut Self::Batch,
     ) -> Result<(), MemoryViewError> {
-        self.erase().await
+        batch.delete_key(self.base_key.clone());
+        for index in stored_indices {
+            batch.delete_key(self.derive_key(&index));
+        }
+        Ok(())
     }
 }
 
 #[async_trait]
 impl<E, I, V> MapOperations<I, V> for MemoryContext<E>
 where
-    I: Eq + Ord + Send + Sync + Clone + 'static,
-    V: Clone + Send + Sync + 'static,
+    I: Eq + Ord + Send + Sync + Clone + Serialize + DeserializeOwned + 'static,
+    V: Clone + Send + Sync + Serialize + DeserializeOwned + 'static,
     E: Clone + Send + Sync,
 {
     async fn get(&mut self, index: &I) -> Result<Option<V>, MemoryViewError> {
-        Ok(self
-            .with_ref(|m: Option<&BTreeMap<I, V>>| m?.get(index).cloned())
-            .await)
+        Ok(self.read_key(&self.derive_key(index)).await?)
     }
 
     async fn insert(
         &mut self,
-        _batch: &mut Self::Batch,
+        batch: &mut Self::Batch,
         index: I,
         value: V,
     ) -> Result<(), MemoryViewError> {
-        self.with_mut(|m: &mut BTreeMap<I, V>| {
-            m.insert(index, value);
-        })
-        .await;
+        batch.write_key(self.derive_key(&index), &value)?;
         Ok(())
     }
 
-    async fn remove(&mut self, _batch: &mut Self::Batch, index: I) -> Result<(), MemoryViewError> {
-        self.with_mut(|m: &mut BTreeMap<I, V>| {
-            m.remove(&index);
-        })
-        .await;
+    async fn remove(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), MemoryViewError> {
+        batch.delete_key(self.derive_key(&index));
         Ok(())
     }
 
     async fn indices(&mut self) -> Result<Vec<I>, MemoryViewError> {
-        Ok(self
-            .with_ref(|m: Option<&BTreeMap<I, V>>| match m {
-                None => Vec::new(),
-                Some(m) => m.keys().cloned().collect(),
-            })
-            .await)
+        let len = self.base_key.len();
+        let mut keys = Vec::new();
+        for key in self.find_keys_with_prefix(&self.base_key.clone()).await? {
+            keys.push(bcs::from_bytes(&key[len..])?);
+        }
+        Ok(keys)
     }
 
     #[allow(clippy::unit_arg)]
@@ -323,25 +350,25 @@ where
     where
         F: FnMut(I) + Send,
     {
-        Ok(self
-            .with_ref(|maybe_map: Option<&BTreeMap<I, V>>| {
-                if let Some(map) = maybe_map {
-                    for index in map.keys() {
-                        f(index.clone());
-                    }
-                }
-            })
-            .await)
+        let len = self.base_key.len();
+        for key in self.find_keys_with_prefix(&self.base_key.clone()).await? {
+            let key = bcs::from_bytes(&key[len..])?;
+            f(key);
+        }
+        Ok(())
     }
 
-    async fn delete(&mut self, _batch: &mut Self::Batch) -> Result<(), MemoryViewError> {
-        self.erase().await
+    async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), MemoryViewError> {
+        for key in self.find_keys_with_prefix(&self.base_key.clone()).await? {
+            batch.delete_key(key);
+        }
+        Ok(())
     }
 }
 
 #[derive(Serialize)]
 enum CollectionKey<I> {
-    Indices,
+    Index(I),
     Subview(I),
 }
 
@@ -359,54 +386,31 @@ where
         }
     }
 
-    async fn add_index(&mut self, _batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
-        let context = Self {
-            map: self.map.clone(),
-            base_key: self.derive_key(&CollectionKey::<I>::Indices),
-            extra: self.extra.clone(),
-        };
-        context
-            .with_mut(|m: &mut BTreeSet<I>| {
-                m.insert(index);
-            })
-            .await;
+    async fn add_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
+        batch.write_key(self.derive_key(&CollectionKey::Index(index)), &())?;
         Ok(())
     }
 
-    async fn remove_index(
-        &mut self,
-        _batch: &mut Self::Batch,
-        index: I,
-    ) -> Result<(), Self::Error> {
-        let mut context = Self {
-            map: self.map.clone(),
-            base_key: self.derive_key(&CollectionKey::<I>::Indices),
-            extra: self.extra.clone(),
-        };
-        let is_empty = context
-            .with_mut(|m: &mut BTreeSet<I>| {
-                m.remove(&index);
-                m.is_empty()
-            })
-            .await;
-        if is_empty {
-            context.erase().await?;
-        }
+    async fn remove_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
+        batch.delete_key(self.derive_key(&CollectionKey::Index(index)));
         Ok(())
     }
 
     async fn indices(&mut self) -> Result<Vec<I>, Self::Error> {
-        let context = Self {
-            map: self.map.clone(),
-            base_key: self.derive_key(&CollectionKey::<I>::Indices),
-            extra: self.extra.clone(),
-        };
-        Ok(context
-            .with_ref(|m: Option<&BTreeSet<I>>| match m {
-                None => Vec::new(),
-                Some(m) => m.iter().cloned().collect(),
-            })
-            .await)
+        let base = self.derive_key(&CollectionKey::Index(()));
+        let len = base.len();
+        let mut keys = Vec::new();
+        for bytes in self.find_keys_with_prefix(&base).await? {
+            match bcs::from_bytes(&bytes[len..]) {
+                Ok(key) => {
+                    keys.push(key);
+                }
+                Err(e) => {
+                    return Err(e.into());
+                }
+            }
+        }
+        Ok(keys)
     }
 
     #[allow(clippy::unit_arg)]
@@ -414,15 +418,19 @@ where
     where
         F: FnMut(I) + Send,
     {
-        Ok(self
-            .with_ref(|maybe_tree: Option<&BTreeSet<I>>| {
-                if let Some(tree) = maybe_tree {
-                    for index in tree {
-                        f(index.clone());
-                    }
+        let base = self.derive_key(&CollectionKey::Index(()));
+        let len = base.len();
+        for bytes in self.find_keys_with_prefix(&base).await? {
+            match bcs::from_bytes(&bytes[len..]) {
+                Ok(key) => {
+                    f(key);
                 }
-            })
-            .await)
+                Err(e) => {
+                    return Err(e.into());
+                }
+            }
+        }
+        Ok(())
     }
 }
 
