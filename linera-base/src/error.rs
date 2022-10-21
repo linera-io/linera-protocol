@@ -106,6 +106,7 @@ pub enum Error {
         at height {height:?} yet"
     )]
     MissingCrossChainUpdate {
+        chain_id: ChainId,
         application_id: ApplicationId,
         origin: Origin,
         height: BlockHeight,
@@ -115,6 +116,7 @@ pub enum Error {
         at height {height:?} and index {index:?}"
     )]
     InvalidMessageContent {
+        chain_id: ChainId,
         application_id: ApplicationId,
         origin: Origin,
         height: BlockHeight,
@@ -126,6 +128,7 @@ pub enum Error {
         instead of {expected_height:?} and {expected_index:?})"
     )]
     InvalidMessage {
+        chain_id: ChainId,
         application_id: ApplicationId,
         origin: Origin,
         height: BlockHeight,
@@ -138,6 +141,7 @@ pub enum Error {
          index {index:?} is out of order"
     )]
     InvalidMessageOrder {
+        chain_id: ChainId,
         application_id: ApplicationId,
         origin: Origin,
         height: BlockHeight,

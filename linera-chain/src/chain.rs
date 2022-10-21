@@ -272,6 +272,7 @@ where
                 ensure!(
                     expected_event.is_none(),
                     Error::MissingCrossChainUpdate {
+                        chain_id: self.chain_id(),
                         application_id: id,
                         origin,
                         height: expected_event.unwrap().height,
@@ -397,7 +398,7 @@ where
 
     /// Verify that the incoming_messages are in the right order. This matters for inbox
     /// invariants, notably the fact that inbox.expected_events is sorted.
-    fn check_incoming_messages(messages: &[MessageGroup]) -> Result<(), Error> {
+    fn check_incoming_messages(&self, messages: &[MessageGroup]) -> Result<(), Error> {
         let mut next_messages: HashMap<(ApplicationId, Origin), (BlockHeight, usize)> =
             HashMap::new();
         for message_group in messages {
@@ -408,6 +409,7 @@ where
                 ensure!(
                     (message_group.height, *message_index) >= *next_message,
                     Error::InvalidMessageOrder {
+                        chain_id: self.chain_id(),
                         application_id: message_group.application_id,
                         origin: message_group.origin.clone(),
                         height: message_group.height,
@@ -432,7 +434,7 @@ where
         let chain_id = self.chain_id();
         let mut effects = Vec::new();
         // First, process incoming messages.
-        Self::check_incoming_messages(&block.incoming_messages)?;
+        self.check_incoming_messages(&block.incoming_messages)?;
 
         for message_group in &block.incoming_messages {
             let communication_state = self
@@ -479,6 +481,7 @@ where
                         ensure!(
                             message_group.height == height && message_index == &index,
                             Error::InvalidMessage {
+                                chain_id: self.chain_id(),
                                 application_id: message_group.application_id,
                                 origin: message_group.origin.clone(),
                                 height: message_group.height,
@@ -490,6 +493,7 @@ where
                         ensure!(
                             message_effect == effect,
                             Error::InvalidMessageContent {
+                                chain_id: self.chain_id(),
                                 application_id: message_group.application_id,
                                 origin: message_group.origin.clone(),
                                 height: message_group.height,
