@@ -2,9 +2,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::{error, messages};
+use linera_base::{error::Error, messages};
 use linera_chain::{messages::Value, ChainManager};
-use linera_core::messages::CrossChainRequest;
+use linera_core::{messages::CrossChainRequest, node::NodeError};
 use linera_execution::{system, Effect, Operation};
 use linera_rpc::Message;
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
@@ -31,7 +31,8 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<messages::ChainDescription>(&samples)?;
     tracer.trace_type::<ChainManager>(&samples)?;
     tracer.trace_type::<CrossChainRequest>(&samples)?;
-    tracer.trace_type::<error::Error>(&samples)?;
+    tracer.trace_type::<Error>(&samples)?;
+    tracer.trace_type::<NodeError>(&samples)?;
     tracer.trace_type::<Message>(&samples)?;
     tracer.registry()
 }

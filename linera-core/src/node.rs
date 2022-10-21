@@ -18,7 +18,9 @@ use linera_chain::{
 };
 use linera_storage::Store;
 use rand::prelude::SliceRandom;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use thiserror::Error;
 
 /// How to communicate with a validator or a local node.
 #[async_trait]
@@ -27,19 +29,46 @@ pub trait ValidatorNode {
     async fn handle_block_proposal(
         &mut self,
         proposal: BlockProposal,
-    ) -> Result<ChainInfoResponse, Error>;
+    ) -> Result<ChainInfoResponse, NodeError>;
 
     /// Process a certificate.
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-    ) -> Result<ChainInfoResponse, Error>;
+    ) -> Result<ChainInfoResponse, NodeError>;
 
     /// Handle information queries for this chain.
     async fn handle_chain_info_query(
         &mut self,
         query: ChainInfoQuery,
-    ) -> Result<ChainInfoResponse, Error>;
+    ) -> Result<ChainInfoResponse, NodeError>;
+}
+
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash)]
+/// Error type for node queries.
+// TODO(#148): We should have more entries here and never create a `WorkerError` outside the worker.
+pub enum NodeError {
+    #[error("Client's block proposal for chain {chain_id} did not reach a quorum because some validators are missing incoming messages")]
+    BlockProposalHasMissingUpdates { chain_id: ChainId },
+    #[error("{0}")]
+    WorkerError(linera_base::error::Error),
+}
+
+impl From<linera_base::error::Error> for NodeError {
+    fn from(error: linera_base::error::Error) -> Self {
+        match error {
+            linera_base::error::Error::MissingCrossChainUpdate { chain_id, .. } => {
+                // In `linera-core/src/updater.rs`, the function `communicate_with_quorum`
+                // is distinguishing "trusted" errors that were returned consistently by
+                // many validators. The following error is used to retry synchronization
+                // in clients. It must be aggregated under this simplified form because
+                // validators may not agree on the details of what's missing and we need
+                // the error to be "trusted" for the retry to happen.
+                NodeError::BlockProposalHasMissingUpdates { chain_id }
+            }
+            error => NodeError::WorkerError(error),
+        }
+    }
 }
 
 /// A local replica, typically used by clients.
@@ -59,25 +88,31 @@ where
     async fn handle_block_proposal(
         &mut self,
         proposal: BlockProposal,
-    ) -> Result<ChainInfoResponse, Error> {
+    ) -> Result<ChainInfoResponse, NodeError> {
         let node = self.0.clone();
         let mut node = node.lock().await;
-        node.state.handle_block_proposal(proposal).await
+        node.state
+            .handle_block_proposal(proposal)
+            .await
+            .map_err(NodeError::from)
     }
 
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-    ) -> Result<ChainInfoResponse, Error> {
+    ) -> Result<ChainInfoResponse, NodeError> {
         let node = self.0.clone();
         let mut node = node.lock().await;
-        node.state.fully_handle_certificate(certificate).await
+        node.state
+            .fully_handle_certificate(certificate)
+            .await
+            .map_err(NodeError::from)
     }
 
     async fn handle_chain_info_query(
         &mut self,
         query: ChainInfoQuery,
-    ) -> Result<ChainInfoResponse, Error> {
+    ) -> Result<ChainInfoResponse, NodeError> {
         self.0
             .clone()
             .lock()
@@ -85,6 +120,7 @@ where
             .state
             .handle_chain_info_query(query)
             .await
+            .map_err(NodeError::from)
     }
 }
 
@@ -114,21 +150,23 @@ where
     pub(crate) async fn stage_block_execution(
         &self,
         block: &Block,
-    ) -> Result<ChainInfoResponse, Error> {
-        self.0
+    ) -> Result<ChainInfoResponse, NodeError> {
+        let info = self
+            .0
             .clone()
             .lock()
             .await
             .state
             .stage_block_execution(block)
-            .await
+            .await?;
+        Ok(info)
     }
 
     async fn try_process_certificates(
         &mut self,
         chain_id: ChainId,
         certificates: Vec<Certificate>,
-    ) -> Result<Option<ChainInfo>, Error> {
+    ) -> Result<Option<ChainInfo>, NodeError> {
         let mut info = None;
         for certificate in certificates {
             if let Value::ConfirmedBlock { block, .. } = &certificate.value {
@@ -139,9 +177,9 @@ where
                             // Continue with the next certificate.
                             continue;
                         }
-                        Err(
+                        Err(NodeError::WorkerError(
                             e @ (Error::InvalidCertificate | Error::MissingEarlierBlocks { .. }),
-                        ) => {
+                        )) => {
                             // The certificate is not as expected. Give up.
                             log::warn!(
                                 "Failed to process network certificate {}: {}",
@@ -166,7 +204,7 @@ where
         Ok(info)
     }
 
-    pub async fn local_chain_info(&mut self, chain_id: ChainId) -> Result<ChainInfo, Error> {
+    pub async fn local_chain_info(&mut self, chain_id: ChainId) -> Result<ChainInfo, NodeError> {
         let query = ChainInfoQuery::new(chain_id);
         Ok(self.handle_chain_info_query(query).await?.info)
     }
@@ -176,7 +214,7 @@ where
         mut validators: Vec<(ValidatorName, A)>,
         chain_id: ChainId,
         target_next_block_height: BlockHeight,
-    ) -> Result<ChainInfo, Error>
+    ) -> Result<ChainInfo, NodeError>
     where
         A: ValidatorNode + Send + Sync + 'static + Clone,
     {
@@ -200,7 +238,9 @@ where
         if target_next_block_height <= info.next_block_height {
             Ok(info)
         } else {
-            Err(Error::ClientErrorWhileQueryingCertificate)
+            Err(NodeError::WorkerError(
+                Error::ClientErrorWhileQueryingCertificate,
+            ))
         }
     }
 
@@ -211,7 +251,7 @@ where
         chain_id: ChainId,
         start: BlockHeight,
         stop: BlockHeight,
-    ) -> Result<(), Error>
+    ) -> Result<(), NodeError>
     where
         A: ValidatorNode + Send + Sync + 'static + Clone,
     {
@@ -237,7 +277,7 @@ where
         &mut self,
         validators: Vec<(ValidatorName, A)>,
         chain_id: ChainId,
-    ) -> Result<ChainInfo, Error>
+    ) -> Result<ChainInfo, NodeError>
     where
         A: ValidatorNode + Send + Sync + 'static + Clone,
     {
@@ -261,7 +301,7 @@ where
         name: ValidatorName,
         mut client: A,
         chain_id: ChainId,
-    ) -> Result<(), Error>
+    ) -> Result<(), NodeError>
     where
         A: ValidatorNode + Send + Sync + 'static + Clone,
     {

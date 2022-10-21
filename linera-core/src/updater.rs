@@ -4,7 +4,7 @@
 
 use crate::{
     messages::{ChainInfo, ChainInfoQuery},
-    node::ValidatorNode,
+    node::{NodeError, ValidatorNode},
 };
 use futures::{future, StreamExt};
 use linera_base::{
@@ -51,10 +51,10 @@ pub async fn communicate_with_quorum<'a, A, V, K, F, G>(
     committee: &Committee,
     group_by: G,
     execute: F,
-) -> Result<(K, Vec<V>), CommunicationError<Error>>
+) -> Result<(K, Vec<V>), CommunicationError<NodeError>>
 where
     A: ValidatorNode + Send + Sync + 'static + Clone,
-    F: Fn(ValidatorName, A) -> future::BoxFuture<'a, Result<V, Error>> + Clone,
+    F: Fn(ValidatorName, A) -> future::BoxFuture<'a, Result<V, NodeError>> + Clone,
     G: Fn(&V) -> K,
     K: Hash + PartialEq + Eq + Clone + 'static,
     V: 'static,
@@ -117,7 +117,7 @@ where
         &mut self,
         certificate: Certificate,
         retryable: bool,
-    ) -> Result<ChainInfo, Error> {
+    ) -> Result<ChainInfo, NodeError> {
         let mut count = 0;
         loop {
             match self.client.handle_certificate(certificate.clone()).await {
@@ -126,7 +126,9 @@ where
                     // Succeed
                     return Ok(response.info);
                 }
-                Err(Error::InactiveChain(_)) if retryable && count < self.retries => {
+                Err(NodeError::WorkerError(Error::InactiveChain(_)))
+                    if retryable && count < self.retries =>
+                {
                     // Retry
                     tokio::time::sleep(self.delay).await;
                     count += 1;
@@ -143,7 +145,7 @@ where
     pub async fn send_block_proposal(
         &mut self,
         proposal: BlockProposal,
-    ) -> Result<ChainInfo, Error> {
+    ) -> Result<ChainInfo, NodeError> {
         let mut count = 0;
         loop {
             match self.client.handle_block_proposal(proposal.clone()).await {
@@ -152,7 +154,7 @@ where
                     // Succeed
                     return Ok(response.info);
                 }
-                Err(Error::InactiveChain(_)) if count < self.retries => {
+                Err(NodeError::WorkerError(Error::InactiveChain(_))) if count < self.retries => {
                     // Retry
                     tokio::time::sleep(self.delay).await;
                     count += 1;
@@ -170,7 +172,7 @@ where
         &mut self,
         mut chain_id: ChainId,
         mut target_block_height: BlockHeight,
-    ) -> Result<(), Error> {
+    ) -> Result<(), NodeError> {
         let mut jobs = Vec::new();
         loop {
             // Figure out which certificates this validator is missing.
@@ -192,7 +194,8 @@ where
                     let description = *self
                         .store
                         .load_chain(chain_id)
-                        .await?
+                        .await
+                        .map_err(Error::from)?
                         .execution_state
                         .system
                         .description
@@ -208,7 +211,7 @@ where
                             target_block_height = height.try_add_one()?;
                         }
                         _ => {
-                            return Err(Error::InactiveChain(chain_id));
+                            return Err(NodeError::WorkerError(Error::InactiveChain(chain_id)));
                         }
                     }
                 }
@@ -221,10 +224,14 @@ where
             // Obtain chain state.
             let range = usize::from(initial_block_height)..usize::from(target_block_height);
             if !range.is_empty() {
-                let mut chain = self.store.load_chain(chain_id).await?;
+                let mut chain = self.store.load_chain(chain_id).await.map_err(Error::from)?;
                 // Send the requested certificates in order.
-                let keys = chain.confirmed_log.read(range).await?;
-                let certs = self.store.read_certificates(keys.into_iter()).await?;
+                let keys = chain.confirmed_log.read(range).await.map_err(Error::from)?;
+                let certs = self
+                    .store
+                    .read_certificates(keys.into_iter())
+                    .await
+                    .map_err(Error::from)?;
                 for cert in certs {
                     self.send_certificate(cert, retryable).await?;
                 }
@@ -236,14 +243,27 @@ where
     pub async fn send_chain_information_as_a_receiver(
         &mut self,
         chain_id: ChainId,
-    ) -> Result<(), Error> {
+    ) -> Result<(), NodeError> {
         let mut info = Vec::new();
         {
-            let mut chain = self.store.load_chain(chain_id).await?;
-            for id in chain.communication_states.indices().await? {
-                let state = chain.communication_states.load_entry(id).await?;
-                for origin in state.inboxes.indices().await? {
-                    let inbox = state.inboxes.load_entry(origin.clone()).await?;
+            let mut chain = self.store.load_chain(chain_id).await.map_err(Error::from)?;
+            for id in chain
+                .communication_states
+                .indices()
+                .await
+                .map_err(Error::from)?
+            {
+                let state = chain
+                    .communication_states
+                    .load_entry(id)
+                    .await
+                    .map_err(Error::from)?;
+                for origin in state.inboxes.indices().await.map_err(Error::from)? {
+                    let inbox = state
+                        .inboxes
+                        .load_entry(origin.clone())
+                        .await
+                        .map_err(Error::from)?;
                     info.push((origin.chain_id, *inbox.next_height_to_receive.get()));
                 }
             }
@@ -258,7 +278,7 @@ where
         &mut self,
         chain_id: ChainId,
         action: CommunicateAction,
-    ) -> Result<Option<Vote>, Error> {
+    ) -> Result<Option<Vote>, NodeError> {
         let target_block_height = match &action {
             CommunicateAction::SubmitBlockForValidation(proposal)
             | CommunicateAction::SubmitBlockForConfirmation(proposal) => {
@@ -279,7 +299,9 @@ where
                 let result = self.send_block_proposal(proposal.clone()).await;
                 let info = match result {
                     Ok(info) => info,
-                    Err(e) if e.is_retriable_validation_error() => {
+                    Err(NodeError::BlockProposalHasMissingUpdates { chain_id: id })
+                        if id == chain_id =>
+                    {
                         // Some received certificates may be missing for this validator
                         // (e.g. to make the balance sufficient) so we are going to
                         // synchronize them now.
@@ -296,7 +318,11 @@ where
                         vote.check(self.name)?;
                         return Ok(Some(vote.clone()));
                     }
-                    None => return Err(Error::ClientErrorWhileProcessingBlockProposal),
+                    None => {
+                        return Err(NodeError::WorkerError(
+                            Error::ClientErrorWhileProcessingBlockProposal,
+                        ))
+                    }
                 }
             }
             CommunicateAction::FinalizeBlock(certificate) => {
@@ -308,7 +334,11 @@ where
                         vote.check(self.name)?;
                         return Ok(Some(vote.clone()));
                     }
-                    None => return Err(Error::ClientErrorWhileProcessingBlockProposal),
+                    None => {
+                        return Err(NodeError::WorkerError(
+                            Error::ClientErrorWhileProcessingBlockProposal,
+                        ))
+                    }
                 }
             }
             CommunicateAction::AdvanceToNextBlockHeight(_) => (),

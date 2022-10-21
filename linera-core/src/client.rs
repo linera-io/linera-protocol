@@ -4,7 +4,7 @@
 
 use crate::{
     messages::{ChainInfo, ChainInfoQuery},
-    node::{LocalNodeClient, ValidatorNode},
+    node::{LocalNodeClient, NodeError, ValidatorNode},
     updater::{communicate_with_quorum, CommunicateAction, CommunicationError, ValidatorUpdater},
     worker::WorkerState,
 };
@@ -123,7 +123,7 @@ pub trait ChainClient {
 pub trait ValidatorNodeProvider {
     type Node;
 
-    fn make_node(&self, address: &str) -> Result<Self::Node, Error>;
+    fn make_node(&self, address: &str) -> Result<Self::Node, NodeError>;
 }
 
 /// Reference implementation of the `ChainClient` trait using many instances of some
@@ -224,14 +224,14 @@ where
     Error: From<S::Error>,
 {
     /// Obtain the basic `ChainInfo` data for the local chain.
-    async fn chain_info(&mut self) -> Result<ChainInfo, Error> {
+    async fn chain_info(&mut self) -> Result<ChainInfo, NodeError> {
         let query = ChainInfoQuery::new(self.chain_id);
         let response = self.node_client.handle_chain_info_query(query).await?;
         Ok(response.info)
     }
 
     /// Obtain the pending messaes for the local chain.
-    async fn pending_messages(&mut self) -> Result<Vec<MessageGroup>, Error> {
+    async fn pending_messages(&mut self) -> Result<Vec<MessageGroup>, NodeError> {
         let query = ChainInfoQuery::new(self.chain_id).with_pending_messages();
         let response = self.node_client.handle_chain_info_query(query).await?;
         let mut pending_messages = response.info.requested_pending_messages;
@@ -247,7 +247,7 @@ where
     }
 
     /// Obtain the set of committees trusted by the local chain.
-    pub async fn committees(&mut self) -> Result<BTreeMap<Epoch, Committee>, Error> {
+    pub async fn committees(&mut self) -> Result<BTreeMap<Epoch, Committee>, NodeError> {
         let (_epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
         Ok(committees)
     }
@@ -256,7 +256,7 @@ where
     pub async fn epoch_and_committees(
         &mut self,
         chain_id: ChainId,
-    ) -> Result<(Option<Epoch>, BTreeMap<Epoch, Committee>), Error> {
+    ) -> Result<(Option<Epoch>, BTreeMap<Epoch, Committee>), NodeError> {
         let query = ChainInfoQuery::new(chain_id).with_committees();
         let info = self.node_client.handle_chain_info_query(query).await?.info;
         let epoch = info.epoch;
@@ -267,22 +267,22 @@ where
     }
 
     /// Obtain the epochs of the committees trusted by the local chain.
-    pub async fn epochs(&mut self) -> Result<Vec<Epoch>, Error> {
+    pub async fn epochs(&mut self) -> Result<Vec<Epoch>, NodeError> {
         let committees = self.committees().await?;
         Ok(committees.into_keys().collect())
     }
 
     /// Obtain the committee for the current epoch of the local chain.
-    pub async fn local_committee(&mut self) -> Result<Committee, Error> {
+    pub async fn local_committee(&mut self) -> Result<Committee, NodeError> {
         let (epoch, mut committees) = self.epoch_and_committees(self.chain_id).await?;
         committees
             .remove(epoch.as_ref().ok_or(Error::InactiveChain(self.chain_id))?)
-            .ok_or(Error::InactiveChain(self.chain_id))
+            .ok_or(NodeError::WorkerError(Error::InactiveChain(self.chain_id)))
     }
 
     /// Obtain all the committees trusted by either the local chain or its admin chain. Also
     /// return the latest trusted epoch.
-    async fn known_committees(&mut self) -> Result<(BTreeMap<Epoch, Committee>, Epoch), Error> {
+    async fn known_committees(&mut self) -> Result<(BTreeMap<Epoch, Committee>, Epoch), NodeError> {
         let (epoch, mut committees) = self.epoch_and_committees(self.chain_id).await?;
         let (admin_epoch, admin_committees) = self.epoch_and_committees(self.admin_id).await?;
         committees.extend(admin_committees);
@@ -291,10 +291,10 @@ where
     }
 
     /// Obtain the validators trusted by the local chain.
-    async fn validator_nodes(&mut self) -> Result<Vec<(ValidatorName, P::Node)>, Error> {
+    async fn validator_nodes(&mut self) -> Result<Vec<(ValidatorName, P::Node)>, NodeError> {
         match self.local_committee().await {
             Ok(committee) => self.make_validator_nodes(&committee),
-            Err(Error::InactiveChain(_)) => Ok(Vec::new()),
+            Err(NodeError::WorkerError(Error::InactiveChain(_))) => Ok(Vec::new()),
             Err(e) => Err(e),
         }
     }
@@ -358,7 +358,7 @@ where
     fn make_validator_nodes(
         &self,
         committee: &Committee,
-    ) -> Result<Vec<(ValidatorName, P::Node)>, Error> {
+    ) -> Result<Vec<(ValidatorName, P::Node)>, NodeError> {
         let mut nodes = Vec::new();
         for (name, validator) in &committee.validators {
             let node = self
@@ -378,7 +378,7 @@ where
     Error: From<S::Error>,
 {
     /// Prepare the chain for the next operation.
-    async fn prepare_chain(&mut self) -> Result<(), Error> {
+    async fn prepare_chain(&mut self) -> Result<(), NodeError> {
         // Verify that our local storage contains enough history compared to the
         // expected block height. Otherwise, download the missing history from the
         // network.
@@ -391,7 +391,7 @@ where
             // Check that our local node has the expected block hash.
             linera_base::ensure!(
                 self.block_hash == info.block_hash,
-                Error::InvalidBlockChaining
+                NodeError::WorkerError(Error::InvalidBlockChaining)
             );
         }
         if matches!(info.manager, ChainManager::Multi(_)) {
@@ -450,7 +450,7 @@ where
         .await;
         let (effects_and_state_hash, votes): (Option<_>, Vec<_>) = match result {
             Ok(content) => content,
-            Err(CommunicationError::Trusted(Error::InactiveChain(id)))
+            Err(CommunicationError::Trusted(NodeError::WorkerError(Error::InactiveChain(id))))
                 if id == chain_id
                     && matches!(action, CommunicateAction::AdvanceToNextBlockHeight(_)) =>
             {
@@ -659,7 +659,9 @@ where
         .await;
         let responses = match result {
             Ok(((), responses)) => responses,
-            Err(CommunicationError::Trusted(Error::InactiveChain(id))) if id == chain_id => {
+            Err(CommunicationError::Trusted(NodeError::WorkerError(Error::InactiveChain(id))))
+                if id == chain_id =>
+            {
                 // The chain is visibly not active (yet or any more) so there is no need
                 // to synchronize received certificates.
                 return Ok(());
@@ -732,7 +734,7 @@ where
         Ok(certificate)
     }
 
-    async fn process_certificate(&mut self, certificate: Certificate) -> Result<(), Error> {
+    async fn process_certificate(&mut self, certificate: Certificate) -> Result<(), NodeError> {
         let info = self.node_client.handle_certificate(certificate).await?.info;
         if info.chain_id == self.chain_id
             && (info.next_block_height, info.manager.next_round())
@@ -1144,7 +1146,8 @@ where
     async fn finalize_committee(&mut self) -> Result<Certificate> {
         self.prepare_chain().await?;
         let (current_epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
-        let current_epoch = current_epoch.ok_or(Error::InactiveChain(self.chain_id))?;
+        let current_epoch =
+            current_epoch.ok_or(NodeError::WorkerError(Error::InactiveChain(self.chain_id)))?;
         let operations = committees
             .keys()
             .filter_map(|epoch| {
