@@ -2,9 +2,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::{error::Error, messages::ChainId};
+use linera_base::messages::ChainId;
 use linera_chain::messages::{BlockProposal, Certificate, Vote};
-use linera_core::messages::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest};
+use linera_core::{
+    messages::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
+    node::NodeError,
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -18,7 +21,7 @@ pub enum Message {
     // Outbound
     Vote(Box<Vote>),
     ChainInfoResponse(Box<ChainInfoResponse>),
-    Error(Box<Error>),
+    Error(Box<NodeError>),
     // Internal to a validator
     CrossChainRequest(Box<CrossChainRequest>),
 }
@@ -71,8 +74,8 @@ impl From<ChainInfoResponse> for Message {
     }
 }
 
-impl From<Error> for Message {
-    fn from(error: Error) -> Self {
+impl From<NodeError> for Message {
+    fn from(error: NodeError) -> Self {
         Message::Error(Box::new(error))
     }
 }

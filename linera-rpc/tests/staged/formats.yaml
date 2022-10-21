@@ -468,7 +468,7 @@ Message:
     5:
       Error:
         NEWTYPE:
-          TYPENAME: Error
+          TYPENAME: NodeError
     6:
       CrossChainRequest:
         NEWTYPE:
@@ -502,6 +502,17 @@ MultiOwnerManager:
     - pending:
         OPTION:
           TYPENAME: Vote
+NodeError:
+  ENUM:
+    0:
+      BlockProposalHasMissingUpdates:
+        STRUCT:
+          - chain_id:
+              TYPENAME: ChainId
+    1:
+      WorkerError:
+        NEWTYPE:
+          TYPENAME: Error
 Operation:
   ENUM:
     0:

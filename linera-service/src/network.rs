@@ -12,7 +12,7 @@ use linera_base::{error::Error, messages::ChainId};
 use linera_chain::messages::{BlockProposal, Certificate};
 use linera_core::{
     messages::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
-    node::ValidatorNode,
+    node::{NodeError, ValidatorNode},
     worker::{ValidatorWorker, WorkerState},
 };
 use linera_rpc::Message;
@@ -300,7 +300,7 @@ where
                 Err(error) => {
                     warn!("User query failed: {}", error);
                     self.server.user_errors += 1;
-                    Some(error.into())
+                    Some(NodeError::from(error).into())
                 }
             }
         })
@@ -366,16 +366,19 @@ impl Client {
             .ok_or_else(|| codec::Error::Io(std::io::ErrorKind::UnexpectedEof.into()))
     }
 
-    pub async fn send_recv_info(&mut self, message: Message) -> Result<ChainInfoResponse, Error> {
+    pub async fn send_recv_info(
+        &mut self,
+        message: Message,
+    ) -> Result<ChainInfoResponse, NodeError> {
         match self.send_recv_internal(message).await {
             Ok(Message::ChainInfoResponse(response)) => Ok(*response),
             Ok(Message::Error(error)) => Err(*error),
-            Ok(_) => Err(Error::UnexpectedMessage),
+            Ok(_) => Err(NodeError::WorkerError(Error::UnexpectedMessage)),
             Err(error) => match error {
-                codec::Error::Io(io_error) => Err(Error::ClientIoError {
+                codec::Error::Io(io_error) => Err(NodeError::WorkerError(Error::ClientIoError {
                     error: format!("{}", io_error),
-                }),
-                _ => Err(Error::InvalidDecoding),
+                })),
+                _ => Err(NodeError::WorkerError(Error::InvalidDecoding)),
             },
         }
     }
@@ -387,7 +390,7 @@ impl ValidatorNode for Client {
     async fn handle_block_proposal(
         &mut self,
         proposal: BlockProposal,
-    ) -> Result<ChainInfoResponse, Error> {
+    ) -> Result<ChainInfoResponse, NodeError> {
         self.send_recv_info(proposal.into()).await
     }
 
@@ -395,7 +398,7 @@ impl ValidatorNode for Client {
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-    ) -> Result<ChainInfoResponse, Error> {
+    ) -> Result<ChainInfoResponse, NodeError> {
         self.send_recv_info(certificate.into()).await
     }
 
@@ -403,7 +406,7 @@ impl ValidatorNode for Client {
     async fn handle_chain_info_query(
         &mut self,
         query: ChainInfoQuery,
-    ) -> Result<ChainInfoResponse, Error> {
+    ) -> Result<ChainInfoResponse, NodeError> {
         self.send_recv_info(query.into()).await
     }
 }

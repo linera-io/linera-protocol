@@ -17,7 +17,7 @@ use linera_chain::messages::{
 use linera_core::{
     client::{ChainClient, ChainClientState, ValidatorNodeProvider},
     messages::{ChainInfoQuery, ChainInfoResponse},
-    node::{LocalNodeClient, ValidatorNode},
+    node::{LocalNodeClient, NodeError, ValidatorNode},
     worker::WorkerState,
 };
 use linera_execution::{
@@ -60,7 +60,7 @@ struct NodeProvider {
 impl ValidatorNodeProvider for NodeProvider {
     type Node = network::Client;
 
-    fn make_node(&self, address: &str) -> Result<Self::Node, Error> {
+    fn make_node(&self, address: &str) -> Result<Self::Node, NodeError> {
         let network = ValidatorPublicNetworkConfig::from_str(address).map_err(|_| {
             Error::CannotResolveValidatorAddress {
                 address: address.to_string(),

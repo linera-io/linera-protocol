@@ -4,7 +4,7 @@
 use crate::{
     client::{ChainClient, ChainClientState, CommunicateAction, ValidatorNodeProvider},
     messages::*,
-    node::ValidatorNode,
+    node::{NodeError, ValidatorNode},
     worker::{ValidatorWorker, WorkerState},
 };
 use async_trait::async_trait;
@@ -43,29 +43,37 @@ where
     async fn handle_block_proposal(
         &mut self,
         proposal: BlockProposal,
-    ) -> Result<ChainInfoResponse, Error> {
+    ) -> Result<ChainInfoResponse, NodeError> {
         let validator = self.0.clone();
         let mut validator = validator.lock().await;
         if validator.is_faulty {
-            Err(Error::SequenceOverflow)
+            Err(Error::SequenceOverflow.into())
         } else {
-            validator.state.handle_block_proposal(proposal).await
+            validator
+                .state
+                .handle_block_proposal(proposal)
+                .await
+                .map_err(NodeError::from)
         }
     }
 
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-    ) -> Result<ChainInfoResponse, Error> {
+    ) -> Result<ChainInfoResponse, NodeError> {
         let validator = self.0.clone();
         let mut validator = validator.lock().await;
-        validator.state.fully_handle_certificate(certificate).await
+        validator
+            .state
+            .fully_handle_certificate(certificate)
+            .await
+            .map_err(NodeError::from)
     }
 
     async fn handle_chain_info_query(
         &mut self,
         query: ChainInfoQuery,
-    ) -> Result<ChainInfoResponse, Error> {
+    ) -> Result<ChainInfoResponse, NodeError> {
         self.0
             .clone()
             .lock()
@@ -73,6 +81,7 @@ where
             .state
             .handle_chain_info_query(query)
             .await
+            .map_err(NodeError::from)
     }
 }
 
@@ -92,7 +101,7 @@ where
 {
     type Node = LocalValidatorClient<S>;
 
-    fn make_node(&self, address: &str) -> Result<Self::Node, Error> {
+    fn make_node(&self, address: &str) -> Result<Self::Node, NodeError> {
         let name = ValidatorName::from_str(address).unwrap();
         let node = self
             .0

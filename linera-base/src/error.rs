@@ -211,10 +211,3 @@ pub enum Error {
     #[error("A session is still opened at the end of a transaction")]
     SessionWasNotClosed,
 }
-
-impl Error {
-    /// Whether an invalid operation for this block can become valid later.
-    pub fn is_retriable_validation_error(&self) -> bool {
-        matches!(self, Error::MissingCrossChainUpdate { .. })
-    }
-}

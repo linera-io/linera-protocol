@@ -1180,6 +1180,7 @@ dependencies = [
  "tempfile",
  "test-log",
  "test-strategy",
+ "thiserror",
  "tokio",
 ]
 
