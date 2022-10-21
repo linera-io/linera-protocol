@@ -15,11 +15,8 @@ use thiserror::Error;
 use tokio::sync::{OwnedMutexGuard, RwLock};
 
 /// The data is serialized in memory just like for rocksdb / dynamodb
-/// Tha analogue of the database is the BTreeMap
-pub type MemoryStoreValue = Vec<u8>;
-
-/// A map of Rust values indexed by their keys.
-pub type MemoryStoreMap = BTreeMap<Vec<u8>, MemoryStoreValue>;
+/// The analogue of the database is the BTreeMap
+pub type MemoryStoreMap = BTreeMap<Vec<u8>, Vec<u8>>;
 
 /// A context that stores all values in memory.
 #[derive(Clone, Debug)]
