@@ -511,7 +511,7 @@ where
         Ok(())
     }
 
-    async fn delete(
+    fn delete(
         &mut self,
         stored_count: usize,
         batch: &mut Self::Batch,
@@ -550,7 +550,7 @@ where
         Ok(values)
     }
 
-    async fn delete_front(
+    fn delete_front(
         &mut self,
         stored_indices: &mut Range<usize>,
         batch: &mut Self::Batch,
@@ -565,7 +565,7 @@ where
         Ok(())
     }
 
-    async fn append_back(
+    fn append_back(
         &mut self,
         stored_indices: &mut Range<usize>,
         batch: &mut Self::Batch,

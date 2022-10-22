@@ -299,7 +299,7 @@ pub trait LogOperations<T>: Context {
     /// Delete the log. Crash-resistant implementations should only write to `batch`.
     /// The stored_count is an invariant of the structure. It is a leaky abstraction
     /// but allows a priori better performance.
-    async fn delete(
+    fn delete(
         &mut self,
         stored_count: usize,
         batch: &mut Self::Batch,
@@ -339,7 +339,7 @@ where
         if self.was_reset_to_default {
             self.was_reset_to_default = false;
             if self.stored_count > 0 {
-                self.context.delete(self.stored_count, batch).await?;
+                self.context.delete(self.stored_count, batch)?;
                 self.stored_count = 0;
             }
         }
@@ -353,7 +353,7 @@ where
     }
 
     async fn delete(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        self.context.delete(self.stored_count, batch).await
+        self.context.delete(self.stored_count, batch)
     }
 
     fn reset_to_default(&mut self) {
@@ -643,7 +643,7 @@ pub trait QueueOperations<T>: Context {
 
     /// Delete `count` values from the front of the queue. Crash-resistant implementations
     /// should only write to `batch`.
-    async fn delete_front(
+    fn delete_front(
         &mut self,
         stored_indices: &mut Range<usize>,
         batch: &mut Self::Batch,
@@ -652,7 +652,7 @@ pub trait QueueOperations<T>: Context {
 
     /// Append the given values from the back of the queue. Crash-resistant
     /// implementations should only write to `batch`.
-    async fn append_back(
+    fn append_back(
         &mut self,
         stored_indices: &mut Range<usize>,
         batch: &mut Self::Batch,
@@ -699,8 +699,7 @@ where
     async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         if self.front_delete_count > 0 {
             self.context
-                .delete_front(&mut self.stored_indices, batch, self.front_delete_count)
-                .await?;
+                .delete_front(&mut self.stored_indices, batch, self.front_delete_count)?;
         }
         if !self.new_back_values.is_empty() {
             self.context
@@ -708,8 +707,7 @@ where
                     &mut self.stored_indices,
                     batch,
                     mem::take(&mut self.new_back_values).into_iter().collect(),
-                )
-                .await?;
+                )?;
         }
         self.front_delete_count = 0;
         Ok(())
