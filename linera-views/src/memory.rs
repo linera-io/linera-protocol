@@ -383,12 +383,12 @@ where
         }
     }
 
-    async fn add_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
+    fn add_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
         batch.write_key(self.derive_key(&CollectionKey::Index(index)), &())?;
         Ok(())
     }
 
-    async fn remove_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
+    fn remove_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
         batch.delete_key(self.derive_key(&CollectionKey::Index(index)));
         Ok(())
     }

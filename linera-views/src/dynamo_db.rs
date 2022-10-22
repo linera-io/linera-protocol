@@ -678,12 +678,12 @@ where
         }
     }
 
-    async fn add_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
+    fn add_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
         self.put_item_batch(batch, &CollectionKey::Index(index), &());
         Ok(())
     }
 
-    async fn remove_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
+    fn remove_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
         self.remove_item_batch(batch, &CollectionKey::Index(index));
         Ok(())
     }

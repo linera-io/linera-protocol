@@ -860,11 +860,11 @@ pub trait CollectionOperations<I>: Context {
 
     /// Add the index to the list of indices. Crash-resistant implementations should only write
     /// to `batch`.
-    async fn add_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error>;
+    fn add_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error>;
 
     /// Remove the index from the list of indices. Crash-resistant implementations should only
     /// write to `batch`.
-    async fn remove_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error>;
+    fn remove_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error>;
 
     // TODO(#149): In contrast to other views, there is no delete operation for CollectionOperation.
 }
@@ -904,7 +904,7 @@ where
             for (index, update) in mem::take(&mut self.updates) {
                 if let Some(view) = update {
                     view.commit(batch).await?;
-                    self.context.add_index(batch, index).await?;
+                    self.context.add_index(batch, index)?;
                 }
             }
         } else {
@@ -912,11 +912,11 @@ where
                 match update {
                     Some(view) => {
                         view.commit(batch).await?;
-                        self.context.add_index(batch, index).await?;
+                        self.context.add_index(batch, index)?;
                     }
                     None => {
                         let context = self.context.clone_with_scope(&index);
-                        self.context.remove_index(batch, index).await?;
+                        self.context.remove_index(batch, index)?;
                         let view = W::load(context).await?;
                         view.delete(batch).await?;
                     }
@@ -947,7 +947,7 @@ where
         let stored_indices = self.context.indices().await?;
         for index in &stored_indices {
             let context = self.context.clone_with_scope(index);
-            self.context.remove_index(batch, index.clone()).await?;
+            self.context.remove_index(batch, index.clone())?;
             let view = W::load(context).await?;
             view.delete(batch).await?;
         }
@@ -1090,7 +1090,7 @@ where
                         .map_err(|_| ViewError::CannotAcquireCollectionEntry)?
                         .into_inner();
                     view.commit(batch).await?;
-                    self.context.add_index(batch, index).await?;
+                    self.context.add_index(batch, index)?;
                 }
             }
         } else {
@@ -1101,11 +1101,11 @@ where
                             .map_err(|_| ViewError::CannotAcquireCollectionEntry)?
                             .into_inner();
                         view.commit(batch).await?;
-                        self.context.add_index(batch, index).await?;
+                        self.context.add_index(batch, index)?;
                     }
                     None => {
                         let context = self.context.clone_with_scope(&index);
-                        self.context.remove_index(batch, index).await?;
+                        self.context.remove_index(batch, index)?;
                         let view = W::load(context).await?;
                         view.delete(batch).await?;
                     }
@@ -1136,7 +1136,7 @@ where
         let stored_indices = self.context.indices().await?;
         for index in &stored_indices {
             let context = self.context.clone_with_scope(index);
-            self.context.remove_index(batch, index.clone()).await?;
+            self.context.remove_index(batch, index.clone())?;
             let view = W::load(context).await?;
             view.delete(batch).await?;
         }
