@@ -286,11 +286,7 @@ pub trait LogOperations<T>: Context {
     /// Delete the log. Crash-resistant implementations should only write to `batch`.
     /// The stored_count is an invariant of the structure. It is a leaky abstraction
     /// but allows a priori better performance.
-    fn delete(
-        &mut self,
-        stored_count: usize,
-        batch: &mut Self::Batch,
-    ) -> Result<(), Self::Error>;
+    fn delete(&mut self, stored_count: usize, batch: &mut Self::Batch) -> Result<(), Self::Error>;
 }
 
 #[async_trait]
@@ -444,12 +440,7 @@ pub trait MapOperations<I, V>: Context {
         F: FnMut(I) + Send;
 
     /// Set a value. Crash-resistant implementations should only write to `batch`.
-    fn insert(
-        &mut self,
-        batch: &mut Self::Batch,
-        index: I,
-        value: V,
-    ) -> Result<(), Self::Error>;
+    fn insert(&mut self, batch: &mut Self::Batch, index: I, value: V) -> Result<(), Self::Error>;
 
     /// Remove the entry at the given index. Crash-resistant implementations should only write
     /// to `batch`.
@@ -677,12 +668,11 @@ where
                 .delete_front(&mut self.stored_indices, batch, self.front_delete_count)?;
         }
         if !self.new_back_values.is_empty() {
-            self.context
-                .append_back(
-                    &mut self.stored_indices,
-                    batch,
-                    mem::take(&mut self.new_back_values).into_iter().collect(),
-                )?;
+            self.context.append_back(
+                &mut self.stored_indices,
+                batch,
+                mem::take(&mut self.new_back_values).into_iter().collect(),
+            )?;
         }
         self.front_delete_count = 0;
         Ok(())

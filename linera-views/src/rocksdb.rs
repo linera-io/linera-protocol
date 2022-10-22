@@ -309,11 +309,7 @@ where
         Ok(())
     }
 
-    fn delete(
-        &mut self,
-        stored_count: usize,
-        batch: &mut Self::Batch,
-    ) -> Result<(), Self::Error> {
+    fn delete(&mut self, stored_count: usize, batch: &mut Self::Batch) -> Result<(), Self::Error> {
         batch.delete_key(self.base_key.clone());
         for index in 0..stored_count {
             batch.delete_key(self.derive_key(&index));

@@ -511,11 +511,7 @@ where
         Ok(())
     }
 
-    fn delete(
-        &mut self,
-        stored_count: usize,
-        batch: &mut Self::Batch,
-    ) -> Result<(), Self::Error> {
+    fn delete(&mut self, stored_count: usize, batch: &mut Self::Batch) -> Result<(), Self::Error> {
         self.remove_item_batch(batch, &());
         for index in 0..stored_count {
             self.remove_item_batch(batch, &index);
@@ -603,12 +599,7 @@ where
         Ok(self.get_item(&index).await?)
     }
 
-    fn insert(
-        &mut self,
-        batch: &mut Self::Batch,
-        index: I,
-        value: V,
-    ) -> Result<(), Self::Error> {
+    fn insert(&mut self, batch: &mut Self::Batch, index: I, value: V) -> Result<(), Self::Error> {
         self.put_item_batch(batch, &index, &value);
         Ok(())
     }
