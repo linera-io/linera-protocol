@@ -579,7 +579,7 @@ where
         Ok(())
     }
 
-    async fn delete(
+    fn delete(
         &mut self,
         stored_indices: Range<usize>,
         batch: &mut Self::Batch,
@@ -603,7 +603,7 @@ where
         Ok(self.get_item(&index).await?)
     }
 
-    async fn insert(
+    fn insert(
         &mut self,
         batch: &mut Self::Batch,
         index: I,
@@ -613,7 +613,7 @@ where
         Ok(())
     }
 
-    async fn remove(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
+    fn remove(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
         self.remove_item_batch(batch, &index);
         Ok(())
     }
@@ -636,7 +636,6 @@ where
         for key in self.get_sub_keys::<I, _>(&()).await? {
             self.remove_item_batch(batch, &key);
         }
-
         Ok(())
     }
 }

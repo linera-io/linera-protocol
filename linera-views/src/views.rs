@@ -461,7 +461,7 @@ pub trait MapOperations<I, V>: Context {
         F: FnMut(I) + Send;
 
     /// Set a value. Crash-resistant implementations should only write to `batch`.
-    async fn insert(
+    fn insert(
         &mut self,
         batch: &mut Self::Batch,
         index: I,
@@ -470,7 +470,7 @@ pub trait MapOperations<I, V>: Context {
 
     /// Remove the entry at the given index. Crash-resistant implementations should only write
     /// to `batch`.
-    async fn remove(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error>;
+    fn remove(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error>;
 
     /// Delete the map and its entries from storage. Crash-resistant implementations should only
     /// write to `batch`.
@@ -511,14 +511,14 @@ where
             self.context.delete(batch).await?;
             for (index, update) in mem::take(&mut self.updates) {
                 if let Some(value) = update {
-                    self.context.insert(batch, index, value).await?;
+                    self.context.insert(batch, index, value)?;
                 }
             }
         } else {
             for (index, update) in mem::take(&mut self.updates) {
                 match update {
-                    None => self.context.remove(batch, index).await?,
-                    Some(value) => self.context.insert(batch, index, value).await?,
+                    None => self.context.remove(batch, index)?,
+                    Some(value) => self.context.insert(batch, index, value)?,
                 }
             }
         }
@@ -660,7 +660,7 @@ pub trait QueueOperations<T>: Context {
     ) -> Result<(), Self::Error>;
 
     /// Delete the queue from storage. Crash-resistant implementations should only write to `batch`.
-    async fn delete(
+    fn delete(
         &mut self,
         stored_indices: Range<usize>,
         batch: &mut Self::Batch,
@@ -714,7 +714,7 @@ where
     }
 
     async fn delete(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        self.context.delete(self.stored_indices, batch).await
+        self.context.delete(self.stored_indices, batch)
     }
 
     fn reset_to_default(&mut self) {

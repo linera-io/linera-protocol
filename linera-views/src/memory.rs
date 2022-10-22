@@ -294,7 +294,7 @@ where
         Ok(())
     }
 
-    async fn delete(
+    fn delete(
         &mut self,
         stored_indices: Range<usize>,
         batch: &mut Self::Batch,
@@ -318,7 +318,7 @@ where
         Ok(self.read_key(&self.derive_key(index)).await?)
     }
 
-    async fn insert(
+    fn insert(
         &mut self,
         batch: &mut Self::Batch,
         index: I,
@@ -328,7 +328,7 @@ where
         Ok(())
     }
 
-    async fn remove(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), MemoryViewError> {
+    fn remove(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), MemoryViewError> {
         batch.delete_key(self.derive_key(&index));
         Ok(())
     }
