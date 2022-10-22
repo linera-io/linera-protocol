@@ -29,27 +29,31 @@ pub trait KeyValueOperations {
     async fn read_key<V: DeserializeOwned>(
         &self,
         key: &[u8],
-    ) -> Result<Option<V>, RocksdbViewError>;
+    ) -> Result<Option<V>, RocksdbContextError>;
 
     async fn write_key<V: Serialize + Sync>(
         &self,
         key: &[u8],
         value: &V,
-    ) -> Result<(), RocksdbViewError>;
+    ) -> Result<(), RocksdbContextError>;
 
-    async fn delete_key(&self, key: &[u8]) -> Result<(), RocksdbViewError>;
+    async fn delete_key(&self, key: &[u8]) -> Result<(), RocksdbContextError>;
 
     async fn find_keys_with_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Vec<Vec<u8>>, RocksdbViewError>;
+    ) -> Result<Vec<Vec<u8>>, RocksdbContextError>;
 
-    async fn count_keys(&self) -> Result<usize, RocksdbViewError>;
+    async fn count_keys(&self) -> Result<usize, RocksdbContextError>;
 }
 
 /// Low-level, blocking write operations.
 trait WriteOperations {
-    fn write_key<V: Serialize>(&mut self, key: Vec<u8>, value: &V) -> Result<(), RocksdbViewError>;
+    fn write_key<V: Serialize>(
+        &mut self,
+        key: Vec<u8>,
+        value: &V,
+    ) -> Result<(), RocksdbContextError>;
 
     fn delete_key(&mut self, key: Vec<u8>);
 }
@@ -59,7 +63,7 @@ impl KeyValueOperations for Arc<DB> {
     async fn read_key<V: DeserializeOwned>(
         &self,
         key: &[u8],
-    ) -> Result<Option<V>, RocksdbViewError> {
+    ) -> Result<Option<V>, RocksdbContextError> {
         let db = self.clone();
         let key = key.to_vec();
         let value = tokio::task::spawn_blocking(move || db.get(&key)).await??;
@@ -73,7 +77,7 @@ impl KeyValueOperations for Arc<DB> {
         &self,
         key: &[u8],
         value: &V,
-    ) -> Result<(), RocksdbViewError> {
+    ) -> Result<(), RocksdbContextError> {
         let db = self.clone();
         let key = key.to_vec();
         let bytes = bcs::to_bytes(value)?;
@@ -81,7 +85,7 @@ impl KeyValueOperations for Arc<DB> {
         Ok(())
     }
 
-    async fn delete_key(&self, key: &[u8]) -> Result<(), RocksdbViewError> {
+    async fn delete_key(&self, key: &[u8]) -> Result<(), RocksdbContextError> {
         let db = self.clone();
         let key = key.to_vec();
         tokio::task::spawn_blocking(move || db.delete(&key)).await??;
@@ -91,7 +95,7 @@ impl KeyValueOperations for Arc<DB> {
     async fn find_keys_with_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Vec<Vec<u8>>, RocksdbViewError> {
+    ) -> Result<Vec<Vec<u8>>, RocksdbContextError> {
         let db = self.clone();
         let prefix = key_prefix.to_vec();
         let keys = tokio::task::spawn_blocking(move || {
@@ -113,7 +117,7 @@ impl KeyValueOperations for Arc<DB> {
         Ok(keys)
     }
 
-    async fn count_keys(&self) -> Result<usize, RocksdbViewError> {
+    async fn count_keys(&self) -> Result<usize, RocksdbContextError> {
         let db = self.clone();
         let size =
             tokio::task::spawn_blocking(move || db.iterator(rocksdb::IteratorMode::Start).count())
@@ -124,7 +128,11 @@ impl KeyValueOperations for Arc<DB> {
 
 #[async_trait]
 impl WriteOperations for Batch {
-    fn write_key<V: Serialize>(&mut self, key: Vec<u8>, value: &V) -> Result<(), RocksdbViewError> {
+    fn write_key<V: Serialize>(
+        &mut self,
+        key: Vec<u8>,
+        value: &V,
+    ) -> Result<(), RocksdbContextError> {
         let bytes = bcs::to_bytes(value)?;
         self.0.push(WriteOperation::Put { key, value: bytes });
         Ok(())
@@ -183,15 +191,15 @@ where
 {
     type Batch = Batch;
     type Extra = E;
-    type Error = RocksdbViewError;
+    type Error = RocksdbContextError;
 
     fn extra(&self) -> &E {
         &self.extra
     }
 
-    async fn run_with_batch<F>(&self, builder: F) -> Result<(), Self::Error>
+    async fn run_with_batch<F>(&self, builder: F) -> Result<(), ViewError>
     where
-        F: FnOnce(&mut Self::Batch) -> futures::future::BoxFuture<Result<(), Self::Error>>
+        F: FnOnce(&mut Self::Batch) -> futures::future::BoxFuture<Result<(), ViewError>>
             + Send
             + Sync,
     {
@@ -204,9 +212,9 @@ where
         Batch(Vec::new())
     }
 
-    async fn write_batch(&self, batch: Self::Batch) -> Result<(), Self::Error> {
+    async fn write_batch(&self, batch: Self::Batch) -> Result<(), ViewError> {
         let db = self.db.clone();
-        tokio::task::spawn_blocking(move || {
+        tokio::task::spawn_blocking(move || -> Result<(), RocksdbContextError> {
             let mut inner_batch = rocksdb::WriteBatchWithTransaction::default();
             for e_ent in batch.0 {
                 match e_ent {
@@ -218,7 +226,8 @@ where
                     }
                 }
             }
-            db.write(inner_batch)
+            db.write(inner_batch)?;
+            Ok(())
         })
         .await??;
         Ok(())
@@ -245,12 +254,12 @@ where
     T: Default + Serialize + DeserializeOwned + Send + Sync + 'static,
     E: Clone + Send + Sync,
 {
-    async fn get(&mut self) -> Result<T, RocksdbViewError> {
+    async fn get(&mut self) -> Result<T, RocksdbContextError> {
         let value = self.db.read_key(&self.base_key).await?.unwrap_or_default();
         Ok(value)
     }
 
-    fn set(&mut self, batch: &mut Self::Batch, value: &T) -> Result<(), RocksdbViewError> {
+    fn set(&mut self, batch: &mut Self::Batch, value: &T) -> Result<(), RocksdbContextError> {
         batch.write_key(self.base_key.clone(), value)?;
         Ok(())
     }
@@ -267,16 +276,16 @@ where
     T: Serialize + DeserializeOwned + Send + Sync + 'static,
     E: Clone + Send + Sync,
 {
-    async fn count(&mut self) -> Result<usize, RocksdbViewError> {
+    async fn count(&mut self) -> Result<usize, RocksdbContextError> {
         let count = self.db.read_key(&self.base_key).await?.unwrap_or_default();
         Ok(count)
     }
 
-    async fn get(&mut self, index: usize) -> Result<Option<T>, RocksdbViewError> {
+    async fn get(&mut self, index: usize) -> Result<Option<T>, RocksdbContextError> {
         self.db.read_key(&self.derive_key(&index)).await
     }
 
-    async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, RocksdbViewError> {
+    async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, RocksdbContextError> {
         let mut values = Vec::new();
         for i in range {
             match self.db.read_key(&self.derive_key(&i)).await? {
@@ -296,7 +305,7 @@ where
         stored_count: usize,
         batch: &mut Self::Batch,
         values: Vec<T>,
-    ) -> Result<(), RocksdbViewError> {
+    ) -> Result<(), RocksdbContextError> {
         if values.is_empty() {
             return Ok(());
         }
@@ -386,7 +395,7 @@ where
         &mut self,
         range: Range<usize>,
         batch: &mut Self::Batch,
-    ) -> Result<(), RocksdbViewError> {
+    ) -> Result<(), RocksdbContextError> {
         batch.delete_key(self.base_key.clone());
         for i in range {
             batch.delete_key(self.derive_key(&i));
@@ -402,7 +411,7 @@ where
     V: Serialize + DeserializeOwned + Send + Sync + 'static,
     E: Clone + Send + Sync,
 {
-    async fn get(&mut self, index: &I) -> Result<Option<V>, RocksdbViewError> {
+    async fn get(&mut self, index: &I) -> Result<Option<V>, RocksdbContextError> {
         Ok(self.db.read_key(&self.derive_key(index)).await?)
     }
 
@@ -411,17 +420,17 @@ where
         batch: &mut Self::Batch,
         index: I,
         value: V,
-    ) -> Result<(), RocksdbViewError> {
+    ) -> Result<(), RocksdbContextError> {
         batch.write_key(self.derive_key(&index), &value)?;
         Ok(())
     }
 
-    fn remove(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), RocksdbViewError> {
+    fn remove(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), RocksdbContextError> {
         batch.delete_key(self.derive_key(&index));
         Ok(())
     }
 
-    async fn indices(&mut self) -> Result<Vec<I>, RocksdbViewError> {
+    async fn indices(&mut self) -> Result<Vec<I>, RocksdbContextError> {
         let len = self.base_key.len();
         let mut keys = Vec::new();
         for key in self.db.find_keys_with_prefix(&self.base_key).await? {
@@ -430,7 +439,7 @@ where
         Ok(keys)
     }
 
-    async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), RocksdbViewError>
+    async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), RocksdbContextError>
     where
         F: FnMut(I) + Send,
     {
@@ -442,7 +451,7 @@ where
         Ok(())
     }
 
-    async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), RocksdbViewError> {
+    async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), RocksdbContextError> {
         for key in self.db.find_keys_with_prefix(&self.base_key).await? {
             batch.delete_key(key);
         }
@@ -529,33 +538,21 @@ where
 }
 
 #[derive(Error, Debug)]
-pub enum RocksdbViewError {
-    #[error("View error: {0}")]
-    ViewError(#[from] ViewError),
-
+pub enum RocksdbContextError {
     #[error("tokio join error: {0}")]
     TokioJoinError(#[from] tokio::task::JoinError),
-
-    #[error("IO error: {0}")]
-    Io(#[from] std::io::Error),
-
-    #[error("Failed to lock collection entry: {0}")]
-    TryLockError(#[from] tokio::sync::TryLockError),
 
     #[error("Rocksdb error: {0}")]
     Rocksdb(#[from] rocksdb::Error),
 
     #[error("BCS error: {0}")]
     Bcs(#[from] bcs::Error),
-
-    #[error("Entry does not exist in Rocksdb: {0}")]
-    NotFound(String),
 }
 
-impl From<RocksdbViewError> for linera_base::error::Error {
-    fn from(error: RocksdbViewError) -> Self {
-        Self::StorageError {
-            backend: "rocksdb".to_string(),
+impl From<RocksdbContextError> for crate::views::ViewError {
+    fn from(error: RocksdbContextError) -> Self {
+        Self::ContextError {
+            backend: "memory".to_string(),
             error: error.to_string(),
         }
     }

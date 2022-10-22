@@ -13,7 +13,7 @@ use std::{fmt::Debug, io::Write};
 #[async_trait]
 pub trait HashView<C: HashingContext>: View<C> {
     /// Compute the hash of the values.
-    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, C::Error>;
+    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError>;
 }
 
 pub trait HashingContext: Context {
@@ -43,9 +43,10 @@ impl Hasher for sha2::Sha512 {
 impl<C, W, const INDEX: u64> HashView<C> for ScopedView<INDEX, W>
 where
     C: HashingContext + Send + Sync + ScopedOperations + 'static,
+    ViewError: From<C::Error>,
     W: HashView<C> + Send,
 {
-    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, C::Error> {
+    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
         self.view.hash().await
     }
 }
@@ -54,9 +55,10 @@ where
 impl<C, T> HashView<C> for RegisterView<C, T>
 where
     C: HashingContext + RegisterOperations<T> + Send + Sync,
+    ViewError: From<C::Error>,
     T: Default + Send + Sync + Serialize,
 {
-    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, C::Error> {
+    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
         let mut hasher = C::Hasher::default();
         hasher.update_with_bcs_bytes(self.get())?;
         Ok(hasher.finalize())
@@ -67,9 +69,10 @@ where
 impl<C, T> HashView<C> for LogView<C, T>
 where
     C: HashingContext + LogOperations<T> + Send + Sync,
+    ViewError: From<C::Error>,
     T: Send + Sync + Clone + Serialize,
 {
-    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, C::Error> {
+    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
         let count = self.count();
         let elements = self.read(0..count).await?;
         let mut hasher = C::Hasher::default();
@@ -82,9 +85,10 @@ where
 impl<C, T> HashView<C> for QueueView<C, T>
 where
     C: HashingContext + QueueOperations<T> + Send + Sync,
+    ViewError: From<C::Error>,
     T: Send + Sync + Clone + Serialize,
 {
-    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, C::Error> {
+    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
         let count = self.count();
         let elements = self.read_front(count).await?;
         let mut hasher = C::Hasher::default();
@@ -97,10 +101,11 @@ where
 impl<C, I, V> HashView<C> for MapView<C, I, V>
 where
     C: HashingContext + MapOperations<I, V> + Send,
+    ViewError: From<C::Error>,
     I: Eq + Ord + Clone + Send + Sync + Serialize,
     V: Clone + Send + Sync + Serialize,
 {
-    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, C::Error> {
+    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
         let mut hasher = C::Hasher::default();
         let indices = self.indices().await?;
         hasher.update_with_bcs_bytes(&indices.len())?;
@@ -121,10 +126,11 @@ where
 impl<C, I, W> HashView<C> for CollectionView<C, I, W>
 where
     C: HashingContext + CollectionOperations<I> + Send,
+    ViewError: From<C::Error>,
     I: Eq + Ord + Clone + Debug + Send + Sync + Serialize + 'static,
     W: HashView<C> + Send + 'static,
 {
-    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, C::Error> {
+    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
         let mut hasher = C::Hasher::default();
         let indices = self.indices().await?;
         hasher.update_with_bcs_bytes(&indices.len())?;
@@ -142,10 +148,11 @@ where
 impl<C, I, W> HashView<C> for ReentrantCollectionView<C, I, W>
 where
     C: HashingContext + CollectionOperations<I> + Send,
+    ViewError: From<C::Error>,
     I: Eq + Ord + Clone + Debug + Send + Sync + Serialize + 'static,
     W: HashView<C> + Send + 'static,
 {
-    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, C::Error> {
+    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
         let mut hasher = C::Hasher::default();
         let indices = self.indices().await?;
         hasher.update_with_bcs_bytes(&indices.len())?;

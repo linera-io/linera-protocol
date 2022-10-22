@@ -17,6 +17,7 @@ use linera_chain::{
     ChainManager,
 };
 use linera_storage::Store;
+use linera_views::views::ViewError;
 use rand::prelude::SliceRandom;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -83,7 +84,7 @@ pub struct LocalNodeClient<S>(Arc<Mutex<LocalNode<S>>>);
 impl<S> ValidatorNode for LocalNodeClient<S>
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    ViewError: From<S::ContextError>,
 {
     async fn handle_block_proposal(
         &mut self,
@@ -145,7 +146,7 @@ where
 impl<S> LocalNodeClient<S>
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    ViewError: From<S::ContextError>,
 {
     pub(crate) async fn stage_block_execution(
         &self,

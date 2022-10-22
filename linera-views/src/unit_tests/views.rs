@@ -3,7 +3,7 @@ use crate::{
     memory::MemoryContext,
     rocksdb::RocksdbContext,
     test_utils::LocalStackTestContext,
-    views::{Context, QueueOperations, QueueView, View},
+    views::{Context, QueueOperations, QueueView, View, ViewError},
 };
 use async_trait::async_trait;
 use std::{
@@ -39,7 +39,7 @@ pub enum Operation {
 async fn run_test_queue_operations_test_cases<C>(mut contexts: C) -> Result<(), anyhow::Error>
 where
     C: TestContextFactory,
-    <C::Context as Context>::Error: 'static,
+    ViewError: From<<C::Context as Context>::Error>,
 {
     use self::Operation::*;
 
@@ -110,7 +110,7 @@ async fn run_test_queue_operations<C>(
 ) -> Result<(), anyhow::Error>
 where
     C: QueueOperations<usize> + Clone + Send + Sync + 'static,
-    C::Error: 'static,
+    ViewError: From<C::Error>,
 {
     let mut expected_state = VecDeque::new();
     let mut queue = QueueView::load(context.clone()).await?;
@@ -148,7 +148,7 @@ async fn check_queue_state<C>(
 ) -> Result<(), anyhow::Error>
 where
     C: QueueOperations<usize> + Clone + Send + Sync,
-    C::Error: 'static,
+    ViewError: From<C::Error>,
 {
     let count = expected_state.len();
 

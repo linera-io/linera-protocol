@@ -7,7 +7,7 @@
 use anyhow::{anyhow, ensure};
 use async_trait::async_trait;
 use futures::future::join_all;
-use linera_base::{crypto::KeyPair, error::Error, messages::ValidatorName};
+use linera_base::{crypto::KeyPair, messages::ValidatorName};
 use linera_core::worker::WorkerState;
 use linera_service::{
     config::{
@@ -19,6 +19,7 @@ use linera_service::{
     transport,
 };
 use linera_storage::Store;
+use linera_views::views::ViewError;
 use log::{error, info};
 use std::{
     path::{Path, PathBuf},
@@ -78,7 +79,7 @@ impl ServerContext {
 impl<S> Runnable<S> for ServerContext
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    ViewError: From<S::ContextError>,
 {
     type Output = ();
 

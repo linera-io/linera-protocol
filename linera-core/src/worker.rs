@@ -15,7 +15,7 @@ use linera_chain::{
     ChainManagerOutcome, ChainStateView,
 };
 use linera_storage::Store;
-use linera_views::views::{LogView, View};
+use linera_views::views::{LogView, View, ViewError};
 use std::{collections::VecDeque, sync::Arc};
 
 #[cfg(test)]
@@ -92,7 +92,7 @@ impl<Client> WorkerState<Client> {
 impl<Client> WorkerState<Client>
 where
     Client: Store + Clone + Send + Sync + 'static,
-    Error: From<Client::Error>,
+    ViewError: From<Client::ContextError>,
 {
     // NOTE: This only works for non-sharded workers!
     pub(crate) async fn fully_handle_certificate(
@@ -349,7 +349,7 @@ where
 impl<Client> ValidatorWorker for WorkerState<Client>
 where
     Client: Store + Clone + Send + Sync + 'static,
-    Error: From<Client::Error>,
+    ViewError: From<Client::ContextError>,
 {
     async fn handle_block_proposal(
         &mut self,

@@ -16,7 +16,7 @@ use linera_views::{
         Config, CreateTableError, DynamoDbContext, DynamoDbContextError, LocalStackError,
         TableName, TableStatus,
     },
-    views::{Context, MapView, View},
+    views::{Context, MapView, View, ViewError},
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -106,7 +106,7 @@ impl DynamoDbStore {
     /// Obtain a [`MapView`] of certificates.
     async fn certificates(
         &self,
-    ) -> Result<MapView<DynamoDbContext<()>, HashValue, Certificate>, DynamoDbContextError> {
+    ) -> Result<MapView<DynamoDbContext<()>, HashValue, Certificate>, ViewError> {
         MapView::load(self.context.clone_with_sub_scope(&BaseKey::Certificate, ())).await
     }
 }
@@ -124,12 +124,9 @@ enum BaseKey {
 #[async_trait]
 impl Store for DynamoDbStoreClient {
     type Context = DynamoDbContext<ChainRuntimeContext>;
-    type Error = DynamoDbContextError;
+    type ContextError = DynamoDbContextError;
 
-    async fn load_chain(
-        &self,
-        id: ChainId,
-    ) -> Result<ChainStateView<Self::Context>, DynamoDbContextError> {
+    async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError> {
         log::trace!("Acquiring lock on {:?}", id);
         let guard = self.0.guards.guard(id).await;
         let runtime_context = ChainRuntimeContext {
@@ -144,21 +141,16 @@ impl Store for DynamoDbStoreClient {
         ChainStateView::load(db_context).await
     }
 
-    async fn read_certificate(&self, hash: HashValue) -> Result<Certificate, DynamoDbContextError> {
+    async fn read_certificate(&self, hash: HashValue) -> Result<Certificate, ViewError> {
         self.0
             .certificates()
             .await?
             .get(&hash)
             .await?
-            .ok_or_else(|| {
-                DynamoDbContextError::NotFound(format!("certificate for hash {:?}", hash))
-            })
+            .ok_or_else(|| ViewError::NotFound(format!("certificate for hash {:?}", hash)))
     }
 
-    async fn write_certificate(
-        &self,
-        certificate: Certificate,
-    ) -> Result<(), DynamoDbContextError> {
+    async fn write_certificate(&self, certificate: Certificate) -> Result<(), ViewError> {
         let mut certificates = self.0.certificates().await?;
         certificates.insert(certificate.hash, certificate);
         let mut batch = self.0.context.create_batch();

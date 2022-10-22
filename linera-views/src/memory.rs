@@ -35,13 +35,21 @@ pub enum WriteOperation {
 pub struct Batch(Vec<WriteOperation>);
 
 trait WriteOperations {
-    fn write_key<V: Serialize>(&mut self, key: Vec<u8>, value: &V) -> Result<(), MemoryViewError>;
+    fn write_key<V: Serialize>(
+        &mut self,
+        key: Vec<u8>,
+        value: &V,
+    ) -> Result<(), MemoryContextError>;
 
     fn delete_key(&mut self, key: Vec<u8>);
 }
 
 impl WriteOperations for Batch {
-    fn write_key<V: Serialize>(&mut self, key: Vec<u8>, value: &V) -> Result<(), MemoryViewError> {
+    fn write_key<V: Serialize>(
+        &mut self,
+        key: Vec<u8>,
+        value: &V,
+    ) -> Result<(), MemoryContextError> {
         let bytes = bcs::to_bytes(value)?;
         self.0.push(WriteOperation::Put { key, value: bytes });
         Ok(())
@@ -70,7 +78,7 @@ impl<E> MemoryContext<E> {
     async fn read_key<V: DeserializeOwned>(
         &mut self,
         key: &Vec<u8>,
-    ) -> Result<Option<V>, MemoryViewError> {
+    ) -> Result<Option<V>, MemoryContextError> {
         let map = self.map.read().await;
         match map.get(key) {
             None => Ok(None),
@@ -81,7 +89,7 @@ impl<E> MemoryContext<E> {
     async fn find_keys_with_prefix(
         &mut self,
         key_prefix: &[u8],
-    ) -> Result<Vec<Vec<u8>>, MemoryViewError> {
+    ) -> Result<Vec<Vec<u8>>, MemoryContextError> {
         let map = self.map.read().await;
         let mut vals = Vec::new();
         for key in map.keys() {
@@ -100,15 +108,15 @@ where
 {
     type Batch = Batch;
     type Extra = E;
-    type Error = MemoryViewError;
+    type Error = MemoryContextError;
 
     fn extra(&self) -> &E {
         &self.extra
     }
 
-    async fn run_with_batch<F>(&self, builder: F) -> Result<(), Self::Error>
+    async fn run_with_batch<F>(&self, builder: F) -> Result<(), ViewError>
     where
-        F: FnOnce(&mut Self::Batch) -> futures::future::BoxFuture<Result<(), Self::Error>>
+        F: FnOnce(&mut Self::Batch) -> futures::future::BoxFuture<Result<(), ViewError>>
             + Send
             + Sync,
     {
@@ -121,7 +129,7 @@ where
         Batch(Vec::new())
     }
 
-    async fn write_batch(&self, batch: Self::Batch) -> Result<(), Self::Error> {
+    async fn write_batch(&self, batch: Self::Batch) -> Result<(), ViewError> {
         let mut map = self.map.write().await;
         for ent in batch.0 {
             match ent {
@@ -157,7 +165,7 @@ where
     T: Serialize + DeserializeOwned + Default + Clone + Send + Sync + 'static,
     E: Clone + Send + Sync,
 {
-    async fn get(&mut self) -> Result<T, MemoryViewError> {
+    async fn get(&mut self) -> Result<T, MemoryContextError> {
         let value = self
             .read_key(&self.base_key.clone())
             .await?
@@ -165,11 +173,11 @@ where
         Ok(value)
     }
 
-    fn set(&mut self, batch: &mut Self::Batch, value: &T) -> Result<(), MemoryViewError> {
+    fn set(&mut self, batch: &mut Self::Batch, value: &T) -> Result<(), MemoryContextError> {
         batch.write_key(self.base_key.clone(), value)
     }
 
-    fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), MemoryViewError> {
+    fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), MemoryContextError> {
         batch.delete_key(self.base_key.clone());
         Ok(())
     }
@@ -181,7 +189,7 @@ where
     T: Serialize + DeserializeOwned + Clone + Send + Sync + 'static,
     E: Clone + Send + Sync,
 {
-    async fn count(&mut self) -> Result<usize, MemoryViewError> {
+    async fn count(&mut self) -> Result<usize, MemoryContextError> {
         let count = self
             .read_key(&self.base_key.clone())
             .await?
@@ -189,11 +197,11 @@ where
         Ok(count)
     }
 
-    async fn get(&mut self, index: usize) -> Result<Option<T>, MemoryViewError> {
+    async fn get(&mut self, index: usize) -> Result<Option<T>, MemoryContextError> {
         self.read_key(&self.derive_key(&index)).await
     }
 
-    async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, MemoryViewError> {
+    async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, MemoryContextError> {
         let mut items = Vec::with_capacity(range.len());
         for index in range {
             let item = match self.read_key(&self.derive_key(&index)).await? {
@@ -210,7 +218,7 @@ where
         stored_count: usize,
         batch: &mut Self::Batch,
         values: Vec<T>,
-    ) -> Result<(), MemoryViewError> {
+    ) -> Result<(), MemoryContextError> {
         if values.is_empty() {
             return Ok(());
         }
@@ -227,7 +235,7 @@ where
         &mut self,
         stored_count: usize,
         batch: &mut Self::Batch,
-    ) -> Result<(), MemoryViewError> {
+    ) -> Result<(), MemoryContextError> {
         batch.delete_key(self.base_key.clone());
         for index in 0..stored_count {
             batch.delete_key(self.derive_key(&index));
@@ -298,7 +306,7 @@ where
         &mut self,
         stored_indices: Range<usize>,
         batch: &mut Self::Batch,
-    ) -> Result<(), MemoryViewError> {
+    ) -> Result<(), MemoryContextError> {
         batch.delete_key(self.base_key.clone());
         for index in stored_indices {
             batch.delete_key(self.derive_key(&index));
@@ -314,7 +322,7 @@ where
     V: Clone + Send + Sync + Serialize + DeserializeOwned + 'static,
     E: Clone + Send + Sync,
 {
-    async fn get(&mut self, index: &I) -> Result<Option<V>, MemoryViewError> {
+    async fn get(&mut self, index: &I) -> Result<Option<V>, MemoryContextError> {
         Ok(self.read_key(&self.derive_key(index)).await?)
     }
 
@@ -323,17 +331,17 @@ where
         batch: &mut Self::Batch,
         index: I,
         value: V,
-    ) -> Result<(), MemoryViewError> {
+    ) -> Result<(), MemoryContextError> {
         batch.write_key(self.derive_key(&index), &value)?;
         Ok(())
     }
 
-    fn remove(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), MemoryViewError> {
+    fn remove(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), MemoryContextError> {
         batch.delete_key(self.derive_key(&index));
         Ok(())
     }
 
-    async fn indices(&mut self) -> Result<Vec<I>, MemoryViewError> {
+    async fn indices(&mut self) -> Result<Vec<I>, MemoryContextError> {
         let len = self.base_key.len();
         let mut keys = Vec::new();
         for key in self.find_keys_with_prefix(&self.base_key.clone()).await? {
@@ -343,7 +351,7 @@ where
     }
 
     #[allow(clippy::unit_arg)]
-    async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), MemoryViewError>
+    async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), MemoryContextError>
     where
         F: FnMut(I) + Send,
     {
@@ -355,7 +363,7 @@ where
         Ok(())
     }
 
-    async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), MemoryViewError> {
+    async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), MemoryContextError> {
         for key in self.find_keys_with_prefix(&self.base_key.clone()).await? {
             batch.delete_key(key);
         }
@@ -439,26 +447,14 @@ where
 }
 
 #[derive(Error, Debug)]
-pub enum MemoryViewError {
-    #[error("View error: {0}")]
-    ViewError(#[from] ViewError),
-
-    #[error("IO error: {0}")]
-    Io(#[from] std::io::Error),
-
-    #[error("Failed to lock collection entry: {0}")]
-    TryLockError(#[from] tokio::sync::TryLockError),
-
+pub enum MemoryContextError {
     #[error("BCS error: {0}")]
     Bcs(#[from] bcs::Error),
-
-    #[error("Entry does not exist in memory: {0}")]
-    NotFound(String),
 }
 
-impl From<MemoryViewError> for linera_base::error::Error {
-    fn from(error: MemoryViewError) -> Self {
-        Self::StorageError {
+impl From<MemoryContextError> for ViewError {
+    fn from(error: MemoryContextError) -> Self {
+        Self::ContextError {
             backend: "memory".to_string(),
             error: error.to_string(),
         }

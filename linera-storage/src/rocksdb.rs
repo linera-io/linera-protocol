@@ -11,8 +11,8 @@ use linera_base::{
 use linera_chain::messages::Certificate;
 use linera_execution::UserApplicationCode;
 use linera_views::{
-    rocksdb::{KeyValueOperations, RocksdbContext, RocksdbViewError, DB},
-    views::View,
+    rocksdb::{KeyValueOperations, RocksdbContext, RocksdbContextError, DB},
+    views::{View, ViewError},
 };
 use serde::{Deserialize, Serialize};
 use std::{path::PathBuf, sync::Arc};
@@ -58,12 +58,9 @@ enum BaseKey {
 #[async_trait]
 impl Store for RocksdbStoreClient {
     type Context = RocksdbContext<ChainRuntimeContext>;
-    type Error = RocksdbViewError;
+    type ContextError = RocksdbContextError;
 
-    async fn load_chain(
-        &self,
-        id: ChainId,
-    ) -> Result<ChainStateView<Self::Context>, RocksdbViewError> {
+    async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError> {
         let db = self.0.db.clone();
         let base_key = bcs::to_bytes(&BaseKey::ChainState(id))?;
         log::trace!("Acquiring lock on {:?}", id);
@@ -77,16 +74,20 @@ impl Store for RocksdbStoreClient {
         ChainStateView::load(db_context).await
     }
 
-    async fn read_certificate(&self, hash: HashValue) -> Result<Certificate, RocksdbViewError> {
+    async fn read_certificate(&self, hash: HashValue) -> Result<Certificate, ViewError> {
         let key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
-        let value = self.0.db.read_key(&key).await?.ok_or_else(|| {
-            RocksdbViewError::NotFound(format!("certificate for hash {:?}", hash))
-        })?;
+        let value = self
+            .0
+            .db
+            .read_key(&key)
+            .await?
+            .ok_or_else(|| ViewError::NotFound(format!("certificate for hash {:?}", hash)))?;
         Ok(value)
     }
 
-    async fn write_certificate(&self, certificate: Certificate) -> Result<(), RocksdbViewError> {
+    async fn write_certificate(&self, certificate: Certificate) -> Result<(), ViewError> {
         let key = bcs::to_bytes(&BaseKey::Certificate(certificate.hash))?;
-        self.0.db.write_key(&key, &certificate).await
+        self.0.db.write_key(&key, &certificate).await?;
+        Ok(())
     }
 }

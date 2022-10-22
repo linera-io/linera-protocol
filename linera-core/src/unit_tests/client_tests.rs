@@ -16,7 +16,7 @@ use linera_execution::{
     Operation,
 };
 use linera_storage::{DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient, Store};
-use linera_views::test_utils::LocalStackTestContext;
+use linera_views::{test_utils::LocalStackTestContext, views::ViewError};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     str::FromStr,
@@ -38,7 +38,7 @@ struct LocalValidatorClient<S>(Arc<Mutex<LocalValidator<S>>>);
 impl<S> ValidatorNode for LocalValidatorClient<S>
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    ViewError: From<S::ContextError>,
 {
     async fn handle_block_proposal(
         &mut self,
@@ -97,7 +97,7 @@ struct NodeProvider<S>(BTreeMap<ValidatorName, LocalValidatorClient<S>>);
 impl<S> ValidatorNodeProvider for NodeProvider<S>
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    ViewError: From<S::ContextError>,
 {
     type Node = LocalValidatorClient<S>;
 
@@ -160,7 +160,7 @@ impl GenesisStoreBuilder {
     async fn build<S>(&self, store: S, initial_committee: Committee, admin_id: ChainId) -> S
     where
         S: Store + Clone + Send + Sync + 'static,
-        Error: From<S::Error>,
+        ViewError: From<S::ContextError>,
     {
         for account in &self.accounts {
             store
@@ -181,7 +181,7 @@ impl GenesisStoreBuilder {
 impl<B> TestBuilder<B>
 where
     B: StoreBuilder,
-    Error: From<<B::Store as Store>::Error>,
+    ViewError: From<<B::Store as Store>::ContextError>,
 {
     async fn new(
         mut store_builder: B,
@@ -424,7 +424,7 @@ async fn test_dynamo_db_initiating_valid_transfer() -> Result<(), anyhow::Error>
 async fn run_test_initiating_valid_transfer<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
-    Error: From<<B::Store as Store>::Error>,
+    ViewError: From<<B::Store as Store>::ContextError>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut sender = builder
@@ -472,7 +472,7 @@ async fn test_dynamo_db_rotate_key_pair() -> Result<(), anyhow::Error> {
 async fn run_test_rotate_key_pair<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
-    Error: From<<B::Store as Store>::Error>,
+    ViewError: From<<B::Store as Store>::ContextError>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut sender = builder
@@ -525,7 +525,7 @@ async fn test_dynamo_db_transfer_ownership() -> Result<(), anyhow::Error> {
 async fn run_test_transfer_ownership<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
-    Error: From<<B::Store as Store>::Error>,
+    ViewError: From<<B::Store as Store>::ContextError>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut sender = builder
@@ -579,7 +579,7 @@ async fn test_dynamo_db_share_ownership() -> Result<(), anyhow::Error> {
 async fn run_test_share_ownership<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
-    Error: From<<B::Store as Store>::Error>,
+    ViewError: From<<B::Store as Store>::ContextError>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut sender = builder
@@ -654,7 +654,7 @@ async fn test_dynamo_db_open_chain_then_close_it() -> Result<(), anyhow::Error> 
 async fn run_test_open_chain_then_close_it<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
-    Error: From<<B::Store as Store>::Error>,
+    ViewError: From<<B::Store as Store>::ContextError>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     // New chains use the admin chain to verify their creation certificate.
@@ -705,7 +705,7 @@ async fn test_dynamo_db_transfer_then_open_chain() -> Result<(), anyhow::Error> 
 async fn run_test_transfer_then_open_chain<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
-    Error: From<<B::Store as Store>::Error>,
+    ViewError: From<<B::Store as Store>::ContextError>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     // New chains use the admin chain to verify their creation certificate.
@@ -780,7 +780,7 @@ async fn test_dynamo_db_open_chain_then_transfer() -> Result<(), anyhow::Error> 
 async fn run_test_open_chain_then_transfer<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
-    Error: From<<B::Store as Store>::Error>,
+    ViewError: From<<B::Store as Store>::ContextError>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     // New chains use the admin chain to verify their creation certificate.
@@ -845,7 +845,7 @@ async fn test_dynamo_db_close_chain() -> Result<(), anyhow::Error> {
 async fn run_test_close_chain<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
-    Error: From<<B::Store as Store>::Error>,
+    ViewError: From<<B::Store as Store>::ContextError>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut sender = builder
@@ -903,7 +903,7 @@ async fn run_test_initiating_valid_transfer_too_many_faults<B>(
 ) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
-    Error: From<<B::Store as Store>::Error>,
+    ViewError: From<<B::Store as Store>::ContextError>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 2).await?;
     let mut sender = builder
@@ -943,7 +943,7 @@ async fn test_dynamo_db_bidirectional_transfer() -> Result<(), anyhow::Error> {
 async fn run_test_bidirectional_transfer<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
-    Error: From<<B::Store as Store>::Error>,
+    ViewError: From<<B::Store as Store>::ContextError>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut client1 = builder
@@ -1016,7 +1016,7 @@ async fn test_dynamo_db_receiving_unconfirmed_transfer() -> Result<(), anyhow::E
 async fn run_test_receiving_unconfirmed_transfer<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
-    Error: From<<B::Store as Store>::Error>,
+    ViewError: From<<B::Store as Store>::ContextError>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut client1 = builder
@@ -1075,7 +1075,7 @@ async fn run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances<B>
 ) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
-    Error: From<<B::Store as Store>::Error>,
+    ViewError: From<<B::Store as Store>::ContextError>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut client1 = builder
@@ -1172,7 +1172,7 @@ async fn test_dynamo_db_change_voting_rights() -> Result<(), anyhow::Error> {
 async fn run_test_change_voting_rights<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
-    Error: From<<B::Store as Store>::Error>,
+    ViewError: From<<B::Store as Store>::ContextError>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut admin = builder

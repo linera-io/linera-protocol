@@ -188,8 +188,9 @@ pub enum Error {
     #[error("Missing certificate: {hash:?}")]
     MissingCertificate { hash: HashValue },
 
-    #[error("Storage error in {backend}: {error}")]
-    StorageError { backend: String, error: String },
+    // TODO(#148): Remove this.
+    #[error("Error in view operation: {error}")]
+    ViewError { error: String },
 
     // Execution
     #[error("Unknown application")]
