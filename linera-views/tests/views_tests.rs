@@ -331,7 +331,7 @@ where
             view.do_flush().await.unwrap();
         }
         let hash = view.hash().await.unwrap();
-        view.write_commit().await.unwrap();
+        view.do_flush().await.unwrap();
         hash
     };
     {
@@ -389,7 +389,7 @@ where
         );
         view.collection.remove_entry("hola".to_string());
         assert_ne!(view.hash().await.unwrap(), stored_hash);
-        view.write_commit().await.unwrap();
+        view.do_flush().await.unwrap();
     }
     {
         let mut view = store.load(1).await.unwrap();
@@ -507,7 +507,7 @@ where
             .await
             .unwrap();
         subview.push(17);
-        view.write_commit().await.unwrap();
+        view.do_flush().await.unwrap();
     }
     {
         let mut view = store.load(1).await.unwrap();
@@ -520,7 +520,7 @@ where
             .unwrap();
         subview.push(16);
         view.rollback();
-        view.write_commit().await.unwrap();
+        view.do_flush().await.unwrap();
     }
     {
         let mut view = store.load(1).await.unwrap();
@@ -528,7 +528,7 @@ where
         view.map.reset_to_default();
         view.collection.reset_to_default();
         view.rollback();
-        view.write_commit().await.unwrap();
+        view.do_flush().await.unwrap();
     }
     {
         let mut view = store.load(1).await.unwrap();

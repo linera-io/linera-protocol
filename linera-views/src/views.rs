@@ -73,8 +73,6 @@ pub trait View<C: Context>: Sized {
     /// implementations are expected to accumulate the desired changes in the `batch`
     /// variable first. If the view is dropped without calling `commit`, staged changes
     /// are simply lost.
-    async fn commit(self, batch: &mut C::Batch) -> Result<(), C::Error>;
-
     /// A more efficient alternative to calling [`View::commit`] immediately followed by a [`View::load`].
     async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error>;
 
@@ -143,10 +141,6 @@ where
         self.view.rollback();
     }
 
-    async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        self.view.commit(batch).await
-    }
-
     async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         self.view.flush(batch).await
     }
@@ -202,13 +196,6 @@ where
 
     fn rollback(&mut self) {
         self.update = None
-    }
-
-    async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        if let Some(value) = self.update {
-            self.context.set(batch, &value)?;
-        }
-        Ok(())
     }
 
     async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
@@ -329,10 +316,6 @@ where
     fn rollback(&mut self) {
         self.was_reset_to_default = false;
         self.new_values.clear();
-    }
-
-    async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        self.flush(batch).await
     }
 
     async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
@@ -499,10 +482,6 @@ where
     fn rollback(&mut self) {
         self.was_reset_to_default = false;
         self.updates.clear();
-    }
-
-    async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        self.flush(batch).await
     }
 
     async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
@@ -690,10 +669,6 @@ where
     fn rollback(&mut self) {
         self.front_delete_count = 0;
         self.new_back_values.clear();
-    }
-
-    async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        self.flush(batch).await
     }
 
     async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
@@ -893,25 +868,21 @@ where
         self.updates.clear();
     }
 
-    async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        self.flush(batch).await
-    }
-
     async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         if self.was_reset_to_default {
             self.was_reset_to_default = false;
             self.delete_entries(batch).await?;
             for (index, update) in mem::take(&mut self.updates) {
-                if let Some(view) = update {
-                    view.commit(batch).await?;
+                if let Some(mut view) = update {
+                    view.flush(batch).await?;
                     self.context.add_index(batch, index)?;
                 }
             }
         } else {
             for (index, update) in mem::take(&mut self.updates) {
                 match update {
-                    Some(view) => {
-                        view.commit(batch).await?;
+                    Some(mut view) => {
+                        view.flush(batch).await?;
                         self.context.add_index(batch, index)?;
                     }
                     None => {
@@ -1076,20 +1047,16 @@ where
         self.updates.clear();
     }
 
-    async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        self.flush(batch).await
-    }
-
     async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         if self.was_reset_to_default {
             self.was_reset_to_default = false;
             self.delete_entries(batch).await?;
             for (index, update) in mem::take(&mut self.updates) {
                 if let Some(view) = update {
-                    let view = Arc::try_unwrap(view)
+                    let mut view = Arc::try_unwrap(view)
                         .map_err(|_| ViewError::CannotAcquireCollectionEntry)?
                         .into_inner();
-                    view.commit(batch).await?;
+                    view.flush(batch).await?;
                     self.context.add_index(batch, index)?;
                 }
             }
@@ -1097,10 +1064,10 @@ where
             for (index, update) in mem::take(&mut self.updates) {
                 match update {
                     Some(view) => {
-                        let view = Arc::try_unwrap(view)
+                        let mut view = Arc::try_unwrap(view)
                             .map_err(|_| ViewError::CannotAcquireCollectionEntry)?
                             .into_inner();
-                        view.commit(batch).await?;
+                        view.flush(batch).await?;
                         self.context.add_index(batch, index)?;
                     }
                     None => {

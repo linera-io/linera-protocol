@@ -33,13 +33,6 @@ where
         $( self.$field.rollback(); )*
     }
 
-    async fn commit(self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        use $crate::views::View;
-
-        $( self.$field.commit(batch).await?; )*
-        Ok(())
-    }
-
     async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         use $crate::views::View;
 
@@ -90,17 +83,6 @@ where
         + $crate::views::ScopedOperations
         $( + $ops_trait )*
 {
-    pub async fn write_commit(self) -> Result<(), C::Error> {
-        use $crate::views::View;
-
-        let context = self.context().clone();
-        context.run_with_batch(move |batch| {
-            Box::pin(async move {
-                $( self.$field.commit(batch).await?; )*
-                Ok(())
-            })
-        }).await
-    }
 
     pub async fn do_flush(&mut self) -> Result<(), C::Error> {
         use $crate::views::View;

@@ -129,9 +129,9 @@ where
             }
             Operation::CommitAndReload => {
                 let context = context.clone();
-                context
-                    .run_with_batch(|batch| Box::pin(async { queue.commit(batch).await }))
-                    .await?;
+                let mut batch = context.create_batch();
+                queue.flush(&mut batch).await?;
+                context.write_batch(batch).await?;
                 queue = QueueView::load(context).await?;
             }
         }
