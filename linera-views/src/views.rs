@@ -179,7 +179,7 @@ pub trait RegisterOperations<T>: Context {
 impl<C, T> View<C> for RegisterView<C, T>
 where
     C: RegisterOperations<T> + Send + Sync,
-    T: Clone + Send + Sync + Default,
+    T: Send + Sync + Default,
 {
     fn context(&self) -> &C {
         &self.context
