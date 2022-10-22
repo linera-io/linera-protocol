@@ -165,11 +165,11 @@ where
         Ok(value)
     }
 
-    async fn set(&mut self, batch: &mut Self::Batch, value: &T) -> Result<(), MemoryViewError> {
+    fn set(&mut self, batch: &mut Self::Batch, value: &T) -> Result<(), MemoryViewError> {
         batch.write_key(self.base_key.clone(), value)
     }
 
-    async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), MemoryViewError> {
+    fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), MemoryViewError> {
         batch.delete_key(self.base_key.clone());
         Ok(())
     }
@@ -205,7 +205,7 @@ where
         Ok(items)
     }
 
-    async fn append(
+    fn append(
         &mut self,
         stored_count: usize,
         batch: &mut Self::Batch,

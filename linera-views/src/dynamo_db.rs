@@ -458,12 +458,12 @@ where
         Ok(value)
     }
 
-    async fn set(&mut self, batch: &mut Self::Batch, value: &T) -> Result<(), Self::Error> {
+    fn set(&mut self, batch: &mut Self::Batch, value: &T) -> Result<(), Self::Error> {
         self.put_item_batch(batch, &(), value);
         Ok(())
     }
 
-    async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error> {
+    fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error> {
         self.remove_item_batch(batch, &());
         Ok(())
     }
@@ -496,7 +496,7 @@ where
         Ok(items)
     }
 
-    async fn append(
+    fn append(
         &mut self,
         stored_count: usize,
         batch: &mut Self::Batch,

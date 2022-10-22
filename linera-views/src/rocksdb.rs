@@ -250,12 +250,12 @@ where
         Ok(value)
     }
 
-    async fn set(&mut self, batch: &mut Self::Batch, value: &T) -> Result<(), RocksdbViewError> {
+    fn set(&mut self, batch: &mut Self::Batch, value: &T) -> Result<(), RocksdbViewError> {
         batch.write_key(self.base_key.clone(), value)?;
         Ok(())
     }
 
-    async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error> {
+    fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error> {
         batch.delete_key(self.base_key.clone());
         Ok(())
     }
@@ -291,7 +291,7 @@ where
         Ok(values)
     }
 
-    async fn append(
+    fn append(
         &mut self,
         stored_count: usize,
         batch: &mut Self::Batch,

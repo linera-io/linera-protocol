@@ -175,10 +175,10 @@ pub trait RegisterOperations<T>: Context {
     async fn get(&mut self) -> Result<T, Self::Error>;
 
     /// Set the value in the register. Crash-resistant implementations should only write to `batch`.
-    async fn set(&mut self, batch: &mut Self::Batch, value: &T) -> Result<(), Self::Error>;
+    fn set(&mut self, batch: &mut Self::Batch, value: &T) -> Result<(), Self::Error>;
 
     /// Delete the register. Crash-resistant implementations should only write to `batch`.
-    async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error>;
+    fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error>;
 }
 
 #[async_trait]
@@ -206,21 +206,21 @@ where
 
     async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         if let Some(value) = self.update {
-            self.context.set(batch, &value).await?;
+            self.context.set(batch, &value)?;
         }
         Ok(())
     }
 
     async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         if let Some(value) = self.update.take() {
-            self.context.set(batch, &value).await?;
+            self.context.set(batch, &value)?;
             self.stored_value = value;
         }
         Ok(())
     }
 
     async fn delete(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        self.context.delete(batch).await
+        self.context.delete(batch)
     }
 
     fn reset_to_default(&mut self) {
@@ -289,7 +289,7 @@ pub trait LogOperations<T>: Context {
     async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error>;
 
     /// Append values to the logs. Crash-resistant implementations should only write to `batch`.
-    async fn append(
+    fn append(
         &mut self,
         stored_count: usize,
         batch: &mut Self::Batch,
@@ -346,8 +346,7 @@ where
         if !self.new_values.is_empty() {
             let count = self.new_values.len();
             self.context
-                .append(self.stored_count, batch, mem::take(&mut self.new_values))
-                .await?;
+                .append(self.stored_count, batch, mem::take(&mut self.new_values))?;
             self.stored_count += count;
         }
         Ok(())
