@@ -25,6 +25,7 @@ use linera_execution::{
     Operation,
 };
 use linera_storage::Store;
+use linera_views::views::ViewError;
 use std::{
     collections::{BTreeMap, HashMap},
     time::Duration,
@@ -221,7 +222,7 @@ where
     P: ValidatorNodeProvider,
     P::Node: ValidatorNode + Send + Sync + 'static + Clone,
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    ViewError: From<S::ContextError>,
 {
     /// Obtain the basic `ChainInfo` data for the local chain.
     async fn chain_info(&mut self) -> Result<ChainInfo, NodeError> {
@@ -375,7 +376,7 @@ where
     P: ValidatorNodeProvider + Send + 'static,
     P::Node: ValidatorNode + Send + Sync + 'static + Clone,
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    ViewError: From<S::ContextError>,
 {
     /// Prepare the chain for the next operation.
     async fn prepare_chain(&mut self) -> Result<(), NodeError> {
@@ -858,7 +859,7 @@ where
     P: ValidatorNodeProvider + Send + 'static,
     P::Node: ValidatorNode + Send + Sync + 'static + Clone,
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    ViewError: From<S::ContextError>,
 {
     async fn local_balance(&mut self) -> Result<Balance> {
         ensure!(

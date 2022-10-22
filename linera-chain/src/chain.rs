@@ -19,7 +19,7 @@ use linera_views::{
     impl_view,
     views::{
         CollectionOperations, CollectionView, LogOperations, LogView, MapOperations, MapView,
-        QueueOperations, QueueView, RegisterOperations, RegisterView, ScopedView,
+        QueueOperations, QueueView, RegisterOperations, RegisterView, ScopedView, ViewError,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -117,7 +117,7 @@ impl_view!(
 impl<C> OutboxStateView<C>
 where
     C: OutboxStateViewContext,
-    Error: From<C::Error>,
+    ViewError: From<C::Error>,
 {
     pub async fn block_heights(&mut self) -> Result<Vec<BlockHeight>, Error> {
         let count = self.queue.count();
@@ -178,8 +178,8 @@ pub struct Event {
 impl<C> ChainStateView<C>
 where
     C: ChainStateViewContext,
+    ViewError: From<C::Error>,
     C::Extra: ExecutionRuntimeContext,
-    Error: From<C::Error>,
 {
     pub fn chain_id(&self) -> ChainId {
         self.execution_state.system.description.extra().chain_id()
@@ -191,7 +191,7 @@ where
         origin: &Origin,
         recipient: ChainId,
         height: BlockHeight,
-    ) -> Result<bool, C::Error> {
+    ) -> Result<bool, ViewError> {
         let outbox = outboxes.load_entry(recipient).await?;
         if outbox.queue.count() == 0 {
             log::warn!(
@@ -214,7 +214,7 @@ where
         application_id: ApplicationId,
         recipient: ChainId,
         height: BlockHeight,
-    ) -> Result<bool, C::Error> {
+    ) -> Result<bool, ViewError> {
         let origin = Origin {
             chain_id: self.chain_id(),
             medium: Medium::Direct,
@@ -236,7 +236,7 @@ where
         application_id: ApplicationId,
         recipient: ChainId,
         height: BlockHeight,
-    ) -> Result<bool, C::Error> {
+    ) -> Result<bool, ViewError> {
         let origin = Origin {
             chain_id: self.chain_id(),
             medium: Medium::Channel(name.to_string()),
@@ -577,7 +577,7 @@ where
         effects: &mut Vec<(ApplicationId, Destination, Effect)>,
         height: BlockHeight,
         results: Vec<ExecutionResult>,
-    ) -> Result<(), C::Error> {
+    ) -> Result<(), ViewError> {
         for result in results {
             match result {
                 ExecutionResult::System(raw) => {
@@ -609,7 +609,7 @@ where
         effects: &mut Vec<(ApplicationId, Destination, Effect)>,
         height: BlockHeight,
         application: RawExecutionResult<E>,
-    ) -> Result<(), C::Error> {
+    ) -> Result<(), ViewError> {
         // Record the effects of the execution. Effects are understood within an
         // application.
         let mut recipients = HashSet::new();
@@ -665,9 +665,10 @@ where
 impl<C> OutboxStateView<C>
 where
     C: QueueOperations<BlockHeight> + Send + Sync,
+    ViewError: From<C::Error>,
 {
     /// Schedule a message at the given height if we haven't already.
-    pub async fn schedule_message(&mut self, height: BlockHeight) -> Result<(), C::Error> {
+    pub async fn schedule_message(&mut self, height: BlockHeight) -> Result<(), ViewError> {
         let last_value = self.queue.back().await?;
         if last_value != Some(height) {
             assert!(
@@ -685,7 +686,7 @@ where
     pub async fn mark_messages_as_received(
         &mut self,
         height: BlockHeight,
-    ) -> Result<bool, C::Error> {
+    ) -> Result<bool, ViewError> {
         let mut updated = false;
         while let Some(h) = self.queue.front().await? {
             if h > height {

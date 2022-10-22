@@ -3,16 +3,16 @@
 
 use async_trait::async_trait;
 use linera_views::{
-    dynamo_db::{DynamoDbContext, DynamoDbContextError},
+    dynamo_db::DynamoDbContext,
     hash::{HashView, Hasher, HashingContext},
     impl_view,
-    memory::{Batch, MemoryContext, MemoryStoreMap, MemoryViewError},
-    rocksdb::{KeyValueOperations, RocksdbContext, RocksdbViewError, DB},
+    memory::{Batch, MemoryContext, MemoryStoreMap},
+    rocksdb::{KeyValueOperations, RocksdbContext, DB},
     test_utils::LocalStackTestContext,
     views::{
         CollectionOperations, CollectionView, Context, LogOperations, LogView, MapOperations,
         MapView, QueueOperations, QueueView, ReentrantCollectionView, RegisterOperations,
-        RegisterView, ScopedView, View,
+        RegisterView, ScopedView, View, ViewError,
     },
 };
 use std::{
@@ -51,10 +51,7 @@ impl_view!(StateView { x1, x2, log, map, queue, collection, collection2, collect
 pub trait StateStore {
     type Context: StateViewContext<Extra = usize>;
 
-    async fn load(
-        &mut self,
-        id: usize,
-    ) -> Result<StateView<Self::Context>, <Self::Context as Context>::Error>;
+    async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError>;
 }
 
 #[derive(Default)]
@@ -66,7 +63,7 @@ pub struct MemoryTestStore {
 impl StateStore for MemoryTestStore {
     type Context = MemoryContext<usize>;
 
-    async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, MemoryViewError> {
+    async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
         let state = self
             .states
             .entry(id)
@@ -95,7 +92,7 @@ impl RocksdbTestStore {
 impl StateStore for RocksdbTestStore {
     type Context = RocksdbContext<usize>;
 
-    async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, RocksdbViewError> {
+    async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
         self.accessed_chains.insert(id);
         log::trace!("Acquiring lock on {:?}", id);
         let context = RocksdbContext::new(self.db.clone(), bcs::to_bytes(&id)?, id);
@@ -121,7 +118,7 @@ impl DynamoDbTestStore {
 impl StateStore for DynamoDbTestStore {
     type Context = DynamoDbContext<usize>;
 
-    async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, DynamoDbContextError> {
+    async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
         self.accessed_chains.insert(id);
         log::trace!("Acquiring lock on {:?}", id);
         let (context, _) = DynamoDbContext::from_config(
@@ -200,6 +197,7 @@ async fn test_store<S>(
 ) -> <<S::Context as HashingContext>::Hasher as Hasher>::Output
 where
     S: StateStore,
+    ViewError: From<<<S as StateStore>::Context as Context>::Error>,
 {
     let default_hash = {
         let mut view = store.load(1).await.unwrap();
@@ -496,6 +494,7 @@ async fn test_views_in_dynamo_db() -> Result<(), anyhow::Error> {
 async fn test_store_rollback_kernel<S>(store: &mut S)
 where
     S: StateStore,
+    ViewError: From<<<S as StateStore>::Context as Context>::Error>,
 {
     {
         let mut view = store.load(1).await.unwrap();

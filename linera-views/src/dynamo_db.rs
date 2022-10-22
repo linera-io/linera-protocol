@@ -20,7 +20,7 @@ use aws_sdk_dynamodb::{
 };
 use linera_base::ensure;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{collections::HashMap, io, ops::Range, str::FromStr};
+use std::{collections::HashMap, ops::Range, str::FromStr};
 use thiserror::Error;
 
 /// The configuration to connect to DynamoDB.
@@ -406,9 +406,9 @@ where
         &self.extra
     }
 
-    async fn run_with_batch<F>(&self, builder: F) -> Result<(), Self::Error>
+    async fn run_with_batch<F>(&self, builder: F) -> Result<(), ViewError>
     where
-        F: FnOnce(&mut Self::Batch) -> futures::future::BoxFuture<Result<(), Self::Error>>
+        F: FnOnce(&mut Self::Batch) -> futures::future::BoxFuture<Result<(), ViewError>>
             + Send
             + Sync,
     {
@@ -421,7 +421,7 @@ where
         Batch(Vec::new())
     }
 
-    async fn write_batch(&self, batch: Self::Batch) -> Result<(), Self::Error> {
+    async fn write_batch(&self, batch: Self::Batch) -> Result<(), ViewError> {
         for operation in batch.0 {
             match operation {
                 WriteOperation::Delete { key } => self.process_delete(key).await?,
@@ -783,15 +783,6 @@ pub enum DynamoDbContextError {
     #[error("Failed to deserialize value")]
     ValueDeserialization(#[source] bcs::Error),
 
-    #[error("IO error")]
-    Io(#[from] io::Error),
-
-    #[error("Failed to lock collection entry: {0}")]
-    TryLockError(#[from] tokio::sync::TryLockError),
-
-    #[error(transparent)]
-    View(#[from] ViewError),
-
     // TODO: Remove the following variants
     #[error("Unknown BCS serialization/deserialization error")]
     UnknownBcsError(#[from] bcs::Error),
@@ -855,9 +846,9 @@ impl DynamoDbContextError {
     }
 }
 
-impl From<DynamoDbContextError> for linera_base::error::Error {
+impl From<DynamoDbContextError> for crate::views::ViewError {
     fn from(error: DynamoDbContextError) -> Self {
-        Self::StorageError {
+        Self::ContextError {
             backend: "DynamoDB".to_string(),
             error: error.to_string(),
         }

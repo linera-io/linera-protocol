@@ -11,8 +11,8 @@ use linera_base::{
 use linera_chain::messages::Certificate;
 use linera_execution::UserApplicationCode;
 use linera_views::{
-    memory::{MemoryContext, MemoryStoreMap, MemoryViewError},
-    views::View,
+    memory::{MemoryContext, MemoryContextError, MemoryStoreMap},
+    views::{View, ViewError},
 };
 use std::{collections::BTreeMap, sync::Arc};
 use tokio::sync::Mutex;
@@ -30,12 +30,9 @@ pub struct MemoryStoreClient(Arc<MemoryStore>);
 #[async_trait]
 impl Store for MemoryStoreClient {
     type Context = MemoryContext<ChainRuntimeContext>;
-    type Error = MemoryViewError;
+    type ContextError = MemoryContextError;
 
-    async fn load_chain(
-        &self,
-        id: ChainId,
-    ) -> Result<ChainStateView<Self::Context>, MemoryViewError> {
+    async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError> {
         let state = self
             .0
             .chains
@@ -52,15 +49,16 @@ impl Store for MemoryStoreClient {
         ChainStateView::load(db_context).await
     }
 
-    async fn read_certificate(&self, hash: HashValue) -> Result<Certificate, MemoryViewError> {
-        let entry =
-            self.0.certificates.get(&hash).ok_or_else(|| {
-                MemoryViewError::NotFound(format!("certificate for hash {:?}", hash))
-            })?;
+    async fn read_certificate(&self, hash: HashValue) -> Result<Certificate, ViewError> {
+        let entry = self
+            .0
+            .certificates
+            .get(&hash)
+            .ok_or_else(|| ViewError::NotFound(format!("certificate for hash {:?}", hash)))?;
         Ok(entry.value().clone())
     }
 
-    async fn write_certificate(&self, certificate: Certificate) -> Result<(), MemoryViewError> {
+    async fn write_certificate(&self, certificate: Certificate) -> Result<(), ViewError> {
         self.0.certificates.insert(certificate.hash, certificate);
         Ok(())
     }

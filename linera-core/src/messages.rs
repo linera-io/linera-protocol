@@ -16,6 +16,7 @@ use linera_chain::{
 };
 use linera_execution::system::Balance;
 use linera_storage::ChainRuntimeContext;
+use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -163,7 +164,7 @@ impl CrossChainRequest {
 impl<C> From<&ChainStateView<C>> for ChainInfo
 where
     C: ChainStateViewContext<Extra = ChainRuntimeContext>,
-    Error: From<C::Error>,
+    ViewError: From<C::Error>,
 {
     fn from(view: &ChainStateView<C>) -> Self {
         let manager = view.manager.get().clone();

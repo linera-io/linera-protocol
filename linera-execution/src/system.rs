@@ -15,7 +15,9 @@ use linera_base::{
 };
 use linera_views::{
     impl_view,
-    views::{MapOperations, MapView, RegisterOperations, RegisterView, ScopedView, View},
+    views::{
+        MapOperations, MapView, RegisterOperations, RegisterView, ScopedView, View, ViewError,
+    },
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -193,7 +195,7 @@ impl_view!(
 impl<C> SystemExecutionStateView<C>
 where
     C: SystemExecutionStateViewContext,
-    Error: From<C::Error>,
+    ViewError: From<C::Error>,
 {
     /// Invariant for the states of active chains.
     pub fn is_active(&self) -> bool {

@@ -12,7 +12,7 @@ use linera_base::{
     error::Error,
     messages::{ApplicationId, ChainId},
 };
-use linera_views::views::{RegisterView, View};
+use linera_views::views::{RegisterView, View, ViewError};
 use std::{
     collections::{btree_map, BTreeMap},
     ops::DerefMut,
@@ -62,6 +62,7 @@ pub(crate) struct SessionState {
 impl<'a, C, const W: bool> ExecutionRuntime<'a, C, W>
 where
     C: ExecutionStateViewContext,
+    ViewError: From<C::Error>,
     C::Extra: ExecutionRuntimeContext,
 {
     pub(crate) fn new(
@@ -239,6 +240,7 @@ where
 impl<'a, C, const W: bool> ReadableStorage for ExecutionRuntime<'a, C, W>
 where
     C: ExecutionStateViewContext,
+    ViewError: From<C::Error>,
     C::Extra: ExecutionRuntimeContext,
 {
     fn chain_id(&self) -> ChainId {
@@ -276,6 +278,7 @@ where
 impl<'a, C> QueryableStorage for ExecutionRuntime<'a, C, false>
 where
     C: ExecutionStateViewContext,
+    ViewError: From<C::Error>,
     C::Extra: ExecutionRuntimeContext,
 {
     /// Note that queries are not available from writable contexts.
@@ -307,6 +310,7 @@ where
 impl<'a, C> WritableStorage for ExecutionRuntime<'a, C, true>
 where
     C: ExecutionStateViewContext,
+    ViewError: From<C::Error>,
     C::Extra: ExecutionRuntimeContext,
 {
     async fn try_read_and_lock_my_state(&self) -> Result<Vec<u8>, Error> {

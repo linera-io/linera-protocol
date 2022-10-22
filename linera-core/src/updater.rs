@@ -14,6 +14,7 @@ use linera_base::{
 };
 use linera_chain::messages::{BlockProposal, Certificate, Vote};
 use linera_storage::Store;
+use linera_views::views::ViewError;
 use std::{collections::HashMap, hash::Hash, time::Duration};
 
 /// Used for `communicate_chain_updates`
@@ -111,7 +112,7 @@ impl<A, S> ValidatorUpdater<A, S>
 where
     A: ValidatorNode + Clone + Send + Sync + 'static,
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    ViewError: From<S::ContextError>,
 {
     pub async fn send_certificate(
         &mut self,

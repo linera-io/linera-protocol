@@ -409,9 +409,8 @@ Error:
           - hash:
               TYPENAME: HashValue
     52:
-      StorageError:
+      ViewError:
         STRUCT:
-          - backend: STR
           - error: STR
     53:
       UnknownApplication: UNIT

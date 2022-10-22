@@ -16,7 +16,7 @@ use linera_views::{
     impl_view,
     views::{
         CollectionOperations, ReentrantCollectionView, RegisterOperations, RegisterView,
-        ScopedView, View,
+        ScopedView, View, ViewError,
     },
 };
 
@@ -50,6 +50,7 @@ impl<R> ExecutionStateView<MemoryContext<R>>
 where
     R: ExecutionRuntimeContext,
     MemoryContext<R>: ExecutionStateViewContext,
+    ViewError: From<<MemoryContext<R> as linera_views::views::Context>::Error>,
 {
     /// Create an in-memory view where the system state is set. This is used notably to
     /// generate state hashes in tests.
@@ -86,8 +87,8 @@ enum UserAction<'a> {
 impl<C> ExecutionStateView<C>
 where
     C: ExecutionStateViewContext,
+    ViewError: From<C::Error>,
     C::Extra: ExecutionRuntimeContext,
-    Error: From<C::Error>,
 {
     async fn run_user_action(
         &mut self,

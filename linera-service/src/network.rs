@@ -17,6 +17,7 @@ use linera_core::{
 };
 use linera_rpc::Message;
 use linera_storage::Store;
+use linera_views::views::ViewError;
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::{io, time::Duration};
@@ -150,7 +151,7 @@ impl<S> Server<S> {
 impl<S> Server<S>
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    ViewError: From<S::ContextError>,
 {
     async fn forward_cross_chain_queries(
         network: ValidatorInternalNetworkConfig,
@@ -239,7 +240,7 @@ struct RunningServerState<S> {
 impl<S> MessageHandler for RunningServerState<S>
 where
     S: Store + Clone + Send + Sync + 'static,
-    Error: From<S::Error>,
+    ViewError: From<S::ContextError>,
 {
     fn handle_message(&mut self, message: Message) -> futures::future::BoxFuture<Option<Message>> {
         Box::pin(async move {
