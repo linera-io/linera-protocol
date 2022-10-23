@@ -162,12 +162,6 @@ pub enum Error {
     #[error("The given effects are not what we computed after executing the block")]
     IncorrectEffects,
 
-    // Client errors
-    #[error("Client failed to obtain a valid response to the block proposal")]
-    ClientErrorWhileProcessingBlockProposal,
-    #[error("Client failed to obtain the requested certificate(s)")]
-    ClientErrorWhileQueryingCertificate,
-
     // Networking and sharding
     #[error("Wrong shard used")]
     WrongShard,

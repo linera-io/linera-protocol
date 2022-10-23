@@ -378,57 +378,53 @@ Error:
     41:
       IncorrectEffects: UNIT
     42:
-      ClientErrorWhileProcessingBlockProposal: UNIT
-    43:
-      ClientErrorWhileQueryingCertificate: UNIT
-    44:
       WrongShard: UNIT
-    45:
+    43:
       InvalidDecoding: UNIT
-    46:
+    44:
       UnexpectedMessage: UNIT
-    47:
+    45:
       ClientIoError:
         STRUCT:
           - error: STR
-    48:
+    46:
       StorageIoError:
         STRUCT:
           - error: STR
-    49:
+    47:
       StorageBcsError:
         STRUCT:
           - error: STR
-    50:
+    48:
       CannotResolveValidatorAddress:
         STRUCT:
           - address: STR
-    51:
+    49:
       MissingCertificate:
         STRUCT:
           - hash:
               TYPENAME: HashValue
-    52:
+    50:
       ViewError:
         STRUCT:
           - error: STR
-    53:
+    51:
       UnknownApplication: UNIT
-    54:
+    52:
       InvalidOperation: UNIT
-    55:
+    53:
       InvalidEffect: UNIT
-    56:
+    54:
       InvalidQuery: UNIT
-    57:
+    55:
       InvalidSession: UNIT
-    58:
+    56:
       ApplicationIsInUse: UNIT
-    59:
+    57:
       SessionIsInUse: UNIT
-    60:
+    58:
       InvalidSessionOwner: UNIT
-    61:
+    59:
       SessionWasNotClosed: UNIT
 HashValue:
   NEWTYPESTRUCT:
@@ -509,10 +505,23 @@ NodeError:
           - chain_id:
               TYPENAME: ChainId
     1:
+      CannotDownloadCertificates:
+        STRUCT:
+          - chain_id:
+              TYPENAME: ChainId
+          - target_next_block_height:
+              TYPENAME: BlockHeight
+    2:
+      MissingVoteInValidatorResponse: UNIT
+    3:
+      InactiveLocalChain:
+        NEWTYPE:
+          TYPENAME: ChainId
+    4:
       ViewError:
         STRUCT:
           - error: STR
-    2:
+    5:
       WorkerError:
         NEWTYPE:
           TYPENAME: Error

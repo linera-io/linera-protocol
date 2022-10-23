@@ -211,7 +211,7 @@ where
                             target_block_height = height.try_add_one()?;
                         }
                         _ => {
-                            return Err(NodeError::WorkerError(Error::InactiveChain(chain_id)));
+                            return Err(NodeError::InactiveLocalChain(chain_id));
                         }
                     }
                 }
@@ -302,9 +302,7 @@ where
                         return Ok(Some(vote.clone()));
                     }
                     None => {
-                        return Err(NodeError::WorkerError(
-                            Error::ClientErrorWhileProcessingBlockProposal,
-                        ))
+                        return Err(NodeError::MissingVoteInValidatorResponse);
                     }
                 }
             }
@@ -318,9 +316,7 @@ where
                         return Ok(Some(vote.clone()));
                     }
                     None => {
-                        return Err(NodeError::WorkerError(
-                            Error::ClientErrorWhileProcessingBlockProposal,
-                        ))
+                        return Err(NodeError::MissingVoteInValidatorResponse);
                     }
                 }
             }
