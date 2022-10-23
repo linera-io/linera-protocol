@@ -195,8 +195,7 @@ where
                     let description = *self
                         .store
                         .load_chain(chain_id)
-                        .await
-                        .map_err(Error::from)?
+                        .await?
                         .execution_state
                         .system
                         .description
@@ -225,14 +224,10 @@ where
             // Obtain chain state.
             let range = usize::from(initial_block_height)..usize::from(target_block_height);
             if !range.is_empty() {
-                let mut chain = self.store.load_chain(chain_id).await.map_err(Error::from)?;
+                let mut chain = self.store.load_chain(chain_id).await?;
                 // Send the requested certificates in order.
-                let keys = chain.confirmed_log.read(range).await.map_err(Error::from)?;
-                let certs = self
-                    .store
-                    .read_certificates(keys.into_iter())
-                    .await
-                    .map_err(Error::from)?;
+                let keys = chain.confirmed_log.read(range).await?;
+                let certs = self.store.read_certificates(keys.into_iter()).await?;
                 for cert in certs {
                     self.send_certificate(cert, retryable).await?;
                 }
@@ -247,24 +242,11 @@ where
     ) -> Result<(), NodeError> {
         let mut info = Vec::new();
         {
-            let mut chain = self.store.load_chain(chain_id).await.map_err(Error::from)?;
-            for id in chain
-                .communication_states
-                .indices()
-                .await
-                .map_err(Error::from)?
-            {
-                let state = chain
-                    .communication_states
-                    .load_entry(id)
-                    .await
-                    .map_err(Error::from)?;
-                for origin in state.inboxes.indices().await.map_err(Error::from)? {
-                    let inbox = state
-                        .inboxes
-                        .load_entry(origin.clone())
-                        .await
-                        .map_err(Error::from)?;
+            let mut chain = self.store.load_chain(chain_id).await?;
+            for id in chain.communication_states.indices().await? {
+                let state = chain.communication_states.load_entry(id).await?;
+                for origin in state.inboxes.indices().await? {
+                    let inbox = state.inboxes.load_entry(origin.clone()).await?;
                     info.push((origin.chain_id, *inbox.next_height_to_receive.get()));
                 }
             }

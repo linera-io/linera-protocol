@@ -45,14 +45,30 @@ pub trait ValidatorNode {
     ) -> Result<ChainInfoResponse, NodeError>;
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash)]
 /// Error type for node queries.
+///
+/// This error is meant to be serialized over the network and aggregated by clients (i.e.
+/// clients will track validator votes on each error value). This means that precision is
+/// not necessarily desirable --- or even correct: in the case of retryable errors such as
+/// `BlockProposalHasMissingUpdates`, we have to remove details so that validators can
+/// *agree* on the error.
 // TODO(#148): We should have more entries here and never create a `WorkerError` outside the worker.
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash)]
 pub enum NodeError {
     #[error("Client's block proposal for chain {chain_id} did not reach a quorum because some validators are missing incoming messages")]
     BlockProposalHasMissingUpdates { chain_id: ChainId },
+    #[error("Error while accessing storage view: {error}")]
+    ViewError { error: String },
     #[error("{0}")]
     WorkerError(linera_base::error::Error),
+}
+
+impl From<ViewError> for NodeError {
+    fn from(error: ViewError) -> Self {
+        Self::ViewError {
+            error: error.to_string(),
+        }
+    }
 }
 
 impl From<linera_base::error::Error> for NodeError {
@@ -92,10 +108,8 @@ where
     ) -> Result<ChainInfoResponse, NodeError> {
         let node = self.0.clone();
         let mut node = node.lock().await;
-        node.state
-            .handle_block_proposal(proposal)
-            .await
-            .map_err(NodeError::from)
+        let response = node.state.handle_block_proposal(proposal).await?;
+        Ok(response)
     }
 
     async fn handle_certificate(
@@ -104,24 +118,23 @@ where
     ) -> Result<ChainInfoResponse, NodeError> {
         let node = self.0.clone();
         let mut node = node.lock().await;
-        node.state
-            .fully_handle_certificate(certificate)
-            .await
-            .map_err(NodeError::from)
+        let response = node.state.fully_handle_certificate(certificate).await?;
+        Ok(response)
     }
 
     async fn handle_chain_info_query(
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, NodeError> {
-        self.0
+        let response = self
+            .0
             .clone()
             .lock()
             .await
             .state
             .handle_chain_info_query(query)
-            .await
-            .map_err(NodeError::from)
+            .await?;
+        Ok(response)
     }
 }
 
