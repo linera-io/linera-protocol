@@ -57,6 +57,15 @@ pub trait ValidatorNode {
 pub enum NodeError {
     #[error("Client's block proposal for chain {chain_id} did not reach a quorum because some validators are missing incoming messages")]
     BlockProposalHasMissingUpdates { chain_id: ChainId },
+    #[error("Failed to download the requested certificate(s) for chain {chain_id} in order to advance to the next height {target_next_block_height}")]
+    CannotDownloadCertificates {
+        chain_id: ChainId,
+        target_next_block_height: BlockHeight,
+    },
+    #[error("Validator's response to block proposal failed to include a vote")]
+    MissingVoteInValidatorResponse,
+    #[error("Failed to update validator because our local node doesn't have an active chain {0}")]
+    InactiveLocalChain(ChainId),
     #[error("Error while accessing storage view: {error}")]
     ViewError { error: String },
     #[error("{0}")]
@@ -252,9 +261,10 @@ where
         if target_next_block_height <= info.next_block_height {
             Ok(info)
         } else {
-            Err(NodeError::WorkerError(
-                Error::ClientErrorWhileQueryingCertificate,
-            ))
+            Err(NodeError::CannotDownloadCertificates {
+                chain_id,
+                target_next_block_height,
+            })
         }
     }
 
