@@ -117,7 +117,7 @@ pub trait Store {
             .manager
             .get_mut()
             .reset(&ChainOwnership::single(owner));
-        chain.do_flush().await?;
+        chain.save().await?;
         Ok(())
     }
 }

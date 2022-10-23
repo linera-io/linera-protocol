@@ -84,7 +84,7 @@ where
         $( + $ops_trait )*
 {
 
-    pub async fn do_flush(&mut self) -> Result<(), C::Error> {
+    pub async fn save(&mut self) -> Result<(), C::Error> {
         use $crate::views::View;
 
         let mut batch = self.context().create_batch();

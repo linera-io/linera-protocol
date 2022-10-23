@@ -328,10 +328,10 @@ where
             subview.push(18);
         }
         if config.with_flush {
-            view.do_flush().await.unwrap();
+            view.save().await.unwrap();
         }
         let hash = view.hash().await.unwrap();
-        view.do_flush().await.unwrap();
+        view.save().await.unwrap();
         hash
     };
     {
@@ -372,7 +372,7 @@ where
             assert_eq!(subview.read(0..10).await.unwrap(), vec![17, 18]);
         }
         if config.with_flush {
-            view.do_flush().await.unwrap();
+            view.save().await.unwrap();
         }
         {
             let subview = view
@@ -389,7 +389,7 @@ where
         );
         view.collection.remove_entry("hola".to_string());
         assert_ne!(view.hash().await.unwrap(), stored_hash);
-        view.do_flush().await.unwrap();
+        view.save().await.unwrap();
     }
     {
         let mut view = store.load(1).await.unwrap();
@@ -507,7 +507,7 @@ where
             .await
             .unwrap();
         subview.push(17);
-        view.do_flush().await.unwrap();
+        view.save().await.unwrap();
     }
     {
         let mut view = store.load(1).await.unwrap();
@@ -520,7 +520,7 @@ where
             .unwrap();
         subview.push(16);
         view.rollback();
-        view.do_flush().await.unwrap();
+        view.save().await.unwrap();
     }
     {
         let mut view = store.load(1).await.unwrap();
@@ -528,7 +528,7 @@ where
         view.map.reset_to_default();
         view.collection.reset_to_default();
         view.rollback();
-        view.do_flush().await.unwrap();
+        view.save().await.unwrap();
     }
     {
         let mut view = store.load(1).await.unwrap();

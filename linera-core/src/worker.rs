@@ -278,7 +278,7 @@ where
         let info = ChainInfoResponse::new(&chain, self.key_pair());
         let continuation = self.make_continuation(&mut chain).await?;
         // Persist chain.
-        chain.do_flush().await?;
+        chain.save().await?;
         Ok((info, continuation))
     }
 
@@ -340,7 +340,7 @@ where
             self.key_pair(),
         );
         let info = ChainInfoResponse::new(&chain, self.key_pair());
-        chain.do_flush().await?;
+        chain.save().await?;
         Ok(info)
     }
 }
@@ -410,7 +410,7 @@ where
             .get_mut()
             .create_vote(proposal, effects, state_hash, self.key_pair());
         let info = ChainInfoResponse::new(&chain, self.key_pair());
-        chain.do_flush().await?;
+        chain.save().await?;
         Ok(info)
     }
 
@@ -610,7 +610,7 @@ where
                         return Ok(Vec::new());
                     }
                 }
-                chain.do_flush().await?;
+                chain.save().await?;
                 // Acknowledge the highest processed block height.
                 Ok(vec![CrossChainRequest::ConfirmUpdatedRecipient {
                     application_id,
@@ -634,7 +634,7 @@ where
                     .mark_outbox_messages_as_received(application_id, recipient, height)
                     .await?
                 {
-                    chain.do_flush().await?;
+                    chain.save().await?;
                 }
                 Ok(Vec::new())
             }
@@ -653,7 +653,7 @@ where
                     .mark_channel_messages_as_received(&name, application_id, recipient, height)
                     .await?
                 {
-                    chain.do_flush().await?;
+                    chain.save().await?;
                 }
                 Ok(Vec::new())
             }

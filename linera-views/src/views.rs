@@ -69,11 +69,10 @@ pub trait View<C: Context>: Sized {
     /// Reset to the default values.
     fn reset_to_default(&mut self);
 
-    /// Persist changes to storage. This consumes the view. Crash-resistant storage
-    /// implementations are expected to accumulate the desired changes in the `batch`
-    /// variable first. If the view is dropped without calling `commit`, staged changes
-    /// are simply lost.
-    /// A more efficient alternative to calling [`View::commit`] immediately followed by a [`View::load`].
+    /// Persist changes to storage. This leaves the view still usable and is essentially neutral to the
+    /// program running. Crash-resistant storage implementations are expected to accumulate the desired
+    /// changes in the `batch` variable first. If the view is dropped without calling `commit`, staged
+    /// changes are simply lost.
     async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error>;
 
     /// Instead of persisting changes, clear all the data that belong to this view and its
