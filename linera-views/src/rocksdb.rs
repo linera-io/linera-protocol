@@ -250,12 +250,12 @@ where
         Ok(value)
     }
 
-    async fn set(&mut self, batch: &mut Self::Batch, value: &T) -> Result<(), RocksdbViewError> {
+    fn set(&mut self, batch: &mut Self::Batch, value: &T) -> Result<(), RocksdbViewError> {
         batch.write_key(self.base_key.clone(), value)?;
         Ok(())
     }
 
-    async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error> {
+    fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error> {
         batch.delete_key(self.base_key.clone());
         Ok(())
     }
@@ -291,7 +291,7 @@ where
         Ok(values)
     }
 
-    async fn append(
+    fn append(
         &mut self,
         stored_count: usize,
         batch: &mut Self::Batch,
@@ -309,11 +309,7 @@ where
         Ok(())
     }
 
-    async fn delete(
-        &mut self,
-        stored_count: usize,
-        batch: &mut Self::Batch,
-    ) -> Result<(), Self::Error> {
+    fn delete(&mut self, stored_count: usize, batch: &mut Self::Batch) -> Result<(), Self::Error> {
         batch.delete_key(self.base_key.clone());
         for index in 0..stored_count {
             batch.delete_key(self.derive_key(&index));
@@ -352,7 +348,7 @@ where
         Ok(values)
     }
 
-    async fn delete_front(
+    fn delete_front(
         &mut self,
         stored_indices: &mut Range<usize>,
         batch: &mut Self::Batch,
@@ -370,7 +366,7 @@ where
         Ok(())
     }
 
-    async fn append_back(
+    fn append_back(
         &mut self,
         range: &mut Range<usize>,
         batch: &mut Self::Batch,
@@ -386,7 +382,7 @@ where
         batch.write_key(self.base_key.clone(), &range)
     }
 
-    async fn delete(
+    fn delete(
         &mut self,
         range: Range<usize>,
         batch: &mut Self::Batch,
@@ -410,7 +406,7 @@ where
         Ok(self.db.read_key(&self.derive_key(index)).await?)
     }
 
-    async fn insert(
+    fn insert(
         &mut self,
         batch: &mut Self::Batch,
         index: I,
@@ -420,7 +416,7 @@ where
         Ok(())
     }
 
-    async fn remove(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), RocksdbViewError> {
+    fn remove(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), RocksdbViewError> {
         batch.delete_key(self.derive_key(&index));
         Ok(())
     }
@@ -474,12 +470,12 @@ where
         }
     }
 
-    async fn add_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
+    fn add_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
         batch.write_key(self.derive_key(&CollectionKey::Index(index)), &())?;
         Ok(())
     }
 
-    async fn remove_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
+    fn remove_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
         batch.delete_key(self.derive_key(&CollectionKey::Index(index)));
         Ok(())
     }

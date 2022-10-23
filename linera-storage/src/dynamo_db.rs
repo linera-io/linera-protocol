@@ -161,9 +161,8 @@ impl Store for DynamoDbStoreClient {
     ) -> Result<(), DynamoDbContextError> {
         let mut certificates = self.0.certificates().await?;
         certificates.insert(certificate.hash, certificate);
-        self.0
-            .context
-            .run_with_batch(|batch| Box::pin(certificates.commit(batch)))
-            .await
+        let mut batch = self.0.context.create_batch();
+        certificates.flush(&mut batch).await?;
+        self.0.context.write_batch(batch).await
     }
 }

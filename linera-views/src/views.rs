@@ -69,13 +69,10 @@ pub trait View<C: Context>: Sized {
     /// Reset to the default values.
     fn reset_to_default(&mut self);
 
-    /// Persist changes to storage. This consumes the view. Crash-resistant storage
-    /// implementations are expected to accumulate the desired changes in the `batch`
-    /// variable first. If the view is dropped without calling `commit`, staged changes
-    /// are simply lost.
-    async fn commit(self, batch: &mut C::Batch) -> Result<(), C::Error>;
-
-    /// A more efficient alternative to calling [`View::commit`] immediately followed by a [`View::load`].
+    /// Persist changes to storage. This leaves the view still usable and is essentially neutral to the
+    /// program running. Crash-resistant storage implementations are expected to accumulate the desired
+    /// changes in the `batch` variable first. If the view is dropped without calling `commit`, staged
+    /// changes are simply lost.
     async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error>;
 
     /// Instead of persisting changes, clear all the data that belong to this view and its
@@ -143,10 +140,6 @@ where
         self.view.rollback();
     }
 
-    async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        self.view.commit(batch).await
-    }
-
     async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         self.view.flush(batch).await
     }
@@ -175,17 +168,17 @@ pub trait RegisterOperations<T>: Context {
     async fn get(&mut self) -> Result<T, Self::Error>;
 
     /// Set the value in the register. Crash-resistant implementations should only write to `batch`.
-    async fn set(&mut self, batch: &mut Self::Batch, value: &T) -> Result<(), Self::Error>;
+    fn set(&mut self, batch: &mut Self::Batch, value: &T) -> Result<(), Self::Error>;
 
     /// Delete the register. Crash-resistant implementations should only write to `batch`.
-    async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error>;
+    fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error>;
 }
 
 #[async_trait]
 impl<C, T> View<C> for RegisterView<C, T>
 where
     C: RegisterOperations<T> + Send + Sync,
-    T: Clone + Send + Sync + Default,
+    T: Send + Sync + Default,
 {
     fn context(&self) -> &C {
         &self.context
@@ -204,23 +197,16 @@ where
         self.update = None
     }
 
-    async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        if let Some(value) = self.update {
-            self.context.set(batch, &value).await?;
-        }
-        Ok(())
-    }
-
     async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         if let Some(value) = self.update.take() {
-            self.context.set(batch, &value).await?;
+            self.context.set(batch, &value)?;
             self.stored_value = value;
         }
         Ok(())
     }
 
     async fn delete(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        self.context.delete(batch).await
+        self.context.delete(batch)
     }
 
     fn reset_to_default(&mut self) {
@@ -289,7 +275,7 @@ pub trait LogOperations<T>: Context {
     async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error>;
 
     /// Append values to the logs. Crash-resistant implementations should only write to `batch`.
-    async fn append(
+    fn append(
         &mut self,
         stored_count: usize,
         batch: &mut Self::Batch,
@@ -299,11 +285,7 @@ pub trait LogOperations<T>: Context {
     /// Delete the log. Crash-resistant implementations should only write to `batch`.
     /// The stored_count is an invariant of the structure. It is a leaky abstraction
     /// but allows a priori better performance.
-    async fn delete(
-        &mut self,
-        stored_count: usize,
-        batch: &mut Self::Batch,
-    ) -> Result<(), Self::Error>;
+    fn delete(&mut self, stored_count: usize, batch: &mut Self::Batch) -> Result<(), Self::Error>;
 }
 
 #[async_trait]
@@ -331,30 +313,25 @@ where
         self.new_values.clear();
     }
 
-    async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        self.flush(batch).await
-    }
-
     async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         if self.was_reset_to_default {
             self.was_reset_to_default = false;
             if self.stored_count > 0 {
-                self.context.delete(self.stored_count, batch).await?;
+                self.context.delete(self.stored_count, batch)?;
                 self.stored_count = 0;
             }
         }
         if !self.new_values.is_empty() {
             let count = self.new_values.len();
             self.context
-                .append(self.stored_count, batch, mem::take(&mut self.new_values))
-                .await?;
+                .append(self.stored_count, batch, mem::take(&mut self.new_values))?;
             self.stored_count += count;
         }
         Ok(())
     }
 
     async fn delete(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        self.context.delete(self.stored_count, batch).await
+        self.context.delete(self.stored_count, batch)
     }
 
     fn reset_to_default(&mut self) {
@@ -462,16 +439,11 @@ pub trait MapOperations<I, V>: Context {
         F: FnMut(I) + Send;
 
     /// Set a value. Crash-resistant implementations should only write to `batch`.
-    async fn insert(
-        &mut self,
-        batch: &mut Self::Batch,
-        index: I,
-        value: V,
-    ) -> Result<(), Self::Error>;
+    fn insert(&mut self, batch: &mut Self::Batch, index: I, value: V) -> Result<(), Self::Error>;
 
     /// Remove the entry at the given index. Crash-resistant implementations should only write
     /// to `batch`.
-    async fn remove(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error>;
+    fn remove(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error>;
 
     /// Delete the map and its entries from storage. Crash-resistant implementations should only
     /// write to `batch`.
@@ -502,24 +474,20 @@ where
         self.updates.clear();
     }
 
-    async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        self.flush(batch).await
-    }
-
     async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         if self.was_reset_to_default {
             self.was_reset_to_default = false;
             self.context.delete(batch).await?;
             for (index, update) in mem::take(&mut self.updates) {
                 if let Some(value) = update {
-                    self.context.insert(batch, index, value).await?;
+                    self.context.insert(batch, index, value)?;
                 }
             }
         } else {
             for (index, update) in mem::take(&mut self.updates) {
                 match update {
-                    None => self.context.remove(batch, index).await?,
-                    Some(value) => self.context.insert(batch, index, value).await?,
+                    None => self.context.remove(batch, index)?,
+                    Some(value) => self.context.insert(batch, index, value)?,
                 }
             }
         }
@@ -644,7 +612,7 @@ pub trait QueueOperations<T>: Context {
 
     /// Delete `count` values from the front of the queue. Crash-resistant implementations
     /// should only write to `batch`.
-    async fn delete_front(
+    fn delete_front(
         &mut self,
         stored_indices: &mut Range<usize>,
         batch: &mut Self::Batch,
@@ -653,7 +621,7 @@ pub trait QueueOperations<T>: Context {
 
     /// Append the given values from the back of the queue. Crash-resistant
     /// implementations should only write to `batch`.
-    async fn append_back(
+    fn append_back(
         &mut self,
         stored_indices: &mut Range<usize>,
         batch: &mut Self::Batch,
@@ -661,7 +629,7 @@ pub trait QueueOperations<T>: Context {
     ) -> Result<(), Self::Error>;
 
     /// Delete the queue from storage. Crash-resistant implementations should only write to `batch`.
-    async fn delete(
+    fn delete(
         &mut self,
         stored_indices: Range<usize>,
         batch: &mut Self::Batch,
@@ -693,31 +661,24 @@ where
         self.new_back_values.clear();
     }
 
-    async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        self.flush(batch).await
-    }
-
     async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         if self.front_delete_count > 0 {
             self.context
-                .delete_front(&mut self.stored_indices, batch, self.front_delete_count)
-                .await?;
+                .delete_front(&mut self.stored_indices, batch, self.front_delete_count)?;
         }
         if !self.new_back_values.is_empty() {
-            self.context
-                .append_back(
-                    &mut self.stored_indices,
-                    batch,
-                    mem::take(&mut self.new_back_values).into_iter().collect(),
-                )
-                .await?;
+            self.context.append_back(
+                &mut self.stored_indices,
+                batch,
+                mem::take(&mut self.new_back_values).into_iter().collect(),
+            )?;
         }
         self.front_delete_count = 0;
         Ok(())
     }
 
     async fn delete(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        self.context.delete(self.stored_indices, batch).await
+        self.context.delete(self.stored_indices, batch)
     }
 
     fn reset_to_default(&mut self) {
@@ -863,11 +824,11 @@ pub trait CollectionOperations<I>: Context {
 
     /// Add the index to the list of indices. Crash-resistant implementations should only write
     /// to `batch`.
-    async fn add_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error>;
+    fn add_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error>;
 
     /// Remove the index from the list of indices. Crash-resistant implementations should only
     /// write to `batch`.
-    async fn remove_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error>;
+    fn remove_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error>;
 
     // TODO(#149): In contrast to other views, there is no delete operation for CollectionOperation.
 }
@@ -896,30 +857,26 @@ where
         self.updates.clear();
     }
 
-    async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        self.flush(batch).await
-    }
-
     async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         if self.was_reset_to_default {
             self.was_reset_to_default = false;
             self.delete_entries(batch).await?;
             for (index, update) in mem::take(&mut self.updates) {
-                if let Some(view) = update {
-                    view.commit(batch).await?;
-                    self.context.add_index(batch, index).await?;
+                if let Some(mut view) = update {
+                    view.flush(batch).await?;
+                    self.context.add_index(batch, index)?;
                 }
             }
         } else {
             for (index, update) in mem::take(&mut self.updates) {
                 match update {
-                    Some(view) => {
-                        view.commit(batch).await?;
-                        self.context.add_index(batch, index).await?;
+                    Some(mut view) => {
+                        view.flush(batch).await?;
+                        self.context.add_index(batch, index)?;
                     }
                     None => {
                         let context = self.context.clone_with_scope(&index);
-                        self.context.remove_index(batch, index).await?;
+                        self.context.remove_index(batch, index)?;
                         let view = W::load(context).await?;
                         view.delete(batch).await?;
                     }
@@ -950,7 +907,7 @@ where
         let stored_indices = self.context.indices().await?;
         for index in &stored_indices {
             let context = self.context.clone_with_scope(index);
-            self.context.remove_index(batch, index.clone()).await?;
+            self.context.remove_index(batch, index.clone())?;
             let view = W::load(context).await?;
             view.delete(batch).await?;
         }
@@ -1079,36 +1036,32 @@ where
         self.updates.clear();
     }
 
-    async fn commit(mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
-        self.flush(batch).await
-    }
-
     async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), C::Error> {
         if self.was_reset_to_default {
             self.was_reset_to_default = false;
             self.delete_entries(batch).await?;
             for (index, update) in mem::take(&mut self.updates) {
                 if let Some(view) = update {
-                    let view = Arc::try_unwrap(view)
+                    let mut view = Arc::try_unwrap(view)
                         .map_err(|_| ViewError::CannotAcquireCollectionEntry)?
                         .into_inner();
-                    view.commit(batch).await?;
-                    self.context.add_index(batch, index).await?;
+                    view.flush(batch).await?;
+                    self.context.add_index(batch, index)?;
                 }
             }
         } else {
             for (index, update) in mem::take(&mut self.updates) {
                 match update {
                     Some(view) => {
-                        let view = Arc::try_unwrap(view)
+                        let mut view = Arc::try_unwrap(view)
                             .map_err(|_| ViewError::CannotAcquireCollectionEntry)?
                             .into_inner();
-                        view.commit(batch).await?;
-                        self.context.add_index(batch, index).await?;
+                        view.flush(batch).await?;
+                        self.context.add_index(batch, index)?;
                     }
                     None => {
                         let context = self.context.clone_with_scope(&index);
-                        self.context.remove_index(batch, index).await?;
+                        self.context.remove_index(batch, index)?;
                         let view = W::load(context).await?;
                         view.delete(batch).await?;
                     }
@@ -1139,7 +1092,7 @@ where
         let stored_indices = self.context.indices().await?;
         for index in &stored_indices {
             let context = self.context.clone_with_scope(index);
-            self.context.remove_index(batch, index.clone()).await?;
+            self.context.remove_index(batch, index.clone())?;
             let view = W::load(context).await?;
             view.delete(batch).await?;
         }

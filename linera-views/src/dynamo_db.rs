@@ -458,12 +458,12 @@ where
         Ok(value)
     }
 
-    async fn set(&mut self, batch: &mut Self::Batch, value: &T) -> Result<(), Self::Error> {
+    fn set(&mut self, batch: &mut Self::Batch, value: &T) -> Result<(), Self::Error> {
         self.put_item_batch(batch, &(), value);
         Ok(())
     }
 
-    async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error> {
+    fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error> {
         self.remove_item_batch(batch, &());
         Ok(())
     }
@@ -496,7 +496,7 @@ where
         Ok(items)
     }
 
-    async fn append(
+    fn append(
         &mut self,
         stored_count: usize,
         batch: &mut Self::Batch,
@@ -511,11 +511,7 @@ where
         Ok(())
     }
 
-    async fn delete(
-        &mut self,
-        stored_count: usize,
-        batch: &mut Self::Batch,
-    ) -> Result<(), Self::Error> {
+    fn delete(&mut self, stored_count: usize, batch: &mut Self::Batch) -> Result<(), Self::Error> {
         self.remove_item_batch(batch, &());
         for index in 0..stored_count {
             self.remove_item_batch(batch, &index);
@@ -550,7 +546,7 @@ where
         Ok(values)
     }
 
-    async fn delete_front(
+    fn delete_front(
         &mut self,
         stored_indices: &mut Range<usize>,
         batch: &mut Self::Batch,
@@ -565,7 +561,7 @@ where
         Ok(())
     }
 
-    async fn append_back(
+    fn append_back(
         &mut self,
         stored_indices: &mut Range<usize>,
         batch: &mut Self::Batch,
@@ -579,7 +575,7 @@ where
         Ok(())
     }
 
-    async fn delete(
+    fn delete(
         &mut self,
         stored_indices: Range<usize>,
         batch: &mut Self::Batch,
@@ -603,17 +599,12 @@ where
         Ok(self.get_item(&index).await?)
     }
 
-    async fn insert(
-        &mut self,
-        batch: &mut Self::Batch,
-        index: I,
-        value: V,
-    ) -> Result<(), Self::Error> {
+    fn insert(&mut self, batch: &mut Self::Batch, index: I, value: V) -> Result<(), Self::Error> {
         self.put_item_batch(batch, &index, &value);
         Ok(())
     }
 
-    async fn remove(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
+    fn remove(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
         self.remove_item_batch(batch, &index);
         Ok(())
     }
@@ -636,7 +627,6 @@ where
         for key in self.get_sub_keys::<I, _>(&()).await? {
             self.remove_item_batch(batch, &key);
         }
-
         Ok(())
     }
 }
@@ -679,12 +669,12 @@ where
         }
     }
 
-    async fn add_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
+    fn add_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
         self.put_item_batch(batch, &CollectionKey::Index(index), &());
         Ok(())
     }
 
-    async fn remove_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
+    fn remove_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
         self.remove_item_batch(batch, &CollectionKey::Index(index));
         Ok(())
     }
