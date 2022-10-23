@@ -49,11 +49,8 @@ where
         if validator.is_faulty {
             Err(Error::SequenceOverflow.into())
         } else {
-            validator
-                .state
-                .handle_block_proposal(proposal)
-                .await
-                .map_err(NodeError::from)
+            let response = validator.state.handle_block_proposal(proposal).await?;
+            Ok(response)
         }
     }
 
@@ -63,25 +60,26 @@ where
     ) -> Result<ChainInfoResponse, NodeError> {
         let validator = self.0.clone();
         let mut validator = validator.lock().await;
-        validator
+        let response = validator
             .state
             .fully_handle_certificate(certificate)
-            .await
-            .map_err(NodeError::from)
+            .await?;
+        Ok(response)
     }
 
     async fn handle_chain_info_query(
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, NodeError> {
-        self.0
+        let response = self
+            .0
             .clone()
             .lock()
             .await
             .state
             .handle_chain_info_query(query)
-            .await
-            .map_err(NodeError::from)
+            .await?;
+        Ok(response)
     }
 }
 

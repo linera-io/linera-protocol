@@ -509,6 +509,10 @@ NodeError:
           - chain_id:
               TYPENAME: ChainId
     1:
+      ViewError:
+        STRUCT:
+          - error: STR
+    2:
       WorkerError:
         NEWTYPE:
           TYPENAME: Error
