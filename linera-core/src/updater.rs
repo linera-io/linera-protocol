@@ -114,7 +114,7 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
-    pub async fn send_certificate(
+    async fn send_certificate(
         &mut self,
         certificate: Certificate,
         retryable: bool,
@@ -143,11 +143,13 @@ where
         }
     }
 
-    pub async fn send_block_proposal(
+    async fn send_block_proposal(
         &mut self,
         proposal: BlockProposal,
     ) -> Result<ChainInfo, NodeError> {
+        let chain_id = proposal.content.block.chain_id;
         let mut count = 0;
+        let mut has_send_chain_information_for_senders = false;
         loop {
             match self.client.handle_block_proposal(proposal.clone()).await {
                 Ok(response) => {
@@ -155,11 +157,46 @@ where
                     // Succeed
                     return Ok(response.info);
                 }
-                Err(NodeError::WorkerError(Error::InactiveChain(_))) if count < self.retries => {
-                    // Retry
-                    tokio::time::sleep(self.delay).await;
-                    count += 1;
-                    continue;
+                Err(NodeError::WorkerError(Error::MissingCrossChainUpdate {
+                    chain_id: id,
+                    ..
+                })) if id == chain_id && !has_send_chain_information_for_senders => {
+                    // Some received certificates may be missing for this validator
+                    // (e.g. to make the balance sufficient) so we are going to
+                    // synchronize them now.
+                    self.send_chain_information_for_senders(chain_id).await?;
+                    has_send_chain_information_for_senders = true;
+                }
+                Err(NodeError::WorkerError(Error::InactiveChain(id))) if id == chain_id => {
+                    if count < self.retries {
+                        // `send_chain_information` is always called before
+                        // `send_block_proposal` but in the case of new chains, it may
+                        // take some time to receive the missing `OpenChain` message: let's
+                        // retry.
+                        tokio::time::sleep(self.delay).await;
+                        count += 1;
+                    } else {
+                        return Err(NodeError::ProposedBlockToInactiveChain {
+                            chain_id,
+                            retries: self.retries,
+                        });
+                    }
+                }
+                Err(NodeError::WorkerError(Error::MissingCrossChainUpdate {
+                    chain_id: id,
+                    ..
+                })) if id == chain_id => {
+                    if count < self.retries {
+                        // We just called `send_chain_information_for_senders` but it may
+                        // take time to receive the missing messages: let's retry.
+                        tokio::time::sleep(self.delay).await;
+                        count += 1;
+                    } else {
+                        return Err(NodeError::ProposedBlockWithLaggingMessages {
+                            chain_id,
+                            retries: self.retries,
+                        });
+                    }
                 }
                 Err(e) => {
                     // Fail
@@ -169,7 +206,7 @@ where
         }
     }
 
-    pub async fn send_chain_information(
+    async fn send_chain_information(
         &mut self,
         mut chain_id: ChainId,
         mut target_block_height: BlockHeight,
@@ -236,7 +273,7 @@ where
         Ok(())
     }
 
-    pub async fn send_chain_information_as_a_receiver(
+    async fn send_chain_information_for_senders(
         &mut self,
         chain_id: ChainId,
     ) -> Result<(), NodeError> {
@@ -279,23 +316,7 @@ where
         match action {
             CommunicateAction::SubmitBlockForValidation(proposal)
             | CommunicateAction::SubmitBlockForConfirmation(proposal) => {
-                let result = self.send_block_proposal(proposal.clone()).await;
-                let info = match result {
-                    Ok(info) => info,
-                    Err(NodeError::BlockProposalHasMissingUpdates { chain_id: id })
-                        if id == chain_id =>
-                    {
-                        // Some received certificates may be missing for this validator
-                        // (e.g. to make the balance sufficient) so we are going to
-                        // synchronize them now.
-                        self.send_chain_information_as_a_receiver(chain_id).await?;
-                        // Now retry the block.
-                        self.send_block_proposal(proposal).await?
-                    }
-                    Err(e) => {
-                        return Err(e);
-                    }
-                };
+                let info = self.send_block_proposal(proposal.clone()).await?;
                 match info.manager.pending() {
                     Some(vote) => {
                         vote.check(self.name)?;
