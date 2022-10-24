@@ -257,9 +257,9 @@ impl<E> DynamoDbContext<E> {
     /// context.
     ///
     /// The `Item` is deserialized using [`bcs`].
-    async fn get_item<Item>(
+    async fn read_key<Item>(
         &mut self,
-        key: &impl Serialize,
+        key: &Vec<u8>,
     ) -> Result<Option<Item>, DynamoDbContextError>
     where
         Item: DeserializeOwned,
@@ -268,7 +268,7 @@ impl<E> DynamoDbContext<E> {
             .client
             .get_item()
             .table_name(self.table.as_ref())
-            .set_key(Some(self.build_key(self.derive_key(key))))
+            .set_key(Some(self.build_key(key.to_vec())))
             .send()
             .await?;
 
@@ -484,7 +484,7 @@ where
     E: Clone + Send + Sync,
 {
     async fn get(&mut self) -> Result<T, Self::Error> {
-        let value = self.get_item(&()).await?.unwrap_or_default();
+        let value = self.read_key(&self.base_key.clone()).await?.unwrap_or_default();
         Ok(value)
     }
 
@@ -506,18 +506,18 @@ where
     E: Clone + Send + Sync,
 {
     async fn count(&mut self) -> Result<usize, Self::Error> {
-        let count = self.get_item(&()).await?.unwrap_or_default();
+        let count = self.read_key(&self.base_key.clone()).await?.unwrap_or_default();
         Ok(count)
     }
 
     async fn get(&mut self, index: usize) -> Result<Option<T>, Self::Error> {
-        self.get_item(&index).await
+        self.read_key(&self.derive_key(&index)).await
     }
 
     async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error> {
         let mut items = Vec::with_capacity(range.len());
         for index in range {
-            let item = match self.get_item(&index).await? {
+            let item = match self.read_key(&self.derive_key(&index)).await? {
                 Some(item) => item,
                 None => return Ok(items),
             };
@@ -557,18 +557,18 @@ where
     E: Clone + Send + Sync,
 {
     async fn indices(&mut self) -> Result<Range<usize>, Self::Error> {
-        let range = self.get_item(&()).await?.unwrap_or_default();
+        let range = self.read_key(&self.base_key.clone()).await?.unwrap_or_default();
         Ok(range)
     }
 
     async fn get(&mut self, index: usize) -> Result<Option<T>, Self::Error> {
-        Ok(self.get_item(&index).await?)
+        Ok(self.read_key(&self.derive_key(&index)).await?)
     }
 
     async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error> {
         let mut values = Vec::new();
         for index in range {
-            match self.get_item(&index).await? {
+            match self.read_key(&self.derive_key(&index)).await? {
                 None => return Ok(values),
                 Some(value) => values.push(value),
             }
@@ -629,7 +629,7 @@ where
     E: Clone + Send + Sync,
 {
     async fn get(&mut self, index: &I) -> Result<Option<V>, Self::Error> {
-        Ok(self.get_item(&index).await?)
+        Ok(self.read_key(&self.derive_key(&index)).await?)
     }
 
     fn insert(&mut self, batch: &mut Self::Batch, index: I, value: V) -> Result<(), Self::Error> {
