@@ -48,51 +48,50 @@ pub trait ValidatorNode {
 /// Error type for node queries.
 ///
 /// This error is meant to be serialized over the network and aggregated by clients (i.e.
-/// clients will track validator votes on each error value). This means that precision is
-/// not necessarily desirable --- or even correct: in the case of retryable errors such as
-/// `BlockProposalHasMissingUpdates`, we have to remove details so that validators can
-/// *agree* on the error.
+/// clients will track validator votes on each error value).
 // TODO(#148): We should have more entries here and never create a `WorkerError` outside the worker.
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash)]
 pub enum NodeError {
-    #[error("Client's block proposal for chain {chain_id} did not reach a quorum because some validators are missing incoming messages")]
-    BlockProposalHasMissingUpdates { chain_id: ChainId },
-    #[error("Failed to download the requested certificate(s) for chain {chain_id} in order to advance to the next height {target_next_block_height}")]
+    #[error(
+        "Failed to download the requested certificate(s) for chain {chain_id:?} \
+         in order to advance to the next height {target_next_block_height}"
+    )]
     CannotDownloadCertificates {
         chain_id: ChainId,
         target_next_block_height: BlockHeight,
     },
+
     #[error("Validator's response to block proposal failed to include a vote")]
     MissingVoteInValidatorResponse,
-    #[error("Failed to update validator because our local node doesn't have an active chain {0}")]
+
+    #[error(
+        "Failed to update validator because our local node doesn't have an active chain {0:?}"
+    )]
     InactiveLocalChain(ChainId),
+
+    #[error(
+        "Failed to submit block proposal: chain {chain_id:?} was still inactive \
+         after validator synchronization and {retries} retries"
+    )]
+    ProposedBlockToInactiveChain { chain_id: ChainId, retries: usize },
+
+    #[error(
+        "Failed to submit block proposal: chain {chain_id:?} was still missing messages \
+         after validator synchronization and {retries} retries"
+    )]
+    ProposedBlockWithLaggingMessages { chain_id: ChainId, retries: usize },
+
     #[error("Error while accessing storage view: {error}")]
     ViewError { error: String },
+
     #[error("{0}")]
-    WorkerError(linera_base::error::Error),
+    WorkerError(#[from] linera_base::error::Error),
 }
 
 impl From<ViewError> for NodeError {
     fn from(error: ViewError) -> Self {
         Self::ViewError {
             error: error.to_string(),
-        }
-    }
-}
-
-impl From<linera_base::error::Error> for NodeError {
-    fn from(error: linera_base::error::Error) -> Self {
-        match error {
-            linera_base::error::Error::MissingCrossChainUpdate { chain_id, .. } => {
-                // In `linera-core/src/updater.rs`, the function `communicate_with_quorum`
-                // is distinguishing "trusted" errors that were returned consistently by
-                // many validators. The following error is used to retry synchronization
-                // in clients. It must be aggregated under this simplified form because
-                // validators may not agree on the details of what's missing and we need
-                // the error to be "trusted" for the retry to happen.
-                NodeError::BlockProposalHasMissingUpdates { chain_id }
-            }
-            error => NodeError::WorkerError(error),
         }
     }
 }
@@ -227,7 +226,7 @@ where
         Ok(info)
     }
 
-    pub async fn local_chain_info(&mut self, chain_id: ChainId) -> Result<ChainInfo, NodeError> {
+    async fn local_chain_info(&mut self, chain_id: ChainId) -> Result<ChainInfo, NodeError> {
         let query = ChainInfoQuery::new(chain_id);
         Ok(self.handle_chain_info_query(query).await?.info)
     }
@@ -268,7 +267,7 @@ where
         }
     }
 
-    pub async fn try_download_certificates_from<A>(
+    async fn try_download_certificates_from<A>(
         &mut self,
         name: ValidatorName,
         mut client: A,

@@ -500,28 +500,35 @@ MultiOwnerManager:
 NodeError:
   ENUM:
     0:
-      BlockProposalHasMissingUpdates:
-        STRUCT:
-          - chain_id:
-              TYPENAME: ChainId
-    1:
       CannotDownloadCertificates:
         STRUCT:
           - chain_id:
               TYPENAME: ChainId
           - target_next_block_height:
               TYPENAME: BlockHeight
-    2:
+    1:
       MissingVoteInValidatorResponse: UNIT
-    3:
+    2:
       InactiveLocalChain:
         NEWTYPE:
           TYPENAME: ChainId
+    3:
+      ProposedBlockToInactiveChain:
+        STRUCT:
+          - chain_id:
+              TYPENAME: ChainId
+          - retries: U64
     4:
+      ProposedBlockWithLaggingMessages:
+        STRUCT:
+          - chain_id:
+              TYPENAME: ChainId
+          - retries: U64
+    5:
       ViewError:
         STRUCT:
           - error: STR
-    5:
+    6:
       WorkerError:
         NEWTYPE:
           TYPENAME: Error
