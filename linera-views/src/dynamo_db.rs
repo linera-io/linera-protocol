@@ -567,6 +567,9 @@ where
         batch: &mut Self::Batch,
         values: Vec<T>,
     ) -> Result<(), Self::Error> {
+        if values.is_empty() {
+            return Ok(());
+        }
         for value in values {
             self.put_item_batch(batch, &stored_indices.end, &value);
             stored_indices.end += 1;

@@ -161,6 +161,14 @@ impl<E> RocksdbContext<E> {
         );
         key
     }
+
+    async fn find_keys_with_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Vec<Vec<u8>>, RocksdbContextError> {
+        self.db.find_keys_with_prefix(key_prefix).await
+    }
+
 }
 
 pub enum WriteOperation {
@@ -377,7 +385,7 @@ where
 
     fn append_back(
         &mut self,
-        range: &mut Range<usize>,
+        stored_indices: &mut Range<usize>,
         batch: &mut Self::Batch,
         values: Vec<T>,
     ) -> Result<(), Self::Error> {
@@ -385,10 +393,10 @@ where
             return Ok(());
         }
         for value in values {
-            batch.write_key(self.derive_key(&range.end), &value)?;
-            range.end += 1;
+            batch.write_key(self.derive_key(&stored_indices.end), &value)?;
+            stored_indices.end += 1;
         }
-        batch.write_key(self.base_key.clone(), &range)
+        batch.write_key(self.base_key.clone(), &stored_indices)
     }
 
     fn delete(
@@ -433,7 +441,7 @@ where
     async fn indices(&mut self) -> Result<Vec<I>, RocksdbContextError> {
         let len = self.base_key.len();
         let mut keys = Vec::new();
-        for key in self.db.find_keys_with_prefix(&self.base_key).await? {
+        for key in self.find_keys_with_prefix(&self.base_key).await? {
             keys.push(bcs::from_bytes(&key[len..])?);
         }
         Ok(keys)
@@ -444,7 +452,7 @@ where
         F: FnMut(I) + Send,
     {
         let len = self.base_key.len();
-        for key in self.db.find_keys_with_prefix(&self.base_key).await? {
+        for key in self.find_keys_with_prefix(&self.base_key).await? {
             let key = bcs::from_bytes(&key[len..])?;
             f(key);
         }
@@ -452,7 +460,7 @@ where
     }
 
     async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), RocksdbContextError> {
-        for key in self.db.find_keys_with_prefix(&self.base_key).await? {
+        for key in self.find_keys_with_prefix(&self.base_key).await? {
             batch.delete_key(key);
         }
         Ok(())
@@ -495,7 +503,7 @@ where
         let base = self.derive_key(&CollectionKey::Index(()));
         let len = base.len();
         let mut keys = Vec::new();
-        for bytes in self.db.find_keys_with_prefix(&base).await? {
+        for bytes in self.find_keys_with_prefix(&base).await? {
             match bcs::from_bytes(&bytes[len..]) {
                 Ok(key) => {
                     keys.push(key);
@@ -516,7 +524,7 @@ where
         // start with that of `CollectionKey::Index(())`, that is, the enum tag.
         let base = self.derive_key(&CollectionKey::Index(()));
         let len = base.len();
-        for bytes in self.db.find_keys_with_prefix(&base).await? {
+        for bytes in self.find_keys_with_prefix(&base).await? {
             match bcs::from_bytes(&bytes[len..]) {
                 Ok(key) => {
                     f(key);
