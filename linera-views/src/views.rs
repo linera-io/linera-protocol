@@ -28,7 +28,7 @@ pub trait Context {
     type Extra: Clone + Send + Sync;
 
     /// The error type in use by internal operations.
-    /// In practice, we always want `ViewError: Self::Error` here.
+    /// In practice, we always want `ViewError: From<Self::Error>` here.
     type Error: std::error::Error + Debug + Send + Sync + 'static;
 
     /// Getter for the user provided data.
