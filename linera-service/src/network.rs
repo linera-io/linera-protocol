@@ -154,6 +154,7 @@ where
     ViewError: From<S::ContextError>,
 {
     async fn forward_cross_chain_queries(
+        nickname: String,
         network: ValidatorInternalNetworkConfig,
         cross_chain_max_retries: usize,
         cross_chain_retry_delay: Duration,
@@ -177,19 +178,22 @@ where
                     Err(error) => {
                         if i < cross_chain_max_retries {
                             error!(
-                                "Failed to send cross-chain query ({}-th retry): {}",
-                                i, error
+                                "[{}] Failed to send cross-chain query ({}-th retry): {}",
+                                nickname, i, error
                             );
                             tokio::time::sleep(cross_chain_retry_delay).await;
                         } else {
                             error!(
-                                "Failed to send cross-chain query (giving up after {} retries): {}",
-                                i, error
+                                "[{}] Failed to send cross-chain query (giving up after {} retries): {}",
+                                nickname, i, error
                             );
                         }
                     }
                     _ => {
-                        debug!("Sent cross-chain query: {} -> {}", this_shard, shard_id);
+                        debug!(
+                            "[{}] Sent cross-chain query: {} -> {}",
+                            nickname, this_shard, shard_id
+                        );
                         queries_sent += 1;
                         break;
                     }
@@ -197,8 +201,8 @@ where
             }
             if queries_sent % 2000 == 0 {
                 debug!(
-                    "{} has sent {} cross-chain queries to {}:{} (shard {})",
-                    this_shard, queries_sent, shard.host, shard.port, shard_id,
+                    "[{}] {} has sent {} cross-chain queries to {}:{} (shard {})",
+                    nickname, this_shard, queries_sent, shard.host, shard.port, shard_id,
                 );
             }
         }
@@ -214,6 +218,7 @@ where
         let (cross_chain_sender, cross_chain_receiver) =
             mpsc::channel(self.cross_chain_config.queue_size);
         tokio::spawn(Self::forward_cross_chain_queries(
+            self.state.nickname().to_string(),
             self.network.clone(),
             self.cross_chain_config.max_retries,
             Duration::from_millis(self.cross_chain_config.retry_delay_ms),
@@ -274,7 +279,11 @@ where
                             self.handle_continuation(continuation).await;
                         }
                         Err(error) => {
-                            error!("Failed to handle cross-chain request: {}", error);
+                            error!(
+                                "[{}] Failed to handle cross-chain request: {}",
+                                self.server.state.nickname(),
+                                error
+                            );
                         }
                     }
                     // No user to respond to.
@@ -288,7 +297,8 @@ where
             self.server.packets_processed += 1;
             if self.server.packets_processed % 5000 == 0 {
                 debug!(
-                    "{}:{} (shard {}) has processed {} packets",
+                    "[{}] {}:{} (shard {}) has processed {} packets",
+                    self.server.state.nickname(),
                     self.server.host,
                     self.server.port,
                     self.server.shard_id,
@@ -299,7 +309,11 @@ where
             match reply {
                 Ok(x) => x,
                 Err(error) => {
-                    warn!("User query failed: {}", error);
+                    warn!(
+                        "[{}] User query failed: {}",
+                        self.server.state.nickname(),
+                        error
+                    );
                     self.server.user_errors += 1;
                     Some(NodeError::from(error).into())
                 }
@@ -320,8 +334,10 @@ where
             for request in requests {
                 let shard_id = self.server.network.get_shard_id(request.target_chain_id());
                 debug!(
-                    "Scheduling cross-chain query: {} -> {}",
-                    self.server.shard_id, shard_id
+                    "[{}] Scheduling cross-chain query: {} -> {}",
+                    self.server.state.nickname(),
+                    self.server.shard_id,
+                    shard_id
                 );
                 self.cross_chain_sender
                     .send((request.into(), shard_id))
