@@ -133,13 +133,9 @@ where
         let mut map = self.map.write().await;
         for ent in batch.0 {
             match ent {
-                WriteOperation::Put { key, value } => {
-                    map.insert(key, value);
-                }
-                WriteOperation::Delete { key } => {
-                    map.remove(&key);
-                }
-            }
+                WriteOperation::Put { key, value } => map.insert(key, value),
+                WriteOperation::Delete { key } => map.remove(&key),
+            };
         }
         Ok(())
     }
