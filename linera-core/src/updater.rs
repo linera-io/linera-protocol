@@ -15,7 +15,11 @@ use linera_base::{
 use linera_chain::messages::{BlockProposal, Certificate, Vote};
 use linera_storage::Store;
 use linera_views::views::ViewError;
-use std::{collections::HashMap, hash::Hash, time::Duration};
+use std::{
+    collections::{BTreeMap, HashMap},
+    hash::Hash,
+    time::Duration,
+};
 
 /// Used for `communicate_chain_updates`
 #[allow(clippy::large_enum_variant)]
@@ -277,14 +281,18 @@ where
         &mut self,
         chain_id: ChainId,
     ) -> Result<(), NodeError> {
-        let mut info = Vec::new();
+        let mut info = BTreeMap::new();
         {
             let mut chain = self.store.load_chain(chain_id).await?;
             for id in chain.communication_states.indices().await? {
                 let state = chain.communication_states.load_entry(id).await?;
                 for origin in state.inboxes.indices().await? {
                     let inbox = state.inboxes.load_entry(origin.clone()).await?;
-                    info.push((origin.chain_id, *inbox.next_height_to_receive.get()));
+                    let next_height = info.entry(origin.chain_id).or_default();
+                    let inbox_next_height = *inbox.next_height_to_receive.get();
+                    if inbox_next_height > *next_height {
+                        *next_height = inbox_next_height;
+                    }
                 }
             }
         }
