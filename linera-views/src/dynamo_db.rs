@@ -383,21 +383,14 @@ impl<E> DynamoDbContext<E> {
     /// # Panics
     ///
     /// If the raw key bytes can't be deserialized into a `Key`.
-    async fn get_sub_keys<Key, ExtraSuffix>(
+    async fn get_sub_keys<Key>(
         &mut self,
-        extra_suffix_for_key_prefix: &ExtraSuffix,
+        key_prefix: &Vec<u8>,
     ) -> Result<Vec<Key>, DynamoDbContextError>
     where
         Key: DeserializeOwned,
-        ExtraSuffix: Serialize,
     {
-        let extra_prefix_bytes =
-            bcs::to_bytes(extra_suffix_for_key_prefix).expect("Failed to serialize suffix");
-        let extra_prefix_bytes_count = extra_prefix_bytes.len();
-
-        let mut prefix_bytes = self.base_key.clone();
-        prefix_bytes.extend(extra_prefix_bytes);
-
+        let extra_prefix_bytes_count = key_prefix.len() - self.base_key.len();
         let response = self
             .client
             .query()
@@ -410,7 +403,7 @@ impl<E> DynamoDbContext<E> {
                 ":partition",
                 AttributeValue::B(Blob::new(DUMMY_PARTITION_KEY)),
             )
-            .expression_attribute_values(":prefix", AttributeValue::B(Blob::new(prefix_bytes)))
+            .expression_attribute_values(":prefix", AttributeValue::B(Blob::new(key_prefix.to_vec())))
             .send()
             .await?;
 
@@ -643,21 +636,21 @@ where
     }
 
     async fn indices(&mut self) -> Result<Vec<I>, Self::Error> {
-        self.get_sub_keys(&()).await
+        self.get_sub_keys(&self.base_key.clone()).await
     }
 
     async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), Self::Error>
     where
         F: FnMut(I) + Send,
     {
-        for index in self.get_sub_keys(&()).await? {
+        for index in self.get_sub_keys(&self.base_key.clone()).await? {
             f(index);
         }
         Ok(())
     }
 
     async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error> {
-        for key in self.get_sub_keys::<I, _>(&()).await? {
+        for key in self.get_sub_keys::<I>(&self.base_key.clone()).await? {
             self.remove_item_batch(batch, &key);
         }
         Ok(())
@@ -713,14 +706,14 @@ where
     }
 
     async fn indices(&mut self) -> Result<Vec<I>, Self::Error> {
-        self.get_sub_keys(&CollectionKey::Index(())).await
+        self.get_sub_keys(&self.derive_key(&CollectionKey::Index(()))).await
     }
 
     async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), Self::Error>
     where
         F: FnMut(I) + Send,
     {
-        for index in self.get_sub_keys(&()).await? {
+        for index in self.get_sub_keys(&self.base_key.clone()).await? {
             f(index);
         }
         Ok(())
