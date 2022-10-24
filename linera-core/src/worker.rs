@@ -84,6 +84,10 @@ impl<Client> WorkerState<Client> {
         self
     }
 
+    pub fn nickname(&self) -> &str {
+        &self.nickname
+    }
+
     pub(crate) fn storage_client(&self) -> &Client {
         &self.storage
     }
@@ -589,7 +593,7 @@ where
                         // now. Accordingly, do not send a confirmation, so that the
                         // message is retried later.
                         log::warn!(
-                            "{}: refusing to store inactive chain {recipient:?}",
+                            "[{}] refusing to store inactive chain {recipient:?}",
                             self.nickname
                         );
                         return Ok(Vec::new());
@@ -606,7 +610,10 @@ where
                         // Refuse to persist the chain state if the latest epoch in
                         // the received blocks from this recipient is not recognized
                         // any more by the receiving chain. (Future epochs are ok.)
-                        log::warn!("Refusing updates from untrusted epoch {epoch:?}");
+                        log::warn!(
+                            "[{}] refusing updates from untrusted epoch {epoch:?}",
+                            self.nickname
+                        );
                         return Ok(Vec::new());
                     }
                 }
