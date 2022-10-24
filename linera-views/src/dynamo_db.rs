@@ -49,12 +49,40 @@ pub enum WriteOperation {
 
 pub struct Batch(Vec<WriteOperation>);
 
+trait WriteOperations {
+    fn write_key<V: Serialize>(
+	&mut self,
+        key: Vec<u8>,
+        value: &V,
+    ) -> Result<(), DynamoDbContextError>;
+
+    fn delete_key(&mut self, key: Vec<u8>);
+}
+
+#[async_trait]
+impl WriteOperations for Batch {
+    fn write_key<V: Serialize>(
+        &mut self,
+        key: Vec<u8>,
+        value: &V,
+    ) -> Result<(), DynamoDbContextError> {
+	let bytes = bcs::to_bytes(value)?;
+        self.0.push(WriteOperation::Put { key, value: bytes });
+        Ok(())
+    }
+
+    fn delete_key(&mut self, key: Vec<u8>) {
+        self.0.push(WriteOperation::Delete { key: key.to_vec() });
+    }
+}
+
+
 /// A implementation of [`Context`] based on DynamoDB.
 #[derive(Debug, Clone)]
 pub struct DynamoDbContext<E> {
     client: Client,
     table: TableName,
-    key_prefix: Vec<u8>,
+    base_key: Vec<u8>,
     extra: E,
 }
 
@@ -62,25 +90,25 @@ impl<E> DynamoDbContext<E> {
     /// Create a new [`DynamoDbContext`] instance.
     pub async fn new(
         table: TableName,
-        key_prefix: Vec<u8>,
+        base_key: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), CreateTableError> {
         let config = aws_config::load_from_env().await;
 
-        DynamoDbContext::from_config(&config, table, key_prefix, extra).await
+        DynamoDbContext::from_config(&config, table, base_key, extra).await
     }
 
     /// Create a new [`DynamoDbContext`] instance using the provided `config` parameters.
     pub async fn from_config(
         config: impl Into<Config>,
         table: TableName,
-        key_prefix: Vec<u8>,
+        base_key: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), CreateTableError> {
         let storage = DynamoDbContext {
             client: Client::from_conf(config.into()),
             table,
-            key_prefix,
+            base_key,
             extra,
         };
 
@@ -96,7 +124,7 @@ impl<E> DynamoDbContext<E> {
     /// [`TableStatus`] to indicate if the table was created or if it already exists.
     pub async fn with_localstack(
         table: TableName,
-        key_prefix: Vec<u8>,
+        base_key: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), LocalStackError> {
         let base_config = aws_config::load_from_env().await;
@@ -104,7 +132,7 @@ impl<E> DynamoDbContext<E> {
             .endpoint_resolver(localstack::get_endpoint()?)
             .build();
 
-        Ok(DynamoDbContext::from_config(config, table, key_prefix, extra).await?)
+        Ok(DynamoDbContext::from_config(config, table, base_key, extra).await?)
     }
 
     /// Clone this [`DynamoDbContext`] while entering a sub-scope.
@@ -119,7 +147,7 @@ impl<E> DynamoDbContext<E> {
         DynamoDbContext {
             client: self.client.clone(),
             table: self.table.clone(),
-            key_prefix: self.extend_prefix(scope_prefix),
+            base_key: self.extend_prefix(scope_prefix),
             extra: new_extra,
         }
     }
@@ -177,7 +205,7 @@ impl<E> DynamoDbContext<E> {
     /// This is used to enter a sub-view's scope.
     fn extend_prefix(&self, marker: &impl Serialize) -> Vec<u8> {
         [
-            self.key_prefix.as_slice(),
+            self.base_key.as_slice(),
             &bcs::to_bytes(marker).expect("Failed to serialize marker to extend key prefix"),
         ]
         .concat()
@@ -260,7 +288,7 @@ impl<E> DynamoDbContext<E> {
         Self::extract_attribute(
             attributes,
             KEY_ATTRIBUTE,
-            Some(self.key_prefix.len() + extra_bytes_to_skip.unwrap_or(0)),
+            Some(self.base_key.len() + extra_bytes_to_skip.unwrap_or(0)),
             DynamoDbContextError::MissingKey,
             DynamoDbContextError::wrong_key_type,
             DynamoDbContextError::KeyDeserialization,
@@ -365,7 +393,7 @@ impl<E> DynamoDbContext<E> {
             bcs::to_bytes(extra_suffix_for_key_prefix).expect("Failed to serialize suffix");
         let extra_prefix_bytes_count = extra_prefix_bytes.len();
 
-        let mut prefix_bytes = self.key_prefix.clone();
+        let mut prefix_bytes = self.base_key.clone();
         prefix_bytes.extend(extra_prefix_bytes);
 
         let response = self
@@ -441,7 +469,7 @@ where
         DynamoDbContext {
             client: self.client.clone(),
             table: self.table.clone(),
-            key_prefix: self.extend_prefix(&index),
+            base_key: self.extend_prefix(&index),
             extra: self.extra.clone(),
         }
     }
@@ -667,7 +695,7 @@ where
         DynamoDbContext {
             client: self.client.clone(),
             table: self.table.clone(),
-            key_prefix: self.extend_prefix(&CollectionKey::Subview(index)),
+            base_key: self.extend_prefix(&CollectionKey::Subview(index)),
             extra: self.extra.clone(),
         }
     }

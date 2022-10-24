@@ -47,7 +47,7 @@ pub trait KeyValueOperations {
     async fn count_keys(&self) -> Result<usize, RocksdbContextError>;
 }
 
-/// Low-level, blocking write operations.
+/// Low-level non-blocking write operations.
 trait WriteOperations {
     fn write_key<V: Serialize>(
         &mut self,
@@ -177,20 +177,6 @@ pub enum WriteOperation {
 }
 
 pub struct Batch(Vec<WriteOperation>);
-
-impl std::ops::Deref for Batch {
-    type Target = Vec<WriteOperation>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl std::ops::DerefMut for Batch {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
 
 #[async_trait]
 impl<E> Context for RocksdbContext<E>
