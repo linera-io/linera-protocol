@@ -162,13 +162,19 @@ impl<E> RocksdbContext<E> {
         key
     }
 
+    async fn read_key<V: DeserializeOwned>(
+        &mut self,
+        key: &Vec<u8>,
+    ) -> Result<Option<V>, RocksdbContextError> {
+        self.db.read_key(key).await
+    }
+
     async fn find_keys_with_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<Vec<u8>>, RocksdbContextError> {
         self.db.find_keys_with_prefix(key_prefix).await
     }
-
 }
 
 pub enum WriteOperation {
@@ -249,7 +255,7 @@ where
     E: Clone + Send + Sync,
 {
     async fn get(&mut self) -> Result<T, RocksdbContextError> {
-        let value = self.db.read_key(&self.base_key).await?.unwrap_or_default();
+        let value = self.read_key(&self.base_key.clone()).await?.unwrap_or_default();
         Ok(value)
     }
 
@@ -271,18 +277,18 @@ where
     E: Clone + Send + Sync,
 {
     async fn count(&mut self) -> Result<usize, RocksdbContextError> {
-        let count = self.db.read_key(&self.base_key).await?.unwrap_or_default();
+        let count = self.read_key(&self.base_key.clone()).await?.unwrap_or_default();
         Ok(count)
     }
 
     async fn get(&mut self, index: usize) -> Result<Option<T>, RocksdbContextError> {
-        self.db.read_key(&self.derive_key(&index)).await
+        self.read_key(&self.derive_key(&index)).await
     }
 
     async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, RocksdbContextError> {
         let mut values = Vec::new();
         for i in range {
-            match self.db.read_key(&self.derive_key(&i)).await? {
+            match self.read_key(&self.derive_key(&i)).await? {
                 None => {
                     return Ok(values);
                 }
@@ -328,18 +334,18 @@ where
     E: Clone + Send + Sync,
 {
     async fn indices(&mut self) -> Result<Range<usize>, Self::Error> {
-        let range = self.db.read_key(&self.base_key).await?.unwrap_or_default();
+        let range = self.read_key(&self.base_key.clone()).await?.unwrap_or_default();
         Ok(range)
     }
 
     async fn get(&mut self, index: usize) -> Result<Option<T>, Self::Error> {
-        Ok(self.db.read_key(&self.derive_key(&index)).await?)
+        Ok(self.read_key(&self.derive_key(&index)).await?)
     }
 
     async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error> {
         let mut values = Vec::new();
         for i in range {
-            match self.db.read_key(&self.derive_key(&i)).await? {
+            match self.read_key(&self.derive_key(&i)).await? {
                 None => {
                     return Ok(values);
                 }
@@ -406,7 +412,7 @@ where
     E: Clone + Send + Sync,
 {
     async fn get(&mut self, index: &I) -> Result<Option<V>, RocksdbContextError> {
-        Ok(self.db.read_key(&self.derive_key(index)).await?)
+        Ok(self.read_key(&self.derive_key(index)).await?)
     }
 
     fn insert(
