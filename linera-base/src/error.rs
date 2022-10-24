@@ -102,8 +102,9 @@ pub enum Error {
     #[error("A different block for height {0:?} was already locked at round number {1:?}")]
     HasLockedBlock(BlockHeight, RoundNumber),
     #[error(
-        "This replica has not processed any update from {origin:?} \
-        at height {height:?} yet"
+        "Cannot vote for block proposal of chain {chain_id:?} because a message \
+         from chain {origin:?} at height {height:?} (application {application_id:?}) \
+         has not been received yet"
     )]
     MissingCrossChainUpdate {
         chain_id: ChainId,
@@ -113,7 +114,7 @@ pub enum Error {
     },
     #[error(
         "Message in block proposal does not match received message from {origin:?} \
-        at height {height:?} and index {index:?}"
+        at height {height:?} and index {index:?} (application {application_id:?})"
     )]
     InvalidMessageContent {
         chain_id: ChainId,
@@ -125,7 +126,7 @@ pub enum Error {
     #[error(
         "Message in block proposal does not match the order of received messages from \
         chain {origin:?}: was height {height:?} and index {index:?} \
-        instead of {expected_height:?} and {expected_index:?})"
+        instead of {expected_height:?} and {expected_index:?} (application {application_id:?})"
     )]
     InvalidMessage {
         chain_id: ChainId,
@@ -138,7 +139,7 @@ pub enum Error {
     },
     #[error(
         "The given incoming message from {origin:?} at height {height:?} and \
-         index {index:?} is out of order"
+         index {index:?} (application {application_id:?}) is out of order"
     )]
     InvalidMessageOrder {
         chain_id: ChainId,
