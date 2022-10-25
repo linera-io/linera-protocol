@@ -44,6 +44,11 @@ pub trait KeyValueOperations {
         key_prefix: &[u8],
     ) -> Result<Vec<Vec<u8>>, RocksdbContextError>;
 
+    async fn get_sub_keys<Key: DeserializeOwned + Send>(
+        &mut self,
+        key_prefix: &Vec<u8>,
+    ) -> Result<Vec<Key>, RocksdbContextError>;
+
     async fn count_keys(&self) -> Result<usize, RocksdbContextError>;
 }
 
@@ -106,6 +111,19 @@ impl KeyValueOperations for Arc<DB> {
         Ok(keys)
     }
 
+    async fn get_sub_keys<Key: DeserializeOwned + Send>(
+        &mut self,
+        key_prefix: &Vec<u8>,
+    ) -> Result<Vec<Key>, RocksdbContextError>
+    {
+        let len = key_prefix.len();
+        let mut keys = Vec::new();
+        for key in self.find_keys_with_prefix(key_prefix).await? {
+            keys.push(bcs::from_bytes(&key[len..])?);
+        }
+        Ok(keys)
+    }
+
     async fn count_keys(&self) -> Result<usize, RocksdbContextError> {
         let db = self.clone();
         let size =
@@ -146,6 +164,13 @@ impl<E> RocksdbContext<E> {
         key_prefix: &[u8],
     ) -> Result<Vec<Vec<u8>>, RocksdbContextError> {
         self.db.find_keys_with_prefix(key_prefix).await
+    }
+    
+    async fn get_sub_keys<Key: DeserializeOwned + Send>(
+        &mut self,
+        key_prefix: &Vec<u8>,
+    ) -> Result<Vec<Key>, RocksdbContextError> {
+        self.db.get_sub_keys(key_prefix).await
     }
 
     fn put_item_batch(&self, batch: &mut Batch, key: Vec<u8>, value: &impl Serialize) -> Result<(), RocksdbContextError> {
@@ -402,21 +427,14 @@ where
     }
 
     async fn indices(&mut self) -> Result<Vec<I>, RocksdbContextError> {
-        let len = self.base_key.len();
-        let mut keys = Vec::new();
-        for key in self.find_keys_with_prefix(&self.base_key).await? {
-            keys.push(bcs::from_bytes(&key[len..])?);
-        }
-        Ok(keys)
+        self.get_sub_keys(&self.base_key.clone()).await
     }
 
     async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), RocksdbContextError>
     where
         F: FnMut(I) + Send,
     {
-        let len = self.base_key.len();
-        for key in self.find_keys_with_prefix(&self.base_key).await? {
-            let key = bcs::from_bytes(&key[len..])?;
+        for key in self.get_sub_keys(&self.base_key.clone()).await? {
             f(key);
         }
         Ok(())
@@ -464,12 +482,7 @@ where
         // Hack: the BCS-serialization of `CollectionKey::Index(value)` for any `value` must
         // start with that of `CollectionKey::Index(())`, that is, the enum tag.
         let base = self.derive_key(&CollectionKey::Index(()));
-        let len = base.len();
-        let mut keys = Vec::new();
-        for bytes in self.find_keys_with_prefix(&base).await? {
-            keys.push(bcs::from_bytes(&bytes[len..])?);
-        }
-        Ok(keys)
+        self.get_sub_keys(&base).await
     }
 
     async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), Self::Error>
@@ -477,9 +490,7 @@ where
         F: FnMut(I) + Send,
     {
         let base = self.derive_key(&CollectionKey::Index(()));
-        let len = base.len();
-        for bytes in self.find_keys_with_prefix(&base).await? {
-            let key = bcs::from_bytes(&bytes[len..])?;
+        for key in self.get_sub_keys(&base).await? {
             f(key);
         }
         Ok(())
