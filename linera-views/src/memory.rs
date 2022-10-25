@@ -170,10 +170,7 @@ where
     E: Clone + Send + Sync,
 {
     async fn count(&mut self) -> Result<usize, MemoryContextError> {
-        let count = self
-            .read_key(&self.base_key.clone())
-            .await?
-            .unwrap_or_default();
+        let count = self.read_key(&self.base_key.clone()).await?.unwrap_or_default();
         Ok(count)
     }
 
@@ -182,15 +179,14 @@ where
     }
 
     async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, MemoryContextError> {
-        let mut items = Vec::with_capacity(range.len());
+        let mut values = Vec::with_capacity(range.len());
         for index in range {
-            let item = match self.read_key(&self.derive_key(&index)).await? {
-                Some(item) => item,
-                None => return Ok(items),
+            match self.read_key(&self.derive_key(&index)).await? {
+                None => return Ok(values),
+                Some(value) => values.push(value),
             };
-            items.push(item);
         }
-        Ok(items)
+        Ok(values)
     }
 
     fn append(
@@ -259,6 +255,9 @@ where
         batch: &mut Self::Batch,
         count: usize,
     ) -> Result<(), Self::Error> {
+        if count == 0 {
+            return Ok(());
+        }
         let deletion_range = stored_indices.clone().take(count);
         stored_indices.start += count;
         self.put_item_batch(batch, self.base_key.clone(), &stored_indices)?;

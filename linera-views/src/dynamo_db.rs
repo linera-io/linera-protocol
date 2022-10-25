@@ -544,6 +544,9 @@ where
         batch: &mut Self::Batch,
         count: usize,
     ) -> Result<(), Self::Error> {
+        if count == 0 {
+            return Ok(());
+        }
         let deletion_range = stored_indices.clone().take(count);
         stored_indices.start += count;
         self.put_item_batch(batch, self.base_key.clone(), &stored_indices)?;

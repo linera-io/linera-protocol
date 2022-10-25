@@ -269,15 +269,11 @@ where
     }
 
     async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, RocksdbContextError> {
-        let mut values = Vec::new();
-        for i in range {
-            match self.read_key(&self.derive_key(&i)).await? {
-                None => {
-                    return Ok(values);
-                }
-                Some(value) => {
-                    values.push(value);
-                }
+        let mut values = Vec::with_capacity(range.len());
+        for index in range {
+            match self.read_key(&self.derive_key(&index)).await? {
+                None => return Ok(values),
+                Some(value) => values.push(value),
             }
         }
         Ok(values)
@@ -329,12 +325,8 @@ where
         let mut values = Vec::new();
         for i in range {
             match self.read_key(&self.derive_key(&i)).await? {
-                None => {
-                    return Ok(values);
-                }
-                Some(value) => {
-                    values.push(value);
-                }
+                None => return Ok(values),
+                Some(value) => values.push(value),
             }
         }
         Ok(values)
@@ -371,7 +363,8 @@ where
             self.put_item_batch(batch, self.derive_key(&stored_indices.end), &value)?;
             stored_indices.end += 1;
         }
-        self.put_item_batch(batch, self.base_key.clone(), &stored_indices)
+        self.put_item_batch(batch, self.base_key.clone(), &stored_indices)?;
+        Ok(())
     }
 
     fn delete(
