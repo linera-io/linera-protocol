@@ -185,8 +185,10 @@ impl<E> DynamoDbContext<E> {
         key
     }
 
-    fn put_item_batch(&self, batch: &mut Batch, key: Vec<u8>, value: &impl Serialize) {
-	batch.0.push(WriteOperation::Put { key, value: bcs::to_bytes(value).expect("Serialization failed") });
+    fn put_item_batch(&self, batch: &mut Batch, key: Vec<u8>, value: &impl Serialize) -> Result<(), DynamoDbContextError> {
+        let bytes = bcs::to_bytes(value)?;
+	batch.0.push(WriteOperation::Put { key, value: bytes });
+        Ok(())
     }
 
     fn remove_item_batch(&self, batch: &mut Batch, key: Vec<u8>) {
@@ -449,7 +451,7 @@ where
     }
 
     fn set(&mut self, batch: &mut Self::Batch, value: &T) -> Result<(), Self::Error> {
-        self.put_item_batch(batch, self.base_key.clone(), value);
+        self.put_item_batch(batch, self.base_key.clone(), value)?;
         Ok(())
     }
 
@@ -494,10 +496,10 @@ where
     ) -> Result<(), Self::Error> {
         let mut count = stored_count;
         for value in values {
-            self.put_item_batch(batch, self.derive_key(&count), &value);
+            self.put_item_batch(batch, self.derive_key(&count), &value)?;
             count += 1;
         }
-        self.put_item_batch(batch, self.base_key.clone(), &count);
+        self.put_item_batch(batch, self.base_key.clone(), &count)?;
         Ok(())
     }
 
@@ -544,7 +546,7 @@ where
     ) -> Result<(), Self::Error> {
         let deletion_range = stored_indices.clone().take(count);
         stored_indices.start += count;
-        self.put_item_batch(batch, self.base_key.clone(), &stored_indices);
+        self.put_item_batch(batch, self.base_key.clone(), &stored_indices)?;
         for index in deletion_range {
             self.remove_item_batch(batch, self.derive_key(&index));
         }
@@ -561,10 +563,10 @@ where
             return Ok(());
         }
         for value in values {
-            self.put_item_batch(batch, self.derive_key(&stored_indices.end), &value);
+            self.put_item_batch(batch, self.derive_key(&stored_indices.end), &value)?;
             stored_indices.end += 1;
         }
-        self.put_item_batch(batch, self.base_key.clone(), &stored_indices);
+        self.put_item_batch(batch, self.base_key.clone(), &stored_indices)?;
         Ok(())
     }
 
@@ -593,7 +595,7 @@ where
     }
 
     fn insert(&mut self, batch: &mut Self::Batch, index: I, value: V) -> Result<(), Self::Error> {
-        self.put_item_batch(batch, self.derive_key(&index), &value);
+        self.put_item_batch(batch, self.derive_key(&index), &value)?;
         Ok(())
     }
 
@@ -663,7 +665,7 @@ where
     }
 
     fn add_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
-        self.put_item_batch(batch, self.derive_key(&CollectionKey::Index(index)), &());
+        self.put_item_batch(batch, self.derive_key(&CollectionKey::Index(index)), &())?;
         Ok(())
     }
 

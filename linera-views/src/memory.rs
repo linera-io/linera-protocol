@@ -148,10 +148,7 @@ where
     E: Clone + Send + Sync,
 {
     async fn get(&mut self) -> Result<T, MemoryContextError> {
-        let value = self
-            .read_key(&self.base_key.clone())
-            .await?
-            .unwrap_or_default();
+        let value = self.read_key(&self.base_key.clone()).await?.unwrap_or_default();
         Ok(value)
     }
 
