@@ -396,14 +396,8 @@ where
         let base = self.derive_key(&CollectionKey::Index(()));
         let len = base.len();
         for bytes in self.find_keys_with_prefix(&base).await? {
-            match bcs::from_bytes(&bytes[len..]) {
-                Ok(key) => {
-                    f(key);
-                }
-                Err(e) => {
-                    return Err(e.into());
-                }
-            }
+            let key = bcs::from_bytes(&bytes[len..])?;
+            f(key);
         }
         Ok(())
     }

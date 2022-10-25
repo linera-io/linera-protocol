@@ -687,8 +687,8 @@ where
     where
         F: FnMut(I) + Send,
     {
-        for index in self.get_sub_keys(&self.base_key.clone()).await? {
-            f(index);
+        for key in self.get_sub_keys(&self.base_key.clone()).await? {
+            f(key);
         }
         Ok(())
     }
