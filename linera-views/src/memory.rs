@@ -301,19 +301,14 @@ where
 impl<E, I, V> MapOperations<I, V> for MemoryContext<E>
 where
     I: Eq + Ord + Send + Sync + Clone + Serialize + DeserializeOwned + 'static,
-    V: Clone + Send + Sync + Serialize + DeserializeOwned + 'static,
+    V: Send + Sync + Serialize + DeserializeOwned + 'static,
     E: Clone + Send + Sync,
 {
     async fn get(&mut self, index: &I) -> Result<Option<V>, MemoryContextError> {
         Ok(self.read_key(&self.derive_key(index)).await?)
     }
 
-    fn insert(
-        &mut self,
-        batch: &mut Self::Batch,
-        index: I,
-        value: V,
-    ) -> Result<(), MemoryContextError> {
+    fn insert(&mut self, batch: &mut Self::Batch, index: I, value: V) -> Result<(), MemoryContextError> {
         self.put_item_batch(batch, self.derive_key(&index), &value)?;
         Ok(())
     }

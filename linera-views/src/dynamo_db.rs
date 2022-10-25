@@ -477,15 +477,14 @@ where
     }
 
     async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error> {
-        let mut items = Vec::with_capacity(range.len());
+        let mut values = Vec::with_capacity(range.len());
         for index in range {
-            let item = match self.read_key(&self.derive_key(&index)).await? {
-                Some(item) => item,
-                None => return Ok(items),
+            match self.read_key(&self.derive_key(&index)).await? {
+                Some(value) => values.push(value),
+                None => return Ok(values),
             };
-            items.push(item);
         }
-        Ok(items)
+        Ok(values)
     }
 
     fn append(
@@ -494,6 +493,9 @@ where
         batch: &mut Self::Batch,
         values: Vec<T>,
     ) -> Result<(), Self::Error> {
+        if values.is_empty() {
+            return Ok(());
+        }
         let mut count = stored_count;
         for value in values {
             self.put_item_batch(batch, self.derive_key(&count), &value)?;
@@ -528,7 +530,7 @@ where
     }
 
     async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error> {
-        let mut values = Vec::new();
+        let mut values = Vec::with_capacity(range.len());
         for index in range {
             match self.read_key(&self.derive_key(&index)).await? {
                 None => return Ok(values),
@@ -594,7 +596,7 @@ where
     E: Clone + Send + Sync,
 {
     async fn get(&mut self, index: &I) -> Result<Option<V>, Self::Error> {
-        Ok(self.read_key(&self.derive_key(&index)).await?)
+        Ok(self.read_key(&self.derive_key(index)).await?)
     }
 
     fn insert(&mut self, batch: &mut Self::Batch, index: I, value: V) -> Result<(), Self::Error> {

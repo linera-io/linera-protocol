@@ -391,12 +391,7 @@ where
         Ok(self.read_key(&self.derive_key(index)).await?)
     }
 
-    fn insert(
-        &mut self,
-        batch: &mut Self::Batch,
-        index: I,
-        value: V,
-    ) -> Result<(), RocksdbContextError> {
+    fn insert(&mut self, batch: &mut Self::Batch, index: I, value: V) -> Result<(), RocksdbContextError> {
         self.put_item_batch(batch, self.derive_key(&index), &value)?;
         Ok(())
     }
