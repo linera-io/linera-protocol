@@ -47,17 +47,6 @@ pub trait KeyValueOperations {
     async fn count_keys(&self) -> Result<usize, RocksdbContextError>;
 }
 
-/// Low-level non-blocking write operations.
-trait WriteOperations {
-    fn write_key<V: Serialize>(
-        &mut self,
-        key: Vec<u8>,
-        value: &V,
-    ) -> Result<(), RocksdbContextError>;
-
-    fn delete_key(&mut self, key: Vec<u8>);
-}
-
 #[async_trait]
 impl KeyValueOperations for Arc<DB> {
     async fn read_key<V: DeserializeOwned>(
@@ -126,23 +115,6 @@ impl KeyValueOperations for Arc<DB> {
     }
 }
 
-#[async_trait]
-impl WriteOperations for Batch {
-    fn write_key<V: Serialize>(
-        &mut self,
-        key: Vec<u8>,
-        value: &V,
-    ) -> Result<(), RocksdbContextError> {
-        let bytes = bcs::to_bytes(value)?;
-        self.0.push(WriteOperation::Put { key, value: bytes });
-        Ok(())
-    }
-
-    fn delete_key(&mut self, key: Vec<u8>) {
-        self.0.push(WriteOperation::Delete { key: key.to_vec() });
-    }
-}
-
 impl<E> RocksdbContext<E> {
     pub fn new(db: Arc<DB>, base_key: Vec<u8>, extra: E) -> Self {
         Self {
@@ -175,6 +147,17 @@ impl<E> RocksdbContext<E> {
     ) -> Result<Vec<Vec<u8>>, RocksdbContextError> {
         self.db.find_keys_with_prefix(key_prefix).await
     }
+
+    fn put_item_batch(&self, batch: &mut Batch, key: Vec<u8>, value: &impl Serialize) -> Result<(), RocksdbContextError> {
+        let bytes = bcs::to_bytes(value)?;
+        batch.0.push(WriteOperation::Put { key, value: bytes });
+        Ok(())
+    }
+
+    fn remove_item_batch(&self, batch: &mut Batch, key: Vec<u8>) {
+        batch.0.push(WriteOperation::Delete { key });
+    }
+
 }
 
 pub enum WriteOperation {
@@ -260,12 +243,12 @@ where
     }
 
     fn set(&mut self, batch: &mut Self::Batch, value: &T) -> Result<(), RocksdbContextError> {
-        batch.write_key(self.base_key.clone(), value)?;
+        self.put_item_batch(batch, self.base_key.clone(), value)?;
         Ok(())
     }
 
     fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error> {
-        batch.delete_key(self.base_key.clone());
+        self.remove_item_batch(batch, self.base_key.clone());
         Ok(())
     }
 }
@@ -311,17 +294,17 @@ where
         }
         let mut count = stored_count;
         for value in values {
-            batch.write_key(self.derive_key(&count), &value)?;
+            self.put_item_batch(batch, self.derive_key(&count), &value)?;
             count += 1;
         }
-        batch.write_key(self.base_key.clone(), &count)?;
+        self.put_item_batch(batch, self.base_key.clone(), &count)?;
         Ok(())
     }
 
     fn delete(&mut self, stored_count: usize, batch: &mut Self::Batch) -> Result<(), Self::Error> {
-        batch.delete_key(self.base_key.clone());
+        self.remove_item_batch(batch, self.base_key.clone());
         for index in 0..stored_count {
-            batch.delete_key(self.derive_key(&index));
+            self.remove_item_batch(batch, self.derive_key(&index));
         }
         Ok(())
     }
@@ -368,9 +351,9 @@ where
         }
         let deletion_range = stored_indices.clone().take(count);
         stored_indices.start += count;
-        batch.write_key(self.base_key.clone(), &stored_indices)?;
+        self.put_item_batch(batch, self.base_key.clone(), &stored_indices)?;
         for i in deletion_range {
-            batch.delete_key(self.derive_key(&i));
+            self.remove_item_batch(batch, self.derive_key(&i));
         }
         Ok(())
     }
@@ -385,10 +368,10 @@ where
             return Ok(());
         }
         for value in values {
-            batch.write_key(self.derive_key(&stored_indices.end), &value)?;
+            self.put_item_batch(batch, self.derive_key(&stored_indices.end), &value)?;
             stored_indices.end += 1;
         }
-        batch.write_key(self.base_key.clone(), &stored_indices)
+        self.put_item_batch(batch, self.base_key.clone(), &stored_indices)
     }
 
     fn delete(
@@ -396,9 +379,9 @@ where
         range: Range<usize>,
         batch: &mut Self::Batch,
     ) -> Result<(), RocksdbContextError> {
-        batch.delete_key(self.base_key.clone());
+        self.remove_item_batch(batch, self.base_key.clone());
         for i in range {
-            batch.delete_key(self.derive_key(&i));
+            self.remove_item_batch(batch, self.derive_key(&i));
         }
         Ok(())
     }
@@ -421,12 +404,12 @@ where
         index: I,
         value: V,
     ) -> Result<(), RocksdbContextError> {
-        batch.write_key(self.derive_key(&index), &value)?;
+        self.put_item_batch(batch, self.derive_key(&index), &value)?;
         Ok(())
     }
 
     fn remove(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), RocksdbContextError> {
-        batch.delete_key(self.derive_key(&index));
+        self.remove_item_batch(batch, self.derive_key(&index));
         Ok(())
     }
 
@@ -453,7 +436,7 @@ where
 
     async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), RocksdbContextError> {
         for key in self.find_keys_with_prefix(&self.base_key).await? {
-            batch.delete_key(key);
+            self.remove_item_batch(batch, key);
         }
         Ok(())
     }
@@ -480,12 +463,12 @@ where
     }
 
     fn add_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
-        batch.write_key(self.derive_key(&CollectionKey::Index(index)), &())?;
+        self.put_item_batch(batch, self.derive_key(&CollectionKey::Index(index)), &())?;
         Ok(())
     }
 
     fn remove_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
-        batch.delete_key(self.derive_key(&CollectionKey::Index(index)));
+        self.remove_item_batch(batch, self.derive_key(&CollectionKey::Index(index)));
         Ok(())
     }
 

@@ -49,34 +49,6 @@ pub enum WriteOperation {
 
 pub struct Batch(Vec<WriteOperation>);
 
-trait WriteOperations {
-    fn write_key<V: Serialize>(
-	&mut self,
-        key: Vec<u8>,
-        value: &V,
-    ) -> Result<(), DynamoDbContextError>;
-
-    fn delete_key(&mut self, key: Vec<u8>);
-}
-
-#[async_trait]
-impl WriteOperations for Batch {
-    fn write_key<V: Serialize>(
-        &mut self,
-        key: Vec<u8>,
-        value: &V,
-    ) -> Result<(), DynamoDbContextError> {
-	let bytes = bcs::to_bytes(value)?;
-        self.0.push(WriteOperation::Put { key, value: bytes });
-        Ok(())
-    }
-
-    fn delete_key(&mut self, key: Vec<u8>) {
-        self.0.push(WriteOperation::Delete { key: key.to_vec() });
-    }
-}
-
-
 /// A implementation of [`Context`] based on DynamoDB.
 #[derive(Debug, Clone)]
 pub struct DynamoDbContext<E> {
@@ -213,17 +185,12 @@ impl<E> DynamoDbContext<E> {
         key
     }
 
-    fn put_item_batch(&self, batch: &mut Batch, key: &impl Serialize, value: &impl Serialize) {
-        batch.0.push(WriteOperation::Put {
-            key: self.derive_key(key),
-            value: bcs::to_bytes(value).expect("Serialization failed"),
-        });
+    fn put_item_batch(&self, batch: &mut Batch, key: Vec<u8>, value: &impl Serialize) {
+	batch.0.push(WriteOperation::Put { key, value: bcs::to_bytes(value).expect("Serialization failed") });
     }
 
-    fn remove_item_batch(&self, batch: &mut Batch, key: &impl Serialize) {
-        batch.0.push(WriteOperation::Delete {
-            key: self.derive_key(key),
-        });
+    fn remove_item_batch(&self, batch: &mut Batch, key: Vec<u8>) {
+        batch.0.push(WriteOperation::Delete { key });
     }
 
     /// Build the key attributes for a table item.
@@ -482,12 +449,12 @@ where
     }
 
     fn set(&mut self, batch: &mut Self::Batch, value: &T) -> Result<(), Self::Error> {
-        self.put_item_batch(batch, &(), value);
+        self.put_item_batch(batch, self.base_key.clone(), value);
         Ok(())
     }
 
     fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error> {
-        self.remove_item_batch(batch, &());
+        self.remove_item_batch(batch, self.base_key.clone());
         Ok(())
     }
 }
@@ -527,17 +494,17 @@ where
     ) -> Result<(), Self::Error> {
         let mut count = stored_count;
         for value in values {
-            self.put_item_batch(batch, &count, &value);
+            self.put_item_batch(batch, self.derive_key(&count), &value);
             count += 1;
         }
-        self.put_item_batch(batch, &(), &count);
+        self.put_item_batch(batch, self.base_key.clone(), &count);
         Ok(())
     }
 
     fn delete(&mut self, stored_count: usize, batch: &mut Self::Batch) -> Result<(), Self::Error> {
-        self.remove_item_batch(batch, &());
+        self.remove_item_batch(batch, self.base_key.clone());
         for index in 0..stored_count {
-            self.remove_item_batch(batch, &index);
+            self.remove_item_batch(batch, self.derive_key(&index));
         }
         Ok(())
     }
@@ -577,9 +544,9 @@ where
     ) -> Result<(), Self::Error> {
         let deletion_range = stored_indices.clone().take(count);
         stored_indices.start += count;
-        self.put_item_batch(batch, &(), &stored_indices);
+        self.put_item_batch(batch, self.base_key.clone(), &stored_indices);
         for index in deletion_range {
-            self.remove_item_batch(batch, &index);
+            self.remove_item_batch(batch, self.derive_key(&index));
         }
         Ok(())
     }
@@ -594,10 +561,10 @@ where
             return Ok(());
         }
         for value in values {
-            self.put_item_batch(batch, &stored_indices.end, &value);
+            self.put_item_batch(batch, self.derive_key(&stored_indices.end), &value);
             stored_indices.end += 1;
         }
-        self.put_item_batch(batch, &(), &stored_indices);
+        self.put_item_batch(batch, self.base_key.clone(), &stored_indices);
         Ok(())
     }
 
@@ -606,9 +573,9 @@ where
         stored_indices: Range<usize>,
         batch: &mut Self::Batch,
     ) -> Result<(), Self::Error> {
-        self.remove_item_batch(batch, &());
+        self.remove_item_batch(batch, self.base_key.clone());
         for index in stored_indices {
-            self.remove_item_batch(batch, &index);
+            self.remove_item_batch(batch, self.derive_key(&index));
         }
         Ok(())
     }
@@ -626,12 +593,12 @@ where
     }
 
     fn insert(&mut self, batch: &mut Self::Batch, index: I, value: V) -> Result<(), Self::Error> {
-        self.put_item_batch(batch, &index, &value);
+        self.put_item_batch(batch, self.derive_key(&index), &value);
         Ok(())
     }
 
     fn remove(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
-        self.remove_item_batch(batch, &index);
+        self.remove_item_batch(batch, self.derive_key(&index));
         Ok(())
     }
 
@@ -651,7 +618,7 @@ where
 
     async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error> {
         for key in self.get_sub_keys::<I>(&self.base_key.clone()).await? {
-            self.remove_item_batch(batch, &key);
+            self.remove_item_batch(batch, self.derive_key(&key));
         }
         Ok(())
     }
@@ -696,12 +663,12 @@ where
     }
 
     fn add_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
-        self.put_item_batch(batch, &CollectionKey::Index(index), &());
+        self.put_item_batch(batch, self.derive_key(&CollectionKey::Index(index)), &());
         Ok(())
     }
 
     fn remove_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
-        self.remove_item_batch(batch, &CollectionKey::Index(index));
+        self.remove_item_batch(batch, self.derive_key(&CollectionKey::Index(index)));
         Ok(())
     }
 
