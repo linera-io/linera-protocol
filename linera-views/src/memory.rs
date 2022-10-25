@@ -74,6 +74,24 @@ impl<E> MemoryContext<E> {
         Ok(vals)
     }
 
+    async fn get_sub_keys<Key>(
+        &mut self,
+        key_prefix: &Vec<u8>,
+    ) -> Result<Vec<Key>, MemoryContextError>
+    where
+        Key: DeserializeOwned,
+    {
+        let map = self.map.read().await;
+        let mut keys = Vec::new();
+        let len = key_prefix.len();
+        for key in map.keys() {
+            if key.starts_with(key_prefix) {
+                keys.push(bcs::from_bytes(&key[len..])?);
+            }
+        }
+        Ok(keys)
+    }
+
     fn put_item_batch(&self, batch: &mut Batch, key: Vec<u8>, value: &impl Serialize) -> Result<(), MemoryContextError> {
         let bytes = bcs::to_bytes(value)?;
         batch.0.push(WriteOperation::Put { key, value: bytes });
@@ -319,12 +337,7 @@ where
     }
 
     async fn indices(&mut self) -> Result<Vec<I>, MemoryContextError> {
-        let len = self.base_key.len();
-        let mut keys = Vec::new();
-        for key in self.find_keys_with_prefix(&self.base_key.clone()).await? {
-            keys.push(bcs::from_bytes(&key[len..])?);
-        }
-        Ok(keys)
+        self.get_sub_keys(&self.base_key.clone()).await
     }
 
     #[allow(clippy::unit_arg)]
@@ -332,9 +345,7 @@ where
     where
         F: FnMut(I) + Send,
     {
-        let len = self.base_key.len();
-        for key in self.find_keys_with_prefix(&self.base_key.clone()).await? {
-            let key = bcs::from_bytes(&key[len..])?;
+        for key in self.get_sub_keys(&self.base_key.clone()).await? {
             f(key);
         }
         Ok(())
@@ -380,12 +391,7 @@ where
 
     async fn indices(&mut self) -> Result<Vec<I>, Self::Error> {
         let base = self.derive_key(&CollectionKey::Index(()));
-        let len = base.len();
-        let mut keys = Vec::new();
-        for bytes in self.find_keys_with_prefix(&base).await? {
-            keys.push(bcs::from_bytes(&bytes[len..])?);
-        }
-        Ok(keys)
+        self.get_sub_keys(&base).await
     }
 
     #[allow(clippy::unit_arg)]
@@ -394,9 +400,7 @@ where
         F: FnMut(I) + Send,
     {
         let base = self.derive_key(&CollectionKey::Index(()));
-        let len = base.len();
-        for bytes in self.find_keys_with_prefix(&base).await? {
-            let key = bcs::from_bytes(&bytes[len..])?;
+        for key in self.get_sub_keys(&base).await? {
             f(key);
         }
         Ok(())
