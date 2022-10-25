@@ -467,14 +467,7 @@ where
         let len = base.len();
         let mut keys = Vec::new();
         for bytes in self.find_keys_with_prefix(&base).await? {
-            match bcs::from_bytes(&bytes[len..]) {
-                Ok(key) => {
-                    keys.push(key);
-                }
-                Err(e) => {
-                    return Err(e.into());
-                }
-            }
+            keys.push(bcs::from_bytes(&bytes[len..])?);
         }
         Ok(keys)
     }
