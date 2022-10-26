@@ -22,6 +22,7 @@ use rand::prelude::SliceRandom;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use thiserror::Error;
+use linera_base::crypto::CryptoError;
 
 /// How to communicate with a validator or a local node.
 #[async_trait]
@@ -86,6 +87,16 @@ pub enum NodeError {
 
     #[error("{0}")]
     WorkerError(#[from] linera_base::error::Error),
+    #[error("Crypto error: {error}")]
+    CryptoError{ error: String }
+}
+
+impl From<CryptoError> for NodeError {
+    fn from(error: CryptoError) -> Self {
+        Self::CryptoError {
+            error: error.to_string()
+        }
+    }
 }
 
 impl From<ViewError> for NodeError {

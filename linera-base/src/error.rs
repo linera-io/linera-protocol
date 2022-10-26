@@ -56,8 +56,7 @@ pub enum Error {
     BalanceUnderflow,
 
     // Signatures and certificates
-    #[error("Signature for object {type_name} is not valid: {error}")]
-    InvalidSignature { error: String, type_name: String },
+
     #[error("The signature was not created by a valid entity")]
     InvalidSigner,
     #[error("Signatures in a certificate must form a quorum")]
@@ -169,6 +168,9 @@ pub enum Error {
     // TODO(#148): Remove this.
     #[error("Error in view operation: {error}")]
     ViewError { error: String },
+
+    #[error("Crypto error: {error}")]
+    CryptoError { error: String },
 
     // Execution
     #[error("Unknown application")]

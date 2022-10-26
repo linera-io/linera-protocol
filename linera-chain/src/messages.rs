@@ -15,6 +15,7 @@ use linera_base::{
 use linera_execution::{Effect, Operation};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use linera_base::crypto::CryptoError;
 
 #[cfg(test)]
 #[path = "unit_tests/messages_tests.rs"]
@@ -185,7 +186,7 @@ impl Vote {
     }
 
     /// Verify the signature in the vote.
-    pub fn check(&self, name: ValidatorName) -> Result<(), Error> {
+    pub fn check(&self, name: ValidatorName) -> Result<(), CryptoError> {
         self.signature.check(&self.value, name.0)
     }
 }

@@ -39,6 +39,19 @@ pub struct HashValue(generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Dige
 #[derive(Eq, PartialEq, Copy, Clone)]
 pub struct Signature(dalek::Signature);
 
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash)]
+/// Error type for cryptographic errors.
+pub enum CryptoError {
+    #[error("Signature for object {type_name} is not valid: {error}")]
+    InvalidSignature { error: String, type_name: String },
+}
+
+impl From<CryptoError> for Error {
+    fn from(e: CryptoError) -> Self {
+        Error::CryptoError { error: e.to_string() }
+    }
+}
+
 impl PublicKey {
     #[cfg(any(test, feature = "test"))]
     pub fn debug(name: u8) -> PublicKey {
@@ -354,12 +367,12 @@ impl Signature {
         public_key.verify(&message, &self.0)
     }
 
-    pub fn check<T>(&self, value: &T, author: PublicKey) -> Result<(), Error>
+    pub fn check<T>(&self, value: &T, author: PublicKey) -> Result<(), CryptoError>
     where
         T: Signable<Vec<u8>> + std::fmt::Debug,
     {
         self.check_internal(value, author)
-            .map_err(|error| Error::InvalidSignature {
+            .map_err(|error| CryptoError::InvalidSignature {
                 error: error.to_string(),
                 type_name: T::type_name().to_string(),
             })
@@ -383,12 +396,12 @@ impl Signature {
         dalek::verify_batch(&messages[..], &signatures[..], &public_keys[..])
     }
 
-    pub fn verify_batch<'a, T, I>(value: &'a T, votes: I) -> Result<(), Error>
+    pub fn verify_batch<'a, T, I>(value: &'a T, votes: I) -> Result<(), CryptoError>
     where
         T: Signable<Vec<u8>>,
         I: IntoIterator<Item = (&'a PublicKey, &'a Signature)>,
     {
-        Signature::verify_batch_internal(value, votes).map_err(|error| Error::InvalidSignature {
+        Signature::verify_batch_internal(value, votes).map_err(|error| CryptoError::InvalidSignature {
             error: format!("batched {}", error),
             type_name: T::type_name().to_string(),
         })
