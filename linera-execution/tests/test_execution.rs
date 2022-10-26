@@ -56,7 +56,9 @@ impl UserApplication for TestApplication {
         // Modify our state.
         let mut state = storage.try_read_and_lock_my_state().await?;
         state.extend(operation);
-        storage.save_and_unlock_my_state(state);
+        storage
+            .save_and_unlock_my_state(state)
+            .expect("State is locked at the start of the operation");
         // Call ourselves after the state => ok.
         let call_result = storage
             .try_call_application(/* authenticate */ true, app_id, &[], vec![])
