@@ -374,48 +374,38 @@ Error:
     39:
       IncorrectEffects: UNIT
     40:
-      WrongShard: UNIT
-    41:
       InvalidDecoding: UNIT
-    42:
+    41:
       UnexpectedMessage: UNIT
-    43:
+    42:
       ClientIoError:
         STRUCT:
           - error: STR
-    44:
-      StorageIoError:
-        STRUCT:
-          - error: STR
-    45:
-      StorageBcsError:
-        STRUCT:
-          - error: STR
-    46:
+    43:
       CannotResolveValidatorAddress:
         STRUCT:
           - address: STR
-    47:
+    44:
       ViewError:
         STRUCT:
           - error: STR
-    48:
+    45:
       UnknownApplication: UNIT
-    49:
+    46:
       InvalidOperation: UNIT
-    50:
+    47:
       InvalidEffect: UNIT
-    51:
+    48:
       InvalidQuery: UNIT
-    52:
+    49:
       InvalidSession: UNIT
-    53:
+    50:
       ApplicationIsInUse: UNIT
-    54:
+    51:
       SessionIsInUse: UNIT
-    55:
+    52:
       InvalidSessionOwner: UNIT
-    56:
+    53:
       SessionWasNotClosed: UNIT
 HashValue:
   NEWTYPESTRUCT:

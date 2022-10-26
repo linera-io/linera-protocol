@@ -158,18 +158,12 @@ pub enum Error {
     IncorrectEffects,
 
     // Networking and sharding
-    #[error("Wrong shard used")]
-    WrongShard,
     #[error("Cannot deserialize")]
     InvalidDecoding,
     #[error("Unexpected message")]
     UnexpectedMessage,
     #[error("Network error while querying service: {error}")]
     ClientIoError { error: String },
-    #[error("Storage error while querying service: {error}")]
-    StorageIoError { error: String },
-    #[error("Storage (de)serialization error: {error}")]
-    StorageBcsError { error: String },
     #[error("Failed to resolve validator address: {address}")]
     CannotResolveValidatorAddress { address: String },
 
