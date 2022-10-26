@@ -23,6 +23,7 @@ use linera_base::{
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use thiserror::Error;
 
 /// An implementation of [`UserApplication`]
 pub type UserApplicationCode = Arc<dyn UserApplication + Send + Sync + 'static>;
@@ -215,7 +216,7 @@ pub trait WritableStorage: ReadableStorage {
     async fn try_read_and_lock_my_state(&self) -> Result<Vec<u8>, Error>;
 
     /// Save the application state and allow reading/loading the state again.
-    fn save_and_unlock_my_state(&self, state: Vec<u8>);
+    fn save_and_unlock_my_state(&self, state: Vec<u8>) -> Result<(), ApplicationStateNotLocked>;
 
     /// Allow reading/loading the state again (without saving anything).
     fn unlock_my_state(&self);
@@ -390,3 +391,7 @@ impl From<Vec<u8>> for Response {
         Response::User(response)
     }
 }
+
+#[derive(Clone, Copy, Debug, Error)]
+#[error("The application state can not be saved because it was not locked for writing")]
+pub struct ApplicationStateNotLocked;
