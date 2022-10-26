@@ -239,6 +239,14 @@ where
         .await??;
         Ok(())
     }
+
+    fn clone_self(&self, base_key: Vec<u8>) -> Self {
+        Self {
+            db: self.db.clone(),
+            base_key,
+            extra: self.extra.clone(),
+        }
+    }
 }
 
 #[async_trait]
@@ -247,11 +255,7 @@ where
     E: Clone + Send + Sync,
 {
     fn clone_with_scope(&self, index: u64) -> Self {
-        Self {
-            db: self.db.clone(),
-            base_key: self.derive_key(&index),
-            extra: self.extra.clone(),
-        }
+        self.clone_self(self.derive_key(&index))
     }
 }
 
@@ -469,11 +473,7 @@ where
     E: Clone + Send + Sync,
 {
     fn clone_with_scope(&self, index: &I) -> Self {
-        Self {
-            db: self.db.clone(),
-            base_key: self.derive_key(&CollectionKey::Subview(index)),
-            extra: self.extra.clone(),
-        }
+        self.clone_self(self.derive_key(&CollectionKey::Subview(index)))
     }
 
     fn add_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {

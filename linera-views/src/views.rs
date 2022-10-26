@@ -46,6 +46,8 @@ pub trait Context {
 
     /// Apply the operations from the `batch`, persisting the changes.
     async fn write_batch(&self, batch: Self::Batch) -> Result<(), ViewError>;
+
+    fn clone_self(&self, base_key: Vec<u8>) -> Self;
 }
 
 /// A view gives an exclusive access to read and write the data stored at an underlying
