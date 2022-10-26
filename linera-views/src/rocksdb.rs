@@ -442,8 +442,8 @@ where
     where
         F: FnMut(I) + Send,
     {
-        for key in self.get_sub_keys(&self.base_key.clone()).await? {
-            f(key);
+        for index in self.get_sub_keys(&self.base_key.clone()).await? {
+            f(index);
         }
         Ok(())
     }
@@ -496,8 +496,8 @@ where
         F: FnMut(I) + Send,
     {
         let base = self.derive_key(&CollectionKey::Index(()));
-        for key in self.get_sub_keys(&base).await? {
-            f(key);
+        for index in self.get_sub_keys(&base).await? {
+            f(index);
         }
         Ok(())
     }

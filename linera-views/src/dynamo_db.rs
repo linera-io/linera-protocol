@@ -535,8 +535,8 @@ where
         let mut values = Vec::with_capacity(range.len());
         for index in range {
             match self.read_key(&self.derive_key(&index)).await? {
-                Some(value) => values.push(value),
                 None => return Ok(values),
+                Some(value) => values.push(value),
             };
         }
         Ok(values)
@@ -650,7 +650,7 @@ where
 impl<E, I, V> MapOperations<I, V> for DynamoDbContext<E>
 where
     I: Eq + Ord + Send + Sync + Serialize + DeserializeOwned + Clone + 'static,
-    V: Serialize + DeserializeOwned + Send + Sync + 'static,
+    V: Send + Sync + Serialize + DeserializeOwned + 'static,
     E: Clone + Send + Sync,
 {
     async fn get(&mut self, index: &I) -> Result<Option<V>, Self::Error> {
@@ -682,7 +682,7 @@ where
     }
 
     async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error> {
-        for key in self.find_keys_with_prefix(&self.base_key).await? {
+        for key in self.find_keys_with_prefix(&self.base_key.clone()).await? {
             self.remove_item_batch(batch, key);
         }
         Ok(())
@@ -715,7 +715,7 @@ enum CollectionKey<I> {
 #[async_trait]
 impl<E, I> CollectionOperations<I> for DynamoDbContext<E>
 where
-    I: serde::Serialize + serde::de::DeserializeOwned + Send + Sync + 'static,
+    I: Serialize + DeserializeOwned + Send + Sync + 'static,
     E: Clone + Send + Sync,
 {
     fn clone_with_scope(&self, index: &I) -> Self {
@@ -747,8 +747,8 @@ where
         F: FnMut(I) + Send,
     {
         let base = self.derive_key(&CollectionKey::Index(()));
-        for key in self.get_sub_keys(&base).await? {
-            f(key);
+        for index in self.get_sub_keys(&base).await? {
+            f(index);
         }
         Ok(())
     }
