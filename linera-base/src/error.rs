@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    crypto::HashValue,
     messages::{ApplicationId, BlockHeight, ChainId, Epoch, Origin, RoundNumber},
 };
 use serde::{Deserialize, Serialize};
@@ -175,10 +174,6 @@ pub enum Error {
     StorageBcsError { error: String },
     #[error("Failed to resolve validator address: {address}")]
     CannotResolveValidatorAddress { address: String },
-
-    // Storage
-    #[error("Missing certificate: {hash:?}")]
-    MissingCertificate { hash: HashValue },
 
     // TODO(#148): Remove this.
     #[error("Error in view operation: {error}")]

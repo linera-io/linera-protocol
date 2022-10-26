@@ -398,31 +398,26 @@ Error:
         STRUCT:
           - address: STR
     48:
-      MissingCertificate:
-        STRUCT:
-          - hash:
-              TYPENAME: HashValue
-    49:
       ViewError:
         STRUCT:
           - error: STR
-    50:
+    49:
       UnknownApplication: UNIT
-    51:
+    50:
       InvalidOperation: UNIT
-    52:
+    51:
       InvalidEffect: UNIT
-    53:
+    52:
       InvalidQuery: UNIT
-    54:
+    53:
       InvalidSession: UNIT
-    55:
+    54:
       ApplicationIsInUse: UNIT
-    56:
+    55:
       SessionIsInUse: UNIT
-    57:
+    56:
       InvalidSessionOwner: UNIT
-    58:
+    57:
       SessionWasNotClosed: UNIT
 HashValue:
   NEWTYPESTRUCT:
