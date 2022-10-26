@@ -132,7 +132,6 @@ pub struct ChainRuntimeContext {
 }
 
 impl ExecutionRuntimeContext for ChainRuntimeContext {
-    #[cfg(any(test, feature = "test"))]
     fn new(chain_id: ChainId) -> Self {
         Self {
             chain_id,

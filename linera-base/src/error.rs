@@ -149,8 +149,6 @@ pub enum Error {
     },
 
     // Other server-side errors
-    #[error("No certificate for this chain and block height")]
-    CertificateNotFound,
     #[error("Invalid cross-chain request")]
     InvalidCrossChainRequest,
     #[error("Invalid block proposal")]

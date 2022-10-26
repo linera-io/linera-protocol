@@ -366,65 +366,63 @@ Error:
               TYPENAME: BlockHeight
           - index: U64
     36:
-      CertificateNotFound: UNIT
-    37:
       InvalidCrossChainRequest: UNIT
-    38:
+    37:
       InvalidBlockProposal: UNIT
-    39:
+    38:
       InvalidBlockChaining: UNIT
-    40:
+    39:
       IncorrectStateHash: UNIT
-    41:
+    40:
       IncorrectEffects: UNIT
-    42:
+    41:
       WrongShard: UNIT
-    43:
+    42:
       InvalidDecoding: UNIT
-    44:
+    43:
       UnexpectedMessage: UNIT
-    45:
+    44:
       ClientIoError:
         STRUCT:
           - error: STR
-    46:
+    45:
       StorageIoError:
         STRUCT:
           - error: STR
-    47:
+    46:
       StorageBcsError:
         STRUCT:
           - error: STR
-    48:
+    47:
       CannotResolveValidatorAddress:
         STRUCT:
           - address: STR
-    49:
+    48:
       MissingCertificate:
         STRUCT:
           - hash:
               TYPENAME: HashValue
-    50:
+    49:
       ViewError:
         STRUCT:
           - error: STR
-    51:
+    50:
       UnknownApplication: UNIT
-    52:
+    51:
       InvalidOperation: UNIT
-    53:
+    52:
       InvalidEffect: UNIT
-    54:
+    53:
       InvalidQuery: UNIT
-    55:
+    54:
       InvalidSession: UNIT
-    56:
+    55:
       ApplicationIsInUse: UNIT
-    57:
+    56:
       SessionIsInUse: UNIT
-    58:
+    57:
       InvalidSessionOwner: UNIT
-    59:
+    58:
       SessionWasNotClosed: UNIT
 HashValue:
   NEWTYPESTRUCT:
