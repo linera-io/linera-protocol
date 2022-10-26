@@ -248,7 +248,21 @@ impl<E> DynamoDbContext<E> {
     }
 
     /// Extract the key attribute from an item and deserialize it into the `Key` type.
-    fn extract_key<Key>(
+    fn extract_raw_key(
+        &self,
+        attributes: &HashMap<String, AttributeValue>,
+    ) -> Result<Vec<u8>, DynamoDbContextError>
+    {
+        Ok(attributes
+           .get(KEY_ATTRIBUTE)
+           .ok_or(DynamoDbContextError::MissingKey)?
+           .as_b()
+           .map_err(DynamoDbContextError::wrong_key_type)?
+           .as_ref()
+           .to_owned())
+    }
+    /// Extract the key attribute from an item and deserialize it into the `Key` type.
+    fn extract_sub_key<Key>(
         &self,
         attributes: &HashMap<String, AttributeValue>,
         extra_bytes_to_skip: usize,
@@ -347,6 +361,34 @@ impl<E> DynamoDbContext<E> {
         Ok(())
     }
 
+    async fn find_keys_with_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Vec<Vec<u8>>, DynamoDbContextError> {
+        let response = self
+            .client
+            .query()
+            .table_name(self.table.as_ref())
+            .projection_expression(KEY_ATTRIBUTE)
+            .key_condition_expression(format!(
+                "{PARTITION_ATTRIBUTE} = :partition and begins_with({KEY_ATTRIBUTE}, :prefix)"
+            ))
+            .expression_attribute_values(
+                ":partition",
+                AttributeValue::B(Blob::new(DUMMY_PARTITION_KEY)),
+            )
+            .expression_attribute_values(":prefix", AttributeValue::B(Blob::new(key_prefix.to_vec())))
+            .send()
+            .await?;
+
+        response
+            .items()
+            .into_iter()
+            .flatten()
+            .map(|item| self.extract_raw_key(item))
+            .collect()
+    }
+
     /// Query the table for the keys that are prefixed by the current context.
     ///
     /// # Panics
@@ -380,7 +422,7 @@ impl<E> DynamoDbContext<E> {
             .items()
             .into_iter()
             .flatten()
-            .map(|item| self.extract_key(item, extra_prefix_bytes_count))
+            .map(|item| self.extract_sub_key(item, extra_prefix_bytes_count))
             .collect()
     }
 }
@@ -624,9 +666,9 @@ where
     }
 
     async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error> {
-        for key in self.get_sub_keys::<I>(&self.base_key.clone()).await? {
-            self.remove_item_batch(batch, self.derive_key(&key));
-        }
+        for key in self.find_keys_with_prefix(&self.base_key).await? {
+            self.remove_item_batch(batch, key);
+	}
         Ok(())
     }
 }
