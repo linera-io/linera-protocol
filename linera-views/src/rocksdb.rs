@@ -261,7 +261,7 @@ where
     T: Default + Serialize + DeserializeOwned + Send + Sync + 'static,
     E: Clone + Send + Sync,
 {
-    async fn get(&mut self) -> Result<T, RocksdbContextError> {
+    async fn get(&mut self) -> Result<T, Self::Error> {
         let value = self
             .read_key(&self.base_key.clone())
             .await?
@@ -269,7 +269,7 @@ where
         Ok(value)
     }
 
-    fn set(&mut self, batch: &mut Self::Batch, value: &T) -> Result<(), RocksdbContextError> {
+    fn set(&mut self, batch: &mut Self::Batch, value: &T) -> Result<(), Self::Error> {
         self.put_item_batch(batch, self.base_key.clone(), value)?;
         Ok(())
     }
@@ -286,7 +286,7 @@ where
     T: Serialize + DeserializeOwned + Send + Sync + 'static,
     E: Clone + Send + Sync,
 {
-    async fn count(&mut self) -> Result<usize, RocksdbContextError> {
+    async fn count(&mut self) -> Result<usize, Self::Error> {
         let count = self
             .read_key(&self.base_key.clone())
             .await?
@@ -294,11 +294,11 @@ where
         Ok(count)
     }
 
-    async fn get(&mut self, index: usize) -> Result<Option<T>, RocksdbContextError> {
+    async fn get(&mut self, index: usize) -> Result<Option<T>, Self::Error> {
         self.read_key(&self.derive_key(&index)).await
     }
 
-    async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, RocksdbContextError> {
+    async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error> {
         let mut values = Vec::with_capacity(range.len());
         for index in range {
             match self.read_key(&self.derive_key(&index)).await? {
@@ -314,7 +314,7 @@ where
         stored_count: usize,
         batch: &mut Self::Batch,
         values: Vec<T>,
-    ) -> Result<(), RocksdbContextError> {
+    ) -> Result<(), Self::Error> {
         if values.is_empty() {
             return Ok(());
         }
@@ -404,7 +404,7 @@ where
         &mut self,
         range: Range<usize>,
         batch: &mut Self::Batch,
-    ) -> Result<(), RocksdbContextError> {
+    ) -> Result<(), Self::Error> {
         self.remove_item_batch(batch, self.base_key.clone());
         for i in range {
             self.remove_item_batch(batch, self.derive_key(&i));
@@ -420,7 +420,7 @@ where
     V: Serialize + DeserializeOwned + Send + Sync + 'static,
     E: Clone + Send + Sync,
 {
-    async fn get(&mut self, index: &I) -> Result<Option<V>, RocksdbContextError> {
+    async fn get(&mut self, index: &I) -> Result<Option<V>, Self::Error> {
         Ok(self.read_key(&self.derive_key(index)).await?)
     }
 
@@ -429,21 +429,21 @@ where
         batch: &mut Self::Batch,
         index: I,
         value: V,
-    ) -> Result<(), RocksdbContextError> {
+    ) -> Result<(), Self::Error> {
         self.put_item_batch(batch, self.derive_key(&index), &value)?;
         Ok(())
     }
 
-    fn remove(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), RocksdbContextError> {
+    fn remove(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
         self.remove_item_batch(batch, self.derive_key(&index));
         Ok(())
     }
 
-    async fn indices(&mut self) -> Result<Vec<I>, RocksdbContextError> {
+    async fn indices(&mut self) -> Result<Vec<I>, Self::Error> {
         self.get_sub_keys(&self.base_key.clone()).await
     }
 
-    async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), RocksdbContextError>
+    async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), Self::Error>
     where
         F: FnMut(I) + Send,
     {
@@ -453,7 +453,7 @@ where
         Ok(())
     }
 
-    async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), RocksdbContextError> {
+    async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error> {
         for key in self.find_keys_with_prefix(&self.base_key).await? {
             self.remove_item_batch(batch, key);
         }
