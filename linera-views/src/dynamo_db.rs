@@ -738,15 +738,16 @@ where
     }
 
     async fn indices(&mut self) -> Result<Vec<I>, Self::Error> {
-        self.get_sub_keys(&self.derive_key(&CollectionKey::Index(())))
-            .await
+        let base = self.derive_key(&CollectionKey::Index(()));
+        self.get_sub_keys(&base).await
     }
 
     async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), Self::Error>
     where
         F: FnMut(I) + Send,
     {
-        for key in self.get_sub_keys(&self.base_key.clone()).await? {
+        let base = self.derive_key(&CollectionKey::Index(()));
+        for key in self.get_sub_keys(&base).await? {
             f(key);
         }
         Ok(())

@@ -9,7 +9,7 @@ use crate::{
     },
 };
 use async_trait::async_trait;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Serialize};
 use std::{ops::Range, sync::Arc};
 use thiserror::Error;
 
@@ -417,7 +417,7 @@ where
 impl<E, I, V> MapOperations<I, V> for RocksdbContext<E>
 where
     I: Eq + Ord + Send + Sync + Serialize + DeserializeOwned + Clone + 'static,
-    V: Serialize + DeserializeOwned + Send + Sync + 'static,
+    V: Send + Sync + Serialize + DeserializeOwned + 'static,
     E: Clone + Send + Sync,
 {
     async fn get(&mut self, index: &I) -> Result<Option<V>, Self::Error> {
@@ -449,14 +449,14 @@ where
     }
 
     async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error> {
-        for key in self.find_keys_with_prefix(&self.base_key).await? {
+        for key in self.find_keys_with_prefix(&self.base_key.clone()).await? {
             self.remove_item_batch(batch, key);
         }
         Ok(())
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize)]
 enum CollectionKey<I> {
     Index(I),
     Subview(I),
@@ -465,7 +465,7 @@ enum CollectionKey<I> {
 #[async_trait]
 impl<E, I> CollectionOperations<I> for RocksdbContext<E>
 where
-    I: serde::Serialize + serde::de::DeserializeOwned + Send + Sync + 'static,
+    I: Serialize + DeserializeOwned + Send + Sync + 'static,
     E: Clone + Send + Sync,
 {
     fn clone_with_scope(&self, index: &I) -> Self {
@@ -487,8 +487,6 @@ where
     }
 
     async fn indices(&mut self) -> Result<Vec<I>, Self::Error> {
-        // Hack: the BCS-serialization of `CollectionKey::Index(value)` for any `value` must
-        // start with that of `CollectionKey::Index(())`, that is, the enum tag.
         let base = self.derive_key(&CollectionKey::Index(()));
         self.get_sub_keys(&base).await
     }

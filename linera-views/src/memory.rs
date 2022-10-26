@@ -169,7 +169,7 @@ where
 #[async_trait]
 impl<E, T> RegisterOperations<T> for MemoryContext<E>
 where
-    T: Serialize + DeserializeOwned + Default + Clone + Send + Sync + 'static,
+    T: Default + Serialize + DeserializeOwned + Send + Sync + 'static,
     E: Clone + Send + Sync,
 {
     async fn get(&mut self) -> Result<T, Self::Error> {
@@ -327,7 +327,7 @@ where
 #[async_trait]
 impl<E, I, V> MapOperations<I, V> for MemoryContext<E>
 where
-    I: Eq + Ord + Send + Sync + Clone + Serialize + DeserializeOwned + 'static,
+    I: Eq + Ord + Send + Sync + Serialize + DeserializeOwned + Clone + 'static,
     V: Send + Sync + Serialize + DeserializeOwned + 'static,
     E: Clone + Send + Sync,
 {
@@ -374,9 +374,9 @@ enum CollectionKey<I> {
 }
 
 #[async_trait]
-impl<E: Clone, I> CollectionOperations<I> for MemoryContext<E>
+impl<E, I> CollectionOperations<I> for MemoryContext<E>
 where
-    I: serde::Serialize + serde::de::DeserializeOwned + Send + Sync + Ord + Clone + 'static,
+    I: Serialize + DeserializeOwned + Send + Sync + 'static,
     E: Clone + Send + Sync,
 {
     fn clone_with_scope(&self, index: &I) -> Self {
@@ -402,7 +402,6 @@ where
         self.get_sub_keys(&base).await
     }
 
-    #[allow(clippy::unit_arg)]
     async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), Self::Error>
     where
         F: FnMut(I) + Send,
