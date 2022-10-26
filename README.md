@@ -3,7 +3,22 @@
 
 # Linera
 
-This repository is dedicated to developing the Linera protocol.
+This repository is dedicated to developing the Linera protocol. For an overview of how 
+the Linera protocol functions refer to the [whitepaper](https://github.com/linera-io/linera-internal/tree/main/whitepaper).
+<!-- Refer to public whitepaper once this repository is made public -->    
+
+## Repository Structure
+
+The Linera protocol repository is broken down into a few crates with distinct functions:
+
+1. [`linera-base`](./linera-base) A catch-all crate for basic type definitions. This will slowly be transitioned out into the rest of the crate ecosystem.
+2. [`linera-chain`](./linera-chain) ?
+3. [`linera-core`](./linera-core) The Linera core protocol. Contains client / server logic, node synchronization etc.
+4. [`linera-execution`](./linera-execution)  Crate responsible for the runtime and execution of smart contracts / applications.
+5. [`linera-rpc`](./linera-rpc)  Defines messaging for cross-chain communication.
+6. [`linera-service`](./linera-service) ?
+7. [`linera-storage`](./linera-storage) Defines the storage abstraction and corresponding concrete implementations (DynamoDB, RocksDB, etc.).
+8. [`linera-views`](./linera-views) A module enabling the mapping of complex data structures onto a KV store.
 
 ## Quickstart with the Linera service CLI
 
