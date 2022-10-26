@@ -185,9 +185,14 @@ impl<E> DynamoDbContext<E> {
         key
     }
 
-    fn put_item_batch(&self, batch: &mut Batch, key: Vec<u8>, value: &impl Serialize) -> Result<(), DynamoDbContextError> {
+    fn put_item_batch(
+        &self,
+        batch: &mut Batch,
+        key: Vec<u8>,
+        value: &impl Serialize,
+    ) -> Result<(), DynamoDbContextError> {
         let bytes = bcs::to_bytes(value)?;
-	batch.0.push(WriteOperation::Put { key, value: bytes });
+        batch.0.push(WriteOperation::Put { key, value: bytes });
         Ok(())
     }
 
@@ -226,10 +231,7 @@ impl<E> DynamoDbContext<E> {
     /// context.
     ///
     /// The `Item` is deserialized using [`bcs`].
-    async fn read_key<Item>(
-        &mut self,
-        key: &Vec<u8>,
-    ) -> Result<Option<Item>, DynamoDbContextError>
+    async fn read_key<Item>(&mut self, key: &Vec<u8>) -> Result<Option<Item>, DynamoDbContextError>
     where
         Item: DeserializeOwned,
     {
@@ -251,15 +253,14 @@ impl<E> DynamoDbContext<E> {
     fn extract_raw_key(
         &self,
         attributes: &HashMap<String, AttributeValue>,
-    ) -> Result<Vec<u8>, DynamoDbContextError>
-    {
+    ) -> Result<Vec<u8>, DynamoDbContextError> {
         Ok(attributes
-           .get(KEY_ATTRIBUTE)
-           .ok_or(DynamoDbContextError::MissingKey)?
-           .as_b()
-           .map_err(DynamoDbContextError::wrong_key_type)?
-           .as_ref()
-           .to_owned())
+            .get(KEY_ATTRIBUTE)
+            .ok_or(DynamoDbContextError::MissingKey)?
+            .as_b()
+            .map_err(DynamoDbContextError::wrong_key_type)?
+            .as_ref()
+            .to_owned())
     }
     /// Extract the key attribute from an item and deserialize it into the `Key` type.
     fn extract_sub_key<Key>(
@@ -377,7 +378,10 @@ impl<E> DynamoDbContext<E> {
                 ":partition",
                 AttributeValue::B(Blob::new(DUMMY_PARTITION_KEY)),
             )
-            .expression_attribute_values(":prefix", AttributeValue::B(Blob::new(key_prefix.to_vec())))
+            .expression_attribute_values(
+                ":prefix",
+                AttributeValue::B(Blob::new(key_prefix.to_vec())),
+            )
             .send()
             .await?;
 
@@ -414,7 +418,10 @@ impl<E> DynamoDbContext<E> {
                 ":partition",
                 AttributeValue::B(Blob::new(DUMMY_PARTITION_KEY)),
             )
-            .expression_attribute_values(":prefix", AttributeValue::B(Blob::new(key_prefix.to_vec())))
+            .expression_attribute_values(
+                ":prefix",
+                AttributeValue::B(Blob::new(key_prefix.to_vec())),
+            )
             .send()
             .await?;
 
@@ -488,7 +495,10 @@ where
     E: Clone + Send + Sync,
 {
     async fn get(&mut self) -> Result<T, Self::Error> {
-        let value = self.read_key(&self.base_key.clone()).await?.unwrap_or_default();
+        let value = self
+            .read_key(&self.base_key.clone())
+            .await?
+            .unwrap_or_default();
         Ok(value)
     }
 
@@ -510,7 +520,10 @@ where
     E: Clone + Send + Sync,
 {
     async fn count(&mut self) -> Result<usize, Self::Error> {
-        let count = self.read_key(&self.base_key.clone()).await?.unwrap_or_default();
+        let count = self
+            .read_key(&self.base_key.clone())
+            .await?
+            .unwrap_or_default();
         Ok(count)
     }
 
@@ -563,7 +576,10 @@ where
     E: Clone + Send + Sync,
 {
     async fn indices(&mut self) -> Result<Range<usize>, Self::Error> {
-        let range = self.read_key(&self.base_key.clone()).await?.unwrap_or_default();
+        let range = self
+            .read_key(&self.base_key.clone())
+            .await?
+            .unwrap_or_default();
         Ok(range)
     }
 
@@ -668,7 +684,7 @@ where
     async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error> {
         for key in self.find_keys_with_prefix(&self.base_key).await? {
             self.remove_item_batch(batch, key);
-	}
+        }
         Ok(())
     }
 }
@@ -722,7 +738,8 @@ where
     }
 
     async fn indices(&mut self) -> Result<Vec<I>, Self::Error> {
-        self.get_sub_keys(&self.derive_key(&CollectionKey::Index(()))).await
+        self.get_sub_keys(&self.derive_key(&CollectionKey::Index(())))
+            .await
     }
 
     async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), Self::Error>

@@ -114,8 +114,7 @@ impl KeyValueOperations for Arc<DB> {
     async fn get_sub_keys<Key: DeserializeOwned + Send>(
         &mut self,
         key_prefix: &Vec<u8>,
-    ) -> Result<Vec<Key>, RocksdbContextError>
-    {
+    ) -> Result<Vec<Key>, RocksdbContextError> {
         let len = key_prefix.len();
         let mut keys = Vec::new();
         for key in self.find_keys_with_prefix(key_prefix).await? {
@@ -165,7 +164,7 @@ impl<E> RocksdbContext<E> {
     ) -> Result<Vec<Vec<u8>>, RocksdbContextError> {
         self.db.find_keys_with_prefix(key_prefix).await
     }
-    
+
     async fn get_sub_keys<Key: DeserializeOwned + Send>(
         &mut self,
         key_prefix: &Vec<u8>,
@@ -173,7 +172,12 @@ impl<E> RocksdbContext<E> {
         self.db.get_sub_keys(key_prefix).await
     }
 
-    fn put_item_batch(&self, batch: &mut Batch, key: Vec<u8>, value: &impl Serialize) -> Result<(), RocksdbContextError> {
+    fn put_item_batch(
+        &self,
+        batch: &mut Batch,
+        key: Vec<u8>,
+        value: &impl Serialize,
+    ) -> Result<(), RocksdbContextError> {
         let bytes = bcs::to_bytes(value)?;
         batch.0.push(WriteOperation::Put { key, value: bytes });
         Ok(())
@@ -182,7 +186,6 @@ impl<E> RocksdbContext<E> {
     fn remove_item_batch(&self, batch: &mut Batch, key: Vec<u8>) {
         batch.0.push(WriteOperation::Delete { key });
     }
-
 }
 
 pub enum WriteOperation {
@@ -226,12 +229,8 @@ where
             let mut inner_batch = rocksdb::WriteBatchWithTransaction::default();
             for e_ent in batch.0 {
                 match e_ent {
-                    WriteOperation::Delete { key } => {
-                        inner_batch.delete(&key);
-                    }
-                    WriteOperation::Put { key, value } => {
-                        inner_batch.put(&key, value);
-                    }
+                    WriteOperation::Delete { key } => inner_batch.delete(&key),
+                    WriteOperation::Put { key, value } => inner_batch.put(&key, value),
                 }
             }
             db.write(inner_batch)?;
@@ -263,7 +262,10 @@ where
     E: Clone + Send + Sync,
 {
     async fn get(&mut self) -> Result<T, RocksdbContextError> {
-        let value = self.read_key(&self.base_key.clone()).await?.unwrap_or_default();
+        let value = self
+            .read_key(&self.base_key.clone())
+            .await?
+            .unwrap_or_default();
         Ok(value)
     }
 
@@ -285,7 +287,10 @@ where
     E: Clone + Send + Sync,
 {
     async fn count(&mut self) -> Result<usize, RocksdbContextError> {
-        let count = self.read_key(&self.base_key.clone()).await?.unwrap_or_default();
+        let count = self
+            .read_key(&self.base_key.clone())
+            .await?
+            .unwrap_or_default();
         Ok(count)
     }
 
@@ -338,7 +343,10 @@ where
     E: Clone + Send + Sync,
 {
     async fn indices(&mut self) -> Result<Range<usize>, Self::Error> {
-        let range = self.read_key(&self.base_key.clone()).await?.unwrap_or_default();
+        let range = self
+            .read_key(&self.base_key.clone())
+            .await?
+            .unwrap_or_default();
         Ok(range)
     }
 
@@ -416,7 +424,12 @@ where
         Ok(self.read_key(&self.derive_key(index)).await?)
     }
 
-    fn insert(&mut self, batch: &mut Self::Batch, index: I, value: V) -> Result<(), RocksdbContextError> {
+    fn insert(
+        &mut self,
+        batch: &mut Self::Batch,
+        index: I,
+        value: V,
+    ) -> Result<(), RocksdbContextError> {
         self.put_item_batch(batch, self.derive_key(&index), &value)?;
         Ok(())
     }

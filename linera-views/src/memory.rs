@@ -46,6 +46,10 @@ impl<E> MemoryContext<E> {
     fn derive_key<I: serde::Serialize>(&self, index: &I) -> Vec<u8> {
         let mut key = self.base_key.clone();
         bcs::serialize_into(&mut key, index).expect("serialization should not fail");
+        assert!(
+            key.len() > self.base_key.len(),
+            "Empty indices are not allowed"
+        );
         key
     }
 
@@ -92,7 +96,12 @@ impl<E> MemoryContext<E> {
         Ok(keys)
     }
 
-    fn put_item_batch(&self, batch: &mut Batch, key: Vec<u8>, value: &impl Serialize) -> Result<(), MemoryContextError> {
+    fn put_item_batch(
+        &self,
+        batch: &mut Batch,
+        key: Vec<u8>,
+        value: &impl Serialize,
+    ) -> Result<(), MemoryContextError> {
         let bytes = bcs::to_bytes(value)?;
         batch.0.push(WriteOperation::Put { key, value: bytes });
         Ok(())
@@ -101,8 +110,6 @@ impl<E> MemoryContext<E> {
     fn remove_item_batch(&self, batch: &mut Batch, key: Vec<u8>) {
         batch.0.push(WriteOperation::Delete { key });
     }
-
-
 }
 
 #[async_trait]
@@ -166,7 +173,10 @@ where
     E: Clone + Send + Sync,
 {
     async fn get(&mut self) -> Result<T, MemoryContextError> {
-        let value = self.read_key(&self.base_key.clone()).await?.unwrap_or_default();
+        let value = self
+            .read_key(&self.base_key.clone())
+            .await?
+            .unwrap_or_default();
         Ok(value)
     }
 
@@ -188,7 +198,10 @@ where
     E: Clone + Send + Sync,
 {
     async fn count(&mut self) -> Result<usize, MemoryContextError> {
-        let count = self.read_key(&self.base_key.clone()).await?.unwrap_or_default();
+        let count = self
+            .read_key(&self.base_key.clone())
+            .await?
+            .unwrap_or_default();
         Ok(count)
     }
 
@@ -326,7 +339,12 @@ where
         Ok(self.read_key(&self.derive_key(index)).await?)
     }
 
-    fn insert(&mut self, batch: &mut Self::Batch, index: I, value: V) -> Result<(), MemoryContextError> {
+    fn insert(
+        &mut self,
+        batch: &mut Self::Batch,
+        index: I,
+        value: V,
+    ) -> Result<(), MemoryContextError> {
         self.put_item_batch(batch, self.derive_key(&index), &value)?;
         Ok(())
     }
