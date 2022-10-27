@@ -383,6 +383,64 @@ pub trait LogOperations<T>: Context {
 }
 
 #[async_trait]
+impl<T, C: Context + Send> LogOperations<T> for C
+where
+    T: Serialize + DeserializeOwned + Send + Sync + 'static,
+{
+    async fn count(&mut self) -> Result<usize, Self::Error> {
+        let base = self.get_base_key();
+        let count = self
+            .read_key(&base)
+            .await?
+            .unwrap_or_default();
+        Ok(count)
+    }
+
+    async fn get(&mut self, index: usize) -> Result<Option<T>, Self::Error> {
+        let key = self.derive_key(&index);
+        self.read_key(&key).await
+    }
+
+    async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error> {
+        let mut values = Vec::with_capacity(range.len());
+        for index in range {
+            let key = self.derive_key(&index);
+            match self.read_key(&key).await? {
+                None => return Ok(values),
+                Some(value) => values.push(value),
+            };
+        }
+        Ok(values)
+    }
+
+    fn append(
+        &mut self,
+        stored_count: usize,
+        batch: &mut Self::Batch,
+        values: Vec<T>,
+    ) -> Result<(), Self::Error> {
+        if values.is_empty() {
+            return Ok(());
+        }
+        let mut count = stored_count;
+        for value in values {
+            self.put_item_batch(batch, self.derive_key(&count), &value)?;
+            count += 1;
+        }
+        self.put_item_batch(batch, self.get_base_key(), &count)?;
+        Ok(())
+    }
+
+    fn delete(&mut self, stored_count: usize, batch: &mut Self::Batch) -> Result<(), Self::Error> {
+        self.remove_item_batch(batch, self.get_base_key());
+        for index in 0..stored_count {
+            self.remove_item_batch(batch, self.derive_key(&index));
+        }
+        Ok(())
+    }
+}
+
+#[async_trait]
 impl<C, T> View<C> for LogView<C, T>
 where
     C: LogOperations<T> + Send + Sync,
