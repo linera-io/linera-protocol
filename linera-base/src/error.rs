@@ -2,10 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    crypto::HashValue,
-    messages::{ApplicationId, BlockHeight, ChainId, Epoch, Origin, RoundNumber},
-};
+use crate::messages::{ApplicationId, BlockHeight, ChainId, Epoch, Origin, RoundNumber};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -57,8 +54,6 @@ pub enum Error {
     BalanceOverflow,
     #[error("Chain balance underflow")]
     BalanceUnderflow,
-    #[error("Operation is not supported for this chain")]
-    UnsupportedOperation,
 
     // Signatures and certificates
     #[error("Signature for object {type_name} is not valid: {error}")]
@@ -150,8 +145,6 @@ pub enum Error {
     },
 
     // Other server-side errors
-    #[error("No certificate for this chain and block height")]
-    CertificateNotFound,
     #[error("Invalid cross-chain request")]
     InvalidCrossChainRequest,
     #[error("Invalid block proposal")]
@@ -164,24 +157,14 @@ pub enum Error {
     IncorrectEffects,
 
     // Networking and sharding
-    #[error("Wrong shard used")]
-    WrongShard,
     #[error("Cannot deserialize")]
     InvalidDecoding,
     #[error("Unexpected message")]
     UnexpectedMessage,
     #[error("Network error while querying service: {error}")]
     ClientIoError { error: String },
-    #[error("Storage error while querying service: {error}")]
-    StorageIoError { error: String },
-    #[error("Storage (de)serialization error: {error}")]
-    StorageBcsError { error: String },
     #[error("Failed to resolve validator address: {address}")]
     CannotResolveValidatorAddress { address: String },
-
-    // Storage
-    #[error("Missing certificate: {hash:?}")]
-    MissingCertificate { hash: HashValue },
 
     // TODO(#148): Remove this.
     #[error("Error in view operation: {error}")]
