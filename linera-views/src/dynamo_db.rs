@@ -6,7 +6,7 @@ use crate::{
     localstack,
     views::{
         CollectionOperations, Context, LogOperations, MapOperations, QueueOperations,
-        RegisterOperations, ScopedOperations, ViewError,
+        RegisterOperations, ViewError,
     },
 };
 use async_trait::async_trait;
@@ -51,14 +51,14 @@ pub struct Batch(Vec<WriteOperation>);
 
 /// A implementation of [`Context`] based on DynamoDB.
 #[derive(Debug, Clone)]
-pub struct DynamoDbContext<E> {
+pub struct DynamoDbContext<E> where E: Clone + Sync + Send {
     client: Client,
     table: TableName,
     base_key: Vec<u8>,
     extra: E,
 }
 
-impl<E> DynamoDbContext<E> {
+impl<E> DynamoDbContext<E> where E: Clone + Sync + Send {
     /// Create a new [`DynamoDbContext`] instance.
     pub async fn new(
         table: TableName,
@@ -111,7 +111,7 @@ impl<E> DynamoDbContext<E> {
     ///
     /// The return context has its key prefix extended with `scope_prefix` and uses the
     /// `new_extra` instead of cloning the current extra data.
-    pub fn clone_with_sub_scope<NewE>(
+    pub fn clone_with_sub_scope<NewE : Clone + Send + Sync>(
         &self,
         scope_prefix: &impl Serialize,
         new_extra: NewE,
@@ -170,19 +170,6 @@ impl<E> DynamoDbContext<E> {
             Err(error) if error.is_resource_in_use_exception() => Ok(TableStatus::Existing),
             Err(error) => Err(error.into()),
         }
-    }
-
-    /// Extend the current key prefix with the provided marker, returning a new key prefix.
-    ///
-    /// This is used to enter a sub-view's scope.
-    fn derive_key(&self, marker: &impl Serialize) -> Vec<u8> {
-        let mut key = self.base_key.clone();
-        bcs::serialize_into(&mut key, marker).expect("serialization should not fail");
-        assert!(
-            key.len() > self.base_key.len(),
-            "Empty indices are not allowed"
-        );
-        key
     }
 
     fn put_item_batch(
@@ -447,6 +434,16 @@ where
         &self.extra
     }
 
+    fn derive_key<I: Serialize>(&self, index: &I) -> Vec<u8> {
+        let mut key = self.base_key.clone();
+        bcs::serialize_into(&mut key, index).expect("serialization should not fail");
+        assert!(
+            key.len() > self.base_key.len(),
+            "Empty indices are not allowed"
+        );
+        key
+    }
+
     async fn run_with_batch<F>(&self, builder: F) -> Result<(), ViewError>
     where
         F: FnOnce(&mut Self::Batch) -> futures::future::BoxFuture<Result<(), ViewError>>
@@ -479,16 +476,6 @@ where
             base_key,
             extra: self.extra.clone(),
         }
-    }
-}
-
-#[async_trait]
-impl<E> ScopedOperations for DynamoDbContext<E>
-where
-    E: Clone + Send + Sync,
-{
-    fn clone_with_scope(&self, index: u64) -> Self {
-        self.clone_self(self.derive_key(&index))
     }
 }
 

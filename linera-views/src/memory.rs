@@ -5,7 +5,7 @@ use crate::{
     hash::HashingContext,
     views::{
         CollectionOperations, Context, LogOperations, MapOperations, QueueOperations,
-        RegisterOperations, ScopedOperations, ViewError,
+        RegisterOperations, ViewError,
     },
 };
 use async_trait::async_trait;
@@ -41,16 +41,6 @@ impl<E> MemoryContext<E> {
             base_key: Vec::new(),
             extra,
         }
-    }
-
-    fn derive_key<I: serde::Serialize>(&self, index: &I) -> Vec<u8> {
-        let mut key = self.base_key.clone();
-        bcs::serialize_into(&mut key, index).expect("serialization should not fail");
-        assert!(
-            key.len() > self.base_key.len(),
-            "Empty indices are not allowed"
-        );
-        key
     }
 
     async fn read_key<V: DeserializeOwned>(
@@ -125,6 +115,16 @@ where
         &self.extra
     }
 
+    fn derive_key<I: Serialize>(&self, index: &I) -> Vec<u8> {
+        let mut key = self.base_key.clone();
+        bcs::serialize_into(&mut key, index).expect("serialization should not fail");
+        assert!(
+            key.len() > self.base_key.len(),
+            "Empty indices are not allowed"
+        );
+        key
+    }
+
     async fn run_with_batch<F>(&self, builder: F) -> Result<(), ViewError>
     where
         F: FnOnce(&mut Self::Batch) -> futures::future::BoxFuture<Result<(), ViewError>>
@@ -157,16 +157,6 @@ where
             base_key,
             extra: self.extra.clone(),
         }
-    }
-}
-
-#[async_trait]
-impl<E> ScopedOperations for MemoryContext<E>
-where
-    E: Clone + Send + Sync,
-{
-    fn clone_with_scope(&self, index: u64) -> Self {
-        self.clone_self(self.derive_key(&index))
     }
 }
 

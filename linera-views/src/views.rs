@@ -12,6 +12,7 @@ use std::{
 };
 use thiserror::Error;
 use tokio::sync::{Mutex, OwnedMutexGuard};
+use serde::Serialize;
 
 #[cfg(test)]
 #[path = "unit_tests/views.rs"]
@@ -33,6 +34,9 @@ pub trait Context {
 
     /// Getter for the user provided data.
     fn extra(&self) -> &Self::Extra;
+
+    /// Obtain the Vec<u8> key from the key by serialization and using the base_key
+    fn derive_key<I: Serialize>(&self, index: &I) -> Vec<u8>;
 
     /// Provide a reference to a new batch to the builder then execute the batch.
     async fn run_with_batch<F>(&self, builder: F) -> Result<(), ViewError>
@@ -141,6 +145,13 @@ pub trait ScopedOperations: Context {
     /// Clone the context and advance the (otherwise implicit) base key for all read/write
     /// operations.
     fn clone_with_scope(&self, index: u64) -> Self;
+}
+
+impl<T: Context> ScopedOperations for T
+{
+    fn clone_with_scope(&self, index: u64) -> Self {
+        self.clone_self(self.derive_key(&index))
+    }
 }
 
 #[async_trait]
