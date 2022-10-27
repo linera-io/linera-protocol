@@ -35,6 +35,9 @@ pub trait Context {
     /// Getter for the user provided data.
     fn extra(&self) -> &Self::Extra;
 
+    /// Get the used base_key
+    fn get_base_key(&self) -> Vec<u8>;
+
     /// Obtain the Vec<u8> key from the key by serialization and using the base_key
     fn derive_key<I: Serialize>(&self, index: &I) -> Vec<u8>;
 
@@ -175,7 +178,7 @@ pub trait ScopedOperations: Context {
     fn clone_with_scope(&self, index: u64) -> Self;
 }
 
-impl<T: Context> ScopedOperations for T
+impl<C: Context> ScopedOperations for C
 {
     fn clone_with_scope(&self, index: u64) -> Self {
         self.clone_self(self.derive_key(&index))
@@ -235,6 +238,33 @@ pub trait RegisterOperations<T>: Context {
     /// Delete the register. Crash-resistant implementations should only write to `batch`.
     fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error>;
 }
+
+#[async_trait]
+impl<T, C: Context + Send> RegisterOperations<T> for C
+where
+    T: Default + Serialize + DeserializeOwned + Send + Sync + 'static,
+{
+    async fn get(&mut self) -> Result<T, Self::Error> {
+        let base = self.get_base_key();
+        let value = self
+            .read_key(&base)
+            .await?
+            .unwrap_or_default();
+        Ok(value)
+    }
+
+    fn set(&mut self, batch: &mut Self::Batch, value: &T) -> Result<(), Self::Error> {
+        self.put_item_batch(batch, self.get_base_key(), value)?;
+        Ok(())
+    }
+
+    fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error> {
+        self.remove_item_batch(batch, self.get_base_key());
+        Ok(())
+    }
+}
+
+
 
 #[async_trait]
 impl<C, T> View<C> for RegisterView<C, T>

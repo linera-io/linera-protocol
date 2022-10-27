@@ -326,6 +326,10 @@ where
         &self.extra
     }
 
+    fn get_base_key(&self) -> Vec<u8> {
+        self.base_key.clone()
+    }
+
     fn derive_key<I: Serialize>(&self, index: &I) -> Vec<u8> {
         let mut key = self.base_key.clone();
         bcs::serialize_into(&mut key, index).expect("serialization should not fail");
@@ -476,31 +480,6 @@ where
             base_key,
             extra: self.extra.clone(),
         }
-    }
-}
-
-#[async_trait]
-impl<E, T> RegisterOperations<T> for DynamoDbContext<E>
-where
-    T: Default + Serialize + DeserializeOwned + Send + Sync + 'static,
-    E: Clone + Send + Sync,
-{
-    async fn get(&mut self) -> Result<T, Self::Error> {
-        let value = self
-            .read_key(&self.base_key.clone())
-            .await?
-            .unwrap_or_default();
-        Ok(value)
-    }
-
-    fn set(&mut self, batch: &mut Self::Batch, value: &T) -> Result<(), Self::Error> {
-        self.put_item_batch(batch, self.base_key.clone(), value)?;
-        Ok(())
-    }
-
-    fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error> {
-        self.remove_item_batch(batch, self.base_key.clone());
-        Ok(())
     }
 }
 
