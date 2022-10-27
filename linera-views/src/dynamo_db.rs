@@ -4,10 +4,7 @@
 use crate::{
     hash::HashingContext,
     localstack,
-    views::{
-        Context,
-        ViewError,
-    },
+    views::{Context, ViewError},
 };
 use async_trait::async_trait;
 use aws_sdk_dynamodb::{
@@ -51,14 +48,20 @@ pub struct Batch(Vec<WriteOperation>);
 
 /// A implementation of [`Context`] based on DynamoDB.
 #[derive(Debug, Clone)]
-pub struct DynamoDbContext<E> where E: Clone + Sync + Send {
+pub struct DynamoDbContext<E>
+where
+    E: Clone + Sync + Send,
+{
     client: Client,
     table: TableName,
     base_key: Vec<u8>,
     extra: E,
 }
 
-impl<E> DynamoDbContext<E> where E: Clone + Sync + Send {
+impl<E> DynamoDbContext<E>
+where
+    E: Clone + Sync + Send,
+{
     /// Create a new [`DynamoDbContext`] instance.
     pub async fn new(
         table: TableName,
@@ -111,7 +114,7 @@ impl<E> DynamoDbContext<E> where E: Clone + Sync + Send {
     ///
     /// The return context has its key prefix extended with `scope_prefix` and uses the
     /// `new_extra` instead of cloning the current extra data.
-    pub fn clone_with_sub_scope<NewE : Clone + Send + Sync>(
+    pub fn clone_with_sub_scope<NewE: Clone + Send + Sync>(
         &self,
         scope_prefix: &impl Serialize,
         new_extra: NewE,
@@ -359,7 +362,7 @@ where
     /// context.
     ///
     /// The `Item` is deserialized using [`bcs`].
-    async fn read_key<Item>(&mut self, key: &Vec<u8>) -> Result<Option<Item>, DynamoDbContextError>
+    async fn read_key<Item>(&mut self, key: &[u8]) -> Result<Option<Item>, DynamoDbContextError>
     where
         Item: DeserializeOwned,
     {

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
+use serde::{de::DeserializeOwned, Serialize};
 use std::{
     cmp::Eq,
     collections::{btree_map, BTreeMap, VecDeque},
@@ -12,7 +13,6 @@ use std::{
 };
 use thiserror::Error;
 use tokio::sync::{Mutex, OwnedMutexGuard};
-use serde::{Serialize, de::DeserializeOwned};
 
 #[cfg(test)]
 #[path = "unit_tests/views.rs"]
@@ -55,13 +55,13 @@ pub trait Context {
     /// Retrieve a generic `Item` from the table using the provided `key` prefixed by the current
     /// context.
     /// The `Item` is deserialized using [`bcs`].
-    async fn read_key<Item: DeserializeOwned>(&mut self, key: &Vec<u8>) -> Result<Option<Item>, Self::Error>;
+    async fn read_key<Item: DeserializeOwned>(
+        &mut self,
+        key: &[u8],
+    ) -> Result<Option<Item>, Self::Error>;
 
     /// Find keys matching the prefix. The full keys are returned, that is including the prefix.
-    async fn find_keys_with_prefix(
-        &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<Vec<u8>>, Self::Error>;
+    async fn find_keys_with_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error>;
 
     /// Find the keys matching the prefix. The remainder of the key are parsed back into elements.
     async fn get_sub_keys<Key: DeserializeOwned + Send>(
@@ -178,8 +178,7 @@ pub trait ScopedOperations: Context {
     fn clone_with_scope(&self, index: u64) -> Self;
 }
 
-impl<C: Context> ScopedOperations for C
-{
+impl<C: Context> ScopedOperations for C {
     fn clone_with_scope(&self, index: u64) -> Self {
         self.clone_self(self.derive_key(&index))
     }
@@ -246,10 +245,7 @@ where
 {
     async fn get(&mut self) -> Result<T, Self::Error> {
         let base = self.get_base_key();
-        let value = self
-            .read_key(&base)
-            .await?
-            .unwrap_or_default();
+        let value = self.read_key(&base).await?.unwrap_or_default();
         Ok(value)
     }
 
@@ -263,8 +259,6 @@ where
         Ok(())
     }
 }
-
-
 
 #[async_trait]
 impl<C, T> View<C> for RegisterView<C, T>
@@ -389,10 +383,7 @@ where
 {
     async fn count(&mut self) -> Result<usize, Self::Error> {
         let base = self.get_base_key();
-        let count = self
-            .read_key(&base)
-            .await?
-            .unwrap_or_default();
+        let count = self.read_key(&base).await?.unwrap_or_default();
         Ok(count)
     }
 
@@ -850,10 +841,7 @@ where
 {
     async fn indices(&mut self) -> Result<Range<usize>, Self::Error> {
         let base = self.get_base_key();
-        let range = self
-            .read_key(&base)
-            .await?
-            .unwrap_or_default();
+        let range = self.read_key(&base).await?.unwrap_or_default();
         Ok(range)
     }
 
@@ -926,7 +914,6 @@ where
         Ok(())
     }
 }
-
 
 #[async_trait]
 impl<C, T> View<C> for QueueView<C, T>
@@ -1129,7 +1116,6 @@ pub trait CollectionOperations<I>: Context {
 
     // TODO(#149): In contrast to other views, there is no delete operation for CollectionOperation.
 }
-
 
 /// A marker type used to distinguish keys from the current scope from the keys of sub-views.
 ///

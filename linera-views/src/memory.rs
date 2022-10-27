@@ -3,10 +3,7 @@
 
 use crate::{
     hash::HashingContext,
-    views::{
-        Context,
-        ViewError,
-    },
+    views::{Context, ViewError},
 };
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
@@ -88,7 +85,7 @@ where
 
     async fn read_key<V: DeserializeOwned>(
         &mut self,
-        key: &Vec<u8>,
+        key: &[u8],
     ) -> Result<Option<V>, MemoryContextError> {
         let map = self.map.read().await;
         match map.get(key) {
@@ -111,10 +108,7 @@ where
         Ok(vals)
     }
 
-    async fn get_sub_keys<Key>(
-        &mut self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<Key>, MemoryContextError>
+    async fn get_sub_keys<Key>(&mut self, key_prefix: &[u8]) -> Result<Vec<Key>, MemoryContextError>
     where
         Key: DeserializeOwned + Send,
     {
