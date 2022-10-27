@@ -140,42 +140,6 @@ impl<E> RocksdbContext<E> {
             extra,
         }
     }
-
-    async fn read_key<V: DeserializeOwned>(
-        &mut self,
-        key: &Vec<u8>,
-    ) -> Result<Option<V>, RocksdbContextError> {
-        self.db.read_key(key).await
-    }
-
-    async fn find_keys_with_prefix(
-        &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<Vec<u8>>, RocksdbContextError> {
-        self.db.find_keys_with_prefix(key_prefix).await
-    }
-
-    async fn get_sub_keys<Key: DeserializeOwned + Send>(
-        &mut self,
-        key_prefix: &Vec<u8>,
-    ) -> Result<Vec<Key>, RocksdbContextError> {
-        self.db.get_sub_keys(key_prefix).await
-    }
-
-    fn put_item_batch(
-        &self,
-        batch: &mut Batch,
-        key: Vec<u8>,
-        value: &impl Serialize,
-    ) -> Result<(), RocksdbContextError> {
-        let bytes = bcs::to_bytes(value)?;
-        batch.0.push(WriteOperation::Put { key, value: bytes });
-        Ok(())
-    }
-
-    fn remove_item_batch(&self, batch: &mut Batch, key: Vec<u8>) {
-        batch.0.push(WriteOperation::Delete { key });
-    }
 }
 
 pub enum WriteOperation {
@@ -206,6 +170,42 @@ where
             "Empty indices are not allowed"
         );
         key
+    }
+
+    fn put_item_batch(
+        &self,
+        batch: &mut Batch,
+        key: Vec<u8>,
+        value: &impl Serialize,
+    ) -> Result<(), RocksdbContextError> {
+        let bytes = bcs::to_bytes(value)?;
+        batch.0.push(WriteOperation::Put { key, value: bytes });
+        Ok(())
+    }
+
+    fn remove_item_batch(&self, batch: &mut Batch, key: Vec<u8>) {
+        batch.0.push(WriteOperation::Delete { key });
+    }
+
+    async fn read_key<V: DeserializeOwned>(
+        &mut self,
+        key: &Vec<u8>,
+    ) -> Result<Option<V>, RocksdbContextError> {
+        self.db.read_key(key).await
+    }
+
+    async fn find_keys_with_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Vec<Vec<u8>>, RocksdbContextError> {
+        self.db.find_keys_with_prefix(key_prefix).await
+    }
+
+    async fn get_sub_keys<Key: DeserializeOwned + Send>(
+        &mut self,
+        key_prefix: &Vec<u8>,
+    ) -> Result<Vec<Key>, RocksdbContextError> {
+        self.db.get_sub_keys(key_prefix).await
     }
 
     async fn run_with_batch<F>(&self, builder: F) -> Result<(), ViewError>

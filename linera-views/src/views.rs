@@ -12,7 +12,7 @@ use std::{
 };
 use thiserror::Error;
 use tokio::sync::{Mutex, OwnedMutexGuard};
-use serde::Serialize;
+use serde::{Serialize, de::DeserializeOwned};
 
 #[cfg(test)]
 #[path = "unit_tests/views.rs"]
@@ -37,6 +37,34 @@ pub trait Context {
 
     /// Obtain the Vec<u8> key from the key by serialization and using the base_key
     fn derive_key<I: Serialize>(&self, index: &I) -> Vec<u8>;
+
+    /// Insert a put a key/value in the batch
+    fn put_item_batch(
+        &self,
+        batch: &mut Self::Batch,
+        key: Vec<u8>,
+        value: &impl Serialize,
+    ) -> Result<(), Self::Error>;
+
+    /// Delete a key and put that command into the batch
+    fn remove_item_batch(&self, batch: &mut Self::Batch, key: Vec<u8>);
+
+    /// Retrieve a generic `Item` from the table using the provided `key` prefixed by the current
+    /// context.
+    /// The `Item` is deserialized using [`bcs`].
+    async fn read_key<Item: DeserializeOwned>(&mut self, key: &Vec<u8>) -> Result<Option<Item>, Self::Error>;
+
+    /// Find keys matching the prefix. The full keys are returned, that is including the prefix.
+    async fn find_keys_with_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Vec<Vec<u8>>, Self::Error>;
+
+    /// Find the keys matching the prefix. The remainder of the key are parsed back into elements.
+    async fn get_sub_keys<Key: DeserializeOwned + Send>(
+        &mut self,
+        key_prefix: &Vec<u8>,
+    ) -> Result<Vec<Key>, Self::Error>;
 
     /// Provide a reference to a new batch to the builder then execute the batch.
     async fn run_with_batch<F>(&self, builder: F) -> Result<(), ViewError>

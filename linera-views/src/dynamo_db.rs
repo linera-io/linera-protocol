@@ -172,21 +172,6 @@ impl<E> DynamoDbContext<E> where E: Clone + Sync + Send {
         }
     }
 
-    fn put_item_batch(
-        &self,
-        batch: &mut Batch,
-        key: Vec<u8>,
-        value: &impl Serialize,
-    ) -> Result<(), DynamoDbContextError> {
-        let bytes = bcs::to_bytes(value)?;
-        batch.0.push(WriteOperation::Put { key, value: bytes });
-        Ok(())
-    }
-
-    fn remove_item_batch(&self, batch: &mut Batch, key: Vec<u8>) {
-        batch.0.push(WriteOperation::Delete { key });
-    }
-
     /// Build the key attributes for a table item.
     ///
     /// The key is composed of two attributes that are both binary blobs. The first attribute is a
@@ -212,28 +197,6 @@ impl<E> DynamoDbContext<E> where E: Clone + Sync + Send {
             VALUE_ATTRIBUTE.to_owned(),
             AttributeValue::B(Blob::new(value)),
         )
-    }
-
-    /// Retrieve a generic `Item` from the table using the provided `key` prefixed by the current
-    /// context.
-    ///
-    /// The `Item` is deserialized using [`bcs`].
-    async fn read_key<Item>(&mut self, key: &Vec<u8>) -> Result<Option<Item>, DynamoDbContextError>
-    where
-        Item: DeserializeOwned,
-    {
-        let response = self
-            .client
-            .get_item()
-            .table_name(self.table.as_ref())
-            .set_key(Some(self.build_key(key.to_vec())))
-            .send()
-            .await?;
-
-        match response.item() {
-            Some(item) => Ok(Some(Self::extract_value(item)?)),
-            None => Ok(None),
-        }
     }
 
     /// Extract the key attribute from an item and deserialize it into the `Key` type.
@@ -348,6 +311,67 @@ impl<E> DynamoDbContext<E> where E: Clone + Sync + Send {
 
         Ok(())
     }
+}
+
+#[async_trait]
+impl<E> Context for DynamoDbContext<E>
+where
+    E: Clone + Send + Sync,
+{
+    type Batch = Batch;
+    type Extra = E;
+    type Error = DynamoDbContextError;
+
+    fn extra(&self) -> &E {
+        &self.extra
+    }
+
+    fn derive_key<I: Serialize>(&self, index: &I) -> Vec<u8> {
+        let mut key = self.base_key.clone();
+        bcs::serialize_into(&mut key, index).expect("serialization should not fail");
+        assert!(
+            key.len() > self.base_key.len(),
+            "Empty indices are not allowed"
+        );
+        key
+    }
+
+    fn put_item_batch(
+        &self,
+        batch: &mut Batch,
+        key: Vec<u8>,
+        value: &impl Serialize,
+    ) -> Result<(), DynamoDbContextError> {
+        let bytes = bcs::to_bytes(value)?;
+        batch.0.push(WriteOperation::Put { key, value: bytes });
+        Ok(())
+    }
+
+    fn remove_item_batch(&self, batch: &mut Batch, key: Vec<u8>) {
+        batch.0.push(WriteOperation::Delete { key });
+    }
+
+    /// Retrieve a generic `Item` from the table using the provided `key` prefixed by the current
+    /// context.
+    ///
+    /// The `Item` is deserialized using [`bcs`].
+    async fn read_key<Item>(&mut self, key: &Vec<u8>) -> Result<Option<Item>, DynamoDbContextError>
+    where
+        Item: DeserializeOwned,
+    {
+        let response = self
+            .client
+            .get_item()
+            .table_name(self.table.as_ref())
+            .set_key(Some(self.build_key(key.to_vec())))
+            .send()
+            .await?;
+
+        match response.item() {
+            Some(item) => Ok(Some(Self::extract_value(item)?)),
+            None => Ok(None),
+        }
+    }
 
     async fn find_keys_with_prefix(
         &self,
@@ -390,7 +414,7 @@ impl<E> DynamoDbContext<E> where E: Clone + Sync + Send {
         key_prefix: &Vec<u8>,
     ) -> Result<Vec<Key>, DynamoDbContextError>
     where
-        Key: DeserializeOwned,
+        Key: DeserializeOwned + Send,
     {
         let extra_prefix_bytes_count = key_prefix.len() - self.base_key.len();
         let response = self
@@ -418,30 +442,6 @@ impl<E> DynamoDbContext<E> where E: Clone + Sync + Send {
             .flatten()
             .map(|item| self.extract_sub_key(item, extra_prefix_bytes_count))
             .collect()
-    }
-}
-
-#[async_trait]
-impl<E> Context for DynamoDbContext<E>
-where
-    E: Clone + Send + Sync,
-{
-    type Batch = Batch;
-    type Extra = E;
-    type Error = DynamoDbContextError;
-
-    fn extra(&self) -> &E {
-        &self.extra
-    }
-
-    fn derive_key<I: Serialize>(&self, index: &I) -> Vec<u8> {
-        let mut key = self.base_key.clone();
-        bcs::serialize_into(&mut key, index).expect("serialization should not fail");
-        assert!(
-            key.len() > self.base_key.len(),
-            "Empty indices are not allowed"
-        );
-        key
     }
 
     async fn run_with_batch<F>(&self, builder: F) -> Result<(), ViewError>

@@ -42,64 +42,6 @@ impl<E> MemoryContext<E> {
             extra,
         }
     }
-
-    async fn read_key<V: DeserializeOwned>(
-        &mut self,
-        key: &Vec<u8>,
-    ) -> Result<Option<V>, MemoryContextError> {
-        let map = self.map.read().await;
-        match map.get(key) {
-            None => Ok(None),
-            Some(bytes) => Ok(Some(bcs::from_bytes(bytes)?)),
-        }
-    }
-
-    async fn find_keys_with_prefix(
-        &mut self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<Vec<u8>>, MemoryContextError> {
-        let map = self.map.read().await;
-        let mut vals = Vec::new();
-        for key in map.keys() {
-            if key.starts_with(key_prefix) {
-                vals.push(key.clone())
-            }
-        }
-        Ok(vals)
-    }
-
-    async fn get_sub_keys<Key>(
-        &mut self,
-        key_prefix: &Vec<u8>,
-    ) -> Result<Vec<Key>, MemoryContextError>
-    where
-        Key: DeserializeOwned,
-    {
-        let map = self.map.read().await;
-        let mut keys = Vec::new();
-        let len = key_prefix.len();
-        for key in map.keys() {
-            if key.starts_with(key_prefix) {
-                keys.push(bcs::from_bytes(&key[len..])?);
-            }
-        }
-        Ok(keys)
-    }
-
-    fn put_item_batch(
-        &self,
-        batch: &mut Batch,
-        key: Vec<u8>,
-        value: &impl Serialize,
-    ) -> Result<(), MemoryContextError> {
-        let bytes = bcs::to_bytes(value)?;
-        batch.0.push(WriteOperation::Put { key, value: bytes });
-        Ok(())
-    }
-
-    fn remove_item_batch(&self, batch: &mut Batch, key: Vec<u8>) {
-        batch.0.push(WriteOperation::Delete { key });
-    }
 }
 
 #[async_trait]
@@ -123,6 +65,64 @@ where
             "Empty indices are not allowed"
         );
         key
+    }
+
+    fn put_item_batch(
+        &self,
+        batch: &mut Batch,
+        key: Vec<u8>,
+        value: &impl Serialize,
+    ) -> Result<(), MemoryContextError> {
+        let bytes = bcs::to_bytes(value)?;
+        batch.0.push(WriteOperation::Put { key, value: bytes });
+        Ok(())
+    }
+
+    fn remove_item_batch(&self, batch: &mut Batch, key: Vec<u8>) {
+        batch.0.push(WriteOperation::Delete { key });
+    }
+
+    async fn read_key<V: DeserializeOwned>(
+        &mut self,
+        key: &Vec<u8>,
+    ) -> Result<Option<V>, MemoryContextError> {
+        let map = self.map.read().await;
+        match map.get(key) {
+            None => Ok(None),
+            Some(bytes) => Ok(Some(bcs::from_bytes(bytes)?)),
+        }
+    }
+
+    async fn find_keys_with_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Vec<Vec<u8>>, MemoryContextError> {
+        let map = self.map.read().await;
+        let mut vals = Vec::new();
+        for key in map.keys() {
+            if key.starts_with(key_prefix) {
+                vals.push(key.clone())
+            }
+        }
+        Ok(vals)
+    }
+
+    async fn get_sub_keys<Key>(
+        &mut self,
+        key_prefix: &Vec<u8>,
+    ) -> Result<Vec<Key>, MemoryContextError>
+    where
+        Key: DeserializeOwned + Send,
+    {
+        let map = self.map.read().await;
+        let mut keys = Vec::new();
+        let len = key_prefix.len();
+        for key in map.keys() {
+            if key.starts_with(key_prefix) {
+                keys.push(bcs::from_bytes(&key[len..])?);
+            }
+        }
+        Ok(keys)
     }
 
     async fn run_with_batch<F>(&self, builder: F) -> Result<(), ViewError>
