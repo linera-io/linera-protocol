@@ -2,6 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use linera_base::crypto::CryptoError;
 use linera_base::{
     committee::Committee,
     crypto::{BcsSignable, HashValue, KeyPair, Signature},
@@ -15,7 +16,6 @@ use linera_base::{
 use linera_execution::{Effect, Operation};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use linera_base::crypto::CryptoError;
 
 #[cfg(test)]
 #[path = "unit_tests/messages_tests.rs"]

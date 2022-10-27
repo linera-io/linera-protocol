@@ -394,9 +394,11 @@ impl Signature {
         T: Signable<Vec<u8>>,
         I: IntoIterator<Item = (&'a PublicKey, &'a Signature)>,
     {
-        Signature::verify_batch_internal(value, votes).map_err(|error| CryptoError::InvalidSignature {
-            error: format!("batched {}", error),
-            type_name: T::type_name().to_string(),
+        Signature::verify_batch_internal(value, votes).map_err(|error| {
+            CryptoError::InvalidSignature {
+                error: format!("batched {}", error),
+                type_name: T::type_name().to_string(),
+            }
         })
     }
 }

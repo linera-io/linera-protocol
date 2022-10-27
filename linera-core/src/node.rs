@@ -8,6 +8,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use futures::lock::Mutex;
+use linera_base::crypto::CryptoError;
 use linera_base::{
     error::Error,
     messages::{BlockHeight, ChainId, ValidatorName},
@@ -22,7 +23,6 @@ use rand::prelude::SliceRandom;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use thiserror::Error;
-use linera_base::crypto::CryptoError;
 
 /// How to communicate with a validator or a local node.
 #[async_trait]
@@ -89,7 +89,7 @@ pub enum NodeError {
     WorkerError(#[from] linera_base::error::Error),
 
     #[error("Cryptographic error: {0}")]
-    CryptoError(#[from] CryptoError)
+    CryptoError(#[from] CryptoError),
 }
 
 impl From<ViewError> for NodeError {

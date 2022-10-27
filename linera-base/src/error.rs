@@ -2,10 +2,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::crypto::CryptoError;
 use crate::messages::{ApplicationId, BlockHeight, ChainId, Epoch, Origin, RoundNumber};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use crate::crypto::CryptoError;
 
 #[macro_export]
 macro_rules! ensure {
@@ -57,7 +57,6 @@ pub enum Error {
     BalanceUnderflow,
 
     // Signatures and certificates
-
     #[error("The signature was not created by a valid entity")]
     InvalidSigner,
     #[error("Signatures in a certificate must form a quorum")]
