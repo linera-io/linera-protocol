@@ -1170,6 +1170,7 @@ dependencies = [
  "futures",
  "linera-base",
  "linera-chain",
+ "linera-core",
  "linera-execution",
  "linera-storage",
  "linera-views",
