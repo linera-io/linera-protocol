@@ -3,7 +3,23 @@
 
 # Linera
 
-This repository is dedicated to developing the Linera protocol.
+This repository is dedicated to developing the Linera protocol. For an overview of how
+the Linera protocol functions refer to the [whitepaper](https://github.com/linera-io/linera-internal/tree/main/whitepaper).
+<!-- Refer to public whitepaper once this repository is made public -->
+
+## Repository Structure
+
+The Linera protocol repository is broken down into the following crates: (from low-level to high-level in the dependency graph)
+
+1. [`linera-base`](./linera-base) Basic type definitions, including cryptography. This will slowly be transitioned out into the rest of the crate ecosystem.
+2. [`linera-views`](./linera-views) A module enabling the mapping of complex data structures onto a KV store.
+3. [`linera-execution`](./linera-execution) Persistent data and the corresponding logics for runtime and execution of smart contracts / applications.
+4. [`linera-chain`](./linera-chain) Persistent data and the corresponding logics for chains of blocks, certificates, and cross-chain messaging.
+5. [`linera-storage`](./linera-storage) Defines the storage abstraction and corresponding concrete implementations (DynamoDB, RocksDB, etc.) on top of `linera-chain`.
+6. [`linera-core`](./linera-core) The Linera core protocol. Contains client / server logic, node synchronization etc.
+7. [`linera-rpc`](./linera-rpc)  Defines the data-type for RPC messages (currently all client<->proxy<->chain<->chain interactions), and track the corresponding data schemas.
+8. [`linera-service`](./linera-service) Executable for clients (aka CLI wallets), proxy (aka validator frontend) and servers.
+
 
 ## Quickstart with the Linera service CLI
 
