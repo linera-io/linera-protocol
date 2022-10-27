@@ -521,8 +521,8 @@ NodeError:
           TYPENAME: Error
     7:
       CryptoError:
-        STRUCT:
-          - error: STR
+        NEWTYPE:
+          TYPENAME: CryptoError
 Operation:
   ENUM:
     0:

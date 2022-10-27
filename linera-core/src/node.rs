@@ -87,16 +87,9 @@ pub enum NodeError {
 
     #[error("{0}")]
     WorkerError(#[from] linera_base::error::Error),
-    #[error("Crypto error: {error}")]
-    CryptoError{ error: String }
-}
 
-impl From<CryptoError> for NodeError {
-    fn from(error: CryptoError) -> Self {
-        Self::CryptoError {
-            error: error.to_string()
-        }
-    }
+    #[error("Cryptographic error: {0}")]
+    CryptoError(#[from] CryptoError)
 }
 
 impl From<ViewError> for NodeError {
