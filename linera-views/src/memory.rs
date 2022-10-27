@@ -4,13 +4,13 @@
 use crate::{
     hash::HashingContext,
     views::{
-        CollectionOperations, Context, MapOperations,
+        CollectionOperations, Context,
         ViewError,
     },
 };
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{cmp::Eq, collections::BTreeMap, fmt::Debug, sync::Arc};
+use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
 use thiserror::Error;
 use tokio::sync::{OwnedMutexGuard, RwLock};
 
@@ -161,49 +161,6 @@ where
             base_key,
             extra: self.extra.clone(),
         }
-    }
-}
-
-#[async_trait]
-impl<E, I, V> MapOperations<I, V> for MemoryContext<E>
-where
-    I: Eq + Ord + Send + Sync + Serialize + DeserializeOwned + Clone + 'static,
-    V: Send + Sync + Serialize + DeserializeOwned + 'static,
-    E: Clone + Send + Sync,
-{
-    async fn get(&mut self, index: &I) -> Result<Option<V>, Self::Error> {
-        Ok(self.read_key(&self.derive_key(index)).await?)
-    }
-
-    fn insert(&mut self, batch: &mut Self::Batch, index: I, value: V) -> Result<(), Self::Error> {
-        self.put_item_batch(batch, self.derive_key(&index), &value)?;
-        Ok(())
-    }
-
-    fn remove(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
-        self.remove_item_batch(batch, self.derive_key(&index));
-        Ok(())
-    }
-
-    async fn indices(&mut self) -> Result<Vec<I>, Self::Error> {
-        self.get_sub_keys(&self.base_key.clone()).await
-    }
-
-    async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), Self::Error>
-    where
-        F: FnMut(I) + Send,
-    {
-        for index in self.get_sub_keys(&self.base_key.clone()).await? {
-            f(index);
-        }
-        Ok(())
-    }
-
-    async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error> {
-        for key in self.find_keys_with_prefix(&self.base_key.clone()).await? {
-            self.remove_item_batch(batch, key);
-        }
-        Ok(())
     }
 }
 

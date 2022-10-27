@@ -607,6 +607,54 @@ pub trait MapOperations<I, V>: Context {
 }
 
 #[async_trait]
+impl<I, V, C: Context + Send + Sync> MapOperations<I, V> for C
+where
+    I: Eq + Ord + Send + Sync + Serialize + DeserializeOwned + Clone + 'static,
+    V: Send + Sync + Serialize + DeserializeOwned + 'static,
+{
+    async fn get(&mut self, index: &I) -> Result<Option<V>, Self::Error> {
+        let key = self.derive_key(index);
+        Ok(self.read_key(&key).await?)
+    }
+
+    fn insert(&mut self, batch: &mut Self::Batch, index: I, value: V) -> Result<(), Self::Error> {
+        let key = self.derive_key(&index);
+        self.put_item_batch(batch, key, &value)?;
+        Ok(())
+    }
+
+    fn remove(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
+        let key = self.derive_key(&index);
+        self.remove_item_batch(batch, key);
+        Ok(())
+    }
+
+    async fn indices(&mut self) -> Result<Vec<I>, Self::Error> {
+        let base = self.get_base_key();
+        self.get_sub_keys(&base).await
+    }
+
+    async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), Self::Error>
+    where
+        F: FnMut(I) + Send,
+    {
+        let base = self.get_base_key();
+        for index in self.get_sub_keys(&base).await? {
+            f(index);
+        }
+        Ok(())
+    }
+
+    async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error> {
+        let base = self.get_base_key();
+        for key in self.find_keys_with_prefix(&base).await? {
+            self.remove_item_batch(batch, key);
+        }
+        Ok(())
+    }
+}
+
+#[async_trait]
 impl<C, I, V> View<C> for MapView<C, I, V>
 where
     C: MapOperations<I, V> + Send,
