@@ -34,6 +34,8 @@ linera-base = { path = "../linera-base", features = ["test"] }
 linera-chain = { path = "../linera-chain", features = ["test"] }
 linera-core = { path = "../linera-core", features = ["test"] }
 linera-execution = { path = "../linera-execution", features = ["test"] }
+linera-rpc = { path = ".", features = ["test"] }
+linera-storage = { path = "../linera-storage", features = ["test"] }
 serde-reflection = "0.3.5"
 serde_yaml = "0.8.21"
 similar-asserts = "1.1.0"
