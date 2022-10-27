@@ -1216,6 +1216,8 @@ dependencies = [
  "linera-chain",
  "linera-core",
  "linera-execution",
+ "linera-rpc",
+ "linera-storage",
  "log",
  "once_cell",
  "proptest",
