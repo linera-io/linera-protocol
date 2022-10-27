@@ -796,6 +796,91 @@ pub trait QueueOperations<T>: Context {
 }
 
 #[async_trait]
+impl<T, C: Context + Send> QueueOperations<T> for C
+where
+    T: Serialize + DeserializeOwned + Send + Sync + 'static,
+{
+    async fn indices(&mut self) -> Result<Range<usize>, Self::Error> {
+        let base = self.get_base_key();
+        let range = self
+            .read_key(&base)
+            .await?
+            .unwrap_or_default();
+        Ok(range)
+    }
+
+    async fn get(&mut self, index: usize) -> Result<Option<T>, Self::Error> {
+        let key = self.derive_key(&index);
+        Ok(self.read_key(&key).await?)
+    }
+
+    async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error> {
+        let mut values = Vec::with_capacity(range.len());
+        for index in range {
+            let key = self.derive_key(&index);
+            match self.read_key(&key).await? {
+                None => return Ok(values),
+                Some(value) => values.push(value),
+            }
+        }
+        Ok(values)
+    }
+
+    fn delete_front(
+        &mut self,
+        stored_indices: &mut Range<usize>,
+        batch: &mut Self::Batch,
+        count: usize,
+    ) -> Result<(), Self::Error> {
+        if count == 0 {
+            return Ok(());
+        }
+        let deletion_range = stored_indices.clone().take(count);
+        stored_indices.start += count;
+        self.put_item_batch(batch, self.get_base_key(), &stored_indices)?;
+        for index in deletion_range {
+            let key = self.derive_key(&index);
+            self.remove_item_batch(batch, key);
+        }
+        Ok(())
+    }
+
+    fn append_back(
+        &mut self,
+        stored_indices: &mut Range<usize>,
+        batch: &mut Self::Batch,
+        values: Vec<T>,
+    ) -> Result<(), Self::Error> {
+        if values.is_empty() {
+            return Ok(());
+        }
+        for value in values {
+            let key = self.derive_key(&stored_indices.end);
+            self.put_item_batch(batch, key, &value)?;
+            stored_indices.end += 1;
+        }
+        let base = self.get_base_key();
+        self.put_item_batch(batch, base, &stored_indices)?;
+        Ok(())
+    }
+
+    fn delete(
+        &mut self,
+        stored_indices: Range<usize>,
+        batch: &mut Self::Batch,
+    ) -> Result<(), Self::Error> {
+        let base = self.get_base_key();
+        self.remove_item_batch(batch, base);
+        for index in stored_indices {
+            let key = self.derive_key(&index);
+            self.remove_item_batch(batch, key);
+        }
+        Ok(())
+    }
+}
+
+
+#[async_trait]
 impl<C, T> View<C> for QueueView<C, T>
 where
     C: QueueOperations<T> + Send + Sync,

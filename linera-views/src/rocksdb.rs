@@ -4,13 +4,13 @@
 use crate::{
     hash::HashingContext,
     views::{
-        CollectionOperations, Context, MapOperations, QueueOperations,
+        CollectionOperations, Context, MapOperations,
         ViewError,
     },
 };
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{ops::Range, sync::Arc};
+use std::sync::Arc;
 use thiserror::Error;
 
 pub type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
@@ -250,83 +250,6 @@ where
             base_key,
             extra: self.extra.clone(),
         }
-    }
-}
-
-#[async_trait]
-impl<E, T> QueueOperations<T> for RocksdbContext<E>
-where
-    T: Serialize + DeserializeOwned + Send + Sync + 'static,
-    E: Clone + Send + Sync,
-{
-    async fn indices(&mut self) -> Result<Range<usize>, Self::Error> {
-        let range = self
-            .read_key(&self.base_key.clone())
-            .await?
-            .unwrap_or_default();
-        Ok(range)
-    }
-
-    async fn get(&mut self, index: usize) -> Result<Option<T>, Self::Error> {
-        Ok(self.read_key(&self.derive_key(&index)).await?)
-    }
-
-    async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error> {
-        let mut values = Vec::new();
-        for index in range {
-            match self.read_key(&self.derive_key(&index)).await? {
-                None => return Ok(values),
-                Some(value) => values.push(value),
-            }
-        }
-        Ok(values)
-    }
-
-    fn delete_front(
-        &mut self,
-        stored_indices: &mut Range<usize>,
-        batch: &mut Self::Batch,
-        count: usize,
-    ) -> Result<(), Self::Error> {
-        if count == 0 {
-            return Ok(());
-        }
-        let deletion_range = stored_indices.clone().take(count);
-        stored_indices.start += count;
-        self.put_item_batch(batch, self.base_key.clone(), &stored_indices)?;
-        for index in deletion_range {
-            self.remove_item_batch(batch, self.derive_key(&index));
-        }
-        Ok(())
-    }
-
-    fn append_back(
-        &mut self,
-        stored_indices: &mut Range<usize>,
-        batch: &mut Self::Batch,
-        values: Vec<T>,
-    ) -> Result<(), Self::Error> {
-        if values.is_empty() {
-            return Ok(());
-        }
-        for value in values {
-            self.put_item_batch(batch, self.derive_key(&stored_indices.end), &value)?;
-            stored_indices.end += 1;
-        }
-        self.put_item_batch(batch, self.base_key.clone(), &stored_indices)?;
-        Ok(())
-    }
-
-    fn delete(
-        &mut self,
-        stored_indices: Range<usize>,
-        batch: &mut Self::Batch,
-    ) -> Result<(), Self::Error> {
-        self.remove_item_batch(batch, self.base_key.clone());
-        for index in stored_indices {
-            self.remove_item_batch(batch, self.derive_key(&index));
-        }
-        Ok(())
     }
 }
 
