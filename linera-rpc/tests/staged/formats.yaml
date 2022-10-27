@@ -188,6 +188,13 @@ CrossChainRequest:
               TYPENAME: ChainId
           - height:
               TYPENAME: BlockHeight
+CryptoError:
+  ENUM:
+    0:
+      InvalidSignature:
+        STRUCT:
+          - error: STR
+          - type_name: STR
 Destination:
   ENUM:
     0:
@@ -386,8 +393,8 @@ Error:
           - error: STR
     44:
       CryptoError:
-        STRUCT:
-          - error: STR
+        NEWTYPE:
+          TYPENAME: CryptoError
     45:
       UnknownApplication: UNIT
     46:

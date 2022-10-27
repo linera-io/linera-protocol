@@ -5,6 +5,7 @@
 use crate::messages::{ApplicationId, BlockHeight, ChainId, Epoch, Origin, RoundNumber};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use crate::crypto::CryptoError;
 
 #[macro_export]
 macro_rules! ensure {
@@ -169,8 +170,8 @@ pub enum Error {
     #[error("Error in view operation: {error}")]
     ViewError { error: String },
 
-    #[error("Crypto error: {error}")]
-    CryptoError { error: String },
+    #[error("Cryptographic error: {0}")]
+    CryptoError(#[from] CryptoError),
 
     // Execution
     #[error("Unknown application")]

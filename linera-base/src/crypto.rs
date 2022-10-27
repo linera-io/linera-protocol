@@ -2,7 +2,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::error::Error;
 use ed25519_dalek as dalek;
 use ed25519_dalek::{Signer, Verifier};
 use rand::rngs::OsRng;
@@ -44,12 +43,6 @@ pub struct Signature(dalek::Signature);
 pub enum CryptoError {
     #[error("Signature for object {type_name} is not valid: {error}")]
     InvalidSignature { error: String, type_name: String },
-}
-
-impl From<CryptoError> for Error {
-    fn from(e: CryptoError) -> Self {
-        Error::CryptoError { error: e.to_string() }
-    }
 }
 
 impl PublicKey {
