@@ -2,10 +2,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::crypto::CryptoError;
 use linera_base::{
     committee::Committee,
-    crypto::{BcsSignable, HashValue, KeyPair, Signature},
+    crypto::{BcsSignable, CryptoError, HashValue, KeyPair, Signature},
     ensure,
     error::Error,
     messages::{

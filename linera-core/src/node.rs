@@ -8,8 +8,8 @@ use crate::{
 };
 use async_trait::async_trait;
 use futures::lock::Mutex;
-use linera_base::crypto::CryptoError;
 use linera_base::{
+    crypto::CryptoError,
     error::Error,
     messages::{BlockHeight, ChainId, ValidatorName},
 };
