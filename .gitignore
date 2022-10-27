@@ -10,3 +10,7 @@
 
 # vim
 *.swp
+
+# idea
+*.iml
+.idea/
