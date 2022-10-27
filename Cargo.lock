@@ -1191,6 +1191,7 @@ dependencies = [
  "async-trait",
  "dashmap",
  "linera-base",
+ "linera-execution",
  "linera-views",
  "log",
  "once_cell",
