@@ -1298,6 +1298,7 @@ dependencies = [
  "generic-array",
  "http",
  "linera-base",
+ "linera-views",
  "log",
  "paste",
  "rocksdb",
