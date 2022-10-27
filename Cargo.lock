@@ -1151,6 +1151,7 @@ dependencies = [
  "bcs",
  "futures",
  "linera-base",
+ "linera-chain",
  "linera-execution",
  "linera-views",
  "log",
