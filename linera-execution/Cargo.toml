@@ -5,7 +5,7 @@ authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 
 [features]
-test = []
+test = ["tokio/macros"]
 
 [dependencies]
 async-trait = "0.1.52"
@@ -17,3 +17,6 @@ once_cell = "1.13.0"
 serde = { version = "1.0.130", features = ["derive"] }
 thiserror = "1.0.31"
 tokio = "1.12.0"
+
+[dev-dependencies]
+linera-execution = { path = ".", features = ["test"] }
