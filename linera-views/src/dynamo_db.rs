@@ -5,7 +5,7 @@ use crate::{
     hash::HashingContext,
     localstack,
     views::{
-        CollectionOperations, Context,
+        Context,
         ViewError,
     },
 };
@@ -488,59 +488,6 @@ where
     E: Clone + Send + Sync,
 {
     type Hasher = sha2::Sha512;
-}
-
-/// A marker type used to distinguish keys from the current scope from the keys of sub-views.
-///
-/// Sub-views in a collection share a common key prefix, like in other view types. However,
-/// just concatenating the shared prefix with sub-view keys makes it impossible to distinguish if a
-/// given key belongs to child sub-view or a grandchild sub-view (consider for example if a
-/// collection is stored inside the collection).
-///
-/// The solution to this is to use a marker type to have two sets of keys, where
-/// [`CollectionKey::Index`] serves to indicate the existence of an entry in the collection, and
-/// [`CollectionKey::Subvie`] serves as the prefix for the sub-view.
-#[derive(Serialize)]
-enum CollectionKey<I> {
-    Index(I),
-    Subview(I),
-}
-
-#[async_trait]
-impl<E, I> CollectionOperations<I> for DynamoDbContext<E>
-where
-    I: Serialize + DeserializeOwned + Send + Sync + 'static,
-    E: Clone + Send + Sync,
-{
-    fn clone_with_scope(&self, index: &I) -> Self {
-        self.clone_self(self.derive_key(&CollectionKey::Subview(index)))
-    }
-
-    fn add_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
-        self.put_item_batch(batch, self.derive_key(&CollectionKey::Index(index)), &())?;
-        Ok(())
-    }
-
-    fn remove_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
-        self.remove_item_batch(batch, self.derive_key(&CollectionKey::Index(index)));
-        Ok(())
-    }
-
-    async fn indices(&mut self) -> Result<Vec<I>, Self::Error> {
-        let base = self.derive_key(&CollectionKey::Index(()));
-        self.get_sub_keys(&base).await
-    }
-
-    async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), Self::Error>
-    where
-        F: FnMut(I) + Send,
-    {
-        let base = self.derive_key(&CollectionKey::Index(()));
-        for index in self.get_sub_keys(&base).await? {
-            f(index);
-        }
-        Ok(())
-    }
 }
 
 /// Status of a table at the creation time of a [`DynamoDbContext`] instance.

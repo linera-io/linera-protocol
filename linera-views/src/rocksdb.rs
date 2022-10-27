@@ -4,7 +4,7 @@
 use crate::{
     hash::HashingContext,
     views::{
-        CollectionOperations, Context,
+        Context,
         ViewError,
     },
 };
@@ -250,49 +250,6 @@ where
             base_key,
             extra: self.extra.clone(),
         }
-    }
-}
-
-#[derive(Serialize)]
-enum CollectionKey<I> {
-    Index(I),
-    Subview(I),
-}
-
-#[async_trait]
-impl<E, I> CollectionOperations<I> for RocksdbContext<E>
-where
-    I: Serialize + DeserializeOwned + Send + Sync + 'static,
-    E: Clone + Send + Sync,
-{
-    fn clone_with_scope(&self, index: &I) -> Self {
-        self.clone_self(self.derive_key(&CollectionKey::Subview(index)))
-    }
-
-    fn add_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
-        self.put_item_batch(batch, self.derive_key(&CollectionKey::Index(index)), &())?;
-        Ok(())
-    }
-
-    fn remove_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
-        self.remove_item_batch(batch, self.derive_key(&CollectionKey::Index(index)));
-        Ok(())
-    }
-
-    async fn indices(&mut self) -> Result<Vec<I>, Self::Error> {
-        let base = self.derive_key(&CollectionKey::Index(()));
-        self.get_sub_keys(&base).await
-    }
-
-    async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), Self::Error>
-    where
-        F: FnMut(I) + Send,
-    {
-        let base = self.derive_key(&CollectionKey::Index(()));
-        for index in self.get_sub_keys(&base).await? {
-            f(index);
-        }
-        Ok(())
     }
 }
 

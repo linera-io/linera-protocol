@@ -1130,6 +1130,62 @@ pub trait CollectionOperations<I>: Context {
     // TODO(#149): In contrast to other views, there is no delete operation for CollectionOperation.
 }
 
+
+/// A marker type used to distinguish keys from the current scope from the keys of sub-views.
+///
+/// Sub-views in a collection share a common key prefix, like in other view types. However,
+/// just concatenating the shared prefix with sub-view keys makes it impossible to distinguish if a
+/// given key belongs to child sub-view or a grandchild sub-view (consider for example if a
+/// collection is stored inside the collection).
+///
+/// The solution to this is to use a marker type to have two sets of keys, where
+/// [`CollectionKey::Index`] serves to indicate the existence of an entry in the collection, and
+/// [`CollectionKey::Subvie`] serves as the prefix for the sub-view.
+#[derive(Serialize)]
+enum CollectionKey<I> {
+    Index(I),
+    Subview(I),
+}
+
+#[async_trait]
+impl<I, C: Context + Send> CollectionOperations<I> for C
+where
+    I: Serialize + DeserializeOwned + Send + Sync + 'static,
+{
+    fn clone_with_scope(&self, index: &I) -> Self {
+        let key = self.derive_key(&CollectionKey::Subview(index));
+        self.clone_self(key)
+    }
+
+    fn add_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
+        let key = self.derive_key(&CollectionKey::Index(index));
+        self.put_item_batch(batch, key, &())?;
+        Ok(())
+    }
+
+    fn remove_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
+        let key = self.derive_key(&CollectionKey::Index(index));
+        self.remove_item_batch(batch, key);
+        Ok(())
+    }
+
+    async fn indices(&mut self) -> Result<Vec<I>, Self::Error> {
+        let base = self.derive_key(&CollectionKey::Index(()));
+        self.get_sub_keys(&base).await
+    }
+
+    async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), Self::Error>
+    where
+        F: FnMut(I) + Send,
+    {
+        let base = self.derive_key(&CollectionKey::Index(()));
+        for index in self.get_sub_keys(&base).await? {
+            f(index);
+        }
+        Ok(())
+    }
+}
+
 #[async_trait]
 impl<C, I, W> View<C> for CollectionView<C, I, W>
 where
