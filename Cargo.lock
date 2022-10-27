@@ -1275,6 +1275,7 @@ dependencies = [
  "linera-base",
  "linera-chain",
  "linera-execution",
+ "linera-storage",
  "linera-views",
  "log",
  "rocksdb",

@@ -5,7 +5,7 @@ authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 
 [features]
-test = []
+test = ["tokio/macros", "tokio/rt", "tokio/test-util"]
 
 [dependencies]
 async-trait = "0.1.52"
@@ -24,4 +24,6 @@ tokio = "1.12.0"
 [dev-dependencies]
 anyhow = "1.0.57"
 linera-execution = { path = "../linera-execution", features = ["test"] }
+linera-storage = { path = ".", features = ["test"] }
+linera-views = { path = "../linera-views", features = ["test"] }
 tempfile = "3.2.0"
