@@ -46,7 +46,7 @@ pub trait KeyValueOperations {
 
     async fn get_sub_keys<Key: DeserializeOwned + Send>(
         &mut self,
-        key_prefix: &Vec<u8>,
+        key_prefix: &[u8],
     ) -> Result<Vec<Key>, RocksdbContextError>;
 
     async fn count_keys(&self) -> Result<usize, RocksdbContextError>;
@@ -113,7 +113,7 @@ impl KeyValueOperations for Arc<DB> {
 
     async fn get_sub_keys<Key: DeserializeOwned + Send>(
         &mut self,
-        key_prefix: &Vec<u8>,
+        key_prefix: &[u8],
     ) -> Result<Vec<Key>, RocksdbContextError> {
         let len = key_prefix.len();
         let mut keys = Vec::new();
@@ -207,7 +207,7 @@ where
 
     async fn get_sub_keys<Key: DeserializeOwned + Send>(
         &mut self,
-        key_prefix: &Vec<u8>,
+        key_prefix: &[u8],
     ) -> Result<Vec<Key>, RocksdbContextError> {
         self.db.get_sub_keys(key_prefix).await
     }

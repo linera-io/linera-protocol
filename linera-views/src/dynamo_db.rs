@@ -415,7 +415,7 @@ where
     /// If the raw key bytes can't be deserialized into a `Key`.
     async fn get_sub_keys<Key>(
         &mut self,
-        key_prefix: &Vec<u8>,
+        key_prefix: &[u8],
     ) -> Result<Vec<Key>, DynamoDbContextError>
     where
         Key: DeserializeOwned + Send,

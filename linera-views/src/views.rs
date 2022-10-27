@@ -66,7 +66,7 @@ pub trait Context {
     /// Find the keys matching the prefix. The remainder of the key are parsed back into elements.
     async fn get_sub_keys<Key: DeserializeOwned + Send>(
         &mut self,
-        key_prefix: &Vec<u8>,
+        key_prefix: &[u8],
     ) -> Result<Vec<Key>, Self::Error>;
 
     /// Provide a reference to a new batch to the builder then execute the batch.
