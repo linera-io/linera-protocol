@@ -3,14 +3,11 @@
 
 use crate::{
     hash::HashingContext,
-    views::{
-        CollectionOperations, Context, LogOperations, MapOperations, QueueOperations,
-        RegisterOperations, ScopedOperations, ViewError,
-    },
+    views::{Context, ViewError},
 };
 use async_trait::async_trait;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::{ops::Range, sync::Arc};
+use serde::{de::DeserializeOwned, Serialize};
+use std::sync::Arc;
 use thiserror::Error;
 
 pub type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
@@ -44,18 +41,12 @@ pub trait KeyValueOperations {
         key_prefix: &[u8],
     ) -> Result<Vec<Vec<u8>>, RocksdbContextError>;
 
-    async fn count_keys(&self) -> Result<usize, RocksdbContextError>;
-}
-
-/// Low-level, blocking write operations.
-trait WriteOperations {
-    fn write_key<V: Serialize>(
+    async fn get_sub_keys<Key: DeserializeOwned + Send>(
         &mut self,
-        key: Vec<u8>,
-        value: &V,
-    ) -> Result<(), RocksdbContextError>;
+        key_prefix: &[u8],
+    ) -> Result<Vec<Key>, RocksdbContextError>;
 
-    fn delete_key(&mut self, key: Vec<u8>);
+    async fn count_keys(&self) -> Result<usize, RocksdbContextError>;
 }
 
 #[async_trait]
@@ -117,29 +108,24 @@ impl KeyValueOperations for Arc<DB> {
         Ok(keys)
     }
 
+    async fn get_sub_keys<Key: DeserializeOwned + Send>(
+        &mut self,
+        key_prefix: &[u8],
+    ) -> Result<Vec<Key>, RocksdbContextError> {
+        let len = key_prefix.len();
+        let mut keys = Vec::new();
+        for key in self.find_keys_with_prefix(key_prefix).await? {
+            keys.push(bcs::from_bytes(&key[len..])?);
+        }
+        Ok(keys)
+    }
+
     async fn count_keys(&self) -> Result<usize, RocksdbContextError> {
         let db = self.clone();
         let size =
             tokio::task::spawn_blocking(move || db.iterator(rocksdb::IteratorMode::Start).count())
                 .await?;
         Ok(size)
-    }
-}
-
-#[async_trait]
-impl WriteOperations for Batch {
-    fn write_key<V: Serialize>(
-        &mut self,
-        key: Vec<u8>,
-        value: &V,
-    ) -> Result<(), RocksdbContextError> {
-        let bytes = bcs::to_bytes(value)?;
-        self.0.push(WriteOperation::Put { key, value: bytes });
-        Ok(())
-    }
-
-    fn delete_key(&mut self, key: Vec<u8>) {
-        self.0.push(WriteOperation::Delete { key: key.to_vec() });
     }
 }
 
@@ -151,16 +137,6 @@ impl<E> RocksdbContext<E> {
             extra,
         }
     }
-
-    fn derive_key<I: Serialize>(&self, index: &I) -> Vec<u8> {
-        let mut key = self.base_key.clone();
-        bcs::serialize_into(&mut key, index).expect("serialization should not fail");
-        assert!(
-            key.len() > self.base_key.len(),
-            "Empty indices are not allowed"
-        );
-        key
-    }
 }
 
 pub enum WriteOperation {
@@ -169,20 +145,6 @@ pub enum WriteOperation {
 }
 
 pub struct Batch(Vec<WriteOperation>);
-
-impl std::ops::Deref for Batch {
-    type Target = Vec<WriteOperation>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl std::ops::DerefMut for Batch {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
 
 #[async_trait]
 impl<E> Context for RocksdbContext<E>
@@ -195,6 +157,56 @@ where
 
     fn extra(&self) -> &E {
         &self.extra
+    }
+
+    fn base_key(&self) -> Vec<u8> {
+        self.base_key.clone()
+    }
+
+    fn derive_key<I: Serialize>(&self, index: &I) -> Vec<u8> {
+        let mut key = self.base_key.clone();
+        bcs::serialize_into(&mut key, index).expect("serialization should not fail");
+        assert!(
+            key.len() > self.base_key.len(),
+            "Empty indices are not allowed"
+        );
+        key
+    }
+
+    fn put_item_batch(
+        &self,
+        batch: &mut Batch,
+        key: Vec<u8>,
+        value: &impl Serialize,
+    ) -> Result<(), RocksdbContextError> {
+        let bytes = bcs::to_bytes(value)?;
+        batch.0.push(WriteOperation::Put { key, value: bytes });
+        Ok(())
+    }
+
+    fn remove_item_batch(&self, batch: &mut Batch, key: Vec<u8>) {
+        batch.0.push(WriteOperation::Delete { key });
+    }
+
+    async fn read_key<V: DeserializeOwned>(
+        &mut self,
+        key: &[u8],
+    ) -> Result<Option<V>, RocksdbContextError> {
+        self.db.read_key(key).await
+    }
+
+    async fn find_keys_with_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Vec<Vec<u8>>, RocksdbContextError> {
+        self.db.find_keys_with_prefix(key_prefix).await
+    }
+
+    async fn get_sub_keys<Key: DeserializeOwned + Send>(
+        &mut self,
+        key_prefix: &[u8],
+    ) -> Result<Vec<Key>, RocksdbContextError> {
+        self.db.get_sub_keys(key_prefix).await
     }
 
     async fn run_with_batch<F>(&self, builder: F) -> Result<(), ViewError>
@@ -218,12 +230,8 @@ where
             let mut inner_batch = rocksdb::WriteBatchWithTransaction::default();
             for e_ent in batch.0 {
                 match e_ent {
-                    WriteOperation::Delete { key } => {
-                        inner_batch.delete(&key);
-                    }
-                    WriteOperation::Put { key, value } => {
-                        inner_batch.put(&key, value);
-                    }
+                    WriteOperation::Delete { key } => inner_batch.delete(&key),
+                    WriteOperation::Put { key, value } => inner_batch.put(&key, value),
                 }
             }
             db.write(inner_batch)?;
@@ -232,301 +240,13 @@ where
         .await??;
         Ok(())
     }
-}
 
-#[async_trait]
-impl<E> ScopedOperations for RocksdbContext<E>
-where
-    E: Clone + Send + Sync,
-{
-    fn clone_with_scope(&self, index: u64) -> Self {
+    fn clone_self(&self, base_key: Vec<u8>) -> Self {
         Self {
             db: self.db.clone(),
-            base_key: self.derive_key(&index),
+            base_key,
             extra: self.extra.clone(),
         }
-    }
-}
-
-#[async_trait]
-impl<E, T> RegisterOperations<T> for RocksdbContext<E>
-where
-    T: Default + Serialize + DeserializeOwned + Send + Sync + 'static,
-    E: Clone + Send + Sync,
-{
-    async fn get(&mut self) -> Result<T, RocksdbContextError> {
-        let value = self.db.read_key(&self.base_key).await?.unwrap_or_default();
-        Ok(value)
-    }
-
-    fn set(&mut self, batch: &mut Self::Batch, value: &T) -> Result<(), RocksdbContextError> {
-        batch.write_key(self.base_key.clone(), value)?;
-        Ok(())
-    }
-
-    fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error> {
-        batch.delete_key(self.base_key.clone());
-        Ok(())
-    }
-}
-
-#[async_trait]
-impl<E, T> LogOperations<T> for RocksdbContext<E>
-where
-    T: Serialize + DeserializeOwned + Send + Sync + 'static,
-    E: Clone + Send + Sync,
-{
-    async fn count(&mut self) -> Result<usize, RocksdbContextError> {
-        let count = self.db.read_key(&self.base_key).await?.unwrap_or_default();
-        Ok(count)
-    }
-
-    async fn get(&mut self, index: usize) -> Result<Option<T>, RocksdbContextError> {
-        self.db.read_key(&self.derive_key(&index)).await
-    }
-
-    async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, RocksdbContextError> {
-        let mut values = Vec::new();
-        for i in range {
-            match self.db.read_key(&self.derive_key(&i)).await? {
-                None => {
-                    return Ok(values);
-                }
-                Some(value) => {
-                    values.push(value);
-                }
-            }
-        }
-        Ok(values)
-    }
-
-    fn append(
-        &mut self,
-        stored_count: usize,
-        batch: &mut Self::Batch,
-        values: Vec<T>,
-    ) -> Result<(), RocksdbContextError> {
-        if values.is_empty() {
-            return Ok(());
-        }
-        let mut count = stored_count;
-        for value in values {
-            batch.write_key(self.derive_key(&count), &value)?;
-            count += 1;
-        }
-        batch.write_key(self.base_key.clone(), &count)?;
-        Ok(())
-    }
-
-    fn delete(&mut self, stored_count: usize, batch: &mut Self::Batch) -> Result<(), Self::Error> {
-        batch.delete_key(self.base_key.clone());
-        for index in 0..stored_count {
-            batch.delete_key(self.derive_key(&index));
-        }
-        Ok(())
-    }
-}
-
-#[async_trait]
-impl<E, T> QueueOperations<T> for RocksdbContext<E>
-where
-    T: Serialize + DeserializeOwned + Send + Sync + 'static,
-    E: Clone + Send + Sync,
-{
-    async fn indices(&mut self) -> Result<Range<usize>, Self::Error> {
-        let range = self.db.read_key(&self.base_key).await?.unwrap_or_default();
-        Ok(range)
-    }
-
-    async fn get(&mut self, index: usize) -> Result<Option<T>, Self::Error> {
-        Ok(self.db.read_key(&self.derive_key(&index)).await?)
-    }
-
-    async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error> {
-        let mut values = Vec::new();
-        for i in range {
-            match self.db.read_key(&self.derive_key(&i)).await? {
-                None => {
-                    return Ok(values);
-                }
-                Some(value) => {
-                    values.push(value);
-                }
-            }
-        }
-        Ok(values)
-    }
-
-    fn delete_front(
-        &mut self,
-        stored_indices: &mut Range<usize>,
-        batch: &mut Self::Batch,
-        count: usize,
-    ) -> Result<(), Self::Error> {
-        if count == 0 {
-            return Ok(());
-        }
-        let deletion_range = stored_indices.clone().take(count);
-        stored_indices.start += count;
-        batch.write_key(self.base_key.clone(), &stored_indices)?;
-        for i in deletion_range {
-            batch.delete_key(self.derive_key(&i));
-        }
-        Ok(())
-    }
-
-    fn append_back(
-        &mut self,
-        range: &mut Range<usize>,
-        batch: &mut Self::Batch,
-        values: Vec<T>,
-    ) -> Result<(), Self::Error> {
-        if values.is_empty() {
-            return Ok(());
-        }
-        for value in values {
-            batch.write_key(self.derive_key(&range.end), &value)?;
-            range.end += 1;
-        }
-        batch.write_key(self.base_key.clone(), &range)
-    }
-
-    fn delete(
-        &mut self,
-        range: Range<usize>,
-        batch: &mut Self::Batch,
-    ) -> Result<(), RocksdbContextError> {
-        batch.delete_key(self.base_key.clone());
-        for i in range {
-            batch.delete_key(self.derive_key(&i));
-        }
-        Ok(())
-    }
-}
-
-#[async_trait]
-impl<E, I, V> MapOperations<I, V> for RocksdbContext<E>
-where
-    I: Eq + Ord + Send + Sync + Serialize + DeserializeOwned + Clone + 'static,
-    V: Serialize + DeserializeOwned + Send + Sync + 'static,
-    E: Clone + Send + Sync,
-{
-    async fn get(&mut self, index: &I) -> Result<Option<V>, RocksdbContextError> {
-        Ok(self.db.read_key(&self.derive_key(index)).await?)
-    }
-
-    fn insert(
-        &mut self,
-        batch: &mut Self::Batch,
-        index: I,
-        value: V,
-    ) -> Result<(), RocksdbContextError> {
-        batch.write_key(self.derive_key(&index), &value)?;
-        Ok(())
-    }
-
-    fn remove(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), RocksdbContextError> {
-        batch.delete_key(self.derive_key(&index));
-        Ok(())
-    }
-
-    async fn indices(&mut self) -> Result<Vec<I>, RocksdbContextError> {
-        let len = self.base_key.len();
-        let mut keys = Vec::new();
-        for key in self.db.find_keys_with_prefix(&self.base_key).await? {
-            keys.push(bcs::from_bytes(&key[len..])?);
-        }
-        Ok(keys)
-    }
-
-    async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), RocksdbContextError>
-    where
-        F: FnMut(I) + Send,
-    {
-        let len = self.base_key.len();
-        for key in self.db.find_keys_with_prefix(&self.base_key).await? {
-            let key = bcs::from_bytes(&key[len..])?;
-            f(key);
-        }
-        Ok(())
-    }
-
-    async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), RocksdbContextError> {
-        for key in self.db.find_keys_with_prefix(&self.base_key).await? {
-            batch.delete_key(key);
-        }
-        Ok(())
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-enum CollectionKey<I> {
-    Index(I),
-    Subview(I),
-}
-
-#[async_trait]
-impl<E, I> CollectionOperations<I> for RocksdbContext<E>
-where
-    I: serde::Serialize + serde::de::DeserializeOwned + Send + Sync + 'static,
-    E: Clone + Send + Sync,
-{
-    fn clone_with_scope(&self, index: &I) -> Self {
-        Self {
-            db: self.db.clone(),
-            base_key: self.derive_key(&CollectionKey::Subview(index)),
-            extra: self.extra.clone(),
-        }
-    }
-
-    fn add_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
-        batch.write_key(self.derive_key(&CollectionKey::Index(index)), &())?;
-        Ok(())
-    }
-
-    fn remove_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
-        batch.delete_key(self.derive_key(&CollectionKey::Index(index)));
-        Ok(())
-    }
-
-    async fn indices(&mut self) -> Result<Vec<I>, Self::Error> {
-        // Hack: the BCS-serialization of `CollectionKey::Index(value)` for any `value` must
-        // start with that of `CollectionKey::Index(())`, that is, the enum tag.
-        let base = self.derive_key(&CollectionKey::Index(()));
-        let len = base.len();
-        let mut keys = Vec::new();
-        for bytes in self.db.find_keys_with_prefix(&base).await? {
-            match bcs::from_bytes(&bytes[len..]) {
-                Ok(key) => {
-                    keys.push(key);
-                }
-                Err(e) => {
-                    return Err(e.into());
-                }
-            }
-        }
-        Ok(keys)
-    }
-
-    async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), Self::Error>
-    where
-        F: FnMut(I) + Send,
-    {
-        // Hack: the BCS-serialization of `CollectionKey::Index(value)` for any `value` must
-        // start with that of `CollectionKey::Index(())`, that is, the enum tag.
-        let base = self.derive_key(&CollectionKey::Index(()));
-        let len = base.len();
-        for bytes in self.db.find_keys_with_prefix(&base).await? {
-            match bcs::from_bytes(&bytes[len..]) {
-                Ok(key) => {
-                    f(key);
-                }
-                Err(e) => {
-                    return Err(e.into());
-                }
-            }
-        }
-        Ok(())
     }
 }
 

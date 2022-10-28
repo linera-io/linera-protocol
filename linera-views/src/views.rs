@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
+use serde::{de::DeserializeOwned, Serialize};
 use std::{
     cmp::Eq,
     collections::{btree_map, BTreeMap, VecDeque},
@@ -34,6 +35,40 @@ pub trait Context {
     /// Getter for the user provided data.
     fn extra(&self) -> &Self::Extra;
 
+    /// Getter for the address of the current entry (aka the base_key)
+    fn base_key(&self) -> Vec<u8>;
+
+    /// Obtain the Vec<u8> key from the key by serialization and using the base_key
+    fn derive_key<I: Serialize>(&self, index: &I) -> Vec<u8>;
+
+    /// Insert a put a key/value in the batch
+    fn put_item_batch(
+        &self,
+        batch: &mut Self::Batch,
+        key: Vec<u8>,
+        value: &impl Serialize,
+    ) -> Result<(), Self::Error>;
+
+    /// Delete a key and put that command into the batch
+    fn remove_item_batch(&self, batch: &mut Self::Batch, key: Vec<u8>);
+
+    /// Retrieve a generic `Item` from the table using the provided `key` prefixed by the current
+    /// context.
+    /// The `Item` is deserialized using [`bcs`].
+    async fn read_key<Item: DeserializeOwned>(
+        &mut self,
+        key: &[u8],
+    ) -> Result<Option<Item>, Self::Error>;
+
+    /// Find keys matching the prefix. The full keys are returned, that is including the prefix.
+    async fn find_keys_with_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error>;
+
+    /// Find the keys matching the prefix. The remainder of the key are parsed back into elements.
+    async fn get_sub_keys<Key: DeserializeOwned + Send>(
+        &mut self,
+        key_prefix: &[u8],
+    ) -> Result<Vec<Key>, Self::Error>;
+
     /// Provide a reference to a new batch to the builder then execute the batch.
     async fn run_with_batch<F>(&self, builder: F) -> Result<(), ViewError>
     where
@@ -46,6 +81,8 @@ pub trait Context {
 
     /// Apply the operations from the `batch`, persisting the changes.
     async fn write_batch(&self, batch: Self::Batch) -> Result<(), ViewError>;
+
+    fn clone_self(&self, base_key: Vec<u8>) -> Self;
 }
 
 /// A view gives an exclusive access to read and write the data stored at an underlying
@@ -141,6 +178,12 @@ pub trait ScopedOperations: Context {
     fn clone_with_scope(&self, index: u64) -> Self;
 }
 
+impl<C: Context> ScopedOperations for C {
+    fn clone_with_scope(&self, index: u64) -> Self {
+        self.clone_self(self.derive_key(&index))
+    }
+}
+
 #[async_trait]
 impl<C, W, const INDEX: u64> View<C> for ScopedView<INDEX, W>
 where
@@ -193,6 +236,28 @@ pub trait RegisterOperations<T>: Context {
 
     /// Delete the register. Crash-resistant implementations should only write to `batch`.
     fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error>;
+}
+
+#[async_trait]
+impl<T, C: Context + Send> RegisterOperations<T> for C
+where
+    T: Default + Serialize + DeserializeOwned + Send + Sync + 'static,
+{
+    async fn get(&mut self) -> Result<T, Self::Error> {
+        let base = self.base_key();
+        let value = self.read_key(&base).await?.unwrap_or_default();
+        Ok(value)
+    }
+
+    fn set(&mut self, batch: &mut Self::Batch, value: &T) -> Result<(), Self::Error> {
+        self.put_item_batch(batch, self.base_key(), value)?;
+        Ok(())
+    }
+
+    fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error> {
+        self.remove_item_batch(batch, self.base_key());
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -309,6 +374,61 @@ pub trait LogOperations<T>: Context {
     /// The stored_count is an invariant of the structure. It is a leaky abstraction
     /// but allows a priori better performance.
     fn delete(&mut self, stored_count: usize, batch: &mut Self::Batch) -> Result<(), Self::Error>;
+}
+
+#[async_trait]
+impl<T, C: Context + Send> LogOperations<T> for C
+where
+    T: Serialize + DeserializeOwned + Send + Sync + 'static,
+{
+    async fn count(&mut self) -> Result<usize, Self::Error> {
+        let base = self.base_key();
+        let count = self.read_key(&base).await?.unwrap_or_default();
+        Ok(count)
+    }
+
+    async fn get(&mut self, index: usize) -> Result<Option<T>, Self::Error> {
+        let key = self.derive_key(&index);
+        self.read_key(&key).await
+    }
+
+    async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error> {
+        let mut values = Vec::with_capacity(range.len());
+        for index in range {
+            let key = self.derive_key(&index);
+            match self.read_key(&key).await? {
+                None => return Ok(values),
+                Some(value) => values.push(value),
+            };
+        }
+        Ok(values)
+    }
+
+    fn append(
+        &mut self,
+        stored_count: usize,
+        batch: &mut Self::Batch,
+        values: Vec<T>,
+    ) -> Result<(), Self::Error> {
+        if values.is_empty() {
+            return Ok(());
+        }
+        let mut count = stored_count;
+        for value in values {
+            self.put_item_batch(batch, self.derive_key(&count), &value)?;
+            count += 1;
+        }
+        self.put_item_batch(batch, self.base_key(), &count)?;
+        Ok(())
+    }
+
+    fn delete(&mut self, stored_count: usize, batch: &mut Self::Batch) -> Result<(), Self::Error> {
+        self.remove_item_batch(batch, self.base_key());
+        for index in 0..stored_count {
+            self.remove_item_batch(batch, self.derive_key(&index));
+        }
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -475,6 +595,54 @@ pub trait MapOperations<I, V>: Context {
     /// Delete the map and its entries from storage. Crash-resistant implementations should only
     /// write to `batch`.
     async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error>;
+}
+
+#[async_trait]
+impl<I, V, C: Context + Send + Sync> MapOperations<I, V> for C
+where
+    I: Eq + Ord + Send + Sync + Serialize + DeserializeOwned + Clone + 'static,
+    V: Send + Sync + Serialize + DeserializeOwned + 'static,
+{
+    async fn get(&mut self, index: &I) -> Result<Option<V>, Self::Error> {
+        let key = self.derive_key(index);
+        Ok(self.read_key(&key).await?)
+    }
+
+    fn insert(&mut self, batch: &mut Self::Batch, index: I, value: V) -> Result<(), Self::Error> {
+        let key = self.derive_key(&index);
+        self.put_item_batch(batch, key, &value)?;
+        Ok(())
+    }
+
+    fn remove(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
+        let key = self.derive_key(&index);
+        self.remove_item_batch(batch, key);
+        Ok(())
+    }
+
+    async fn indices(&mut self) -> Result<Vec<I>, Self::Error> {
+        let base = self.base_key();
+        self.get_sub_keys(&base).await
+    }
+
+    async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), Self::Error>
+    where
+        F: FnMut(I) + Send,
+    {
+        let base = self.base_key();
+        for index in self.get_sub_keys(&base).await? {
+            f(index);
+        }
+        Ok(())
+    }
+
+    async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error> {
+        let base = self.base_key();
+        for key in self.find_keys_with_prefix(&base).await? {
+            self.remove_item_batch(batch, key);
+        }
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -664,6 +832,87 @@ pub trait QueueOperations<T>: Context {
         stored_indices: Range<usize>,
         batch: &mut Self::Batch,
     ) -> Result<(), Self::Error>;
+}
+
+#[async_trait]
+impl<T, C: Context + Send> QueueOperations<T> for C
+where
+    T: Serialize + DeserializeOwned + Send + Sync + 'static,
+{
+    async fn indices(&mut self) -> Result<Range<usize>, Self::Error> {
+        let base = self.base_key();
+        let range = self.read_key(&base).await?.unwrap_or_default();
+        Ok(range)
+    }
+
+    async fn get(&mut self, index: usize) -> Result<Option<T>, Self::Error> {
+        let key = self.derive_key(&index);
+        Ok(self.read_key(&key).await?)
+    }
+
+    async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error> {
+        let mut values = Vec::with_capacity(range.len());
+        for index in range {
+            let key = self.derive_key(&index);
+            match self.read_key(&key).await? {
+                None => return Ok(values),
+                Some(value) => values.push(value),
+            }
+        }
+        Ok(values)
+    }
+
+    fn delete_front(
+        &mut self,
+        stored_indices: &mut Range<usize>,
+        batch: &mut Self::Batch,
+        count: usize,
+    ) -> Result<(), Self::Error> {
+        if count == 0 {
+            return Ok(());
+        }
+        let deletion_range = stored_indices.clone().take(count);
+        stored_indices.start += count;
+        self.put_item_batch(batch, self.base_key(), &stored_indices)?;
+        for index in deletion_range {
+            let key = self.derive_key(&index);
+            self.remove_item_batch(batch, key);
+        }
+        Ok(())
+    }
+
+    fn append_back(
+        &mut self,
+        stored_indices: &mut Range<usize>,
+        batch: &mut Self::Batch,
+        values: Vec<T>,
+    ) -> Result<(), Self::Error> {
+        if values.is_empty() {
+            return Ok(());
+        }
+        for value in values {
+            let key = self.derive_key(&stored_indices.end);
+            self.put_item_batch(batch, key, &value)?;
+            stored_indices.end += 1;
+        }
+        let base = self.base_key();
+        self.put_item_batch(batch, base, &stored_indices)?;
+        Ok(())
+    }
+
+    fn delete(
+        &mut self,
+        stored_indices: Range<usize>,
+        batch: &mut Self::Batch,
+    ) -> Result<(), Self::Error> {
+        let base = self.base_key();
+        self.remove_item_batch(batch, base);
+        for index in stored_indices {
+            let key = self.derive_key(&index);
+            self.remove_item_batch(batch, key);
+        }
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -866,6 +1115,61 @@ pub trait CollectionOperations<I>: Context {
     fn remove_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error>;
 
     // TODO(#149): In contrast to other views, there is no delete operation for CollectionOperation.
+}
+
+/// A marker type used to distinguish keys from the current scope from the keys of sub-views.
+///
+/// Sub-views in a collection share a common key prefix, like in other view types. However,
+/// just concatenating the shared prefix with sub-view keys makes it impossible to distinguish if a
+/// given key belongs to child sub-view or a grandchild sub-view (consider for example if a
+/// collection is stored inside the collection).
+///
+/// The solution to this is to use a marker type to have two sets of keys, where
+/// [`CollectionKey::Index`] serves to indicate the existence of an entry in the collection, and
+/// [`CollectionKey::Subvie`] serves as the prefix for the sub-view.
+#[derive(Serialize)]
+enum CollectionKey<I> {
+    Index(I),
+    Subview(I),
+}
+
+#[async_trait]
+impl<I, C: Context + Send> CollectionOperations<I> for C
+where
+    I: Serialize + DeserializeOwned + Send + Sync + 'static,
+{
+    fn clone_with_scope(&self, index: &I) -> Self {
+        let key = self.derive_key(&CollectionKey::Subview(index));
+        self.clone_self(key)
+    }
+
+    fn add_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
+        let key = self.derive_key(&CollectionKey::Index(index));
+        self.put_item_batch(batch, key, &())?;
+        Ok(())
+    }
+
+    fn remove_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
+        let key = self.derive_key(&CollectionKey::Index(index));
+        self.remove_item_batch(batch, key);
+        Ok(())
+    }
+
+    async fn indices(&mut self) -> Result<Vec<I>, Self::Error> {
+        let base = self.derive_key(&CollectionKey::Index(()));
+        self.get_sub_keys(&base).await
+    }
+
+    async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), Self::Error>
+    where
+        F: FnMut(I) + Send,
+    {
+        let base = self.derive_key(&CollectionKey::Index(()));
+        for index in self.get_sub_keys(&base).await? {
+            f(index);
+        }
+        Ok(())
+    }
 }
 
 #[async_trait]
