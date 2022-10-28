@@ -329,7 +329,7 @@ where
         &self.extra
     }
 
-    fn get_base_key(&self) -> Vec<u8> {
+    fn base_key(&self) -> Vec<u8> {
         self.base_key.clone()
     }
 

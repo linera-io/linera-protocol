@@ -35,8 +35,8 @@ pub trait Context {
     /// Getter for the user provided data.
     fn extra(&self) -> &Self::Extra;
 
-    /// Get the used base_key
-    fn get_base_key(&self) -> Vec<u8>;
+    /// Getter for the address of the current entry (aka the base_key)
+    fn base_key(&self) -> Vec<u8>;
 
     /// Obtain the Vec<u8> key from the key by serialization and using the base_key
     fn derive_key<I: Serialize>(&self, index: &I) -> Vec<u8>;
@@ -244,18 +244,18 @@ where
     T: Default + Serialize + DeserializeOwned + Send + Sync + 'static,
 {
     async fn get(&mut self) -> Result<T, Self::Error> {
-        let base = self.get_base_key();
+        let base = self.base_key();
         let value = self.read_key(&base).await?.unwrap_or_default();
         Ok(value)
     }
 
     fn set(&mut self, batch: &mut Self::Batch, value: &T) -> Result<(), Self::Error> {
-        self.put_item_batch(batch, self.get_base_key(), value)?;
+        self.put_item_batch(batch, self.base_key(), value)?;
         Ok(())
     }
 
     fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error> {
-        self.remove_item_batch(batch, self.get_base_key());
+        self.remove_item_batch(batch, self.base_key());
         Ok(())
     }
 }
@@ -382,7 +382,7 @@ where
     T: Serialize + DeserializeOwned + Send + Sync + 'static,
 {
     async fn count(&mut self) -> Result<usize, Self::Error> {
-        let base = self.get_base_key();
+        let base = self.base_key();
         let count = self.read_key(&base).await?.unwrap_or_default();
         Ok(count)
     }
@@ -418,12 +418,12 @@ where
             self.put_item_batch(batch, self.derive_key(&count), &value)?;
             count += 1;
         }
-        self.put_item_batch(batch, self.get_base_key(), &count)?;
+        self.put_item_batch(batch, self.base_key(), &count)?;
         Ok(())
     }
 
     fn delete(&mut self, stored_count: usize, batch: &mut Self::Batch) -> Result<(), Self::Error> {
-        self.remove_item_batch(batch, self.get_base_key());
+        self.remove_item_batch(batch, self.base_key());
         for index in 0..stored_count {
             self.remove_item_batch(batch, self.derive_key(&index));
         }
@@ -621,7 +621,7 @@ where
     }
 
     async fn indices(&mut self) -> Result<Vec<I>, Self::Error> {
-        let base = self.get_base_key();
+        let base = self.base_key();
         self.get_sub_keys(&base).await
     }
 
@@ -629,7 +629,7 @@ where
     where
         F: FnMut(I) + Send,
     {
-        let base = self.get_base_key();
+        let base = self.base_key();
         for index in self.get_sub_keys(&base).await? {
             f(index);
         }
@@ -637,7 +637,7 @@ where
     }
 
     async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error> {
-        let base = self.get_base_key();
+        let base = self.base_key();
         for key in self.find_keys_with_prefix(&base).await? {
             self.remove_item_batch(batch, key);
         }
@@ -840,7 +840,7 @@ where
     T: Serialize + DeserializeOwned + Send + Sync + 'static,
 {
     async fn indices(&mut self) -> Result<Range<usize>, Self::Error> {
-        let base = self.get_base_key();
+        let base = self.base_key();
         let range = self.read_key(&base).await?.unwrap_or_default();
         Ok(range)
     }
@@ -873,7 +873,7 @@ where
         }
         let deletion_range = stored_indices.clone().take(count);
         stored_indices.start += count;
-        self.put_item_batch(batch, self.get_base_key(), &stored_indices)?;
+        self.put_item_batch(batch, self.base_key(), &stored_indices)?;
         for index in deletion_range {
             let key = self.derive_key(&index);
             self.remove_item_batch(batch, key);
@@ -895,7 +895,7 @@ where
             self.put_item_batch(batch, key, &value)?;
             stored_indices.end += 1;
         }
-        let base = self.get_base_key();
+        let base = self.base_key();
         self.put_item_batch(batch, base, &stored_indices)?;
         Ok(())
     }
@@ -905,7 +905,7 @@ where
         stored_indices: Range<usize>,
         batch: &mut Self::Batch,
     ) -> Result<(), Self::Error> {
-        let base = self.get_base_key();
+        let base = self.base_key();
         self.remove_item_batch(batch, base);
         for index in stored_indices {
             let key = self.derive_key(&index);
