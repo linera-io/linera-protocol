@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use aws_sdk_dynamodb::{
     model::{
         AttributeDefinition, AttributeValue, KeySchemaElement, KeyType, ProvisionedThroughput,
-        ScalarAttributeType, WriteRequest,
+        ScalarAttributeType, WriteRequest, PutRequest, DeleteRequest,
     },
     types::{Blob, SdkError},
     Client,
@@ -292,7 +292,7 @@ where
 
     /// Store a generic `value` into the table using the provided `key` prefixed by the current
     /// context.
-    async fn process_put(&self, key: Vec<u8>, value: Vec<u8>) -> Result<(), DynamoDbContextError> {
+    pub async fn process_put(&self, key: Vec<u8>, value: Vec<u8>) -> Result<(), DynamoDbContextError> {
         self.client
             .put_item()
             .table_name(self.table.as_ref())
@@ -304,7 +304,7 @@ where
     }
 
     /// Remove an item with the provided `key` prefixed with `prefix` from the table.
-    async fn process_delete(&self, key: Vec<u8>) -> Result<(), DynamoDbContextError> {
+    pub async fn process_delete(&self, key: Vec<u8>) -> Result<(), DynamoDbContextError> {
         self.client
             .delete_item()
             .table_name(self.table.as_ref())
@@ -317,20 +317,24 @@ where
 
     /// We put submit the transaction in blocks of at most 25 so as to decrease the
     /// number of needed transactions.
-    async fn process_batch(&self, l_op: Batch) -> Result<(), DynamoDbContextError> {
-        let n_ent = l_op.0.len();
+    async fn process_batch(&self, batch: Batch) -> Result<(), DynamoDbContextError> {
+        let n_ent = batch.0.len();
         let n_block = div_ceil(n_ent, 25);
         for i_block in 0..n_block {
             let mut v = Vec::new();
             let i_begin = i_block * 25;
             let i_end = min( (i_block+1) * 25, n_ent);
             for i in i_begin..i_end {
-                match l_op.0[i] {
+                match &batch.0[i] {
                     WriteOperation::Delete { key } => {
-//                        let pr : PutRequest = PutRequest::builder().
+                        let dr : DeleteRequest = DeleteRequest::builder().set_key(Some(self.build_key(key.to_vec()))).build();
+                        let wr : WriteRequest = WriteRequest::builder().delete_request(dr).build();
+                        v.push(wr);
                     },
                     WriteOperation::Put { key, value } => {
-
+                        let pr : PutRequest = PutRequest::builder().set_item(Some(self.build_key_value(key.to_vec(),value.to_vec()))).build();
+                        let wr : WriteRequest = WriteRequest::builder().put_request(pr).build();
+                        v.push(wr);
                     },
                 };
             }
@@ -496,7 +500,8 @@ where
     }
 
     async fn write_batch(&self, batch: Self::Batch) -> Result<(), ViewError> {
-        self.process_batch(batch).await
+        self.process_batch(batch).await?;
+        Ok(())
     }
 
     fn clone_self(&self, base_key: Vec<u8>) -> Self {
