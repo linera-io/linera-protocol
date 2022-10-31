@@ -9,17 +9,17 @@ use crate::{
 use async_trait::async_trait;
 use aws_sdk_dynamodb::{
     model::{
-        AttributeDefinition, AttributeValue, KeySchemaElement, KeyType, ProvisionedThroughput,
-        ScalarAttributeType, WriteRequest, PutRequest, DeleteRequest,
+        AttributeDefinition, AttributeValue, DeleteRequest, KeySchemaElement, KeyType,
+        ProvisionedThroughput, PutRequest, ScalarAttributeType, WriteRequest,
     },
     types::{Blob, SdkError},
     Client,
 };
 use linera_base::ensure;
+use num_integer::div_ceil;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{cmp::min, collections::HashMap, str::FromStr};
 use thiserror::Error;
-use num_integer::div_ceil;
 
 /// The configuration to connect to DynamoDB.
 pub use aws_sdk_dynamodb::Config;
@@ -198,9 +198,15 @@ where
     /// Build the value attribute for storing a table item.
     fn build_key_value(&self, key: Vec<u8>, value: Vec<u8>) -> HashMap<String, AttributeValue> {
         [
-            (PARTITION_ATTRIBUTE.to_owned(), AttributeValue::B(Blob::new(DUMMY_PARTITION_KEY))),
+            (
+                PARTITION_ATTRIBUTE.to_owned(),
+                AttributeValue::B(Blob::new(DUMMY_PARTITION_KEY)),
+            ),
             (KEY_ATTRIBUTE.to_owned(), AttributeValue::B(Blob::new(key))),
-            (VALUE_ATTRIBUTE.to_owned(), AttributeValue::B(Blob::new(value))),
+            (
+                VALUE_ATTRIBUTE.to_owned(),
+                AttributeValue::B(Blob::new(value)),
+            ),
         ]
         .into()
     }
@@ -292,7 +298,11 @@ where
 
     /// Store a generic `value` into the table using the provided `key` prefixed by the current
     /// context.
-    pub async fn process_put(&self, key: Vec<u8>, value: Vec<u8>) -> Result<(), DynamoDbContextError> {
+    pub async fn process_put(
+        &self,
+        key: Vec<u8>,
+        value: Vec<u8>,
+    ) -> Result<(), DynamoDbContextError> {
         self.client
             .put_item()
             .table_name(self.table.as_ref())
@@ -323,22 +333,27 @@ where
         for i_block in 0..n_block {
             let mut v = Vec::new();
             let i_begin = i_block * 25;
-            let i_end = min( (i_block+1) * 25, n_ent);
+            let i_end = min((i_block + 1) * 25, n_ent);
             for i in i_begin..i_end {
                 match &batch.0[i] {
                     WriteOperation::Delete { key } => {
-                        let dr : DeleteRequest = DeleteRequest::builder().set_key(Some(self.build_key(key.to_vec()))).build();
-                        let wr : WriteRequest = WriteRequest::builder().delete_request(dr).build();
+                        let dr: DeleteRequest = DeleteRequest::builder()
+                            .set_key(Some(self.build_key(key.to_vec())))
+                            .build();
+                        let wr: WriteRequest = WriteRequest::builder().delete_request(dr).build();
                         v.push(wr);
-                    },
+                    }
                     WriteOperation::Put { key, value } => {
-                        let pr : PutRequest = PutRequest::builder().set_item(Some(self.build_key_value(key.to_vec(),value.to_vec()))).build();
-                        let wr : WriteRequest = WriteRequest::builder().put_request(pr).build();
+                        let pr: PutRequest = PutRequest::builder()
+                            .set_item(Some(self.build_key_value(key.to_vec(), value.to_vec())))
+                            .build();
+                        let wr: WriteRequest = WriteRequest::builder().put_request(pr).build();
                         v.push(wr);
-                    },
+                    }
                 };
             }
-            let map : HashMap<String, Vec<WriteRequest>> = HashMap::from([(self.table.0.clone(), v)]);
+            let map: HashMap<String, Vec<WriteRequest>> =
+                HashMap::from([(self.table.0.clone(), v)]);
             self.client
                 .batch_write_item()
                 .set_request_items(Some(map))
