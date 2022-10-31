@@ -10,15 +10,16 @@ use async_trait::async_trait;
 use aws_sdk_dynamodb::{
     model::{
         AttributeDefinition, AttributeValue, KeySchemaElement, KeyType, ProvisionedThroughput,
-        ScalarAttributeType,
+        ScalarAttributeType, WriteRequest,
     },
     types::{Blob, SdkError},
     Client,
 };
 use linera_base::ensure;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{collections::HashMap, str::FromStr};
+use std::{cmp::min, collections::HashMap, str::FromStr};
 use thiserror::Error;
+use num_integer::div_ceil;
 
 /// The configuration to connect to DynamoDB.
 pub use aws_sdk_dynamodb::Config;
@@ -195,11 +196,13 @@ where
     }
 
     /// Build the value attribute for storing a table item.
-    fn build_value(&self, value: Vec<u8>) -> (String, AttributeValue) {
-        (
-            VALUE_ATTRIBUTE.to_owned(),
-            AttributeValue::B(Blob::new(value)),
-        )
+    fn build_key_value(&self, key: Vec<u8>, value: Vec<u8>) -> HashMap<String, AttributeValue> {
+        [
+            (PARTITION_ATTRIBUTE.to_owned(), AttributeValue::B(Blob::new(DUMMY_PARTITION_KEY))),
+            (KEY_ATTRIBUTE.to_owned(), AttributeValue::B(Blob::new(key))),
+            (VALUE_ATTRIBUTE.to_owned(), AttributeValue::B(Blob::new(value))),
+        ]
+        .into()
     }
 
     /// Extract the key attribute from an item and deserialize it into the `Key` type.
@@ -290,13 +293,10 @@ where
     /// Store a generic `value` into the table using the provided `key` prefixed by the current
     /// context.
     async fn process_put(&self, key: Vec<u8>, value: Vec<u8>) -> Result<(), DynamoDbContextError> {
-        let mut item = self.build_key(key);
-        item.extend([self.build_value(value)]);
-
         self.client
             .put_item()
             .table_name(self.table.as_ref())
-            .set_item(Some(item))
+            .set_item(Some(self.build_key_value(key, value)))
             .send()
             .await?;
 
@@ -312,6 +312,35 @@ where
             .send()
             .await?;
 
+        Ok(())
+    }
+
+    /// We put submit the transaction in blocks of at most 25 so as to decrease the
+    /// number of needed transactions.
+    async fn process_batch(&self, l_op: Batch) -> Result<(), DynamoDbContextError> {
+        let n_ent = l_op.0.len();
+        let n_block = div_ceil(n_ent, 25);
+        for i_block in 0..n_block {
+            let mut v = Vec::new();
+            let i_begin = i_block * 25;
+            let i_end = min( (i_block+1) * 25, n_ent);
+            for i in i_begin..i_end {
+                match l_op.0[i] {
+                    WriteOperation::Delete { key } => {
+//                        let pr : PutRequest = PutRequest::builder().
+                    },
+                    WriteOperation::Put { key, value } => {
+
+                    },
+                };
+            }
+            let map : HashMap<String, Vec<WriteRequest>> = HashMap::from([(self.table.0.clone(), v)]);
+            self.client
+                .batch_write_item()
+                .set_request_items(Some(map))
+                .send()
+                .await?;
+        }
         Ok(())
     }
 }
@@ -467,13 +496,7 @@ where
     }
 
     async fn write_batch(&self, batch: Self::Batch) -> Result<(), ViewError> {
-        for operation in batch.0 {
-            match operation {
-                WriteOperation::Delete { key } => self.process_delete(key).await?,
-                WriteOperation::Put { key, value } => self.process_put(key, value).await?,
-            }
-        }
-        Ok(())
+        self.process_batch(batch).await
     }
 
     fn clone_self(&self, base_key: Vec<u8>) -> Self {
@@ -560,6 +583,9 @@ pub enum DynamoDbContextError {
 
     #[error(transparent)]
     Delete(#[from] Box<SdkError<aws_sdk_dynamodb::error::DeleteItemError>>),
+
+    #[error(transparent)]
+    BatchWriteItem(#[from] Box<SdkError<aws_sdk_dynamodb::error::BatchWriteItemError>>),
 
     #[error(transparent)]
     Query(#[from] Box<SdkError<aws_sdk_dynamodb::error::QueryError>>),
