@@ -47,6 +47,27 @@ pub enum WriteOperation {
 
 pub struct Batch(Vec<WriteOperation>);
 
+/// A key may appear multiple times in the batch
+/// The construction of BatchWriteItem and TransactWriteItem does
+/// not allow for this to happen.
+fn simplify_batch(batch: Batch) -> Batch {
+    let mut map = HashMap::new();
+    for op in batch.0 {
+        match op {
+            WriteOperation::Delete { key } => map.insert(key, None),
+            WriteOperation::Put { key, value } => map.insert(key, Some(value)),
+        };
+    }
+    let mut v_ret = Vec::new();
+    for (key, val) in map {
+        match val {
+            Some(value) => v_ret.push(WriteOperation::Put { key, value }),
+            None => v_ret.push(WriteOperation::Delete { key }),
+        }
+    }
+    Batch(v_ret)
+}
+
 /// A implementation of [`Context`] based on DynamoDB.
 #[derive(Debug, Clone)]
 pub struct DynamoDbContext<E>
@@ -328,6 +349,7 @@ where
     /// We put submit the transaction in blocks of at most 25 so as to decrease the
     /// number of needed transactions.
     async fn process_batch(&self, batch: Batch) -> Result<(), DynamoDbContextError> {
+        let batch = simplify_batch(batch);
         let n_ent = batch.0.len();
         let n_block = div_ceil(n_ent, 25);
         for i_block in 0..n_block {
