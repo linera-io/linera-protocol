@@ -1306,7 +1306,6 @@ dependencies = [
  "linera-base",
  "linera-views",
  "log",
- "num-integer",
  "paste",
  "rocksdb",
  "serde",
