@@ -29,7 +29,6 @@ tokio = "1.12.0"
 env_logger = "0.9.0"
 linera-base = { path = "../linera-base", features = ["test"] }
 linera-chain = { path = "../linera-chain", features = ["test"] }
-linera-core = { path = ".", features = ["test"] }
 linera-execution = { path = "../linera-execution", features = ["test"] }
 linera-storage = { path = "../linera-storage", features = ["test"] }
 linera-views = { path = "../linera-views", features = ["test"] }
