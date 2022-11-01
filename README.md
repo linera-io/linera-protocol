@@ -149,34 +149,3 @@ ${CLIENT[@]} query_validators "$CHAIN1"
 
 cd ../..
 ```
-
-## Contributing
-
-### Copyright
-
-The new code should be copyrighted by "Zefchain Labs, Inc". (This is currently still the legal entity behind the Linera project.)
-
-### Formatting and linting
-
-Make sure to fix the lint errors reported by
-```
-cargo clippy --all-targets
-```
-and run `cargo fmt` like this:
-```
-cargo fmt -- --config unstable_features=true --config imports_granularity=Crate
-```
-or (optimistically)
-```
-cargo fmt +nightly
-```
-(see also [rust-lang/rustfmt#4991](https://github.com/rust-lang/rustfmt/issues/4991))
-
-### Dealing with test failures `test_format` after code changes
-
-Getting an error with the test in [`linera-rpc/tests/format.rs`](linera-rpc/tests/format.rs) ?
-Probably the file [`linera-rpc/tests/staged/formats.yaml`](linera-rpc/tests/staged/formats.yaml) (recording message formats) is
-outdated. In the most case (but not always sadly), this can be fixed by running
-[`linera-rpc/generate-format.sh`](linera-rpc/generate-format.sh).
-
-See https://github.com/zefchain/serde-reflection for more context.
