@@ -30,6 +30,7 @@ pub enum Destination {
     Subscribers(String),
 }
 
+/// A unique identifier for an application.
 // FIXME: placeholder
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug)]
 pub struct ApplicationId(pub u64);
