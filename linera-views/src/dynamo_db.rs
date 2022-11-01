@@ -16,9 +16,8 @@ use aws_sdk_dynamodb::{
     Client,
 };
 use linera_base::ensure;
-use num_integer::div_ceil;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{cmp::min, collections::HashMap, str::FromStr};
+use std::{collections::HashMap, str::FromStr};
 use thiserror::Error;
 
 /// The configuration to connect to DynamoDB.
@@ -317,35 +316,6 @@ where
         bcs::from_bytes(data_bytes).map_err(deserialization_error)
     }
 
-    /// Store a generic `value` into the table using the provided `key` prefixed by the current
-    /// context.
-    pub async fn process_put(
-        &self,
-        key: Vec<u8>,
-        value: Vec<u8>,
-    ) -> Result<(), DynamoDbContextError> {
-        self.client
-            .put_item()
-            .table_name(self.table.as_ref())
-            .set_item(Some(self.build_key_value(key, value)))
-            .send()
-            .await?;
-
-        Ok(())
-    }
-
-    /// Remove an item with the provided `key` prefixed with `prefix` from the table.
-    pub async fn process_delete(&self, key: Vec<u8>) -> Result<(), DynamoDbContextError> {
-        self.client
-            .delete_item()
-            .table_name(self.table.as_ref())
-            .set_key(Some(self.build_key(key)))
-            .send()
-            .await?;
-
-        Ok(())
-    }
-
     /// We put submit the transaction in blocks of at most 25 so as to decrease the
     /// number of needed transactions.
     async fn process_batch(&self, batch: Batch) -> Result<(), DynamoDbContextError> {
@@ -354,14 +324,13 @@ where
                 .iter()
                 .map(|operation| match operation {
                     WriteOperation::Delete { key } => {
-                        let dr: DeleteRequest = DeleteRequest::builder()
-                            .set_key(Some(self.build_key(key.to_vec())))...
-.
+                        let dr = DeleteRequest::builder()
+                            .set_key(Some(self.build_key(key.to_vec())))
                             .build();
                         WriteRequest::builder().delete_request(dr).build()
                     }
                     WriteOperation::Put { key, value } => {
-                        let pr: PutRequest = PutRequest::builder()
+                        let pr = PutRequest::builder()
                             .set_item(Some(self.build_key_value(key.to_vec(), value.to_vec())))
                             .build();
                         WriteRequest::builder().put_request(pr).build()
