@@ -1,15 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    runtime::{ExecutionRuntime, SessionManager},
-    system::{SystemExecutionStateView, SystemExecutionStateViewContext, SYSTEM},
-    Effect, EffectContext, ExecutionResult, ExecutionRuntimeContext, Operation, OperationContext,
-    Query, QueryContext, Response,
-};
+use crate::{runtime::{ExecutionRuntime, SessionManager}, system::{SystemExecutionStateView, SystemExecutionStateViewContext, SYSTEM}, Effect, EffectContext, ExecutionResult, ExecutionRuntimeContext, Operation, OperationContext, Query, QueryContext, Response, ExecutionError};
 use linera_base::{
     ensure,
-    error::Error,
     messages::{ApplicationId, ChainId},
 };
 use linera_views::{
@@ -95,7 +89,7 @@ where
         application_id: ApplicationId,
         chain_id: ChainId,
         action: UserAction<'_>,
-    ) -> Result<Vec<ExecutionResult>, Error> {
+    ) -> Result<Vec<ExecutionResult>, ExecutionError> {
         // Load the application.
         let application = self
             .context()
@@ -131,7 +125,7 @@ where
         // Check that all sessions were properly closed.
         ensure!(
             session_manager.states.is_empty(),
-            Error::SessionWasNotClosed
+            ExecutionError::SessionWasNotClosed
         );
         Ok(results)
     }
@@ -141,7 +135,7 @@ where
         application_id: ApplicationId,
         context: &OperationContext,
         operation: &Operation,
-    ) -> Result<Vec<ExecutionResult>, Error> {
+    ) -> Result<Vec<ExecutionResult>, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         if application_id == SYSTEM {
             match operation {
@@ -149,11 +143,11 @@ where
                     let result = self.system.execute_operation(context, op).await?;
                     Ok(vec![ExecutionResult::System(result)])
                 }
-                _ => Err(Error::InvalidOperation),
+                _ => Err(ExecutionError::InvalidOperation),
             }
         } else {
             match operation {
-                Operation::System(_) => Err(Error::InvalidOperation),
+                Operation::System(_) => Err(ExecutionError::InvalidOperation),
                 Operation::User(operation) => {
                     self.run_user_action(
                         application_id,
@@ -171,7 +165,7 @@ where
         application_id: ApplicationId,
         context: &EffectContext,
         effect: &Effect,
-    ) -> Result<Vec<ExecutionResult>, Error> {
+    ) -> Result<Vec<ExecutionResult>, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         if application_id == SYSTEM {
             match effect {
@@ -179,11 +173,11 @@ where
                     let result = self.system.execute_effect(context, effect)?;
                     Ok(vec![ExecutionResult::System(result)])
                 }
-                _ => Err(Error::InvalidEffect),
+                _ => Err(ExecutionError::InvalidEffect),
             }
         } else {
             match effect {
-                Effect::System(_) => Err(Error::InvalidEffect),
+                Effect::System(_) => Err(ExecutionError::InvalidEffect),
                 Effect::User(effect) => {
                     self.run_user_action(
                         application_id,
@@ -201,7 +195,7 @@ where
         application_id: ApplicationId,
         context: &QueryContext,
         query: &Query,
-    ) -> Result<Response, Error> {
+    ) -> Result<Response, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         if application_id == SYSTEM {
             match query {
@@ -209,11 +203,11 @@ where
                     let response = self.system.query_application(context, query).await?;
                     Ok(Response::System(response))
                 }
-                _ => Err(Error::InvalidQuery),
+                _ => Err(ExecutionError::InvalidQuery),
             }
         } else {
             match query {
-                Query::System(_) => Err(Error::InvalidQuery),
+                Query::System(_) => Err(ExecutionError::InvalidQuery),
                 Query::User(query) => {
                     // Load the application.
                     let application = self

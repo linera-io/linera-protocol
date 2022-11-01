@@ -18,15 +18,84 @@ pub use system::{
 use async_trait::async_trait;
 use dashmap::DashMap;
 use linera_base::{
-    error::Error,
     messages::{ApplicationId, BlockHeight, ChainId, Destination, EffectId},
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use thiserror::Error;
+use linera_base::messages::Epoch;
+use linera_views::views::ViewError;
 
 /// An implementation of [`UserApplication`]
 pub type UserApplicationCode = Arc<dyn UserApplication + Send + Sync + 'static>;
+
+
+#[derive(Error, Debug)]
+pub enum ExecutionError {
+    #[error("Unknown application")]
+    UnknownApplication,
+    #[error("A session is still opened at the end of a transaction")]
+    SessionWasNotClosed,
+    #[error("Invalid operation for this application")]
+    InvalidOperation,
+    #[error("Invalid effect for this application")]
+    InvalidEffect,
+    #[error("Invalid query for this application")]
+    InvalidQuery,
+    #[error("Session does not exist or was already closed")]
+    InvalidSession,
+    #[error("Attempted to call or forward an active session")]
+    SessionIsInUse,
+    #[error("Session is not accessible by this owner")]
+    InvalidSessionOwner,
+    #[error("Attempted to call an application while the state is locked")]
+    ApplicationIsInUse,
+    #[error("Invalid new chain id: {0}")]
+    InvalidNewChainId(ChainId),
+    #[error("Invalid admin id in new chain: {0}")]
+    InvalidNewChainAdminId(ChainId),
+    #[error("Invalid committees")]
+    InvalidCommittees,
+    #[error("{epoch:?} is not recognized by chain {chain_id:}")]
+    InvalidEpoch { chain_id: ChainId, epoch: Epoch },
+    #[error("Transfers must have positive amount")]
+    IncorrectTransferAmount,
+    #[error(
+    "The transferred amount must be not exceed the current chain balance: {current_balance}"
+    )]
+    InsufficientFunding { current_balance: u128 },
+    #[error("Failed to create new committee")]
+    InvalidCommitteeCreation,
+    #[error("Failed to remove committee")]
+    InvalidCommitteeRemoval,
+    #[error("Invalid subscription to new committees: {0}")]
+    InvalidSubscriptionToNewCommittees(ChainId),
+    #[error("Invalid unsubscription to new committees: {0}")]
+    InvalidUnsubscriptionToNewCommittees(ChainId),
+    #[error("Amount overflow")]
+    AmountOverflow,
+    #[error("Amount underflow")]
+    AmountUnderflow,
+    #[error("Chain balance overflow")]
+    BalanceOverflow,
+    #[error("Chain balance underflow")]
+    BalanceUnderflow,
+    #[error("Invalid cross-chain request")]
+    InvalidCrossChainRequest,
+    // todo - this will be removed once linera_base::error::Error disappears
+    #[error("{0}")]
+    BaseError(#[from] linera_base::error::Error),
+    #[error("Error in view operation: {0}")]
+    View(#[from] ViewError),
+}
+
+impl From<ExecutionError> for linera_base::error::Error {
+    fn from(error: ExecutionError) -> Self {
+        Self::ExecutionError {
+            error: error.to_string()
+        }
+    }
+}
 
 /// The public entry points provided by an application.
 #[async_trait]
@@ -37,7 +106,7 @@ pub trait UserApplication {
         context: &OperationContext,
         storage: &dyn WritableStorage,
         operation: &[u8],
-    ) -> Result<RawExecutionResult<Vec<u8>>, Error>;
+    ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError>;
 
     /// Apply an effect originating from a cross-chain message.
     async fn execute_effect(
@@ -45,7 +114,7 @@ pub trait UserApplication {
         context: &EffectContext,
         storage: &dyn WritableStorage,
         effect: &[u8],
-    ) -> Result<RawExecutionResult<Vec<u8>>, Error>;
+    ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError>;
 
     /// Allow an operation or an effect of other applications to call into this
     /// user application.
@@ -55,7 +124,7 @@ pub trait UserApplication {
         storage: &dyn WritableStorage,
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult, Error>;
+    ) -> Result<ApplicationCallResult, ExecutionError>;
 
     /// Allow an operation or an effect of other applications to call into a session that
     /// we previously created.
@@ -67,7 +136,7 @@ pub trait UserApplication {
         session_data: &mut Vec<u8>,
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult, Error>;
+    ) -> Result<SessionCallResult, ExecutionError>;
 
     /// Allow an end user to execute read-only queries on the state of this application.
     /// NOTE: This is not meant to be metered and may not be exposed by all validators.
@@ -76,7 +145,7 @@ pub trait UserApplication {
         context: &QueryContext,
         storage: &dyn QueryableStorage,
         argument: &[u8],
-    ) -> Result<Vec<u8>, Error>;
+    ) -> Result<Vec<u8>, ExecutionError>;
 }
 
 /// The result of calling into a user application.
@@ -121,11 +190,11 @@ pub trait ExecutionRuntimeContext {
     fn get_user_application(
         &self,
         application_id: ApplicationId,
-    ) -> Result<UserApplicationCode, Error> {
+    ) -> Result<UserApplicationCode, ExecutionError> {
         Ok(self
             .user_applications()
             .get(&application_id)
-            .ok_or(Error::UnknownApplication)?
+            .ok_or(ExecutionError::UnknownApplication)?
             .clone())
     }
 }
@@ -178,7 +247,7 @@ pub trait ReadableStorage: Send + Sync {
     fn read_system_balance(&self) -> crate::system::Balance;
 
     /// Read the application state.
-    async fn try_read_my_state(&self) -> Result<Vec<u8>, Error>;
+    async fn try_read_my_state(&self) -> Result<Vec<u8>, ExecutionError>;
 }
 
 #[async_trait]
@@ -188,7 +257,7 @@ pub trait QueryableStorage: ReadableStorage {
         &self,
         queried_id: ApplicationId,
         argument: &[u8],
-    ) -> Result<Vec<u8>, Error>;
+    ) -> Result<Vec<u8>, ExecutionError>;
 }
 
 /// The identifier of a session.
@@ -213,9 +282,10 @@ pub struct CallResult {
 #[async_trait]
 pub trait WritableStorage: ReadableStorage {
     /// Read the application state and prevent further reading/loading until the state is saved.
-    async fn try_read_and_lock_my_state(&self) -> Result<Vec<u8>, Error>;
+    async fn try_read_and_lock_my_state(&self) -> Result<Vec<u8>, ExecutionError>;
 
     /// Save the application state and allow reading/loading the state again.
+    // TODO what is happening here with the error?
     fn save_and_unlock_my_state(&self, state: Vec<u8>) -> Result<(), ApplicationStateNotLocked>;
 
     /// Allow reading/loading the state again (without saving anything).
@@ -229,7 +299,7 @@ pub trait WritableStorage: ReadableStorage {
         callee_id: ApplicationId,
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<CallResult, Error>;
+    ) -> Result<CallResult, ExecutionError>;
 
     /// Call into a session that is in our scope. Forwarded sessions will be visible to
     /// the application that runs `session_id`.
@@ -239,7 +309,7 @@ pub trait WritableStorage: ReadableStorage {
         session_id: SessionId,
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<CallResult, Error>;
+    ) -> Result<CallResult, ExecutionError>;
 }
 
 /// An operation to be executed in a block.
@@ -392,6 +462,7 @@ impl From<Vec<u8>> for Response {
     }
 }
 
+// todo - take care of this
 #[derive(Clone, Copy, Debug, Error)]
 #[error("The application state can not be saved because it was not locked for writing")]
 pub struct ApplicationStateNotLocked;

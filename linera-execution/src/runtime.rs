@@ -1,15 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    execution::{ExecutionStateView, ExecutionStateViewContext},
-    ApplicationStateNotLocked, CallResult, ExecutionResult, ExecutionRuntimeContext, NewSession,
-    QueryableStorage, ReadableStorage, SessionId, WritableStorage,
-};
+use crate::{execution::{ExecutionStateView, ExecutionStateViewContext}, ApplicationStateNotLocked, CallResult, ExecutionResult, ExecutionRuntimeContext, NewSession, QueryableStorage, ReadableStorage, SessionId, WritableStorage, ExecutionError};
 use async_trait::async_trait;
 use linera_base::{
     ensure,
-    error::Error,
     messages::{ApplicationId, ChainId},
 };
 use linera_views::views::{RegisterView, View, ViewError};
@@ -125,17 +120,17 @@ where
         session_ids: &[SessionId],
         from_id: ApplicationId,
         to_id: ApplicationId,
-    ) -> Result<(), Error> {
+    ) -> Result<(), ExecutionError> {
         let states = &self.session_manager_mut().states;
         for id in session_ids {
             let mut state = states
                 .get(id)
-                .ok_or(Error::InvalidSession)?
+                .ok_or(ExecutionError::InvalidSession)?
                 .clone()
                 .try_lock_owned()
-                .map_err(|_| Error::SessionIsInUse)?;
+                .map_err(|_| ExecutionError::SessionIsInUse)?;
             // Verify ownership.
-            ensure!(state.owner == from_id, Error::InvalidSessionOwner);
+            ensure!(state.owner == from_id, ExecutionError::InvalidSessionOwner);
             // Transfer the session.
             state.owner = to_id;
         }
@@ -174,18 +169,18 @@ where
         &self,
         session_id: SessionId,
         application_id: ApplicationId,
-    ) -> Result<Vec<u8>, Error> {
+    ) -> Result<Vec<u8>, ExecutionError> {
         let guard = self
             .session_manager_mut()
             .states
             .get(&session_id)
-            .ok_or(Error::InvalidSession)?
+            .ok_or(ExecutionError::InvalidSession)?
             .clone()
             .try_lock_owned()
-            .map_err(|_| Error::SessionIsInUse)?;
+            .map_err(|_| ExecutionError::SessionIsInUse)?;
         let state = guard.data.clone();
         // Verify ownership.
-        ensure!(guard.owner == application_id, Error::InvalidSessionOwner);
+        ensure!(guard.owner == application_id, ExecutionError::InvalidSessionOwner);
         // Remember the guard. This will prevent reentrancy.
         self.active_sessions_mut().insert(session_id, guard);
         Ok(state)
@@ -196,14 +191,14 @@ where
         session_id: SessionId,
         application_id: ApplicationId,
         state: Vec<u8>,
-    ) -> Result<(), Error> {
+    ) -> Result<(), ExecutionError> {
         // Remove the guard.
         if let btree_map::Entry::Occupied(mut guard) = self.active_sessions_mut().entry(session_id)
         {
             // Verify ownership.
             ensure!(
                 guard.get().owner == application_id,
-                Error::InvalidSessionOwner
+                ExecutionError::InvalidSessionOwner
             );
             // Save the state and unlock the session for future calls.
             guard.get_mut().data = state;
@@ -217,12 +212,12 @@ where
         &self,
         session_id: SessionId,
         application_id: ApplicationId,
-    ) -> Result<(), Error> {
+    ) -> Result<(), ExecutionError> {
         if let btree_map::Entry::Occupied(guard) = self.active_sessions_mut().entry(session_id) {
             // Verify ownership.
             ensure!(
                 guard.get().owner == application_id,
-                Error::InvalidSessionOwner
+                ExecutionError::InvalidSessionOwner
             );
             // Remove the entry from the set of active sessions.
             guard.remove();
@@ -230,7 +225,7 @@ where
             self.session_manager_mut()
                 .states
                 .remove(&session_id)
-                .ok_or(Error::InvalidSession)?;
+                .ok_or(ExecutionError::InvalidSession)?;
         }
         Ok(())
     }
@@ -258,7 +253,7 @@ where
         *self.execution_state_mut().system.balance.get()
     }
 
-    async fn try_read_my_state(&self) -> Result<Vec<u8>, Error> {
+    async fn try_read_my_state(&self) -> Result<Vec<u8>, ExecutionError> {
         let state = self
             .execution_state_mut()
             .users
@@ -266,7 +261,7 @@ where
             .await
             .map_err(|_| {
                 // FIXME(#152): This remapping is too coarse as the error could be network-related.
-                Error::ApplicationIsInUse
+                ExecutionError::ApplicationIsInUse
             })?
             .get()
             .to_vec();
@@ -286,7 +281,7 @@ where
         &self,
         queried_id: ApplicationId,
         argument: &[u8],
-    ) -> Result<Vec<u8>, Error> {
+    ) -> Result<Vec<u8>, ExecutionError> {
         // Load the application.
         let application = self
             .execution_state_mut()
@@ -313,7 +308,7 @@ where
     ViewError: From<C::Error>,
     C::Extra: ExecutionRuntimeContext,
 {
-    async fn try_read_and_lock_my_state(&self) -> Result<Vec<u8>, Error> {
+    async fn try_read_and_lock_my_state(&self) -> Result<Vec<u8>, ExecutionError> {
         let view = self
             .execution_state_mut()
             .users
@@ -321,7 +316,7 @@ where
             .await
             .map_err(|_| {
                 // FIXME(#152): This remapping is too coarse as the error could be network-related.
-                Error::ApplicationIsInUse
+                ExecutionError::ApplicationIsInUse
             })?;
         let state = view.get().to_vec();
         // Remember the view. This will prevent reentrancy.
@@ -352,7 +347,7 @@ where
         callee_id: ApplicationId,
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<CallResult, Error> {
+    ) -> Result<CallResult, ExecutionError> {
         // Load the application.
         let application = self
             .execution_state_mut()
@@ -392,7 +387,7 @@ where
         session_id: SessionId,
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<CallResult, Error> {
+    ) -> Result<CallResult, ExecutionError> {
         // Load the application.
         let callee_id = session_id.application_id;
         let application = self
