@@ -58,7 +58,7 @@ fn simplify_batch(batch: Batch) -> Batch {
             WriteOperation::Put { key, value } => map.insert(key, Some(value)),
         };
     }
-    let mut v_ret = Vec::new();
+    let mut v_ret = Vec::with_capacity(map.len());
     for (key, val) in map {
         match val {
             Some(value) => v_ret.push(WriteOperation::Put { key, value }),
