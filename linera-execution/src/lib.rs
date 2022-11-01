@@ -17,18 +17,14 @@ pub use system::{
 
 use async_trait::async_trait;
 use dashmap::DashMap;
-use linera_base::{
-    messages::{ApplicationId, BlockHeight, ChainId, Destination, EffectId},
-};
+use linera_base::messages::{ApplicationId, BlockHeight, ChainId, Destination, EffectId, Epoch};
+use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use thiserror::Error;
-use linera_base::messages::Epoch;
-use linera_views::views::ViewError;
 
 /// An implementation of [`UserApplication`]
 pub type UserApplicationCode = Arc<dyn UserApplication + Send + Sync + 'static>;
-
 
 #[derive(Error, Debug)]
 pub enum ExecutionError {
@@ -61,7 +57,7 @@ pub enum ExecutionError {
     #[error("Transfers must have positive amount")]
     IncorrectTransferAmount,
     #[error(
-    "The transferred amount must be not exceed the current chain balance: {current_balance}"
+        "The transferred amount must be not exceed the current chain balance: {current_balance}"
     )]
     InsufficientFunding { current_balance: u128 },
     #[error("Failed to create new committee")]
@@ -92,7 +88,7 @@ pub enum ExecutionError {
 impl From<ExecutionError> for linera_base::error::Error {
     fn from(error: ExecutionError) -> Self {
         Self::ExecutionError {
-            error: error.to_string()
+            error: error.to_string(),
         }
     }
 }

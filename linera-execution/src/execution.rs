@@ -1,7 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{runtime::{ExecutionRuntime, SessionManager}, system::{SystemExecutionStateView, SystemExecutionStateViewContext, SYSTEM}, Effect, EffectContext, ExecutionResult, ExecutionRuntimeContext, Operation, OperationContext, Query, QueryContext, Response, ExecutionError};
+use crate::{
+    runtime::{ExecutionRuntime, SessionManager},
+    system::{SystemExecutionStateView, SystemExecutionStateViewContext, SYSTEM},
+    Effect, EffectContext, ExecutionError, ExecutionResult, ExecutionRuntimeContext, Operation,
+    OperationContext, Query, QueryContext, Response,
+};
 use linera_base::{
     ensure,
     messages::{ApplicationId, ChainId},

@@ -1,7 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{execution::{ExecutionStateView, ExecutionStateViewContext}, ApplicationStateNotLocked, CallResult, ExecutionResult, ExecutionRuntimeContext, NewSession, QueryableStorage, ReadableStorage, SessionId, WritableStorage, ExecutionError};
+use crate::{
+    execution::{ExecutionStateView, ExecutionStateViewContext},
+    ApplicationStateNotLocked, CallResult, ExecutionError, ExecutionResult,
+    ExecutionRuntimeContext, NewSession, QueryableStorage, ReadableStorage, SessionId,
+    WritableStorage,
+};
 use async_trait::async_trait;
 use linera_base::{
     ensure,
@@ -180,7 +185,10 @@ where
             .map_err(|_| ExecutionError::SessionIsInUse)?;
         let state = guard.data.clone();
         // Verify ownership.
-        ensure!(guard.owner == application_id, ExecutionError::InvalidSessionOwner);
+        ensure!(
+            guard.owner == application_id,
+            ExecutionError::InvalidSessionOwner
+        );
         // Remember the guard. This will prevent reentrancy.
         self.active_sessions_mut().insert(session_id, guard);
         Ok(state)

@@ -2,7 +2,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{ChainOwnership, Effect, EffectContext, ExecutionError, OperationContext, QueryContext, RawExecutionResult};
+use crate::{
+    ChainOwnership, Effect, EffectContext, ExecutionError, OperationContext, QueryContext,
+    RawExecutionResult,
+};
 use linera_base::{
     committee::Committee,
     ensure,
@@ -301,7 +304,10 @@ where
             Transfer {
                 amount, recipient, ..
             } => {
-                ensure!(*amount > Amount::zero(), ExecutionError::IncorrectTransferAmount);
+                ensure!(
+                    *amount > Amount::zero(),
+                    ExecutionError::IncorrectTransferAmount
+                );
                 ensure!(
                     *self.balance.get() >= (*amount).into(),
                     ExecutionError::InsufficientFunding {
@@ -581,25 +587,37 @@ impl Amount {
 
     #[inline]
     pub fn try_add(self, other: Self) -> Result<Self, ExecutionError> {
-        let val = self.0.checked_add(other.0).ok_or(ExecutionError::AmountOverflow)?;
+        let val = self
+            .0
+            .checked_add(other.0)
+            .ok_or(ExecutionError::AmountOverflow)?;
         Ok(Self(val))
     }
 
     #[inline]
     pub fn try_sub(self, other: Self) -> Result<Self, ExecutionError> {
-        let val = self.0.checked_sub(other.0).ok_or(ExecutionError::AmountUnderflow)?;
+        let val = self
+            .0
+            .checked_sub(other.0)
+            .ok_or(ExecutionError::AmountUnderflow)?;
         Ok(Self(val))
     }
 
     #[inline]
     pub fn try_add_assign(&mut self, other: Self) -> Result<(), ExecutionError> {
-        self.0 = self.0.checked_add(other.0).ok_or(ExecutionError::AmountOverflow)?;
+        self.0 = self
+            .0
+            .checked_add(other.0)
+            .ok_or(ExecutionError::AmountOverflow)?;
         Ok(())
     }
 
     #[inline]
     pub fn try_sub_assign(&mut self, other: Self) -> Result<(), ExecutionError> {
-        self.0 = self.0.checked_sub(other.0).ok_or(ExecutionError::AmountUnderflow)?;
+        self.0 = self
+            .0
+            .checked_sub(other.0)
+            .ok_or(ExecutionError::AmountUnderflow)?;
         Ok(())
     }
 }
@@ -617,25 +635,37 @@ impl Balance {
 
     #[inline]
     pub fn try_add(self, other: Self) -> Result<Self, ExecutionError> {
-        let val = self.0.checked_add(other.0).ok_or(ExecutionError::BalanceOverflow)?;
+        let val = self
+            .0
+            .checked_add(other.0)
+            .ok_or(ExecutionError::BalanceOverflow)?;
         Ok(Self(val))
     }
 
     #[inline]
     pub fn try_sub(self, other: Self) -> Result<Self, ExecutionError> {
-        let val = self.0.checked_sub(other.0).ok_or(ExecutionError::BalanceUnderflow)?;
+        let val = self
+            .0
+            .checked_sub(other.0)
+            .ok_or(ExecutionError::BalanceUnderflow)?;
         Ok(Self(val))
     }
 
     #[inline]
     pub fn try_add_assign(&mut self, other: Self) -> Result<(), ExecutionError> {
-        self.0 = self.0.checked_add(other.0).ok_or(ExecutionError::BalanceOverflow)?;
+        self.0 = self
+            .0
+            .checked_add(other.0)
+            .ok_or(ExecutionError::BalanceOverflow)?;
         Ok(())
     }
 
     #[inline]
     pub fn try_sub_assign(&mut self, other: Self) -> Result<(), ExecutionError> {
-        self.0 = self.0.checked_sub(other.0).ok_or(ExecutionError::BalanceUnderflow)?;
+        self.0 = self
+            .0
+            .checked_sub(other.0)
+            .ok_or(ExecutionError::BalanceUnderflow)?;
         Ok(())
     }
 }

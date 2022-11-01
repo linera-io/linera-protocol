@@ -6,9 +6,7 @@
 extern crate core;
 
 use async_trait::async_trait;
-use linera_base::{
-    messages::{ApplicationId, BlockHeight, ChainDescription, ChainId},
-};
+use linera_base::messages::{ApplicationId, BlockHeight, ChainDescription, ChainId};
 use linera_execution::*;
 use linera_views::{
     memory::MemoryContext,
@@ -32,9 +30,16 @@ async fn test_missing_user_application() {
         index: 0,
     };
 
-    match view.execute_operation(app_id, &context, &Operation::User(vec![])).await {
-        Err(ExecutionError::UnknownApplication) => {},
-        res => panic!("Expected {:?}, instead found {:?}", ExecutionError::UnknownApplication, res)
+    match view
+        .execute_operation(app_id, &context, &Operation::User(vec![]))
+        .await
+    {
+        Err(ExecutionError::UnknownApplication) => {}
+        res => panic!(
+            "Expected {:?}, instead found {:?}",
+            ExecutionError::UnknownApplication,
+            res
+        ),
     }
 }
 
@@ -200,8 +205,15 @@ async fn test_simple_user_operation_with_leaking_session() {
         index: 0,
     };
 
-    match view.execute_operation(app_id, &context, &Operation::User(vec![])).await {
-        Err(ExecutionError::SessionWasNotClosed) => {},
-        res => panic!("Expected {:?}, instead found {:?}", ExecutionError::SessionWasNotClosed, res)
+    match view
+        .execute_operation(app_id, &context, &Operation::User(vec![]))
+        .await
+    {
+        Err(ExecutionError::SessionWasNotClosed) => {}
+        res => panic!(
+            "Expected {:?}, instead found {:?}",
+            ExecutionError::SessionWasNotClosed,
+            res
+        ),
     }
 }
