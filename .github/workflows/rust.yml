@@ -45,4 +45,4 @@ jobs:
     - name: Install cargo-udeps
       run: cargo install cargo-udeps --locked
     - name: Check for unused dependencies
-      run: cargo +nightly udeps
+      run: cargo +nightly udeps --all-targets
