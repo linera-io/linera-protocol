@@ -324,16 +324,16 @@ where
                 .iter()
                 .map(|operation| match operation {
                     WriteOperation::Delete { key } => {
-                        let dr = DeleteRequest::builder()
+                        let request = DeleteRequest::builder()
                             .set_key(Some(Self::build_key(key.to_vec())))
                             .build();
-                        WriteRequest::builder().delete_request(dr).build()
+                        WriteRequest::builder().delete_request(request).build()
                     }
                     WriteOperation::Put { key, value } => {
-                        let pr = PutRequest::builder()
+                        let request = PutRequest::builder()
                             .set_item(Some(Self::build_key_value(key.to_vec(), value.to_vec())))
                             .build();
-                        WriteRequest::builder().put_request(pr).build()
+                        WriteRequest::builder().put_request(request).build()
                     }
                 })
                 .collect();
