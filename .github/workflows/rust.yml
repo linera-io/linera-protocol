@@ -32,3 +32,17 @@ jobs:
       run: cargo clippy --all-targets
     - name: Rustfmt
       run: cargo fmt -- --check --config unstable_features=true --config imports_granularity=Crate
+
+  check-for-unused-dependencies:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: nightly
+    - name: Install cargo-udeps
+      run: cargo install cargo-udeps --locked
+    - name: Check for unused dependencies
+      run: cargo +nightly udeps
