@@ -12,6 +12,7 @@ use std::str::FromStr;
 #[cfg(any(test, feature = "test"))]
 use test_strategy::Arbitrary;
 
+/// A unique identifier for an application.
 // FIXME: placeholder
 #[derive(
     Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
