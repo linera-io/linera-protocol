@@ -349,36 +349,29 @@ where
     /// We put submit the transaction in blocks of at most 25 so as to decrease the
     /// number of needed transactions.
     async fn process_batch(&self, batch: Batch) -> Result<(), DynamoDbContextError> {
-        let batch = simplify_batch(batch);
-        let n_ent = batch.0.len();
-        let n_block = div_ceil(n_ent, 25);
-        for i_block in 0..n_block {
-            let mut v = Vec::new();
-            let i_begin = i_block * 25;
-            let i_end = min((i_block + 1) * 25, n_ent);
-            for i in i_begin..i_end {
-                match &batch.0[i] {
+        for batch_chunk in simplify_batch(batch).0.chunks(25) {
+            let requests = batch_chunk
+                .iter()
+                .map(|operation| match operation {
                     WriteOperation::Delete { key } => {
                         let dr: DeleteRequest = DeleteRequest::builder()
-                            .set_key(Some(self.build_key(key.to_vec())))
+                            .set_key(Some(self.build_key(key.to_vec())))...
+.
                             .build();
-                        let wr: WriteRequest = WriteRequest::builder().delete_request(dr).build();
-                        v.push(wr);
+                        WriteRequest::builder().delete_request(dr).build()
                     }
                     WriteOperation::Put { key, value } => {
                         let pr: PutRequest = PutRequest::builder()
                             .set_item(Some(self.build_key_value(key.to_vec(), value.to_vec())))
                             .build();
-                        let wr: WriteRequest = WriteRequest::builder().put_request(pr).build();
-                        v.push(wr);
+                        WriteRequest::builder().put_request(pr).build()
                     }
-                };
-            }
-            let map: HashMap<String, Vec<WriteRequest>> =
-                HashMap::from([(self.table.0.clone(), v)]);
+                })
+                .collect();
+
             self.client
                 .batch_write_item()
-                .set_request_items(Some(map))
+                .set_request_items(Some(HashMap::from([(self.table.0.clone(), requests)])))
                 .send()
                 .await?;
         }
