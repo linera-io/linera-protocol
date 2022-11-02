@@ -95,4 +95,7 @@ pub enum Error {
     InvalidQuery,
 }
 
+/// Alias to the application type, so that the boilerplate module can reference it.
+type ApplicationState = Counter;
+
 mod boilerplate;
