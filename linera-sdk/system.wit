@@ -1,0 +1,16 @@
+resource load {
+    static new: func() -> load
+    poll: func() -> poll-load
+}
+
+resource load-and-lock {
+    static new: func() -> load-and-lock
+    poll: func() -> poll-load
+}
+
+variant poll-load {
+    pending,
+    ready(expected<list<u8>, string>),
+}
+
+store-and-unlock: func(value: list<u8>) -> bool
