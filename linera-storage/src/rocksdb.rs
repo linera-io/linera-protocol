@@ -88,7 +88,9 @@ impl Store for RocksdbStoreClient {
 
     async fn write_certificate(&self, certificate: Certificate) -> Result<(), StorageError> {
         let key = bcs::to_bytes(&BaseKey::Certificate(certificate.hash))?;
-        self.0.db.write_key(&key, &certificate)
+        self.0
+            .db
+            .write_key(&key, &certificate)
             .await
             .map_err(|e| ViewError::from(e))?;
         Ok(())

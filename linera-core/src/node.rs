@@ -16,7 +16,7 @@ use linera_chain::{
     messages::{Block, BlockProposal, Certificate, Value},
     ChainManager,
 };
-use linera_storage::Store;
+use linera_storage::{StorageError, Store};
 use linera_views::views::ViewError;
 use rand::prelude::SliceRandom;
 use serde::{Deserialize, Serialize};
@@ -86,6 +86,17 @@ pub enum NodeError {
 
     #[error("{0}")]
     WorkerError(#[from] linera_base::error::Error),
+
+    #[error("Storage error: {error}")]
+    StorageError { error: String },
+}
+
+impl From<StorageError> for NodeError {
+    fn from(error: StorageError) -> Self {
+        Self::StorageError {
+            error: error.to_string(),
+        }
+    }
 }
 
 impl From<ViewError> for NodeError {

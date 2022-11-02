@@ -28,7 +28,6 @@ use linera_views::views::ViewError;
 use std::{fmt::Debug, sync::Arc};
 use thiserror::Error;
 
-
 #[derive(Error, Debug)]
 pub enum StorageError {
     #[error("Error in view operation: {0}")]
@@ -37,6 +36,14 @@ pub enum StorageError {
     InactiveChain(ChainId),
     #[error("failed to serialize value to calculate its hash")]
     Serialization(#[from] bcs::Error),
+}
+
+impl From<StorageError> for linera_base::error::Error {
+    fn from(error: StorageError) -> Self {
+        Self::StorageError {
+            error: error.to_string(),
+        }
+    }
 }
 
 /// Communicate with a persistent storage using the "views" abstraction.
@@ -66,10 +73,7 @@ pub trait Store {
         ViewError: From<Self::ContextError>,
     {
         let chain = self.load_chain(id).await?;
-        ensure!(
-            chain.is_active(),
-            StorageError::InactiveChain(id)
-        );
+        ensure!(chain.is_active(), StorageError::InactiveChain(id));
         Ok(chain)
     }
 
@@ -111,10 +115,7 @@ pub trait Store {
     {
         let id = description.into();
         let mut chain = self.load_chain(id).await?;
-        ensure!(
-            !chain.is_active(),
-            StorageError::InactiveChain(id)
-        );
+        ensure!(!chain.is_active(), StorageError::InactiveChain(id));
         let system_state = &mut chain.execution_state.system;
         system_state.description.set(Some(description));
         system_state.epoch.set(Some(Epoch::from(0)));

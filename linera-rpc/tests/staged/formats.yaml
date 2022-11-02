@@ -390,22 +390,26 @@ Error:
         STRUCT:
           - error: STR
     45:
-      UnknownApplication: UNIT
+      StorageError:
+        STRUCT:
+          - error: STR
     46:
-      InvalidOperation: UNIT
+      UnknownApplication: UNIT
     47:
-      InvalidEffect: UNIT
+      InvalidOperation: UNIT
     48:
-      InvalidQuery: UNIT
+      InvalidEffect: UNIT
     49:
-      InvalidSession: UNIT
+      InvalidQuery: UNIT
     50:
-      ApplicationIsInUse: UNIT
+      InvalidSession: UNIT
     51:
-      SessionIsInUse: UNIT
+      ApplicationIsInUse: UNIT
     52:
-      InvalidSessionOwner: UNIT
+      SessionIsInUse: UNIT
     53:
+      InvalidSessionOwner: UNIT
+    54:
       SessionWasNotClosed: UNIT
 HashValue:
   NEWTYPESTRUCT:
@@ -513,6 +517,10 @@ NodeError:
       WorkerError:
         NEWTYPE:
           TYPENAME: Error
+    7:
+      StorageError:
+        STRUCT:
+          - error: STR
 Operation:
   ENUM:
     0:

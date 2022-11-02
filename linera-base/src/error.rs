@@ -170,6 +170,9 @@ pub enum Error {
     #[error("Error in view operation: {error}")]
     ViewError { error: String },
 
+    #[error("Storage error: {error}")]
+    StorageError { error: String },
+
     // Execution
     #[error("Unknown application")]
     UnknownApplication,

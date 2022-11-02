@@ -142,7 +142,8 @@ impl Store for DynamoDbStoreClient {
     }
 
     async fn read_certificate(&self, hash: HashValue) -> Result<Certificate, StorageError> {
-        let certificate = self.0
+        let certificate = self
+            .0
             .certificates()
             .await?
             .get(&hash)
