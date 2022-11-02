@@ -20,7 +20,7 @@ jobs:
         toolchain: 1.64.0
     - name: Report warnings as errors
       run: echo 'RUSTFLAGS=-D warnings' >> $GITHUB_ENV
-    - uses: Swatinem/rust-cache@v1
+    - uses: Swatinem/rust-cache@v2
     - name: Build
       run: cargo build --locked
     - name: Setup local DynamoDB instance
