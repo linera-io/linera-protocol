@@ -12,8 +12,20 @@
 //! the code with a procedural macro. For now, this module should be included by all implemented
 //! applications.
 
+// Export the application interface.
+wit_bindgen_guest_rust::export!("application.wit");
+
 // Import the system interface.
 wit_bindgen_guest_rust::import!("system.wit");
 
 mod conversions_from_wit;
+mod exported_futures;
 mod state_management;
+
+use self::exported_futures::{
+    CallApplication, CallSession, ExecuteEffect, ExecuteOperation, QueryApplication,
+};
+use super::ApplicationState as Application;
+
+/// Mark the application type to be exported.
+impl application::Application for Application {}
