@@ -11,3 +11,6 @@
 //! This should be fixable with a few changes to [`wit-bindgen`], but an alternative is to generate
 //! the code with a procedural macro. For now, this module should be included by all implemented
 //! applications.
+
+// Import the system interface.
+wit_bindgen_guest_rust::import!("system.wit");
