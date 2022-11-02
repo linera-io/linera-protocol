@@ -96,7 +96,7 @@ pub struct SessionId {
 
 /// Syscall to request creating a new session.
 #[derive(Default)]
-pub struct NewSession {
+pub struct Session {
     /// A kind provided by the creator (meant to be visible to other applications).
     pub kind: u64,
     /// The data associated to the session.
@@ -111,7 +111,7 @@ pub struct ApplicationCallResult {
     /// The externally-visible result.
     pub execution_result: RawExecutionResult<Vec<u8>>,
     /// The new sessions that were just created by the callee for us.
-    pub create_sessions: Vec<NewSession>,
+    pub create_sessions: Vec<Session>,
 }
 
 /// The result of calling into a session.
