@@ -30,17 +30,11 @@ async fn test_missing_user_application() {
         index: 0,
     };
 
-    match view
+    let result = view
         .execute_operation(app_id, &context, &Operation::User(vec![]))
-        .await
-    {
-        Err(ExecutionError::UnknownApplication) => {}
-        res => panic!(
-            "Expected {:?}, instead found {:?}",
-            ExecutionError::UnknownApplication,
-            res
-        ),
-    }
+        .await;
+
+    assert!(matches!(result, Err(ExecutionError::UnknownApplication)))
 }
 
 struct TestApplication;
@@ -205,15 +199,9 @@ async fn test_simple_user_operation_with_leaking_session() {
         index: 0,
     };
 
-    match view
+    let result = view
         .execute_operation(app_id, &context, &Operation::User(vec![]))
-        .await
-    {
-        Err(ExecutionError::SessionWasNotClosed) => {}
-        res => panic!(
-            "Expected {:?}, instead found {:?}",
-            ExecutionError::SessionWasNotClosed,
-            res
-        ),
-    }
+        .await;
+
+    assert!(matches!(result, Err(ExecutionError::SessionWasNotClosed)))
 }
