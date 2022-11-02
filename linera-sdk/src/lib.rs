@@ -1,6 +1,57 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use async_trait::async_trait;
+use std::error::Error;
+
+/// The public entry points provided by an application.
+#[async_trait]
+pub trait Application {
+    /// Message reports for application execution errors.
+    type Error: Error;
+
+    /// Apply an operation from the current block.
+    async fn execute_operation(
+        &mut self,
+        context: &OperationContext,
+        operation: &[u8],
+    ) -> Result<ExecutionResult, Self::Error>;
+
+    /// Apply an effect originating from a cross-chain message.
+    async fn execute_effect(
+        &mut self,
+        context: &EffectContext,
+        effect: &[u8],
+    ) -> Result<ExecutionResult, Self::Error>;
+
+    /// Allow an operation or an effect of other applications to call into this
+    /// application.
+    async fn call_application(
+        &mut self,
+        context: &CalleeContext,
+        argument: &[u8],
+        forwarded_sessions: Vec<SessionId>,
+    ) -> Result<ApplicationCallResult, Self::Error>;
+
+    /// Allow an operation or an effect of other applications to call into a session that
+    /// we previously created.
+    async fn call_session(
+        &mut self,
+        context: &CalleeContext,
+        session: Session,
+        argument: &[u8],
+        forwarded_sessions: Vec<SessionId>,
+    ) -> Result<SessionCallResult, Self::Error>;
+
+    /// Allow an end user to execute read-only queries on the state of this application.
+    /// NOTE: This is not meant to be metered and may not be exposed by validators.
+    async fn query_application(
+        &self,
+        context: &QueryContext,
+        argument: &[u8],
+    ) -> Result<Vec<u8>, Self::Error>;
+}
+
 #[derive(Debug, Clone)]
 pub struct OperationContext {
     /// The current chain id.
