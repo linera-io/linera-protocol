@@ -5,3 +5,4 @@ authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 
 [dependencies]
+async-trait = "0.1.52"
