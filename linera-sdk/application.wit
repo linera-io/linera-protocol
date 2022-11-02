@@ -1,0 +1,144 @@
+resource execute-operation {
+    static new: func(
+        context: operation-context,
+        operation: list<u8>,
+    ) -> execute-operation
+
+    poll: func() -> poll-execution-result
+}
+
+resource execute-effect {
+    static new: func(
+        context: effect-context,
+        effect: list<u8>,
+    ) -> execute-effect
+
+    poll: func() -> poll-execution-result
+}
+
+resource call-application {
+    static new: func(
+        context: callee-context,
+        argument: list<u8>,
+        forwarded-sessions: list<session-id>,
+    ) -> call-application
+
+    poll: func() -> poll-call-application
+}
+
+resource call-session {
+    static new: func(
+        context: callee-context,
+        session: session,
+        argument: list<u8>,
+        forwarded-sessions: list<session-id>,
+    ) -> call-session
+
+    poll: func() -> poll-call-session
+}
+
+resource query-application {
+    static new: func(
+        context: query-context,
+        argument: list<u8>,
+    ) -> query-application
+
+    poll: func() -> poll-query
+}
+
+record operation-context {
+    chain-id: chain-id,
+    height: block-height,
+    index: u64,
+}
+
+record effect-context {
+    chain-id: chain-id,
+    height: block-height,
+    effect-id: effect-id,
+}
+
+record effect-id {
+    chain-id: chain-id,
+    height: block-height,
+    index: u64,
+}
+
+record callee-context {
+    chain-id: chain-id,
+    authenticated-caller-id: option<application-id>,
+}
+
+record query-context {
+    chain-id: chain-id,
+}
+
+type chain-id = hash-value
+type block-height = u64
+type application-id = u64
+
+variant poll-execution-result {
+    pending,
+    ready(expected<execution-result, string>),
+}
+
+variant poll-call-application {
+    pending,
+    ready(expected<application-call-result, string>),
+}
+
+variant poll-call-session {
+    pending,
+    ready(expected<session-call-result, string>),
+}
+
+variant poll-query {
+    pending,
+    ready(expected<list<u8>, string>),
+}
+
+record application-call-result {
+    value: list<u8>,
+    execution-result: execution-result,
+    create-sessions: list<session>,
+}
+
+record session-id {
+    application-id: application-id,
+    kind: u64,
+    index: u64,
+}
+
+record session {
+    kind: u64,
+    data: list<u8>,
+}
+
+record session-call-result {
+    inner: application-call-result,
+    data: option<list<u8>>,
+}
+
+record execution-result {
+    effects: list<tuple<destination, effect>>,
+    subscribe: list<tuple<string, chain-id>>,
+    unsubscribe: list<tuple<string, chain-id>>,
+}
+
+variant destination {
+    recipient(chain-id),
+    subscribers(string),
+}
+
+type effect = list<u8>
+
+record hash-value {
+    part1: u64,
+    part2: u64,
+    part3: u64,
+    part4: u64,
+    part5: u64,
+    part6: u64,
+    part7: u64,
+    part8: u64,
+}
