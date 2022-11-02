@@ -7,79 +7,155 @@
 //! WASM module's respective endpoint. This module contains the code to forward the call to the
 //! application type that implements [`linera_sdk::Application`].
 
-use super::application;
+use super::{super::ApplicationState, application};
+use linera_sdk::{
+    Application, ApplicationCallResult, ExecutionResult, ExportedFuture, SessionCallResult,
+    SessionId,
+};
 use wit_bindgen_guest_rust::Handle;
 
-/// Asynchronous endpoint to call [`linera_sdk::Application::execute_operation`].
-pub struct ExecuteOperation;
+pub struct ExecuteOperation {
+    future: ExportedFuture<Result<ExecutionResult, String>>,
+}
 
 impl application::ExecuteOperation for ExecuteOperation {
-    fn new(_context: application::OperationContext, _operation: Vec<u8>) -> Handle<Self> {
-        Handle::new(ExecuteOperation)
+    fn new(context: application::OperationContext, operation: Vec<u8>) -> Handle<Self> {
+        Handle::new(ExecuteOperation {
+            future: ExportedFuture::new(async move {
+                let mut application = ApplicationState::load_and_lock().await;
+                let result = application
+                    .execute_operation(&context.into(), &operation)
+                    .await;
+                if result.is_ok() {
+                    application.store_and_unlock().await;
+                }
+                result.map_err(|error| error.to_string())
+            }),
+        })
     }
 
     fn poll(&self) -> application::PollExecutionResult {
-        todo!();
+        self.future.poll()
     }
 }
 
-/// Asynchronous endpoint to call [`linera_sdk::Application::execute_effect`].
-pub struct ExecuteEffect;
+pub struct ExecuteEffect {
+    future: ExportedFuture<Result<ExecutionResult, String>>,
+}
 
 impl application::ExecuteEffect for ExecuteEffect {
-    fn new(_context: application::EffectContext, _effect: Vec<u8>) -> Handle<Self> {
-        Handle::new(ExecuteEffect)
+    fn new(context: application::EffectContext, effect: Vec<u8>) -> Handle<Self> {
+        Handle::new(ExecuteEffect {
+            future: ExportedFuture::new(async move {
+                let mut application = ApplicationState::load_and_lock().await;
+                let result = application.execute_effect(&context.into(), &effect).await;
+                if result.is_ok() {
+                    application.store_and_unlock().await;
+                }
+                result.map_err(|error| error.to_string())
+            }),
+        })
     }
 
     fn poll(&self) -> application::PollExecutionResult {
-        todo!();
+        self.future.poll()
     }
 }
 
-/// Asynchronous endpoint to call [`linera_sdk::Application::call_application`].
-pub struct CallApplication;
+pub struct CallApplication {
+    future: ExportedFuture<Result<ApplicationCallResult, String>>,
+}
 
 impl application::CallApplication for CallApplication {
     fn new(
-        _context: application::CalleeContext,
-        _argument: Vec<u8>,
-        _forwarded_sessions: Vec<application::SessionId>,
+        context: application::CalleeContext,
+        argument: Vec<u8>,
+        forwarded_sessions: Vec<application::SessionId>,
     ) -> Handle<Self> {
-        Handle::new(CallApplication)
+        Handle::new(CallApplication {
+            future: ExportedFuture::new(async move {
+                let mut application = ApplicationState::load_and_lock().await;
+
+                let forwarded_sessions = forwarded_sessions
+                    .into_iter()
+                    .map(SessionId::from)
+                    .collect();
+
+                let result = application
+                    .call_application(&context.into(), &argument, forwarded_sessions)
+                    .await;
+                if result.is_ok() {
+                    application.store_and_unlock().await;
+                }
+                result.map_err(|error| error.to_string())
+            }),
+        })
     }
 
     fn poll(&self) -> application::PollCallApplication {
-        todo!();
+        self.future.poll()
     }
 }
 
-/// Asynchronous endpoint to call [`linera_sdk::Application::call_session`].
-pub struct CallSession;
+pub struct CallSession {
+    future: ExportedFuture<Result<SessionCallResult, String>>,
+}
 
 impl application::CallSession for CallSession {
     fn new(
-        _context: application::CalleeContext,
-        _session: application::Session,
-        _argument: Vec<u8>,
-        _forwarded_sessions: Vec<application::SessionId>,
+        context: application::CalleeContext,
+        session: application::Session,
+        argument: Vec<u8>,
+        forwarded_sessions: Vec<application::SessionId>,
     ) -> Handle<Self> {
-        Handle::new(CallSession)
+        Handle::new(CallSession {
+            future: ExportedFuture::new(async move {
+                let mut application = ApplicationState::load_and_lock().await;
+
+                let forwarded_sessions = forwarded_sessions
+                    .into_iter()
+                    .map(SessionId::from)
+                    .collect();
+
+                let result = application
+                    .call_session(
+                        &context.into(),
+                        session.into(),
+                        &argument,
+                        forwarded_sessions,
+                    )
+                    .await;
+                if result.is_ok() {
+                    application.store_and_unlock().await;
+                }
+                result.map_err(|error| error.to_string())
+            }),
+        })
     }
 
     fn poll(&self) -> application::PollCallSession {
-        todo!();
+        self.future.poll()
     }
 }
 
-/// Asynchronous endpoint to call [`linera_sdk::Application::query_application`].
-pub struct QueryApplication;
+pub struct QueryApplication {
+    future: ExportedFuture<Result<Vec<u8>, String>>,
+}
 
 impl application::QueryApplication for QueryApplication {
-    fn new(_context: application::QueryContext, _argument: Vec<u8>) -> Handle<Self> {
-        Handle::new(QueryApplication)
+    fn new(context: application::QueryContext, argument: Vec<u8>) -> Handle<Self> {
+        Handle::new(QueryApplication {
+            future: ExportedFuture::new(async move {
+                let application = ApplicationState::load().await;
+                application
+                    .query_application(&context.into(), &argument)
+                    .await
+                    .map_err(|error| error.to_string())
+            }),
+        })
     }
 
     fn poll(&self) -> application::PollQuery {
-        todo!();
+        self.future.poll()
     }
 }
