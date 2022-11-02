@@ -81,7 +81,7 @@ impl Store for RocksdbStoreClient {
             .db
             .read_key(&key)
             .await
-            .map_err(|e| ViewError::from(e))?
+            .map_err(ViewError::from)?
             .ok_or_else(|| ViewError::NotFound(format!("certificate for hash {:?}", hash)))?;
         Ok(certificate)
     }
@@ -92,7 +92,7 @@ impl Store for RocksdbStoreClient {
             .db
             .write_key(&key, &certificate)
             .await
-            .map_err(|e| ViewError::from(e))?;
+            .map_err(ViewError::from)?;
         Ok(())
     }
 }
