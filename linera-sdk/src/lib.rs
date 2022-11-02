@@ -40,9 +40,9 @@ pub struct QueryContext {
 /// Externally visible results of an execution. These results are meant in the context of
 /// the application that created them.
 #[derive(Debug, Default)]
-pub struct RawExecutionResult<Effect> {
+pub struct ExecutionResult {
     /// Send messages to the given destinations.
-    pub effects: Vec<(Destination, Effect)>,
+    pub effects: Vec<(Destination, Vec<u8>)>,
     /// Subscribe chains to channels.
     pub subscribe: Vec<(String, ChainId)>,
     /// Unsubscribe chains to channels.
@@ -109,7 +109,7 @@ pub struct ApplicationCallResult {
     /// The return value.
     pub value: Vec<u8>,
     /// The externally-visible result.
-    pub execution_result: RawExecutionResult<Vec<u8>>,
+    pub execution_result: ExecutionResult,
     /// The new sessions that were just created by the callee for us.
     pub create_sessions: Vec<Session>,
 }
