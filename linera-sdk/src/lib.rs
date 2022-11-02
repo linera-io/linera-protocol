@@ -1,8 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod exported_future;
+
 use async_trait::async_trait;
 use std::error::Error;
+
+pub use crate::exported_future::ExportedFuture;
 
 /// The public entry points provided by an application.
 #[async_trait]
