@@ -19,6 +19,7 @@ wit_bindgen_guest_rust::export!("application.wit");
 wit_bindgen_guest_rust::import!("system.wit");
 
 mod conversions_from_wit;
+mod conversions_to_wit;
 mod exported_futures;
 mod state_management;
 
