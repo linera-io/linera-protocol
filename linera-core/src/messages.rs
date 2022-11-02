@@ -197,7 +197,7 @@ impl ChainInfoResponse {
 
     pub fn check(&self, name: ValidatorName) -> Result<(), Error> {
         match self.signature {
-            Some(sig) => sig.check(&self.info, name.0),
+            Some(sig) => Ok(sig.check(&self.info, name.0)?),
             None => Err(Error::InvalidChainInfoResponse),
         }
     }

@@ -2,7 +2,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::messages::{ApplicationId, BlockHeight, ChainId, Epoch, Origin, RoundNumber};
+use crate::{
+    crypto::CryptoError,
+    messages::{ApplicationId, BlockHeight, ChainId, Epoch, Origin, RoundNumber},
+};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -56,8 +59,6 @@ pub enum Error {
     BalanceUnderflow,
 
     // Signatures and certificates
-    #[error("Signature for object {type_name} is not valid: {error}")]
-    InvalidSignature { error: String, type_name: String },
     #[error("The signature was not created by a valid entity")]
     InvalidSigner,
     #[error("Signatures in a certificate must form a quorum")]
@@ -169,6 +170,9 @@ pub enum Error {
     // TODO(#148): Remove this.
     #[error("Error in view operation: {error}")]
     ViewError { error: String },
+
+    #[error("Cryptographic error: {0}")]
+    CryptoError(#[from] CryptoError),
 
     // Execution
     #[error("Unknown application")]

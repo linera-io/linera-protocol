@@ -188,6 +188,13 @@ CrossChainRequest:
               TYPENAME: ChainId
           - height:
               TYPENAME: BlockHeight
+CryptoError:
+  ENUM:
+    0:
+      InvalidSignature:
+        STRUCT:
+          - error: STR
+          - type_name: STR
 Destination:
   ENUM:
     0:
@@ -255,65 +262,60 @@ Error:
     12:
       BalanceUnderflow: UNIT
     13:
-      InvalidSignature:
-        STRUCT:
-          - error: STR
-          - type_name: STR
-    14:
       InvalidSigner: UNIT
-    15:
+    14:
       CertificateRequiresQuorum: UNIT
-    16:
+    15:
       CertificateValidatorReuse: UNIT
-    17:
+    16:
       InvalidCertificate: UNIT
-    18:
+    17:
       InvalidChainInfoResponse: UNIT
-    19:
+    18:
       InvalidEpoch:
         STRUCT:
           - chain_id:
               TYPENAME: ChainId
           - epoch:
               TYPENAME: Epoch
-    20:
+    19:
       IncorrectTransferAmount: UNIT
-    21:
+    20:
       InsufficientFunding:
         STRUCT:
           - current_balance: U128
-    22:
+    21:
       InvalidNewChainId:
         NEWTYPE:
           TYPENAME: ChainId
-    23:
+    22:
       InvalidNewChainAdminId:
         NEWTYPE:
           TYPENAME: ChainId
-    24:
+    23:
       InvalidSubscriptionToNewCommittees:
         NEWTYPE:
           TYPENAME: ChainId
-    25:
+    24:
       InvalidUnsubscriptionToNewCommittees:
         NEWTYPE:
           TYPENAME: ChainId
-    26:
+    25:
       InvalidCommittees: UNIT
-    27:
+    26:
       InvalidCommitteeCreation: UNIT
-    28:
+    27:
       InvalidCommitteeRemoval: UNIT
-    29:
+    28:
       InsufficientRound:
         NEWTYPE:
           TYPENAME: RoundNumber
-    30:
+    29:
       HasLockedBlock:
         TUPLE:
           - TYPENAME: BlockHeight
           - TYPENAME: RoundNumber
-    31:
+    30:
       MissingCrossChainUpdate:
         STRUCT:
           - chain_id:
@@ -324,7 +326,7 @@ Error:
               TYPENAME: Origin
           - height:
               TYPENAME: BlockHeight
-    32:
+    31:
       InvalidMessageContent:
         STRUCT:
           - chain_id:
@@ -336,7 +338,7 @@ Error:
           - height:
               TYPENAME: BlockHeight
           - index: U64
-    33:
+    32:
       InvalidMessage:
         STRUCT:
           - chain_id:
@@ -351,7 +353,7 @@ Error:
           - expected_height:
               TYPENAME: BlockHeight
           - expected_index: U64
-    34:
+    33:
       InvalidMessageOrder:
         STRUCT:
           - chain_id:
@@ -363,32 +365,36 @@ Error:
           - height:
               TYPENAME: BlockHeight
           - index: U64
-    35:
+    34:
       InvalidCrossChainRequest: UNIT
-    36:
+    35:
       InvalidBlockProposal: UNIT
-    37:
+    36:
       InvalidBlockChaining: UNIT
-    38:
+    37:
       IncorrectStateHash: UNIT
-    39:
+    38:
       IncorrectEffects: UNIT
-    40:
+    39:
       InvalidDecoding: UNIT
-    41:
+    40:
       UnexpectedMessage: UNIT
-    42:
+    41:
       ClientIoError:
         STRUCT:
           - error: STR
-    43:
+    42:
       CannotResolveValidatorAddress:
         STRUCT:
           - address: STR
-    44:
+    43:
       ViewError:
         STRUCT:
           - error: STR
+    44:
+      CryptoError:
+        NEWTYPE:
+          TYPENAME: CryptoError
     45:
       UnknownApplication: UNIT
     46:
@@ -513,6 +519,10 @@ NodeError:
       WorkerError:
         NEWTYPE:
           TYPENAME: Error
+    7:
+      CryptoError:
+        NEWTYPE:
+          TYPENAME: CryptoError
 Operation:
   ENUM:
     0:

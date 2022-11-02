@@ -9,6 +9,7 @@ use crate::{
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use linera_base::{
+    crypto::CryptoError,
     error::Error,
     messages::{BlockHeight, ChainId, ValidatorName},
 };
@@ -86,6 +87,9 @@ pub enum NodeError {
 
     #[error("{0}")]
     WorkerError(#[from] linera_base::error::Error),
+
+    #[error("Cryptographic error: {0}")]
+    CryptoError(#[from] CryptoError),
 }
 
 impl From<ViewError> for NodeError {

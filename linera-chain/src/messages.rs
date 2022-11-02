@@ -4,7 +4,7 @@
 
 use linera_base::{
     committee::Committee,
-    crypto::{BcsSignable, HashValue, KeyPair, Signature},
+    crypto::{BcsSignable, CryptoError, HashValue, KeyPair, Signature},
     ensure,
     error::Error,
     messages::{
@@ -185,7 +185,7 @@ impl Vote {
     }
 
     /// Verify the signature in the vote.
-    pub fn check(&self, name: ValidatorName) -> Result<(), Error> {
+    pub fn check(&self, name: ValidatorName) -> Result<(), CryptoError> {
         self.signature.check(&self.value, name.0)
     }
 }
