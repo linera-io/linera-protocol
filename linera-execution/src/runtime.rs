@@ -267,10 +267,7 @@ where
             .users
             .try_load_entry(self.application_id())
             .await
-            .map_err(|_| {
-                // FIXME(#152): This remapping is too coarse as the error could be network-related.
-                ExecutionError::ApplicationIsInUse
-            })?
+            .map_err(ExecutionError::from)?
             .get()
             .to_vec();
         Ok(state)
@@ -322,10 +319,7 @@ where
             .users
             .try_load_entry(self.application_id())
             .await
-            .map_err(|_| {
-                // FIXME(#152): This remapping is too coarse as the error could be network-related.
-                ExecutionError::ApplicationIsInUse
-            })?;
+            .map_err(ExecutionError::from)?;
         let state = view.get().to_vec();
         // Remember the view. This will prevent reentrancy.
         self.active_user_states_mut()
