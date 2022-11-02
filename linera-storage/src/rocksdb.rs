@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{chain_guards::ChainGuards, ChainRuntimeContext, ChainStateView, Store};
+use crate::{chain_guards::ChainGuards, ChainRuntimeContext, ChainStateView, StorageError, Store};
 use async_trait::async_trait;
 use dashmap::DashMap;
 use linera_base::{
@@ -60,7 +60,7 @@ impl Store for RocksdbStoreClient {
     type Context = RocksdbContext<ChainRuntimeContext>;
     type ContextError = RocksdbContextError;
 
-    async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError> {
+    async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, StorageError> {
         let db = self.0.db.clone();
         let base_key = bcs::to_bytes(&BaseKey::ChainState(id))?;
         log::trace!("Acquiring lock on {:?}", id);
@@ -71,23 +71,26 @@ impl Store for RocksdbStoreClient {
             chain_guard: Some(Arc::new(guard)),
         };
         let db_context = RocksdbContext::new(db, base_key, runtime_context);
-        ChainStateView::load(db_context).await
+        Ok(ChainStateView::load(db_context).await?)
     }
 
-    async fn read_certificate(&self, hash: HashValue) -> Result<Certificate, ViewError> {
+    async fn read_certificate(&self, hash: HashValue) -> Result<Certificate, StorageError> {
         let key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
-        let value = self
+        let certificate = self
             .0
             .db
             .read_key(&key)
-            .await?
+            .await
+            .map_err(|e| ViewError::from(e))?
             .ok_or_else(|| ViewError::NotFound(format!("certificate for hash {:?}", hash)))?;
-        Ok(value)
+        Ok(certificate)
     }
 
-    async fn write_certificate(&self, certificate: Certificate) -> Result<(), ViewError> {
+    async fn write_certificate(&self, certificate: Certificate) -> Result<(), StorageError> {
         let key = bcs::to_bytes(&BaseKey::Certificate(certificate.hash))?;
-        self.0.db.write_key(&key, &certificate).await?;
+        self.0.db.write_key(&key, &certificate)
+            .await
+            .map_err(|e| ViewError::from(e))?;
         Ok(())
     }
 }

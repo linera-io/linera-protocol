@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{chain_guards::ChainGuards, ChainRuntimeContext, ChainStateView, Store};
+use crate::{chain_guards::ChainGuards, ChainRuntimeContext, ChainStateView, StorageError, Store};
 use async_trait::async_trait;
 use dashmap::DashMap;
 use futures::Future;
@@ -126,7 +126,7 @@ impl Store for DynamoDbStoreClient {
     type Context = DynamoDbContext<ChainRuntimeContext>;
     type ContextError = DynamoDbContextError;
 
-    async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError> {
+    async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, StorageError> {
         log::trace!("Acquiring lock on {:?}", id);
         let guard = self.0.guards.guard(id).await;
         let runtime_context = ChainRuntimeContext {
@@ -138,23 +138,24 @@ impl Store for DynamoDbStoreClient {
             .0
             .context
             .clone_with_sub_scope(&BaseKey::ChainState(id), runtime_context);
-        ChainStateView::load(db_context).await
+        Ok(ChainStateView::load(db_context).await?)
     }
 
-    async fn read_certificate(&self, hash: HashValue) -> Result<Certificate, ViewError> {
-        self.0
+    async fn read_certificate(&self, hash: HashValue) -> Result<Certificate, StorageError> {
+        let certificate = self.0
             .certificates()
             .await?
             .get(&hash)
             .await?
-            .ok_or_else(|| ViewError::NotFound(format!("certificate for hash {:?}", hash)))
+            .ok_or_else(|| ViewError::NotFound(format!("certificate for hash {:?}", hash)))?;
+        Ok(certificate)
     }
 
-    async fn write_certificate(&self, certificate: Certificate) -> Result<(), ViewError> {
+    async fn write_certificate(&self, certificate: Certificate) -> Result<(), StorageError> {
         let mut certificates = self.0.certificates().await?;
         certificates.insert(certificate.hash, certificate);
         let mut batch = self.0.context.create_batch();
         certificates.flush(&mut batch).await?;
-        self.0.context.write_batch(batch).await
+        Ok(self.0.context.write_batch(batch).await?)
     }
 }

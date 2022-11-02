@@ -1284,6 +1284,7 @@ dependencies = [
  "rocksdb",
  "serde",
  "tempfile",
+ "thiserror",
  "tokio",
 ]
 

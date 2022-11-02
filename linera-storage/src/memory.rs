@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{ChainRuntimeContext, ChainStateView, Store};
+use crate::{ChainRuntimeContext, ChainStateView, StorageError, Store};
 use async_trait::async_trait;
 use dashmap::DashMap;
 use linera_base::{
@@ -32,7 +32,7 @@ impl Store for MemoryStoreClient {
     type Context = MemoryContext<ChainRuntimeContext>;
     type ContextError = MemoryContextError;
 
-    async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError> {
+    async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, StorageError> {
         let state = self
             .0
             .chains
@@ -46,10 +46,10 @@ impl Store for MemoryStoreClient {
             chain_guard: None,
         };
         let db_context = MemoryContext::new(state.lock_owned().await, runtime_context);
-        ChainStateView::load(db_context).await
+        Ok(ChainStateView::load(db_context).await?)
     }
 
-    async fn read_certificate(&self, hash: HashValue) -> Result<Certificate, ViewError> {
+    async fn read_certificate(&self, hash: HashValue) -> Result<Certificate, StorageError> {
         let entry = self
             .0
             .certificates
@@ -58,7 +58,7 @@ impl Store for MemoryStoreClient {
         Ok(entry.value().clone())
     }
 
-    async fn write_certificate(&self, certificate: Certificate) -> Result<(), ViewError> {
+    async fn write_certificate(&self, certificate: Certificate) -> Result<(), StorageError> {
         self.0.certificates.insert(certificate.hash, certificate);
         Ok(())
     }

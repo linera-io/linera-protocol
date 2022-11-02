@@ -26,6 +26,18 @@ use linera_execution::{
 };
 use linera_views::views::ViewError;
 use std::{fmt::Debug, sync::Arc};
+use thiserror::Error;
+
+
+#[derive(Error, Debug)]
+pub enum StorageError {
+    #[error("Error in view operation: {0}")]
+    View(#[from] ViewError),
+    #[error("The chain being queried is not active {0:?}")]
+    InactiveChain(ChainId),
+    #[error("failed to serialize value to calculate its hash")]
+    Serialization(#[from] bcs::Error),
+}
 
 /// Communicate with a persistent storage using the "views" abstraction.
 #[async_trait]
@@ -37,26 +49,26 @@ pub trait Store {
     type ContextError: std::error::Error + Debug + Sync + Send;
 
     /// Load the view of a chain state.
-    async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError>;
+    async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, StorageError>;
 
     /// Read the certificate with the given hash.
-    async fn read_certificate(&self, hash: HashValue) -> Result<Certificate, ViewError>;
+    async fn read_certificate(&self, hash: HashValue) -> Result<Certificate, StorageError>;
 
     /// Write the given certificate.
-    async fn write_certificate(&self, certificate: Certificate) -> Result<(), ViewError>;
+    async fn write_certificate(&self, certificate: Certificate) -> Result<(), StorageError>;
 
     /// Load the view of a chain state and check that it is active.
     async fn load_active_chain(
         &self,
         id: ChainId,
-    ) -> Result<ChainStateView<Self::Context>, linera_base::error::Error>
+    ) -> Result<ChainStateView<Self::Context>, StorageError>
     where
         ViewError: From<Self::ContextError>,
     {
         let chain = self.load_chain(id).await?;
         ensure!(
             chain.is_active(),
-            linera_base::error::Error::InactiveChain(id)
+            StorageError::InactiveChain(id)
         );
         Ok(chain)
     }
@@ -65,7 +77,7 @@ pub trait Store {
     async fn read_certificates<I: IntoIterator<Item = HashValue> + Send>(
         &self,
         keys: I,
-    ) -> Result<Vec<Certificate>, ViewError>
+    ) -> Result<Vec<Certificate>, StorageError>
     where
         Self: Clone + Send + 'static,
     {
@@ -93,7 +105,7 @@ pub trait Store {
         description: ChainDescription,
         owner: Owner,
         balance: Balance,
-    ) -> Result<(), linera_base::error::Error>
+    ) -> Result<(), StorageError>
     where
         ViewError: From<Self::ContextError>,
     {
@@ -101,7 +113,7 @@ pub trait Store {
         let mut chain = self.load_chain(id).await?;
         ensure!(
             !chain.is_active(),
-            linera_base::error::Error::InactiveChain(id)
+            StorageError::InactiveChain(id)
         );
         let system_state = &mut chain.execution_state.system;
         system_state.description.set(Some(description));
