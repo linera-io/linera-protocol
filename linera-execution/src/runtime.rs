@@ -266,7 +266,11 @@ where
             .execution_state_mut()
             .users
             .try_load_entry(self.application_id())
-            .await?
+            .await
+            .map_err(|error| match error {
+                ViewError::TryLockError(_) => ExecutionError::ApplicationIsInUse,
+                error => ExecutionError::View(error),
+            })?
             .get()
             .to_vec();
         Ok(state)
@@ -317,8 +321,11 @@ where
             .execution_state_mut()
             .users
             .try_load_entry(self.application_id())
-            .await?;
-            // .map_err(ExecutionError::from)?;
+            .await
+            .map_err(|error| match error {
+                ViewError::TryLockError(_) => ExecutionError::ApplicationIsInUse,
+                error => ExecutionError::View(error),
+            })?;
         let state = view.get().to_vec();
         // Remember the view. This will prevent reentrancy.
         self.active_user_states_mut()
