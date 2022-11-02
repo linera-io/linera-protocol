@@ -94,3 +94,5 @@ pub enum Error {
     #[error("Invalid query argument; Counter application only supports a single (empty) query")]
     InvalidQuery,
 }
+
+mod boilerplate;
