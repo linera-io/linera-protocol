@@ -124,6 +124,41 @@ pub struct BlockHeight(pub u64);
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 pub struct HashValue([u8; 64]);
 
+impl From<[u64; 8]> for HashValue {
+    fn from(eight_u64s: [u64; 8]) -> Self {
+        let mut bytes = [0u8; 64];
+
+        bytes[0..8].copy_from_slice(&eight_u64s[0].to_le_bytes());
+        bytes[8..16].copy_from_slice(&eight_u64s[1].to_le_bytes());
+        bytes[16..24].copy_from_slice(&eight_u64s[2].to_le_bytes());
+        bytes[24..32].copy_from_slice(&eight_u64s[3].to_le_bytes());
+        bytes[32..40].copy_from_slice(&eight_u64s[4].to_le_bytes());
+        bytes[40..48].copy_from_slice(&eight_u64s[5].to_le_bytes());
+        bytes[48..56].copy_from_slice(&eight_u64s[6].to_le_bytes());
+        bytes[56..64].copy_from_slice(&eight_u64s[7].to_le_bytes());
+
+        HashValue(bytes)
+    }
+}
+
+impl From<HashValue> for [u64; 8] {
+    fn from(hash_value: HashValue) -> Self {
+        let bytes = hash_value.0;
+        let mut eight_u64s = [0u64; 8];
+
+        eight_u64s[0] = u64::from_le_bytes(bytes[0..8].try_into().expect("incorrect indices"));
+        eight_u64s[1] = u64::from_le_bytes(bytes[8..16].try_into().expect("incorrect indices"));
+        eight_u64s[2] = u64::from_le_bytes(bytes[16..24].try_into().expect("incorrect indices"));
+        eight_u64s[3] = u64::from_le_bytes(bytes[24..32].try_into().expect("incorrect indices"));
+        eight_u64s[4] = u64::from_le_bytes(bytes[32..40].try_into().expect("incorrect indices"));
+        eight_u64s[5] = u64::from_le_bytes(bytes[40..48].try_into().expect("incorrect indices"));
+        eight_u64s[6] = u64::from_le_bytes(bytes[48..56].try_into().expect("incorrect indices"));
+        eight_u64s[7] = u64::from_le_bytes(bytes[56..64].try_into().expect("incorrect indices"));
+
+        eight_u64s
+    }
+}
+
 /// The destination of a message, relative to a particular application.
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Destination {
