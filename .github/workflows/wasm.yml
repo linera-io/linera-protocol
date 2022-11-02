@@ -1,0 +1,29 @@
+name: Wasm
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: 1.64.0
+        target: wasm32-unknown-unknown
+    - name: Report warnings as errors
+      run: echo 'RUSTFLAGS=-D warnings' >> $GITHUB_ENV
+    - uses: Swatinem/rust-cache@v2
+    - name: Build example contract
+      run: |
+        cargo build --target wasm32-unknown-unknown -p linera-sdk --examples
