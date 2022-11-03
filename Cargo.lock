@@ -1279,7 +1279,6 @@ dependencies = [
  "aws-smithy-http",
  "aws-types",
  "bcs",
- "futures",
  "generic-array",
  "http",
  "linera-base",
