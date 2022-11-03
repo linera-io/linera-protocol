@@ -53,10 +53,13 @@ jobs:
         run: |
           kubectl wait --for condition=Complete --timeout 180s job/client
       - name: Print client test logs
+        if: always()
         run: |
           kubectl logs --tail 500 -l app=client
       - name: Clean cluster
+        if: always()
         run: |
           kubectl delete -f docker/zefchain-k8s.yml
       - name: Delete cluster
+        if: always()
         run: kind delete cluster
