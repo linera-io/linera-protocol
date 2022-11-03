@@ -523,9 +523,9 @@ where
     }
     {
         let mut view = store.load(1).await.unwrap();
-        view.queue.reset_to_default();
-        view.map.reset_to_default();
-        view.collection.reset_to_default();
+        view.queue.clear();
+        view.map.clear();
+        view.collection.clear();
         view.rollback();
         view.save().await.unwrap();
     }

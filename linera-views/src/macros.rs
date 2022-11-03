@@ -48,8 +48,8 @@ where
         Ok(())
     }
 
-    fn reset_to_default(&mut self) {
-        $( self.$field.reset_to_default(); )*
+    fn clear(&mut self) {
+        $( self.$field.clear(); )*
     }
 }
 

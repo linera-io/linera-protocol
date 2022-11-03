@@ -293,7 +293,7 @@ where
                         ));
                     })
                     .await?;
-                self.subscriptions.reset_to_default();
+                self.subscriptions.clear();
                 let application = RawExecutionResult {
                     effects,
                     subscribe: vec![],
