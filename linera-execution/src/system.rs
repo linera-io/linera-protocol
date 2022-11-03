@@ -3,12 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    ChainOwnership, Effect, EffectContext, OperationContext, QueryContext, RawExecutionResult,
+    ChainOwnership, Effect, EffectContext, ExecutionError, OperationContext, QueryContext,
+    RawExecutionResult,
 };
 use linera_base::{
     committee::Committee,
     ensure,
-    error::Error,
     messages::{
         ApplicationId, ChainDescription, ChainId, ChannelId, Destination, EffectId, Epoch, Owner,
     },
@@ -215,7 +215,7 @@ where
         &mut self,
         context: &OperationContext,
         operation: &SystemOperation,
-    ) -> Result<RawExecutionResult<SystemEffect>, Error> {
+    ) -> Result<RawExecutionResult<SystemEffect>, ExecutionError> {
         use SystemOperation::*;
         match operation {
             OpenChain {
@@ -226,18 +226,18 @@ where
                 epoch,
             } => {
                 let expected_id = ChainId::child(context.clone().into());
-                ensure!(id == &expected_id, Error::InvalidNewChainId(*id));
+                ensure!(id == &expected_id, ExecutionError::InvalidNewChainId(*id));
                 ensure!(
                     self.admin_id.get().as_ref() == Some(admin_id),
-                    Error::InvalidNewChainAdminId(*id)
+                    ExecutionError::InvalidNewChainAdminId(*id)
                 );
                 ensure!(
                     self.committees.get() == committees,
-                    Error::InvalidCommittees
+                    ExecutionError::InvalidCommittees
                 );
                 ensure!(
                     self.epoch.get().as_ref() == Some(epoch),
-                    Error::InvalidEpoch {
+                    ExecutionError::InvalidEpoch {
                         chain_id: *id,
                         epoch: *epoch
                     }
@@ -304,10 +304,13 @@ where
             Transfer {
                 amount, recipient, ..
             } => {
-                ensure!(*amount > Amount::zero(), Error::IncorrectTransferAmount);
+                ensure!(
+                    *amount > Amount::zero(),
+                    ExecutionError::IncorrectTransferAmount
+                );
                 ensure!(
                     *self.balance.get() >= (*amount).into(),
-                    Error::InsufficientFunding {
+                    ExecutionError::InsufficientFunding {
                         current_balance: (*self.balance.get()).into()
                     }
                 );
@@ -336,15 +339,15 @@ where
                 // We are the admin chain and want to create a committee.
                 ensure!(
                     *admin_id == context.chain_id,
-                    Error::InvalidCommitteeCreation
+                    ExecutionError::InvalidCommitteeCreation
                 );
                 ensure!(
                     Some(admin_id) == self.admin_id.get().as_ref(),
-                    Error::InvalidCommitteeCreation
+                    ExecutionError::InvalidCommitteeCreation
                 );
                 ensure!(
                     *epoch == self.epoch.get().expect("chain is active").try_add_one()?,
-                    Error::InvalidCommitteeCreation
+                    ExecutionError::InvalidCommitteeCreation
                 );
                 self.committees.get_mut().insert(*epoch, committee.clone());
                 self.epoch.set(Some(*epoch));
@@ -366,15 +369,15 @@ where
                 // We are the admin chain and want to remove a committee.
                 ensure!(
                     *admin_id == context.chain_id,
-                    Error::InvalidCommitteeRemoval
+                    ExecutionError::InvalidCommitteeRemoval
                 );
                 ensure!(
                     Some(admin_id) == self.admin_id.get().as_ref(),
-                    Error::InvalidCommitteeRemoval
+                    ExecutionError::InvalidCommitteeRemoval
                 );
                 ensure!(
                     self.committees.get_mut().remove(epoch).is_some(),
-                    Error::InvalidCommitteeRemoval
+                    ExecutionError::InvalidCommitteeRemoval
                 );
                 let application = RawExecutionResult {
                     effects: vec![(
@@ -394,11 +397,11 @@ where
                 // We should not subscribe to ourself in this case.
                 ensure!(
                     context.chain_id != *admin_id,
-                    Error::InvalidSubscriptionToNewCommittees(context.chain_id)
+                    ExecutionError::InvalidSubscriptionToNewCommittees(context.chain_id)
                 );
                 ensure!(
                     self.admin_id.get().as_ref() == Some(admin_id),
-                    Error::InvalidSubscriptionToNewCommittees(context.chain_id)
+                    ExecutionError::InvalidSubscriptionToNewCommittees(context.chain_id)
                 );
                 let channel_id = ChannelId {
                     chain_id: *admin_id,
@@ -406,7 +409,7 @@ where
                 };
                 ensure!(
                     self.subscriptions.get(&channel_id).await?.is_none(),
-                    Error::InvalidSubscriptionToNewCommittees(context.chain_id)
+                    ExecutionError::InvalidSubscriptionToNewCommittees(context.chain_id)
                 );
                 self.subscriptions.insert(channel_id, ());
                 let application = RawExecutionResult {
@@ -432,7 +435,7 @@ where
                 };
                 ensure!(
                     self.subscriptions.get(&channel_id).await?.is_some(),
-                    Error::InvalidUnsubscriptionToNewCommittees(context.chain_id)
+                    ExecutionError::InvalidUnsubscriptionToNewCommittees(context.chain_id)
                 );
                 self.subscriptions.remove(channel_id);
                 let application = RawExecutionResult {
@@ -460,7 +463,7 @@ where
         &mut self,
         context: &EffectContext,
         effect: &SystemEffect,
-    ) -> Result<RawExecutionResult<SystemEffect>, Error> {
+    ) -> Result<RawExecutionResult<SystemEffect>, ExecutionError> {
         use SystemEffect::*;
         match effect {
             Credit { amount, recipient } if context.chain_id == *recipient => {
@@ -480,7 +483,7 @@ where
                 // This chain was not yet subscribed at the time earlier epochs were broadcast.
                 ensure!(
                     *epoch >= self.epoch.get().expect("chain is active"),
-                    Error::InvalidCrossChainRequest
+                    ExecutionError::InvalidCrossChainRequest
                 );
                 self.epoch.set(Some(*epoch));
                 self.committees.set(committees.clone());
@@ -528,7 +531,7 @@ where
         this_chain_id: ChainId,
         effect_id: EffectId,
         effect: &Effect,
-    ) -> Result<bool, Error> {
+    ) -> Result<bool, ExecutionError> {
         // Chain creation effects are special and executed (only) in this callback.
         // For simplicity, they will still appear in the received messages.
         match &effect {
@@ -567,7 +570,7 @@ where
         &mut self,
         context: &QueryContext,
         _query: &SystemQuery,
-    ) -> Result<SystemResponse, Error> {
+    ) -> Result<SystemResponse, ExecutionError> {
         let response = SystemResponse {
             chain_id: context.chain_id,
             balance: *self.balance.get(),
@@ -583,26 +586,38 @@ impl Amount {
     }
 
     #[inline]
-    pub fn try_add(self, other: Self) -> Result<Self, Error> {
-        let val = self.0.checked_add(other.0).ok_or(Error::AmountOverflow)?;
+    pub fn try_add(self, other: Self) -> Result<Self, ExecutionError> {
+        let val = self
+            .0
+            .checked_add(other.0)
+            .ok_or(ExecutionError::AmountOverflow)?;
         Ok(Self(val))
     }
 
     #[inline]
-    pub fn try_sub(self, other: Self) -> Result<Self, Error> {
-        let val = self.0.checked_sub(other.0).ok_or(Error::AmountUnderflow)?;
+    pub fn try_sub(self, other: Self) -> Result<Self, ExecutionError> {
+        let val = self
+            .0
+            .checked_sub(other.0)
+            .ok_or(ExecutionError::AmountUnderflow)?;
         Ok(Self(val))
     }
 
     #[inline]
-    pub fn try_add_assign(&mut self, other: Self) -> Result<(), Error> {
-        self.0 = self.0.checked_add(other.0).ok_or(Error::AmountOverflow)?;
+    pub fn try_add_assign(&mut self, other: Self) -> Result<(), ExecutionError> {
+        self.0 = self
+            .0
+            .checked_add(other.0)
+            .ok_or(ExecutionError::AmountOverflow)?;
         Ok(())
     }
 
     #[inline]
-    pub fn try_sub_assign(&mut self, other: Self) -> Result<(), Error> {
-        self.0 = self.0.checked_sub(other.0).ok_or(Error::AmountUnderflow)?;
+    pub fn try_sub_assign(&mut self, other: Self) -> Result<(), ExecutionError> {
+        self.0 = self
+            .0
+            .checked_sub(other.0)
+            .ok_or(ExecutionError::AmountUnderflow)?;
         Ok(())
     }
 }
@@ -619,26 +634,38 @@ impl Balance {
     }
 
     #[inline]
-    pub fn try_add(self, other: Self) -> Result<Self, Error> {
-        let val = self.0.checked_add(other.0).ok_or(Error::BalanceOverflow)?;
+    pub fn try_add(self, other: Self) -> Result<Self, ExecutionError> {
+        let val = self
+            .0
+            .checked_add(other.0)
+            .ok_or(ExecutionError::BalanceOverflow)?;
         Ok(Self(val))
     }
 
     #[inline]
-    pub fn try_sub(self, other: Self) -> Result<Self, Error> {
-        let val = self.0.checked_sub(other.0).ok_or(Error::BalanceUnderflow)?;
+    pub fn try_sub(self, other: Self) -> Result<Self, ExecutionError> {
+        let val = self
+            .0
+            .checked_sub(other.0)
+            .ok_or(ExecutionError::BalanceUnderflow)?;
         Ok(Self(val))
     }
 
     #[inline]
-    pub fn try_add_assign(&mut self, other: Self) -> Result<(), Error> {
-        self.0 = self.0.checked_add(other.0).ok_or(Error::BalanceOverflow)?;
+    pub fn try_add_assign(&mut self, other: Self) -> Result<(), ExecutionError> {
+        self.0 = self
+            .0
+            .checked_add(other.0)
+            .ok_or(ExecutionError::BalanceOverflow)?;
         Ok(())
     }
 
     #[inline]
-    pub fn try_sub_assign(&mut self, other: Self) -> Result<(), Error> {
-        self.0 = self.0.checked_sub(other.0).ok_or(Error::BalanceUnderflow)?;
+    pub fn try_sub_assign(&mut self, other: Self) -> Result<(), ExecutionError> {
+        self.0 = self
+            .0
+            .checked_sub(other.0)
+            .ok_or(ExecutionError::BalanceUnderflow)?;
         Ok(())
     }
 }

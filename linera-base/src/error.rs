@@ -49,14 +49,6 @@ pub enum Error {
     SequenceOverflow,
     #[error("Sequence number underflow")]
     SequenceUnderflow,
-    #[error("Amount overflow")]
-    AmountOverflow,
-    #[error("Amount underflow")]
-    AmountUnderflow,
-    #[error("Chain balance overflow")]
-    BalanceOverflow,
-    #[error("Chain balance underflow")]
-    BalanceUnderflow,
 
     // Signatures and certificates
     #[error("The signature was not created by a valid entity")]
@@ -73,26 +65,6 @@ pub enum Error {
     InvalidEpoch { chain_id: ChainId, epoch: Epoch },
 
     // Validation of operations and blocks
-    #[error("Transfers must have positive amount")]
-    IncorrectTransferAmount,
-    #[error(
-        "The transferred amount must be not exceed the current chain balance: {current_balance}"
-    )]
-    InsufficientFunding { current_balance: u128 },
-    #[error("Invalid new chain id: {0}")]
-    InvalidNewChainId(ChainId),
-    #[error("Invalid admin id in new chain: {0}")]
-    InvalidNewChainAdminId(ChainId),
-    #[error("Invalid subscription to new committees: {0}")]
-    InvalidSubscriptionToNewCommittees(ChainId),
-    #[error("Invalid unsubscription to new committees: {0}")]
-    InvalidUnsubscriptionToNewCommittees(ChainId),
-    #[error("Invalid committees")]
-    InvalidCommittees,
-    #[error("Failed to create new committee")]
-    InvalidCommitteeCreation,
-    #[error("Failed to remove committee")]
-    InvalidCommitteeRemoval,
     #[error("Round number should be greater than {0:?}")]
     InsufficientRound(RoundNumber),
     #[error("A different block for height {0:?} was already locked at round number {1:?}")]
@@ -174,23 +146,6 @@ pub enum Error {
     #[error("Cryptographic error: {0}")]
     CryptoError(#[from] CryptoError),
 
-    // Execution
-    #[error("Unknown application")]
-    UnknownApplication,
-    #[error("Invalid operation for this application")]
-    InvalidOperation,
-    #[error("Invalid effect for this application")]
-    InvalidEffect,
-    #[error("Invalid query for this application")]
-    InvalidQuery,
-    #[error("Session does not exist or was already closed")]
-    InvalidSession,
-    #[error("Attempted to call an application while the state is locked")]
-    ApplicationIsInUse,
-    #[error("Attempted to call or forward an active session")]
-    SessionIsInUse,
-    #[error("Session is not accessible by this owner")]
-    InvalidSessionOwner,
-    #[error("A session is still opened at the end of a transaction")]
-    SessionWasNotClosed,
+    #[error("Execution error: {error}")]
+    ExecutionError { error: String },
 }

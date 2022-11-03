@@ -3,11 +3,10 @@
 
 #![allow(clippy::field_reassign_with_default)]
 
+extern crate core;
+
 use async_trait::async_trait;
-use linera_base::{
-    error::Error,
-    messages::{ApplicationId, BlockHeight, ChainDescription, ChainId},
-};
+use linera_base::messages::{ApplicationId, BlockHeight, ChainDescription, ChainId};
 use linera_execution::*;
 use linera_views::{
     memory::MemoryContext,
@@ -30,11 +29,12 @@ async fn test_missing_user_application() {
         height: BlockHeight(0),
         index: 0,
     };
-    assert_eq!(
-        view.execute_operation(app_id, &context, &Operation::User(vec![]))
-            .await,
-        Err(Error::UnknownApplication)
-    );
+
+    let result = view
+        .execute_operation(app_id, &context, &Operation::User(vec![]))
+        .await;
+
+    assert!(matches!(result, Err(ExecutionError::UnknownApplication)))
 }
 
 struct TestApplication;
@@ -50,7 +50,7 @@ impl UserApplication for TestApplication {
         _context: &OperationContext,
         storage: &dyn WritableStorage,
         operation: &[u8],
-    ) -> Result<RawExecutionResult<Vec<u8>>, Error> {
+    ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         // Who we are.
         let app_id = storage.application_id();
         // Modify our state.
@@ -81,7 +81,7 @@ impl UserApplication for TestApplication {
         _context: &EffectContext,
         storage: &dyn WritableStorage,
         _effect: &[u8],
-    ) -> Result<RawExecutionResult<Vec<u8>>, Error> {
+    ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         // Who we are.
         let app_id = storage.application_id();
         storage.try_read_and_lock_my_state().await?;
@@ -100,7 +100,7 @@ impl UserApplication for TestApplication {
         _storage: &dyn WritableStorage,
         _argument: &[u8],
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult, Error> {
+    ) -> Result<ApplicationCallResult, ExecutionError> {
         Ok(ApplicationCallResult {
             create_sessions: vec![NewSession {
                 kind: 0,
@@ -119,7 +119,7 @@ impl UserApplication for TestApplication {
         _session_data: &mut Vec<u8>,
         _argument: &[u8],
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult, Error> {
+    ) -> Result<SessionCallResult, ExecutionError> {
         Ok(SessionCallResult {
             inner: ApplicationCallResult::default(),
             close_session: true,
@@ -132,7 +132,7 @@ impl UserApplication for TestApplication {
         _context: &QueryContext,
         storage: &dyn QueryableStorage,
         _argument: &[u8],
-    ) -> Result<Vec<u8>, Error> {
+    ) -> Result<Vec<u8>, ExecutionError> {
         let state = storage.try_read_my_state().await?;
         Ok(state)
     }
@@ -198,9 +198,10 @@ async fn test_simple_user_operation_with_leaking_session() {
         height: BlockHeight(0),
         index: 0,
     };
-    assert_eq!(
-        view.execute_operation(app_id, &context, &Operation::User(vec![]))
-            .await,
-        Err(Error::SessionWasNotClosed)
-    );
+
+    let result = view
+        .execute_operation(app_id, &context, &Operation::User(vec![]))
+        .await;
+
+    assert!(matches!(result, Err(ExecutionError::SessionWasNotClosed)))
 }

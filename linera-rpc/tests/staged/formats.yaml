@@ -254,68 +254,32 @@ Error:
     8:
       SequenceUnderflow: UNIT
     9:
-      AmountOverflow: UNIT
-    10:
-      AmountUnderflow: UNIT
-    11:
-      BalanceOverflow: UNIT
-    12:
-      BalanceUnderflow: UNIT
-    13:
       InvalidSigner: UNIT
-    14:
+    10:
       CertificateRequiresQuorum: UNIT
-    15:
+    11:
       CertificateValidatorReuse: UNIT
-    16:
+    12:
       InvalidCertificate: UNIT
-    17:
+    13:
       InvalidChainInfoResponse: UNIT
-    18:
+    14:
       InvalidEpoch:
         STRUCT:
           - chain_id:
               TYPENAME: ChainId
           - epoch:
               TYPENAME: Epoch
-    19:
-      IncorrectTransferAmount: UNIT
-    20:
-      InsufficientFunding:
-        STRUCT:
-          - current_balance: U128
-    21:
-      InvalidNewChainId:
-        NEWTYPE:
-          TYPENAME: ChainId
-    22:
-      InvalidNewChainAdminId:
-        NEWTYPE:
-          TYPENAME: ChainId
-    23:
-      InvalidSubscriptionToNewCommittees:
-        NEWTYPE:
-          TYPENAME: ChainId
-    24:
-      InvalidUnsubscriptionToNewCommittees:
-        NEWTYPE:
-          TYPENAME: ChainId
-    25:
-      InvalidCommittees: UNIT
-    26:
-      InvalidCommitteeCreation: UNIT
-    27:
-      InvalidCommitteeRemoval: UNIT
-    28:
+    15:
       InsufficientRound:
         NEWTYPE:
           TYPENAME: RoundNumber
-    29:
+    16:
       HasLockedBlock:
         TUPLE:
           - TYPENAME: BlockHeight
           - TYPENAME: RoundNumber
-    30:
+    17:
       MissingCrossChainUpdate:
         STRUCT:
           - chain_id:
@@ -326,7 +290,7 @@ Error:
               TYPENAME: Origin
           - height:
               TYPENAME: BlockHeight
-    31:
+    18:
       InvalidMessageContent:
         STRUCT:
           - chain_id:
@@ -338,7 +302,7 @@ Error:
           - height:
               TYPENAME: BlockHeight
           - index: U64
-    32:
+    19:
       InvalidMessage:
         STRUCT:
           - chain_id:
@@ -353,7 +317,7 @@ Error:
           - expected_height:
               TYPENAME: BlockHeight
           - expected_index: U64
-    33:
+    20:
       InvalidMessageOrder:
         STRUCT:
           - chain_id:
@@ -365,54 +329,40 @@ Error:
           - height:
               TYPENAME: BlockHeight
           - index: U64
-    34:
+    21:
       InvalidCrossChainRequest: UNIT
-    35:
+    22:
       InvalidBlockProposal: UNIT
-    36:
+    23:
       InvalidBlockChaining: UNIT
-    37:
+    24:
       IncorrectStateHash: UNIT
-    38:
+    25:
       IncorrectEffects: UNIT
-    39:
+    26:
       InvalidDecoding: UNIT
-    40:
+    27:
       UnexpectedMessage: UNIT
-    41:
+    28:
       ClientIoError:
         STRUCT:
           - error: STR
-    42:
+    29:
       CannotResolveValidatorAddress:
         STRUCT:
           - address: STR
-    43:
+    30:
       ViewError:
         STRUCT:
           - error: STR
-    44:
+    31:
       CryptoError:
         NEWTYPE:
           TYPENAME: CryptoError
-    45:
-      UnknownApplication: UNIT
-    46:
-      InvalidOperation: UNIT
-    47:
-      InvalidEffect: UNIT
-    48:
-      InvalidQuery: UNIT
-    49:
-      InvalidSession: UNIT
-    50:
-      ApplicationIsInUse: UNIT
-    51:
-      SessionIsInUse: UNIT
-    52:
-      InvalidSessionOwner: UNIT
-    53:
-      SessionWasNotClosed: UNIT
+    32:
+      ExecutionError:
+        STRUCT:
+          - error: STR
 HashValue:
   NEWTYPESTRUCT:
     TUPLEARRAY:
