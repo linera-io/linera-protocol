@@ -1,4 +1,4 @@
-FROM debian:11 as base
+FROM ubuntu:22.04 as base
 
 RUN apt-get update && apt-get install -y curl
 
@@ -8,7 +8,7 @@ COPY fetch-config-file.sh /opt/zefchain/
 
 WORKDIR /opt/zefchain
 
-FROM debian:11 as setup
+FROM ubuntu:22.04 as setup
 
 RUN apt-get update && apt-get install -y mini-httpd
 
