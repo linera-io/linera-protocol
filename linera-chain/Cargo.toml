@@ -10,7 +10,6 @@ test = ["tokio/macros"]
 [dependencies]
 async-trait = "0.1.52"
 bcs = "0.1.3"
-futures = "0.3.17"
 linera-base = { path = "../linera-base" }
 linera-execution = { path = "../linera-execution" }
 linera-views = { path = "../linera-views" }
