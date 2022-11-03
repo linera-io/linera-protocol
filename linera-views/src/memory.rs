@@ -123,17 +123,6 @@ where
         Ok(keys)
     }
 
-    async fn run_with_batch<F>(&self, builder: F) -> Result<(), ViewError>
-    where
-        F: FnOnce(&mut Self::Batch) -> futures::future::BoxFuture<Result<(), ViewError>>
-            + Send
-            + Sync,
-    {
-        let mut batch = Batch(Vec::new());
-        builder(&mut batch).await?;
-        self.write_batch(batch).await
-    }
-
     fn create_batch(&self) -> Self::Batch {
         Batch(Vec::new())
     }

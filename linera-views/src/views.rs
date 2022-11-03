@@ -69,13 +69,6 @@ pub trait Context {
         key_prefix: &[u8],
     ) -> Result<Vec<Key>, Self::Error>;
 
-    /// Provide a reference to a new batch to the builder then execute the batch.
-    async fn run_with_batch<F>(&self, builder: F) -> Result<(), ViewError>
-    where
-        F: FnOnce(&mut Self::Batch) -> futures::future::BoxFuture<Result<(), ViewError>>
-            + Send
-            + Sync;
-
     /// Create a new [`Self::Batch`] to collect write operations.
     fn create_batch(&self) -> Self::Batch;
 
@@ -110,7 +103,7 @@ pub trait View<C: Context>: Sized {
     /// Instead of persisting changes, clear all the data that belong to this view and its
     /// subviews. Crash-resistant storage implementations are expected to accumulate the
     /// desired changes into the `batch` variable first.
-    async fn delete(self, batch: &mut C::Batch) -> Result<(), ViewError>;
+    async fn delete(&mut self, batch: &mut C::Batch) -> Result<(), ViewError>;
 }
 
 #[derive(Error, Debug)]
@@ -208,7 +201,7 @@ where
         self.view.flush(batch).await
     }
 
-    async fn delete(self, batch: &mut C::Batch) -> Result<(), ViewError> {
+    async fn delete(&mut self, batch: &mut C::Batch) -> Result<(), ViewError> {
         self.view.delete(batch).await
     }
 
@@ -292,7 +285,7 @@ where
         Ok(())
     }
 
-    async fn delete(mut self, batch: &mut C::Batch) -> Result<(), ViewError> {
+    async fn delete(&mut self, batch: &mut C::Batch) -> Result<(), ViewError> {
         self.context.delete(batch)?;
         Ok(())
     }
@@ -474,7 +467,7 @@ where
         Ok(())
     }
 
-    async fn delete(mut self, batch: &mut C::Batch) -> Result<(), ViewError> {
+    async fn delete(&mut self, batch: &mut C::Batch) -> Result<(), ViewError> {
         self.context.delete(self.stored_count, batch)?;
         Ok(())
     }
@@ -690,7 +683,7 @@ where
         Ok(())
     }
 
-    async fn delete(mut self, batch: &mut C::Batch) -> Result<(), ViewError> {
+    async fn delete(&mut self, batch: &mut C::Batch) -> Result<(), ViewError> {
         self.context.delete(batch).await?;
         Ok(())
     }
@@ -957,8 +950,8 @@ where
         Ok(())
     }
 
-    async fn delete(mut self, batch: &mut C::Batch) -> Result<(), ViewError> {
-        self.context.delete(self.stored_indices, batch)?;
+    async fn delete(&mut self, batch: &mut C::Batch) -> Result<(), ViewError> {
+        self.context.delete(self.stored_indices.clone(), batch)?;
         Ok(())
     }
 
@@ -1217,7 +1210,7 @@ where
                     None => {
                         let context = self.context.clone_with_scope(&index);
                         self.context.remove_index(batch, index)?;
-                        let view = W::load(context).await?;
+                        let mut view = W::load(context).await?;
                         view.delete(batch).await?;
                     }
                 }
@@ -1226,7 +1219,7 @@ where
         Ok(())
     }
 
-    async fn delete(mut self, batch: &mut C::Batch) -> Result<(), ViewError> {
+    async fn delete(&mut self, batch: &mut C::Batch) -> Result<(), ViewError> {
         self.delete_entries(batch).await
     }
 
@@ -1249,7 +1242,7 @@ where
         for index in &stored_indices {
             let context = self.context.clone_with_scope(index);
             self.context.remove_index(batch, index.clone())?;
-            let view = W::load(context).await?;
+            let mut view = W::load(context).await?;
             view.delete(batch).await?;
         }
         Ok(())
@@ -1405,7 +1398,7 @@ where
                     None => {
                         let context = self.context.clone_with_scope(&index);
                         self.context.remove_index(batch, index)?;
-                        let view = W::load(context).await?;
+                        let mut view = W::load(context).await?;
                         view.delete(batch).await?;
                     }
                 }
@@ -1414,7 +1407,7 @@ where
         Ok(())
     }
 
-    async fn delete(mut self, batch: &mut C::Batch) -> Result<(), ViewError> {
+    async fn delete(&mut self, batch: &mut C::Batch) -> Result<(), ViewError> {
         self.delete_entries(batch).await
     }
 
@@ -1437,7 +1430,7 @@ where
         for index in &stored_indices {
             let context = self.context.clone_with_scope(index);
             self.context.remove_index(batch, index.clone())?;
-            let view = W::load(context).await?;
+            let mut view = W::load(context).await?;
             view.delete(batch).await?;
         }
         Ok(())
