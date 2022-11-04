@@ -4,6 +4,7 @@
 use crate::{
     hash::HashingContext,
     views::{Context, ViewError},
+    common::{WriteOperation, Batch},
 };
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
@@ -139,13 +140,6 @@ impl<E> RocksdbContext<E> {
     }
 }
 
-pub enum WriteOperation {
-    Delete { key: Vec<u8> },
-    Put { key: Vec<u8>, value: Vec<u8> },
-}
-
-pub struct Batch(Vec<WriteOperation>);
-
 #[async_trait]
 impl<E> Context for RocksdbContext<E>
 where
@@ -180,12 +174,12 @@ where
         value: &impl Serialize,
     ) -> Result<(), RocksdbContextError> {
         let bytes = bcs::to_bytes(value)?;
-        batch.0.push(WriteOperation::Put { key, value: bytes });
+        batch.operations.push(WriteOperation::Put { key, value: bytes });
         Ok(())
     }
 
     fn remove_item_batch(&self, batch: &mut Batch, key: Vec<u8>) {
-        batch.0.push(WriteOperation::Delete { key });
+        batch.operations.push(WriteOperation::Delete { key });
     }
 
     async fn read_key<V: DeserializeOwned>(
@@ -215,20 +209,20 @@ where
             + Send
             + Sync,
     {
-        let mut batch = Batch(Vec::new());
+        let mut batch = Batch::default();
         builder(&mut batch).await?;
         self.write_batch(batch).await
     }
 
     fn create_batch(&self) -> Self::Batch {
-        Batch(Vec::new())
+        Batch::default()
     }
 
     async fn write_batch(&self, batch: Self::Batch) -> Result<(), ViewError> {
         let db = self.db.clone();
         tokio::task::spawn_blocking(move || -> Result<(), RocksdbContextError> {
             let mut inner_batch = rocksdb::WriteBatchWithTransaction::default();
-            for e_ent in batch.0 {
+            for e_ent in batch.operations {
                 match e_ent {
                     WriteOperation::Delete { key } => inner_batch.delete(&key),
                     WriteOperation::Put { key, value } => inner_batch.put(&key, value),

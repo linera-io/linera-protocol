@@ -5,6 +5,7 @@ use crate::{
     hash::HashingContext,
     localstack,
     views::{Context, ViewError},
+    common::{WriteOperation, Batch, simplify_batch},
 };
 use async_trait::async_trait;
 use aws_sdk_dynamodb::{
@@ -38,34 +39,6 @@ const KEY_ATTRIBUTE: &str = "item_key";
 
 /// The attribute name of the table value blob.
 const VALUE_ATTRIBUTE: &str = "item_value";
-
-pub enum WriteOperation {
-    Delete { key: Vec<u8> },
-    Put { key: Vec<u8>, value: Vec<u8> },
-}
-
-pub struct Batch(Vec<WriteOperation>);
-
-/// A key may appear multiple times in the batch
-/// The construction of BatchWriteItem and TransactWriteItem does
-/// not allow for this to happen.
-fn simplify_batch(batch: Batch) -> Batch {
-    let mut map = HashMap::new();
-    for op in batch.0 {
-        match op {
-            WriteOperation::Delete { key } => map.insert(key, None),
-            WriteOperation::Put { key, value } => map.insert(key, Some(value)),
-        };
-    }
-    let mut operations = Vec::with_capacity(map.len());
-    for (key, val) in map {
-        match val {
-            Some(value) => operations.push(WriteOperation::Put { key, value }),
-            None => operations.push(WriteOperation::Delete { key }),
-        }
-    }
-    Batch(operations)
-}
 
 /// A implementation of [`Context`] based on DynamoDB.
 #[derive(Debug, Clone)]
@@ -319,7 +292,7 @@ where
     /// We put submit the transaction in blocks of at most 25 so as to decrease the
     /// number of needed transactions.
     async fn process_batch(&self, batch: Batch) -> Result<(), DynamoDbContextError> {
-        for batch_chunk in simplify_batch(batch).0.chunks(25) {
+        for batch_chunk in simplify_batch(batch).operations.chunks(25) {
             let requests = batch_chunk
                 .iter()
                 .map(|operation| match operation {
@@ -382,12 +355,12 @@ where
         value: &impl Serialize,
     ) -> Result<(), DynamoDbContextError> {
         let bytes = bcs::to_bytes(value)?;
-        batch.0.push(WriteOperation::Put { key, value: bytes });
+        batch.operations.push(WriteOperation::Put { key, value: bytes });
         Ok(())
     }
 
     fn remove_item_batch(&self, batch: &mut Batch, key: Vec<u8>) {
-        batch.0.push(WriteOperation::Delete { key });
+        batch.operations.push(WriteOperation::Delete { key });
     }
 
     /// Retrieve a generic `Item` from the table using the provided `key` prefixed by the current
@@ -489,13 +462,13 @@ where
             + Send
             + Sync,
     {
-        let mut batch = Batch(Vec::new());
+        let mut batch = Batch::default();
         builder(&mut batch).await?;
         self.write_batch(batch).await
     }
 
     fn create_batch(&self) -> Self::Batch {
-        Batch(Vec::new())
+        Batch::default()
     }
 
     async fn write_batch(&self, batch: Self::Batch) -> Result<(), ViewError> {
