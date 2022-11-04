@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
     cmp::Eq,
     collections::{btree_map, BTreeMap, VecDeque},
@@ -192,6 +192,7 @@ where
     W: View<C> + Send,
 {
     fn context(&self) -> &C {
+        // The base_key of this context is wrong. We should only expose `extra`.
         self.view.context()
     }
 
@@ -1542,5 +1543,149 @@ where
             }
         }
         Ok(())
+    }
+}
+
+/// A view that supports accessing a collection of data without schema.
+#[derive(Debug)]
+pub struct DynamicView<C> {
+    context: C,
+    inner: InnerDynamicView<C>,
+}
+
+#[derive(Debug)]
+pub enum InnerDynamicView<C> {
+    Empty,
+    Register(RegisterView<C, Vec<u8>>),
+    // ...
+    Record(Vec<DynamicView<C>>),
+    Collection(CollectionView<C, Vec<u8>, DynamicView<C>>),
+}
+
+#[derive(Debug, Serialize, Deserialize, Default, Clone, Copy)]
+pub enum DynamicViewSchema {
+    #[default]
+    Empty,
+    Register,
+    // ...
+    Record(usize),
+    Collection,
+}
+
+pub trait DynamicOperations: ScopedOperations + RegisterOperations<DynamicViewSchema> {}
+
+impl<C> DynamicView<C> {
+    pub fn inner(&mut self) -> &mut InnerDynamicView<C> {
+        &mut self.inner
+    }
+
+    fn schema(&self) -> DynamicViewSchema {
+        match &self.inner {
+            InnerDynamicView::Empty => DynamicViewSchema::Empty,
+            InnerDynamicView::Register(_) => DynamicViewSchema::Register,
+            InnerDynamicView::Record(views) => DynamicViewSchema::Record(views.len()),
+            InnerDynamicView::Collection(_) => DynamicViewSchema::Collection,
+        }
+    }
+}
+
+#[async_trait]
+impl<C> View<C> for DynamicView<C>
+where
+    C: DynamicOperations + Send,
+    RegisterView<C, Vec<u8>>: View<C>,
+    CollectionView<C, Vec<u8>, DynamicView<C>>: View<C>,
+    ViewError: From<C::Error>,
+{
+    fn context(&self) -> &C {
+        &self.context
+    }
+
+    async fn load(mut context: C) -> Result<Self, ViewError> {
+        let schema = context.get().await?;
+        let inner = match schema {
+            DynamicViewSchema::Empty => InnerDynamicView::Empty,
+            DynamicViewSchema::Register => {
+                let scoped = context.clone_with_scope(0);
+                let view = RegisterView::load(scoped).await?;
+                InnerDynamicView::Register(view)
+            }
+            DynamicViewSchema::Record(size) => {
+                let mut views = Vec::new();
+                for i in 0..(size as u64) {
+                    let scoped = context.clone_with_scope(i);
+                    let view = DynamicView::load(scoped).await?;
+                    views.push(view);
+                }
+                InnerDynamicView::Record(views)
+            }
+            DynamicViewSchema::Collection => {
+                let scoped = context.clone_with_scope(0);
+                let view = CollectionView::load(scoped).await?;
+                InnerDynamicView::Collection(view)
+            }
+        };
+        Ok(Self { context, inner })
+    }
+
+    fn rollback(&mut self) {
+        match &mut self.inner {
+            InnerDynamicView::Empty => {}
+            InnerDynamicView::Register(view) => view.rollback(),
+            InnerDynamicView::Record(views) => {
+                for view in views {
+                    view.rollback();
+                }
+            }
+            InnerDynamicView::Collection(view) => view.rollback(),
+        }
+    }
+
+    async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), ViewError> {
+        let schema = self.schema();
+        match &mut self.inner {
+            InnerDynamicView::Empty => (),
+            InnerDynamicView::Register(view) => {
+                view.flush(batch).await?;
+            }
+            InnerDynamicView::Record(views) => {
+                for view in views {
+                    view.flush(batch).await?;
+                }
+            }
+            InnerDynamicView::Collection(view) => {
+                view.flush(batch).await?;
+            }
+        }
+        self.context.set(batch, &schema)?;
+        Ok(())
+    }
+
+    async fn delete(mut self, batch: &mut C::Batch) -> Result<(), ViewError> {
+        match self.inner {
+            InnerDynamicView::Empty => (),
+            InnerDynamicView::Register(view) => view.delete(batch).await?,
+            InnerDynamicView::Record(views) => {
+                for view in views {
+                    view.delete(batch).await?;
+                }
+            }
+            InnerDynamicView::Collection(view) => view.delete(batch).await?,
+        }
+        self.context.delete(batch)?;
+        Ok(())
+    }
+
+    fn reset_to_default(&mut self) {
+        match &mut self.inner {
+            InnerDynamicView::Empty => {}
+            InnerDynamicView::Register(view) => view.reset_to_default(),
+            InnerDynamicView::Record(views) => {
+                for view in views {
+                    view.reset_to_default();
+                }
+            }
+            InnerDynamicView::Collection(view) => view.reset_to_default(),
+        }
     }
 }
