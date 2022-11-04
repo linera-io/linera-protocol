@@ -95,17 +95,17 @@ pub trait View<C: Context>: Sized {
     /// Create a view or a subview.
     async fn load(context: C) -> Result<Self, ViewError>;
 
-    /// Discard all pending changes. After that `commit` should have no effect to storage.
+    /// Discard all pending changes. After that `flush` should have no effect to storage.
     fn rollback(&mut self);
 
     /// Clear the view. That can be seen as resetting to default. In the case of a RegisterView
-    /// this means setting the value to T::default(). For other views, it means setting them to
-    /// empty
+    /// this means setting the value to T::default(). For LogView, QueueView, this leaves
+    /// the range data to be left in the database.
     fn clear(&mut self);
 
     /// Persist changes to storage. This leaves the view still usable and is essentially neutral to the
     /// program running. Crash-resistant storage implementations are expected to accumulate the desired
-    /// changes in the `batch` variable first. If the view is dropped without calling `commit`, staged
+    /// changes in the `batch` variable first. If the view is dropped without calling `flush`, staged
     /// changes are simply lost.
     async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), ViewError>;
 
@@ -126,7 +126,7 @@ pub enum ViewError {
     Serialization(#[from] bcs::Error),
 
     #[error(
-        "trying to commit or delete a collection view while some entries are still being accessed"
+        "trying to flush or delete a collection view while some entries are still being accessed"
     )]
     CannotAcquireCollectionEntry,
 
@@ -1288,7 +1288,7 @@ where
         }
     }
 
-    /// Mark the entry so that it is removed in the next commit.
+    /// Mark the entry so that it is removed in the next flush
     pub fn remove_entry(&mut self, index: I) {
         if self.was_reset_to_default {
             self.updates.remove(&index);
@@ -1297,7 +1297,7 @@ where
         }
     }
 
-    /// Mark the entry so that it is removed in the next commit.
+    /// Mark the entry so that it is removed in the next flush
     pub async fn reset_entry_to_default(&mut self, index: I) -> Result<(), ViewError> {
         let view = self.load_entry(index).await?;
         view.clear();
@@ -1479,7 +1479,7 @@ where
         }
     }
 
-    /// Mark the entry so that it is removed in the next commit.
+    /// Mark the entry so that it is removed in the next flush
     pub fn remove_entry(&mut self, index: I) {
         if self.was_reset_to_default {
             self.updates.remove(&index);
@@ -1488,7 +1488,7 @@ where
         }
     }
 
-    /// Mark the entry so that it is removed in the next commit.
+    /// Mark the entry so that it is removed in the next flush
     pub async fn try_reset_entry_to_default(&mut self, index: I) -> Result<(), ViewError> {
         let mut view = self.try_load_entry(index).await?;
         view.clear();
