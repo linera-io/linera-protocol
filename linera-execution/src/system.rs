@@ -225,7 +225,7 @@ where
                 admin_id,
                 epoch,
             } => {
-                let expected_id = ChainId::child(context.clone().into());
+                let expected_id = ChainId::child((*context).into());
                 ensure!(id == &expected_id, ExecutionError::InvalidNewChainId(*id));
                 ensure!(
                     self.admin_id.get().as_ref() == Some(admin_id),

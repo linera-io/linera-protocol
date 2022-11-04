@@ -6,9 +6,8 @@ use super::{
     async_boundary::{ContextForwarder, HostFuture},
     Runtime, WasmApplication, WritableRuntimeContext,
 };
-use crate::WritableStorage;
+use crate::{ExecutionError, WritableStorage};
 use std::{marker::PhantomData, mem, sync::Arc, task::Poll};
-use thiserror::Error;
 use tokio::sync::Mutex;
 use wasmer::{imports, Module, RuntimeError, Store};
 
@@ -27,7 +26,7 @@ impl WasmApplication {
     pub fn prepare_runtime<'storage>(
         &self,
         storage: &'storage dyn WritableStorage,
-    ) -> Result<WritableRuntimeContext<Wasmer<'storage>>, PrepareRuntimeError> {
+    ) -> Result<WritableRuntimeContext<Wasmer<'storage>>, ExecutionError> {
         let mut store = Store::default();
         let module = Module::from_file(&store, &self.bytecode_file)
             // TODO: Remove `map_err` if Wasmer issue #3267 is fixed
@@ -45,21 +44,8 @@ impl WasmApplication {
             context_forwarder,
             application,
             store,
-            storage_guard,
+            _storage_guard: storage_guard,
         })
-    }
-}
-
-#[derive(Debug, Error)]
-pub enum PrepareRuntimeError {
-    #[error("Failed to instantiate application Wasm module")]
-    Instantiate(#[from] wit_bindgen_host_wasmer_rust::anyhow::Error),
-}
-
-impl From<PrepareRuntimeError> for linera_base::error::Error {
-    fn from(error: PrepareRuntimeError) -> Self {
-        // TODO
-        linera_base::error::Error::UnknownApplication
     }
 }
 
@@ -182,8 +168,8 @@ impl SystemApi {
 }
 
 impl system::System for SystemApi {
-    type Load = HostFuture<'static, Result<Vec<u8>, linera_base::error::Error>>;
-    type LoadAndLock = HostFuture<'static, Result<Vec<u8>, linera_base::error::Error>>;
+    type Load = HostFuture<'static, Result<Vec<u8>, ExecutionError>>;
+    type LoadAndLock = HostFuture<'static, Result<Vec<u8>, ExecutionError>>;
 
     fn load_new(&mut self) -> Self::Load {
         HostFuture::new(self.storage().try_read_my_state())
@@ -210,9 +196,9 @@ impl system::System for SystemApi {
     }
 
     fn store_and_unlock(&mut self, state: &[u8]) -> bool {
-        self.storage().save_and_unlock_my_state(state.to_owned());
-        // TODO
-        true
+        self.storage()
+            .save_and_unlock_my_state(state.to_owned())
+            .is_ok()
     }
 }
 

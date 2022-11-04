@@ -3,14 +3,11 @@
 
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 
-use linera_base::{
-    error::Error,
-    messages::{ApplicationId, BlockHeight, ChainDescription, ChainId},
-};
+use linera_base::messages::{ApplicationId, BlockHeight, ChainDescription, ChainId};
 use linera_execution::{
-    ExecutionResult, ExecutionRuntimeContext, ExecutionStateView, Operation, OperationContext,
-    Query, QueryContext, RawExecutionResult, Response, SystemExecutionState,
-    TestExecutionRuntimeContext, WasmApplication,
+    ExecutionResult, ExecutionRuntimeContext, ExecutionStateView, OperationContext, Query,
+    QueryContext, RawExecutionResult, Response, SystemExecutionState, TestExecutionRuntimeContext,
+    WasmApplication,
 };
 use linera_views::{
     memory::MemoryContext,
@@ -40,11 +37,7 @@ async fn test_wasm_application() {
     };
     let operation = bcs::to_bytes(&2_u128).expect("Serialization of u128 failed");
     let result = view
-        .execute_operation(
-            app_id,
-            &context,
-            &Operation::User(vec![2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-        )
+        .execute_operation(app_id, &context, &operation.into())
         .await
         .unwrap();
     assert_eq!(
@@ -60,6 +53,6 @@ async fn test_wasm_application() {
         view.query_application(app_id, &context, &Query::User(vec![]))
             .await
             .unwrap(),
-        Response::User(vec![2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+        Response::User(expected_value)
     );
 }

@@ -1,7 +1,6 @@
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 
 mod async_boundary;
-mod common;
 #[cfg(feature = "wasmer")]
 #[path = "wasmer.rs"]
 mod runtime;
@@ -18,14 +17,13 @@ use self::{
 };
 use crate::{
     system::Balance, ApplicationCallResult, ApplicationStateNotLocked, CallResult, CalleeContext,
-    EffectContext, EffectId, NewSession, OperationContext, QueryContext, QueryableStorage,
-    RawExecutionResult, ReadableStorage, SessionCallResult, SessionId, UserApplication,
-    WritableStorage,
+    EffectContext, EffectId, ExecutionError, NewSession, OperationContext, QueryContext,
+    QueryableStorage, RawExecutionResult, ReadableStorage, SessionCallResult, SessionId,
+    UserApplication, WritableStorage,
 };
 use async_trait::async_trait;
 use linera_base::{
     crypto::HashValue,
-    error::Error,
     messages::{ApplicationId, ChainId, Destination},
 };
 use std::{path::PathBuf, task::Poll};
@@ -49,7 +47,7 @@ impl UserApplication for WasmApplication {
         context: &OperationContext,
         storage: &dyn WritableStorage,
         operation: &[u8],
-    ) -> Result<RawExecutionResult<Vec<u8>>, Error> {
+    ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         self.prepare_runtime(storage)?
             .execute_operation(context, operation)
             .await
@@ -60,7 +58,7 @@ impl UserApplication for WasmApplication {
         context: &EffectContext,
         storage: &dyn WritableStorage,
         effect: &[u8],
-    ) -> Result<RawExecutionResult<Vec<u8>>, Error> {
+    ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         self.prepare_runtime(storage)?
             .execute_effect(context, effect)
             .await
@@ -72,7 +70,7 @@ impl UserApplication for WasmApplication {
         storage: &dyn WritableStorage,
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult, Error> {
+    ) -> Result<ApplicationCallResult, ExecutionError> {
         self.prepare_runtime(storage)?
             .call_application(context, argument, forwarded_sessions)
             .await
@@ -86,7 +84,7 @@ impl UserApplication for WasmApplication {
         session_data: &mut Vec<u8>,
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult, Error> {
+    ) -> Result<SessionCallResult, ExecutionError> {
         self.prepare_runtime(storage)?
             .call_session(
                 context,
@@ -103,7 +101,7 @@ impl UserApplication for WasmApplication {
         context: &QueryContext,
         storage: &dyn QueryableStorage,
         argument: &[u8],
-    ) -> Result<Vec<u8>, Error> {
+    ) -> Result<Vec<u8>, ExecutionError> {
         let wrapped_storage = WrappedQueryableStorage(storage);
         let storage_reference = &wrapped_storage;
         let result = self
@@ -118,7 +116,7 @@ pub trait Runtime: Sized {
     type Application: Application<Self>;
     type Store;
     type StorageGuard;
-    type Error;
+    type Error: Into<ExecutionError>;
 }
 
 pub trait Application<R: Runtime> {
@@ -198,7 +196,7 @@ where
     context_forwarder: ContextForwarder,
     application: R::Application,
     store: R::Store,
-    storage_guard: R::StorageGuard,
+    _storage_guard: R::StorageGuard,
 }
 
 impl<R> WritableRuntimeContext<R>
@@ -381,6 +379,7 @@ impl From<HashValue> for application::HashValue {
 impl<'storage, R> GuestFutureInterface<R> for ExecuteOperation
 where
     R: Runtime,
+    ExecutionError: From<R::Error>,
 {
     type Output = RawExecutionResult<Vec<u8>>;
 
@@ -388,14 +387,13 @@ where
         &self,
         application: &R::Application,
         store: &mut R::Store,
-    ) -> Poll<Result<Self::Output, linera_base::error::Error>> {
-        match application.execute_operation_poll(store, self) {
-            Ok(PollExecutionResult::Ready(Ok(result))) => Poll::Ready(Ok(result.into())),
-            Ok(PollExecutionResult::Ready(Err(_message))) => {
-                Poll::Ready(Err(linera_base::error::Error::UnknownApplication))
+    ) -> Poll<Result<Self::Output, ExecutionError>> {
+        match application.execute_operation_poll(store, self)? {
+            PollExecutionResult::Ready(Ok(result)) => Poll::Ready(Ok(result.into())),
+            PollExecutionResult::Ready(Err(message)) => {
+                Poll::Ready(Err(ExecutionError::UserApplication(message)))
             }
-            Ok(PollExecutionResult::Pending) => Poll::Pending,
-            Err(_) => Poll::Ready(Err(linera_base::error::Error::UnknownApplication)),
+            PollExecutionResult::Pending => Poll::Pending,
         }
     }
 }
@@ -403,6 +401,7 @@ where
 impl<'storage, R> GuestFutureInterface<R> for ExecuteEffect
 where
     R: Runtime,
+    ExecutionError: From<R::Error>,
 {
     type Output = RawExecutionResult<Vec<u8>>;
 
@@ -410,14 +409,13 @@ where
         &self,
         application: &R::Application,
         store: &mut R::Store,
-    ) -> Poll<Result<Self::Output, linera_base::error::Error>> {
-        match application.execute_effect_poll(store, self) {
-            Ok(PollExecutionResult::Ready(Ok(result))) => Poll::Ready(Ok(result.into())),
-            Ok(PollExecutionResult::Ready(Err(_message))) => {
-                Poll::Ready(Err(linera_base::error::Error::UnknownApplication))
+    ) -> Poll<Result<Self::Output, ExecutionError>> {
+        match application.execute_effect_poll(store, self)? {
+            PollExecutionResult::Ready(Ok(result)) => Poll::Ready(Ok(result.into())),
+            PollExecutionResult::Ready(Err(message)) => {
+                Poll::Ready(Err(ExecutionError::UserApplication(message)))
             }
-            Ok(PollExecutionResult::Pending) => Poll::Pending,
-            Err(_) => Poll::Ready(Err(linera_base::error::Error::UnknownApplication)),
+            PollExecutionResult::Pending => Poll::Pending,
         }
     }
 }
@@ -425,6 +423,7 @@ where
 impl<'storage, R> GuestFutureInterface<R> for CallApplication
 where
     R: Runtime,
+    ExecutionError: From<R::Error>,
 {
     type Output = ApplicationCallResult;
 
@@ -432,14 +431,13 @@ where
         &self,
         application: &R::Application,
         store: &mut R::Store,
-    ) -> Poll<Result<Self::Output, linera_base::error::Error>> {
-        match application.call_application_poll(store, self) {
-            Ok(PollCallApplication::Ready(Ok(result))) => Poll::Ready(Ok(result.into())),
-            Ok(PollCallApplication::Ready(Err(_message))) => {
-                Poll::Ready(Err(linera_base::error::Error::UnknownApplication))
+    ) -> Poll<Result<Self::Output, ExecutionError>> {
+        match application.call_application_poll(store, self)? {
+            PollCallApplication::Ready(Ok(result)) => Poll::Ready(Ok(result.into())),
+            PollCallApplication::Ready(Err(message)) => {
+                Poll::Ready(Err(ExecutionError::UserApplication(message)))
             }
-            Ok(PollCallApplication::Pending) => Poll::Pending,
-            Err(_) => Poll::Ready(Err(linera_base::error::Error::UnknownApplication)),
+            PollCallApplication::Pending => Poll::Pending,
         }
     }
 }
@@ -447,6 +445,7 @@ where
 impl<'storage, R> GuestFutureInterface<R> for CallSession
 where
     R: Runtime,
+    ExecutionError: From<R::Error>,
 {
     type Output = SessionCallResult;
 
@@ -454,14 +453,13 @@ where
         &self,
         application: &R::Application,
         store: &mut R::Store,
-    ) -> Poll<Result<Self::Output, linera_base::error::Error>> {
-        match application.call_session_poll(store, self) {
-            Ok(PollCallSession::Ready(Ok(result))) => Poll::Ready(Ok(result.into())),
-            Ok(PollCallSession::Ready(Err(_message))) => {
-                Poll::Ready(Err(linera_base::error::Error::UnknownApplication))
+    ) -> Poll<Result<Self::Output, ExecutionError>> {
+        match application.call_session_poll(store, self)? {
+            PollCallSession::Ready(Ok(result)) => Poll::Ready(Ok(result.into())),
+            PollCallSession::Ready(Err(message)) => {
+                Poll::Ready(Err(ExecutionError::UserApplication(message)))
             }
-            Ok(PollCallSession::Pending) => Poll::Pending,
-            Err(_) => Poll::Ready(Err(linera_base::error::Error::UnknownApplication)),
+            PollCallSession::Pending => Poll::Pending,
         }
     }
 }
@@ -469,6 +467,7 @@ where
 impl<'storage, R> GuestFutureInterface<R> for QueryApplication
 where
     R: Runtime,
+    ExecutionError: From<R::Error>,
 {
     type Output = Vec<u8>;
 
@@ -476,14 +475,13 @@ where
         &self,
         application: &R::Application,
         store: &mut R::Store,
-    ) -> Poll<Result<Self::Output, linera_base::error::Error>> {
-        match application.query_application_poll(store, self) {
-            Ok(PollQuery::Ready(Ok(result))) => Poll::Ready(Ok(result.into())),
-            Ok(PollQuery::Ready(Err(message))) => {
-                Poll::Ready(Err(linera_base::error::Error::UnknownApplication))
+    ) -> Poll<Result<Self::Output, ExecutionError>> {
+        match application.query_application_poll(store, self)? {
+            PollQuery::Ready(Ok(result)) => Poll::Ready(Ok(result.into())),
+            PollQuery::Ready(Err(message)) => {
+                Poll::Ready(Err(ExecutionError::UserApplication(message)))
             }
-            Ok(PollQuery::Pending) => Poll::Pending,
-            Err(error) => Poll::Ready(Err(linera_base::error::Error::UnknownApplication)),
+            PollQuery::Pending => Poll::Pending,
         }
     }
 }
@@ -602,15 +600,15 @@ impl ReadableStorage for WrappedQueryableStorage<'_> {
         self.0.read_system_balance()
     }
 
-    async fn try_read_my_state(&self) -> Result<Vec<u8>, Error> {
+    async fn try_read_my_state(&self) -> Result<Vec<u8>, ExecutionError> {
         self.0.try_read_my_state().await
     }
 }
 
 #[async_trait]
 impl WritableStorage for WrappedQueryableStorage<'_> {
-    async fn try_read_and_lock_my_state(&self) -> Result<Vec<u8>, Error> {
-        Err(Error::UnknownApplication)
+    async fn try_read_and_lock_my_state(&self) -> Result<Vec<u8>, ExecutionError> {
+        Err(ExecutionError::LockStateFromQuery)
     }
 
     fn save_and_unlock_my_state(&self, _state: Vec<u8>) -> Result<(), ApplicationStateNotLocked> {
@@ -625,8 +623,8 @@ impl WritableStorage for WrappedQueryableStorage<'_> {
         _callee_id: ApplicationId,
         _argument: &[u8],
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<CallResult, Error> {
-        Err(Error::UnknownApplication)
+    ) -> Result<CallResult, ExecutionError> {
+        Err(ExecutionError::CallApplicationFromQuery)
     }
 
     async fn try_call_session(
@@ -635,7 +633,7 @@ impl WritableStorage for WrappedQueryableStorage<'_> {
         _session_id: SessionId,
         _argument: &[u8],
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<CallResult, Error> {
-        Err(Error::UnknownApplication)
+    ) -> Result<CallResult, ExecutionError> {
+        Err(ExecutionError::InvalidSession)
     }
 }

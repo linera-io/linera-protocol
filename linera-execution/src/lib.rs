@@ -41,6 +41,10 @@ pub enum ExecutionError {
     InvalidEffect,
     #[error("Invalid query for this application")]
     InvalidQuery,
+    #[error("Can't call another application during a query")]
+    CallApplicationFromQuery,
+    #[error("Queries can't change application state")]
+    LockStateFromQuery,
     #[error("Session does not exist or was already closed")]
     InvalidSession,
     #[error("Attempted to call or forward an active session")]
@@ -86,6 +90,20 @@ pub enum ExecutionError {
     BaseError(#[from] linera_base::error::Error),
     #[error("Error in view operation: {0}")]
     View(#[from] ViewError),
+    #[cfg(feature = "wasmer")]
+    #[error("Failed to load Wasm module")]
+    LoadWasmModule(#[from] wit_bindgen_host_wasmer_rust::anyhow::Error),
+    #[cfg(feature = "wasmtime")]
+    #[error("Failed to load Wasm module")]
+    LoadWasmModule(#[from] wit_bindgen_host_wasmtime_rust::anyhow::Error),
+    #[cfg(feature = "wasmer")]
+    #[error("Failed to execute Wasm module")]
+    ExecuteWasm(#[from] wasmer::RuntimeError),
+    #[cfg(feature = "wasmtime")]
+    #[error("Failed to execute Wasm module")]
+    ExecuteWasm(#[from] wasmtime::Trap),
+    #[error("Error reported from user application: {0}")]
+    UserApplication(String),
 }
 
 impl From<ExecutionError> for linera_base::error::Error {

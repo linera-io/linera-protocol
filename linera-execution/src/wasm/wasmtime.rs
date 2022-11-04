@@ -9,9 +9,8 @@ use super::{
     async_boundary::{ContextForwarder, HostFuture},
     Runtime, WasmApplication, WritableRuntimeContext,
 };
-use crate::WritableStorage;
-use std::{fmt::Debug, marker::PhantomData, task::Poll};
-use thiserror::Error;
+use crate::{ExecutionError, WritableStorage};
+use std::{marker::PhantomData, task::Poll};
 use wasmtime::{Engine, Linker, Module, Store, Trap};
 
 pub struct Wasmtime<'storage> {
@@ -29,7 +28,7 @@ impl WasmApplication {
     pub fn prepare_runtime<'storage>(
         &self,
         storage: &'storage dyn WritableStorage,
-    ) -> Result<WritableRuntimeContext<Wasmtime<'storage>>, PrepareRuntimeError> {
+    ) -> Result<WritableRuntimeContext<Wasmtime<'storage>>, ExecutionError> {
         let engine = Engine::default();
         let mut linker = Linker::new(&engine);
 
@@ -46,7 +45,7 @@ impl WasmApplication {
             context_forwarder,
             application,
             store,
-            storage_guard: (),
+            _storage_guard: (),
         })
     }
 }
@@ -176,8 +175,8 @@ pub struct SystemApi<'storage> {
 }
 
 impl<'storage> system::System for SystemApi<'storage> {
-    type Load = HostFuture<'storage, Result<Vec<u8>, linera_base::error::Error>>;
-    type LoadAndLock = HostFuture<'storage, Result<Vec<u8>, linera_base::error::Error>>;
+    type Load = HostFuture<'storage, Result<Vec<u8>, ExecutionError>>;
+    type LoadAndLock = HostFuture<'storage, Result<Vec<u8>, ExecutionError>>;
 
     fn load_new(&mut self) -> Self::Load {
         HostFuture::new(self.storage.try_read_my_state())
@@ -204,21 +203,8 @@ impl<'storage> system::System for SystemApi<'storage> {
     }
 
     fn store_and_unlock(&mut self, state: &[u8]) -> bool {
-        self.storage.save_and_unlock_my_state(state.to_owned());
-        // TODO
-        true
-    }
-}
-
-#[derive(Debug, Error)]
-pub enum PrepareRuntimeError {
-    #[error("Failed to instantiate application Wasm module")]
-    Instantiate(#[from] wit_bindgen_host_wasmtime_rust::anyhow::Error),
-}
-
-impl From<PrepareRuntimeError> for linera_base::error::Error {
-    fn from(error: PrepareRuntimeError) -> Self {
-        // TODO
-        linera_base::error::Error::UnknownApplication
+        self.storage
+            .save_and_unlock_my_state(state.to_owned())
+            .is_ok()
     }
 }

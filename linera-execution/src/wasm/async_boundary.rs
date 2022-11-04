@@ -1,4 +1,5 @@
 use super::WritableRuntimeContext;
+use crate::ExecutionError;
 use futures::future::BoxFuture;
 use std::{
     any::type_name,
@@ -54,7 +55,7 @@ pub enum GuestFuture<Future, Runtime>
 where
     Runtime: super::Runtime,
 {
-    FailedToCreate,
+    FailedToCreate(Option<Runtime::Error>),
     Active {
         future: Future,
         context: WritableRuntimeContext<Runtime>,
@@ -65,13 +66,13 @@ impl<Future, Runtime> GuestFuture<Future, Runtime>
 where
     Runtime: super::Runtime,
 {
-    pub fn new<Trap>(
-        creation_result: Result<Future, Trap>,
+    pub fn new(
+        creation_result: Result<Future, Runtime::Error>,
         context: WritableRuntimeContext<Runtime>,
     ) -> Self {
         match creation_result {
             Ok(future) => GuestFuture::Active { future, context },
-            Err(trap) => GuestFuture::FailedToCreate,
+            Err(error) => GuestFuture::FailedToCreate(Some(error)),
         }
     }
 }
@@ -83,13 +84,15 @@ where
     Runtime::Application: Unpin,
     Runtime::Store: Unpin,
     Runtime::StorageGuard: Unpin,
+    Runtime::Error: Unpin,
 {
-    type Output = Result<InnerFuture::Output, linera_base::error::Error>;
+    type Output = Result<InnerFuture::Output, ExecutionError>;
 
     fn poll(self: Pin<&mut Self>, task_context: &mut Context) -> Poll<Self::Output> {
         match self.get_mut() {
-            GuestFuture::FailedToCreate => {
-                Poll::Ready(Err(linera_base::error::Error::UnknownApplication))
+            GuestFuture::FailedToCreate(runtime_error) => {
+                let error = runtime_error.take().expect("Unexpected poll after error");
+                Poll::Ready(Err(error.into()))
             }
             GuestFuture::Active { future, context } => {
                 let _context_guard = context.context_forwarder.forward(task_context);
@@ -109,7 +112,7 @@ where
         &self,
         application: &Runtime::Application,
         store: &mut Runtime::Store,
-    ) -> Poll<Result<Self::Output, linera_base::error::Error>>;
+    ) -> Poll<Result<Self::Output, ExecutionError>>;
 }
 
 #[derive(Clone, Default)]
