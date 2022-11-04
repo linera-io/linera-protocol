@@ -3,10 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    crypto::{
-        BcsSignable, HashFromStrError, HashValue, IncorrectHashSize, PublicKey,
-        PublicKeyFromStrError,
-    },
+    crypto::{BcsSignable, HashFromStrError, HashValue, PublicKey, PublicKeyFromStrError},
     error::Error,
 };
 use serde::{Deserialize, Serialize};
@@ -292,14 +289,6 @@ impl std::fmt::Debug for ChainId {
 impl From<ChainDescription> for ChainId {
     fn from(description: ChainDescription) -> Self {
         Self(HashValue::new(&description))
-    }
-}
-
-impl TryFrom<&[u8]> for ChainId {
-    type Error = IncorrectHashSize;
-
-    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-        Ok(Self(HashValue::try_from(bytes)?))
     }
 }
 
