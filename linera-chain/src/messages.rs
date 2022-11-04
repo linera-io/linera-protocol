@@ -185,6 +185,7 @@ impl Vote {
     }
 
     /// Verify the signature in the vote.
+    #[allow(clippy::result_large_err)]
     pub fn check(&self, name: ValidatorName) -> Result<(), ChainError> {
         Ok(self.signature.check(&self.value, name.0)?)
     }
@@ -216,6 +217,7 @@ impl<'a> SignatureAggregator<'a> {
     /// Try to append a signature to a (partial) certificate. Returns Some(certificate) if a quorum was reached.
     /// The resulting final certificate is guaranteed to be valid in the sense of `check` below.
     /// Returns an error if the signed value cannot be aggregated.
+    #[allow(clippy::result_large_err)]
     pub fn append(
         &mut self,
         validator: ValidatorName,
@@ -272,6 +274,7 @@ impl Certificate {
     }
 
     /// Verify the certificate.
+    #[allow(clippy::result_large_err)]
     pub fn check<'a>(&'a self, committee: &Committee) -> Result<&'a Value, ChainError> {
         // Check the quorum.
         let mut weight = 0;

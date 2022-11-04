@@ -459,6 +459,7 @@ where
 
     /// Execute the recipient's side of an operation, aka a "remote effect".
     /// Effects must be executed by order of heights in the sender's chain.
+    #[allow(clippy::result_large_err)]
     pub fn execute_effect(
         &mut self,
         context: &EffectContext,
@@ -525,6 +526,7 @@ where
     }
 
     /// Execute certain effects immediately upon receiving a message.
+    #[allow(clippy::result_large_err)]
     pub fn apply_immediate_effect(
         &mut self,
         this_chain_id: ChainId,
@@ -585,6 +587,7 @@ impl Amount {
     }
 
     #[inline]
+    #[allow(clippy::result_large_err)]
     pub fn try_add(self, other: Self) -> Result<Self, ExecutionError> {
         let val = self
             .0
@@ -594,6 +597,7 @@ impl Amount {
     }
 
     #[inline]
+    #[allow(clippy::result_large_err)]
     pub fn try_sub(self, other: Self) -> Result<Self, ExecutionError> {
         let val = self
             .0
@@ -603,6 +607,7 @@ impl Amount {
     }
 
     #[inline]
+    #[allow(clippy::result_large_err)]
     pub fn try_add_assign(&mut self, other: Self) -> Result<(), ExecutionError> {
         self.0 = self
             .0
@@ -612,6 +617,7 @@ impl Amount {
     }
 
     #[inline]
+    #[allow(clippy::result_large_err)]
     pub fn try_sub_assign(&mut self, other: Self) -> Result<(), ExecutionError> {
         self.0 = self
             .0
@@ -633,6 +639,7 @@ impl Balance {
     }
 
     #[inline]
+    #[allow(clippy::result_large_err)]
     pub fn try_add(self, other: Self) -> Result<Self, ExecutionError> {
         let val = self
             .0
@@ -642,6 +649,7 @@ impl Balance {
     }
 
     #[inline]
+    #[allow(clippy::result_large_err)]
     pub fn try_sub(self, other: Self) -> Result<Self, ExecutionError> {
         let val = self
             .0
@@ -651,6 +659,7 @@ impl Balance {
     }
 
     #[inline]
+    #[allow(clippy::result_large_err)]
     pub fn try_add_assign(&mut self, other: Self) -> Result<(), ExecutionError> {
         self.0 = self
             .0
@@ -660,6 +669,7 @@ impl Balance {
     }
 
     #[inline]
+    #[allow(clippy::result_large_err)]
     pub fn try_sub_assign(&mut self, other: Self) -> Result<(), ExecutionError> {
         self.0 = self
             .0

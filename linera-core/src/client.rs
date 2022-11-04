@@ -123,6 +123,7 @@ pub trait ChainClient {
 pub trait ValidatorNodeProvider {
     type Node;
 
+    #[allow(clippy::result_large_err)]
     fn make_node(&self, address: &str) -> Result<Self::Node, NodeError>;
 }
 
@@ -361,6 +362,7 @@ where
             .expect("key should be known at this point"))
     }
 
+    #[allow(clippy::result_large_err)]
     fn make_validator_nodes(
         &self,
         committee: &Committee,
