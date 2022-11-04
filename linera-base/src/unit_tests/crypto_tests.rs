@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![allow(clippy::blacklisted_name)]
+#![allow(clippy::disallowed_names)]
 
 use super::*;
 use crate::messages::BlockHeight;
