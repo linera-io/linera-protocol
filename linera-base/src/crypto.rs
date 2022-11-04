@@ -150,7 +150,7 @@ impl Serialize for KeyPair {
     {
         // This is only used for JSON configuration.
         assert!(serializer.is_human_readable());
-        serializer.serialize_str(&hex::encode(&self.0.to_bytes()))
+        serializer.serialize_str(&hex::encode(self.0.to_bytes()))
     }
 }
 
@@ -175,7 +175,7 @@ impl Serialize for Signature {
         S: serde::ser::Serializer,
     {
         if serializer.is_human_readable() {
-            serializer.serialize_str(&hex::encode(&self.0.to_bytes()))
+            serializer.serialize_str(&hex::encode(self.0.to_bytes()))
         } else {
             serializer.serialize_newtype_struct("Signature", &self.0)
         }
@@ -256,7 +256,7 @@ pub enum HashFromStrError {
 
 impl std::fmt::Display for Signature {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let s = hex::encode(&self.0.to_bytes());
+        let s = hex::encode(self.0.to_bytes());
         write!(f, "{}", s)
     }
 }
