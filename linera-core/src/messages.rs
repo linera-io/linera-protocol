@@ -195,6 +195,7 @@ impl ChainInfoResponse {
         Self { info, signature }
     }
 
+    #[allow(clippy::result_large_err)]
     pub fn check(&self, name: ValidatorName) -> Result<(), NodeError> {
         match self.signature {
             Some(sig) => Ok(sig.check(&self.info, name.0)?),
