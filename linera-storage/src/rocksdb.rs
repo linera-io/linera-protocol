@@ -11,7 +11,8 @@ use linera_base::{
 use linera_chain::messages::Certificate;
 use linera_execution::UserApplicationCode;
 use linera_views::{
-    rocksdb::{KeyValueOperations, RocksdbContext, RocksdbContextError, DB},
+    rocksdb::{RocksdbContext, RocksdbContextError, DB},
+    common::KeyValueOperations,
     views::{View, ViewError},
 };
 use serde::{Deserialize, Serialize};

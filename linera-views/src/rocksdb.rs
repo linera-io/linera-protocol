@@ -4,8 +4,9 @@
 use crate::{
     hash::HashingContext,
     views::{Context, ViewError},
-    common::{WriteOperation, Batch},
+    common::{WriteOperation, Batch, KeyValueOperations},
 };
+//use linera_views::common::KeyValueOperations;
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::sync::Arc;
@@ -21,35 +22,8 @@ pub struct RocksdbContext<E> {
     extra: E,
 }
 
-/// Low-level, asynchronous key-value operations. Useful for storage APIs not based on views.
 #[async_trait]
-pub trait KeyValueOperations {
-    async fn read_key<V: DeserializeOwned>(
-        &self,
-        key: &[u8],
-    ) -> Result<Option<V>, RocksdbContextError>;
-
-    async fn write_key<V: Serialize + Sync>(
-        &self,
-        key: &[u8],
-        value: &V,
-    ) -> Result<(), RocksdbContextError>;
-
-    async fn delete_key(&self, key: &[u8]) -> Result<(), RocksdbContextError>;
-
-    async fn find_keys_with_prefix(
-        &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<Vec<u8>>, RocksdbContextError>;
-
-    async fn get_sub_keys<Key: DeserializeOwned + Send>(
-        &mut self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<Key>, RocksdbContextError>;
-}
-
-#[async_trait]
-impl KeyValueOperations for Arc<DB> {
+impl KeyValueOperations<RocksdbContextError> for Arc<DB> {
     async fn read_key<V: DeserializeOwned>(
         &self,
         key: &[u8],
