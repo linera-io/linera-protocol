@@ -18,6 +18,7 @@ use linera_views::{
     views::{
         MapOperations, MapView, RegisterOperations, RegisterView, ScopedView, View, ViewError,
     },
+    common::Batch,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;

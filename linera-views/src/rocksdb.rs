@@ -46,8 +46,6 @@ pub trait KeyValueOperations {
         &mut self,
         key_prefix: &[u8],
     ) -> Result<Vec<Key>, RocksdbContextError>;
-
-    async fn count_keys(&self) -> Result<usize, RocksdbContextError>;
 }
 
 #[async_trait]
@@ -120,14 +118,6 @@ impl KeyValueOperations for Arc<DB> {
         }
         Ok(keys)
     }
-
-    async fn count_keys(&self) -> Result<usize, RocksdbContextError> {
-        let db = self.clone();
-        let size =
-            tokio::task::spawn_blocking(move || db.iterator(rocksdb::IteratorMode::Start).count())
-                .await?;
-        Ok(size)
-    }
 }
 
 impl<E> RocksdbContext<E> {
@@ -145,7 +135,6 @@ impl<E> Context for RocksdbContext<E>
 where
     E: Clone + Send + Sync,
 {
-    type Batch = Batch;
     type Extra = E;
     type Error = RocksdbContextError;
 
@@ -205,7 +194,7 @@ where
 
     async fn run_with_batch<F>(&self, builder: F) -> Result<(), ViewError>
     where
-        F: FnOnce(&mut Self::Batch) -> futures::future::BoxFuture<Result<(), ViewError>>
+        F: FnOnce(&mut Batch) -> futures::future::BoxFuture<Result<(), ViewError>>
             + Send
             + Sync,
     {
@@ -214,11 +203,11 @@ where
         self.write_batch(batch).await
     }
 
-    fn create_batch(&self) -> Self::Batch {
+    fn create_batch(&self) -> Batch {
         Batch::default()
     }
 
-    async fn write_batch(&self, batch: Self::Batch) -> Result<(), ViewError> {
+    async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
         let db = self.db.clone();
         tokio::task::spawn_blocking(move || -> Result<(), RocksdbContextError> {
             let mut inner_batch = rocksdb::WriteBatchWithTransaction::default();

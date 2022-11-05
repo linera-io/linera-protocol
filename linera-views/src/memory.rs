@@ -39,7 +39,6 @@ impl<E> Context for MemoryContext<E>
 where
     E: Clone + Send + Sync,
 {
-    type Batch = Batch;
     type Extra = E;
     type Error = MemoryContextError;
 
@@ -118,7 +117,7 @@ where
 
     async fn run_with_batch<F>(&self, builder: F) -> Result<(), ViewError>
     where
-        F: FnOnce(&mut Self::Batch) -> futures::future::BoxFuture<Result<(), ViewError>>
+        F: FnOnce(&mut Batch) -> futures::future::BoxFuture<Result<(), ViewError>>
             + Send
             + Sync,
     {
@@ -127,11 +126,11 @@ where
         self.write_batch(batch).await
     }
 
-    fn create_batch(&self) -> Self::Batch {
+    fn create_batch(&self) -> Batch {
         Batch::default()
     }
 
-    async fn write_batch(&self, batch: Self::Batch) -> Result<(), ViewError> {
+    async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
         let mut map = self.map.write().await;
         for ent in batch.operations {
             match ent {

@@ -326,7 +326,6 @@ impl<E> Context for DynamoDbContext<E>
 where
     E: Clone + Send + Sync,
 {
-    type Batch = Batch;
     type Extra = E;
     type Error = DynamoDbContextError;
 
@@ -458,7 +457,7 @@ where
 
     async fn run_with_batch<F>(&self, builder: F) -> Result<(), ViewError>
     where
-        F: FnOnce(&mut Self::Batch) -> futures::future::BoxFuture<Result<(), ViewError>>
+        F: FnOnce(&mut Batch) -> futures::future::BoxFuture<Result<(), ViewError>>
             + Send
             + Sync,
     {
@@ -467,11 +466,11 @@ where
         self.write_batch(batch).await
     }
 
-    fn create_batch(&self) -> Self::Batch {
+    fn create_batch(&self) -> Batch {
         Batch::default()
     }
 
-    async fn write_batch(&self, batch: Self::Batch) -> Result<(), ViewError> {
+    async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
         self.process_batch(batch).await?;
         Ok(())
     }

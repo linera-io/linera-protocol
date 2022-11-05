@@ -17,6 +17,7 @@ use linera_views::{
         CollectionOperations, ReentrantCollectionView, RegisterOperations, RegisterView,
         ScopedView, View, ViewError,
     },
+    common::Batch,
 };
 
 #[cfg(any(test, feature = "test"))]
