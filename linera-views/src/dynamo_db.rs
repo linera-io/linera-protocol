@@ -466,10 +466,6 @@ where
         self.write_batch(batch).await
     }
 
-    fn create_batch(&self) -> Batch {
-        Batch::default()
-    }
-
     async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
         self.process_batch(batch).await?;
         Ok(())

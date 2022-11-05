@@ -46,8 +46,6 @@ pub trait KeyValueOperations<E> {
         value: &V,
     ) -> Result<(), E>;
 
-    async fn delete_key(&self, key: &[u8]) -> Result<(), E>;
-
     async fn find_keys_with_prefix(
         &self,
         key_prefix: &[u8],

@@ -89,7 +89,7 @@ where
     pub async fn save(&mut self) -> Result<(), $crate::views::ViewError> {
         use $crate::views::View;
 
-        let mut batch = self.context().create_batch();
+        let mut batch = Batch::default();
         $( self.$field.flush(&mut batch).await?; )*
         self.context().write_batch(batch).await
      }

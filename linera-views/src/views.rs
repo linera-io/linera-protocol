@@ -74,9 +74,6 @@ pub trait Context {
             + Send
             + Sync;
 
-    /// Create a new [`Self::Batch`] to collect write operations.
-    fn create_batch(&self) -> Batch;
-
     /// Apply the operations from the `batch`, persisting the changes.
     async fn write_batch(&self, batch: Batch) -> Result<(), ViewError>;
 

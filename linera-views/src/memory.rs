@@ -126,10 +126,6 @@ where
         self.write_batch(batch).await
     }
 
-    fn create_batch(&self) -> Batch {
-        Batch::default()
-    }
-
     async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
         let mut map = self.map.write().await;
         for ent in batch.operations {

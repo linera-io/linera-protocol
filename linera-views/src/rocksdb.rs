@@ -49,13 +49,6 @@ impl KeyValueOperations<RocksdbContextError> for Arc<DB> {
         Ok(())
     }
 
-    async fn delete_key(&self, key: &[u8]) -> Result<(), RocksdbContextError> {
-        let db = self.clone();
-        let key = key.to_vec();
-        tokio::task::spawn_blocking(move || db.delete(&key)).await??;
-        Ok(())
-    }
-
     async fn find_keys_with_prefix(
         &self,
         key_prefix: &[u8],
@@ -175,10 +168,6 @@ where
         let mut batch = Batch::default();
         builder(&mut batch).await?;
         self.write_batch(batch).await
-    }
-
-    fn create_batch(&self) -> Batch {
-        Batch::default()
     }
 
     async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
