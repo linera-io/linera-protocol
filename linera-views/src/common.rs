@@ -32,6 +32,24 @@ pub fn simplify_batch(batch: Batch) -> Batch {
     Batch{ operations }
 }
 
+/// Insert a put a key/value in the batch
+pub fn put_item_batch(
+    batch: &mut Batch,
+    key: Vec<u8>,
+    value: &impl Serialize,
+) -> Result<(), bcs::Error> {
+    let bytes = bcs::to_bytes(value)?;
+    batch.operations.push(WriteOperation::Put { key, value: bytes });
+    Ok(())
+}
+
+/// Delete a key and put that command into the batch
+pub fn remove_item_batch(batch: &mut Batch, key: Vec<u8>) {
+    batch.operations.push(WriteOperation::Delete { key });
+}
+
+
+
 /// Low-level, asynchronous key-value operations. Useful for storage APIs not based on views.
 #[async_trait]
 pub trait KeyValueOperations<E> {

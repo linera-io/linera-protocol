@@ -123,21 +123,6 @@ where
         Ok(key)
     }
 
-    fn put_item_batch(
-        &self,
-        batch: &mut Batch,
-        key: Vec<u8>,
-        value: &impl Serialize,
-    ) -> Result<(), RocksdbContextError> {
-        let bytes = bcs::to_bytes(value)?;
-        batch.operations.push(WriteOperation::Put { key, value: bytes });
-        Ok(())
-    }
-
-    fn remove_item_batch(&self, batch: &mut Batch, key: Vec<u8>) {
-        batch.operations.push(WriteOperation::Delete { key });
-    }
-
     async fn read_key<V: DeserializeOwned>(
         &mut self,
         key: &[u8],

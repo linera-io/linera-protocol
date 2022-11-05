@@ -4,6 +4,7 @@ use crate::{
     rocksdb::RocksdbContext,
     test_utils::LocalStackTestContext,
     views::{Context, QueueOperations, QueueView, View, ViewError},
+    common::Batch,
 };
 use async_trait::async_trait;
 use std::{

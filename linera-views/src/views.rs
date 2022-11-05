@@ -13,7 +13,7 @@ use std::{
 };
 use thiserror::Error;
 use tokio::sync::{Mutex, OwnedMutexGuard};
-use crate::common::Batch;
+use crate::common::{Batch, remove_item_batch, put_item_batch};
 
 #[cfg(test)]
 #[path = "unit_tests/views.rs"]
@@ -28,7 +28,7 @@ pub trait Context {
 
     /// The error type in use by internal operations.
     /// In practice, we always want `ViewError: From<Self::Error>` here.
-    type Error: std::error::Error + Debug + Send + Sync + 'static;
+    type Error: std::error::Error + Debug + Send + Sync + 'static + std::convert::From<bcs::Error>;
 
     /// Getter for the user provided data.
     fn extra(&self) -> &Self::Extra;
@@ -38,17 +38,6 @@ pub trait Context {
 
     /// Obtain the Vec<u8> key from the key by serialization and using the base_key
     fn derive_key<I: Serialize>(&self, index: &I) -> Result<Vec<u8>, Self::Error>;
-
-    /// Insert a put a key/value in the batch
-    fn put_item_batch(
-        &self,
-        batch: &mut Batch,
-        key: Vec<u8>,
-        value: &impl Serialize,
-    ) -> Result<(), Self::Error>;
-
-    /// Delete a key and put that command into the batch
-    fn remove_item_batch(&self, batch: &mut Batch, key: Vec<u8>);
 
     /// Retrieve a generic `Item` from the table using the provided `key` prefixed by the current
     /// context.
@@ -249,12 +238,12 @@ where
     }
 
     fn set(&mut self, batch: &mut Batch, value: &T) -> Result<(), Self::Error> {
-        self.put_item_batch(batch, self.base_key(), value)?;
+        put_item_batch(batch, self.base_key(), value)?;
         Ok(())
     }
 
     fn delete(&mut self, batch: &mut Batch) -> Result<(), Self::Error> {
-        self.remove_item_batch(batch, self.base_key());
+        remove_item_batch(batch, self.base_key());
         Ok(())
     }
 }
@@ -414,17 +403,17 @@ where
         }
         let mut count = stored_count;
         for value in values {
-            self.put_item_batch(batch, self.derive_key(&count)?, &value)?;
+            put_item_batch(batch, self.derive_key(&count)?, &value)?;
             count += 1;
         }
-        self.put_item_batch(batch, self.base_key(), &count)?;
+        put_item_batch(batch, self.base_key(), &count)?;
         Ok(())
     }
 
     fn delete(&mut self, stored_count: usize, batch: &mut Batch) -> Result<(), Self::Error> {
-        self.remove_item_batch(batch, self.base_key());
+        remove_item_batch(batch, self.base_key());
         for index in 0..stored_count {
-            self.remove_item_batch(batch, self.derive_key(&index)?);
+            remove_item_batch(batch, self.derive_key(&index)?);
         }
         Ok(())
     }
@@ -609,13 +598,13 @@ where
 
     fn insert(&mut self, batch: &mut Batch, index: I, value: V) -> Result<(), Self::Error> {
         let key = self.derive_key(&index)?;
-        self.put_item_batch(batch, key, &value)?;
+        put_item_batch(batch, key, &value)?;
         Ok(())
     }
 
     fn remove(&mut self, batch: &mut Batch, index: I) -> Result<(), Self::Error> {
         let key = self.derive_key(&index)?;
-        self.remove_item_batch(batch, key);
+        remove_item_batch(batch, key);
         Ok(())
     }
 
@@ -638,7 +627,7 @@ where
     async fn delete(&mut self, batch: &mut Batch) -> Result<(), Self::Error> {
         let base = self.base_key();
         for key in self.find_keys_with_prefix(&base).await? {
-            self.remove_item_batch(batch, key);
+            remove_item_batch(batch, key);
         }
         Ok(())
     }
@@ -872,10 +861,10 @@ where
         }
         let deletion_range = stored_indices.clone().take(count);
         stored_indices.start += count;
-        self.put_item_batch(batch, self.base_key(), &stored_indices)?;
+        put_item_batch(batch, self.base_key(), &stored_indices)?;
         for index in deletion_range {
             let key = self.derive_key(&index)?;
-            self.remove_item_batch(batch, key);
+            remove_item_batch(batch, key);
         }
         Ok(())
     }
@@ -891,11 +880,11 @@ where
         }
         for value in values {
             let key = self.derive_key(&stored_indices.end)?;
-            self.put_item_batch(batch, key, &value)?;
+            put_item_batch(batch, key, &value)?;
             stored_indices.end += 1;
         }
         let base = self.base_key();
-        self.put_item_batch(batch, base, &stored_indices)?;
+        put_item_batch(batch, base, &stored_indices)?;
         Ok(())
     }
 
@@ -905,10 +894,10 @@ where
         batch: &mut Batch,
     ) -> Result<(), Self::Error> {
         let base = self.base_key();
-        self.remove_item_batch(batch, base);
+        remove_item_batch(batch, base);
         for index in stored_indices {
             let key = self.derive_key(&index)?;
-            self.remove_item_batch(batch, key);
+            remove_item_batch(batch, key);
         }
         Ok(())
     }
@@ -1144,13 +1133,13 @@ where
 
     fn add_index(&mut self, batch: &mut Batch, index: I) -> Result<(), Self::Error> {
         let key = self.derive_key(&CollectionKey::Index(index))?;
-        self.put_item_batch(batch, key, &())?;
+        put_item_batch(batch, key, &())?;
         Ok(())
     }
 
     fn remove_index(&mut self, batch: &mut Batch, index: I) -> Result<(), Self::Error> {
         let key = self.derive_key(&CollectionKey::Index(index))?;
-        self.remove_item_batch(batch, key);
+        remove_item_batch(batch, key);
         Ok(())
     }
 
