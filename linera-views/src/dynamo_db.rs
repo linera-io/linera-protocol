@@ -116,7 +116,7 @@ where
         DynamoDbContext {
             client: self.client.clone(),
             table: self.table.clone(),
-            base_key: self.derive_key(scope_prefix),
+            base_key: self.derive_key(scope_prefix).expect("derive_key should not fail"),
             extra: new_extra,
         }
     }
@@ -337,14 +337,14 @@ where
         self.base_key.clone()
     }
 
-    fn derive_key<I: Serialize>(&self, index: &I) -> Vec<u8> {
+    fn derive_key<I: Serialize>(&self, index: &I) -> Result<Vec<u8>,DynamoDbContextError> {
         let mut key = self.base_key.clone();
-        bcs::serialize_into(&mut key, index).expect("serialization should not fail");
+        bcs::serialize_into(&mut key, index)?;
         assert!(
             key.len() > self.base_key.len(),
             "Empty indices are not allowed"
         );
-        key
+        Ok(key)
     }
 
     fn put_item_batch(

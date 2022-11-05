@@ -146,14 +146,14 @@ where
         self.base_key.clone()
     }
 
-    fn derive_key<I: Serialize>(&self, index: &I) -> Vec<u8> {
+    fn derive_key<I: Serialize>(&self, index: &I) -> Result<Vec<u8>,RocksdbContextError> {
         let mut key = self.base_key.clone();
-        bcs::serialize_into(&mut key, index).expect("serialization should not fail");
+        bcs::serialize_into(&mut key, index)?;
         assert!(
             key.len() > self.base_key.len(),
             "Empty indices are not allowed"
         );
-        key
+        Ok(key)
     }
 
     fn put_item_batch(

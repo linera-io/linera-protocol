@@ -37,7 +37,7 @@ pub trait Context {
     fn base_key(&self) -> Vec<u8>;
 
     /// Obtain the Vec<u8> key from the key by serialization and using the base_key
-    fn derive_key<I: Serialize>(&self, index: &I) -> Vec<u8>;
+    fn derive_key<I: Serialize>(&self, index: &I) -> Result<Vec<u8>, Self::Error>;
 
     /// Insert a put a key/value in the batch
     fn put_item_batch(
@@ -182,7 +182,7 @@ pub trait ScopedOperations: Context {
 
 impl<C: Context> ScopedOperations for C {
     fn clone_with_scope(&self, index: u64) -> Self {
-        self.clone_self(self.derive_key(&index))
+        self.clone_self(self.derive_key(&index).expect("derive_key should not fail"))
     }
 }
 
@@ -390,14 +390,14 @@ where
     }
 
     async fn get(&mut self, index: usize) -> Result<Option<T>, Self::Error> {
-        let key = self.derive_key(&index);
+        let key = self.derive_key(&index)?;
         self.read_key(&key).await
     }
 
     async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error> {
         let mut values = Vec::with_capacity(range.len());
         for index in range {
-            let key = self.derive_key(&index);
+            let key = self.derive_key(&index)?;
             match self.read_key(&key).await? {
                 None => return Ok(values),
                 Some(value) => values.push(value),
@@ -417,7 +417,7 @@ where
         }
         let mut count = stored_count;
         for value in values {
-            self.put_item_batch(batch, self.derive_key(&count), &value)?;
+            self.put_item_batch(batch, self.derive_key(&count)?, &value)?;
             count += 1;
         }
         self.put_item_batch(batch, self.base_key(), &count)?;
@@ -427,7 +427,7 @@ where
     fn delete(&mut self, stored_count: usize, batch: &mut Batch) -> Result<(), Self::Error> {
         self.remove_item_batch(batch, self.base_key());
         for index in 0..stored_count {
-            self.remove_item_batch(batch, self.derive_key(&index));
+            self.remove_item_batch(batch, self.derive_key(&index)?);
         }
         Ok(())
     }
@@ -606,18 +606,18 @@ where
     V: Send + Sync + Serialize + DeserializeOwned + 'static,
 {
     async fn get(&mut self, index: &I) -> Result<Option<V>, Self::Error> {
-        let key = self.derive_key(index);
+        let key = self.derive_key(index)?;
         Ok(self.read_key(&key).await?)
     }
 
     fn insert(&mut self, batch: &mut Batch, index: I, value: V) -> Result<(), Self::Error> {
-        let key = self.derive_key(&index);
+        let key = self.derive_key(&index)?;
         self.put_item_batch(batch, key, &value)?;
         Ok(())
     }
 
     fn remove(&mut self, batch: &mut Batch, index: I) -> Result<(), Self::Error> {
-        let key = self.derive_key(&index);
+        let key = self.derive_key(&index)?;
         self.remove_item_batch(batch, key);
         Ok(())
     }
@@ -848,14 +848,14 @@ where
     }
 
     async fn get(&mut self, index: usize) -> Result<Option<T>, Self::Error> {
-        let key = self.derive_key(&index);
+        let key = self.derive_key(&index)?;
         Ok(self.read_key(&key).await?)
     }
 
     async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error> {
         let mut values = Vec::with_capacity(range.len());
         for index in range {
-            let key = self.derive_key(&index);
+            let key = self.derive_key(&index)?;
             match self.read_key(&key).await? {
                 None => return Ok(values),
                 Some(value) => values.push(value),
@@ -877,7 +877,7 @@ where
         stored_indices.start += count;
         self.put_item_batch(batch, self.base_key(), &stored_indices)?;
         for index in deletion_range {
-            let key = self.derive_key(&index);
+            let key = self.derive_key(&index)?;
             self.remove_item_batch(batch, key);
         }
         Ok(())
@@ -893,7 +893,7 @@ where
             return Ok(());
         }
         for value in values {
-            let key = self.derive_key(&stored_indices.end);
+            let key = self.derive_key(&stored_indices.end)?;
             self.put_item_batch(batch, key, &value)?;
             stored_indices.end += 1;
         }
@@ -910,7 +910,7 @@ where
         let base = self.base_key();
         self.remove_item_batch(batch, base);
         for index in stored_indices {
-            let key = self.derive_key(&index);
+            let key = self.derive_key(&index)?;
             self.remove_item_batch(batch, key);
         }
         Ok(())
@@ -1141,24 +1141,24 @@ where
     I: Serialize + DeserializeOwned + Send + Sync + 'static,
 {
     fn clone_with_scope(&self, index: &I) -> Self {
-        let key = self.derive_key(&CollectionKey::Subview(index));
+        let key = self.derive_key(&CollectionKey::Subview(index)).expect("derive_key should not fail");
         self.clone_self(key)
     }
 
     fn add_index(&mut self, batch: &mut Batch, index: I) -> Result<(), Self::Error> {
-        let key = self.derive_key(&CollectionKey::Index(index));
+        let key = self.derive_key(&CollectionKey::Index(index))?;
         self.put_item_batch(batch, key, &())?;
         Ok(())
     }
 
     fn remove_index(&mut self, batch: &mut Batch, index: I) -> Result<(), Self::Error> {
-        let key = self.derive_key(&CollectionKey::Index(index));
+        let key = self.derive_key(&CollectionKey::Index(index))?;
         self.remove_item_batch(batch, key);
         Ok(())
     }
 
     async fn indices(&mut self) -> Result<Vec<I>, Self::Error> {
-        let base = self.derive_key(&CollectionKey::Index(()));
+        let base = self.derive_key(&CollectionKey::Index(()))?;
         self.get_sub_keys(&base).await
     }
 
@@ -1166,7 +1166,7 @@ where
     where
         F: FnMut(I) + Send,
     {
-        let base = self.derive_key(&CollectionKey::Index(()));
+        let base = self.derive_key(&CollectionKey::Index(()))?;
         for index in self.get_sub_keys(&base).await? {
             f(index);
         }
