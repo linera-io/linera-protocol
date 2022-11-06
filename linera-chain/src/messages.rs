@@ -5,7 +5,7 @@
 use crate::ChainError;
 use linera_base::{
     committee::Committee,
-    crypto::{BcsSignable, CryptoError, HashValue, KeyPair, Signature},
+    crypto::{BcsSignable, HashValue, KeyPair, Signature},
     ensure,
     messages::{
         ApplicationId, BlockHeight, ChainId, Destination, Epoch, Origin, Owner, RoundNumber,

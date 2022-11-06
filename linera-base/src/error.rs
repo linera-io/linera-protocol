@@ -106,6 +106,9 @@ pub enum Error {
     #[error("Error in view operation: {error}")]
     ViewError { error: String },
 
+    #[error("Chain error: {error}")]
+    ChainError { error: String },
+
     #[error("Cryptographic error: {0}")]
     CryptoError(#[from] CryptoError),
 

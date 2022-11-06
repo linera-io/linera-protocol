@@ -116,7 +116,6 @@ pub enum NodeError {
 
     #[error("Chain error: {error}")]
     ChainError { error: String },
-
 }
 
 impl From<ViewError> for NodeError {

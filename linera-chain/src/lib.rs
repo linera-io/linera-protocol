@@ -6,7 +6,11 @@ mod manager;
 pub mod messages;
 
 pub use chain::{ChainStateView, ChainStateViewContext, Event};
-use linera_base::messages::{ApplicationId, BlockHeight, ChainId, Origin, RoundNumber};
+use linera_base::{
+    crypto::CryptoError,
+    messages::{ApplicationId, BlockHeight, ChainId, Origin, RoundNumber},
+};
+use linera_execution::ExecutionError;
 use linera_views::views::ViewError;
 pub use manager::{ChainManager, Outcome as ChainManagerOutcome};
 use thiserror::Error;
@@ -15,6 +19,10 @@ use thiserror::Error;
 pub enum ChainError {
     #[error("Error in view operation: {0}")]
     View(#[from] ViewError),
+    #[error("Cryptographic error: {0}")]
+    CryptoError(#[from] CryptoError),
+    #[error("Execution error: {0}")]
+    ExecutionError(#[from] ExecutionError),
     #[error(
         "Cannot vote for block proposal of chain {chain_id:?} because a message \
          from chain {origin:?} at height {height:?} (application {application_id:?}) \
