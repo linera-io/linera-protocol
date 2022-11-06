@@ -3,12 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    crypto::{BcsSignable, HashFromStrError, HashValue, PublicKey, PublicKeyFromStrError},
+    crypto::{BcsSignable, HashValue, PublicKey},
     error::Error,
 };
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
+use crate::crypto::CryptoError;
 #[cfg(any(test, feature = "test"))]
 use test_strategy::Arbitrary;
 
@@ -139,7 +140,7 @@ impl std::fmt::Display for ValidatorName {
 }
 
 impl std::str::FromStr for ValidatorName {
-    type Err = PublicKeyFromStrError;
+    type Err = CryptoError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(ValidatorName(PublicKey::from_str(s)?))
@@ -269,7 +270,7 @@ impl From<PublicKey> for Owner {
 }
 
 impl std::str::FromStr for Owner {
-    type Err = PublicKeyFromStrError;
+    type Err = CryptoError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Owner(PublicKey::from_str(s)?))
@@ -283,7 +284,7 @@ impl std::fmt::Display for ChainId {
 }
 
 impl FromStr for ChainId {
-    type Err = HashFromStrError;
+    type Err = CryptoError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(ChainId(HashValue::from_str(s)?))

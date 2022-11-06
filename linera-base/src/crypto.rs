@@ -38,11 +38,15 @@ pub struct HashValue(generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Dige
 #[derive(Eq, PartialEq, Copy, Clone)]
 pub struct Signature(dalek::Signature);
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash)]
+#[derive(Error, Debug)]
 /// Error type for cryptographic errors.
 pub enum CryptoError {
     #[error("Signature for object {type_name} is not valid: {error}")]
     InvalidSignature { error: String, type_name: String },
+    #[error("Error attempting to convert a string into a public key {0}")]
+    PublicKeyFromStrError(PublicKeyFromStrError),
+    #[error("Error attempting to convert a string into a hash value {0}")]
+    HashFromStrError(HashFromStrError),
 }
 
 impl PublicKey {
@@ -228,6 +232,12 @@ pub enum PublicKeyFromStrError {
     NonHexDigits(#[from] hex::FromHexError),
 }
 
+impl From<PublicKeyFromStrError> for CryptoError {
+    fn from(error: PublicKeyFromStrError) -> Self {
+        CryptoError::PublicKeyFromStrError(error)
+    }
+}
+
 impl FromStr for HashValue {
     type Err = HashFromStrError;
 
@@ -252,6 +262,12 @@ pub enum HashFromStrError {
 
     #[error("String contains non-hexadecimal digits")]
     NonHexDigits(#[from] hex::FromHexError),
+}
+
+impl From<HashFromStrError> for CryptoError {
+    fn from(error: HashFromStrError) -> Self {
+        CryptoError::HashFromStrError(error)
+    }
 }
 
 impl std::fmt::Display for Signature {

@@ -51,8 +51,8 @@ pub trait ValidatorNode {
 /// clients will track validator votes on each error value).
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash)]
 pub enum NodeError {
-    #[error("Cryptographic error: {0}")]
-    CryptoError(#[from] CryptoError),
+    #[error("Cryptographic error: {error}")]
+    CryptoError { error: String },
 
     #[error("Base error: {error}")]
     BaseError { error: String },
@@ -130,6 +130,7 @@ pub enum NodeError {
     ClientIoError { error: String },
     #[error("Failed to resolve validator address: {address}")]
     CannotResolveValidatorAddress { address: String },
+
 }
 
 impl From<ViewError> for NodeError {
@@ -140,9 +141,18 @@ impl From<ViewError> for NodeError {
     }
 }
 
+
 impl From<linera_base::error::Error> for NodeError {
     fn from(error: linera_base::error::Error) -> Self {
         Self::BaseError {
+            error: error.to_string(),
+        }
+    }
+}
+
+impl From<CryptoError> for NodeError {
+    fn from(error: CryptoError) -> Self {
+        Self::CryptoError {
             error: error.to_string(),
         }
     }
