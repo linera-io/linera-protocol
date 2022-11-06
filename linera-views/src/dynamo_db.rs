@@ -5,7 +5,7 @@ use crate::{
     hash::HashingContext,
     localstack,
     views::{Context, ViewError},
-    common::{WriteOperation, Batch, KeyValueOperations, simplify_batch, put_item_batch},
+    common::{WriteOperation, Batch, KeyValueOperations, simplify_batch},
 };
 use async_trait::async_trait;
 use aws_sdk_dynamodb::{
@@ -201,16 +201,6 @@ impl KeyValueOperations for DynamoPair {
             Some(item) => Ok(Some(Self::extract_value(item)?)),
             None => Ok(None),
         }
-    }
-
-    async fn write_key<V: Serialize + Sync>(
-        &self,
-        key: &[u8],
-	value: &V,
-    ) -> Result<(), DynamoDbContextError> {
-        let mut batch = Batch::default();
-        put_item_batch(&mut batch, key.to_vec(), value)?;
-        self.write_batch(batch).await
     }
 
     async fn find_keys_with_prefix(
@@ -465,10 +455,6 @@ where
         Ok(key)
     }
 
-    /// Retrieve a generic `Item` from the table using the provided `key` prefixed by the current
-    /// context.
-    ///
-    /// The `Item` is deserialized using [`bcs`].
     async fn read_key<Item>(&mut self, key: &[u8]) -> Result<Option<Item>, DynamoDbContextError>
     where
         Item: DeserializeOwned,
@@ -483,11 +469,6 @@ where
         self.db.find_keys_with_prefix(key_prefix).await
     }
 
-    /// Query the table for the keys that are prefixed by the current context.
-    ///
-    /// # Panics
-    ///
-    /// If the raw key bytes can't be deserialized into a `Key`.
     async fn get_sub_keys<Key>(
         &mut self,
         key_prefix: &[u8],

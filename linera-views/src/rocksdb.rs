@@ -38,18 +38,6 @@ impl KeyValueOperations for Arc<DB> {
         }
     }
 
-    async fn write_key<V: Serialize + Sync>(
-        &self,
-        key: &[u8],
-        value: &V,
-    ) -> Result<(), RocksdbContextError> {
-        let db = self.clone();
-        let key = key.to_vec();
-        let bytes = bcs::to_bytes(value)?;
-        tokio::task::spawn_blocking(move || db.put(&key, bytes)).await??;
-        Ok(())
-    }
-
     async fn find_keys_with_prefix(
         &self,
         key_prefix: &[u8],

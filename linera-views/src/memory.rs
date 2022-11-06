@@ -4,7 +4,7 @@
 use crate::{
     hash::HashingContext,
     views::{Context, ViewError},
-    common::{KeyValueOperations, WriteOperation, Batch, put_item_batch},
+    common::{KeyValueOperations, WriteOperation, Batch},
 };
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
@@ -50,16 +50,6 @@ impl KeyValueOperations for MemoryContainer {
             None => Ok(None),
             Some(bytes) => Ok(Some(bcs::from_bytes(bytes)?)),
         }
-    }
-
-    async fn write_key<V: Serialize + Sync>(
-	&self,
-        key: &[u8],
-	value: &V,
-    ) -> Result<(), MemoryContextError> {
-        let mut batch = Batch::default();
-        put_item_batch(&mut batch, key.to_vec(), value)?;
-	self.write_batch(batch).await
     }
 
     async fn find_keys_with_prefix(

@@ -70,12 +70,6 @@ pub trait KeyValueOperations {
         key: &[u8],
     ) -> Result<Option<V>, Self::E>;
 
-    async fn write_key<V: Serialize + Sync>(
-        &self,
-        key: &[u8],
-        value: &V,
-    ) -> Result<(), Self::E>;
-
     async fn find_keys_with_prefix(
         &self,
         key_prefix: &[u8],
