@@ -56,13 +56,6 @@ pub trait Context {
         key_prefix: &[u8],
     ) -> Result<Vec<Key>, Self::Error>;
 
-    /// Provide a reference to a new batch to the builder then execute the batch.
-    async fn run_with_batch<F>(&self, builder: F) -> Result<(), ViewError>
-    where
-        F: FnOnce(&mut Batch) -> futures::future::BoxFuture<Result<(), ViewError>>
-            + Send
-            + Sync;
-
     /// Apply the operations from the `batch`, persisting the changes.
     async fn write_batch(&self, batch: Batch) -> Result<(), ViewError>;
 

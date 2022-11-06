@@ -440,17 +440,6 @@ where
             .collect()
     }
 
-    async fn run_with_batch<F>(&self, builder: F) -> Result<(), ViewError>
-    where
-        F: FnOnce(&mut Batch) -> futures::future::BoxFuture<Result<(), ViewError>>
-            + Send
-            + Sync,
-    {
-        let mut batch = Batch::default();
-        builder(&mut batch).await?;
-        self.write_batch(batch).await
-    }
-
     async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
         self.process_batch(batch).await?;
         Ok(())

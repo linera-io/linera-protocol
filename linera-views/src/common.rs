@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use serde::{de::DeserializeOwned, Serialize};
 use async_trait::async_trait;
+use crate::views::ViewError;
 
 pub enum WriteOperation {
     Delete { key: Vec<u8> },
@@ -48,7 +49,17 @@ pub fn remove_item_batch(batch: &mut Batch, key: Vec<u8>) {
     batch.operations.push(WriteOperation::Delete { key });
 }
 
-
+/// Build a batch using builder. This is used for the macro.
+pub async fn build_batch<F>(builder: F) -> Result<Batch, ViewError>
+where
+    F: FnOnce(&mut Batch) -> futures::future::BoxFuture<Result<(), ViewError>>
+    + Send
+    + Sync
+{
+    let mut batch = Batch::default();
+    builder(&mut batch).await?;
+    Ok(batch)
+}
 
 /// Low-level, asynchronous key-value operations. Useful for storage APIs not based on views.
 #[async_trait]
