@@ -85,6 +85,24 @@ impl KeyValueOperations<RocksdbContextError> for Arc<DB> {
         }
         Ok(keys)
     }
+
+    async fn write_batch(&self, batch: Batch) -> Result<(), RocksdbContextError> {
+        let db = self.clone();
+        tokio::task::spawn_blocking(move || -> Result<(), RocksdbContextError> {
+            let mut inner_batch = rocksdb::WriteBatchWithTransaction::default();
+            for e_ent in batch.operations {
+		match e_ent {
+                    WriteOperation::Delete { key } => inner_batch.delete(&key),
+                    WriteOperation::Put { key, value } => inner_batch.put(&key, value),
+                }
+            }
+            db.write(inner_batch)?;
+	    Ok(())
+        })
+        .await??;
+        Ok(())
+    }
+
 }
 
 impl<E> RocksdbContext<E> {
@@ -145,19 +163,7 @@ where
     }
 
     async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
-        let db = self.db.clone();
-        tokio::task::spawn_blocking(move || -> Result<(), RocksdbContextError> {
-            let mut inner_batch = rocksdb::WriteBatchWithTransaction::default();
-            for e_ent in batch.operations {
-                match e_ent {
-                    WriteOperation::Delete { key } => inner_batch.delete(&key),
-                    WriteOperation::Put { key, value } => inner_batch.put(&key, value),
-                }
-            }
-            db.write(inner_batch)?;
-            Ok(())
-        })
-        .await??;
+        self.db.write_batch(batch).await?;
         Ok(())
     }
 

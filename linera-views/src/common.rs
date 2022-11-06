@@ -84,5 +84,7 @@ pub trait KeyValueOperations<E> {
         &mut self,
         key_prefix: &[u8],
     ) -> Result<Vec<Key>, E>;
+
+    async fn write_batch(&self, batch: Batch) -> Result<(), E>;
 }
 
