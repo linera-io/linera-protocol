@@ -5,7 +5,7 @@ use crate::{
     hash::HashingContext,
     localstack,
     views::{Context, ViewError},
-    common::{WriteOperation, Batch, simplify_batch},
+    common::{WriteOperation, Batch, KeyValueOperations, simplify_batch, put_item_batch},
 };
 use async_trait::async_trait;
 use aws_sdk_dynamodb::{
@@ -54,122 +54,8 @@ where
     extra: E,
 }
 
-impl<E> DynamoDbContext<E>
-where
-    E: Clone + Sync + Send,
+impl DynamoPair
 {
-    /// Create a new [`DynamoDbContext`] instance.
-    pub async fn new(
-        table: TableName,
-        base_key: Vec<u8>,
-        extra: E,
-    ) -> Result<(Self, TableStatus), CreateTableError> {
-        let config = aws_config::load_from_env().await;
-
-        DynamoDbContext::from_config(&config, table, base_key, extra).await
-    }
-
-    /// Create a new [`DynamoDbContext`] instance using the provided `config` parameters.
-    pub async fn from_config(
-        config: impl Into<Config>,
-        table: TableName,
-        base_key: Vec<u8>,
-        extra: E,
-    ) -> Result<(Self, TableStatus), CreateTableError> {
-        let db = DynamoPair { client: Client::from_conf(config.into()), table };
-        let storage = DynamoDbContext {
-            db,
-            base_key,
-            extra,
-        };
-
-        let table_status = storage.create_table_if_needed().await?;
-
-        Ok((storage, table_status))
-    }
-
-    /// Create a new [`DynamoDbContext`] instance using a LocalStack endpoint.
-    ///
-    /// Requires a [`LOCALSTACK_ENDPOINT`] environment variable with the endpoint address to connect
-    /// to the LocalStack instance. Creates the table if it doesn't exist yet, reporting a
-    /// [`TableStatus`] to indicate if the table was created or if it already exists.
-    pub async fn with_localstack(
-        table: TableName,
-        base_key: Vec<u8>,
-        extra: E,
-    ) -> Result<(Self, TableStatus), LocalStackError> {
-        let base_config = aws_config::load_from_env().await;
-        let config = aws_sdk_dynamodb::config::Builder::from(&base_config)
-            .endpoint_resolver(localstack::get_endpoint()?)
-            .build();
-
-        Ok(DynamoDbContext::from_config(config, table, base_key, extra).await?)
-    }
-
-    /// Clone this [`DynamoDbContext`] while entering a sub-scope.
-    ///
-    /// The return context has its key prefix extended with `scope_prefix` and uses the
-    /// `new_extra` instead of cloning the current extra data.
-    pub fn clone_with_sub_scope<NewE: Clone + Send + Sync>(
-        &self,
-        scope_prefix: &impl Serialize,
-        new_extra: NewE,
-    ) -> DynamoDbContext<NewE> {
-        DynamoDbContext {
-            db: self.db.clone(),
-            base_key: self.derive_key(scope_prefix).expect("derive_key should not fail"),
-            extra: new_extra,
-        }
-    }
-
-    /// Create the storage table if it doesn't exist.
-    ///
-    /// Attempts to create the table and ignores errors that indicate that it already exists.
-    async fn create_table_if_needed(&self) -> Result<TableStatus, CreateTableError> {
-        let result = self
-            .db.client
-            .create_table()
-            .table_name(self.db.table.as_ref())
-            .attribute_definitions(
-                AttributeDefinition::builder()
-                    .attribute_name(PARTITION_ATTRIBUTE)
-                    .attribute_type(ScalarAttributeType::B)
-                    .build(),
-            )
-            .attribute_definitions(
-                AttributeDefinition::builder()
-                    .attribute_name(KEY_ATTRIBUTE)
-                    .attribute_type(ScalarAttributeType::B)
-                    .build(),
-            )
-            .key_schema(
-                KeySchemaElement::builder()
-                    .attribute_name(PARTITION_ATTRIBUTE)
-                    .key_type(KeyType::Hash)
-                    .build(),
-            )
-            .key_schema(
-                KeySchemaElement::builder()
-                    .attribute_name(KEY_ATTRIBUTE)
-                    .key_type(KeyType::Range)
-                    .build(),
-            )
-            .provisioned_throughput(
-                ProvisionedThroughput::builder()
-                    .read_capacity_units(10)
-                    .write_capacity_units(10)
-                    .build(),
-            )
-            .send()
-            .await;
-
-        match result {
-            Ok(_) => Ok(TableStatus::New),
-            Err(error) if error.is_resource_in_use_exception() => Ok(TableStatus::Existing),
-            Err(error) => Err(error.into()),
-        }
-    }
-
     /// Build the key attributes for a table item.
     ///
     /// The key is composed of two attributes that are both binary blobs. The first attribute is a
@@ -222,7 +108,7 @@ where
     fn extract_sub_key<Key>(
         &self,
         attributes: &HashMap<String, AttributeValue>,
-        extra_bytes_to_skip: usize,
+        key_length: usize,
     ) -> Result<Key, DynamoDbContextError>
     where
         Key: DeserializeOwned,
@@ -230,7 +116,7 @@ where
         Self::extract_attribute(
             attributes,
             KEY_ATTRIBUTE,
-            Some(self.base_key.len() + extra_bytes_to_skip),
+            Some(key_length),
             DynamoDbContextError::MissingKey,
             DynamoDbContextError::wrong_key_type,
             DynamoDbContextError::KeyDeserialization,
@@ -290,9 +176,116 @@ where
         bcs::from_bytes(data_bytes).map_err(deserialization_error)
     }
 
+}
+
+#[async_trait]
+impl KeyValueOperations<DynamoDbContextError> for DynamoPair {
+    /// Retrieve a generic `Item` from the table using the provided `key` prefixed by the current
+    /// context.
+    ///
+    /// The `Item` is deserialized using [`bcs`].
+    async fn read_key<Item>(&self, key: &[u8]) -> Result<Option<Item>, DynamoDbContextError>
+    where
+        Item: DeserializeOwned,
+    {
+        let response = self
+            .client
+            .get_item()
+            .table_name(self.table.as_ref())
+            .set_key(Some(Self::build_key(key.to_vec())))
+            .send()
+            .await?;
+
+        match response.item() {
+            Some(item) => Ok(Some(Self::extract_value(item)?)),
+            None => Ok(None),
+        }
+    }
+
+    async fn write_key<V: Serialize + Sync>(
+        &self,
+        key: &[u8],
+	value: &V,
+    ) -> Result<(), DynamoDbContextError> {
+        let mut batch = Batch::default();
+        put_item_batch(&mut batch, key.to_vec(), value)?;
+        self.write_batch(batch).await
+    }
+
+    async fn find_keys_with_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Vec<Vec<u8>>, DynamoDbContextError> {
+        let response = self
+            .client
+            .query()
+            .table_name(self.table.as_ref())
+            .projection_expression(KEY_ATTRIBUTE)
+            .key_condition_expression(format!(
+                "{PARTITION_ATTRIBUTE} = :partition and begins_with({KEY_ATTRIBUTE}, :prefix)"
+            ))
+            .expression_attribute_values(
+                ":partition",
+                AttributeValue::B(Blob::new(DUMMY_PARTITION_KEY)),
+            )
+            .expression_attribute_values(
+                ":prefix",
+                AttributeValue::B(Blob::new(key_prefix.to_vec())),
+            )
+            .send()
+            .await?;
+
+        response
+            .items()
+            .into_iter()
+            .flatten()
+            .map(|item| self.extract_raw_key(item))
+            .collect()
+    }
+
+    /// Query the table for the keys that are prefixed by the current context.
+    ///
+    /// # Panics
+    ///
+    /// If the raw key bytes can't be deserialized into a `Key`.
+    async fn get_sub_keys<Key>(
+        &mut self,
+        key_prefix: &[u8],
+    ) -> Result<Vec<Key>, DynamoDbContextError>
+    where
+        Key: DeserializeOwned + Send,
+    {
+        let key_length = key_prefix.len();
+        let response = self
+            .client
+            .query()
+            .table_name(self.table.as_ref())
+            .projection_expression(KEY_ATTRIBUTE)
+            .key_condition_expression(format!(
+                "{PARTITION_ATTRIBUTE} = :partition and begins_with({KEY_ATTRIBUTE}, :prefix)"
+            ))
+            .expression_attribute_values(
+                ":partition",
+                AttributeValue::B(Blob::new(DUMMY_PARTITION_KEY)),
+            )
+            .expression_attribute_values(
+                ":prefix",
+                AttributeValue::B(Blob::new(key_prefix.to_vec())),
+            )
+            .send()
+            .await?;
+
+        response
+            .items()
+            .into_iter()
+            .flatten()
+            .map(|item| self.extract_sub_key(item, key_length))
+            .collect()
+    }
+
     /// We put submit the transaction in blocks of at most 25 so as to decrease the
     /// number of needed transactions.
-    async fn process_batch(&self, batch: Batch) -> Result<(), DynamoDbContextError> {
+    async fn write_batch(&self, batch: Batch) -> Result<(), DynamoDbContextError> {
         for batch_chunk in simplify_batch(batch).operations.chunks(25) {
             let requests = batch_chunk
                 .iter()
@@ -312,9 +305,9 @@ where
                 })
                 .collect();
 
-            self.db.client
+            self.client
                 .batch_write_item()
-                .set_request_items(Some(HashMap::from([(self.db.table.0.clone(), requests)])))
+                .set_request_items(Some(HashMap::from([(self.table.0.clone(), requests)])))
                 .send()
                 .await?;
         }
@@ -322,6 +315,125 @@ where
     }
 }
 
+
+
+
+impl<E> DynamoDbContext<E>
+where
+    E: Clone + Sync + Send,
+{
+    /// Create a new [`DynamoDbContext`] instance.
+    pub async fn new(
+        table: TableName,
+        base_key: Vec<u8>,
+        extra: E,
+    ) -> Result<(Self, TableStatus), CreateTableError> {
+        let config = aws_config::load_from_env().await;
+
+        DynamoDbContext::from_config(&config, table, base_key, extra).await
+    }
+    /// Create the storage table if it doesn't exist.
+    ///
+    /// Attempts to create the table and ignores errors that indicate that it already exists.
+    async fn create_table_if_needed(&self) -> Result<TableStatus, CreateTableError> {
+        let result = self
+            .db.client
+            .create_table()
+            .table_name(self.db.table.as_ref())
+            .attribute_definitions(
+                AttributeDefinition::builder()
+                    .attribute_name(PARTITION_ATTRIBUTE)
+                    .attribute_type(ScalarAttributeType::B)
+                    .build(),
+            )
+            .attribute_definitions(
+                AttributeDefinition::builder()
+                    .attribute_name(KEY_ATTRIBUTE)
+                    .attribute_type(ScalarAttributeType::B)
+                    .build(),
+            )
+            .key_schema(
+                KeySchemaElement::builder()
+                    .attribute_name(PARTITION_ATTRIBUTE)
+                    .key_type(KeyType::Hash)
+                    .build(),
+            )
+            .key_schema(
+                KeySchemaElement::builder()
+                    .attribute_name(KEY_ATTRIBUTE)
+                    .key_type(KeyType::Range)
+                    .build(),
+            )
+            .provisioned_throughput(
+                ProvisionedThroughput::builder()
+                    .read_capacity_units(10)
+                    .write_capacity_units(10)
+                    .build(),
+            )
+            .send()
+            .await;
+
+        match result {
+            Ok(_) => Ok(TableStatus::New),
+            Err(error) if error.is_resource_in_use_exception() => Ok(TableStatus::Existing),
+            Err(error) => Err(error.into()),
+        }
+    }
+
+    /// Create a new [`DynamoDbContext`] instance using the provided `config` parameters.
+    pub async fn from_config(
+        config: impl Into<Config>,
+        table: TableName,
+        base_key: Vec<u8>,
+        extra: E,
+    ) -> Result<(Self, TableStatus), CreateTableError> {
+        let db = DynamoPair { client: Client::from_conf(config.into()), table };
+        let storage = DynamoDbContext {
+            db,
+            base_key,
+            extra,
+        };
+
+        let table_status = storage.create_table_if_needed().await?;
+
+        Ok((storage, table_status))
+    }
+
+    /// Create a new [`DynamoDbContext`] instance using a LocalStack endpoint.
+    ///
+    /// Requires a [`LOCALSTACK_ENDPOINT`] environment variable with the endpoint address to connect
+    /// to the LocalStack instance. Creates the table if it doesn't exist yet, reporting a
+    /// [`TableStatus`] to indicate if the table was created or if it already exists.
+    pub async fn with_localstack(
+        table: TableName,
+        base_key: Vec<u8>,
+        extra: E,
+    ) -> Result<(Self, TableStatus), LocalStackError> {
+        let base_config = aws_config::load_from_env().await;
+        let config = aws_sdk_dynamodb::config::Builder::from(&base_config)
+            .endpoint_resolver(localstack::get_endpoint()?)
+            .build();
+
+        Ok(DynamoDbContext::from_config(config, table, base_key, extra).await?)
+    }
+
+    /// Clone this [`DynamoDbContext`] while entering a sub-scope.
+    ///
+    /// The return context has its key prefix extended with `scope_prefix` and uses the
+    /// `new_extra` instead of cloning the current extra data.
+    pub fn clone_with_sub_scope<NewE: Clone + Send + Sync>(
+        &self,
+        scope_prefix: &impl Serialize,
+        new_extra: NewE,
+    ) -> DynamoDbContext<NewE> {
+        DynamoDbContext {
+            db: self.db.clone(),
+            base_key: self.derive_key(scope_prefix).expect("derive_key should not fail"),
+            extra: new_extra,
+        }
+    }
+
+}
 
 
 
@@ -360,49 +472,14 @@ where
     where
         Item: DeserializeOwned,
     {
-        let response = self
-            .db.client
-            .get_item()
-            .table_name(self.db.table.as_ref())
-            .set_key(Some(Self::build_key(key.to_vec())))
-            .send()
-            .await?;
-
-        match response.item() {
-            Some(item) => Ok(Some(Self::extract_value(item)?)),
-            None => Ok(None),
-        }
+        self.db.read_key(key).await
     }
 
     async fn find_keys_with_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<Vec<u8>>, DynamoDbContextError> {
-        let response = self
-            .db.client
-            .query()
-            .table_name(self.db.table.as_ref())
-            .projection_expression(KEY_ATTRIBUTE)
-            .key_condition_expression(format!(
-                "{PARTITION_ATTRIBUTE} = :partition and begins_with({KEY_ATTRIBUTE}, :prefix)"
-            ))
-            .expression_attribute_values(
-                ":partition",
-                AttributeValue::B(Blob::new(DUMMY_PARTITION_KEY)),
-            )
-            .expression_attribute_values(
-                ":prefix",
-                AttributeValue::B(Blob::new(key_prefix.to_vec())),
-            )
-            .send()
-            .await?;
-
-        response
-            .items()
-            .into_iter()
-            .flatten()
-            .map(|item| self.extract_raw_key(item))
-            .collect()
+        self.db.find_keys_with_prefix(key_prefix).await
     }
 
     /// Query the table for the keys that are prefixed by the current context.
@@ -417,36 +494,11 @@ where
     where
         Key: DeserializeOwned + Send,
     {
-        let extra_prefix_bytes_count = key_prefix.len() - self.base_key.len();
-        let response = self
-            .db.client
-            .query()
-            .table_name(self.db.table.as_ref())
-            .projection_expression(KEY_ATTRIBUTE)
-            .key_condition_expression(format!(
-                "{PARTITION_ATTRIBUTE} = :partition and begins_with({KEY_ATTRIBUTE}, :prefix)"
-            ))
-            .expression_attribute_values(
-                ":partition",
-                AttributeValue::B(Blob::new(DUMMY_PARTITION_KEY)),
-            )
-            .expression_attribute_values(
-                ":prefix",
-                AttributeValue::B(Blob::new(key_prefix.to_vec())),
-            )
-            .send()
-            .await?;
-
-        response
-            .items()
-            .into_iter()
-            .flatten()
-            .map(|item| self.extract_sub_key(item, extra_prefix_bytes_count))
-            .collect()
+        self.db.get_sub_keys(key_prefix).await
     }
 
     async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
-        self.process_batch(batch).await?;
+        self.write_batch(batch).await?;
         Ok(())
     }
 
