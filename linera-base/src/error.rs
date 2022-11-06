@@ -28,8 +28,6 @@ pub enum Error {
     InvalidOwner,
 
     // Chaining
-    #[error("The previous block hash of a new block should match the last block of the chain")]
-    UnexpectedPreviousBlockHash,
     #[error(
         "Was expecting block height {expected_block_height} but found {found_block_height} instead"
     )]
@@ -37,10 +35,6 @@ pub enum Error {
         expected_block_height: BlockHeight,
         found_block_height: BlockHeight,
     },
-    #[error("Sequence numbers above the maximal value are not usable for blocks")]
-    InvalidBlockHeight,
-    #[error("Cannot initiate a new block while the previous one is still pending confirmation")]
-    PreviousBlockMustBeConfirmedFirst,
     #[error("Cannot confirm a block before its predecessors: {current_block_height:?}")]
     MissingEarlierBlocks { current_block_height: BlockHeight },
 
@@ -51,12 +45,8 @@ pub enum Error {
     SequenceUnderflow,
 
     // Signatures and certificates
-    #[error("The signature was not created by a valid entity")]
-    InvalidSigner,
-    #[error("Signatures in a certificate must form a quorum")]
-    CertificateRequiresQuorum,
-    #[error("Signatures in a certificate must be from different validators")]
-    CertificateValidatorReuse,
+    #[error("Signature for object {type_name} is not valid: {error}")]
+    InvalidSignature { error: String, type_name: String },
     #[error("The given certificate is invalid")]
     InvalidCertificate,
     #[error("The given chain info response is invalid")]
@@ -70,15 +60,15 @@ pub enum Error {
     #[error("A different block for height {0:?} was already locked at round number {1:?}")]
     HasLockedBlock(BlockHeight, RoundNumber),
     #[error(
-        "Cannot vote for block proposal of chain {chain_id:?} because a message \
-         from chain {origin:?} at height {height:?} (application {application_id:?}) \
-         has not been received yet"
+        "The given incoming message from {origin:?} at height {height:?} and \
+         index {index:?} (application {application_id:?}) is out of order"
     )]
-    MissingCrossChainUpdate {
+    InvalidMessageOrder {
         chain_id: ChainId,
         application_id: ApplicationId,
         origin: Origin,
         height: BlockHeight,
+        index: usize,
     },
     #[error(
         "Message in block proposal does not match received message from {origin:?} \
@@ -91,37 +81,10 @@ pub enum Error {
         height: BlockHeight,
         index: usize,
     },
-    #[error(
-        "Message in block proposal does not match the order of received messages from \
-        chain {origin:?}: was height {height:?} and index {index:?} \
-        instead of {expected_height:?} and {expected_index:?} (application {application_id:?})"
-    )]
-    InvalidMessage {
-        chain_id: ChainId,
-        application_id: ApplicationId,
-        origin: Origin,
-        height: BlockHeight,
-        index: usize,
-        expected_height: BlockHeight,
-        expected_index: usize,
-    },
-    #[error(
-        "The given incoming message from {origin:?} at height {height:?} and \
-         index {index:?} (application {application_id:?}) is out of order"
-    )]
-    InvalidMessageOrder {
-        chain_id: ChainId,
-        application_id: ApplicationId,
-        origin: Origin,
-        height: BlockHeight,
-        index: usize,
-    },
 
     // Other server-side errors
     #[error("Invalid cross-chain request")]
     InvalidCrossChainRequest,
-    #[error("Invalid block proposal")]
-    InvalidBlockProposal,
     #[error("The block does contain the hash that we expected for the previous block")]
     InvalidBlockChaining,
     #[error("The given state hash is not what we computed after executing the block")]

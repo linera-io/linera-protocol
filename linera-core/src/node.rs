@@ -11,11 +11,11 @@ use futures::lock::Mutex;
 use linera_base::{
     crypto::CryptoError,
     error::Error,
-    messages::{BlockHeight, ChainId, ValidatorName},
+    messages::{ApplicationId, BlockHeight, ChainId, Origin, ValidatorName},
 };
 use linera_chain::{
     messages::{Block, BlockProposal, Certificate, Value},
-    ChainManager,
+    ChainError, ChainManager,
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -82,6 +82,29 @@ pub enum NodeError {
     )]
     ProposedBlockWithLaggingMessages { chain_id: ChainId, retries: usize },
 
+    #[error(
+        "Cannot vote for block proposal of chain {chain_id:?} because a message \
+         from chain {origin:?} at height {height:?} (application {application_id:?}) \
+         has not been received yet"
+    )]
+    MissingCrossChainUpdate {
+        chain_id: ChainId,
+        application_id: ApplicationId,
+        origin: Origin,
+        height: BlockHeight,
+    },
+
+    #[error("Cannot confirm a block before its predecessors: {current_block_height:?}")]
+    MissingEarlierBlocks { current_block_height: BlockHeight },
+
+    #[error(
+        "Was expecting block height {expected_block_height} but found {found_block_height} instead"
+    )]
+    UnexpectedBlockHeight {
+        expected_block_height: BlockHeight,
+        found_block_height: BlockHeight,
+    },
+
     #[error("Error while accessing storage view: {error}")]
     ViewError { error: String },
 
@@ -90,12 +113,49 @@ pub enum NodeError {
 
     #[error("Cryptographic error: {0}")]
     CryptoError(#[from] CryptoError),
+
+    #[error("Chain error: {error}")]
+    ChainError { error: String },
+
 }
 
 impl From<ViewError> for NodeError {
     fn from(error: ViewError) -> Self {
         Self::ViewError {
             error: error.to_string(),
+        }
+    }
+}
+
+impl From<ChainError> for NodeError {
+    fn from(error: ChainError) -> Self {
+        match error {
+            ChainError::MissingCrossChainUpdate {
+                chain_id,
+                application_id,
+                origin,
+                height,
+            } => Self::MissingCrossChainUpdate {
+                chain_id,
+                application_id,
+                origin,
+                height,
+            },
+            ChainError::MissingEarlierBlocks {
+                current_block_height,
+            } => Self::MissingEarlierBlocks {
+                current_block_height,
+            },
+            ChainError::UnexpectedBlockHeight {
+                expected_block_height,
+                found_block_height,
+            } => Self::UnexpectedBlockHeight {
+                expected_block_height,
+                found_block_height,
+            },
+            error => Self::ChainError {
+                error: error.to_string(),
+            },
         }
     }
 }
@@ -203,9 +263,10 @@ where
                             // Continue with the next certificate.
                             continue;
                         }
-                        Err(NodeError::WorkerError(
-                            e @ (Error::InvalidCertificate | Error::MissingEarlierBlocks { .. }),
-                        )) => {
+                        Err(
+                            e @ (NodeError::WorkerError(Error::InvalidCertificate)
+                            | NodeError::MissingEarlierBlocks { .. }),
+                        ) => {
                             // The certificate is not as expected. Give up.
                             log::warn!(
                                 "Failed to process network certificate {}: {}",

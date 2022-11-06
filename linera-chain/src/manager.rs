@@ -1,11 +1,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::messages::{Block, BlockAndRound, BlockProposal, Certificate, Value, Vote};
+use crate::{
+    messages::{Block, BlockAndRound, BlockProposal, Certificate, Value, Vote},
+    ChainError,
+};
 use linera_base::{
     crypto::{HashValue, KeyPair},
     ensure,
-    error::Error,
     messages::{ApplicationId, BlockHeight, Destination, Owner, RoundNumber},
 };
 use linera_execution::{ChainOwnership, Effect};
@@ -151,36 +153,36 @@ impl ChainManager {
         next_block_height: BlockHeight,
         new_block: &Block,
         new_round: RoundNumber,
-    ) -> Result<Outcome, Error> {
+    ) -> Result<Outcome, ChainError> {
         ensure!(
             new_block.height == next_block_height,
-            Error::UnexpectedBlockHeight {
+            ChainError::UnexpectedBlockHeight {
                 expected_block_height: next_block_height,
                 found_block_height: new_block.height
             }
         );
         ensure!(
             new_block.previous_block_hash == block_hash,
-            Error::UnexpectedPreviousBlockHash
+            ChainError::UnexpectedPreviousBlockHash
         );
         ensure!(
             new_block.height <= BlockHeight::max(),
-            Error::InvalidBlockHeight
+            ChainError::InvalidBlockHeight
         );
         match self {
             ChainManager::Single(manager) => {
                 ensure!(
                     new_round == RoundNumber::default(),
-                    Error::InvalidBlockProposal
+                    ChainError::InvalidBlockProposal
                 );
                 if let Some(vote) = &manager.pending {
                     match &vote.value {
                         Value::ConfirmedBlock { block, .. } if block != new_block => {
                             log::error!("Attempting to sign a different block at the same height:\n{:?}\n{:?}", block, new_block);
-                            return Err(Error::PreviousBlockMustBeConfirmedFirst);
+                            return Err(ChainError::PreviousBlockMustBeConfirmedFirst);
                         }
                         Value::ValidatedBlock { .. } => {
-                            return Err(Error::InvalidBlockProposal);
+                            return Err(ChainError::InvalidBlockProposal);
                         }
                         _ => {
                             return Ok(Outcome::Skip);
@@ -195,16 +197,16 @@ impl ChainManager {
                         return Ok(Outcome::Skip);
                     }
                     if new_round <= proposal.content.round {
-                        return Err(Error::InsufficientRound(proposal.content.round));
+                        return Err(ChainError::InsufficientRound(proposal.content.round));
                     }
                 }
                 if let Some(cert) = &manager.locked {
                     match &cert.value {
                         Value::ValidatedBlock { round, .. } if new_round <= *round => {
-                            return Err(Error::InsufficientRound(*round));
+                            return Err(ChainError::InsufficientRound(*round));
                         }
                         Value::ValidatedBlock { block, round, .. } if new_block != block => {
-                            return Err(Error::HasLockedBlock(block.height, *round));
+                            return Err(ChainError::HasLockedBlock(block.height, *round));
                         }
                         _ => (),
                     }
@@ -220,9 +222,9 @@ impl ChainManager {
         next_block_height: BlockHeight,
         new_block: &Block,
         new_round: RoundNumber,
-    ) -> Result<Outcome, Error> {
+    ) -> Result<Outcome, ChainError> {
         if next_block_height < new_block.height {
-            return Err(Error::MissingEarlierBlocks {
+            return Err(ChainError::MissingEarlierBlocks {
                 current_block_height: next_block_height,
             });
         }
@@ -238,7 +240,9 @@ impl ChainManager {
                             return Ok(Outcome::Skip);
                         }
                         Value::ValidatedBlock { round, .. } if new_round < *round => {
-                            return Err(Error::InsufficientRound(round.try_sub_one().unwrap()));
+                            return Err(ChainError::InsufficientRound(
+                                round.try_sub_one().unwrap(),
+                            ));
                         }
                         _ => (),
                     }
@@ -246,7 +250,9 @@ impl ChainManager {
                 if let Some(cert) = &manager.locked {
                     match &cert.value {
                         Value::ValidatedBlock { round, .. } if new_round < *round => {
-                            return Err(Error::InsufficientRound(round.try_sub_one().unwrap()));
+                            return Err(ChainError::InsufficientRound(
+                                round.try_sub_one().unwrap(),
+                            ));
                         }
                         _ => (),
                     }

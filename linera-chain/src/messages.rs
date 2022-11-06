@@ -2,11 +2,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::ChainError;
 use linera_base::{
     committee::Committee,
     crypto::{BcsSignable, CryptoError, HashValue, KeyPair, Signature},
     ensure,
-    error::Error,
     messages::{
         ApplicationId, BlockHeight, ChainId, Destination, Epoch, Origin, Owner, RoundNumber,
         ValidatorName,
@@ -185,8 +185,8 @@ impl Vote {
     }
 
     /// Verify the signature in the vote.
-    pub fn check(&self, name: ValidatorName) -> Result<(), CryptoError> {
-        self.signature.check(&self.value, name.0)
+    pub fn check(&self, name: ValidatorName) -> Result<(), ChainError> {
+        Ok(self.signature.check(&self.value, name.0)?)
     }
 }
 
@@ -220,17 +220,17 @@ impl<'a> SignatureAggregator<'a> {
         &mut self,
         validator: ValidatorName,
         signature: Signature,
-    ) -> Result<Option<Certificate>, Error> {
+    ) -> Result<Option<Certificate>, ChainError> {
         signature.check(&self.partial.value, validator.0)?;
         // Check that each validator only appears once.
         ensure!(
             !self.used_validators.contains(&validator),
-            Error::CertificateValidatorReuse
+            ChainError::CertificateValidatorReuse
         );
         self.used_validators.insert(validator);
         // Update weight.
         let voting_rights = self.committee.weight(&validator);
-        ensure!(voting_rights > 0, Error::InvalidSigner);
+        ensure!(voting_rights > 0, ChainError::InvalidSigner);
         self.weight += voting_rights;
         // Update certificate.
         self.partial.signatures.push((validator, signature));
@@ -272,7 +272,7 @@ impl Certificate {
     }
 
     /// Verify the certificate.
-    pub fn check<'a>(&'a self, committee: &Committee) -> Result<&'a Value, Error> {
+    pub fn check<'a>(&'a self, committee: &Committee) -> Result<&'a Value, ChainError> {
         // Check the quorum.
         let mut weight = 0;
         let mut used_validators = HashSet::new();
@@ -280,23 +280,27 @@ impl Certificate {
             // Check that each validator only appears once.
             ensure!(
                 !used_validators.contains(validator),
-                Error::CertificateValidatorReuse
+                ChainError::CertificateValidatorReuse
             );
             used_validators.insert(*validator);
             // Update weight.
             let voting_rights = committee.weight(validator);
-            ensure!(voting_rights > 0, Error::InvalidSigner);
+            ensure!(voting_rights > 0, ChainError::InvalidSigner);
             weight += voting_rights;
         }
         ensure!(
             weight >= committee.quorum_threshold(),
-            Error::CertificateRequiresQuorum
+            ChainError::CertificateRequiresQuorum
         );
         // All what is left is checking signatures!
-        Signature::verify_batch(&self.value, self.signatures.iter().map(|(v, s)| (&v.0, s)))?;
+        Signature::verify_batch(&self.value, self.signatures.iter().map(|(v, s)| (&v.0, s)))
+            .map_err(|e| ChainError::CertificateSignatureVerificationFailed {
+                error: e.to_string(),
+            })?;
         Ok(&self.value)
     }
 }
 
 impl BcsSignable for BlockAndRound {}
+
 impl BcsSignable for Value {}

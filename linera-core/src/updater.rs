@@ -161,10 +161,9 @@ where
                     // Succeed
                     return Ok(response.info);
                 }
-                Err(NodeError::WorkerError(Error::MissingCrossChainUpdate {
-                    chain_id: id,
-                    ..
-                })) if id == chain_id && !has_send_chain_information_for_senders => {
+                Err(NodeError::MissingCrossChainUpdate { chain_id: id, .. })
+                    if id == chain_id && !has_send_chain_information_for_senders =>
+                {
                     // Some received certificates may be missing for this validator
                     // (e.g. to make the balance sufficient) so we are going to
                     // synchronize them now.
@@ -186,10 +185,7 @@ where
                         });
                     }
                 }
-                Err(NodeError::WorkerError(Error::MissingCrossChainUpdate {
-                    chain_id: id,
-                    ..
-                })) if id == chain_id => {
+                Err(NodeError::MissingCrossChainUpdate { chain_id: id, .. }) if id == chain_id => {
                     if count < self.retries {
                         // We just called `send_chain_information_for_senders` but it may
                         // take time to receive the missing messages: let's retry.

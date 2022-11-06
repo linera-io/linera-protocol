@@ -531,7 +531,7 @@ where
         this_chain_id: ChainId,
         effect_id: EffectId,
         effect: &Effect,
-    ) -> Result<bool, ExecutionError> {
+    ) -> bool {
         // Chain creation effects are special and executed (only) in this callback.
         // For simplicity, they will still appear in the received messages.
         match &effect {
@@ -560,9 +560,9 @@ where
                     (),
                 );
                 self.ownership.set(ChainOwnership::single(*owner));
-                Ok(true)
+                true
             }
-            _ => Ok(false),
+            _ => false,
         }
     }
 

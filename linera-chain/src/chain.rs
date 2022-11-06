@@ -3,12 +3,11 @@
 
 use crate::{
     messages::{Block, MessageGroup},
-    ChainManager,
+    ChainError, ChainManager,
 };
 use linera_base::{
     crypto::HashValue,
     ensure,
-    error::Error,
     messages::{ApplicationId, BlockHeight, ChainId, Destination, EffectId, Medium, Origin},
 };
 use linera_execution::{
@@ -119,7 +118,7 @@ where
     C: OutboxStateViewContext,
     ViewError: From<C::Error>,
 {
-    pub async fn block_heights(&mut self) -> Result<Vec<BlockHeight>, Error> {
+    pub async fn block_heights(&mut self) -> Result<Vec<BlockHeight>, ChainError> {
         let count = self.queue.count();
         let heights = self.queue.read_front(count).await?;
         Ok(heights)
@@ -191,7 +190,7 @@ where
         origin: &Origin,
         recipient: ChainId,
         height: BlockHeight,
-    ) -> Result<bool, ViewError> {
+    ) -> Result<bool, ChainError> {
         let outbox = outboxes.load_entry(recipient).await?;
         if outbox.queue.count() == 0 {
             log::warn!(
@@ -214,7 +213,7 @@ where
         application_id: ApplicationId,
         recipient: ChainId,
         height: BlockHeight,
-    ) -> Result<bool, ViewError> {
+    ) -> Result<bool, ChainError> {
         let origin = Origin {
             chain_id: self.chain_id(),
             medium: Medium::Direct,
@@ -236,7 +235,7 @@ where
         application_id: ApplicationId,
         recipient: ChainId,
         height: BlockHeight,
-    ) -> Result<bool, ViewError> {
+    ) -> Result<bool, ChainError> {
         let origin = Origin {
             chain_id: self.chain_id(),
             medium: Medium::Channel(name.to_string()),
@@ -263,7 +262,7 @@ where
 
     /// Verify that this chain is up-to-date and all the messages executed ahead of time
     /// have been properly received by now.
-    pub async fn validate_incoming_messages(&mut self) -> Result<(), Error> {
+    pub async fn validate_incoming_messages(&mut self) -> Result<(), ChainError> {
         for id in self.communication_states.indices().await? {
             let state = self.communication_states.load_entry(id).await?;
             for origin in state.inboxes.indices().await? {
@@ -271,7 +270,7 @@ where
                 let expected_event = inbox.expected_events.front().await?;
                 ensure!(
                     expected_event.is_none(),
-                    Error::MissingCrossChainUpdate {
+                    ChainError::MissingCrossChainUpdate {
                         chain_id: self.chain_id(),
                         application_id: id,
                         origin,
@@ -293,7 +292,7 @@ where
         height: BlockHeight,
         effects: Vec<(ApplicationId, Destination, Effect)>,
         key: HashValue,
-    ) -> Result<bool, Error> {
+    ) -> Result<bool, ChainError> {
         let chain_id = self.chain_id();
         let communication_state = self.communication_states.load_entry(application_id).await?;
         let inbox = communication_state
@@ -317,7 +316,11 @@ where
             height
         );
         // Mark the block as received.
-        inbox.next_height_to_receive.set(height.try_add_one()?);
+        inbox.next_height_to_receive.set(height
+            .try_add_one()
+            .map_err(|_| ChainError::InvalidBlockHeight)?
+        );
+
         self.received_log.push(key);
 
         let mut was_a_recipient = false;
@@ -351,7 +354,7 @@ where
                 if self
                     .execution_state
                     .system
-                    .apply_immediate_effect(chain_id, effect_id, &effect)?
+                    .apply_immediate_effect(chain_id, effect_id, &effect)
                 {
                     // Recompute the state hash.
                     let hash = self.execution_state.hash_value().await?;
@@ -398,7 +401,7 @@ where
 
     /// Verify that the incoming_messages are in the right order. This matters for inbox
     /// invariants, notably the fact that inbox.expected_events is sorted.
-    fn check_incoming_messages(&self, messages: &[MessageGroup]) -> Result<(), Error> {
+    fn check_incoming_messages(&self, messages: &[MessageGroup]) -> Result<(), ChainError> {
         let mut next_messages: HashMap<(ApplicationId, Origin), (BlockHeight, usize)> =
             HashMap::new();
         for message_group in messages {
@@ -408,7 +411,7 @@ where
             for (message_index, _) in &message_group.effects {
                 ensure!(
                     (message_group.height, *message_index) >= *next_message,
-                    Error::InvalidMessageOrder {
+                    ChainError::InvalidMessageOrder {
                         chain_id: self.chain_id(),
                         application_id: message_group.application_id,
                         origin: message_group.origin.clone(),
@@ -429,7 +432,7 @@ where
     pub async fn execute_block(
         &mut self,
         block: &Block,
-    ) -> Result<Vec<(ApplicationId, Destination, Effect)>, Error> {
+    ) -> Result<Vec<(ApplicationId, Destination, Effect)>, ChainError> {
         assert_eq!(block.chain_id, self.chain_id());
         let chain_id = self.chain_id();
         let mut effects = Vec::new();
@@ -480,7 +483,7 @@ where
                         } = event;
                         ensure!(
                             message_group.height == height && message_index == &index,
-                            Error::InvalidMessage {
+                            ChainError::InvalidMessage {
                                 chain_id: self.chain_id(),
                                 application_id: message_group.application_id,
                                 origin: message_group.origin.clone(),
@@ -492,7 +495,7 @@ where
                         );
                         ensure!(
                             message_effect == effect,
-                            Error::InvalidMessageContent {
+                            ChainError::InvalidMessageContent {
                                 chain_id: self.chain_id(),
                                 application_id: message_group.application_id,
                                 origin: message_group.origin.clone(),
@@ -523,10 +526,12 @@ where
                         index: *message_index,
                     },
                 };
+
                 let results = self
                     .execution_state
                     .execute_effect(message_group.application_id, &context, message_effect)
                     .await?;
+
                 Self::process_execution_results(
                     &mut communication_state.outboxes,
                     &mut communication_state.channels,
@@ -552,6 +557,7 @@ where
                 .execution_state
                 .execute_operation(*application_id, &context, operation)
                 .await?;
+
             Self::process_execution_results(
                 &mut communication_state.outboxes,
                 &mut communication_state.channels,
@@ -577,7 +583,7 @@ where
         effects: &mut Vec<(ApplicationId, Destination, Effect)>,
         height: BlockHeight,
         results: Vec<ExecutionResult>,
-    ) -> Result<(), ViewError> {
+    ) -> Result<(), ChainError> {
         for result in results {
             match result {
                 ExecutionResult::System(raw) => {
@@ -609,7 +615,7 @@ where
         effects: &mut Vec<(ApplicationId, Destination, Effect)>,
         height: BlockHeight,
         application: RawExecutionResult<E>,
-    ) -> Result<(), ViewError> {
+    ) -> Result<(), ChainError> {
         // Record the effects of the execution. Effects are understood within an
         // application.
         let mut recipients = HashSet::new();
@@ -668,7 +674,7 @@ where
     ViewError: From<C::Error>,
 {
     /// Schedule a message at the given height if we haven't already.
-    pub async fn schedule_message(&mut self, height: BlockHeight) -> Result<(), ViewError> {
+    pub async fn schedule_message(&mut self, height: BlockHeight) -> Result<(), ChainError> {
         let last_value = self.queue.back().await?;
         if last_value != Some(height) {
             assert!(
