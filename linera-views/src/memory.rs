@@ -4,7 +4,7 @@
 use crate::{
     hash::HashingContext,
     views::{Context, ViewError},
-    common::{WriteOperation, Batch},
+    common::{KeyValueOperations, WriteOperation, Batch, put_item_batch},
 };
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
@@ -16,10 +16,12 @@ use tokio::sync::{OwnedMutexGuard, RwLock};
 /// The analogue of the database is the BTreeMap
 pub type MemoryStoreMap = BTreeMap<Vec<u8>, Vec<u8>>;
 
+pub type MemoryContainer = Arc<RwLock<OwnedMutexGuard<MemoryStoreMap>>>;
+
 /// A context that stores all values in memory.
 #[derive(Clone, Debug)]
 pub struct MemoryContext<E> {
-    db: Arc<RwLock<OwnedMutexGuard<MemoryStoreMap>>>,
+    db: MemoryContainer,
     base_key: Vec<u8>,
     extra: E,
 }
@@ -34,6 +36,72 @@ impl<E> MemoryContext<E> {
     }
 }
 
+
+
+#[async_trait]
+impl KeyValueOperations<MemoryContextError> for MemoryContainer {
+    async fn read_key<V: DeserializeOwned>(
+        &self,
+        key: &[u8],
+    ) -> Result<Option<V>, MemoryContextError> {
+        let map = self.read().await;
+        match map.get(key) {
+            None => Ok(None),
+            Some(bytes) => Ok(Some(bcs::from_bytes(bytes)?)),
+        }
+    }
+
+    async fn write_key<V: Serialize + Sync>(
+	&self,
+        key: &[u8],
+	value: &V,
+    ) -> Result<(), MemoryContextError> {
+        let mut batch = Batch::default();
+        put_item_batch(&mut batch, key.to_vec(), value)?;
+	self.write_batch(batch).await
+    }
+
+    async fn find_keys_with_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Vec<Vec<u8>>, MemoryContextError> {
+        let map = self.read().await;
+        let mut vals = Vec::new();
+        for key in map.keys() {
+            if key.starts_with(key_prefix) {
+                vals.push(key.clone())
+            }
+        }
+        Ok(vals)
+    }
+
+    async fn get_sub_keys<Key>(&mut self, key_prefix: &[u8]) -> Result<Vec<Key>, MemoryContextError>
+    where
+        Key: DeserializeOwned + Send,
+    {
+        let map = self.read().await;
+        let mut keys = Vec::new();
+        let len = key_prefix.len();
+        for key in map.keys() {
+            if key.starts_with(key_prefix) {
+                keys.push(bcs::from_bytes(&key[len..])?);
+            }
+        }
+        Ok(keys)
+    }
+
+    async fn write_batch(&self, batch: Batch) -> Result<(), MemoryContextError> {
+        let mut map = self.write().await;
+        for ent in batch.operations {
+            match ent {
+                WriteOperation::Put { key, value } => map.insert(key, value),
+                WriteOperation::Delete { key } => map.remove(&key),
+            };
+        }
+        Ok(())
+    }
+
+}
 
 
 
@@ -69,50 +137,25 @@ where
         &mut self,
         key: &[u8],
     ) -> Result<Option<V>, MemoryContextError> {
-        let map = self.db.read().await;
-        match map.get(key) {
-            None => Ok(None),
-            Some(bytes) => Ok(Some(bcs::from_bytes(bytes)?)),
-        }
+        self.db.read_key(key).await
     }
 
     async fn find_keys_with_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<Vec<u8>>, MemoryContextError> {
-        let map = self.db.read().await;
-        let mut vals = Vec::new();
-        for key in map.keys() {
-            if key.starts_with(key_prefix) {
-                vals.push(key.clone())
-            }
-        }
-        Ok(vals)
+        self.db.find_keys_with_prefix(key_prefix).await
     }
 
     async fn get_sub_keys<Key>(&mut self, key_prefix: &[u8]) -> Result<Vec<Key>, MemoryContextError>
     where
         Key: DeserializeOwned + Send,
     {
-        let map = self.db.read().await;
-        let mut keys = Vec::new();
-        let len = key_prefix.len();
-        for key in map.keys() {
-            if key.starts_with(key_prefix) {
-                keys.push(bcs::from_bytes(&key[len..])?);
-            }
-        }
-        Ok(keys)
+	self.db.get_sub_keys(key_prefix).await
     }
 
     async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
-        let mut map = self.db.write().await;
-        for ent in batch.operations {
-            match ent {
-                WriteOperation::Put { key, value } => map.insert(key, value),
-                WriteOperation::Delete { key } => map.remove(&key),
-            };
-        }
+        self.db.write_batch(batch).await?;
         Ok(())
     }
 
