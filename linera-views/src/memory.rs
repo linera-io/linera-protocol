@@ -19,7 +19,7 @@ pub type MemoryStoreMap = BTreeMap<Vec<u8>, Vec<u8>>;
 /// A context that stores all values in memory.
 #[derive(Clone, Debug)]
 pub struct MemoryContext<E> {
-    map: Arc<RwLock<OwnedMutexGuard<MemoryStoreMap>>>,
+    db: Arc<RwLock<OwnedMutexGuard<MemoryStoreMap>>>,
     base_key: Vec<u8>,
     extra: E,
 }
@@ -27,12 +27,17 @@ pub struct MemoryContext<E> {
 impl<E> MemoryContext<E> {
     pub fn new(guard: OwnedMutexGuard<MemoryStoreMap>, extra: E) -> Self {
         Self {
-            map: Arc::new(RwLock::new(guard)),
+            db: Arc::new(RwLock::new(guard)),
             base_key: Vec::new(),
             extra,
         }
     }
 }
+
+
+
+
+
 
 #[async_trait]
 impl<E> Context for MemoryContext<E>
@@ -64,7 +69,7 @@ where
         &mut self,
         key: &[u8],
     ) -> Result<Option<V>, MemoryContextError> {
-        let map = self.map.read().await;
+        let map = self.db.read().await;
         match map.get(key) {
             None => Ok(None),
             Some(bytes) => Ok(Some(bcs::from_bytes(bytes)?)),
@@ -75,7 +80,7 @@ where
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<Vec<u8>>, MemoryContextError> {
-        let map = self.map.read().await;
+        let map = self.db.read().await;
         let mut vals = Vec::new();
         for key in map.keys() {
             if key.starts_with(key_prefix) {
@@ -89,7 +94,7 @@ where
     where
         Key: DeserializeOwned + Send,
     {
-        let map = self.map.read().await;
+        let map = self.db.read().await;
         let mut keys = Vec::new();
         let len = key_prefix.len();
         for key in map.keys() {
@@ -101,7 +106,7 @@ where
     }
 
     async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
-        let mut map = self.map.write().await;
+        let mut map = self.db.write().await;
         for ent in batch.operations {
             match ent {
                 WriteOperation::Put { key, value } => map.insert(key, value),
@@ -113,7 +118,7 @@ where
 
     fn clone_self(&self, base_key: Vec<u8>) -> Self {
         Self {
-            map: self.map.clone(),
+            db: self.db.clone(),
             base_key,
             extra: self.extra.clone(),
         }

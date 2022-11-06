@@ -40,14 +40,16 @@ const KEY_ATTRIBUTE: &str = "item_key";
 /// The attribute name of the table value blob.
 const VALUE_ATTRIBUTE: &str = "item_value";
 
+#[derive(Debug, Clone)]
+pub struct DynamoPair { pub client: Client, pub table: TableName }
+
 /// A implementation of [`Context`] based on DynamoDB.
 #[derive(Debug, Clone)]
 pub struct DynamoDbContext<E>
 where
     E: Clone + Sync + Send,
 {
-    client: Client,
-    table: TableName,
+    db: DynamoPair,
     base_key: Vec<u8>,
     extra: E,
 }
@@ -74,9 +76,9 @@ where
         base_key: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), CreateTableError> {
+        let db = DynamoPair { client: Client::from_conf(config.into()), table };
         let storage = DynamoDbContext {
-            client: Client::from_conf(config.into()),
-            table,
+            db,
             base_key,
             extra,
         };
@@ -114,8 +116,7 @@ where
         new_extra: NewE,
     ) -> DynamoDbContext<NewE> {
         DynamoDbContext {
-            client: self.client.clone(),
-            table: self.table.clone(),
+            db: self.db.clone(),
             base_key: self.derive_key(scope_prefix).expect("derive_key should not fail"),
             extra: new_extra,
         }
@@ -126,9 +127,9 @@ where
     /// Attempts to create the table and ignores errors that indicate that it already exists.
     async fn create_table_if_needed(&self) -> Result<TableStatus, CreateTableError> {
         let result = self
-            .client
+            .db.client
             .create_table()
-            .table_name(self.table.as_ref())
+            .table_name(self.db.table.as_ref())
             .attribute_definitions(
                 AttributeDefinition::builder()
                     .attribute_name(PARTITION_ATTRIBUTE)
@@ -311,9 +312,9 @@ where
                 })
                 .collect();
 
-            self.client
+            self.db.client
                 .batch_write_item()
-                .set_request_items(Some(HashMap::from([(self.table.0.clone(), requests)])))
+                .set_request_items(Some(HashMap::from([(self.db.table.0.clone(), requests)])))
                 .send()
                 .await?;
         }
@@ -360,9 +361,9 @@ where
         Item: DeserializeOwned,
     {
         let response = self
-            .client
+            .db.client
             .get_item()
-            .table_name(self.table.as_ref())
+            .table_name(self.db.table.as_ref())
             .set_key(Some(Self::build_key(key.to_vec())))
             .send()
             .await?;
@@ -378,9 +379,9 @@ where
         key_prefix: &[u8],
     ) -> Result<Vec<Vec<u8>>, DynamoDbContextError> {
         let response = self
-            .client
+            .db.client
             .query()
-            .table_name(self.table.as_ref())
+            .table_name(self.db.table.as_ref())
             .projection_expression(KEY_ATTRIBUTE)
             .key_condition_expression(format!(
                 "{PARTITION_ATTRIBUTE} = :partition and begins_with({KEY_ATTRIBUTE}, :prefix)"
@@ -418,9 +419,9 @@ where
     {
         let extra_prefix_bytes_count = key_prefix.len() - self.base_key.len();
         let response = self
-            .client
+            .db.client
             .query()
-            .table_name(self.table.as_ref())
+            .table_name(self.db.table.as_ref())
             .projection_expression(KEY_ATTRIBUTE)
             .key_condition_expression(format!(
                 "{PARTITION_ATTRIBUTE} = :partition and begins_with({KEY_ATTRIBUTE}, :prefix)"
@@ -451,8 +452,7 @@ where
 
     fn clone_self(&self, base_key: Vec<u8>) -> Self {
         DynamoDbContext {
-            client: self.client.clone(),
-            table: self.table.clone(),
+            db: self.db.clone(),
             base_key,
             extra: self.extra.clone(),
         }
