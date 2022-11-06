@@ -41,7 +41,7 @@ const KEY_ATTRIBUTE: &str = "item_key";
 const VALUE_ATTRIBUTE: &str = "item_value";
 
 #[derive(Debug, Clone)]
-pub struct DynamoPair { pub client: Client, pub table: TableName }
+pub struct DynamodbContainer { pub client: Client, pub table: TableName }
 
 /// A implementation of [`Context`] based on DynamoDB.
 #[derive(Debug, Clone)]
@@ -49,12 +49,12 @@ pub struct DynamoDbContext<E>
 where
     E: Clone + Sync + Send,
 {
-    db: DynamoPair,
+    db: DynamodbContainer,
     base_key: Vec<u8>,
     extra: E,
 }
 
-impl DynamoPair
+impl DynamodbContainer
 {
     /// Build the key attributes for a table item.
     ///
@@ -179,7 +179,7 @@ impl DynamoPair
 }
 
 #[async_trait]
-impl KeyValueOperations for DynamoPair {
+impl KeyValueOperations for DynamodbContainer {
     type E = DynamoDbContextError;
     /// Retrieve a generic `Item` from the table using the provided `key` prefixed by the current
     /// context.
@@ -378,7 +378,7 @@ where
         base_key: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), CreateTableError> {
-        let db = DynamoPair { client: Client::from_conf(config.into()), table };
+        let db = DynamodbContainer { client: Client::from_conf(config.into()), table };
         let storage = DynamoDbContext {
             db,
             base_key,

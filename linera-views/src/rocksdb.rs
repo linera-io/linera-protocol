@@ -13,17 +13,18 @@ use std::sync::Arc;
 use thiserror::Error;
 
 pub type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
+pub type RocksdbContainer = Arc<DB>;
 
 /// An implementation of [`crate::views::Context`] based on Rocksdb
 #[derive(Debug, Clone)]
 pub struct RocksdbContext<E> {
-    db: Arc<DB>,
+    db: RocksdbContainer,
     base_key: Vec<u8>,
     extra: E,
 }
 
 #[async_trait]
-impl KeyValueOperations for Arc<DB> {
+impl KeyValueOperations for RocksdbContainer {
     type E = RocksdbContextError;
     async fn read_key<V: DeserializeOwned>(
         &self,
@@ -95,7 +96,7 @@ impl KeyValueOperations for Arc<DB> {
 }
 
 impl<E> RocksdbContext<E> {
-    pub fn new(db: Arc<DB>, base_key: Vec<u8>, extra: E) -> Self {
+    pub fn new(db: RocksdbContainer, base_key: Vec<u8>, extra: E) -> Self {
         Self {
             db,
             base_key,

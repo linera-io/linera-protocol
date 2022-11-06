@@ -11,7 +11,7 @@ use linera_base::{
 use linera_chain::messages::Certificate;
 use linera_execution::UserApplicationCode;
 use linera_views::{
-    rocksdb::{RocksdbContext, RocksdbContextError, DB},
+    rocksdb::{RocksdbContext, RocksdbContextError, RocksdbContainer, DB},
     common::{KeyValueOperations, Batch, put_item_batch},
     views::{View, ViewError},
 };
@@ -23,7 +23,7 @@ use std::{path::PathBuf, sync::Arc};
 mod tests;
 
 struct RocksdbStore {
-    db: Arc<DB>,
+    db: RocksdbContainer,
     guards: ChainGuards,
     user_applications: Arc<DashMap<ApplicationId, UserApplicationCode>>,
 }
