@@ -22,7 +22,7 @@ macro_rules! ensure {
 /// Custom error type.
 pub enum Error {
     // Chain access control
-    	#[error("The chain being queried is not active {0:?}")]
+    #[error("The chain being queried is not active {0:?}")]
     InactiveChain(ChainId),
     #[error("Block was not signed by an authorized owner")]
     InvalidOwner,
