@@ -179,7 +179,8 @@ impl DynamoPair
 }
 
 #[async_trait]
-impl KeyValueOperations<DynamoDbContextError> for DynamoPair {
+impl KeyValueOperations for DynamoPair {
+    type E = DynamoDbContextError;
     /// Retrieve a generic `Item` from the table using the provided `key` prefixed by the current
     /// context.
     ///

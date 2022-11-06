@@ -39,7 +39,8 @@ impl<E> MemoryContext<E> {
 
 
 #[async_trait]
-impl KeyValueOperations<MemoryContextError> for MemoryContainer {
+impl KeyValueOperations for MemoryContainer {
+    type E = MemoryContextError;
     async fn read_key<V: DeserializeOwned>(
         &self,
         key: &[u8],

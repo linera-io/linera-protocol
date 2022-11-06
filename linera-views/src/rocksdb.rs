@@ -23,7 +23,8 @@ pub struct RocksdbContext<E> {
 }
 
 #[async_trait]
-impl KeyValueOperations<RocksdbContextError> for Arc<DB> {
+impl KeyValueOperations for Arc<DB> {
+    type E = RocksdbContextError;
     async fn read_key<V: DeserializeOwned>(
         &self,
         key: &[u8],

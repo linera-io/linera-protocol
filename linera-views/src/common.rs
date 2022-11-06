@@ -63,28 +63,29 @@ where
 
 /// Low-level, asynchronous key-value operations. Useful for storage APIs not based on views.
 #[async_trait]
-pub trait KeyValueOperations<E> {
+pub trait KeyValueOperations {
+    type E;
     async fn read_key<V: DeserializeOwned>(
         &self,
         key: &[u8],
-    ) -> Result<Option<V>, E>;
+    ) -> Result<Option<V>, Self::E>;
 
     async fn write_key<V: Serialize + Sync>(
         &self,
         key: &[u8],
         value: &V,
-    ) -> Result<(), E>;
+    ) -> Result<(), Self::E>;
 
     async fn find_keys_with_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Vec<Vec<u8>>, E>;
+    ) -> Result<Vec<Vec<u8>>, Self::E>;
 
     async fn get_sub_keys<Key: DeserializeOwned + Send>(
         &mut self,
         key_prefix: &[u8],
-    ) -> Result<Vec<Key>, E>;
+    ) -> Result<Vec<Key>, Self::E>;
 
-    async fn write_batch(&self, batch: Batch) -> Result<(), E>;
+    async fn write_batch(&self, batch: Batch) -> Result<(), Self::E>;
 }
 
