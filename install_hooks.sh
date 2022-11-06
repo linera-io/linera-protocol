@@ -5,7 +5,7 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 if cat <<EOF > $SCRIPT_DIR/.git/hooks/pre-push
 #!/bin/sh
 #
-# This precommit runs a cargo-clippy and cargo +nightly fmt before making a commit.
+# This pre-push hook runs a cargo-clippy and cargo +nightly fmt before pushing code to remote.
 # This is to prevent commits being pushed which will fail CI.
 
 cargo clippy --all-targets || { echo "Error: clippy did not pass - aborting push. Please run 'cargo clippy --all-targets'." ; exit 1 ; }
