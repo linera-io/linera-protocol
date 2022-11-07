@@ -20,6 +20,8 @@ pub enum ChainError {
     #[error("Cryptographic error: {0}")]
     CryptoError(#[from] CryptoError),
     #[error("Error in view operation: {0}")]
+    BaseError(#[from] linera_base::error::Error),
+    #[error("Error in view operation: {0}")]
     ViewError(#[from] ViewError),
     #[error("Execution error: {0}")]
     ExecutionError(#[from] ExecutionError),

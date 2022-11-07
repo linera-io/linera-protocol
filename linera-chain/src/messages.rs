@@ -293,10 +293,7 @@ impl Certificate {
             ChainError::CertificateRequiresQuorum
         );
         // All what is left is checking signatures!
-        Signature::verify_batch(&self.value, self.signatures.iter().map(|(v, s)| (&v.0, s)))
-            .map_err(|e| ChainError::CertificateSignatureVerificationFailed {
-                error: e.to_string(),
-            })?;
+        Signature::verify_batch(&self.value, self.signatures.iter().map(|(v, s)| (&v.0, s)))?;
         Ok(&self.value)
     }
 }

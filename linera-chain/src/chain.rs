@@ -325,11 +325,7 @@ where
             height
         );
         // Mark the block as received.
-        inbox.next_height_to_receive.set(
-            height
-                .try_add_one()
-                .map_err(|_| ChainError::InvalidBlockHeight)?,
-        );
+        inbox.next_height_to_receive.set(height.try_add_one()?);
 
         self.received_log.push(key);
 

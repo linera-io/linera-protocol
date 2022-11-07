@@ -298,7 +298,7 @@ where
             }
             // The certificate is not as expected. Give up.
             log::warn!("Failed to process network certificate {}", certificate.hash);
-            return info
+            return info;
         }
         // Done with all certificates.
         info
