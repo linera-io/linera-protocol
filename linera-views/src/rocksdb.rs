@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    impl_context,
     hash::HashingContext,
     views::{Context, ViewError},
     common::{WriteOperation, Batch, KeyValueOperations},
@@ -105,6 +106,10 @@ impl<E> RocksdbContext<E> {
     }
 }
 
+
+impl_context!{RocksdbContext,RocksdbContextError}
+
+/*
 #[async_trait]
 impl<E> Context for RocksdbContext<E>
 where
@@ -165,6 +170,7 @@ where
         }
     }
 }
+ */
 
 impl<E> HashingContext for RocksdbContext<E>
 where

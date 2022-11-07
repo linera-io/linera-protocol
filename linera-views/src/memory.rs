@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    impl_context,
     hash::HashingContext,
     views::{Context, ViewError},
     common::{KeyValueOperations, WriteOperation, Batch},
@@ -95,9 +96,9 @@ impl KeyValueOperations for MemoryContainer {
 }
 
 
+impl_context!{MemoryContext,MemoryContextError}
 
-
-
+/*
 #[async_trait]
 impl<E> Context for MemoryContext<E>
 where
@@ -158,6 +159,7 @@ where
         }
     }
 }
+ */
 
 impl<E> HashingContext for MemoryContext<E>
 where

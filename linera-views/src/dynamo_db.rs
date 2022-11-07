@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    impl_context,
     hash::HashingContext,
     localstack,
     views::{Context, ViewError},
@@ -428,7 +429,9 @@ where
 
 
 
+impl_context!{DynamoDbContext,DynamoDbContextError}
 
+/*
 #[async_trait]
 impl<E> Context for DynamoDbContext<E>
 where
@@ -492,6 +495,8 @@ where
         }
     }
 }
+*/
+
 
 impl<E> HashingContext for DynamoDbContext<E>
 where

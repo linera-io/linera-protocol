@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use serde::{de::DeserializeOwned, Serialize};
 use async_trait::async_trait;
 use crate::views::ViewError;
-
 pub enum WriteOperation {
     Delete { key: Vec<u8> },
     Put { key: Vec<u8>, value: Vec<u8> },
@@ -82,4 +81,77 @@ pub trait KeyValueOperations {
 
     async fn write_batch(&self, batch: Batch) -> Result<(), Self::E>;
 }
+
+
+#[macro_export]
+macro_rules! impl_context {
+    ($a:ident, $b:ident) => {
+
+        #[async_trait]
+        impl<E> Context for $a<E>
+        where
+            E: Clone + Send + Sync,
+        {
+            type Extra = E;
+            type Error = $b;
+
+            fn extra(&self) -> &E {
+                &self.extra
+            }
+
+            fn base_key(&self) -> Vec<u8> {
+                self.base_key.clone()
+            }
+
+            fn derive_key<I: Serialize>(&self, index: &I) -> Result<Vec<u8>,Self::Error> {
+                let mut key = self.base_key.clone();
+                bcs::serialize_into(&mut key, index)?;
+                assert!(
+                    key.len() > self.base_key.len(),
+                    "Empty indices are not allowed"
+                );
+                Ok(key)
+            }
+
+            async fn read_key<Item>(&mut self, key: &[u8]) -> Result<Option<Item>, Self::Error>
+            where
+                Item: DeserializeOwned,
+            {
+                self.db.read_key(key).await
+            }
+
+            async fn find_keys_with_prefix(
+                &self,
+                key_prefix: &[u8],
+            ) -> Result<Vec<Vec<u8>>, Self::Error> {
+                self.db.find_keys_with_prefix(key_prefix).await
+            }
+
+            async fn get_sub_keys<Key>(
+                &mut self,
+                key_prefix: &[u8],
+            ) -> Result<Vec<Key>, Self::Error>
+            where
+                Key: DeserializeOwned + Send,
+            {
+                self.db.get_sub_keys(key_prefix).await
+            }
+
+            async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
+                self.write_batch(batch).await?;
+                Ok(())
+            }
+
+            fn clone_self(&self, base_key: Vec<u8>) -> Self {
+                $a {
+                    db: self.db.clone(),
+                    base_key,
+                    extra: self.extra.clone(),
+                }
+            }
+        }
+    }
+
+}
+
 
