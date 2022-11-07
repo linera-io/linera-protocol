@@ -51,7 +51,7 @@ pub enum ChainError {
         index: usize,
     },
     #[error(
-        "Message in block proposal does not match the order of received messages from \
+        "Message in block proposal for {chain_id:?} does not match the order of received messages from \
         chain {origin:?}: was height {height:?} and index {index:?} \
         instead of {expected_height:?} and {expected_index:?} (application {application_id:?})"
     )]
