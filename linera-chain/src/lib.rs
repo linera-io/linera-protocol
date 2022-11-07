@@ -65,7 +65,7 @@ pub enum ChainError {
         expected_index: usize,
     },
     #[error(
-        "Message in block proposal does not match received message from {origin:?} \
+        "Message in block proposal for {chain_id:?} does not match received message from {origin:?} \
         at height {height:?} and index {index:?} (application {application_id:?})"
     )]
     InvalidMessageContent {
