@@ -266,11 +266,7 @@ where
             .execution_state_mut()
             .users
             .try_load_entry(self.application_id())
-            .await
-            .map_err(|error| match error {
-                ViewError::TryLockError(_) => ExecutionError::ApplicationIsInUse,
-                error => ExecutionError::ViewError(error),
-            })?
+            .await?
             .get()
             .to_vec();
         Ok(state)
