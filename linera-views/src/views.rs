@@ -147,15 +147,6 @@ pub enum ViewError {
     NotFound(String),
 }
 
-/// FIXME(#148): This belongs to each future refinements of `linera_base::error::Error`.
-impl From<ViewError> for linera_base::error::Error {
-    fn from(error: ViewError) -> Self {
-        Self::ViewError {
-            error: error.to_string(),
-        }
-    }
-}
-
 /// A view that adds a prefix to all the keys of the contained view.
 #[derive(Debug, Clone)]
 pub struct ScopedView<const INDEX: u64, W> {

@@ -13,7 +13,6 @@ use async_trait::async_trait;
 use linera_base::{
     committee::{Committee, ValidatorState},
     crypto::{HashValue, KeyPair},
-    error::Error,
     messages::{BlockHeight, ChainId, EffectId, Epoch, Owner, RoundNumber, ValidatorName},
 };
 use linera_chain::{
@@ -263,7 +262,7 @@ where
         let epoch = info.epoch;
         let committees = info
             .requested_committees
-            .ok_or(Error::InvalidChainInfoResponse)?;
+            .ok_or(NodeError::InvalidChainInfoResponse)?;
         Ok((epoch, committees))
     }
 
@@ -277,8 +276,12 @@ where
     pub async fn local_committee(&mut self) -> Result<Committee, NodeError> {
         let (epoch, mut committees) = self.epoch_and_committees(self.chain_id).await?;
         committees
-            .remove(epoch.as_ref().ok_or(Error::InactiveChain(self.chain_id))?)
-            .ok_or(NodeError::WorkerError(Error::InactiveChain(self.chain_id)))
+            .remove(
+                epoch
+                    .as_ref()
+                    .ok_or(NodeError::InactiveLocalChain(self.chain_id))?,
+            )
+            .ok_or(NodeError::InactiveLocalChain(self.chain_id))
     }
 
     /// Obtain all the committees trusted by either the local chain or its admin chain. Also
@@ -295,7 +298,9 @@ where
     async fn validator_nodes(&mut self) -> Result<Vec<(ValidatorName, P::Node)>, NodeError> {
         match self.local_committee().await {
             Ok(committee) => self.make_validator_nodes(&committee),
-            Err(NodeError::WorkerError(Error::InactiveChain(_))) => Ok(Vec::new()),
+            Err(NodeError::InactiveChain(_)) | Err(NodeError::InactiveLocalChain(_)) => {
+                Ok(Vec::new())
+            }
             Err(e) => Err(e),
         }
     }
@@ -306,7 +311,7 @@ where
             .chain_info()
             .await?
             .epoch
-            .ok_or(Error::InactiveChain(self.chain_id))?)
+            .ok_or(NodeError::InactiveLocalChain(self.chain_id))?)
     }
 
     /// Obtain the identity of the current owner of the chain. HACK: In the case of a
@@ -343,7 +348,7 @@ where
                 }
                 Ok(identities.pop().unwrap())
             }
-            ChainManager::None => Err(Error::InactiveChain(self.chain_id).into()),
+            ChainManager::None => Err(NodeError::InactiveLocalChain(self.chain_id).into()),
         }
     }
 
@@ -392,7 +397,7 @@ where
             // Check that our local node has the expected block hash.
             linera_base::ensure!(
                 self.block_hash == info.block_hash,
-                NodeError::WorkerError(Error::InvalidBlockChaining)
+                NodeError::InvalidLocalBlockChaining
             );
         }
         if matches!(info.manager, ChainManager::Multi(_)) {
@@ -451,7 +456,7 @@ where
         .await;
         let (effects_and_state_hash, votes): (Option<_>, Vec<_>) = match result {
             Ok(content) => content,
-            Err(CommunicationError::Trusted(NodeError::WorkerError(Error::InactiveChain(id))))
+            Err(CommunicationError::Trusted(NodeError::InactiveChain(id)))
                 if id == chain_id
                     && matches!(action, CommunicateAction::AdvanceToNextBlockHeight(_)) =>
             {
@@ -616,7 +621,7 @@ where
                         let block = certificate
                             .value
                             .confirmed_block()
-                            .ok_or(Error::InvalidChainInfoResponse)?;
+                            .ok_or(NodeError::InvalidChainInfoResponse)?;
                         // Check that certificates are valid w.r.t one of our trusted
                         // committees.
                         if block.epoch > max_epoch {
@@ -660,9 +665,7 @@ where
         .await;
         let responses = match result {
             Ok(((), responses)) => responses,
-            Err(CommunicationError::Trusted(NodeError::WorkerError(Error::InactiveChain(id))))
-                if id == chain_id =>
-            {
+            Err(CommunicationError::Trusted(NodeError::InactiveChain(id))) if id == chain_id => {
                 // The chain is visibly not active (yet or any more) so there is no need
                 // to synchronize received certificates.
                 return Ok(());
@@ -1010,7 +1013,7 @@ where
             index: 0,
         });
         let (epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
-        let epoch = epoch.ok_or(Error::InactiveChain(self.chain_id))?;
+        let epoch = epoch.ok_or(NodeError::InactiveLocalChain(self.chain_id))?;
         let block = Block {
             epoch,
             chain_id: self.chain_id,
@@ -1147,8 +1150,7 @@ where
     async fn finalize_committee(&mut self) -> Result<Certificate> {
         self.prepare_chain().await?;
         let (current_epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
-        let current_epoch =
-            current_epoch.ok_or(NodeError::WorkerError(Error::InactiveChain(self.chain_id)))?;
+        let current_epoch = current_epoch.ok_or(NodeError::InactiveLocalChain(self.chain_id))?;
         let operations = committees
             .keys()
             .filter_map(|epoch| {

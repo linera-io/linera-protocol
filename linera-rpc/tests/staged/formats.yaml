@@ -223,146 +223,6 @@ EffectId:
     - index: U64
 Epoch:
   NEWTYPESTRUCT: U64
-Error:
-  ENUM:
-    0:
-      InactiveChain:
-        NEWTYPE:
-          TYPENAME: ChainId
-    1:
-      InvalidOwner: UNIT
-    2:
-      UnexpectedPreviousBlockHash: UNIT
-    3:
-      UnexpectedBlockHeight:
-        STRUCT:
-          - expected_block_height:
-              TYPENAME: BlockHeight
-          - found_block_height:
-              TYPENAME: BlockHeight
-    4:
-      InvalidBlockHeight: UNIT
-    5:
-      PreviousBlockMustBeConfirmedFirst: UNIT
-    6:
-      MissingEarlierBlocks:
-        STRUCT:
-          - current_block_height:
-              TYPENAME: BlockHeight
-    7:
-      SequenceOverflow: UNIT
-    8:
-      SequenceUnderflow: UNIT
-    9:
-      InvalidSigner: UNIT
-    10:
-      CertificateRequiresQuorum: UNIT
-    11:
-      CertificateValidatorReuse: UNIT
-    12:
-      InvalidCertificate: UNIT
-    13:
-      InvalidChainInfoResponse: UNIT
-    14:
-      InvalidEpoch:
-        STRUCT:
-          - chain_id:
-              TYPENAME: ChainId
-          - epoch:
-              TYPENAME: Epoch
-    15:
-      InsufficientRound:
-        NEWTYPE:
-          TYPENAME: RoundNumber
-    16:
-      HasLockedBlock:
-        TUPLE:
-          - TYPENAME: BlockHeight
-          - TYPENAME: RoundNumber
-    17:
-      MissingCrossChainUpdate:
-        STRUCT:
-          - chain_id:
-              TYPENAME: ChainId
-          - application_id:
-              TYPENAME: ApplicationId
-          - origin:
-              TYPENAME: Origin
-          - height:
-              TYPENAME: BlockHeight
-    18:
-      InvalidMessageContent:
-        STRUCT:
-          - chain_id:
-              TYPENAME: ChainId
-          - application_id:
-              TYPENAME: ApplicationId
-          - origin:
-              TYPENAME: Origin
-          - height:
-              TYPENAME: BlockHeight
-          - index: U64
-    19:
-      InvalidMessage:
-        STRUCT:
-          - chain_id:
-              TYPENAME: ChainId
-          - application_id:
-              TYPENAME: ApplicationId
-          - origin:
-              TYPENAME: Origin
-          - height:
-              TYPENAME: BlockHeight
-          - index: U64
-          - expected_height:
-              TYPENAME: BlockHeight
-          - expected_index: U64
-    20:
-      InvalidMessageOrder:
-        STRUCT:
-          - chain_id:
-              TYPENAME: ChainId
-          - application_id:
-              TYPENAME: ApplicationId
-          - origin:
-              TYPENAME: Origin
-          - height:
-              TYPENAME: BlockHeight
-          - index: U64
-    21:
-      InvalidCrossChainRequest: UNIT
-    22:
-      InvalidBlockProposal: UNIT
-    23:
-      InvalidBlockChaining: UNIT
-    24:
-      IncorrectStateHash: UNIT
-    25:
-      IncorrectEffects: UNIT
-    26:
-      InvalidDecoding: UNIT
-    27:
-      UnexpectedMessage: UNIT
-    28:
-      ClientIoError:
-        STRUCT:
-          - error: STR
-    29:
-      CannotResolveValidatorAddress:
-        STRUCT:
-          - address: STR
-    30:
-      ViewError:
-        STRUCT:
-          - error: STR
-    31:
-      CryptoError:
-        NEWTYPE:
-          TYPENAME: CryptoError
-    32:
-      ExecutionError:
-        STRUCT:
-          - error: STR
 HashValue:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -437,42 +297,81 @@ MultiOwnerManager:
 NodeError:
   ENUM:
     0:
+      CryptoError:
+        NEWTYPE:
+          TYPENAME: CryptoError
+    1:
+      BaseError:
+        STRUCT:
+          - error: STR
+    2:
+      ViewError:
+        STRUCT:
+          - error: STR
+    3:
+      ChainError:
+        STRUCT:
+          - error: STR
+    4:
+      WorkerError:
+        STRUCT:
+          - error: STR
+    5:
+      InactiveChain:
+        NEWTYPE:
+          TYPENAME: ChainId
+    6:
+      MissingCrossChainUpdate:
+        STRUCT:
+          - chain_id:
+              TYPENAME: ChainId
+          - application_id:
+              TYPENAME: ApplicationId
+          - origin:
+              TYPENAME: Origin
+          - height:
+              TYPENAME: BlockHeight
+    7:
       CannotDownloadCertificates:
         STRUCT:
           - chain_id:
               TYPENAME: ChainId
           - target_next_block_height:
               TYPENAME: BlockHeight
-    1:
+    8:
       MissingVoteInValidatorResponse: UNIT
-    2:
+    9:
       InactiveLocalChain:
         NEWTYPE:
           TYPENAME: ChainId
-    3:
+    10:
+      InvalidLocalBlockChaining: UNIT
+    11:
+      InvalidChainInfoResponse: UNIT
+    12:
       ProposedBlockToInactiveChain:
         STRUCT:
           - chain_id:
               TYPENAME: ChainId
           - retries: U64
-    4:
+    13:
       ProposedBlockWithLaggingMessages:
         STRUCT:
           - chain_id:
               TYPENAME: ChainId
           - retries: U64
-    5:
-      ViewError:
+    14:
+      InvalidDecoding: UNIT
+    15:
+      UnexpectedMessage: UNIT
+    16:
+      ClientIoError:
         STRUCT:
           - error: STR
-    6:
-      WorkerError:
-        NEWTYPE:
-          TYPENAME: Error
-    7:
-      CryptoError:
-        NEWTYPE:
-          TYPENAME: CryptoError
+    17:
+      CannotResolveValidatorAddress:
+        STRUCT:
+          - address: STR
 Operation:
   ENUM:
     0:
