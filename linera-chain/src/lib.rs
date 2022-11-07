@@ -19,7 +19,7 @@ use thiserror::Error;
 pub enum ChainError {
     #[error("Cryptographic error: {0}")]
     CryptoError(#[from] CryptoError),
-    #[error("Error in view operation: {0}")]
+    #[error("Base error: {0}")]
     BaseError(#[from] linera_base::error::Error),
     #[error("Error in view operation: {0}")]
     ViewError(#[from] ViewError),
