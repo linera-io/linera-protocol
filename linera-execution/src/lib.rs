@@ -31,7 +31,7 @@ pub enum ExecutionError {
     #[error("{0}")]
     BaseError(#[from] linera_base::error::Error),
     #[error("Error in view operation: {0}")]
-    ViewError(#[from] ViewError),
+    ViewError(ViewError),
 
     #[error("Unknown application")]
     UnknownApplication,
@@ -83,6 +83,15 @@ pub enum ExecutionError {
     BalanceUnderflow,
     #[error("Cannot set epoch to a lower value")]
     CannotRewindEpoch,
+}
+
+impl From<ViewError> for ExecutionError {
+    fn from(error: ViewError) -> Self {
+        match error {
+            ViewError::TryLockError(_) => ExecutionError::ApplicationIsInUse,
+            error => ExecutionError::ViewError(error),
+        }
+    }
 }
 
 /// The public entry points provided by an application.
