@@ -121,7 +121,7 @@ where
 
 #[derive(StructOpt)]
 #[structopt(
-    name = "Zef Server",
+    name = "Linera Server",
     about = "A byzantine fault tolerant payments sidechain with low-latency finality and high throughput"
 )]
 struct ServerOptions {
@@ -132,7 +132,7 @@ struct ServerOptions {
 
 #[derive(Debug, PartialEq, Eq)]
 struct ValidatorOptions {
-    /// Path to the file containing the server configuration of this Zef validator (including its secret key)
+    /// Path to the file containing the server configuration of this Linera validator (including its secret key)
     server_config_path: PathBuf,
 
     /// The host of the validator (IP address or hostname)
@@ -204,10 +204,10 @@ fn make_server_config(options: ValidatorOptions) -> ValidatorServerConfig {
 
 #[derive(StructOpt)]
 enum ServerCommand {
-    /// Runs a service for each shard of the Zef validator")
+    /// Runs a service for each shard of the Linera validator")
     #[structopt(name = "run")]
     Run {
-        /// Path to the file containing the server configuration of this Zef validator (including its secret key)
+        /// Path to the file containing the server configuration of this Linera validator (including its secret key)
         #[structopt(long = "server")]
         server_config_path: PathBuf,
 
@@ -235,7 +235,7 @@ enum ServerCommand {
         #[structopt(long)]
         validators: Vec<ValidatorOptions>,
 
-        /// Path where to write the description of the Zef committee
+        /// Path where to write the description of the Linera committee
         #[structopt(long)]
         committee: Option<PathBuf>,
     },
