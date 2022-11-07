@@ -7,7 +7,8 @@ use self::{
 };
 use super::{
     async_boundary::{ContextForwarder, HostFuture},
-    Runtime, WasmApplication, WritableRuntimeContext,
+    common::{self, Runtime, WritableRuntimeContext},
+    WasmApplication,
 };
 use crate::{ExecutionError, WritableStorage};
 use std::{marker::PhantomData, task::Poll};
@@ -79,7 +80,7 @@ impl<'storage> Data<'storage> {
     }
 }
 
-impl<'storage> super::Application<Wasmtime<'storage>> for Application<Data<'storage>> {
+impl<'storage> common::Application<Wasmtime<'storage>> for Application<Data<'storage>> {
     fn execute_operation_new(
         &self,
         store: &mut Store<Data<'storage>>,

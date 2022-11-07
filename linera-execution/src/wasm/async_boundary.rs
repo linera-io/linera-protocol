@@ -1,4 +1,4 @@
-use super::WritableRuntimeContext;
+use super::common::{self, WritableRuntimeContext};
 use crate::ExecutionError;
 use futures::future::BoxFuture;
 use std::{
@@ -53,7 +53,7 @@ impl<'future, Output> HostFuture<'future, Output> {
 
 pub enum GuestFuture<Future, Runtime>
 where
-    Runtime: super::Runtime,
+    Runtime: common::Runtime,
 {
     FailedToCreate(Option<Runtime::Error>),
     Active {
@@ -64,7 +64,7 @@ where
 
 impl<Future, Runtime> GuestFuture<Future, Runtime>
 where
-    Runtime: super::Runtime,
+    Runtime: common::Runtime,
 {
     pub fn new(
         creation_result: Result<Future, Runtime::Error>,
@@ -80,7 +80,7 @@ where
 impl<InnerFuture, Runtime> Future for GuestFuture<InnerFuture, Runtime>
 where
     InnerFuture: GuestFutureInterface<Runtime> + Unpin,
-    Runtime: super::Runtime,
+    Runtime: common::Runtime,
     Runtime::Application: Unpin,
     Runtime::Store: Unpin,
     Runtime::StorageGuard: Unpin,
@@ -104,7 +104,7 @@ where
 
 pub trait GuestFutureInterface<Runtime>
 where
-    Runtime: super::Runtime,
+    Runtime: common::Runtime,
 {
     type Output;
 

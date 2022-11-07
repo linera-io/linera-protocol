@@ -4,7 +4,8 @@ wit_bindgen_host_wasmer_rust::import!("../linera-sdk/application.wit");
 use self::{application::Application, system::PollLoad};
 use super::{
     async_boundary::{ContextForwarder, HostFuture},
-    Runtime, WasmApplication, WritableRuntimeContext,
+    common::{self, Runtime, WritableRuntimeContext},
+    WasmApplication,
 };
 use crate::{ExecutionError, WritableStorage};
 use std::{marker::PhantomData, mem, sync::Arc, task::Poll};
@@ -49,7 +50,7 @@ impl WasmApplication {
     }
 }
 
-impl<'storage> super::Application<Wasmer<'storage>> for Application {
+impl<'storage> common::Application<Wasmer<'storage>> for Application {
     fn execute_operation_new(
         &self,
         store: &mut Store,
