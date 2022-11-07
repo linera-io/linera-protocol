@@ -10,6 +10,13 @@
 
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 
+#[cfg(feature = "wasmer")]
+#[path = "wasmer.rs"]
+mod runtime;
+#[cfg(feature = "wasmtime")]
+#[path = "wasmtime.rs"]
+mod runtime;
+
 use crate::{
     ApplicationCallResult, CalleeContext, EffectContext, ExecutionError, OperationContext,
     QueryContext, QueryableStorage, RawExecutionResult, SessionCallResult, SessionId,

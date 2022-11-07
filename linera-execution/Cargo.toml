@@ -6,8 +6,8 @@ edition = "2021"
 
 [features]
 test = ["tokio/macros"]
-wasmer = []
-wasmtime = []
+wasmer = ["dep:wasmer", "wit-bindgen-host-wasmer-rust"]
+wasmtime = ["dep:wasmtime", "wit-bindgen-host-wasmtime-rust"]
 
 [dependencies]
 async-trait = "0.1.52"
@@ -19,6 +19,10 @@ once_cell = "1.13.0"
 serde = { version = "1.0.130", features = ["derive"] }
 thiserror = "1.0.31"
 tokio = { version = "1.12.0", features = ["fs"] }
+wasmer = { version = "3.0.0-rc.2", optional = true }
+wasmtime = { version = "0.39.1", optional = true }
+wit-bindgen-host-wasmer-rust = { git = "https://github.com/jvff/wit-bindgen", rev = "4a9e7cc6899a9736e2a2d23dcfc4f8744b6107a1", optional = true }
+wit-bindgen-host-wasmtime-rust = { git = "https://github.com/jvff/wit-bindgen", rev = "4a9e7cc6899a9736e2a2d23dcfc4f8744b6107a1", optional = true }
 
 [dev-dependencies]
 linera-execution = { path = ".", features = ["test"] }
