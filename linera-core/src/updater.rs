@@ -9,7 +9,6 @@ use crate::{
 use futures::{future, StreamExt};
 use linera_base::{
     committee::Committee,
-    error::Error,
     messages::{BlockHeight, ChainDescription, ChainId, EffectId, ValidatorName},
 };
 use linera_chain::messages::{BlockProposal, Certificate, Vote};
@@ -131,9 +130,7 @@ where
                     // Succeed
                     return Ok(response.info);
                 }
-                Err(NodeError::WorkerError(Error::InactiveChain(_)))
-                    if retryable && count < self.retries =>
-                {
+                Err(NodeError::InactiveChain(_)) if retryable && count < self.retries => {
                     // Retry
                     tokio::time::sleep(self.delay).await;
                     count += 1;
@@ -161,17 +158,16 @@ where
                     // Succeed
                     return Ok(response.info);
                 }
-                Err(NodeError::WorkerError(Error::MissingCrossChainUpdate {
-                    chain_id: id,
-                    ..
-                })) if id == chain_id && !has_send_chain_information_for_senders => {
+                Err(NodeError::MissingCrossChainUpdate { chain_id: id, .. })
+                    if id == chain_id && !has_send_chain_information_for_senders =>
+                {
                     // Some received certificates may be missing for this validator
                     // (e.g. to make the balance sufficient) so we are going to
                     // synchronize them now.
                     self.send_chain_information_for_senders(chain_id).await?;
                     has_send_chain_information_for_senders = true;
                 }
-                Err(NodeError::WorkerError(Error::InactiveChain(id))) if id == chain_id => {
+                Err(NodeError::InactiveChain(id)) if id == chain_id => {
                     if count < self.retries {
                         // `send_chain_information` is always called before
                         // `send_block_proposal` but in the case of new chains, it may
@@ -186,10 +182,7 @@ where
                         });
                     }
                 }
-                Err(NodeError::WorkerError(Error::MissingCrossChainUpdate {
-                    chain_id: id,
-                    ..
-                })) if id == chain_id => {
+                Err(NodeError::MissingCrossChainUpdate { chain_id: id, .. }) if id == chain_id => {
                     if count < self.retries {
                         // We just called `send_chain_information_for_senders` but it may
                         // take time to receive the missing messages: let's retry.

@@ -8,7 +8,6 @@ use async_trait::async_trait;
 use linera_base::{
     committee::ValidatorState,
     crypto::KeyPair,
-    error::Error,
     messages::{BlockHeight, ChainDescription, ChainId, Epoch, Owner, RoundNumber, ValidatorName},
 };
 use linera_chain::messages::{
@@ -63,7 +62,7 @@ impl ValidatorNodeProvider for NodeProvider {
 
     fn make_node(&self, address: &str) -> Result<Self::Node, NodeError> {
         let network = ValidatorPublicNetworkConfig::from_str(address).map_err(|_| {
-            Error::CannotResolveValidatorAddress {
+            NodeError::CannotResolveValidatorAddress {
                 address: address.to_string(),
             }
         })?;

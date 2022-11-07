@@ -104,7 +104,7 @@ where
         let node = self
             .0
             .get(&name)
-            .ok_or_else(|| Error::CannotResolveValidatorAddress {
+            .ok_or_else(|| NodeError::CannotResolveValidatorAddress {
                 address: address.to_string(),
             })?;
         Ok(node.clone())

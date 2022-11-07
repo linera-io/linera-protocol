@@ -2,10 +2,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::node::NodeError;
 use linera_base::{
     committee::Committee,
     crypto::{BcsSignable, HashValue, KeyPair, Signature},
-    error::Error,
     messages::{
         ApplicationId, BlockHeight, ChainDescription, ChainId, Epoch, Origin, ValidatorName,
     },
@@ -195,10 +195,10 @@ impl ChainInfoResponse {
         Self { info, signature }
     }
 
-    pub fn check(&self, name: ValidatorName) -> Result<(), Error> {
+    pub fn check(&self, name: ValidatorName) -> Result<(), NodeError> {
         match self.signature {
             Some(sig) => Ok(sig.check(&self.info, name.0)?),
-            None => Err(Error::InvalidChainInfoResponse),
+            None => Err(NodeError::InvalidChainInfoResponse),
         }
     }
 }

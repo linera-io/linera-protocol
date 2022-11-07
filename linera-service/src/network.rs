@@ -8,7 +8,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use futures::{channel::mpsc, sink::SinkExt, stream::StreamExt};
-use linera_base::{error::Error, messages::ChainId};
+use linera_base::messages::ChainId;
 use linera_chain::messages::{BlockProposal, Certificate};
 use linera_core::{
     messages::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
@@ -250,12 +250,12 @@ where
     fn handle_message(&mut self, message: Message) -> futures::future::BoxFuture<Option<Message>> {
         Box::pin(async move {
             let reply = match message {
-                Message::BlockProposal(message) => self
-                    .server
-                    .state
-                    .handle_block_proposal(*message)
-                    .await
-                    .map(|info| Some(info.into())),
+                Message::BlockProposal(message) => {
+                    match self.server.state.handle_block_proposal(*message).await {
+                        Ok(info) => Ok(Some(info.into())),
+                        Err(error) => Err(error.into()),
+                    }
+                }
                 Message::Certificate(message) => {
                     match self.server.state.handle_certificate(*message).await {
                         Ok((info, continuation)) => {
@@ -264,15 +264,15 @@ where
                             // Response
                             Ok(Some(info.into()))
                         }
-                        Err(error) => Err(error),
+                        Err(error) => Err(error.into()),
                     }
                 }
-                Message::ChainInfoQuery(message) => self
-                    .server
-                    .state
-                    .handle_chain_info_query(*message)
-                    .await
-                    .map(|info| Some(info.into())),
+                Message::ChainInfoQuery(message) => {
+                    match self.server.state.handle_chain_info_query(*message).await {
+                        Ok(info) => Ok(Some(info.into())),
+                        Err(error) => Err(error.into()),
+                    }
+                }
                 Message::CrossChainRequest(request) => {
                     match self.server.state.handle_cross_chain_request(*request).await {
                         Ok(continuation) => {
@@ -290,7 +290,7 @@ where
                     Ok(None)
                 }
                 Message::Vote(_) | Message::Error(_) | Message::ChainInfoResponse(_) => {
-                    Err(Error::UnexpectedMessage)
+                    Err(NodeError::UnexpectedMessage)
                 }
             };
 
@@ -315,7 +315,7 @@ where
                         error
                     );
                     self.server.user_errors += 1;
-                    Some(NodeError::from(error).into())
+                    Some(error.into())
                 }
             }
         })
@@ -390,12 +390,12 @@ impl Client {
         match self.send_recv_internal(message).await {
             Ok(Message::ChainInfoResponse(response)) => Ok(*response),
             Ok(Message::Error(error)) => Err(*error),
-            Ok(_) => Err(NodeError::WorkerError(Error::UnexpectedMessage)),
+            Ok(_) => Err(NodeError::UnexpectedMessage),
             Err(error) => match error {
-                codec::Error::Io(io_error) => Err(NodeError::WorkerError(Error::ClientIoError {
+                codec::Error::Io(io_error) => Err(NodeError::ClientIoError {
                     error: format!("{}", io_error),
-                })),
-                _ => Err(NodeError::WorkerError(Error::InvalidDecoding)),
+                }),
+                _ => Err(NodeError::InvalidDecoding),
             },
         }
     }

@@ -28,6 +28,11 @@ pub type UserApplicationCode = Arc<dyn UserApplication + Send + Sync + 'static>;
 
 #[derive(Error, Debug)]
 pub enum ExecutionError {
+    #[error("{0}")]
+    BaseError(#[from] linera_base::error::Error),
+    #[error("Error in view operation: {0}")]
+    ViewError(ViewError),
+
     #[error("Unknown application")]
     UnknownApplication,
     #[error("A session is still opened at the end of a transaction")]
@@ -76,19 +81,15 @@ pub enum ExecutionError {
     BalanceOverflow,
     #[error("Chain balance underflow")]
     BalanceUnderflow,
-    #[error("Invalid cross-chain request")]
-    InvalidCrossChainRequest,
-    // todo - this will be removed once linera_base::error::Error disappears
-    #[error("{0}")]
-    BaseError(#[from] linera_base::error::Error),
-    #[error("Error in view operation: {0}")]
-    View(#[from] ViewError),
+    #[error("Cannot set epoch to a lower value")]
+    CannotRewindEpoch,
 }
 
-impl From<ExecutionError> for linera_base::error::Error {
-    fn from(error: ExecutionError) -> Self {
-        Self::ExecutionError {
-            error: error.to_string(),
+impl From<ViewError> for ExecutionError {
+    fn from(error: ViewError) -> Self {
+        match error {
+            ViewError::TryLockError(_) => ExecutionError::ApplicationIsInUse,
+            error => ExecutionError::ViewError(error),
         }
     }
 }

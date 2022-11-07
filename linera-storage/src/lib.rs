@@ -17,10 +17,9 @@ use futures::future;
 use linera_base::{
     committee::Committee,
     crypto::HashValue,
-    ensure,
     messages::{ApplicationId, ChainDescription, ChainId, Epoch, Owner},
 };
-use linera_chain::{messages::Certificate, ChainStateView, ChainStateViewContext};
+use linera_chain::{messages::Certificate, ChainError, ChainStateView, ChainStateViewContext};
 use linera_execution::{
     system::Balance, ChainOwnership, ExecutionRuntimeContext, UserApplicationCode,
 };
@@ -49,15 +48,12 @@ pub trait Store {
     async fn load_active_chain(
         &self,
         id: ChainId,
-    ) -> Result<ChainStateView<Self::Context>, linera_base::error::Error>
+    ) -> Result<ChainStateView<Self::Context>, linera_chain::ChainError>
     where
         ViewError: From<Self::ContextError>,
     {
         let chain = self.load_chain(id).await?;
-        ensure!(
-            chain.is_active(),
-            linera_base::error::Error::InactiveChain(id)
-        );
+        chain.ensure_is_active()?;
         Ok(chain)
     }
 
@@ -93,16 +89,13 @@ pub trait Store {
         description: ChainDescription,
         owner: Owner,
         balance: Balance,
-    ) -> Result<(), linera_base::error::Error>
+    ) -> Result<(), ChainError>
     where
         ViewError: From<Self::ContextError>,
     {
         let id = description.into();
         let mut chain = self.load_chain(id).await?;
-        ensure!(
-            !chain.is_active(),
-            linera_base::error::Error::InactiveChain(id)
-        );
+        assert!(!chain.is_active(), "Attempting to create a chain twice");
         let system_state = &mut chain.execution_state.system;
         system_state.description.set(Some(description));
         system_state.epoch.set(Some(Epoch::from(0)));

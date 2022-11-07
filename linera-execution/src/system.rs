@@ -481,10 +481,9 @@ where
                 epoch,
                 committees,
             } if self.admin_id.get().as_ref() == Some(admin_id) => {
-                // This chain was not yet subscribed at the time earlier epochs were broadcast.
                 ensure!(
                     *epoch >= self.epoch.get().expect("chain is active"),
-                    ExecutionError::InvalidCrossChainRequest
+                    ExecutionError::CannotRewindEpoch
                 );
                 self.epoch.set(Some(*epoch));
                 self.committees.set(committees.clone());
@@ -532,7 +531,7 @@ where
         this_chain_id: ChainId,
         effect_id: EffectId,
         effect: &Effect,
-    ) -> Result<bool, ExecutionError> {
+    ) -> bool {
         // Chain creation effects are special and executed (only) in this callback.
         // For simplicity, they will still appear in the received messages.
         match &effect {
@@ -561,9 +560,9 @@ where
                     (),
                 );
                 self.ownership.set(ChainOwnership::single(*owner));
-                Ok(true)
+                true
             }
-            _ => Ok(false),
+            _ => false,
         }
     }
 
