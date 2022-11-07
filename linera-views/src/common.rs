@@ -1,7 +1,7 @@
-use std::collections::HashMap;
-use serde::{de::DeserializeOwned, Serialize};
-use async_trait::async_trait;
 use crate::views::ViewError;
+use async_trait::async_trait;
+use serde::{de::DeserializeOwned, Serialize};
+use std::collections::HashMap;
 pub enum WriteOperation {
     Delete { key: Vec<u8> },
     Put { key: Vec<u8>, value: Vec<u8> },
@@ -9,7 +9,9 @@ pub enum WriteOperation {
 
 /// A batch of writes inside a transaction;
 #[derive(Default)]
-pub struct Batch{ pub operations: Vec<WriteOperation>}
+pub struct Batch {
+    pub operations: Vec<WriteOperation>,
+}
 
 /// A key may appear multiple times in the batch
 /// The construction of BatchWriteItem and TransactWriteItem does
@@ -24,12 +26,12 @@ pub fn simplify_batch(batch: Batch) -> Batch {
     }
     let mut operations = Vec::with_capacity(map.len());
     for (key, val) in map {
-	match val {
+        match val {
             Some(value) => operations.push(WriteOperation::Put { key, value }),
             None => operations.push(WriteOperation::Delete { key }),
         }
     }
-    Batch{ operations }
+    Batch { operations }
 }
 
 /// Insert a put a key/value in the batch
@@ -39,7 +41,9 @@ pub fn put_item_batch(
     value: &impl Serialize,
 ) -> Result<(), bcs::Error> {
     let bytes = bcs::to_bytes(value)?;
-    batch.operations.push(WriteOperation::Put { key, value: bytes });
+    batch
+        .operations
+        .push(WriteOperation::Put { key, value: bytes });
     Ok(())
 }
 
@@ -51,9 +55,7 @@ pub fn remove_item_batch(batch: &mut Batch, key: Vec<u8>) {
 /// Build a batch using builder. This is used for the macro.
 pub async fn build_batch<F>(builder: F) -> Result<Batch, ViewError>
 where
-    F: FnOnce(&mut Batch) -> futures::future::BoxFuture<Result<(), ViewError>>
-    + Send
-    + Sync
+    F: FnOnce(&mut Batch) -> futures::future::BoxFuture<Result<(), ViewError>> + Send + Sync,
 {
     let mut batch = Batch::default();
     builder(&mut batch).await?;
@@ -64,15 +66,9 @@ where
 #[async_trait]
 pub trait KeyValueOperations {
     type E;
-    async fn read_key<V: DeserializeOwned>(
-        &self,
-        key: &[u8],
-    ) -> Result<Option<V>, Self::E>;
+    async fn read_key<V: DeserializeOwned>(&self, key: &[u8]) -> Result<Option<V>, Self::E>;
 
-    async fn find_keys_with_prefix(
-        &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<Vec<u8>>, Self::E>;
+    async fn find_keys_with_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::E>;
 
     async fn get_sub_keys<Key: DeserializeOwned + Send>(
         &mut self,
@@ -82,11 +78,9 @@ pub trait KeyValueOperations {
     async fn write_batch(&self, batch: Batch) -> Result<(), Self::E>;
 }
 
-
 #[macro_export]
 macro_rules! impl_context {
     ($a:ident, $b:ident) => {
-
         #[async_trait]
         impl<E> Context for $a<E>
         where
@@ -103,7 +97,7 @@ macro_rules! impl_context {
                 self.base_key.clone()
             }
 
-            fn derive_key<I: Serialize>(&self, index: &I) -> Result<Vec<u8>,Self::Error> {
+            fn derive_key<I: Serialize>(&self, index: &I) -> Result<Vec<u8>, Self::Error> {
                 let mut key = self.base_key.clone();
                 bcs::serialize_into(&mut key, index)?;
                 assert!(
@@ -157,8 +151,5 @@ macro_rules! impl_context {
         {
             type Hasher = sha2::Sha512;
         }
-    }
-
+    };
 }
-
-

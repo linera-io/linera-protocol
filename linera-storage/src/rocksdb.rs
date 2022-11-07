@@ -11,8 +11,8 @@ use linera_base::{
 use linera_chain::messages::Certificate;
 use linera_execution::UserApplicationCode;
 use linera_views::{
-    rocksdb::{RocksdbContext, RocksdbContextError, RocksdbContainer, DB},
-    common::{KeyValueOperations, Batch, put_item_batch},
+    common::{put_item_batch, Batch, KeyValueOperations},
+    rocksdb::{RocksdbContainer, RocksdbContext, RocksdbContextError, DB},
     views::{View, ViewError},
 };
 use serde::{Deserialize, Serialize};
@@ -89,7 +89,7 @@ impl Store for RocksdbStoreClient {
     async fn write_certificate(&self, certificate: Certificate) -> Result<(), ViewError> {
         let key = bcs::to_bytes(&BaseKey::Certificate(certificate.hash))?;
         let mut batch = Batch::default();
-	put_item_batch(&mut batch, key.to_vec(), &certificate)?;
+        put_item_batch(&mut batch, key.to_vec(), &certificate)?;
         self.0.db.write_batch(batch).await?;
         Ok(())
     }

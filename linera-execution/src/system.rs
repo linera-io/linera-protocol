@@ -14,11 +14,11 @@ use linera_base::{
     },
 };
 use linera_views::{
+    common::Batch,
     impl_view,
     views::{
         MapOperations, MapView, RegisterOperations, RegisterView, ScopedView, View, ViewError,
     },
-    common::Batch,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;

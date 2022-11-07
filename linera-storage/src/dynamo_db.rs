@@ -12,12 +12,12 @@ use linera_base::{
 use linera_chain::messages::Certificate;
 use linera_execution::UserApplicationCode;
 use linera_views::{
+    common::Batch,
     dynamo_db::{
         Config, CreateTableError, DynamoDbContext, DynamoDbContextError, LocalStackError,
         TableName, TableStatus,
     },
     views::{Context, MapView, View, ViewError},
-    common::Batch,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;

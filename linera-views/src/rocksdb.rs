@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    impl_context,
+    common::{Batch, KeyValueOperations, WriteOperation},
     hash::HashingContext,
+    impl_context,
     views::{Context, ViewError},
-    common::{WriteOperation, Batch, KeyValueOperations},
 };
 //use linera_views::common::KeyValueOperations;
 use async_trait::async_trait;
@@ -82,18 +82,17 @@ impl KeyValueOperations for RocksdbContainer {
         tokio::task::spawn_blocking(move || -> Result<(), RocksdbContextError> {
             let mut inner_batch = rocksdb::WriteBatchWithTransaction::default();
             for e_ent in batch.operations {
-		match e_ent {
+                match e_ent {
                     WriteOperation::Delete { key } => inner_batch.delete(&key),
                     WriteOperation::Put { key, value } => inner_batch.put(&key, value),
                 }
             }
             db.write(inner_batch)?;
-	    Ok(())
+            Ok(())
         })
         .await??;
         Ok(())
     }
-
 }
 
 impl<E> RocksdbContext<E> {
@@ -106,8 +105,7 @@ impl<E> RocksdbContext<E> {
     }
 }
 
-
-impl_context!{RocksdbContext,RocksdbContextError}
+impl_context! {RocksdbContext,RocksdbContextError}
 
 #[derive(Error, Debug)]
 pub enum RocksdbContextError {

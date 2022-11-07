@@ -1,10 +1,10 @@
 use crate::{
+    common::Batch,
     dynamo_db::DynamoDbContext,
     memory::MemoryContext,
     rocksdb::RocksdbContext,
     test_utils::LocalStackTestContext,
     views::{Context, QueueOperations, QueueView, View, ViewError},
-    common::Batch,
 };
 use async_trait::async_trait;
 use std::{

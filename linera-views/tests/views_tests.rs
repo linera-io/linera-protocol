@@ -3,10 +3,10 @@
 
 use async_trait::async_trait;
 use linera_views::{
+    common::Batch,
     dynamo_db::DynamoDbContext,
     hash::{HashView, Hasher, HashingContext},
     impl_view,
-    common::Batch,
     memory::{MemoryContext, MemoryStoreMap},
     rocksdb::{RocksdbContext, DB},
     test_utils::LocalStackTestContext,

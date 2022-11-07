@@ -16,12 +16,12 @@ use linera_execution::{
     ExecutionStateView, ExecutionStateViewContext, OperationContext, RawExecutionResult,
 };
 use linera_views::{
+    common::Batch,
     impl_view,
     views::{
         CollectionOperations, CollectionView, LogOperations, LogView, MapOperations, MapView,
         QueueOperations, QueueView, RegisterOperations, RegisterView, ScopedView, ViewError,
     },
-    common::Batch,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};

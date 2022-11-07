@@ -12,12 +12,12 @@ use linera_base::{
     messages::{ApplicationId, ChainId},
 };
 use linera_views::{
+    common::Batch,
     impl_view,
     views::{
         CollectionOperations, ReentrantCollectionView, RegisterOperations, RegisterView,
         ScopedView, View, ViewError,
     },
-    common::Batch,
 };
 
 #[cfg(any(test, feature = "test"))]

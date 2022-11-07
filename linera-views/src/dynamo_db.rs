@@ -2,11 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    impl_context,
+    common::{simplify_batch, Batch, KeyValueOperations, WriteOperation},
     hash::HashingContext,
-    localstack,
+    impl_context, localstack,
     views::{Context, ViewError},
-    common::{WriteOperation, Batch, KeyValueOperations, simplify_batch},
 };
 use async_trait::async_trait;
 use aws_sdk_dynamodb::{
@@ -42,7 +41,10 @@ const KEY_ATTRIBUTE: &str = "item_key";
 const VALUE_ATTRIBUTE: &str = "item_value";
 
 #[derive(Debug, Clone)]
-pub struct DynamodbContainer { pub client: Client, pub table: TableName }
+pub struct DynamodbContainer {
+    pub client: Client,
+    pub table: TableName,
+}
 
 /// A implementation of [`Context`] based on DynamoDB.
 #[derive(Debug, Clone)]
@@ -55,8 +57,7 @@ where
     extra: E,
 }
 
-impl DynamodbContainer
-{
+impl DynamodbContainer {
     /// Build the key attributes for a table item.
     ///
     /// The key is composed of two attributes that are both binary blobs. The first attribute is a
@@ -176,7 +177,6 @@ impl DynamodbContainer
 
         bcs::from_bytes(data_bytes).map_err(deserialization_error)
     }
-
 }
 
 #[async_trait]
@@ -307,9 +307,6 @@ impl KeyValueOperations for DynamodbContainer {
     }
 }
 
-
-
-
 impl<E> DynamoDbContext<E>
 where
     E: Clone + Sync + Send,
@@ -329,7 +326,8 @@ where
     /// Attempts to create the table and ignores errors that indicate that it already exists.
     async fn create_table_if_needed(&self) -> Result<TableStatus, CreateTableError> {
         let result = self
-            .db.client
+            .db
+            .client
             .create_table()
             .table_name(self.db.table.as_ref())
             .attribute_definitions(
@@ -379,7 +377,10 @@ where
         base_key: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), CreateTableError> {
-        let db = DynamodbContainer { client: Client::from_conf(config.into()), table };
+        let db = DynamodbContainer {
+            client: Client::from_conf(config.into()),
+            table,
+        };
         let storage = DynamoDbContext {
             db,
             base_key,
@@ -420,16 +421,15 @@ where
     ) -> DynamoDbContext<NewE> {
         DynamoDbContext {
             db: self.db.clone(),
-            base_key: self.derive_key(scope_prefix).expect("derive_key should not fail"),
+            base_key: self
+                .derive_key(scope_prefix)
+                .expect("derive_key should not fail"),
             extra: new_extra,
         }
     }
-
 }
 
-
-
-impl_context!{DynamoDbContext,DynamoDbContextError}
+impl_context! {DynamoDbContext,DynamoDbContextError}
 
 /// Status of a table at the creation time of a [`DynamoDbContext`] instance.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

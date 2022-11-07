@@ -1,6 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::common::{put_item_batch, remove_item_batch, Batch};
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
@@ -13,7 +14,6 @@ use std::{
 };
 use thiserror::Error;
 use tokio::sync::{Mutex, OwnedMutexGuard};
-use crate::common::{Batch, remove_item_batch, put_item_batch};
 
 #[cfg(test)]
 #[path = "unit_tests/views.rs"]
@@ -1120,7 +1120,9 @@ where
     I: Serialize + DeserializeOwned + Send + Sync + 'static,
 {
     fn clone_with_scope(&self, index: &I) -> Self {
-        let key = self.derive_key(&CollectionKey::Subview(index)).expect("derive_key should not fail");
+        let key = self
+            .derive_key(&CollectionKey::Subview(index))
+            .expect("derive_key should not fail");
         self.clone_self(key)
     }
 

@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    impl_context,
+    common::{Batch, KeyValueOperations, WriteOperation},
     hash::HashingContext,
+    impl_context,
     views::{Context, ViewError},
-    common::{KeyValueOperations, WriteOperation, Batch},
 };
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
@@ -36,8 +36,6 @@ impl<E> MemoryContext<E> {
         }
     }
 }
-
-
 
 #[async_trait]
 impl KeyValueOperations for MemoryContainer {
@@ -92,11 +90,9 @@ impl KeyValueOperations for MemoryContainer {
         }
         Ok(())
     }
-
 }
 
-
-impl_context!{MemoryContext,MemoryContextError}
+impl_context! {MemoryContext,MemoryContextError}
 
 #[derive(Error, Debug)]
 pub enum MemoryContextError {
