@@ -138,17 +138,24 @@ macro_rules! impl_context {
             }
 
             async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
-                self.write_batch(batch).await?;
+                self.db.write_batch(batch).await?;
                 Ok(())
             }
 
             fn clone_self(&self, base_key: Vec<u8>) -> Self {
-                $a {
+                Self {
                     db: self.db.clone(),
                     base_key,
                     extra: self.extra.clone(),
                 }
             }
+        }
+
+        impl<E> HashingContext for $a<E>
+        where
+            E: Clone + Send + Sync,
+        {
+            type Hasher = sha2::Sha512;
         }
     }
 

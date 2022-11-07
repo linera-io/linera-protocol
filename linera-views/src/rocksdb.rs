@@ -109,76 +109,6 @@ impl<E> RocksdbContext<E> {
 
 impl_context!{RocksdbContext,RocksdbContextError}
 
-/*
-#[async_trait]
-impl<E> Context for RocksdbContext<E>
-where
-    E: Clone + Send + Sync,
-{
-    type Extra = E;
-    type Error = RocksdbContextError;
-
-    fn extra(&self) -> &E {
-        &self.extra
-    }
-
-    fn base_key(&self) -> Vec<u8> {
-        self.base_key.clone()
-    }
-
-    fn derive_key<I: Serialize>(&self, index: &I) -> Result<Vec<u8>,RocksdbContextError> {
-        let mut key = self.base_key.clone();
-        bcs::serialize_into(&mut key, index)?;
-        assert!(
-            key.len() > self.base_key.len(),
-            "Empty indices are not allowed"
-        );
-        Ok(key)
-    }
-
-    async fn read_key<V: DeserializeOwned>(
-        &mut self,
-        key: &[u8],
-    ) -> Result<Option<V>, RocksdbContextError> {
-        self.db.read_key(key).await
-    }
-
-    async fn find_keys_with_prefix(
-        &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<Vec<u8>>, RocksdbContextError> {
-        self.db.find_keys_with_prefix(key_prefix).await
-    }
-
-    async fn get_sub_keys<Key: DeserializeOwned + Send>(
-        &mut self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<Key>, RocksdbContextError> {
-        self.db.get_sub_keys(key_prefix).await
-    }
-
-    async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
-        self.db.write_batch(batch).await?;
-        Ok(())
-    }
-
-    fn clone_self(&self, base_key: Vec<u8>) -> Self {
-        Self {
-            db: self.db.clone(),
-            base_key,
-            extra: self.extra.clone(),
-        }
-    }
-}
- */
-
-impl<E> HashingContext for RocksdbContext<E>
-where
-    E: Clone + Send + Sync,
-{
-    type Hasher = sha2::Sha512;
-}
-
 #[derive(Error, Debug)]
 pub enum RocksdbContextError {
     #[error("tokio join error: {0}")]
@@ -194,7 +124,7 @@ pub enum RocksdbContextError {
 impl From<RocksdbContextError> for crate::views::ViewError {
     fn from(error: RocksdbContextError) -> Self {
         Self::ContextError {
-            backend: "memory".to_string(),
+            backend: "rocksdb".to_string(),
             error: error.to_string(),
         }
     }
