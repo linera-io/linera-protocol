@@ -10,6 +10,7 @@
 
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 
+mod common;
 #[cfg(feature = "wasmer")]
 #[path = "wasmer.rs"]
 mod runtime;
