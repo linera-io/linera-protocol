@@ -192,116 +192,6 @@ where
     }
 }
 
-impl<'storage, R> GuestFutureInterface<R> for ExecuteOperation
-where
-    R: Runtime,
-    ExecutionError: From<R::Error>,
-{
-    type Output = RawExecutionResult<Vec<u8>>;
-
-    fn poll(
-        &self,
-        application: &R::Application,
-        store: &mut R::Store,
-    ) -> Poll<Result<Self::Output, ExecutionError>> {
-        match application.execute_operation_poll(store, self)? {
-            PollExecutionResult::Ready(Ok(result)) => Poll::Ready(Ok(result.into())),
-            PollExecutionResult::Ready(Err(message)) => {
-                Poll::Ready(Err(ExecutionError::UserApplication(message)))
-            }
-            PollExecutionResult::Pending => Poll::Pending,
-        }
-    }
-}
-
-impl<'storage, R> GuestFutureInterface<R> for ExecuteEffect
-where
-    R: Runtime,
-    ExecutionError: From<R::Error>,
-{
-    type Output = RawExecutionResult<Vec<u8>>;
-
-    fn poll(
-        &self,
-        application: &R::Application,
-        store: &mut R::Store,
-    ) -> Poll<Result<Self::Output, ExecutionError>> {
-        match application.execute_effect_poll(store, self)? {
-            PollExecutionResult::Ready(Ok(result)) => Poll::Ready(Ok(result.into())),
-            PollExecutionResult::Ready(Err(message)) => {
-                Poll::Ready(Err(ExecutionError::UserApplication(message)))
-            }
-            PollExecutionResult::Pending => Poll::Pending,
-        }
-    }
-}
-
-impl<'storage, R> GuestFutureInterface<R> for CallApplication
-where
-    R: Runtime,
-    ExecutionError: From<R::Error>,
-{
-    type Output = ApplicationCallResult;
-
-    fn poll(
-        &self,
-        application: &R::Application,
-        store: &mut R::Store,
-    ) -> Poll<Result<Self::Output, ExecutionError>> {
-        match application.call_application_poll(store, self)? {
-            PollCallApplication::Ready(Ok(result)) => Poll::Ready(Ok(result.into())),
-            PollCallApplication::Ready(Err(message)) => {
-                Poll::Ready(Err(ExecutionError::UserApplication(message)))
-            }
-            PollCallApplication::Pending => Poll::Pending,
-        }
-    }
-}
-
-impl<'storage, R> GuestFutureInterface<R> for CallSession
-where
-    R: Runtime,
-    ExecutionError: From<R::Error>,
-{
-    type Output = SessionCallResult;
-
-    fn poll(
-        &self,
-        application: &R::Application,
-        store: &mut R::Store,
-    ) -> Poll<Result<Self::Output, ExecutionError>> {
-        match application.call_session_poll(store, self)? {
-            PollCallSession::Ready(Ok(result)) => Poll::Ready(Ok(result.into())),
-            PollCallSession::Ready(Err(message)) => {
-                Poll::Ready(Err(ExecutionError::UserApplication(message)))
-            }
-            PollCallSession::Pending => Poll::Pending,
-        }
-    }
-}
-
-impl<'storage, R> GuestFutureInterface<R> for QueryApplication
-where
-    R: Runtime,
-    ExecutionError: From<R::Error>,
-{
-    type Output = Vec<u8>;
-
-    fn poll(
-        &self,
-        application: &R::Application,
-        store: &mut R::Store,
-    ) -> Poll<Result<Self::Output, ExecutionError>> {
-        match application.query_application_poll(store, self)? {
-            PollQuery::Ready(Ok(result)) => Poll::Ready(Ok(result.into())),
-            PollQuery::Ready(Err(message)) => {
-                Poll::Ready(Err(ExecutionError::UserApplication(message)))
-            }
-            PollQuery::Pending => Poll::Pending,
-        }
-    }
-}
-
 pub struct WrappedQueryableStorage<'storage>(&'storage dyn QueryableStorage);
 
 impl<'storage> WrappedQueryableStorage<'storage> {
@@ -360,4 +250,40 @@ impl WritableStorage for WrappedQueryableStorage<'_> {
     ) -> Result<CallResult, ExecutionError> {
         Err(ExecutionError::InvalidSession)
     }
+}
+
+macro_rules! impl_guest_future_interface {
+    ( $( $future:ident : $poll_func:ident -> $poll_type:ident => $output:ty ),* $(,)* ) => {
+        $(
+            impl<'storage, R> GuestFutureInterface<R> for $future
+            where
+                R: Runtime,
+                ExecutionError: From<R::Error>,
+            {
+                type Output = $output;
+
+                fn poll(
+                    &self,
+                    application: &R::Application,
+                    store: &mut R::Store,
+                ) -> Poll<Result<Self::Output, ExecutionError>> {
+                    match application.$poll_func(store, self)? {
+                        $poll_type::Ready(Ok(result)) => Poll::Ready(Ok(result.into())),
+                        $poll_type::Ready(Err(message)) => {
+                            Poll::Ready(Err(ExecutionError::UserApplication(message)))
+                        }
+                        $poll_type::Pending => Poll::Pending,
+                    }
+                }
+            }
+        )*
+    }
+}
+
+impl_guest_future_interface! {
+    ExecuteOperation: execute_operation_poll -> PollExecutionResult => RawExecutionResult<Vec<u8>>,
+    ExecuteEffect: execute_effect_poll -> PollExecutionResult => RawExecutionResult<Vec<u8>>,
+    CallApplication: call_application_poll -> PollCallApplication => ApplicationCallResult,
+    CallSession: call_session_poll -> PollCallSession => SessionCallResult,
+    QueryApplication: query_application_poll -> PollQuery => Vec<u8>,
 }
