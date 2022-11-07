@@ -4,13 +4,12 @@
 
 use crate::{
     messages::{BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse},
-    worker::{ValidatorWorker, WorkerState},
+    worker::{ValidatorWorker, WorkerError, WorkerState},
 };
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use linera_base::{
     crypto::CryptoError,
-    error::Error,
     messages::{ApplicationId, BlockHeight, ChainId, Origin, ValidatorName},
 };
 use linera_chain::{
@@ -50,9 +49,40 @@ pub trait ValidatorNode {
 ///
 /// This error is meant to be serialized over the network and aggregated by clients (i.e.
 /// clients will track validator votes on each error value).
-// TODO(#148): We should have more entries here and never create a `WorkerError` outside the worker.
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash)]
 pub enum NodeError {
+    #[error("Cryptographic error: {0}")]
+    CryptoError(#[from] CryptoError),
+
+    #[error("Base error: {error}")]
+    BaseError { error: String },
+
+    #[error("Error while accessing storage: {error}")]
+    ViewError { error: String },
+
+    #[error("Chain error: {error}")]
+    ChainError { error: String },
+
+    #[error("Worker error: {error}")]
+    WorkerError { error: String },
+
+    // This error must be normalized during conversions.
+    #[error("The chain {0:?} is not active in validator")]
+    InactiveChain(ChainId),
+
+    // This error must be normalized during conversions.
+    #[error(
+        "Cannot vote for block proposal of chain {chain_id:?} because a message \
+         from chain {origin:?} at height {height:?} (application {application_id:?}) \
+         has not been received yet"
+    )]
+    MissingCrossChainUpdate {
+        chain_id: ChainId,
+        application_id: ApplicationId,
+        origin: Origin,
+        height: BlockHeight,
+    },
+
     #[error(
         "Failed to download the requested certificate(s) for chain {chain_id:?} \
          in order to advance to the next height {target_next_block_height}"
@@ -65,10 +95,19 @@ pub enum NodeError {
     #[error("Validator's response to block proposal failed to include a vote")]
     MissingVoteInValidatorResponse,
 
+    // This should go to ClientError.
     #[error(
         "Failed to update validator because our local node doesn't have an active chain {0:?}"
     )]
     InactiveLocalChain(ChainId),
+
+    // This should go to ClientError.
+    #[error("The block does contain the hash that we expected for the previous block")]
+    InvalidLocalBlockChaining,
+
+    // This should go to ClientError.
+    #[error("The given chain info response is invalid")]
+    InvalidChainInfoResponse,
 
     #[error(
         "Failed to submit block proposal: chain {chain_id:?} was still inactive \
@@ -82,45 +121,28 @@ pub enum NodeError {
     )]
     ProposedBlockWithLaggingMessages { chain_id: ChainId, retries: usize },
 
-    #[error(
-        "Cannot vote for block proposal of chain {chain_id:?} because a message \
-         from chain {origin:?} at height {height:?} (application {application_id:?}) \
-         has not been received yet"
-    )]
-    MissingCrossChainUpdate {
-        chain_id: ChainId,
-        application_id: ApplicationId,
-        origin: Origin,
-        height: BlockHeight,
-    },
-
-    #[error("Cannot confirm a block before its predecessors: {current_block_height:?}")]
-    MissingEarlierBlocks { current_block_height: BlockHeight },
-
-    #[error(
-        "Was expecting block height {expected_block_height} but found {found_block_height} instead"
-    )]
-    UnexpectedBlockHeight {
-        expected_block_height: BlockHeight,
-        found_block_height: BlockHeight,
-    },
-
-    #[error("Error while accessing storage view: {error}")]
-    ViewError { error: String },
-
-    #[error("{0}")]
-    WorkerError(#[from] linera_base::error::Error),
-
-    #[error("Cryptographic error: {0}")]
-    CryptoError(#[from] CryptoError),
-
-    #[error("Chain error: {error}")]
-    ChainError { error: String },
+    // Networking and sharding. TODO: those probably belong to linera-service
+    #[error("Cannot deserialize")]
+    InvalidDecoding,
+    #[error("Unexpected message")]
+    UnexpectedMessage,
+    #[error("Network error while querying service: {error}")]
+    ClientIoError { error: String },
+    #[error("Failed to resolve validator address: {address}")]
+    CannotResolveValidatorAddress { address: String },
 }
 
 impl From<ViewError> for NodeError {
     fn from(error: ViewError) -> Self {
         Self::ViewError {
+            error: error.to_string(),
+        }
+    }
+}
+
+impl From<linera_base::error::Error> for NodeError {
+    fn from(error: linera_base::error::Error) -> Self {
+        Self::BaseError {
             error: error.to_string(),
         }
     }
@@ -140,19 +162,19 @@ impl From<ChainError> for NodeError {
                 origin,
                 height,
             },
-            ChainError::MissingEarlierBlocks {
-                current_block_height,
-            } => Self::MissingEarlierBlocks {
-                current_block_height,
-            },
-            ChainError::UnexpectedBlockHeight {
-                expected_block_height,
-                found_block_height,
-            } => Self::UnexpectedBlockHeight {
-                expected_block_height,
-                found_block_height,
-            },
+            ChainError::InactiveChain(chain_id) => Self::InactiveChain(chain_id),
             error => Self::ChainError {
+                error: error.to_string(),
+            },
+        }
+    }
+}
+
+impl From<WorkerError> for NodeError {
+    fn from(error: WorkerError) -> Self {
+        match error {
+            WorkerError::ChainError(error) => error.into(),
+            error => Self::WorkerError {
                 error: error.to_string(),
             },
         }
@@ -251,7 +273,7 @@ where
         &mut self,
         chain_id: ChainId,
         certificates: Vec<Certificate>,
-    ) -> Result<Option<ChainInfo>, NodeError> {
+    ) -> Option<ChainInfo> {
         let mut info = None;
         for certificate in certificates {
             if let Value::ConfirmedBlock { block, .. } = &certificate.value {
@@ -262,32 +284,24 @@ where
                             // Continue with the next certificate.
                             continue;
                         }
-                        Err(
-                            e @ (NodeError::WorkerError(Error::InvalidCertificate)
-                            | NodeError::MissingEarlierBlocks { .. }),
-                        ) => {
+                        Err(e) => {
                             // The certificate is not as expected. Give up.
                             log::warn!(
                                 "Failed to process network certificate {}: {}",
                                 certificate.hash,
                                 e
                             );
-                            return Ok(info);
-                        }
-                        Err(e) => {
-                            // Something is wrong: a valid certificate with the
-                            // right block height should not fail to execute.
-                            return Err(e);
+                            return info;
                         }
                     }
                 }
             }
             // The certificate is not as expected. Give up.
             log::warn!("Failed to process network certificate {}", certificate.hash);
-            return Ok(info);
+            return info
         }
         // Done with all certificates.
-        Ok(info)
+        info
     }
 
     async fn local_chain_info(&mut self, chain_id: ChainId) -> Result<ChainInfo, NodeError> {
@@ -354,7 +368,7 @@ where
                     ..
                 } = response.info;
                 self.try_process_certificates(chain_id, requested_sent_certificates)
-                    .await?;
+                    .await;
             }
         }
         Ok(())
@@ -412,7 +426,7 @@ where
         };
         if self
             .try_process_certificates(chain_id, info.requested_sent_certificates)
-            .await?
+            .await
             .is_none()
         {
             return Ok(());

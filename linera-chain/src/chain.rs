@@ -260,6 +260,15 @@ where
         self.execution_state.system.is_active()
     }
 
+    /// Invariant for the states of active chains.
+    pub fn ensure_is_active(&self) -> Result<(), ChainError> {
+        if self.is_active() {
+            Ok(())
+        } else {
+            Err(ChainError::InactiveChain(self.chain_id()))
+        }
+    }
+
     /// Verify that this chain is up-to-date and all the messages executed ahead of time
     /// have been properly received by now.
     pub async fn validate_incoming_messages(&mut self) -> Result<(), ChainError> {

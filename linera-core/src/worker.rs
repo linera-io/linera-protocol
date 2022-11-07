@@ -7,8 +7,7 @@ use async_trait::async_trait;
 use linera_base::{
     crypto::{HashValue, KeyPair},
     ensure,
-    error::Error,
-    messages::{ApplicationId, BlockHeight, ChainId, Medium, Origin},
+    messages::{ApplicationId, BlockHeight, ChainId, Epoch, Medium, Origin},
 };
 use linera_chain::{
     messages::{Block, BlockProposal, Certificate, MessageGroup, Value},
@@ -17,6 +16,7 @@ use linera_chain::{
 use linera_storage::Store;
 use linera_views::views::{LogView, View, ViewError};
 use std::{collections::VecDeque, sync::Arc};
+use thiserror::Error;
 
 #[cfg(test)]
 #[path = "unit_tests/worker_tests.rs"]
@@ -34,25 +34,65 @@ pub trait ValidatorWorker {
     async fn handle_block_proposal(
         &mut self,
         proposal: BlockProposal,
-    ) -> Result<ChainInfoResponse, Error>;
+    ) -> Result<ChainInfoResponse, WorkerError>;
 
     /// Process a certificate, e.g. to extend a chain with a confirmed block.
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-    ) -> Result<(ChainInfoResponse, Vec<CrossChainRequest>), Error>;
+    ) -> Result<(ChainInfoResponse, Vec<CrossChainRequest>), WorkerError>;
 
     /// Handle information queries on chains.
     async fn handle_chain_info_query(
         &mut self,
         query: ChainInfoQuery,
-    ) -> Result<ChainInfoResponse, Error>;
+    ) -> Result<ChainInfoResponse, WorkerError>;
 
     /// Handle a (trusted!) cross-chain request.
     async fn handle_cross_chain_request(
         &mut self,
         request: CrossChainRequest,
-    ) -> Result<Vec<CrossChainRequest>, Error>;
+    ) -> Result<Vec<CrossChainRequest>, WorkerError>;
+}
+
+/// Error type for [`ValidatorWorker`].
+#[derive(Debug, Error)]
+pub enum WorkerError {
+    #[error(transparent)]
+    CryptoError(#[from] linera_base::crypto::CryptoError),
+    #[error(transparent)]
+    BaseError(#[from] linera_base::error::Error),
+    #[error(transparent)]
+    ViewError(#[from] linera_views::views::ViewError),
+    #[error(transparent)]
+    ChainError(#[from] linera_chain::ChainError),
+
+    // Chain access control
+    #[error("Block was not signed by an authorized owner")]
+    InvalidOwner,
+
+    // Chaining
+    #[error(
+        "Was expecting block height {expected_block_height} but found {found_block_height} instead"
+    )]
+    UnexpectedBlockHeight {
+        expected_block_height: BlockHeight,
+        found_block_height: BlockHeight,
+    },
+    #[error("Cannot confirm a block before its predecessors: {current_block_height:?}")]
+    MissingEarlierBlocks { current_block_height: BlockHeight },
+    #[error("{epoch:?} is not recognized by chain {chain_id:}")]
+    InvalidEpoch { chain_id: ChainId, epoch: Epoch },
+
+    // Other server-side errors
+    #[error("Invalid cross-chain request")]
+    InvalidCrossChainRequest,
+    #[error("The block does contain the hash that we expected for the previous block")]
+    InvalidBlockChaining,
+    #[error("The given state hash is not what we computed after executing the block")]
+    IncorrectStateHash,
+    #[error("The given effects are not what we computed after executing the block")]
+    IncorrectEffects,
 }
 
 /// State of a worker in a validator or a local node.
@@ -102,7 +142,7 @@ where
     pub(crate) async fn fully_handle_certificate(
         &mut self,
         certificate: Certificate,
-    ) -> Result<ChainInfoResponse, linera_base::error::Error> {
+    ) -> Result<ChainInfoResponse, WorkerError> {
         let (response, requests) = self.handle_certificate(certificate).await?;
         let mut requests = VecDeque::from(requests);
         while let Some(request) = requests.pop_front() {
@@ -115,7 +155,7 @@ where
     pub(crate) async fn stage_block_execution(
         &mut self,
         block: &Block,
-    ) -> Result<ChainInfoResponse, Error> {
+    ) -> Result<ChainInfoResponse, WorkerError> {
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
         chain.execute_block(block).await?;
         let info = ChainInfoResponse::new(&chain, None);
@@ -135,7 +175,7 @@ where
         origin: Origin,
         recipient: ChainId,
         heights: &[BlockHeight],
-    ) -> Result<CrossChainRequest, Error> {
+    ) -> Result<CrossChainRequest, WorkerError> {
         let mut keys = Vec::new();
         for height in heights {
             if let Some(key) = confirmed_log.get(usize::from(*height)).await? {
@@ -155,7 +195,7 @@ where
     async fn make_continuation(
         &mut self,
         chain: &mut ChainStateView<Client::Context>,
-    ) -> Result<Vec<CrossChainRequest>, Error> {
+    ) -> Result<Vec<CrossChainRequest>, WorkerError> {
         let mut continuation = Vec::new();
         let chain_id = chain.chain_id();
         for application_id in chain.communication_states.indices().await? {
@@ -210,7 +250,7 @@ where
     async fn process_confirmed_block(
         &mut self,
         certificate: Certificate,
-    ) -> Result<(ChainInfoResponse, Vec<CrossChainRequest>), Error> {
+    ) -> Result<(ChainInfoResponse, Vec<CrossChainRequest>), WorkerError> {
         let (block, effects, state_hash) = match &certificate.value {
             Value::ConfirmedBlock {
                 block,
@@ -225,7 +265,7 @@ where
         let mut chain = self.storage.load_active_chain(sender).await?;
         let tip = chain.tip_state.get();
         if tip.next_block_height < block.height {
-            return Err(Error::MissingEarlierBlocks {
+            return Err(WorkerError::MissingEarlierBlocks {
                 current_block_height: tip.next_block_height,
             });
         }
@@ -244,7 +284,7 @@ where
             .expect("chain is active");
         ensure!(
             block.epoch == epoch,
-            Error::InvalidEpoch {
+            WorkerError::InvalidEpoch {
                 chain_id: sender,
                 epoch: block.epoch,
             }
@@ -256,19 +296,17 @@ where
             .get()
             .get(&epoch)
             .expect("chain is active");
-        certificate
-            .check(committee)
-            .map_err(|_| Error::InvalidCertificate)?;
+        certificate.check(committee)?;
         // This should always be true for valid certificates.
         ensure!(
             tip.block_hash == block.previous_block_hash,
-            Error::InvalidBlockChaining
+            WorkerError::InvalidBlockChaining
         );
         // Persist certificate.
         self.storage.write_certificate(certificate.clone()).await?;
         // Execute the block.
         let verified_effects = chain.execute_block(block).await?;
-        ensure!(effects == verified_effects, Error::IncorrectEffects);
+        ensure!(effects == verified_effects, WorkerError::IncorrectEffects);
         // Advance to next block height.
         let tip = chain.tip_state.get_mut();
         tip.block_hash = Some(certificate.hash);
@@ -277,7 +315,7 @@ where
         // We should always agree on the state hash.
         ensure!(
             *chain.execution_state_hash.get() == Some(state_hash),
-            Error::IncorrectStateHash
+            WorkerError::IncorrectStateHash
         );
         let info = ChainInfoResponse::new(&chain, self.key_pair());
         let continuation = self.make_continuation(&mut chain).await?;
@@ -290,7 +328,7 @@ where
     async fn process_validated_block(
         &mut self,
         certificate: Certificate,
-    ) -> Result<ChainInfoResponse, Error> {
+    ) -> Result<ChainInfoResponse, WorkerError> {
         let (block, round, effects, state_hash) = match &certificate.value {
             Value::ValidatedBlock {
                 block,
@@ -311,7 +349,7 @@ where
             .expect("chain is active");
         ensure!(
             block.epoch == epoch,
-            Error::InvalidEpoch {
+            WorkerError::InvalidEpoch {
                 chain_id: block.chain_id,
                 epoch: block.epoch,
             }
@@ -323,9 +361,7 @@ where
             .get()
             .get(&epoch)
             .expect("chain is active");
-        certificate
-            .check(committee)
-            .map_err(|_| Error::InvalidCertificate)?;
+        certificate.check(committee)?;
         if chain.manager.get_mut().check_validated_block(
             chain.tip_state.get().next_block_height,
             block,
@@ -358,7 +394,7 @@ where
     async fn handle_block_proposal(
         &mut self,
         proposal: BlockProposal,
-    ) -> Result<ChainInfoResponse, Error> {
+    ) -> Result<ChainInfoResponse, WorkerError> {
         log::trace!("{} <-- {:?}", self.nickname, proposal);
         // Obtain the sender's chain.
         let sender = proposal.content.block.chain_id;
@@ -372,7 +408,7 @@ where
             .expect("chain is active");
         ensure!(
             proposal.content.block.epoch == epoch,
-            Error::InvalidEpoch {
+            WorkerError::InvalidEpoch {
                 chain_id: sender,
                 epoch,
             }
@@ -380,7 +416,7 @@ where
         // Check authentication of the block.
         ensure!(
             chain.manager.get().has_owner(&proposal.owner),
-            Error::InvalidOwner
+            WorkerError::InvalidOwner
         );
         proposal
             .signature
@@ -422,7 +458,7 @@ where
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-    ) -> Result<(ChainInfoResponse, Vec<CrossChainRequest>), Error> {
+    ) -> Result<(ChainInfoResponse, Vec<CrossChainRequest>), WorkerError> {
         log::trace!("{} <-- {:?}", self.nickname, certificate);
         match &certificate.value {
             Value::ValidatedBlock { .. } => {
@@ -440,7 +476,7 @@ where
     async fn handle_chain_info_query(
         &mut self,
         query: ChainInfoQuery,
-    ) -> Result<ChainInfoResponse, Error> {
+    ) -> Result<ChainInfoResponse, WorkerError> {
         log::trace!("{} <-- {:?}", self.nickname, query);
         let mut chain = self.storage.load_chain(query.chain_id).await?;
         let mut info = ChainInfo::from(&chain);
@@ -450,7 +486,7 @@ where
         if let Some(next_block_height) = query.test_next_block_height {
             ensure!(
                 chain.tip_state.get().next_block_height == next_block_height,
-                Error::UnexpectedBlockHeight {
+                WorkerError::UnexpectedBlockHeight {
                     expected_block_height: next_block_height,
                     found_block_height: chain.tip_state.get().next_block_height
                 }
@@ -527,7 +563,7 @@ where
     async fn handle_cross_chain_request(
         &mut self,
         request: CrossChainRequest,
-    ) -> Result<Vec<CrossChainRequest>, Error> {
+    ) -> Result<Vec<CrossChainRequest>, WorkerError> {
         log::trace!("{} <-- {:?}", self.nickname, request);
         match request {
             CrossChainRequest::UpdateRecipient {
@@ -549,20 +585,20 @@ where
                             (block.clone(), effects.clone())
                         }
                         _ => {
-                            return Err(Error::InvalidCrossChainRequest);
+                            return Err(WorkerError::InvalidCrossChainRequest);
                         }
                     };
                     ensure!(
                         origin.chain_id == block.chain_id,
-                        Error::InvalidCrossChainRequest
+                        WorkerError::InvalidCrossChainRequest
                     );
                     ensure!(
                         last_height < Some(block.height),
-                        Error::InvalidCrossChainRequest
+                        WorkerError::InvalidCrossChainRequest
                     );
                     ensure!(
                         last_epoch <= Some(block.epoch),
-                        Error::InvalidCrossChainRequest
+                        WorkerError::InvalidCrossChainRequest
                     );
                     last_height = Some(block.height);
                     last_epoch = Some(block.epoch);

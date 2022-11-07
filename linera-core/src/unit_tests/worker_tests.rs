@@ -4,15 +4,15 @@
 
 use crate::{
     messages::*,
-    worker::{ValidatorWorker, WorkerState},
+    worker::{ValidatorWorker, WorkerError, WorkerState},
 };
-use linera_base::{committee::Committee, crypto::*, error::Error, messages::*};
+use linera_base::{committee::Committee, crypto::*, messages::*};
 use linera_chain::{
     messages::{
         Block, BlockAndRound, BlockProposal, Certificate, MessageGroup, SignatureAggregator, Value,
         Vote,
     },
-    Event,
+    ChainError, Event,
 };
 use linera_execution::{
     system::{
@@ -753,7 +753,9 @@ where
         // Inconsistent received messages.
         assert!(matches!(
             worker.handle_block_proposal(block_proposal).await,
-            Err(Error::InvalidMessageContent { .. })
+            Err(WorkerError::ChainError(
+                ChainError::InvalidMessageContent { .. }
+            ))
         ));
     }
     {
@@ -802,7 +804,9 @@ where
         // Inconsistent order in received messages (indices).
         assert!(matches!(
             worker.handle_block_proposal(block_proposal).await,
-            Err(Error::InvalidMessageOrder { .. })
+            Err(WorkerError::ChainError(
+                ChainError::InvalidMessageOrder { .. }
+            ))
         ));
     }
     {
@@ -851,7 +855,9 @@ where
         // Inconsistent order in received messages (heights).
         assert!(matches!(
             worker.handle_block_proposal(block_proposal).await,
-            Err(Error::InvalidMessageOrder { .. })
+            Err(WorkerError::ChainError(
+                ChainError::InvalidMessageOrder { .. }
+            ))
         ));
     }
     {

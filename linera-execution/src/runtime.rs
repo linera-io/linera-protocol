@@ -269,7 +269,7 @@ where
             .await
             .map_err(|error| match error {
                 ViewError::TryLockError(_) => ExecutionError::ApplicationIsInUse,
-                error => ExecutionError::View(error),
+                error => ExecutionError::ViewError(error),
             })?
             .get()
             .to_vec();
@@ -323,8 +323,9 @@ where
             .try_load_entry(self.application_id())
             .await
             .map_err(|error| match error {
+                // TODO: move to `impl From<ViewError> for ExecutionError`
                 ViewError::TryLockError(_) => ExecutionError::ApplicationIsInUse,
-                error => ExecutionError::View(error),
+                error => ExecutionError::ViewError(error),
             })?;
         let state = view.get().to_vec();
         // Remember the view. This will prevent reentrancy.

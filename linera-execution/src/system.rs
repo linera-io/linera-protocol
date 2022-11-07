@@ -480,10 +480,9 @@ where
                 epoch,
                 committees,
             } if self.admin_id.get().as_ref() == Some(admin_id) => {
-                // This chain was not yet subscribed at the time earlier epochs were broadcast.
                 ensure!(
                     *epoch >= self.epoch.get().expect("chain is active"),
-                    ExecutionError::InvalidCrossChainRequest
+                    ExecutionError::CannotRewindEpoch
                 );
                 self.epoch.set(Some(*epoch));
                 self.committees.set(committees.clone());
