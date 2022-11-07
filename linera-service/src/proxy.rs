@@ -12,8 +12,8 @@ use structopt::StructOpt;
 /// Options for running the proxy.
 #[derive(Debug, StructOpt)]
 #[structopt(
-    name = "Zef Proxy",
-    about = "A proxy to redirect incoming requests to Zef Server shards"
+    name = "Linera Proxy",
+    about = "A proxy to redirect incoming requests to Linera Server shards"
 )]
 pub struct ProxyOptions {
     /// Path to server configuration.

@@ -387,7 +387,7 @@ fn deserialize_response(response: Message) -> Option<ChainInfoResponse> {
 
 #[derive(StructOpt)]
 #[structopt(
-    name = "Zef Client",
+    name = "Linera Client",
     about = "A Byzantine-fault tolerant sidechain with low-latency finality and high throughput"
 )]
 struct ClientOptions {
