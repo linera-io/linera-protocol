@@ -16,9 +16,10 @@ pub type RocksdbContainer = Arc<DB>;
 /// An implementation of [`crate::views::Context`] based on Rocksdb
 pub type RocksdbContext<E> = ContextFromDb<E, RocksdbContainer, RocksdbContextError>;
 
+
 #[async_trait]
 impl KeyValueOperations for RocksdbContainer {
-    type E = RocksdbContextError;
+    type Error = RocksdbContextError;
     async fn read_key<V: DeserializeOwned>(
         &self,
         key: &[u8],

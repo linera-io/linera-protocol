@@ -69,17 +69,17 @@ where
 /// Low-level, asynchronous key-value operations. Useful for storage APIs not based on views.
 #[async_trait]
 pub trait KeyValueOperations {
-    type E;
-    async fn read_key<V: DeserializeOwned>(&self, key: &[u8]) -> Result<Option<V>, Self::E>;
+    type Error;
+    async fn read_key<V: DeserializeOwned>(&self, key: &[u8]) -> Result<Option<V>, Self::Error>;
 
-    async fn find_keys_with_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::E>;
+    async fn find_keys_with_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error>;
 
     async fn get_sub_keys<Key: DeserializeOwned + Send>(
         &mut self,
         key_prefix: &[u8],
-    ) -> Result<Vec<Key>, Self::E>;
+    ) -> Result<Vec<Key>, Self::Error>;
 
-    async fn write_batch(&self, batch: Batch) -> Result<(), Self::E>;
+    async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error>;
 }
 
 
@@ -88,7 +88,7 @@ pub trait KeyValueOperations {
 pub struct ContextFromDb<EX,DB,ER>
 where
     EX: Clone + Sync + Send,
-    DB: KeyValueOperations<E = ER> + Clone + Send + Sync,
+    DB: KeyValueOperations<Error = ER> + Clone + Send + Sync,
     ER: std::convert::From<bcs::Error> + Send + Sync + std::error::Error + 'static,
 {
     pub db: DB,
@@ -96,17 +96,22 @@ where
     pub extra: EX,
 }
 
+pub trait ContainerError {
+    type Error;
+}
+
+
 
 #[async_trait]
 impl<EX,DB,ER> Context for ContextFromDb<EX,DB,ER>
 where
     EX: Clone + Send + Sync,
-    DB: KeyValueOperations<E = ER> + Clone + Send + Sync,
+    DB: KeyValueOperations<Error = ER> + Clone + Send + Sync,
     ER: std::convert::From<bcs::Error> + Send + Sync + std::error::Error + 'static,
     ViewError: std::convert::From<ER>
 {
     type Extra = EX;
-    type Error = ER;
+    type Error = DB::Error;
 
     fn extra(&self) -> &EX {
         &self.extra
@@ -167,7 +172,7 @@ where
 impl<EX,DB,ER> HashingContext for ContextFromDb<EX,DB,ER>
 where
     EX: Clone + Send + Sync,
-    DB: KeyValueOperations<E = ER> + Clone + Send + Sync,
+    DB: KeyValueOperations<Error = ER> + Clone + Send + Sync,
     ER: std::convert::From<bcs::Error> + Send + Sync + std::error::Error + 'static,
     ViewError: std::convert::From<ER>,
 {

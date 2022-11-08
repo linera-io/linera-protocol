@@ -19,6 +19,7 @@ pub type MemoryContainer = Arc<RwLock<OwnedMutexGuard<MemoryStoreMap>>>;
 /// A context that stores all values in memory.
 pub type MemoryContext<E> = ContextFromDb<E, MemoryContainer, MemoryContextError>;
 
+
 impl<E: Clone + Send + Sync> MemoryContext<E> {
     pub fn new(guard: OwnedMutexGuard<MemoryStoreMap>, extra: E) -> Self {
         Self {
@@ -31,7 +32,7 @@ impl<E: Clone + Send + Sync> MemoryContext<E> {
 
 #[async_trait]
 impl KeyValueOperations for MemoryContainer {
-    type E = MemoryContextError;
+    type Error = MemoryContextError;
     async fn read_key<V: DeserializeOwned>(
         &self,
         key: &[u8],

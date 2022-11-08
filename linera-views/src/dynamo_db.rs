@@ -47,7 +47,6 @@ pub struct DynamodbContainer {
 /// A implementation of [`Context`] based on DynamoDB.
 pub type DynamoDbContext<E> = ContextFromDb<E, DynamodbContainer, DynamoDbContextError>;
 
-
 impl DynamodbContainer {
     /// Build the key attributes for a table item.
     ///
@@ -172,7 +171,7 @@ impl DynamodbContainer {
 
 #[async_trait]
 impl KeyValueOperations for DynamodbContainer {
-    type E = DynamoDbContextError;
+    type Error = DynamoDbContextError;
     /// Retrieve a generic `Item` from the table using the provided `key` prefixed by the current
     /// context.
     ///
