@@ -1,14 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 use crate::{
-    common::{Batch, KeyValueOperations, WriteOperation},
-    hash::HashingContext,
-    impl_context,
-    views::{Context, ViewError},
+    common::{Batch, KeyValueOperations, WriteOperation, ContextFromDb},
+    views::{ViewError},
 };
 use async_trait::async_trait;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{de::DeserializeOwned};
 use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
 use thiserror::Error;
 use tokio::sync::{OwnedMutexGuard, RwLock};
@@ -20,14 +17,9 @@ pub type MemoryStoreMap = BTreeMap<Vec<u8>, Vec<u8>>;
 pub type MemoryContainer = Arc<RwLock<OwnedMutexGuard<MemoryStoreMap>>>;
 
 /// A context that stores all values in memory.
-#[derive(Clone, Debug)]
-pub struct MemoryContext<E> {
-    db: MemoryContainer,
-    base_key: Vec<u8>,
-    extra: E,
-}
+pub type MemoryContext<E> = ContextFromDb<E, MemoryContainer, MemoryContextError>;
 
-impl<E> MemoryContext<E> {
+impl<E: Clone + Send + Sync> MemoryContext<E> {
     pub fn new(guard: OwnedMutexGuard<MemoryStoreMap>, extra: E) -> Self {
         Self {
             db: Arc::new(RwLock::new(guard)),
@@ -91,8 +83,6 @@ impl KeyValueOperations for MemoryContainer {
         Ok(())
     }
 }
-
-impl_context! {MemoryContext,MemoryContextError}
 
 #[derive(Error, Debug)]
 pub enum MemoryContextError {

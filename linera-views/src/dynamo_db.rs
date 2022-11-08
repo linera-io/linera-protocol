@@ -1,11 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 use crate::{
-    common::{simplify_batch, Batch, KeyValueOperations, WriteOperation},
-    hash::HashingContext,
-    impl_context, localstack,
-    views::{Context, ViewError},
+    common::{simplify_batch, Batch, KeyValueOperations, WriteOperation, ContextFromDb},
+    localstack,
+    views::{Context},
 };
 use async_trait::async_trait;
 use aws_sdk_dynamodb::{
@@ -47,15 +45,8 @@ pub struct DynamodbContainer {
 }
 
 /// A implementation of [`Context`] based on DynamoDB.
-#[derive(Debug, Clone)]
-pub struct DynamoDbContext<E>
-where
-    E: Clone + Sync + Send,
-{
-    db: DynamodbContainer,
-    base_key: Vec<u8>,
-    extra: E,
-}
+pub type DynamoDbContext<E> = ContextFromDb<E, DynamodbContainer, DynamoDbContextError>;
+
 
 impl DynamodbContainer {
     /// Build the key attributes for a table item.
@@ -428,8 +419,6 @@ where
         }
     }
 }
-
-impl_context! {DynamoDbContext,DynamoDbContextError}
 
 /// Status of a table at the creation time of a [`DynamoDbContext`] instance.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

@@ -1,5 +1,7 @@
-use crate::views::ViewError;
+use crate::hash::HashingContext;
+use crate::views::{Context, ViewError};
 use async_trait::async_trait;
+use derive_bounded::Clone;
 use serde::{de::DeserializeOwned, Serialize};
 use std::collections::HashMap;
 pub enum WriteOperation {
@@ -78,78 +80,94 @@ pub trait KeyValueOperations {
     async fn write_batch(&self, batch: Batch) -> Result<(), Self::E>;
 }
 
-#[macro_export]
-macro_rules! impl_context {
-    ($a:ident, $b:ident) => {
-        #[async_trait]
-        impl<E> Context for $a<E>
-        where
-            E: Clone + Send + Sync,
-        {
-            type Extra = E;
-            type Error = $b;
 
-            fn extra(&self) -> &E {
-                &self.extra
-            }
+#[derive(Debug, Clone)]
+#[bounded_to(EX, DB)]
+pub struct ContextFromDb<EX,DB,ER>
+where
+    EX: Clone + Sync + Send,
+    DB: KeyValueOperations<E = ER> + Clone + Send + Sync,
+    ER: std::convert::From<bcs::Error> + Send + Sync + std::error::Error + 'static,
+{
+    pub db: DB,
+    pub base_key: Vec<u8>,
+    pub extra: EX,
+}
 
-            fn base_key(&self) -> Vec<u8> {
-                self.base_key.clone()
-            }
 
-            fn derive_key<I: Serialize>(&self, index: &I) -> Result<Vec<u8>, Self::Error> {
-                let mut key = self.base_key.clone();
-                bcs::serialize_into(&mut key, index)?;
-                assert!(
-                    key.len() > self.base_key.len(),
-                    "Empty indices are not allowed"
-                );
-                Ok(key)
-            }
+#[async_trait]
+impl<EX,DB,ER> Context for ContextFromDb<EX,DB,ER>
+where
+    EX: Clone + Send + Sync,
+    DB: KeyValueOperations<E = ER> + Clone + Send + Sync,
+    ER: std::convert::From<bcs::Error> + Send + Sync + std::error::Error + 'static,
+    ViewError: std::convert::From<ER>
+{
+    type Extra = EX;
+    type Error = ER;
 
-            async fn read_key<Item>(&mut self, key: &[u8]) -> Result<Option<Item>, Self::Error>
-            where
-                Item: DeserializeOwned,
-            {
-                self.db.read_key(key).await
-            }
+    fn extra(&self) -> &EX {
+        &self.extra
+    }
 
-            async fn find_keys_with_prefix(
-                &self,
-                key_prefix: &[u8],
-            ) -> Result<Vec<Vec<u8>>, Self::Error> {
-                self.db.find_keys_with_prefix(key_prefix).await
-            }
+    fn base_key(&self) -> Vec<u8> {
+        self.base_key.clone()
+    }
 
-            async fn get_sub_keys<Key>(
-                &mut self,
-                key_prefix: &[u8],
-            ) -> Result<Vec<Key>, Self::Error>
-            where
-                Key: DeserializeOwned + Send,
-            {
-                self.db.get_sub_keys(key_prefix).await
-            }
+    fn derive_key<I: Serialize>(&self, index: &I) -> Result<Vec<u8>, Self::Error> {
+        let mut key = self.base_key.clone();
+        bcs::serialize_into(&mut key, index)?;
+        assert!(
+            key.len() > self.base_key.len(),
+            "Empty indices are not allowed"
+        );
+        Ok(key)
+    }
 
-            async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
-                self.db.write_batch(batch).await?;
-                Ok(())
-            }
+    async fn read_key<Item>(&mut self, key: &[u8]) -> Result<Option<Item>, Self::Error>
+    where
+        Item: DeserializeOwned,
+    {
+        self.db.read_key(key).await
+    }
 
-            fn clone_self(&self, base_key: Vec<u8>) -> Self {
-                Self {
-                    db: self.db.clone(),
-                    base_key,
-                    extra: self.extra.clone(),
-                }
-            }
+    async fn find_keys_with_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Vec<Vec<u8>>, Self::Error> {
+        self.db.find_keys_with_prefix(key_prefix).await
+    }
+
+    async fn get_sub_keys<Key>(
+        &mut self,
+        key_prefix: &[u8],
+    ) -> Result<Vec<Key>, Self::Error>
+    where
+        Key: DeserializeOwned + Send,
+    {
+        self.db.get_sub_keys(key_prefix).await
+    }
+
+    async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
+        self.db.write_batch(batch).await?;
+        Ok(())
+    }
+
+    fn clone_self(&self, base_key: Vec<u8>) -> Self {
+        Self {
+            db: self.db.clone(),
+            base_key,
+            extra: self.extra.clone(),
         }
+    }
+}
 
-        impl<E> HashingContext for $a<E>
-        where
-            E: Clone + Send + Sync,
-        {
-            type Hasher = sha2::Sha512;
-        }
-    };
+impl<EX,DB,ER> HashingContext for ContextFromDb<EX,DB,ER>
+where
+    EX: Clone + Send + Sync,
+    DB: KeyValueOperations<E = ER> + Clone + Send + Sync,
+    ER: std::convert::From<bcs::Error> + Send + Sync + std::error::Error + 'static,
+    ViewError: std::convert::From<ER>,
+{
+    type Hasher = sha2::Sha512;
 }

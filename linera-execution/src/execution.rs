@@ -48,7 +48,7 @@ impl_view!(
 #[cfg(any(test, feature = "test"))]
 impl<R> ExecutionStateView<MemoryContext<R>>
 where
-    R: ExecutionRuntimeContext,
+    R: ExecutionRuntimeContext + Clone + Send + Sync,
     MemoryContext<R>: ExecutionStateViewContext,
     ViewError: From<<MemoryContext<R> as linera_views::views::Context>::Error>,
 {

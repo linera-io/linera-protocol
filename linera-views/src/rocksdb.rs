@@ -2,14 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    common::{Batch, KeyValueOperations, WriteOperation},
-    hash::HashingContext,
-    impl_context,
-    views::{Context, ViewError},
+    common::{Batch, KeyValueOperations, WriteOperation, ContextFromDb},
 };
 //use linera_views::common::KeyValueOperations;
 use async_trait::async_trait;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{de::DeserializeOwned};
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -17,12 +14,7 @@ pub type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
 pub type RocksdbContainer = Arc<DB>;
 
 /// An implementation of [`crate::views::Context`] based on Rocksdb
-#[derive(Debug, Clone)]
-pub struct RocksdbContext<E> {
-    db: RocksdbContainer,
-    base_key: Vec<u8>,
-    extra: E,
-}
+pub type RocksdbContext<E> = ContextFromDb<E, RocksdbContainer, RocksdbContextError>;
 
 #[async_trait]
 impl KeyValueOperations for RocksdbContainer {
@@ -95,7 +87,7 @@ impl KeyValueOperations for RocksdbContainer {
     }
 }
 
-impl<E> RocksdbContext<E> {
+impl<E: Clone + Send + Sync> RocksdbContext<E> {
     pub fn new(db: RocksdbContainer, base_key: Vec<u8>, extra: E) -> Self {
         Self {
             db,
@@ -104,8 +96,6 @@ impl<E> RocksdbContext<E> {
         }
     }
 }
-
-impl_context! {RocksdbContext,RocksdbContextError}
 
 #[derive(Error, Debug)]
 pub enum RocksdbContextError {
