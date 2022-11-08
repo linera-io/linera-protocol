@@ -4,7 +4,7 @@
 //! Helper types to handle async code between the host WebAssembly runtime and guest WebAssembly
 //! modules.
 
-use super::common;
+use super::common::{self, WritableRuntimeContext};
 use crate::WasmExecutionError;
 use futures::future::BoxFuture;
 use std::{
@@ -13,6 +13,7 @@ use std::{
     future::Future,
     marker::PhantomData,
     mem,
+    pin::Pin,
     sync::Arc,
     task::{Context, Poll},
 };
@@ -68,6 +69,76 @@ impl<'future, Output> HostFuture<'future, Output> {
             .expect("Application can't call the future concurrently because it's single threaded");
 
         future.as_mut().poll(context)
+    }
+}
+
+/// A future implemented in a WASM module.
+pub enum GuestFuture<Future, Runtime>
+where
+    Runtime: common::Runtime,
+{
+    /// The WASM module failed to create an instance of the future.
+    ///
+    /// The error will be returned when this [`GuestFuture`] is polled.
+    FailedToCreate(Option<Runtime::Error>),
+
+    /// The WASM future type and the runtime context to poll it.
+    Active {
+        /// A WIT resource type implementing a [`GuestFutureInterface`] so that it can be polled.
+        future: Future,
+
+        /// Types necessary to call the guest WASM module in order to poll the future.
+        context: WritableRuntimeContext<Runtime>,
+    },
+}
+
+impl<Future, Runtime> GuestFuture<Future, Runtime>
+where
+    Runtime: common::Runtime,
+{
+    /// Create a [`GuestFuture`] instance with `creation_result` of a future resource type.
+    ///
+    /// If the guest resource type could not be created by the WASM module, the error is stored so
+    /// that it can be returned when the [`GuestFuture`] is polled.
+    pub fn new(
+        creation_result: Result<Future, Runtime::Error>,
+        context: WritableRuntimeContext<Runtime>,
+    ) -> Self {
+        match creation_result {
+            Ok(future) => GuestFuture::Active { future, context },
+            Err(error) => GuestFuture::FailedToCreate(Some(error)),
+        }
+    }
+}
+
+impl<InnerFuture, Runtime> Future for GuestFuture<InnerFuture, Runtime>
+where
+    InnerFuture: GuestFutureInterface<Runtime> + Unpin,
+    Runtime: common::Runtime,
+    Runtime::Application: Unpin,
+    Runtime::Store: Unpin,
+    Runtime::StorageGuard: Unpin,
+    Runtime::Error: Unpin,
+{
+    type Output = Result<InnerFuture::Output, WasmExecutionError>;
+
+    /// Poll the guest future.
+    ///
+    /// Uses the runtime context to call the WASM future's `poll` method, as implemented in the
+    /// [`GuestFutureInterface`]. The `task_context` is stored in the runtime context's
+    /// [`ContextForwarder`], so that any host futures the guest calls can use the correct task
+    /// context.
+    fn poll(self: Pin<&mut Self>, task_context: &mut Context) -> Poll<Self::Output> {
+        match self.get_mut() {
+            GuestFuture::FailedToCreate(runtime_error) => {
+                let error = runtime_error.take().expect("Unexpected poll after error");
+                Poll::Ready(Err(error.into()))
+            }
+            GuestFuture::Active { future, context } => {
+                let _context_guard = context.context_forwarder.forward(task_context);
+                future.poll(&context.application, &mut context.store)
+            }
+        }
     }
 }
 
