@@ -96,7 +96,6 @@ where
 
     pub async fn write_delete(self) -> Result<(), $crate::views::ViewError> {
         use $crate::views::View;
-        use $crate::views::View;
         use $crate::common::build_batch;
 
         let context = self.context().clone();
