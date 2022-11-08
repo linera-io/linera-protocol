@@ -4,8 +4,70 @@
 //! Helper types to handle async code between the host WebAssembly runtime and guest WebAssembly
 //! modules.
 
-use std::{marker::PhantomData, mem, sync::Arc, task::Context};
+use futures::future::BoxFuture;
+use std::{
+    any::type_name,
+    fmt::{self, Debug, Formatter},
+    future::Future,
+    marker::PhantomData,
+    mem,
+    sync::Arc,
+    task::{Context, Poll},
+};
 use tokio::sync::Mutex;
+
+/// A host future that can be called by a WASM guest module.
+pub struct HostFuture<'future, Output> {
+    future: Mutex<BoxFuture<'future, Output>>,
+}
+
+impl<Output> Debug for HostFuture<'_, Output> {
+    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
+        write!(
+            formatter,
+            "HostFuture<'_, {}> {{ .. }}",
+            type_name::<Output>()
+        )
+    }
+}
+
+impl<'future, Output> HostFuture<'future, Output> {
+    /// Wrap a given `future` so that it can be called from guest WASM modules.
+    pub fn new(future: impl Future<Output = Output> + Send + 'future) -> Self {
+        HostFuture {
+            future: Mutex::new(Box::pin(future)),
+        }
+    }
+
+    /// Poll a future from a WASM module.
+    ///
+    /// Requires the task [`Context`] to have been saved in the provided `context`. If it hasn't,
+    /// or if the context for a task other than the task used to call the WASM module code is
+    /// provided, the call may panic or the future may not be scheduled to resume afterwards,
+    /// leading the module to hang.
+    ///
+    /// # Panics
+    ///
+    /// If the `context` does not contain a valid exclusive task [`Context`] reference, or if this
+    /// future is polled concurrently in different tasks.
+    pub fn poll(&self, context: &mut ContextForwarder) -> Poll<Output> {
+        let mut context_reference = context
+            .0
+            .try_lock()
+            .expect("Unexpected concurrent application call");
+
+        let context = context_reference
+            .as_mut()
+            .expect("Application called without an async task context");
+
+        let mut future = self
+            .future
+            .try_lock()
+            .expect("Application can't call the future concurrently because it's single threaded");
+
+        future.as_mut().poll(context)
+    }
+}
 
 /// A type to keep track of a [`std::task::Context`] so that it can be forwarded to any async code
 /// called from the guest WASM module.
