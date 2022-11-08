@@ -12,6 +12,7 @@ wasmtime = ["dep:wasmtime", "wit-bindgen-host-wasmtime-rust"]
 [dependencies]
 async-trait = "0.1.52"
 dashmap = "5.3.4"
+futures = "0.3.24"
 linera-base = { path = "../linera-base" }
 linera-views = { path = "../linera-views" }
 log = "0.4.14"
