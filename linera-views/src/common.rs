@@ -15,43 +15,45 @@ pub struct Batch {
     pub operations: Vec<WriteOperation>,
 }
 
-/// A key may appear multiple times in the batch
-/// The construction of BatchWriteItem and TransactWriteItem does
-/// not allow for this to happen.
-pub fn simplify_batch(batch: Batch) -> Batch {
-    let mut map = HashMap::new();
-    for op in batch.operations {
-        match op {
-            WriteOperation::Delete { key } => map.insert(key, None),
-            WriteOperation::Put { key, value } => map.insert(key, Some(value)),
-        };
-    }
-    let mut operations = Vec::with_capacity(map.len());
-    for (key, val) in map {
-        match val {
-            Some(value) => operations.push(WriteOperation::Put { key, value }),
-            None => operations.push(WriteOperation::Delete { key }),
+
+impl Batch {
+    /// A key may appear multiple times in the batch
+    /// The construction of BatchWriteItem and TransactWriteItem does
+    /// not allow for this to happen.
+    pub fn simplify(self) -> Self {
+        let mut map = HashMap::new();
+        for op in self.operations {
+            match op {
+                WriteOperation::Delete { key } => map.insert(key, None),
+                WriteOperation::Put { key, value } => map.insert(key, Some(value)),
+            };
         }
+        let mut operations = Vec::with_capacity(map.len());
+        for (key, val) in map {
+            match val {
+                Some(value) => operations.push(WriteOperation::Put { key, value }),
+                None => operations.push(WriteOperation::Delete { key }),
+            }
+        }
+        Self { operations }
     }
-    Batch { operations }
-}
 
-/// Insert a put a key/value in the batch
-pub fn put_item_batch(
-    batch: &mut Batch,
-    key: Vec<u8>,
-    value: &impl Serialize,
-) -> Result<(), bcs::Error> {
-    let bytes = bcs::to_bytes(value)?;
-    batch
-        .operations
-        .push(WriteOperation::Put { key, value: bytes });
-    Ok(())
-}
+    /// Insert a put a key/value in the batch
+    pub fn put_key_value(
+        &mut self,
+        key: Vec<u8>,
+        value: &impl Serialize,
+    ) -> Result<(), bcs::Error> {
+        let bytes = bcs::to_bytes(value)?;
+        self.operations
+            .push(WriteOperation::Put { key, value: bytes });
+        Ok(())
+    }
 
-/// Delete a key and put that command into the batch
-pub fn remove_item_batch(batch: &mut Batch, key: Vec<u8>) {
-    batch.operations.push(WriteOperation::Delete { key });
+    /// Delete a key and put that command into the batch
+    pub fn delete_key(&mut self, key: Vec<u8>) {
+        self.operations.push(WriteOperation::Delete { key });
+    }
 }
 
 /// Build a batch using builder. This is used for the macro.

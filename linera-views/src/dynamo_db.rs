@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    common::{simplify_batch, Batch, KeyValueOperations, WriteOperation, ContextFromDb},
+    common::{Batch, KeyValueOperations, WriteOperation, ContextFromDb},
     localstack,
     views::{Context},
 };
@@ -269,7 +269,7 @@ impl KeyValueOperations for DynamodbContainer {
     /// We put submit the transaction in blocks of at most 25 so as to decrease the
     /// number of needed transactions.
     async fn write_batch(&self, batch: Batch) -> Result<(), DynamoDbContextError> {
-        for batch_chunk in simplify_batch(batch).operations.chunks(25) {
+        for batch_chunk in batch.simplify().operations.chunks(25) {
             let requests = batch_chunk
                 .iter()
                 .map(|operation| match operation {

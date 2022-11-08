@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::common::{put_item_batch, remove_item_batch, Batch};
+use crate::common::Batch;
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
@@ -231,12 +231,12 @@ where
     }
 
     fn set(&mut self, batch: &mut Batch, value: &T) -> Result<(), Self::Error> {
-        put_item_batch(batch, self.base_key(), value)?;
+        batch.put_key_value(self.base_key(), value)?;
         Ok(())
     }
 
     fn delete(&mut self, batch: &mut Batch) -> Result<(), Self::Error> {
-        remove_item_batch(batch, self.base_key());
+        batch.delete_key(self.base_key());
         Ok(())
     }
 }
@@ -396,17 +396,17 @@ where
         }
         let mut count = stored_count;
         for value in values {
-            put_item_batch(batch, self.derive_key(&count)?, &value)?;
+            batch.put_key_value(self.derive_key(&count)?, &value)?;
             count += 1;
         }
-        put_item_batch(batch, self.base_key(), &count)?;
+        batch.put_key_value(self.base_key(), &count)?;
         Ok(())
     }
 
     fn delete(&mut self, stored_count: usize, batch: &mut Batch) -> Result<(), Self::Error> {
-        remove_item_batch(batch, self.base_key());
+        batch.delete_key(self.base_key());
         for index in 0..stored_count {
-            remove_item_batch(batch, self.derive_key(&index)?);
+            batch.delete_key(self.derive_key(&index)?);
         }
         Ok(())
     }
@@ -591,13 +591,13 @@ where
 
     fn insert(&mut self, batch: &mut Batch, index: I, value: V) -> Result<(), Self::Error> {
         let key = self.derive_key(&index)?;
-        put_item_batch(batch, key, &value)?;
+        batch.put_key_value(key, &value)?;
         Ok(())
     }
 
     fn remove(&mut self, batch: &mut Batch, index: I) -> Result<(), Self::Error> {
         let key = self.derive_key(&index)?;
-        remove_item_batch(batch, key);
+        batch.delete_key(key);
         Ok(())
     }
 
@@ -620,7 +620,7 @@ where
     async fn delete(&mut self, batch: &mut Batch) -> Result<(), Self::Error> {
         let base = self.base_key();
         for key in self.find_keys_with_prefix(&base).await? {
-            remove_item_batch(batch, key);
+            batch.delete_key(key);
         }
         Ok(())
     }
@@ -854,10 +854,10 @@ where
         }
         let deletion_range = stored_indices.clone().take(count);
         stored_indices.start += count;
-        put_item_batch(batch, self.base_key(), &stored_indices)?;
+        batch.put_key_value(self.base_key(), &stored_indices)?;
         for index in deletion_range {
             let key = self.derive_key(&index)?;
-            remove_item_batch(batch, key);
+            batch.delete_key(key);
         }
         Ok(())
     }
@@ -873,11 +873,11 @@ where
         }
         for value in values {
             let key = self.derive_key(&stored_indices.end)?;
-            put_item_batch(batch, key, &value)?;
+            batch.put_key_value(key, &value)?;
             stored_indices.end += 1;
         }
         let base = self.base_key();
-        put_item_batch(batch, base, &stored_indices)?;
+        batch.put_key_value(base, &stored_indices)?;
         Ok(())
     }
 
@@ -887,10 +887,10 @@ where
         batch: &mut Batch,
     ) -> Result<(), Self::Error> {
         let base = self.base_key();
-        remove_item_batch(batch, base);
+        batch.delete_key(base);
         for index in stored_indices {
             let key = self.derive_key(&index)?;
-            remove_item_batch(batch, key);
+            batch.delete_key(key);
         }
         Ok(())
     }
@@ -1128,13 +1128,13 @@ where
 
     fn add_index(&mut self, batch: &mut Batch, index: I) -> Result<(), Self::Error> {
         let key = self.derive_key(&CollectionKey::Index(index))?;
-        put_item_batch(batch, key, &())?;
+        batch.put_key_value(key, &())?;
         Ok(())
     }
 
     fn remove_index(&mut self, batch: &mut Batch, index: I) -> Result<(), Self::Error> {
         let key = self.derive_key(&CollectionKey::Index(index))?;
-        remove_item_batch(batch, key);
+        batch.delete_key(key);
         Ok(())
     }
 
