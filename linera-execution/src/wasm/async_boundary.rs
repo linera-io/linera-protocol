@@ -4,6 +4,8 @@
 //! Helper types to handle async code between the host WebAssembly runtime and guest WebAssembly
 //! modules.
 
+use super::common;
+use crate::WasmExecutionError;
 use futures::future::BoxFuture;
 use std::{
     any::type_name,
@@ -67,6 +69,24 @@ impl<'future, Output> HostFuture<'future, Output> {
 
         future.as_mut().poll(context)
     }
+}
+
+/// Interface to poll a future implemented in a WASM module.
+pub trait GuestFutureInterface<Runtime>
+where
+    Runtime: common::Runtime,
+{
+    /// The output of the guest future.
+    type Output;
+
+    /// Poll the guest future to attempt to progress it.
+    ///
+    /// May return an [`WasmExecutionError`] if the guest WASM module panics, for example.
+    fn poll(
+        &self,
+        application: &Runtime::Application,
+        store: &mut Runtime::Store,
+    ) -> Poll<Result<Self::Output, WasmExecutionError>>;
 }
 
 /// A type to keep track of a [`std::task::Context`] so that it can be forwarded to any async code
