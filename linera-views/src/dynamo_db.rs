@@ -45,7 +45,7 @@ pub struct DynamodbContainer {
 }
 
 /// A implementation of [`Context`] based on DynamoDB.
-pub type DynamoDbContext<E> = ContextFromDb<E, DynamodbContainer, DynamoDbContextError>;
+pub type DynamoDbContext<E> = ContextFromDb<E, DynamodbContainer>;
 
 impl DynamodbContainer {
     /// Build the key attributes for a table item.

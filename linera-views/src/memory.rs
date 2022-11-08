@@ -17,7 +17,7 @@ pub type MemoryStoreMap = BTreeMap<Vec<u8>, Vec<u8>>;
 pub type MemoryContainer = Arc<RwLock<OwnedMutexGuard<MemoryStoreMap>>>;
 
 /// A context that stores all values in memory.
-pub type MemoryContext<E> = ContextFromDb<E, MemoryContainer, MemoryContextError>;
+pub type MemoryContext<E> = ContextFromDb<E, MemoryContainer>;
 
 
 impl<E: Clone + Send + Sync> MemoryContext<E> {

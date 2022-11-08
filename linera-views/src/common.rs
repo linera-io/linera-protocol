@@ -84,36 +84,27 @@ pub trait KeyValueOperations {
 
 
 #[derive(Debug, Clone)]
-#[bounded_to(EX, DB)]
-pub struct ContextFromDb<EX,DB,ER>
-where
-    EX: Clone + Sync + Send,
-    DB: KeyValueOperations<Error = ER> + Clone + Send + Sync,
-    ER: std::convert::From<bcs::Error> + Send + Sync + std::error::Error + 'static,
+pub struct ContextFromDb<E,DB>
 {
     pub db: DB,
     pub base_key: Vec<u8>,
-    pub extra: EX,
-}
-
-pub trait ContainerError {
-    type Error;
+    pub extra: E,
 }
 
 
 
 #[async_trait]
-impl<EX,DB,ER> Context for ContextFromDb<EX,DB,ER>
+impl<E,DB> Context for ContextFromDb<E,DB>
 where
-    EX: Clone + Send + Sync,
-    DB: KeyValueOperations<Error = ER> + Clone + Send + Sync,
-    ER: std::convert::From<bcs::Error> + Send + Sync + std::error::Error + 'static,
-    ViewError: std::convert::From<ER>
+    E: Clone + Send + Sync,
+    DB: KeyValueOperations + Clone + Send + Sync,
+    DB::Error: std::convert::From<bcs::Error> + Send + Sync + std::error::Error + 'static,
+    ViewError: std::convert::From<DB::Error>
 {
-    type Extra = EX;
+    type Extra = E;
     type Error = DB::Error;
 
-    fn extra(&self) -> &EX {
+    fn extra(&self) -> &E {
         &self.extra
     }
 
@@ -169,12 +160,12 @@ where
     }
 }
 
-impl<EX,DB,ER> HashingContext for ContextFromDb<EX,DB,ER>
+impl<E,DB> HashingContext for ContextFromDb<E,DB>
 where
-    EX: Clone + Send + Sync,
-    DB: KeyValueOperations<Error = ER> + Clone + Send + Sync,
-    ER: std::convert::From<bcs::Error> + Send + Sync + std::error::Error + 'static,
-    ViewError: std::convert::From<ER>,
+    E: Clone + Send + Sync,
+    DB: KeyValueOperations + Clone + Send + Sync,
+    DB::Error: std::convert::From<bcs::Error> + Send + Sync + std::error::Error + 'static,
+    ViewError: std::convert::From<DB::Error>,
 {
     type Hasher = sha2::Sha512;
 }
