@@ -94,7 +94,10 @@ pub enum ExecutionError {
 /// Errors that can occur when executing a user application in a WebAssembly module.
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 #[derive(Debug, Error)]
-pub enum WasmExecutionError {}
+pub enum WasmExecutionError {
+    #[error("Error reported from user application: {0}")]
+    UserApplication(String),
+}
 
 impl From<ViewError> for ExecutionError {
     fn from(error: ViewError) -> Self {
