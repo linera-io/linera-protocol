@@ -3,7 +3,7 @@
 
 //! Runtime independent code for interfacing with user applications in WebAssembly modules.
 
-use super::runtime::application;
+use super::{async_boundary::ContextForwarder, runtime::application};
 use crate::WasmExecutionError;
 
 /// Types that are specific to a WebAssembly runtime.
@@ -101,4 +101,23 @@ pub trait Application<R: Runtime> {
         store: &mut R::Store,
         future: &application::QueryApplication,
     ) -> Result<application::PollQuery, R::Error>;
+}
+
+/// Wrapper around all types necessary to call an asynchronous method of a WASM application.
+pub struct WritableRuntimeContext<R>
+where
+    R: Runtime,
+{
+    /// Where to store the async task context to later be reused in async calls from the guest WASM
+    /// module.
+    pub(crate) context_forwarder: ContextForwarder,
+
+    /// The application type.
+    pub(crate) application: R::Application,
+
+    /// The application's memory state.
+    pub(crate) store: R::Store,
+
+    /// Guard type to clean up any host state after the call to the WASM application finishes.
+    pub(crate) _storage_guard: R::StorageGuard,
 }
