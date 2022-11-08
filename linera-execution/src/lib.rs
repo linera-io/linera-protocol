@@ -46,6 +46,10 @@ pub enum ExecutionError {
     InvalidEffect,
     #[error("Invalid query for this application")]
     InvalidQuery,
+    #[error("Can't call another application during a query")]
+    CallApplicationFromQuery,
+    #[error("Queries can't change application state")]
+    LockStateFromQuery,
     #[error("Session does not exist or was already closed")]
     InvalidSession,
     #[error("Attempted to call or forward an active session")]
