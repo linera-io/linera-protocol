@@ -23,7 +23,6 @@ linera-base = { path = "../linera-base" }
 log = "0.4.14"
 paste = "1.0.8"
 rocksdb = "0.19.0"
-derive_bounded = "0.5.0"
 serde = { version = "1.0.130", features = ["derive"] }
 sha2 = "0.9.8"
 thiserror = "1.0.31"
