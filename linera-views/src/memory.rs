@@ -1,11 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    common::{Batch, KeyValueOperations, WriteOperation, ContextFromDb},
-    views::{ViewError},
+    common::{Batch, ContextFromDb, KeyValueOperations, WriteOperation},
+    views::ViewError,
 };
 use async_trait::async_trait;
-use serde::{de::DeserializeOwned};
+use serde::de::DeserializeOwned;
 use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
 use thiserror::Error;
 use tokio::sync::{OwnedMutexGuard, RwLock};
@@ -18,7 +18,6 @@ pub type MemoryContainer = Arc<RwLock<OwnedMutexGuard<MemoryStoreMap>>>;
 
 /// A context that stores all values in memory.
 pub type MemoryContext<E> = ContextFromDb<E, MemoryContainer>;
-
 
 impl<E: Clone + Send + Sync> MemoryContext<E> {
     pub fn new(guard: OwnedMutexGuard<MemoryStoreMap>, extra: E) -> Self {

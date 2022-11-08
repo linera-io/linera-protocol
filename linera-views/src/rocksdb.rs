@@ -1,12 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    common::{Batch, KeyValueOperations, WriteOperation, ContextFromDb},
-};
+use crate::common::{Batch, ContextFromDb, KeyValueOperations, WriteOperation};
 //use linera_views::common::KeyValueOperations;
 use async_trait::async_trait;
-use serde::{de::DeserializeOwned};
+use serde::de::DeserializeOwned;
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -15,7 +13,6 @@ pub type RocksdbContainer = Arc<DB>;
 
 /// An implementation of [`crate::views::Context`] based on Rocksdb
 pub type RocksdbContext<E> = ContextFromDb<E, RocksdbContainer>;
-
 
 #[async_trait]
 impl KeyValueOperations for RocksdbContainer {

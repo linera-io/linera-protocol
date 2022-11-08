@@ -1,5 +1,10 @@
-use crate::hash::HashingContext;
-use crate::views::{Context, ViewError};
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+use crate::{
+    hash::HashingContext,
+    views::{Context, ViewError},
+};
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::collections::HashMap;
@@ -14,11 +19,10 @@ pub struct Batch {
     pub operations: Vec<WriteOperation>,
 }
 
-
 impl Batch {
     /// A key may appear multiple times in the batch
-    /// The construction of BatchWriteItem and TransactWriteItem does
-    /// not allow for this to happen.
+    /// The construction of BatchWriteItem and TransactWriteItem for DynamoDb does
+    /// not allow this to happen.
     pub fn simplify(self) -> Self {
         let mut map = HashMap::new();
         for op in self.operations {
@@ -49,7 +53,7 @@ impl Batch {
         Ok(())
     }
 
-    /// Delete a key and put that command into the batch
+    /// Delete a key and put in the batch
     pub fn delete_key(&mut self, key: Vec<u8>) {
         self.operations.push(WriteOperation::Delete { key });
     }
@@ -81,24 +85,20 @@ pub trait KeyValueOperations {
     async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error>;
 }
 
-
 #[derive(Debug, Clone)]
-pub struct ContextFromDb<E,DB>
-{
+pub struct ContextFromDb<E, DB> {
     pub db: DB,
     pub base_key: Vec<u8>,
     pub extra: E,
 }
 
-
-
 #[async_trait]
-impl<E,DB> Context for ContextFromDb<E,DB>
+impl<E, DB> Context for ContextFromDb<E, DB>
 where
     E: Clone + Send + Sync,
     DB: KeyValueOperations + Clone + Send + Sync,
     DB::Error: std::convert::From<bcs::Error> + Send + Sync + std::error::Error + 'static,
-    ViewError: std::convert::From<DB::Error>
+    ViewError: std::convert::From<DB::Error>,
 {
     type Extra = E;
     type Error = DB::Error;
@@ -128,17 +128,11 @@ where
         self.db.read_key(key).await
     }
 
-    async fn find_keys_with_prefix(
-        &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<Vec<u8>>, Self::Error> {
+    async fn find_keys_with_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
         self.db.find_keys_with_prefix(key_prefix).await
     }
 
-    async fn get_sub_keys<Key>(
-        &mut self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<Key>, Self::Error>
+    async fn get_sub_keys<Key>(&mut self, key_prefix: &[u8]) -> Result<Vec<Key>, Self::Error>
     where
         Key: DeserializeOwned + Send,
     {
@@ -159,7 +153,7 @@ where
     }
 }
 
-impl<E,DB> HashingContext for ContextFromDb<E,DB>
+impl<E, DB> HashingContext for ContextFromDb<E, DB>
 where
     E: Clone + Send + Sync,
     DB: KeyValueOperations + Clone + Send + Sync,
