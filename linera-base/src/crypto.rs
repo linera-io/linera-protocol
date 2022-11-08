@@ -4,6 +4,7 @@
 
 use ed25519_dalek as dalek;
 use ed25519_dalek::{Signer, Verifier};
+use generic_array::typenum::Unsigned;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
@@ -47,6 +48,11 @@ pub enum CryptoError {
     PublicKeyFromStrError(#[from] PublicKeyFromStrError),
     #[error("Error attempting to convert a string into a hash value {0}")]
     HashFromStrError(#[from] HashFromStrError),
+    #[error(
+        "Byte slice has length {0} but a `HashValue` requires exactly {expected} bytes",
+        expected = <sha2::Sha512 as sha2::Digest>::OutputSize::to_usize(),
+    )]
+    IncorrectHashSize(usize),
 }
 
 impl PublicKey {
@@ -404,6 +410,18 @@ impl Signature {
                 type_name: T::type_name().to_string(),
             }
         })
+    }
+}
+
+impl TryFrom<&[u8]> for HashValue {
+    type Error = CryptoError;
+
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        if bytes.len() == <sha2::Sha512 as sha2::Digest>::OutputSize::to_usize() {
+            Ok(HashValue(*generic_array::GenericArray::from_slice(bytes)))
+        } else {
+            Err(CryptoError::IncorrectHashSize(bytes.len()))
+        }
     }
 }
 
