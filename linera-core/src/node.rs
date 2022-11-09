@@ -130,7 +130,6 @@ pub enum NodeError {
     ClientIoError { error: String },
     #[error("Failed to resolve validator address: {address}")]
     CannotResolveValidatorAddress { address: String },
-
 }
 
 impl From<ViewError> for NodeError {
@@ -140,7 +139,6 @@ impl From<ViewError> for NodeError {
         }
     }
 }
-
 
 impl From<linera_base::error::Error> for NodeError {
     fn from(error: linera_base::error::Error) -> Self {
