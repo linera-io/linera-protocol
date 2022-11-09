@@ -3,12 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    crypto::{BcsSignable, HashFromStrError, HashValue, PublicKey, PublicKeyFromStrError},
+    crypto::{BcsSignable, HashValue, PublicKey},
     error::Error,
 };
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
+use crate::crypto::CryptoError;
 #[cfg(any(test, feature = "test"))]
 use test_strategy::Arbitrary;
 
@@ -139,7 +140,7 @@ impl std::fmt::Display for ValidatorName {
 }
 
 impl std::str::FromStr for ValidatorName {
-    type Err = PublicKeyFromStrError;
+    type Err = CryptoError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(ValidatorName(PublicKey::from_str(s)?))
@@ -153,28 +154,24 @@ impl BlockHeight {
     }
 
     #[inline]
-    #[allow(clippy::result_large_err)]
     pub fn try_add_one(self) -> Result<BlockHeight, Error> {
         let val = self.0.checked_add(1).ok_or(Error::SequenceOverflow)?;
         Ok(Self(val))
     }
 
     #[inline]
-    #[allow(clippy::result_large_err)]
     pub fn try_sub_one(self) -> Result<BlockHeight, Error> {
         let val = self.0.checked_sub(1).ok_or(Error::SequenceUnderflow)?;
         Ok(Self(val))
     }
 
     #[inline]
-    #[allow(clippy::result_large_err)]
     pub fn try_add_assign_one(&mut self) -> Result<(), Error> {
         self.0 = self.0.checked_add(1).ok_or(Error::SequenceOverflow)?;
         Ok(())
     }
 
     #[inline]
-    #[allow(clippy::result_large_err)]
     pub fn try_sub_assign_one(&mut self) -> Result<(), Error> {
         self.0 = self.0.checked_sub(1).ok_or(Error::SequenceUnderflow)?;
         Ok(())
@@ -188,28 +185,24 @@ impl RoundNumber {
     }
 
     #[inline]
-    #[allow(clippy::result_large_err)]
     pub fn try_add_one(self) -> Result<RoundNumber, Error> {
         let val = self.0.checked_add(1).ok_or(Error::SequenceOverflow)?;
         Ok(Self(val))
     }
 
     #[inline]
-    #[allow(clippy::result_large_err)]
     pub fn try_sub_one(self) -> Result<RoundNumber, Error> {
         let val = self.0.checked_sub(1).ok_or(Error::SequenceUnderflow)?;
         Ok(Self(val))
     }
 
     #[inline]
-    #[allow(clippy::result_large_err)]
     pub fn try_add_assign_one(&mut self) -> Result<(), Error> {
         self.0 = self.0.checked_add(1).ok_or(Error::SequenceOverflow)?;
         Ok(())
     }
 
     #[inline]
-    #[allow(clippy::result_large_err)]
     pub fn try_sub_assign_one(&mut self) -> Result<(), Error> {
         self.0 = self.0.checked_sub(1).ok_or(Error::SequenceUnderflow)?;
         Ok(())
@@ -218,14 +211,12 @@ impl RoundNumber {
 
 impl Epoch {
     #[inline]
-    #[allow(clippy::result_large_err)]
     pub fn try_add_one(self) -> Result<Self, Error> {
         let val = self.0.checked_add(1).ok_or(Error::SequenceOverflow)?;
         Ok(Self(val))
     }
 
     #[inline]
-    #[allow(clippy::result_large_err)]
     pub fn try_add_assign_one(&mut self) -> Result<(), Error> {
         self.0 = self.0.checked_add(1).ok_or(Error::SequenceOverflow)?;
         Ok(())
@@ -269,7 +260,7 @@ impl From<PublicKey> for Owner {
 }
 
 impl std::str::FromStr for Owner {
-    type Err = PublicKeyFromStrError;
+    type Err = CryptoError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Owner(PublicKey::from_str(s)?))
@@ -283,7 +274,7 @@ impl std::fmt::Display for ChainId {
 }
 
 impl FromStr for ChainId {
-    type Err = HashFromStrError;
+    type Err = CryptoError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(ChainId(HashValue::from_str(s)?))

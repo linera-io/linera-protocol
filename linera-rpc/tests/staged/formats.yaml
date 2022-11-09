@@ -188,13 +188,6 @@ CrossChainRequest:
               TYPENAME: ChainId
           - height:
               TYPENAME: BlockHeight
-CryptoError:
-  ENUM:
-    0:
-      InvalidSignature:
-        STRUCT:
-          - error: STR
-          - type_name: STR
 Destination:
   ENUM:
     0:
@@ -298,8 +291,8 @@ NodeError:
   ENUM:
     0:
       CryptoError:
-        NEWTYPE:
-          TYPENAME: CryptoError
+        STRUCT:
+          - error: STR
     1:
       BaseError:
         STRUCT:

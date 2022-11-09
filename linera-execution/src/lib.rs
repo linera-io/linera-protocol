@@ -184,7 +184,6 @@ pub trait ExecutionRuntimeContext {
 
     fn user_applications(&self) -> &Arc<DashMap<ApplicationId, UserApplicationCode>>;
 
-    #[allow(clippy::result_large_err)]
     fn get_user_application(
         &self,
         application_id: ApplicationId,
