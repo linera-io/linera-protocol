@@ -1,12 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 use crate::{
-    hash::HashingContext,
-    views::{Context, ViewError},
+    common::{Batch, ContextFromDb, KeyValueOperations, WriteOperation},
+    views::ViewError,
 };
 use async_trait::async_trait;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::de::DeserializeOwned;
 use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
 use thiserror::Error;
 use tokio::sync::{OwnedMutexGuard, RwLock};
@@ -15,26 +14,15 @@ use tokio::sync::{OwnedMutexGuard, RwLock};
 /// The analogue of the database is the BTreeMap
 pub type MemoryStoreMap = BTreeMap<Vec<u8>, Vec<u8>>;
 
+pub type MemoryContainer = Arc<RwLock<OwnedMutexGuard<MemoryStoreMap>>>;
+
 /// A context that stores all values in memory.
-#[derive(Clone, Debug)]
-pub struct MemoryContext<E> {
-    map: Arc<RwLock<OwnedMutexGuard<MemoryStoreMap>>>,
-    base_key: Vec<u8>,
-    extra: E,
-}
-
-pub enum WriteOperation {
-    Delete { key: Vec<u8> },
-    Put { key: Vec<u8>, value: Vec<u8> },
-}
-
-#[derive(Default)]
-pub struct Batch(Vec<WriteOperation>);
+pub type MemoryContext<E> = ContextFromDb<E, MemoryContainer>;
 
 impl<E> MemoryContext<E> {
     pub fn new(guard: OwnedMutexGuard<MemoryStoreMap>, extra: E) -> Self {
         Self {
-            map: Arc::new(RwLock::new(guard)),
+            db: Arc::new(RwLock::new(guard)),
             base_key: Vec::new(),
             extra,
         }
@@ -42,52 +30,13 @@ impl<E> MemoryContext<E> {
 }
 
 #[async_trait]
-impl<E> Context for MemoryContext<E>
-where
-    E: Clone + Send + Sync,
-{
-    type Batch = Batch;
-    type Extra = E;
+impl KeyValueOperations for MemoryContainer {
     type Error = MemoryContextError;
-
-    fn extra(&self) -> &E {
-        &self.extra
-    }
-
-    fn base_key(&self) -> Vec<u8> {
-        self.base_key.clone()
-    }
-
-    fn derive_key<I: Serialize>(&self, index: &I) -> Vec<u8> {
-        let mut key = self.base_key.clone();
-        bcs::serialize_into(&mut key, index).expect("serialization should not fail");
-        assert!(
-            key.len() > self.base_key.len(),
-            "Empty indices are not allowed"
-        );
-        key
-    }
-
-    fn put_item_batch(
-        &self,
-        batch: &mut Batch,
-        key: Vec<u8>,
-        value: &impl Serialize,
-    ) -> Result<(), MemoryContextError> {
-        let bytes = bcs::to_bytes(value)?;
-        batch.0.push(WriteOperation::Put { key, value: bytes });
-        Ok(())
-    }
-
-    fn remove_item_batch(&self, batch: &mut Batch, key: Vec<u8>) {
-        batch.0.push(WriteOperation::Delete { key });
-    }
-
     async fn read_key<V: DeserializeOwned>(
-        &mut self,
+        &self,
         key: &[u8],
     ) -> Result<Option<V>, MemoryContextError> {
-        let map = self.map.read().await;
+        let map = self.read().await;
         match map.get(key) {
             None => Ok(None),
             Some(bytes) => Ok(Some(bcs::from_bytes(bytes)?)),
@@ -98,7 +47,7 @@ where
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<Vec<u8>>, MemoryContextError> {
-        let map = self.map.read().await;
+        let map = self.read().await;
         let mut vals = Vec::new();
         for key in map.keys() {
             if key.starts_with(key_prefix) {
@@ -112,7 +61,7 @@ where
     where
         Key: DeserializeOwned + Send,
     {
-        let map = self.map.read().await;
+        let map = self.read().await;
         let mut keys = Vec::new();
         let len = key_prefix.len();
         for key in map.keys() {
@@ -123,24 +72,9 @@ where
         Ok(keys)
     }
 
-    async fn run_with_batch<F>(&self, builder: F) -> Result<(), ViewError>
-    where
-        F: FnOnce(&mut Self::Batch) -> futures::future::BoxFuture<Result<(), ViewError>>
-            + Send
-            + Sync,
-    {
-        let mut batch = Batch(Vec::new());
-        builder(&mut batch).await?;
-        self.write_batch(batch).await
-    }
-
-    fn create_batch(&self) -> Self::Batch {
-        Batch(Vec::new())
-    }
-
-    async fn write_batch(&self, batch: Self::Batch) -> Result<(), ViewError> {
-        let mut map = self.map.write().await;
-        for ent in batch.0 {
+    async fn write_batch(&self, batch: Batch) -> Result<(), MemoryContextError> {
+        let mut map = self.write().await;
+        for ent in batch.operations {
             match ent {
                 WriteOperation::Put { key, value } => map.insert(key, value),
                 WriteOperation::Delete { key } => map.remove(&key),
@@ -148,21 +82,6 @@ where
         }
         Ok(())
     }
-
-    fn clone_self(&self, base_key: Vec<u8>) -> Self {
-        Self {
-            map: self.map.clone(),
-            base_key,
-            extra: self.extra.clone(),
-        }
-    }
-}
-
-impl<E> HashingContext for MemoryContext<E>
-where
-    E: Clone + Send + Sync,
-{
-    type Hasher = sha2::Sha512;
 }
 
 #[derive(Error, Debug)]

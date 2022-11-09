@@ -1,4 +1,5 @@
 use crate::{
+    common::Batch,
     dynamo_db::DynamoDbContext,
     memory::MemoryContext,
     rocksdb::RocksdbContext,
@@ -129,7 +130,7 @@ where
             }
             Operation::CommitAndReload => {
                 let context = context.clone();
-                let mut batch = context.create_batch();
+                let mut batch = Batch::default();
                 queue.flush(&mut batch).await?;
                 context.write_batch(batch).await?;
                 queue = QueueView::load(context).await?;

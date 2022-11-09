@@ -3,11 +3,12 @@
 
 use async_trait::async_trait;
 use linera_views::{
+    common::Batch,
     dynamo_db::DynamoDbContext,
     hash::{HashView, Hasher, HashingContext},
     impl_view,
-    memory::{Batch, MemoryContext, MemoryStoreMap},
-    rocksdb::{KeyValueOperations, RocksdbContext, DB},
+    memory::{MemoryContext, MemoryStoreMap},
+    rocksdb::{RocksdbContext, DB},
     test_utils::LocalStackTestContext,
     views::{
         CollectionOperations, CollectionView, Context, LogOperations, LogView, MapOperations,
@@ -461,7 +462,6 @@ async fn test_views_in_rocksdb_param(config: &TestConfig) {
     let mut store = RocksdbTestStore::new(db);
     let hash = test_store(&mut store, config).await;
     assert_eq!(store.accessed_chains.len(), 1);
-    assert_eq!(store.db.count_keys().await.unwrap(), 0);
 
     let mut store = MemoryTestStore::default();
     let hash2 = test_store(&mut store, config).await;

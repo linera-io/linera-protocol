@@ -34,14 +34,14 @@ where
         $( self.$field.rollback(); )*
     }
 
-    async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), $crate::views::ViewError> {
+    async fn flush(&mut self, batch: &mut $crate::common::Batch) -> Result<(), $crate::views::ViewError> {
         use $crate::views::View;
 
         $( self.$field.flush(batch).await?; )*
         Ok(())
     }
 
-    async fn delete(self, batch: &mut C::Batch) -> Result<(), $crate::views::ViewError> {
+    async fn delete(self, batch: &mut $crate::common::Batch) -> Result<(), $crate::views::ViewError> {
         use $crate::views::View;
 
         $( self.$field.delete(batch).await?; )*
@@ -89,21 +89,23 @@ where
     pub async fn save(&mut self) -> Result<(), $crate::views::ViewError> {
         use $crate::views::View;
 
-        let mut batch = self.context().create_batch();
+        let mut batch = $crate::common::Batch::default();
         $( self.$field.flush(&mut batch).await?; )*
         self.context().write_batch(batch).await
      }
 
     pub async fn write_delete(self) -> Result<(), $crate::views::ViewError> {
         use $crate::views::View;
+        use $crate::common::Batch;
 
         let context = self.context().clone();
-        context.run_with_batch(move |batch| {
+        let batch = Batch::build(move |batch| {
             Box::pin(async move {
                 $( self.$field.delete(batch).await?; )*
                 Ok(())
             })
-        }).await
+        }).await?;
+        context.write_batch(batch).await
     }
 }
 

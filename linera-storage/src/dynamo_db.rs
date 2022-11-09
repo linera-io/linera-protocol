@@ -12,6 +12,7 @@ use linera_base::{
 use linera_chain::messages::Certificate;
 use linera_execution::UserApplicationCode;
 use linera_views::{
+    common::Batch,
     dynamo_db::{
         Config, CreateTableError, DynamoDbContext, DynamoDbContextError, LocalStackError,
         TableName, TableStatus,
@@ -153,7 +154,7 @@ impl Store for DynamoDbStoreClient {
     async fn write_certificate(&self, certificate: Certificate) -> Result<(), ViewError> {
         let mut certificates = self.0.certificates().await?;
         certificates.insert(certificate.hash, certificate);
-        let mut batch = self.0.context.create_batch();
+        let mut batch = Batch::default();
         certificates.flush(&mut batch).await?;
         self.0.context.write_batch(batch).await
     }

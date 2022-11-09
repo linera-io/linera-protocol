@@ -1,10 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 use crate::{
-    hash::HashingContext,
+    common::{Batch, ContextFromDb, KeyValueOperations, WriteOperation},
     localstack,
-    views::{Context, ViewError},
+    views::Context,
 };
 use async_trait::async_trait;
 use aws_sdk_dynamodb::{
@@ -39,163 +38,16 @@ const KEY_ATTRIBUTE: &str = "item_key";
 /// The attribute name of the table value blob.
 const VALUE_ATTRIBUTE: &str = "item_value";
 
-pub enum WriteOperation {
-    Delete { key: Vec<u8> },
-    Put { key: Vec<u8>, value: Vec<u8> },
-}
-
-pub struct Batch(Vec<WriteOperation>);
-
-/// A key may appear multiple times in the batch
-/// The construction of BatchWriteItem and TransactWriteItem does
-/// not allow for this to happen.
-fn simplify_batch(batch: Batch) -> Batch {
-    let mut map = HashMap::new();
-    for op in batch.0 {
-        match op {
-            WriteOperation::Delete { key } => map.insert(key, None),
-            WriteOperation::Put { key, value } => map.insert(key, Some(value)),
-        };
-    }
-    let mut operations = Vec::with_capacity(map.len());
-    for (key, val) in map {
-        match val {
-            Some(value) => operations.push(WriteOperation::Put { key, value }),
-            None => operations.push(WriteOperation::Delete { key }),
-        }
-    }
-    Batch(operations)
+#[derive(Debug, Clone)]
+pub struct DynamodbContainer {
+    pub client: Client,
+    pub table: TableName,
 }
 
 /// A implementation of [`Context`] based on DynamoDB.
-#[derive(Debug, Clone)]
-pub struct DynamoDbContext<E>
-where
-    E: Clone + Sync + Send,
-{
-    client: Client,
-    table: TableName,
-    base_key: Vec<u8>,
-    extra: E,
-}
+pub type DynamoDbContext<E> = ContextFromDb<E, DynamodbContainer>;
 
-impl<E> DynamoDbContext<E>
-where
-    E: Clone + Sync + Send,
-{
-    /// Create a new [`DynamoDbContext`] instance.
-    pub async fn new(
-        table: TableName,
-        base_key: Vec<u8>,
-        extra: E,
-    ) -> Result<(Self, TableStatus), CreateTableError> {
-        let config = aws_config::load_from_env().await;
-
-        DynamoDbContext::from_config(&config, table, base_key, extra).await
-    }
-
-    /// Create a new [`DynamoDbContext`] instance using the provided `config` parameters.
-    pub async fn from_config(
-        config: impl Into<Config>,
-        table: TableName,
-        base_key: Vec<u8>,
-        extra: E,
-    ) -> Result<(Self, TableStatus), CreateTableError> {
-        let storage = DynamoDbContext {
-            client: Client::from_conf(config.into()),
-            table,
-            base_key,
-            extra,
-        };
-
-        let table_status = storage.create_table_if_needed().await?;
-
-        Ok((storage, table_status))
-    }
-
-    /// Create a new [`DynamoDbContext`] instance using a LocalStack endpoint.
-    ///
-    /// Requires a [`LOCALSTACK_ENDPOINT`] environment variable with the endpoint address to connect
-    /// to the LocalStack instance. Creates the table if it doesn't exist yet, reporting a
-    /// [`TableStatus`] to indicate if the table was created or if it already exists.
-    pub async fn with_localstack(
-        table: TableName,
-        base_key: Vec<u8>,
-        extra: E,
-    ) -> Result<(Self, TableStatus), LocalStackError> {
-        let base_config = aws_config::load_from_env().await;
-        let config = aws_sdk_dynamodb::config::Builder::from(&base_config)
-            .endpoint_resolver(localstack::get_endpoint()?)
-            .build();
-
-        Ok(DynamoDbContext::from_config(config, table, base_key, extra).await?)
-    }
-
-    /// Clone this [`DynamoDbContext`] while entering a sub-scope.
-    ///
-    /// The return context has its key prefix extended with `scope_prefix` and uses the
-    /// `new_extra` instead of cloning the current extra data.
-    pub fn clone_with_sub_scope<NewE: Clone + Send + Sync>(
-        &self,
-        scope_prefix: &impl Serialize,
-        new_extra: NewE,
-    ) -> DynamoDbContext<NewE> {
-        DynamoDbContext {
-            client: self.client.clone(),
-            table: self.table.clone(),
-            base_key: self.derive_key(scope_prefix),
-            extra: new_extra,
-        }
-    }
-
-    /// Create the storage table if it doesn't exist.
-    ///
-    /// Attempts to create the table and ignores errors that indicate that it already exists.
-    async fn create_table_if_needed(&self) -> Result<TableStatus, CreateTableError> {
-        let result = self
-            .client
-            .create_table()
-            .table_name(self.table.as_ref())
-            .attribute_definitions(
-                AttributeDefinition::builder()
-                    .attribute_name(PARTITION_ATTRIBUTE)
-                    .attribute_type(ScalarAttributeType::B)
-                    .build(),
-            )
-            .attribute_definitions(
-                AttributeDefinition::builder()
-                    .attribute_name(KEY_ATTRIBUTE)
-                    .attribute_type(ScalarAttributeType::B)
-                    .build(),
-            )
-            .key_schema(
-                KeySchemaElement::builder()
-                    .attribute_name(PARTITION_ATTRIBUTE)
-                    .key_type(KeyType::Hash)
-                    .build(),
-            )
-            .key_schema(
-                KeySchemaElement::builder()
-                    .attribute_name(KEY_ATTRIBUTE)
-                    .key_type(KeyType::Range)
-                    .build(),
-            )
-            .provisioned_throughput(
-                ProvisionedThroughput::builder()
-                    .read_capacity_units(10)
-                    .write_capacity_units(10)
-                    .build(),
-            )
-            .send()
-            .await;
-
-        match result {
-            Ok(_) => Ok(TableStatus::New),
-            Err(error) if error.is_resource_in_use_exception() => Ok(TableStatus::Existing),
-            Err(error) => Err(error.into()),
-        }
-    }
-
+impl DynamodbContainer {
     /// Build the key attributes for a table item.
     ///
     /// The key is composed of two attributes that are both binary blobs. The first attribute is a
@@ -248,7 +100,7 @@ where
     fn extract_sub_key<Key>(
         &self,
         attributes: &HashMap<String, AttributeValue>,
-        extra_bytes_to_skip: usize,
+        key_length: usize,
     ) -> Result<Key, DynamoDbContextError>
     where
         Key: DeserializeOwned,
@@ -256,7 +108,7 @@ where
         Self::extract_attribute(
             attributes,
             KEY_ATTRIBUTE,
-            Some(self.base_key.len() + extra_bytes_to_skip),
+            Some(key_length),
             DynamoDbContextError::MissingKey,
             DynamoDbContextError::wrong_key_type,
             DynamoDbContextError::KeyDeserialization,
@@ -315,86 +167,16 @@ where
 
         bcs::from_bytes(data_bytes).map_err(deserialization_error)
     }
-
-    /// We put submit the transaction in blocks of at most 25 so as to decrease the
-    /// number of needed transactions.
-    async fn process_batch(&self, batch: Batch) -> Result<(), DynamoDbContextError> {
-        for batch_chunk in simplify_batch(batch).0.chunks(25) {
-            let requests = batch_chunk
-                .iter()
-                .map(|operation| match operation {
-                    WriteOperation::Delete { key } => {
-                        let request = DeleteRequest::builder()
-                            .set_key(Some(Self::build_key(key.to_vec())))
-                            .build();
-                        WriteRequest::builder().delete_request(request).build()
-                    }
-                    WriteOperation::Put { key, value } => {
-                        let request = PutRequest::builder()
-                            .set_item(Some(Self::build_key_value(key.to_vec(), value.to_vec())))
-                            .build();
-                        WriteRequest::builder().put_request(request).build()
-                    }
-                })
-                .collect();
-
-            self.client
-                .batch_write_item()
-                .set_request_items(Some(HashMap::from([(self.table.0.clone(), requests)])))
-                .send()
-                .await?;
-        }
-        Ok(())
-    }
 }
 
 #[async_trait]
-impl<E> Context for DynamoDbContext<E>
-where
-    E: Clone + Send + Sync,
-{
-    type Batch = Batch;
-    type Extra = E;
+impl KeyValueOperations for DynamodbContainer {
     type Error = DynamoDbContextError;
-
-    fn extra(&self) -> &E {
-        &self.extra
-    }
-
-    fn base_key(&self) -> Vec<u8> {
-        self.base_key.clone()
-    }
-
-    fn derive_key<I: Serialize>(&self, index: &I) -> Vec<u8> {
-        let mut key = self.base_key.clone();
-        bcs::serialize_into(&mut key, index).expect("serialization should not fail");
-        assert!(
-            key.len() > self.base_key.len(),
-            "Empty indices are not allowed"
-        );
-        key
-    }
-
-    fn put_item_batch(
-        &self,
-        batch: &mut Batch,
-        key: Vec<u8>,
-        value: &impl Serialize,
-    ) -> Result<(), DynamoDbContextError> {
-        let bytes = bcs::to_bytes(value)?;
-        batch.0.push(WriteOperation::Put { key, value: bytes });
-        Ok(())
-    }
-
-    fn remove_item_batch(&self, batch: &mut Batch, key: Vec<u8>) {
-        batch.0.push(WriteOperation::Delete { key });
-    }
-
     /// Retrieve a generic `Item` from the table using the provided `key` prefixed by the current
     /// context.
     ///
     /// The `Item` is deserialized using [`bcs`].
-    async fn read_key<Item>(&mut self, key: &[u8]) -> Result<Option<Item>, DynamoDbContextError>
+    async fn read_key<Item>(&self, key: &[u8]) -> Result<Option<Item>, DynamoDbContextError>
     where
         Item: DeserializeOwned,
     {
@@ -455,7 +237,7 @@ where
     where
         Key: DeserializeOwned + Send,
     {
-        let extra_prefix_bytes_count = key_prefix.len() - self.base_key.len();
+        let key_length = key_prefix.len();
         let response = self
             .client
             .query()
@@ -479,45 +261,162 @@ where
             .items()
             .into_iter()
             .flatten()
-            .map(|item| self.extract_sub_key(item, extra_prefix_bytes_count))
+            .map(|item| self.extract_sub_key(item, key_length))
             .collect()
     }
 
-    async fn run_with_batch<F>(&self, builder: F) -> Result<(), ViewError>
-    where
-        F: FnOnce(&mut Self::Batch) -> futures::future::BoxFuture<Result<(), ViewError>>
-            + Send
-            + Sync,
-    {
-        let mut batch = Batch(Vec::new());
-        builder(&mut batch).await?;
-        self.write_batch(batch).await
-    }
+    /// We put submit the transaction in blocks of at most 25 so as to decrease the
+    /// number of needed transactions.
+    async fn write_batch(&self, batch: Batch) -> Result<(), DynamoDbContextError> {
+        for batch_chunk in batch.simplify().operations.chunks(25) {
+            let requests = batch_chunk
+                .iter()
+                .map(|operation| match operation {
+                    WriteOperation::Delete { key } => {
+                        let request = DeleteRequest::builder()
+                            .set_key(Some(Self::build_key(key.to_vec())))
+                            .build();
+                        WriteRequest::builder().delete_request(request).build()
+                    }
+                    WriteOperation::Put { key, value } => {
+                        let request = PutRequest::builder()
+                            .set_item(Some(Self::build_key_value(key.to_vec(), value.to_vec())))
+                            .build();
+                        WriteRequest::builder().put_request(request).build()
+                    }
+                })
+                .collect();
 
-    fn create_batch(&self) -> Self::Batch {
-        Batch(Vec::new())
-    }
-
-    async fn write_batch(&self, batch: Self::Batch) -> Result<(), ViewError> {
-        self.process_batch(batch).await?;
-        Ok(())
-    }
-
-    fn clone_self(&self, base_key: Vec<u8>) -> Self {
-        DynamoDbContext {
-            client: self.client.clone(),
-            table: self.table.clone(),
-            base_key,
-            extra: self.extra.clone(),
+            self.client
+                .batch_write_item()
+                .set_request_items(Some(HashMap::from([(self.table.0.clone(), requests)])))
+                .send()
+                .await?;
         }
+        Ok(())
     }
 }
 
-impl<E> HashingContext for DynamoDbContext<E>
+impl<E> DynamoDbContext<E>
 where
-    E: Clone + Send + Sync,
+    E: Clone + Sync + Send,
 {
-    type Hasher = sha2::Sha512;
+    /// Create a new [`DynamoDbContext`] instance.
+    pub async fn new(
+        table: TableName,
+        base_key: Vec<u8>,
+        extra: E,
+    ) -> Result<(Self, TableStatus), CreateTableError> {
+        let config = aws_config::load_from_env().await;
+
+        DynamoDbContext::from_config(&config, table, base_key, extra).await
+    }
+    /// Create the storage table if it doesn't exist.
+    ///
+    /// Attempts to create the table and ignores errors that indicate that it already exists.
+    async fn create_table_if_needed(&self) -> Result<TableStatus, CreateTableError> {
+        let result = self
+            .db
+            .client
+            .create_table()
+            .table_name(self.db.table.as_ref())
+            .attribute_definitions(
+                AttributeDefinition::builder()
+                    .attribute_name(PARTITION_ATTRIBUTE)
+                    .attribute_type(ScalarAttributeType::B)
+                    .build(),
+            )
+            .attribute_definitions(
+                AttributeDefinition::builder()
+                    .attribute_name(KEY_ATTRIBUTE)
+                    .attribute_type(ScalarAttributeType::B)
+                    .build(),
+            )
+            .key_schema(
+                KeySchemaElement::builder()
+                    .attribute_name(PARTITION_ATTRIBUTE)
+                    .key_type(KeyType::Hash)
+                    .build(),
+            )
+            .key_schema(
+                KeySchemaElement::builder()
+                    .attribute_name(KEY_ATTRIBUTE)
+                    .key_type(KeyType::Range)
+                    .build(),
+            )
+            .provisioned_throughput(
+                ProvisionedThroughput::builder()
+                    .read_capacity_units(10)
+                    .write_capacity_units(10)
+                    .build(),
+            )
+            .send()
+            .await;
+
+        match result {
+            Ok(_) => Ok(TableStatus::New),
+            Err(error) if error.is_resource_in_use_exception() => Ok(TableStatus::Existing),
+            Err(error) => Err(error.into()),
+        }
+    }
+
+    /// Create a new [`DynamoDbContext`] instance using the provided `config` parameters.
+    pub async fn from_config(
+        config: impl Into<Config>,
+        table: TableName,
+        base_key: Vec<u8>,
+        extra: E,
+    ) -> Result<(Self, TableStatus), CreateTableError> {
+        let db = DynamodbContainer {
+            client: Client::from_conf(config.into()),
+            table,
+        };
+        let storage = DynamoDbContext {
+            db,
+            base_key,
+            extra,
+        };
+
+        let table_status = storage.create_table_if_needed().await?;
+
+        Ok((storage, table_status))
+    }
+
+    /// Create a new [`DynamoDbContext`] instance using a LocalStack endpoint.
+    ///
+    /// Requires a [`LOCALSTACK_ENDPOINT`] environment variable with the endpoint address to connect
+    /// to the LocalStack instance. Creates the table if it doesn't exist yet, reporting a
+    /// [`TableStatus`] to indicate if the table was created or if it already exists.
+    pub async fn with_localstack(
+        table: TableName,
+        base_key: Vec<u8>,
+        extra: E,
+    ) -> Result<(Self, TableStatus), LocalStackError> {
+        let base_config = aws_config::load_from_env().await;
+        let config = aws_sdk_dynamodb::config::Builder::from(&base_config)
+            .endpoint_resolver(localstack::get_endpoint()?)
+            .build();
+
+        Ok(DynamoDbContext::from_config(config, table, base_key, extra).await?)
+    }
+
+    /// Clone this [`DynamoDbContext`] while entering a sub-scope.
+    ///
+    /// The return context has its key prefix extended with `scope_prefix` and uses the
+    /// `new_extra` instead of cloning the current extra data.
+    pub fn clone_with_sub_scope<NewE: Clone + Send + Sync>(
+        &self,
+        scope_prefix: &impl Serialize,
+        new_extra: NewE,
+    ) -> DynamoDbContext<NewE> {
+        DynamoDbContext {
+            db: self.db.clone(),
+            base_key: self
+                .derive_key(scope_prefix)
+                .expect("derive_key should not fail"),
+            extra: new_extra,
+        }
+    }
 }
 
 /// Status of a table at the creation time of a [`DynamoDbContext`] instance.

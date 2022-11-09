@@ -5,6 +5,9 @@
 //! store. The central notion is a [`views::View`] which can be loaded from storage, modified in
 //! memory, then committed (i.e. the changes are atomically persisted in storage).
 
+/// The definitions used for the memory/rocksdb/dynamo_db
+pub mod common;
+
 /// The main definitions.
 pub mod views;
 

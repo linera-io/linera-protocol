@@ -1,6 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::common::Batch;
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
@@ -22,15 +23,12 @@ mod tests;
 /// connect to the database and the address of the current entry.
 #[async_trait]
 pub trait Context {
-    /// A batch of writes inside a transaction;
-    type Batch: Send + Sync;
-
     /// User provided data to be carried along.
     type Extra: Clone + Send + Sync;
 
     /// The error type in use by internal operations.
     /// In practice, we always want `ViewError: From<Self::Error>` here.
-    type Error: std::error::Error + Debug + Send + Sync + 'static;
+    type Error: std::error::Error + Debug + Send + Sync + 'static + std::convert::From<bcs::Error>;
 
     /// Getter for the user provided data.
     fn extra(&self) -> &Self::Extra;
@@ -39,18 +37,7 @@ pub trait Context {
     fn base_key(&self) -> Vec<u8>;
 
     /// Obtain the Vec<u8> key from the key by serialization and using the base_key
-    fn derive_key<I: Serialize>(&self, index: &I) -> Vec<u8>;
-
-    /// Insert a put a key/value in the batch
-    fn put_item_batch(
-        &self,
-        batch: &mut Self::Batch,
-        key: Vec<u8>,
-        value: &impl Serialize,
-    ) -> Result<(), Self::Error>;
-
-    /// Delete a key and put that command into the batch
-    fn remove_item_batch(&self, batch: &mut Self::Batch, key: Vec<u8>);
+    fn derive_key<I: Serialize>(&self, index: &I) -> Result<Vec<u8>, Self::Error>;
 
     /// Retrieve a generic `Item` from the table using the provided `key` prefixed by the current
     /// context.
@@ -69,18 +56,8 @@ pub trait Context {
         key_prefix: &[u8],
     ) -> Result<Vec<Key>, Self::Error>;
 
-    /// Provide a reference to a new batch to the builder then execute the batch.
-    async fn run_with_batch<F>(&self, builder: F) -> Result<(), ViewError>
-    where
-        F: FnOnce(&mut Self::Batch) -> futures::future::BoxFuture<Result<(), ViewError>>
-            + Send
-            + Sync;
-
-    /// Create a new [`Self::Batch`] to collect write operations.
-    fn create_batch(&self) -> Self::Batch;
-
     /// Apply the operations from the `batch`, persisting the changes.
-    async fn write_batch(&self, batch: Self::Batch) -> Result<(), ViewError>;
+    async fn write_batch(&self, batch: Batch) -> Result<(), ViewError>;
 
     fn clone_self(&self, base_key: Vec<u8>) -> Self;
 }
@@ -107,14 +84,14 @@ pub trait View<C: Context>: Sized {
     /// program running. Crash-resistant storage implementations are expected to accumulate the desired
     /// changes in the `batch` variable first. If the view is dropped without calling `flush`, staged
     /// changes are simply lost.
-    async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), ViewError>;
+    async fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError>;
 
     /// Instead of persisting changes, clear all the data that belong to this view and its
     /// subviews. Crash-resistant storage implementations are expected to accumulate the
     /// desired changes into the `batch` variable first.
     /// No data/metadata at all is left after delete. The view is consumed by delete
     /// and cannot be used in any way after delete.
-    async fn delete(self, batch: &mut C::Batch) -> Result<(), ViewError>;
+    async fn delete(self, batch: &mut Batch) -> Result<(), ViewError>;
 }
 
 #[derive(Error, Debug)]
@@ -175,7 +152,7 @@ pub trait ScopedOperations: Context {
 
 impl<C: Context> ScopedOperations for C {
     fn clone_with_scope(&self, index: u64) -> Self {
-        self.clone_self(self.derive_key(&index))
+        self.clone_self(self.derive_key(&index).expect("derive_key should not fail"))
     }
 }
 
@@ -199,11 +176,11 @@ where
         self.view.rollback();
     }
 
-    async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), ViewError> {
+    async fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
         self.view.flush(batch).await
     }
 
-    async fn delete(self, batch: &mut C::Batch) -> Result<(), ViewError> {
+    async fn delete(self, batch: &mut Batch) -> Result<(), ViewError> {
         self.view.delete(batch).await
     }
 
@@ -227,10 +204,10 @@ pub trait RegisterOperations<T>: Context {
     async fn get(&mut self) -> Result<T, Self::Error>;
 
     /// Set the value in the register. Crash-resistant implementations should only write to `batch`.
-    fn set(&mut self, batch: &mut Self::Batch, value: &T) -> Result<(), Self::Error>;
+    fn set(&mut self, batch: &mut Batch, value: &T) -> Result<(), Self::Error>;
 
     /// Delete the register. Crash-resistant implementations should only write to `batch`.
-    fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error>;
+    fn delete(&mut self, batch: &mut Batch) -> Result<(), Self::Error>;
 }
 
 #[async_trait]
@@ -244,13 +221,13 @@ where
         Ok(value)
     }
 
-    fn set(&mut self, batch: &mut Self::Batch, value: &T) -> Result<(), Self::Error> {
-        self.put_item_batch(batch, self.base_key(), value)?;
+    fn set(&mut self, batch: &mut Batch, value: &T) -> Result<(), Self::Error> {
+        batch.put_key_value(self.base_key(), value)?;
         Ok(())
     }
 
-    fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error> {
-        self.remove_item_batch(batch, self.base_key());
+    fn delete(&mut self, batch: &mut Batch) -> Result<(), Self::Error> {
+        batch.delete_key(self.base_key());
         Ok(())
     }
 }
@@ -279,7 +256,7 @@ where
         self.update = None
     }
 
-    async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), ViewError> {
+    async fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
         if let Some(value) = self.update.take() {
             self.context.set(batch, &value)?;
             self.stored_value = value;
@@ -287,7 +264,7 @@ where
         Ok(())
     }
 
-    async fn delete(mut self, batch: &mut C::Batch) -> Result<(), ViewError> {
+    async fn delete(mut self, batch: &mut Batch) -> Result<(), ViewError> {
         self.context.delete(batch)?;
         Ok(())
     }
@@ -361,14 +338,14 @@ pub trait LogOperations<T>: Context {
     fn append(
         &mut self,
         stored_count: usize,
-        batch: &mut Self::Batch,
+        batch: &mut Batch,
         values: Vec<T>,
     ) -> Result<(), Self::Error>;
 
     /// Delete the log. Crash-resistant implementations should only write to `batch`.
     /// The stored_count is an invariant of the structure. It is a leaky abstraction
     /// but allows a priori better performance.
-    fn delete(&mut self, stored_count: usize, batch: &mut Self::Batch) -> Result<(), Self::Error>;
+    fn delete(&mut self, stored_count: usize, batch: &mut Batch) -> Result<(), Self::Error>;
 }
 
 #[async_trait]
@@ -383,14 +360,14 @@ where
     }
 
     async fn get(&mut self, index: usize) -> Result<Option<T>, Self::Error> {
-        let key = self.derive_key(&index);
+        let key = self.derive_key(&index)?;
         self.read_key(&key).await
     }
 
     async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error> {
         let mut values = Vec::with_capacity(range.len());
         for index in range {
-            let key = self.derive_key(&index);
+            let key = self.derive_key(&index)?;
             match self.read_key(&key).await? {
                 None => return Ok(values),
                 Some(value) => values.push(value),
@@ -402,7 +379,7 @@ where
     fn append(
         &mut self,
         stored_count: usize,
-        batch: &mut Self::Batch,
+        batch: &mut Batch,
         values: Vec<T>,
     ) -> Result<(), Self::Error> {
         if values.is_empty() {
@@ -410,17 +387,17 @@ where
         }
         let mut count = stored_count;
         for value in values {
-            self.put_item_batch(batch, self.derive_key(&count), &value)?;
+            batch.put_key_value(self.derive_key(&count)?, &value)?;
             count += 1;
         }
-        self.put_item_batch(batch, self.base_key(), &count)?;
+        batch.put_key_value(self.base_key(), &count)?;
         Ok(())
     }
 
-    fn delete(&mut self, stored_count: usize, batch: &mut Self::Batch) -> Result<(), Self::Error> {
-        self.remove_item_batch(batch, self.base_key());
+    fn delete(&mut self, stored_count: usize, batch: &mut Batch) -> Result<(), Self::Error> {
+        batch.delete_key(self.base_key());
         for index in 0..stored_count {
-            self.remove_item_batch(batch, self.derive_key(&index));
+            batch.delete_key(self.derive_key(&index)?);
         }
         Ok(())
     }
@@ -452,7 +429,7 @@ where
         self.new_values.clear();
     }
 
-    async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), ViewError> {
+    async fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
         if self.was_reset_to_default {
             self.was_reset_to_default = false;
             if self.stored_count > 0 {
@@ -469,7 +446,7 @@ where
         Ok(())
     }
 
-    async fn delete(mut self, batch: &mut C::Batch) -> Result<(), ViewError> {
+    async fn delete(mut self, batch: &mut Batch) -> Result<(), ViewError> {
         self.context.delete(self.stored_count, batch)?;
         Ok(())
     }
@@ -581,15 +558,15 @@ pub trait MapOperations<I, V>: Context {
         F: FnMut(I) + Send;
 
     /// Set a value. Crash-resistant implementations should only write to `batch`.
-    fn insert(&mut self, batch: &mut Self::Batch, index: I, value: V) -> Result<(), Self::Error>;
+    fn insert(&mut self, batch: &mut Batch, index: I, value: V) -> Result<(), Self::Error>;
 
     /// Remove the entry at the given index. Crash-resistant implementations should only write
     /// to `batch`.
-    fn remove(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error>;
+    fn remove(&mut self, batch: &mut Batch, index: I) -> Result<(), Self::Error>;
 
     /// Delete the map and its entries from storage. Crash-resistant implementations should only
     /// write to `batch`.
-    async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error>;
+    async fn delete(&mut self, batch: &mut Batch) -> Result<(), Self::Error>;
 }
 
 #[async_trait]
@@ -599,19 +576,19 @@ where
     V: Send + Sync + Serialize + DeserializeOwned + 'static,
 {
     async fn get(&mut self, index: &I) -> Result<Option<V>, Self::Error> {
-        let key = self.derive_key(index);
+        let key = self.derive_key(index)?;
         Ok(self.read_key(&key).await?)
     }
 
-    fn insert(&mut self, batch: &mut Self::Batch, index: I, value: V) -> Result<(), Self::Error> {
-        let key = self.derive_key(&index);
-        self.put_item_batch(batch, key, &value)?;
+    fn insert(&mut self, batch: &mut Batch, index: I, value: V) -> Result<(), Self::Error> {
+        let key = self.derive_key(&index)?;
+        batch.put_key_value(key, &value)?;
         Ok(())
     }
 
-    fn remove(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
-        let key = self.derive_key(&index);
-        self.remove_item_batch(batch, key);
+    fn remove(&mut self, batch: &mut Batch, index: I) -> Result<(), Self::Error> {
+        let key = self.derive_key(&index)?;
+        batch.delete_key(key);
         Ok(())
     }
 
@@ -631,10 +608,10 @@ where
         Ok(())
     }
 
-    async fn delete(&mut self, batch: &mut Self::Batch) -> Result<(), Self::Error> {
+    async fn delete(&mut self, batch: &mut Batch) -> Result<(), Self::Error> {
         let base = self.base_key();
         for key in self.find_keys_with_prefix(&base).await? {
-            self.remove_item_batch(batch, key);
+            batch.delete_key(key);
         }
         Ok(())
     }
@@ -665,7 +642,7 @@ where
         self.updates.clear();
     }
 
-    async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), ViewError> {
+    async fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
         if self.was_reset_to_default {
             self.was_reset_to_default = false;
             self.context.delete(batch).await?;
@@ -685,7 +662,7 @@ where
         Ok(())
     }
 
-    async fn delete(mut self, batch: &mut C::Batch) -> Result<(), ViewError> {
+    async fn delete(mut self, batch: &mut Batch) -> Result<(), ViewError> {
         self.context.delete(batch).await?;
         Ok(())
     }
@@ -808,7 +785,7 @@ pub trait QueueOperations<T>: Context {
     fn delete_front(
         &mut self,
         stored_indices: &mut Range<usize>,
-        batch: &mut Self::Batch,
+        batch: &mut Batch,
         count: usize,
     ) -> Result<(), Self::Error>;
 
@@ -817,7 +794,7 @@ pub trait QueueOperations<T>: Context {
     fn append_back(
         &mut self,
         stored_indices: &mut Range<usize>,
-        batch: &mut Self::Batch,
+        batch: &mut Batch,
         values: Vec<T>,
     ) -> Result<(), Self::Error>;
 
@@ -825,7 +802,7 @@ pub trait QueueOperations<T>: Context {
     fn delete(
         &mut self,
         stored_indices: Range<usize>,
-        batch: &mut Self::Batch,
+        batch: &mut Batch,
     ) -> Result<(), Self::Error>;
 }
 
@@ -841,14 +818,14 @@ where
     }
 
     async fn get(&mut self, index: usize) -> Result<Option<T>, Self::Error> {
-        let key = self.derive_key(&index);
+        let key = self.derive_key(&index)?;
         Ok(self.read_key(&key).await?)
     }
 
     async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error> {
         let mut values = Vec::with_capacity(range.len());
         for index in range {
-            let key = self.derive_key(&index);
+            let key = self.derive_key(&index)?;
             match self.read_key(&key).await? {
                 None => return Ok(values),
                 Some(value) => values.push(value),
@@ -860,7 +837,7 @@ where
     fn delete_front(
         &mut self,
         stored_indices: &mut Range<usize>,
-        batch: &mut Self::Batch,
+        batch: &mut Batch,
         count: usize,
     ) -> Result<(), Self::Error> {
         if count == 0 {
@@ -868,10 +845,10 @@ where
         }
         let deletion_range = stored_indices.clone().take(count);
         stored_indices.start += count;
-        self.put_item_batch(batch, self.base_key(), &stored_indices)?;
+        batch.put_key_value(self.base_key(), &stored_indices)?;
         for index in deletion_range {
-            let key = self.derive_key(&index);
-            self.remove_item_batch(batch, key);
+            let key = self.derive_key(&index)?;
+            batch.delete_key(key);
         }
         Ok(())
     }
@@ -879,32 +856,32 @@ where
     fn append_back(
         &mut self,
         stored_indices: &mut Range<usize>,
-        batch: &mut Self::Batch,
+        batch: &mut Batch,
         values: Vec<T>,
     ) -> Result<(), Self::Error> {
         if values.is_empty() {
             return Ok(());
         }
         for value in values {
-            let key = self.derive_key(&stored_indices.end);
-            self.put_item_batch(batch, key, &value)?;
+            let key = self.derive_key(&stored_indices.end)?;
+            batch.put_key_value(key, &value)?;
             stored_indices.end += 1;
         }
         let base = self.base_key();
-        self.put_item_batch(batch, base, &stored_indices)?;
+        batch.put_key_value(base, &stored_indices)?;
         Ok(())
     }
 
     fn delete(
         &mut self,
         stored_indices: Range<usize>,
-        batch: &mut Self::Batch,
+        batch: &mut Batch,
     ) -> Result<(), Self::Error> {
         let base = self.base_key();
-        self.remove_item_batch(batch, base);
+        batch.delete_key(base);
         for index in stored_indices {
-            let key = self.derive_key(&index);
-            self.remove_item_batch(batch, key);
+            let key = self.derive_key(&index)?;
+            batch.delete_key(key);
         }
         Ok(())
     }
@@ -936,7 +913,7 @@ where
         self.new_back_values.clear();
     }
 
-    async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), ViewError> {
+    async fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
         if self.front_delete_count > 0 {
             self.context
                 .delete_front(&mut self.stored_indices, batch, self.front_delete_count)?;
@@ -952,7 +929,7 @@ where
         Ok(())
     }
 
-    async fn delete(mut self, batch: &mut C::Batch) -> Result<(), ViewError> {
+    async fn delete(mut self, batch: &mut Batch) -> Result<(), ViewError> {
         self.context.delete(self.stored_indices, batch)?;
         Ok(())
     }
@@ -1103,11 +1080,11 @@ pub trait CollectionOperations<I>: Context {
 
     /// Add the index to the list of indices. Crash-resistant implementations should only write
     /// to `batch`.
-    fn add_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error>;
+    fn add_index(&mut self, batch: &mut Batch, index: I) -> Result<(), Self::Error>;
 
     /// Remove the index from the list of indices. Crash-resistant implementations should only
     /// write to `batch`.
-    fn remove_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error>;
+    fn remove_index(&mut self, batch: &mut Batch, index: I) -> Result<(), Self::Error>;
 
     // TODO(#149): In contrast to other views, there is no delete operation for CollectionOperation.
 }
@@ -1134,24 +1111,26 @@ where
     I: Serialize + DeserializeOwned + Send + Sync + 'static,
 {
     fn clone_with_scope(&self, index: &I) -> Self {
-        let key = self.derive_key(&CollectionKey::Subview(index));
+        let key = self
+            .derive_key(&CollectionKey::Subview(index))
+            .expect("derive_key should not fail");
         self.clone_self(key)
     }
 
-    fn add_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
-        let key = self.derive_key(&CollectionKey::Index(index));
-        self.put_item_batch(batch, key, &())?;
+    fn add_index(&mut self, batch: &mut Batch, index: I) -> Result<(), Self::Error> {
+        let key = self.derive_key(&CollectionKey::Index(index))?;
+        batch.put_key_value(key, &())?;
         Ok(())
     }
 
-    fn remove_index(&mut self, batch: &mut Self::Batch, index: I) -> Result<(), Self::Error> {
-        let key = self.derive_key(&CollectionKey::Index(index));
-        self.remove_item_batch(batch, key);
+    fn remove_index(&mut self, batch: &mut Batch, index: I) -> Result<(), Self::Error> {
+        let key = self.derive_key(&CollectionKey::Index(index))?;
+        batch.delete_key(key);
         Ok(())
     }
 
     async fn indices(&mut self) -> Result<Vec<I>, Self::Error> {
-        let base = self.derive_key(&CollectionKey::Index(()));
+        let base = self.derive_key(&CollectionKey::Index(()))?;
         self.get_sub_keys(&base).await
     }
 
@@ -1159,7 +1138,7 @@ where
     where
         F: FnMut(I) + Send,
     {
-        let base = self.derive_key(&CollectionKey::Index(()));
+        let base = self.derive_key(&CollectionKey::Index(()))?;
         for index in self.get_sub_keys(&base).await? {
             f(index);
         }
@@ -1192,7 +1171,7 @@ where
         self.updates.clear();
     }
 
-    async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), ViewError> {
+    async fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
         if self.was_reset_to_default {
             self.was_reset_to_default = false;
             self.delete_entries(batch).await?;
@@ -1221,7 +1200,7 @@ where
         Ok(())
     }
 
-    async fn delete(mut self, batch: &mut C::Batch) -> Result<(), ViewError> {
+    async fn delete(mut self, batch: &mut Batch) -> Result<(), ViewError> {
         self.delete_entries(batch).await
     }
 
@@ -1239,7 +1218,7 @@ where
     W: View<C>,
 {
     /// Delete all entries in this [`Collection`].
-    async fn delete_entries(&mut self, batch: &mut C::Batch) -> Result<(), ViewError> {
+    async fn delete_entries(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
         let stored_indices = self.context.indices().await?;
         for index in &stored_indices {
             let context = self.context.clone_with_scope(index);
@@ -1374,7 +1353,7 @@ where
         self.updates.clear();
     }
 
-    async fn flush(&mut self, batch: &mut C::Batch) -> Result<(), ViewError> {
+    async fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
         if self.was_reset_to_default {
             self.was_reset_to_default = false;
             self.delete_entries(batch).await?;
@@ -1409,7 +1388,7 @@ where
         Ok(())
     }
 
-    async fn delete(mut self, batch: &mut C::Batch) -> Result<(), ViewError> {
+    async fn delete(mut self, batch: &mut Batch) -> Result<(), ViewError> {
         self.delete_entries(batch).await
     }
 
@@ -1427,7 +1406,7 @@ where
     W: View<C>,
 {
     /// Delete all entries in this [`Collection`].
-    async fn delete_entries(&mut self, batch: &mut C::Batch) -> Result<(), ViewError> {
+    async fn delete_entries(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
         let stored_indices = self.context.indices().await?;
         for index in &stored_indices {
             let context = self.context.clone_with_scope(index);
