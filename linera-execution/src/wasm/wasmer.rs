@@ -8,11 +8,148 @@ wit_bindgen_host_wasmer_rust::export!("../linera-sdk/system.wit");
 // Import the interface implemented by a user application.
 wit_bindgen_host_wasmer_rust::import!("../linera-sdk/application.wit");
 
-use self::system::PollLoad;
-use super::async_boundary::{ContextForwarder, HostFuture};
-use crate::{ExecutionError, WritableStorage};
+use self::{application::Application, system::PollLoad};
+use super::{
+    async_boundary::{ContextForwarder, HostFuture},
+    common::{self, Runtime, WritableRuntimeContext},
+    WasmApplication,
+};
+use crate::{ExecutionError, WasmExecutionError, WritableStorage};
 use std::{marker::PhantomData, mem, sync::Arc, task::Poll};
 use tokio::sync::Mutex;
+use wasmer::{imports, Module, RuntimeError, Store};
+
+/// Type representing the [Wasmer](https://wasmer.io/) runtime.
+///
+/// The runtime has a lifetime so that it does not outlive the trait object used to export the
+/// system API.
+pub struct Wasmer<'storage> {
+    _lifetime: PhantomData<&'storage ()>,
+}
+
+impl<'storage> Runtime for Wasmer<'storage> {
+    type Application = Application;
+    type Store = Store;
+    type StorageGuard = StorageGuard<'storage>;
+    type Error = RuntimeError;
+}
+
+impl WasmApplication {
+    /// Prepare a runtime instance to call into the WASM application.
+    pub fn prepare_runtime<'storage>(
+        &self,
+        storage: &'storage dyn WritableStorage,
+    ) -> Result<WritableRuntimeContext<Wasmer<'storage>>, WasmExecutionError> {
+        let mut store = Store::default();
+        let module = Module::new(&store, &self.bytecode)
+            .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)?;
+        let mut imports = imports! {};
+        let context_forwarder = ContextForwarder::default();
+        let (system_api, storage_guard) = SystemApi::new(context_forwarder.clone(), storage);
+        let system_api_setup = system::add_to_imports(&mut store, &mut imports, system_api);
+        let (application, instance) =
+            application::Application::instantiate(&mut store, &module, &mut imports)?;
+
+        system_api_setup(&instance, &store)?;
+
+        Ok(WritableRuntimeContext {
+            context_forwarder,
+            application,
+            store,
+            _storage_guard: storage_guard,
+        })
+    }
+}
+
+impl<'storage> common::Application<Wasmer<'storage>> for Application {
+    fn execute_operation_new(
+        &self,
+        store: &mut Store,
+        context: application::OperationContext,
+        operation: &[u8],
+    ) -> Result<application::ExecuteOperation, RuntimeError> {
+        Application::execute_operation_new(self, store, context, operation)
+    }
+
+    fn execute_operation_poll(
+        &self,
+        store: &mut Store,
+        future: &application::ExecuteOperation,
+    ) -> Result<application::PollExecutionResult, RuntimeError> {
+        Application::execute_operation_poll(self, store, future)
+    }
+
+    fn execute_effect_new(
+        &self,
+        store: &mut Store,
+        context: application::EffectContext,
+        effect: &[u8],
+    ) -> Result<application::ExecuteEffect, RuntimeError> {
+        Application::execute_effect_new(self, store, context, effect)
+    }
+
+    fn execute_effect_poll(
+        &self,
+        store: &mut Store,
+        future: &application::ExecuteEffect,
+    ) -> Result<application::PollExecutionResult, RuntimeError> {
+        Application::execute_effect_poll(self, store, future)
+    }
+
+    fn call_application_new(
+        &self,
+        store: &mut Store,
+        context: application::CalleeContext,
+        argument: &[u8],
+        forwarded_sessions: &[application::SessionId],
+    ) -> Result<application::CallApplication, RuntimeError> {
+        Application::call_application_new(self, store, context, argument, forwarded_sessions)
+    }
+
+    fn call_application_poll(
+        &self,
+        store: &mut Store,
+        future: &application::CallApplication,
+    ) -> Result<application::PollCallApplication, RuntimeError> {
+        Application::call_application_poll(self, store, future)
+    }
+
+    fn call_session_new(
+        &self,
+        store: &mut Store,
+        context: application::CalleeContext,
+        session: application::SessionParam,
+        argument: &[u8],
+        forwarded_sessions: &[application::SessionId],
+    ) -> Result<application::CallSession, RuntimeError> {
+        Application::call_session_new(self, store, context, session, argument, forwarded_sessions)
+    }
+
+    fn call_session_poll(
+        &self,
+        store: &mut Store,
+        future: &application::CallSession,
+    ) -> Result<application::PollCallSession, RuntimeError> {
+        Application::call_session_poll(self, store, future)
+    }
+
+    fn query_application_new(
+        &self,
+        store: &mut Store,
+        context: application::QueryContext,
+        argument: &[u8],
+    ) -> Result<application::QueryApplication, RuntimeError> {
+        Application::query_application_new(self, store, context, argument)
+    }
+
+    fn query_application_poll(
+        &self,
+        store: &mut Store,
+        future: &application::QueryApplication,
+    ) -> Result<application::PollQuery, RuntimeError> {
+        Application::query_application_poll(self, store, future)
+    }
+}
 
 /// Implementation to forward system calls from the guest WASM module to the host implementation.
 pub struct SystemApi {
