@@ -3,7 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    codec,
     transport::{MessageHandler, NetworkProtocol, SpawnedServer},
+    Message,
 };
 use async_trait::async_trait;
 use futures::{channel::mpsc, sink::SinkExt, stream::StreamExt};
@@ -14,7 +16,6 @@ use linera_core::{
     node::{NodeError, ValidatorNode},
     worker::{ValidatorWorker, WorkerState},
 };
-use linera_rpc::{Message, codec};
 use linera_storage::Store;
 use linera_views::views::ViewError;
 use log::{debug, error, info, warn};

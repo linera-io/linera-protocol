@@ -2,15 +2,16 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use clap::arg_enum;
+use crate::{codec, Message};
 use futures::{future, Sink, SinkExt, Stream, StreamExt, TryStreamExt};
-use linera_rpc::{Message, codec};
 use log::{error, warn};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, io, net::ToSocketAddrs};
+use structopt::clap::arg_enum;
 use tokio::net::{TcpListener, TcpStream, UdpSocket};
 use tokio_util::{codec::Framed, udp::UdpFramed};
-use linera_rpc::codec::Codec;
+
+use crate::codec::Codec;
 
 /// Suggested buffer size
 pub const DEFAULT_MAX_DATAGRAM_SIZE: &str = "65507";

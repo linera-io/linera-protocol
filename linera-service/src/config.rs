@@ -2,7 +2,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::network::{ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig};
 use linera_base::{
     committee::{Committee, ValidatorState},
     crypto::{HashValue, KeyPair},
@@ -13,6 +12,7 @@ use linera_core::{
     node::ValidatorNode,
 };
 use linera_execution::system::Balance;
+use linera_rpc::network::{ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig};
 use linera_storage::Store;
 use linera_views::views::ViewError;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};

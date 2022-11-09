@@ -98,7 +98,7 @@ pub enum Error {
 
 #[cfg(test)]
 mod tests {
-    use super::{Codec, PREFIX_SIZE, Message};
+    use super::{Codec, Message, PREFIX_SIZE};
     use bytes::{BufMut, BytesMut};
     use linera_core::messages::ChainInfoQuery;
     use test_strategy::proptest;

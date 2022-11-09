@@ -1197,11 +1197,14 @@ dependencies = [
 name = "linera-rpc"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "async-trait",
  "bcs",
  "bincode",
  "bytes",
  "ed25519",
  "ed25519-dalek",
+ "futures",
  "generic-array",
  "hex",
  "linera-base",
@@ -1210,6 +1213,7 @@ dependencies = [
  "linera-execution",
  "linera-rpc",
  "linera-storage",
+ "linera-views",
  "log",
  "once_cell",
  "proptest",
@@ -1223,6 +1227,7 @@ dependencies = [
  "structopt",
  "test-strategy",
  "thiserror",
+ "tokio",
  "tokio-util 0.6.10",
 ]
 
