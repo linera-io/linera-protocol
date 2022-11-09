@@ -21,6 +21,7 @@ mod runtime;
 #[path = "wasmtime.rs"]
 mod runtime;
 
+use self::common::WrappedQueryableStorage;
 use crate::{
     ApplicationCallResult, CalleeContext, EffectContext, ExecutionError, OperationContext,
     QueryContext, QueryableStorage, RawExecutionResult, SessionCallResult, SessionId,
@@ -52,7 +53,11 @@ impl UserApplication for WasmApplication {
         storage: &dyn WritableStorage,
         operation: &[u8],
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
-        todo!();
+        let result = self
+            .prepare_runtime(storage)?
+            .execute_operation(context, operation)
+            .await?;
+        Ok(result)
     }
 
     async fn execute_effect(
@@ -61,7 +66,11 @@ impl UserApplication for WasmApplication {
         storage: &dyn WritableStorage,
         effect: &[u8],
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
-        todo!();
+        let result = self
+            .prepare_runtime(storage)?
+            .execute_effect(context, effect)
+            .await?;
+        Ok(result)
     }
 
     async fn call_application(
@@ -71,7 +80,11 @@ impl UserApplication for WasmApplication {
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, ExecutionError> {
-        todo!();
+        let result = self
+            .prepare_runtime(storage)?
+            .call_application(context, argument, forwarded_sessions)
+            .await?;
+        Ok(result)
     }
 
     async fn call_session(
@@ -83,7 +96,17 @@ impl UserApplication for WasmApplication {
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<SessionCallResult, ExecutionError> {
-        todo!();
+        let result = self
+            .prepare_runtime(storage)?
+            .call_session(
+                context,
+                session_kind,
+                session_data,
+                argument,
+                forwarded_sessions,
+            )
+            .await?;
+        Ok(result)
     }
 
     async fn query_application(
@@ -92,6 +115,12 @@ impl UserApplication for WasmApplication {
         storage: &dyn QueryableStorage,
         argument: &[u8],
     ) -> Result<Vec<u8>, ExecutionError> {
-        todo!();
+        let wrapped_storage = WrappedQueryableStorage::new(storage);
+        let storage_reference = &wrapped_storage;
+        let result = self
+            .prepare_runtime(storage_reference)?
+            .query_application(context, argument)
+            .await?;
+        Ok(result)
     }
 }
