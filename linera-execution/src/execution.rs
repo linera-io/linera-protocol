@@ -12,7 +12,6 @@ use linera_base::{
     messages::{ApplicationId, ChainId},
 };
 use linera_views::{
-    common::Batch,
     impl_view,
     views::{
         CollectionOperations, ReentrantCollectionView, RegisterOperations, RegisterView,
@@ -48,7 +47,7 @@ impl_view!(
 #[cfg(any(test, feature = "test"))]
 impl<R> ExecutionStateView<MemoryContext<R>>
 where
-    R: ExecutionRuntimeContext + Clone + Send + Sync,
+    R: ExecutionRuntimeContext,
     MemoryContext<R>: ExecutionStateViewContext,
     ViewError: From<<MemoryContext<R> as linera_views::views::Context>::Error>,
 {

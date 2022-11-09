@@ -19,7 +19,7 @@ pub type MemoryContainer = Arc<RwLock<OwnedMutexGuard<MemoryStoreMap>>>;
 /// A context that stores all values in memory.
 pub type MemoryContext<E> = ContextFromDb<E, MemoryContainer>;
 
-impl<E: Clone + Send + Sync> MemoryContext<E> {
+impl<E> MemoryContext<E> {
     pub fn new(guard: OwnedMutexGuard<MemoryStoreMap>, extra: E) -> Self {
         Self {
             db: Arc::new(RwLock::new(guard)),

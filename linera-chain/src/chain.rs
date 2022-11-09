@@ -15,7 +15,6 @@ use linera_execution::{
     ExecutionStateView, ExecutionStateViewContext, OperationContext, RawExecutionResult,
 };
 use linera_views::{
-    common::Batch,
     impl_view,
     views::{
         CollectionOperations, CollectionView, LogOperations, LogView, MapOperations, MapView,

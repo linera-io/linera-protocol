@@ -8,6 +8,7 @@ use crate::{
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::collections::HashMap;
+
 pub enum WriteOperation {
     Delete { key: Vec<u8> },
     Put { key: Vec<u8>, value: Vec<u8> },
@@ -16,7 +17,7 @@ pub enum WriteOperation {
 /// A batch of writes inside a transaction;
 #[derive(Default)]
 pub struct Batch {
-    pub operations: Vec<WriteOperation>,
+    pub(crate) operations: Vec<WriteOperation>,
 }
 
 impl Batch {
@@ -73,6 +74,7 @@ where
 #[async_trait]
 pub trait KeyValueOperations {
     type Error;
+
     async fn read_key<V: DeserializeOwned>(&self, key: &[u8]) -> Result<Option<V>, Self::Error>;
 
     async fn find_keys_with_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error>;

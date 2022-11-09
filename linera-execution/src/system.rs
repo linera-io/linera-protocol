@@ -14,7 +14,6 @@ use linera_base::{
     },
 };
 use linera_views::{
-    common::Batch,
     impl_view,
     views::{
         MapOperations, MapView, RegisterOperations, RegisterView, ScopedView, View, ViewError,

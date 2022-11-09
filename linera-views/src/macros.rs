@@ -34,14 +34,14 @@ where
         $( self.$field.rollback(); )*
     }
 
-    async fn flush(&mut self, batch: &mut Batch) -> Result<(), $crate::views::ViewError> {
+    async fn flush(&mut self, batch: &mut $crate::common::Batch) -> Result<(), $crate::views::ViewError> {
         use $crate::views::View;
 
         $( self.$field.flush(batch).await?; )*
         Ok(())
     }
 
-    async fn delete(self, batch: &mut Batch) -> Result<(), $crate::views::ViewError> {
+    async fn delete(self, batch: &mut $crate::common::Batch) -> Result<(), $crate::views::ViewError> {
         use $crate::views::View;
 
         $( self.$field.delete(batch).await?; )*
