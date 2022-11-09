@@ -1,8 +1,9 @@
 use bytes::{Buf, BufMut, BytesMut};
-use linera_rpc::Message;
 use std::{io, mem, ops::DerefMut};
 use thiserror::Error;
 use tokio_util::codec::{Decoder, Encoder};
+
+use crate::Message;
 
 /// The size of the frame prefix that contains the payload size.
 const PREFIX_SIZE: u8 = mem::size_of::<u32>() as u8;
@@ -97,10 +98,9 @@ pub enum Error {
 
 #[cfg(test)]
 mod tests {
-    use super::{Codec, PREFIX_SIZE};
+    use super::{Codec, Message, PREFIX_SIZE};
     use bytes::{BufMut, BytesMut};
     use linera_core::messages::ChainInfoQuery;
-    use linera_rpc::Message;
     use test_strategy::proptest;
     use tokio_util::codec::{Decoder, Encoder};
 

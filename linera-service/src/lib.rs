@@ -4,8 +4,5 @@
 
 #![deny(warnings)]
 
-mod codec;
 pub mod config;
-pub mod network;
 pub mod storage;
-pub mod transport;

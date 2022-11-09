@@ -9,14 +9,16 @@ use async_trait::async_trait;
 use futures::future::join_all;
 use linera_base::{crypto::KeyPair, messages::ValidatorName};
 use linera_core::worker::WorkerState;
+use linera_rpc::{
+    network,
+    network::{ShardConfig, ShardId, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig},
+    transport,
+};
 use linera_service::{
     config::{
         CommitteeConfig, Export, GenesisConfig, Import, ValidatorConfig, ValidatorServerConfig,
     },
-    network,
-    network::{ShardConfig, ShardId, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig},
     storage::{Runnable, StorageConfig},
-    transport,
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;

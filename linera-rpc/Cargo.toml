@@ -8,15 +8,22 @@ edition = "2021"
 test = []
 
 [dependencies]
+anyhow = "1.0.57"
+async-trait = "0.1.52"
 bcs = "0.1.3"
+bincode = "1.3.3"
+bytes = "1.2.1"
 ed25519 = "1.2.0"
 ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
+futures = "0.3.17"
 generic-array = { version = "0.14.4", features = ["serde"] }
 hex = "0.4.3"
 linera-base = { path = "../linera-base" }
 linera-chain = { path = "../linera-chain" }
 linera-core = { path = "../linera-core" }
 linera-execution = { path = "../linera-execution" }
+linera-storage = { path = "../linera-storage" }
+linera-views = { path = "../linera-views" }
 log = "0.4.14"
 once_cell = "1.13.0"
 proptest = { version = "1.0.0", optional = true }
@@ -24,7 +31,10 @@ rand = "0.7.3"
 serde = { version = "1.0.130", features = ["derive"] }
 serde-name = "0.2.0"
 sha2 = "0.9.8"
+structopt = "0.3.23"
 thiserror = "1.0.31"
+tokio = "1.12.0"
+tokio-util = { version = "0.6.9", features = ["codec", "net"] }
 
 [dev-dependencies]
 linera-base = { path = "../linera-base", features = ["test"] }
@@ -33,7 +43,9 @@ linera-core = { path = "../linera-core", features = ["test"] }
 linera-execution = { path = "../linera-execution", features = ["test"] }
 linera-rpc = { path = ".", features = ["test"] }
 linera-storage = { path = "../linera-storage", features = ["test"] }
+proptest = "1.0.0"
 serde-reflection = "0.3.5"
 serde_yaml = "0.8.21"
 similar-asserts = "1.1.0"
 structopt = "0.3.23"
+test-strategy = "0.2.0"

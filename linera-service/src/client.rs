@@ -23,11 +23,9 @@ use linera_execution::{
     system::{Address, Amount, Balance, SystemOperation, UserData, SYSTEM},
     Operation,
 };
-use linera_rpc::Message;
+use linera_rpc::{network, network::ValidatorPublicNetworkConfig, Message};
 use linera_service::{
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain, WalletState},
-    network,
-    network::ValidatorPublicNetworkConfig,
     storage::{Runnable, StorageConfig},
 };
 use linera_storage::Store;

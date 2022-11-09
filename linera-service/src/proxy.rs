@@ -1,11 +1,11 @@
 use anyhow::Result;
 use futures::{future::BoxFuture, FutureExt, SinkExt, StreamExt};
-use linera_rpc::Message;
-use linera_service::{
-    config::{Import, ValidatorServerConfig},
+use linera_rpc::{
     network::{ShardConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig},
     transport::{MessageHandler, NetworkProtocol},
+    Message,
 };
+use linera_service::config::{Import, ValidatorServerConfig};
 use std::path::PathBuf;
 use structopt::StructOpt;
 
