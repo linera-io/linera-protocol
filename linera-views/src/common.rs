@@ -21,6 +21,16 @@ pub struct Batch {
 }
 
 impl Batch {
+    /// building a batch from a function
+    pub async fn build<F>(builder: F) -> Result<Self, ViewError>
+    where
+        F: FnOnce(&mut Batch) -> futures::future::BoxFuture<Result<(), ViewError>> + Send + Sync,
+    {
+        let mut batch = Batch::default();
+        builder(&mut batch).await?;
+        Ok(batch)
+    }
+
     /// A key may appear multiple times in the batch
     /// The construction of BatchWriteItem and TransactWriteItem for DynamoDb does
     /// not allow this to happen.
@@ -58,16 +68,6 @@ impl Batch {
     pub fn delete_key(&mut self, key: Vec<u8>) {
         self.operations.push(WriteOperation::Delete { key });
     }
-}
-
-/// Build a batch using builder. This is used for the macro.
-pub async fn build_batch<F>(builder: F) -> Result<Batch, ViewError>
-where
-    F: FnOnce(&mut Batch) -> futures::future::BoxFuture<Result<(), ViewError>> + Send + Sync,
-{
-    let mut batch = Batch::default();
-    builder(&mut batch).await?;
-    Ok(batch)
 }
 
 /// Low-level, asynchronous key-value operations. Useful for storage APIs not based on views.

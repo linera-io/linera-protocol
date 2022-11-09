@@ -96,10 +96,10 @@ where
 
     pub async fn write_delete(self) -> Result<(), $crate::views::ViewError> {
         use $crate::views::View;
-        use $crate::common::build_batch;
+        use $crate::common::Batch;
 
         let context = self.context().clone();
-        let batch = build_batch(move |batch| {
+        let batch = Batch::build(move |batch| {
             Box::pin(async move {
                 $( self.$field.delete(batch).await?; )*
                 Ok(())
