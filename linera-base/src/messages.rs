@@ -154,28 +154,24 @@ impl BlockHeight {
     }
 
     #[inline]
-    #[allow(clippy::result_large_err)]
     pub fn try_add_one(self) -> Result<BlockHeight, Error> {
         let val = self.0.checked_add(1).ok_or(Error::SequenceOverflow)?;
         Ok(Self(val))
     }
 
     #[inline]
-    #[allow(clippy::result_large_err)]
     pub fn try_sub_one(self) -> Result<BlockHeight, Error> {
         let val = self.0.checked_sub(1).ok_or(Error::SequenceUnderflow)?;
         Ok(Self(val))
     }
 
     #[inline]
-    #[allow(clippy::result_large_err)]
     pub fn try_add_assign_one(&mut self) -> Result<(), Error> {
         self.0 = self.0.checked_add(1).ok_or(Error::SequenceOverflow)?;
         Ok(())
     }
 
     #[inline]
-    #[allow(clippy::result_large_err)]
     pub fn try_sub_assign_one(&mut self) -> Result<(), Error> {
         self.0 = self.0.checked_sub(1).ok_or(Error::SequenceUnderflow)?;
         Ok(())
@@ -189,28 +185,24 @@ impl RoundNumber {
     }
 
     #[inline]
-    #[allow(clippy::result_large_err)]
     pub fn try_add_one(self) -> Result<RoundNumber, Error> {
         let val = self.0.checked_add(1).ok_or(Error::SequenceOverflow)?;
         Ok(Self(val))
     }
 
     #[inline]
-    #[allow(clippy::result_large_err)]
     pub fn try_sub_one(self) -> Result<RoundNumber, Error> {
         let val = self.0.checked_sub(1).ok_or(Error::SequenceUnderflow)?;
         Ok(Self(val))
     }
 
     #[inline]
-    #[allow(clippy::result_large_err)]
     pub fn try_add_assign_one(&mut self) -> Result<(), Error> {
         self.0 = self.0.checked_add(1).ok_or(Error::SequenceOverflow)?;
         Ok(())
     }
 
     #[inline]
-    #[allow(clippy::result_large_err)]
     pub fn try_sub_assign_one(&mut self) -> Result<(), Error> {
         self.0 = self.0.checked_sub(1).ok_or(Error::SequenceUnderflow)?;
         Ok(())
@@ -219,14 +211,12 @@ impl RoundNumber {
 
 impl Epoch {
     #[inline]
-    #[allow(clippy::result_large_err)]
     pub fn try_add_one(self) -> Result<Self, Error> {
         let val = self.0.checked_add(1).ok_or(Error::SequenceOverflow)?;
         Ok(Self(val))
     }
 
     #[inline]
-    #[allow(clippy::result_large_err)]
     pub fn try_add_assign_one(&mut self) -> Result<(), Error> {
         self.0 = self.0.checked_add(1).ok_or(Error::SequenceOverflow)?;
         Ok(())

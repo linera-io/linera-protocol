@@ -120,7 +120,6 @@ where
             .expect("single-threaded execution should not lock `execution_results`")
     }
 
-    #[allow(clippy::result_large_err)]
     fn forward_sessions(
         &self,
         session_ids: &[SessionId],
@@ -171,7 +170,6 @@ where
         session_ids
     }
 
-    #[allow(clippy::result_large_err)]
     fn try_load_session(
         &self,
         session_id: SessionId,
@@ -196,7 +194,6 @@ where
         Ok(state)
     }
 
-    #[allow(clippy::result_large_err)]
     fn try_save_session(
         &self,
         session_id: SessionId,
@@ -219,7 +216,6 @@ where
         Ok(())
     }
 
-    #[allow(clippy::result_large_err)]
     fn try_close_session(
         &self,
         session_id: SessionId,
