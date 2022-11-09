@@ -26,4 +26,7 @@ wit-bindgen-host-wasmer-rust = { git = "https://github.com/jvff/wit-bindgen", re
 wit-bindgen-host-wasmtime-rust = { git = "https://github.com/jvff/wit-bindgen", rev = "4a9e7cc6899a9736e2a2d23dcfc4f8744b6107a1", optional = true }
 
 [dev-dependencies]
+anyhow = "1.0.57"
+bcs = "0.1.3"
 linera-execution = { path = ".", features = ["test"] }
+tokio = { version = "1.12.0", features = ["full", "test-util"] }

@@ -1600,7 +1600,9 @@ dependencies = [
 name = "linera-execution"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
+ "bcs",
  "dashmap",
  "futures",
  "linera-base",
