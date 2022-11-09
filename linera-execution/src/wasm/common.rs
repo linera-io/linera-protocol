@@ -4,16 +4,17 @@
 //! Runtime independent code for interfacing with user applications in WebAssembly modules.
 
 use super::{
-    async_boundary::{ContextForwarder, GuestFutureInterface},
+    async_boundary::{ContextForwarder, GuestFuture, GuestFutureInterface},
     runtime::application::{
         self, CallApplication, CallSession, ExecuteEffect, ExecuteOperation, PollCallApplication,
         PollCallSession, PollExecutionResult, PollQuery, QueryApplication,
     },
 };
 use crate::{
-    system::Balance, ApplicationCallResult, ApplicationStateNotLocked, CallResult, ExecutionError,
-    QueryableStorage, RawExecutionResult, ReadableStorage, SessionCallResult, SessionId,
-    WasmExecutionError, WritableStorage,
+    system::Balance, ApplicationCallResult, ApplicationStateNotLocked, CallResult, CalleeContext,
+    EffectContext, ExecutionError, OperationContext, QueryContext, QueryableStorage,
+    RawExecutionResult, ReadableStorage, SessionCallResult, SessionId, WasmExecutionError,
+    WritableStorage,
 };
 use async_trait::async_trait;
 use linera_base::messages::{ApplicationId, ChainId};
@@ -133,6 +134,161 @@ where
 
     /// Guard type to clean up any host state after the call to the WASM application finishes.
     pub(crate) _storage_guard: R::StorageGuard,
+}
+
+impl<R> WritableRuntimeContext<R>
+where
+    R: Runtime,
+{
+    /// Call the guest WASM module's implementation of
+    /// [`UserApplication::execute_operation`][`linera_execution::UserApplication::execute_operation`].
+    ///
+    /// This method returns a [`Future`][`std::future::Future`], and is equivalent to
+    ///
+    /// ```ignore
+    /// pub async fn execute_operation(
+    ///     mut self,
+    ///     context: &OperationContext,
+    ///     operation: &[u8],
+    /// ) -> Result<RawExecutionResult<Vec<u8>>, WasmExecutionError>
+    /// ```
+    pub fn execute_operation(
+        mut self,
+        context: &OperationContext,
+        operation: &[u8],
+    ) -> GuestFuture<ExecuteOperation, R> {
+        let future =
+            self.application
+                .execute_operation_new(&mut self.store, (*context).into(), operation);
+
+        GuestFuture::new(future, self)
+    }
+
+    /// Call the guest WASM module's implementation of
+    /// [`UserApplication::execute_effect`][`linera_execution::UserApplication::execute_effect`].
+    ///
+    /// This method returns a [`Future`][`std::future::Future`], and is equivalent to
+    ///
+    /// ```ignore
+    /// pub async fn execute_effect(
+    ///     mut self,
+    ///     context: &EffectContext,
+    ///     effect: &[u8],
+    /// ) -> Result<RawExecutionResult<Vec<u8>>, WasmExecutionError>
+    /// ```
+    pub fn execute_effect(
+        mut self,
+        context: &EffectContext,
+        effect: &[u8],
+    ) -> GuestFuture<ExecuteEffect, R> {
+        let future =
+            self.application
+                .execute_effect_new(&mut self.store, (*context).into(), effect);
+
+        GuestFuture::new(future, self)
+    }
+
+    /// Call the guest WASM module's implementation of
+    /// [`UserApplication::call_application`][`linera_execution::UserApplication::call_application`].
+    ///
+    /// This method returns a [`Future`][`std::future::Future`], and is equivalent to
+    ///
+    /// ```ignore
+    /// pub async fn call_application(
+    ///     mut self,
+    ///     context: &CalleeContext,
+    ///     argument: &[u8],
+    ///     forwarded_sessions: Vec<SessionId>,
+    /// ) -> Result<ApplicationCallResult, WasmExecutionError>
+    /// ```
+    pub fn call_application(
+        mut self,
+        context: &CalleeContext,
+        argument: &[u8],
+        forwarded_sessions: Vec<SessionId>,
+    ) -> GuestFuture<CallApplication, R> {
+        let forwarded_sessions: Vec<_> = forwarded_sessions
+            .into_iter()
+            .map(application::SessionId::from)
+            .collect();
+
+        let future = self.application.call_application_new(
+            &mut self.store,
+            (*context).into(),
+            argument,
+            &forwarded_sessions,
+        );
+
+        GuestFuture::new(future, self)
+    }
+
+    /// Call the guest WASM module's implementation of
+    /// [`UserApplication::call_session`][`linera_execution::UserApplication::call_session`].
+    ///
+    /// This method returns a [`Future`][`std::future::Future`], and is equivalent to
+    ///
+    /// ```ignore
+    /// pub async fn call_session(
+    ///     mut self,
+    ///     context: &CalleeContext,
+    ///     session_kind: u64,
+    ///     session_data: &mut Vec<u8>,
+    ///     argument: &[u8],
+    ///     forwarded_sessions: Vec<SessionId>,
+    /// ) -> Result<SessionCallResult, WasmExecutionError>
+    /// ```
+    pub fn call_session(
+        mut self,
+        context: &CalleeContext,
+        session_kind: u64,
+        session_data: &mut Vec<u8>,
+        argument: &[u8],
+        forwarded_sessions: Vec<SessionId>,
+    ) -> GuestFuture<CallSession, R> {
+        let forwarded_sessions: Vec<_> = forwarded_sessions
+            .into_iter()
+            .map(application::SessionId::from)
+            .collect();
+
+        let session = application::SessionParam {
+            kind: session_kind,
+            data: &*session_data,
+        };
+
+        let future = self.application.call_session_new(
+            &mut self.store,
+            (*context).into(),
+            session,
+            argument,
+            &forwarded_sessions,
+        );
+
+        GuestFuture::new(future, self)
+    }
+
+    /// Call the guest WASM module's implementation of
+    /// [`UserApplication::query_application`][`linera_execution::UserApplication::query_application`].
+    ///
+    /// This method returns a [`Future`][`std::future::Future`], and is equivalent to
+    ///
+    /// ```ignore
+    /// pub async fn query_application(
+    ///     mut self,
+    ///     context: &QueryContext,
+    ///     argument: &[u8],
+    /// ) -> Result<Vec<u8>, WasmExecutionError>
+    /// ```
+    pub fn query_application(
+        mut self,
+        context: &QueryContext,
+        argument: &[u8],
+    ) -> GuestFuture<QueryApplication, R> {
+        let future =
+            self.application
+                .query_application_new(&mut self.store, (*context).into(), argument);
+
+        GuestFuture::new(future, self)
+    }
 }
 
 /// Wrap a [`QueryableStorage`] trait object so that it implements [`WritableStorage`] with stub
