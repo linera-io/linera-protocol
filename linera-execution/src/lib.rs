@@ -102,9 +102,15 @@ pub enum WasmExecutionError {
     #[cfg(feature = "wasmer")]
     #[error("Failed to load WASM module")]
     LoadModule(#[from] wit_bindgen_host_wasmer_rust::anyhow::Error),
+    #[cfg(feature = "wasmtime")]
+    #[error("Failed to load WASM module")]
+    LoadModule(#[from] wit_bindgen_host_wasmtime_rust::anyhow::Error),
     #[cfg(feature = "wasmer")]
     #[error("Failed to execute WASM module")]
     ExecuteModule(#[from] wasmer::RuntimeError),
+    #[cfg(feature = "wasmtime")]
+    #[error("Failed to execute WASM module")]
+    ExecuteModule(#[from] wasmtime::Trap),
     #[error("Error reported from user application: {0}")]
     UserApplication(String),
 }
