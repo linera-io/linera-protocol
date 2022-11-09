@@ -216,149 +216,6 @@ EffectId:
     - index: U64
 Epoch:
   NEWTYPESTRUCT: U64
-<<<<<<< HEAD
-=======
-Error:
-  ENUM:
-    0:
-      InactiveChain:
-        NEWTYPE:
-          TYPENAME: ChainId
-    1:
-      InvalidOwner: UNIT
-    2:
-      UnexpectedPreviousBlockHash: UNIT
-    3:
-      UnexpectedBlockHeight:
-        STRUCT:
-          - expected_block_height:
-              TYPENAME: BlockHeight
-          - found_block_height:
-              TYPENAME: BlockHeight
-    4:
-      InvalidBlockHeight: UNIT
-    5:
-      PreviousBlockMustBeConfirmedFirst: UNIT
-    6:
-      MissingEarlierBlocks:
-        STRUCT:
-          - current_block_height:
-              TYPENAME: BlockHeight
-    7:
-      SequenceOverflow: UNIT
-    8:
-      SequenceUnderflow: UNIT
-    9:
-      InvalidSigner: UNIT
-    10:
-      CertificateRequiresQuorum: UNIT
-    11:
-      CertificateValidatorReuse: UNIT
-    12:
-      InvalidCertificate: UNIT
-    13:
-      InvalidChainInfoResponse: UNIT
-    14:
-      InvalidEpoch:
-        STRUCT:
-          - chain_id:
-              TYPENAME: ChainId
-          - epoch:
-              TYPENAME: Epoch
-    15:
-      InsufficientRound:
-        NEWTYPE:
-          TYPENAME: RoundNumber
-    16:
-      HasLockedBlock:
-        TUPLE:
-          - TYPENAME: BlockHeight
-          - TYPENAME: RoundNumber
-    17:
-      MissingCrossChainUpdate:
-        STRUCT:
-          - chain_id:
-              TYPENAME: ChainId
-          - application_id:
-              TYPENAME: ApplicationId
-          - origin:
-              TYPENAME: Origin
-          - height:
-              TYPENAME: BlockHeight
-    18:
-      InvalidMessageContent:
-        STRUCT:
-          - chain_id:
-              TYPENAME: ChainId
-          - application_id:
-              TYPENAME: ApplicationId
-          - origin:
-              TYPENAME: Origin
-          - height:
-              TYPENAME: BlockHeight
-          - index: U64
-    19:
-      InvalidMessage:
-        STRUCT:
-          - chain_id:
-              TYPENAME: ChainId
-          - application_id:
-              TYPENAME: ApplicationId
-          - origin:
-              TYPENAME: Origin
-          - height:
-              TYPENAME: BlockHeight
-          - index: U64
-          - expected_height:
-              TYPENAME: BlockHeight
-          - expected_index: U64
-    20:
-      InvalidMessageOrder:
-        STRUCT:
-          - chain_id:
-              TYPENAME: ChainId
-          - application_id:
-              TYPENAME: ApplicationId
-          - origin:
-              TYPENAME: Origin
-          - height:
-              TYPENAME: BlockHeight
-          - index: U64
-    21:
-      InvalidCrossChainRequest: UNIT
-    22:
-      InvalidBlockProposal: UNIT
-    23:
-      InvalidBlockChaining: UNIT
-    24:
-      IncorrectStateHash: UNIT
-    25:
-      IncorrectEffects: UNIT
-    26:
-      InvalidDecoding: UNIT
-    27:
-      UnexpectedMessage: UNIT
-    28:
-      ClientIoError:
-        STRUCT:
-          - error: STR
-    29:
-      CannotResolveValidatorAddress:
-        STRUCT:
-          - address: STR
-    30:
-      ViewError:
-        STRUCT:
-          - error: STR
-    31:
-      CryptoError:
-        STRUCT:
-          - error: STR
-    32:
-      ExecutionError:
-        STRUCT:
-          - error: STR
->>>>>>> refactor: added more variants to CryptoError
 HashValue:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -434,8 +291,8 @@ NodeError:
   ENUM:
     0:
       CryptoError:
-        NEWTYPE:
-          TYPENAME: CryptoError
+        STRUCT:
+          - error: STR
     1:
       BaseError:
         STRUCT:
@@ -504,21 +361,10 @@ NodeError:
       ClientIoError:
         STRUCT:
           - error: STR
-<<<<<<< HEAD
     17:
       CannotResolveValidatorAddress:
         STRUCT:
           - address: STR
-=======
-    6:
-      WorkerError:
-        NEWTYPE:
-          TYPENAME: Error
-    7:
-      CryptoError:
-        STRUCT:
-          - error: STR
->>>>>>> refactor: added more variants to CryptoError
 Operation:
   ENUM:
     0:
