@@ -27,3 +27,7 @@ jobs:
     - name: Build example contract
       run: |
         cargo build --target wasm32-unknown-unknown -p linera-sdk --examples
+    - name: Test using Wasmer
+      run: cargo test --features wasmer wasm
+    - name: Test using Wasmtime
+      run: cargo test --features wasmtime wasm
