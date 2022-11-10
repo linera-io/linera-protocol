@@ -108,7 +108,7 @@ impl DynamoDbStore {
     async fn certificates(
         &self,
     ) -> Result<MapView<DynamoDbContext<()>, HashValue, Certificate>, ViewError> {
-        MapView::load(self.context.clone_with_sub_scope(&BaseKey::Certificate, ())).await
+        MapView::load(self.context.clone_with_sub_scope(&BaseKey::Certificate, ())?).await
     }
 }
 
@@ -138,7 +138,7 @@ impl Store for DynamoDbStoreClient {
         let db_context = self
             .0
             .context
-            .clone_with_sub_scope(&BaseKey::ChainState(id), runtime_context);
+            .clone_with_sub_scope(&BaseKey::ChainState(id), runtime_context)?;
         ChainStateView::load(db_context).await
     }
 

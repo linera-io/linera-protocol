@@ -408,14 +408,12 @@ where
         &self,
         scope_prefix: &impl Serialize,
         new_extra: NewE,
-    ) -> DynamoDbContext<NewE> {
-        DynamoDbContext {
+    ) -> Result<DynamoDbContext<NewE>,DynamoDbContextError> {
+        Ok(DynamoDbContext {
             db: self.db.clone(),
-            base_key: self
-                .derive_key(scope_prefix)
-                .expect("derive_key should not fail"),
+            base_key: self.derive_key(scope_prefix)?,
             extra: new_extra,
-        }
+        })
     }
 }
 
