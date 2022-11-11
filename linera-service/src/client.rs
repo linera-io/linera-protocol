@@ -16,14 +16,14 @@ use linera_chain::messages::{
 use linera_core::{
     client::{ChainClient, ChainClientState, ValidatorNodeProvider},
     messages::{ChainInfoQuery, ChainInfoResponse},
-    node::{LocalNodeClient, NodeError, ValidatorNode},
+    node::{LocalNodeClient, ValidatorNode},
     worker::WorkerState,
 };
 use linera_execution::{
     system::{Address, Amount, Balance, SystemOperation, UserData, SYSTEM},
     Operation,
 };
-use linera_rpc::{network, network::ValidatorPublicNetworkConfig, Message};
+use linera_rpc::{network, Message};
 use linera_service::{
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain, WalletState},
     storage::{Runnable, StorageConfig},
@@ -34,7 +34,6 @@ use log::{debug, error, info, warn};
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
-    str::FromStr,
     time::{Duration, Instant},
 };
 use structopt::StructOpt;
@@ -50,36 +49,7 @@ struct ClientContext {
     cross_chain_retries: usize,
 }
 
-struct NodeProvider {
-    send_timeout: Duration,
-    recv_timeout: Duration,
-}
-
-impl ValidatorNodeProvider for NodeProvider {
-    type Node = network::Client;
-
-    fn make_node(&self, address: &str) -> Result<Self::Node, NodeError> {
-        let network = ValidatorPublicNetworkConfig::from_str(address).map_err(|_| {
-            NodeError::CannotResolveValidatorAddress {
-                address: address.to_string(),
-            }
-        })?;
-        Ok(network::Client::new(
-            network,
-            self.send_timeout,
-            self.recv_timeout,
-        ))
-    }
-}
-
 impl ClientContext {
-    fn node_provider(&self) -> NodeProvider {
-        NodeProvider {
-            send_timeout: self.send_timeout,
-            recv_timeout: self.recv_timeout,
-        }
-    }
-
     async fn from_options(options: &ClientOptions) -> Self {
         let wallet_state_path = options.wallet_state_path.clone();
         let wallet_state =
@@ -125,8 +95,12 @@ impl ClientContext {
         &self,
         storage: S,
         chain_id: ChainId,
-    ) -> ChainClientState<NodeProvider, S> {
+    ) -> ChainClientState<network::NodeProvider, S> {
         let chain = self.wallet_state.get(chain_id).expect("Unknown chain");
+        let node_provider = network::NodeProvider {
+            send_timeout: self.send_timeout,
+            recv_timeout: self.recv_timeout,
+        };
         ChainClientState::new(
             chain_id,
             chain
@@ -135,7 +109,7 @@ impl ClientContext {
                 .map(|kp| kp.copy())
                 .into_iter()
                 .collect(),
-            self.node_provider(),
+            node_provider,
             storage,
             self.genesis_config.admin_id,
             self.max_pending_messages,

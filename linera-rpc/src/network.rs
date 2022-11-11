@@ -12,6 +12,7 @@ use futures::{channel::mpsc, sink::SinkExt, stream::StreamExt};
 use linera_base::messages::ChainId;
 use linera_chain::messages::{BlockProposal, Certificate};
 use linera_core::{
+    client::ValidatorNodeProvider,
     messages::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     node::{NodeError, ValidatorNode},
     worker::{ValidatorWorker, WorkerState},
@@ -20,7 +21,7 @@ use linera_storage::Store;
 use linera_views::views::ViewError;
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
-use std::{io, time::Duration};
+use std::{io, str::FromStr, time::Duration};
 use structopt::StructOpt;
 use tokio::time;
 
@@ -348,6 +349,24 @@ where
     }
 }
 
+pub struct NodeProvider {
+    pub send_timeout: Duration,
+    pub recv_timeout: Duration,
+}
+
+impl ValidatorNodeProvider for NodeProvider {
+    type Node = Client;
+
+    fn make_node(&self, address: &str) -> Result<Self::Node, NodeError> {
+        let network = ValidatorPublicNetworkConfig::from_str(address).map_err(|_| {
+            NodeError::CannotResolveValidatorAddress {
+                address: address.to_string(),
+            }
+        })?;
+        Ok(Client::new(network, self.send_timeout, self.recv_timeout))
+    }
+}
+
 #[derive(Clone)]
 pub struct Client {
     network: ValidatorPublicNetworkConfig,
@@ -356,7 +375,7 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(
+    fn new(
         network: ValidatorPublicNetworkConfig,
         send_timeout: std::time::Duration,
         recv_timeout: std::time::Duration,
@@ -383,10 +402,7 @@ impl Client {
             .ok_or_else(|| codec::Error::Io(std::io::ErrorKind::UnexpectedEof.into()))
     }
 
-    pub async fn send_recv_info(
-        &mut self,
-        message: Message,
-    ) -> Result<ChainInfoResponse, NodeError> {
+    async fn send_recv_info(&mut self, message: Message) -> Result<ChainInfoResponse, NodeError> {
         match self.send_recv_internal(message).await {
             Ok(Message::ChainInfoResponse(response)) => Ok(*response),
             Ok(Message::Error(error)) => Err(*error),
