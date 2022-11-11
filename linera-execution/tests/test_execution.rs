@@ -8,10 +8,7 @@ extern crate core;
 use async_trait::async_trait;
 use linera_base::messages::{ApplicationId, BlockHeight, ChainDescription, ChainId};
 use linera_execution::*;
-use linera_views::{
-    memory::MemoryContext,
-    views::{Context, View},
-};
+use linera_views::{common::Context, memory::MemoryContext, views::View};
 use std::sync::Arc;
 
 #[tokio::test]

@@ -12,7 +12,10 @@ use linera_base::{
     ensure,
     messages::{ApplicationId, ChainId},
 };
-use linera_views::views::{RegisterView, View, ViewError};
+use linera_views::{
+    register_view::RegisterView,
+    views::{View, ViewError},
+};
 use std::{
     collections::{btree_map, BTreeMap},
     ops::DerefMut,

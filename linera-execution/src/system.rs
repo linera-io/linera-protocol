@@ -15,9 +15,10 @@ use linera_base::{
 };
 use linera_views::{
     impl_view,
-    views::{
-        MapOperations, MapView, RegisterOperations, RegisterView, ScopedView, View, ViewError,
-    },
+    map_view::{MapOperations, MapView},
+    register_view::{RegisterOperations, RegisterView},
+    scoped_view::ScopedView,
+    views::{View, ViewError},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;

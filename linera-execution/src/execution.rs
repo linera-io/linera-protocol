@@ -12,11 +12,11 @@ use linera_base::{
     messages::{ApplicationId, ChainId},
 };
 use linera_views::{
+    collection_view::{CollectionOperations, ReentrantCollectionView},
     impl_view,
-    views::{
-        CollectionOperations, ReentrantCollectionView, RegisterOperations, RegisterView,
-        ScopedView, View, ViewError,
-    },
+    register_view::{RegisterOperations, RegisterView},
+    scoped_view::ScopedView,
+    views::{View, ViewError},
 };
 
 #[cfg(any(test, feature = "test"))]
@@ -49,7 +49,7 @@ impl<R> ExecutionStateView<MemoryContext<R>>
 where
     R: ExecutionRuntimeContext,
     MemoryContext<R>: ExecutionStateViewContext,
-    ViewError: From<<MemoryContext<R> as linera_views::views::Context>::Error>,
+    ViewError: From<<MemoryContext<R> as linera_views::common::Context>::Error>,
 {
     /// Create an in-memory view where the system state is set. This is used notably to
     /// generate state hashes in tests.

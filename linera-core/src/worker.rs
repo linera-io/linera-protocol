@@ -14,7 +14,10 @@ use linera_chain::{
     ChainManagerOutcome, ChainStateView,
 };
 use linera_storage::Store;
-use linera_views::views::{LogView, View, ViewError};
+use linera_views::{
+    log_view::LogView,
+    views::{View, ViewError},
+};
 use std::{collections::VecDeque, sync::Arc};
 use thiserror::Error;
 

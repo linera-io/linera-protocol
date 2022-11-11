@@ -1,9 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    common::{Batch, ContextFromDb, KeyValueOperations, WriteOperation},
+    common::{Batch, Context, ContextFromDb, KeyValueOperations, WriteOperation},
     localstack,
-    views::Context,
 };
 use async_trait::async_trait;
 use aws_sdk_dynamodb::{
@@ -408,14 +407,12 @@ where
         &self,
         scope_prefix: &impl Serialize,
         new_extra: NewE,
-    ) -> DynamoDbContext<NewE> {
-        DynamoDbContext {
+    ) -> Result<DynamoDbContext<NewE>, DynamoDbContextError> {
+        Ok(DynamoDbContext {
             db: self.db.clone(),
-            base_key: self
-                .derive_key(scope_prefix)
-                .expect("derive_key should not fail"),
+            base_key: self.derive_key(scope_prefix)?,
             extra: new_extra,
-        }
+        })
     }
 }
 

@@ -9,12 +9,12 @@ macro_rules! impl_view {
 #[$crate::async_trait]
 impl<C> $crate::views::View<C> for $name<C>
 where
-    C: $crate::views::Context
+    C: $crate::common::Context
         + Send
         + Sync
         + Clone
         + 'static
-        + $crate::views::ScopedOperations
+        + $crate::scoped_view::ScopedOperations
         $( + $ops_trait )*,
     $crate::views::ViewError: From<C::Error>,
 {
@@ -24,7 +24,7 @@ where
     }
 
     async fn load(context: C) -> Result<Self, $crate::views::ViewError> {
-        $( let $field = $crate::views::ScopedView::load(context.clone()).await?; )*
+        $( let $field = $crate::scoped_view::ScopedView::load(context.clone()).await?; )*
         Ok(Self {
             $( $field ),*
         })
@@ -61,7 +61,7 @@ where
         + Sync
         + Clone
         + 'static
-        + $crate::views::ScopedOperations
+        + $crate::scoped_view::ScopedOperations
         $( + $ops_trait )*,
     $crate::views::ViewError: From<C::Error>,
 {
@@ -77,12 +77,12 @@ where
 
 impl<C> $name<C>
 where
-    C: $crate::views::Context
+    C: $crate::common::Context
         + Send
         + Sync
         + Clone
         + 'static
-        + $crate::views::ScopedOperations
+        + $crate::scoped_view::ScopedOperations
         $( + $ops_trait )*,
     $crate::views::ViewError: From<C::Error>,
 {
@@ -116,7 +116,7 @@ pub trait [< $name Context >]: $crate::hash::HashingContext<Hasher = $crate::sha
     + Sync
     + Clone
     + 'static
-    + $crate::views::ScopedOperations
+    + $crate::scoped_view::ScopedOperations
     $( + $ops_trait )*
 {}
 
@@ -127,7 +127,7 @@ where
         + Sync
         + Clone
         + 'static
-        + $crate::views::ScopedOperations
+        + $crate::scoped_view::ScopedOperations
         $( + $ops_trait )*,
     $crate::views::ViewError: From<AnyContext::Error>,
 {}

@@ -1,10 +1,15 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::views::{
-    CollectionOperations, CollectionView, Context, LogOperations, LogView, MapOperations, MapView,
-    QueueOperations, QueueView, ReentrantCollectionView, RegisterOperations, RegisterView,
-    ScopedOperations, ScopedView, View, ViewError,
+use crate::{
+    collection_view::{CollectionOperations, CollectionView, ReentrantCollectionView},
+    common::Context,
+    log_view::{LogOperations, LogView},
+    map_view::{MapOperations, MapView},
+    queue_view::{QueueOperations, QueueView},
+    register_view::{RegisterOperations, RegisterView},
+    scoped_view::{ScopedOperations, ScopedView},
+    views::{View, ViewError},
 };
 use async_trait::async_trait;
 use serde::Serialize;

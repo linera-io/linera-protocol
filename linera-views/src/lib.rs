@@ -11,6 +11,24 @@ pub mod common;
 /// The main definitions.
 pub mod views;
 
+/// The scoped_view
+pub mod scoped_view;
+
+/// The register_view
+pub mod register_view;
+
+/// The log_view
+pub mod log_view;
+
+/// The queue_view
+pub mod queue_view;
+
+/// The map_view
+pub mod map_view;
+
+/// The collection_view
+pub mod collection_view;
+
 /// Helper definitions for in-memory storage.
 pub mod memory;
 
