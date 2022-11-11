@@ -3,11 +3,13 @@
 
 use crate::{
     hash::HashingContext,
-    views::{Context, ViewError},
+    views::ViewError,
 };
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::collections::HashMap;
+use std::fmt::Debug;
+
 
 pub enum WriteOperation {
     Delete { key: Vec<u8> },
@@ -86,6 +88,55 @@ pub trait KeyValueOperations {
 
     async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error>;
 }
+
+/// The context in which a view is operated. Typically, this includes the client to
+/// connect to the database and the address of the current entry.
+#[async_trait]
+pub trait Context {
+    /// User provided data to be carried along.
+    type Extra: Clone + Send + Sync;
+
+    /// The error type in use by internal operations.
+    /// In practice, we always want `ViewError: From<Self::Error>` here.
+    type Error: std::error::Error + Debug + Send + Sync + 'static + std::convert::From<bcs::Error>;
+
+    /// Getter for the user provided data.
+    fn extra(&self) -> &Self::Extra;
+
+    /// Getter for the address of the current entry (aka the base_key)
+    fn base_key(&self) -> Vec<u8>;
+
+    /// Obtain the Vec<u8> key from the key by serialization and using the base_key
+    fn derive_key<I: Serialize>(&self, index: &I) -> Result<Vec<u8>, Self::Error>;
+
+    /// Retrieve a generic `Item` from the table using the provided `key` prefixed by the current
+    /// context.
+    /// The `Item` is deserialized using [`bcs`].
+    async fn read_key<Item: DeserializeOwned>(
+        &mut self,
+        key: &[u8],
+    ) -> Result<Option<Item>, Self::Error>;
+
+    /// Find keys matching the prefix. The full keys are returned, that is including the prefix.
+    async fn find_keys_with_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error>;
+
+    /// Find the keys matching the prefix. The remainder of the key are parsed back into elements.
+    async fn get_sub_keys<Key: DeserializeOwned + Send>(
+        &mut self,
+        key_prefix: &[u8],
+    ) -> Result<Vec<Key>, Self::Error>;
+
+    /// Apply the operations from the `batch`, persisting the changes.
+    async fn write_batch(&self, batch: Batch) -> Result<(), ViewError>;
+
+    fn clone_self(&self, base_key: Vec<u8>) -> Self;
+}
+
+
+
+
+
+
 
 #[derive(Debug, Clone)]
 pub struct ContextFromDb<E, DB> {

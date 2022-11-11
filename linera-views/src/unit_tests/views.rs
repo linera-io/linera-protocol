@@ -4,7 +4,8 @@ use crate::{
     memory::MemoryContext,
     rocksdb::RocksdbContext,
     test_utils::LocalStackTestContext,
-    views::{Context, QueueOperations, QueueView, View, ViewError},
+    queue_view::{QueueOperations, QueueView},
+    views::{Context, View, ViewError},
 };
 use async_trait::async_trait;
 use std::{

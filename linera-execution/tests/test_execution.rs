@@ -10,7 +10,8 @@ use linera_base::messages::{ApplicationId, BlockHeight, ChainDescription, ChainI
 use linera_execution::*;
 use linera_views::{
     memory::MemoryContext,
-    views::{Context, View},
+    common::Context,
+    views::View,
 };
 use std::sync::Arc;
 

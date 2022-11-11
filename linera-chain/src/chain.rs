@@ -16,10 +16,13 @@ use linera_execution::{
 };
 use linera_views::{
     impl_view,
-    views::{
-        CollectionOperations, CollectionView, LogOperations, LogView, MapOperations, MapView,
-        QueueOperations, QueueView, RegisterOperations, RegisterView, ScopedView, ViewError,
-    },
+    scoped_view::ScopedView,
+    register_view::{RegisterOperations, RegisterView},
+    queue_view::{QueueOperations, QueueView},
+    map_view::{MapOperations, MapView},
+    log_view::{LogOperations, LogView},
+    collection_view::{CollectionOperations, CollectionView},
+    views::ViewError,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};

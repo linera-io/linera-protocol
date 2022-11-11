@@ -17,7 +17,9 @@ use linera_views::{
         Config, CreateTableError, DynamoDbContext, DynamoDbContextError, LocalStackError,
         TableName, TableStatus,
     },
-    views::{Context, MapView, View, ViewError},
+    map_view::MapView,
+    common::Context,
+    views::{View, ViewError},
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;

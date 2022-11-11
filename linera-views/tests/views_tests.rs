@@ -10,11 +10,14 @@ use linera_views::{
     memory::{MemoryContext, MemoryStoreMap},
     rocksdb::{RocksdbContext, DB},
     test_utils::LocalStackTestContext,
-    views::{
-        CollectionOperations, CollectionView, Context, LogOperations, LogView, MapOperations,
-        MapView, QueueOperations, QueueView, ReentrantCollectionView, RegisterOperations,
-        RegisterView, ScopedView, View, ViewError,
-    },
+    scoped_view::ScopedView,
+    register_view::{RegisterView, RegisterOperations},
+    map_view::{MapView, MapOperations},
+    log_view::{LogOperations, LogView},
+    common::Context,
+    collection_view::{CollectionOperations, CollectionView, ReentrantCollectionView},
+    queue_view::{QueueOperations, QueueView},
+    views::{View, ViewError},
 };
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},

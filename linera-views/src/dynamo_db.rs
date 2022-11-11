@@ -1,9 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    common::{Batch, ContextFromDb, KeyValueOperations, WriteOperation},
+    common::{Batch, Context, ContextFromDb, KeyValueOperations, WriteOperation},
     localstack,
-    views::Context,
 };
 use async_trait::async_trait;
 use aws_sdk_dynamodb::{
