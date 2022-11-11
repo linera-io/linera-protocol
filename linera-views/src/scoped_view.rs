@@ -1,9 +1,9 @@
-use async_trait::async_trait;
-use std::{
-    fmt::Debug,
+use crate::{
+    common::{Batch, Context},
+    views::{View, ViewError},
 };
-use crate::views::{View, ViewError};
-use crate::common::{Context, Batch};
+use async_trait::async_trait;
+use std::fmt::Debug;
 
 /// A view that adds a prefix to all the keys of the contained view.
 #[derive(Debug, Clone)]

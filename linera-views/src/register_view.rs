@@ -1,11 +1,10 @@
-use async_trait::async_trait;
-use serde::Serialize;
-use std::{
-    fmt::Debug,
+use crate::{
+    common::{Batch, Context},
+    views::{View, ViewError},
 };
-use crate::views::{View, ViewError};
-use serde::de::DeserializeOwned;
-use crate::common::{Context, Batch};
+use async_trait::async_trait;
+use serde::{de::DeserializeOwned, Serialize};
+use std::fmt::Debug;
 
 /// A view that supports modifying a single value of type `T`.
 #[derive(Debug, Clone)]
@@ -130,4 +129,3 @@ where
         }
     }
 }
-

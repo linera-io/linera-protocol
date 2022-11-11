@@ -1,15 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    hash::HashingContext,
-    views::ViewError,
-};
+use crate::{hash::HashingContext, views::ViewError};
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
-use std::collections::HashMap;
-use std::fmt::Debug;
-
+use std::{collections::HashMap, fmt::Debug};
 
 pub enum WriteOperation {
     Delete { key: Vec<u8> },
@@ -131,12 +126,6 @@ pub trait Context {
 
     fn clone_self(&self, base_key: Vec<u8>) -> Self;
 }
-
-
-
-
-
-
 
 #[derive(Debug, Clone)]
 pub struct ContextFromDb<E, DB> {

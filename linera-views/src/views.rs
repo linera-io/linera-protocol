@@ -3,15 +3,12 @@
 
 use crate::common::{Batch, Context};
 use async_trait::async_trait;
-use std::{
-    fmt::Debug,
-};
+use std::fmt::Debug;
 use thiserror::Error;
 
 #[cfg(test)]
 #[path = "unit_tests/views.rs"]
 mod tests;
-
 
 /// A view gives an exclusive access to read and write the data stored at an underlying
 /// address in storage.
@@ -74,46 +71,3 @@ pub enum ViewError {
     #[error("Entry does not exist in memory: {0}")]
     NotFound(String),
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

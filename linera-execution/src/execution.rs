@@ -12,10 +12,10 @@ use linera_base::{
     messages::{ApplicationId, ChainId},
 };
 use linera_views::{
-    impl_view,
-    scoped_view::ScopedView,
     collection_view::{CollectionOperations, ReentrantCollectionView},
+    impl_view,
     register_view::{RegisterOperations, RegisterView},
+    scoped_view::ScopedView,
     views::{View, ViewError},
 };
 

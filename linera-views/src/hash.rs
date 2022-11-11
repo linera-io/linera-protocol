@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    collection_view::{CollectionOperations, CollectionView, ReentrantCollectionView},
     common::Context,
-    log_view::{LogView, LogOperations},
-    map_view::{MapView, MapOperations},
-    queue_view::{QueueView, QueueOperations},
-    register_view::{RegisterView, RegisterOperations},
-    scoped_view::{ScopedView, ScopedOperations},
-    collection_view::{CollectionView, CollectionOperations, ReentrantCollectionView},
+    log_view::{LogOperations, LogView},
+    map_view::{MapOperations, MapView},
+    queue_view::{QueueOperations, QueueView},
+    register_view::{RegisterOperations, RegisterView},
+    scoped_view::{ScopedOperations, ScopedView},
     views::{View, ViewError},
 };
 use async_trait::async_trait;

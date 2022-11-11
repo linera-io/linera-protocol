@@ -15,9 +15,9 @@ use linera_base::{
 };
 use linera_views::{
     impl_view,
-    map_view::{MapView, MapOperations},
+    map_view::{MapOperations, MapView},
+    register_view::{RegisterOperations, RegisterView},
     scoped_view::ScopedView,
-    register_view::{RegisterView, RegisterOperations},
     views::{View, ViewError},
 };
 use serde::{Deserialize, Serialize};

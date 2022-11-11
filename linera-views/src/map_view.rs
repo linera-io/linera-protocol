@@ -1,14 +1,10 @@
-use async_trait::async_trait;
-use serde::Serialize;
-use std::{
-    cmp::Eq,
-    collections::BTreeMap,
-    fmt::Debug,
-    mem,
+use crate::{
+    common::{Batch, Context},
+    views::{View, ViewError},
 };
-use crate::views::{View, ViewError};
-use serde::de::DeserializeOwned;
-use crate::common::{Context, Batch};
+use async_trait::async_trait;
+use serde::{de::DeserializeOwned, Serialize};
+use std::{cmp::Eq, collections::BTreeMap, fmt::Debug, mem};
 
 /// A view that supports inserting and removing values indexed by a key.
 #[derive(Debug, Clone)]
@@ -233,6 +229,3 @@ where
         Ok(())
     }
 }
-
-
-

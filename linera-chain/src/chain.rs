@@ -15,13 +15,13 @@ use linera_execution::{
     ExecutionStateView, ExecutionStateViewContext, OperationContext, RawExecutionResult,
 };
 use linera_views::{
-    impl_view,
-    scoped_view::ScopedView,
-    register_view::{RegisterOperations, RegisterView},
-    queue_view::{QueueOperations, QueueView},
-    map_view::{MapOperations, MapView},
-    log_view::{LogOperations, LogView},
     collection_view::{CollectionOperations, CollectionView},
+    impl_view,
+    log_view::{LogOperations, LogView},
+    map_view::{MapOperations, MapView},
+    queue_view::{QueueOperations, QueueView},
+    register_view::{RegisterOperations, RegisterView},
+    scoped_view::ScopedView,
     views::ViewError,
 };
 use serde::{Deserialize, Serialize};

@@ -12,13 +12,12 @@ use linera_base::{
 use linera_chain::messages::Certificate;
 use linera_execution::UserApplicationCode;
 use linera_views::{
-    common::Batch,
+    common::{Batch, Context},
     dynamo_db::{
         Config, CreateTableError, DynamoDbContext, DynamoDbContextError, LocalStackError,
         TableName, TableStatus,
     },
     map_view::MapView,
-    common::Context,
     views::{View, ViewError},
 };
 use serde::{Deserialize, Serialize};
@@ -110,7 +109,11 @@ impl DynamoDbStore {
     async fn certificates(
         &self,
     ) -> Result<MapView<DynamoDbContext<()>, HashValue, Certificate>, ViewError> {
-        MapView::load(self.context.clone_with_sub_scope(&BaseKey::Certificate, ())?).await
+        MapView::load(
+            self.context
+                .clone_with_sub_scope(&BaseKey::Certificate, ())?,
+        )
+        .await
     }
 }
 

@@ -1,5 +1,9 @@
+use crate::{
+    common::{Batch, Context},
+    views::{View, ViewError},
+};
 use async_trait::async_trait;
-use serde::Serialize;
+use serde::{de::DeserializeOwned, Serialize};
 use std::{
     cmp::Eq,
     collections::{btree_map, BTreeMap},
@@ -7,11 +11,7 @@ use std::{
     mem,
     sync::Arc,
 };
-use crate::views::{View, ViewError};
 use tokio::sync::{Mutex, OwnedMutexGuard};
-use crate::common::Batch;
-use serde::de::DeserializeOwned;
-use crate::common::Context;
 
 /// A view that supports accessing a collection of views of the same kind, indexed by a
 /// key, one subview at a time.

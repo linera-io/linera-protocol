@@ -3,20 +3,19 @@
 
 use async_trait::async_trait;
 use linera_views::{
-    common::Batch,
+    collection_view::{CollectionOperations, CollectionView, ReentrantCollectionView},
+    common::{Batch, Context},
     dynamo_db::DynamoDbContext,
     hash::{HashView, Hasher, HashingContext},
     impl_view,
-    memory::{MemoryContext, MemoryStoreMap},
-    rocksdb::{RocksdbContext, DB},
-    test_utils::LocalStackTestContext,
-    scoped_view::ScopedView,
-    register_view::{RegisterView, RegisterOperations},
-    map_view::{MapView, MapOperations},
     log_view::{LogOperations, LogView},
-    common::Context,
-    collection_view::{CollectionOperations, CollectionView, ReentrantCollectionView},
+    map_view::{MapOperations, MapView},
+    memory::{MemoryContext, MemoryStoreMap},
     queue_view::{QueueOperations, QueueView},
+    register_view::{RegisterOperations, RegisterView},
+    rocksdb::{RocksdbContext, DB},
+    scoped_view::ScopedView,
+    test_utils::LocalStackTestContext,
     views::{View, ViewError},
 };
 use std::{

@@ -2,9 +2,9 @@ use crate::{
     common::Batch,
     dynamo_db::DynamoDbContext,
     memory::MemoryContext,
+    queue_view::{QueueOperations, QueueView},
     rocksdb::RocksdbContext,
     test_utils::LocalStackTestContext,
-    queue_view::{QueueOperations, QueueView},
     views::{Context, View, ViewError},
 };
 use async_trait::async_trait;

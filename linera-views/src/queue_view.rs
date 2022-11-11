@@ -1,14 +1,10 @@
-use async_trait::async_trait;
-use serde::Serialize;
-use std::{
-    collections::VecDeque,
-    fmt::Debug,
-    mem,
-    ops::Range,
+use crate::{
+    common::{Batch, Context},
+    views::{View, ViewError},
 };
-use crate::views::{View, ViewError};
-use serde::de::DeserializeOwned;
-use crate::common::{Context, Batch};
+use async_trait::async_trait;
+use serde::{de::DeserializeOwned, Serialize};
+use std::{collections::VecDeque, fmt::Debug, mem, ops::Range};
 
 /// A view that supports a FIFO queue for values of type `T`.
 #[derive(Debug, Clone)]
