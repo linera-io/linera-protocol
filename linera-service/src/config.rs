@@ -7,10 +7,7 @@ use linera_base::{
     crypto::{HashValue, KeyPair},
     messages::{BlockHeight, ChainDescription, ChainId, Owner, ValidatorName},
 };
-use linera_core::{
-    client::{ChainClientState, ValidatorNodeProvider},
-    node::ValidatorNode,
-};
+use linera_core::client::{ChainClientState, ValidatorNodeProvider};
 use linera_execution::system::Balance;
 use linera_rpc::network::{ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig};
 use linera_storage::Store;
@@ -156,7 +153,6 @@ impl WalletState {
     pub async fn update_from_state<P, S>(&mut self, state: &mut ChainClientState<P, S>)
     where
         P: ValidatorNodeProvider + Send + 'static,
-        P::Node: ValidatorNode + Send + Sync + 'static + Clone,
         S: Store + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
