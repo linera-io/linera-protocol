@@ -121,7 +121,7 @@ pub trait ChainClient {
 
 /// Turn an address into a validator node (local node or client to a remote node).
 pub trait ValidatorNodeProvider {
-    type Node;
+    type Node: ValidatorNode + Clone + Send + Sync + 'static;
 
     #[allow(clippy::result_large_err)]
     fn make_node(&self, address: &str) -> Result<Self::Node, NodeError>;
@@ -220,7 +220,6 @@ impl<P, S> ChainClientState<P, S> {
 impl<P, S> ChainClientState<P, S>
 where
     P: ValidatorNodeProvider,
-    P::Node: ValidatorNode + Send + Sync + 'static + Clone,
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
@@ -381,7 +380,6 @@ where
 impl<P, S> ChainClientState<P, S>
 where
     P: ValidatorNodeProvider + Send + 'static,
-    P::Node: ValidatorNode + Send + Sync + 'static + Clone,
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
@@ -862,7 +860,6 @@ where
 impl<P, S> ChainClient for ChainClientState<P, S>
 where
     P: ValidatorNodeProvider + Send + 'static,
-    P::Node: ValidatorNode + Send + Sync + 'static + Clone,
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {

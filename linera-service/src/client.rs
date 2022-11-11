@@ -286,7 +286,6 @@ impl ClientContext {
     async fn update_wallet_from_client<P, S>(&mut self, state: &mut ChainClientState<P, S>)
     where
         P: ValidatorNodeProvider + Send + 'static,
-        P::Node: ValidatorNode + Send + Sync + 'static + Clone,
         S: Store + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
