@@ -9,7 +9,7 @@ use linera_base::{
 };
 use linera_core::client::{ChainClientState, ValidatorNodeProvider};
 use linera_execution::system::Balance;
-use linera_rpc::network::{ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig};
+use linera_rpc::config::{ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig};
 use linera_storage::Store;
 use linera_views::views::ViewError;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
