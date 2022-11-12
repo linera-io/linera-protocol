@@ -7,7 +7,7 @@ use crate::{
     config::{
         CrossChainConfig, ShardId, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
     },
-    transport::{MessageHandler, NetworkProtocol, SpawnedServer},
+    transport::{MessageHandler, SpawnedServer},
     Message,
 };
 use async_trait::async_trait;
@@ -309,7 +309,7 @@ impl Client {
 
     async fn send_recv_internal(&mut self, message: Message) -> Result<Message, codec::Error> {
         let address = format!("{}:{}", self.network.host, self.network.port);
-        let mut stream = NetworkProtocol::Tcp.connect(address).await?;
+        let mut stream = self.network.protocol.connect(address).await?;
         // Send message
         time::timeout(self.send_timeout, stream.send(message))
             .await
@@ -389,7 +389,7 @@ impl MassClient {
 
     pub async fn send(&self, requests: Vec<Message>) -> Result<Vec<Message>, io::Error> {
         let address = format!("{}:{}", self.network.host, self.network.port);
-        let mut stream = NetworkProtocol::Tcp.connect(address).await?;
+        let mut stream = self.network.protocol.connect(address).await?;
         let mut requests = requests.into_iter();
         let mut in_flight: u64 = 0;
         let mut responses = Vec::new();
