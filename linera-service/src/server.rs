@@ -38,7 +38,7 @@ struct ServerContext {
 }
 
 impl ServerContext {
-    async fn make_shard_server<S>(
+    fn make_shard_server<S>(
         &self,
         local_ip_addr: &str,
         shard_id: ShardId,
@@ -70,17 +70,15 @@ impl ServerContext {
         )
     }
 
-    async fn make_servers<S>(&self, local_ip_addr: &str, storage: S) -> Vec<network::Server<S>>
+    fn make_servers<S>(&self, local_ip_addr: &str, storage: S) -> Vec<network::Server<S>>
     where
         S: Store + Clone + Send + Sync + 'static,
     {
         let num_shards = self.server_config.internal_network.shards.len();
-        join_all(
-            (0..num_shards)
-                .into_iter()
-                .map(|shard| self.make_shard_server(local_ip_addr, shard, storage.clone())),
-        )
-        .await
+        (0..num_shards)
+            .into_iter()
+            .map(|shard| self.make_shard_server(local_ip_addr, shard, storage.clone()))
+            .collect()
     }
 }
 
@@ -99,11 +97,11 @@ where
         let servers = match self.shard {
             Some(shard) => {
                 info!("Running shard number {}", shard);
-                vec![self.make_shard_server(listen_address, shard, storage).await]
+                vec![self.make_shard_server(listen_address, shard, storage)]
             }
             None => {
                 info!("Running all shards");
-                self.make_servers(listen_address, storage).await
+                self.make_servers(listen_address, storage)
             }
         };
 
