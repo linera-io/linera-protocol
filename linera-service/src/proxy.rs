@@ -1,7 +1,7 @@
 use anyhow::Result;
 use futures::{future::BoxFuture, FutureExt, SinkExt, StreamExt};
 use linera_rpc::{
-    network::{ShardConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig},
+    config::{ShardConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig},
     transport::{MessageHandler, NetworkProtocol},
     Message,
 };

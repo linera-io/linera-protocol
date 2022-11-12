@@ -10,9 +10,11 @@ use futures::future::join_all;
 use linera_base::{crypto::KeyPair, messages::ValidatorName};
 use linera_core::worker::WorkerState;
 use linera_rpc::{
-    network,
-    network::{ShardConfig, ShardId, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig},
-    transport,
+    config::{
+        CrossChainConfig, ShardConfig, ShardId, ValidatorInternalNetworkConfig,
+        ValidatorPublicNetworkConfig,
+    },
+    network, transport,
 };
 use linera_service::{
     config::{
@@ -31,7 +33,7 @@ use structopt::StructOpt;
 
 struct ServerContext {
     server_config: ValidatorServerConfig,
-    cross_chain_config: network::CrossChainConfig,
+    cross_chain_config: CrossChainConfig,
     shard: Option<usize>,
 }
 
@@ -219,7 +221,7 @@ enum ServerCommand {
 
         /// Configuration for cross-chain requests
         #[structopt(flatten)]
-        cross_chain_config: network::CrossChainConfig,
+        cross_chain_config: CrossChainConfig,
 
         /// Path to the file describing the initial user chains (aka genesis state)
         #[structopt(long = "genesis")]
