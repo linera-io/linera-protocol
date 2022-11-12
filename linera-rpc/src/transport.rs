@@ -19,7 +19,7 @@ pub const DEFAULT_MAX_DATAGRAM_SIZE: &str = "65507";
 // Supported transport protocols.
 arg_enum! {
     #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
-    pub enum NetworkProtocol {
+    pub enum TransportProtocol {
         Udp,
         Tcp,
     }
@@ -77,7 +77,7 @@ impl<T> Transport for T where
 {
 }
 
-impl NetworkProtocol {
+impl TransportProtocol {
     /// Create a transport for this protocol.
     pub async fn connect(self, address: String) -> Result<impl Transport, std::io::Error> {
         let mut addresses = address
@@ -88,7 +88,7 @@ impl NetworkProtocol {
             .expect("Couldn't resolve address to connect to");
 
         let stream: futures::future::Either<_, _> = match self {
-            NetworkProtocol::Udp => {
+            TransportProtocol::Udp => {
                 let socket = UdpSocket::bind(&"0.0.0.0:0").await?;
 
                 UdpFramed::new(socket, Codec)
@@ -96,7 +96,7 @@ impl NetworkProtocol {
                     .map_ok(|(message, _address)| message)
                     .left_stream()
             }
-            NetworkProtocol::Tcp => {
+            TransportProtocol::Tcp => {
                 let stream = TcpStream::connect(address).await?;
 
                 Framed::new(stream, Codec).right_stream()
@@ -170,7 +170,7 @@ impl ConnectionPool for UdpConnectionPool {
 }
 
 // Server implementation for UDP.
-impl NetworkProtocol {
+impl TransportProtocol {
     async fn run_udp_server<S>(
         socket: UdpSocket,
         mut state: S,
@@ -256,7 +256,7 @@ impl ConnectionPool for TcpConnectionPool {
 }
 
 // Server implementation for TCP.
-impl NetworkProtocol {
+impl TransportProtocol {
     async fn run_tcp_server<S>(
         listener: TcpListener,
         state: S,

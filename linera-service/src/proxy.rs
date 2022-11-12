@@ -2,7 +2,7 @@ use anyhow::Result;
 use futures::{future::BoxFuture, FutureExt, SinkExt, StreamExt};
 use linera_rpc::{
     config::{ShardConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig},
-    transport::{MessageHandler, NetworkProtocol},
+    transport::{MessageHandler, TransportProtocol},
     Message,
 };
 use linera_service::config::{Import, ValidatorServerConfig};
@@ -80,7 +80,7 @@ impl Proxy {
     async fn try_proxy_message(
         message: Message,
         shard: ShardConfig,
-        protocol: NetworkProtocol,
+        protocol: TransportProtocol,
     ) -> Result<Option<Message>> {
         let shard_address = format!("{}:{}", shard.host, shard.port);
         let mut connection = protocol.connect(shard_address).await?;
