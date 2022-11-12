@@ -38,12 +38,12 @@ struct ServerContext {
 }
 
 impl ServerContext {
-    fn make_shard_server<S>(
+    fn make_shard_state<S>(
         &self,
         local_ip_addr: &str,
         shard_id: ShardId,
         storage: S,
-    ) -> network::Server<S>
+    ) -> (WorkerState<S>, ShardId, ShardConfig)
     where
         S: Store + Clone + Send + Sync + 'static,
     {
@@ -55,30 +55,7 @@ impl ServerContext {
             storage,
         )
         .allow_inactive_chains(false);
-        let NetworkProtocol::Simple(protocol) = self.server_config.internal_network.protocol;
-        let internal_network = self
-            .server_config
-            .internal_network
-            .clone_with_protocol(protocol);
-        network::Server::new(
-            internal_network,
-            local_ip_addr.to_string(),
-            shard.port,
-            state,
-            shard_id,
-            self.cross_chain_config.clone(),
-        )
-    }
-
-    fn make_servers<S>(&self, local_ip_addr: &str, storage: S) -> Vec<network::Server<S>>
-    where
-        S: Store + Clone + Send + Sync + 'static,
-    {
-        let num_shards = self.server_config.internal_network.shards.len();
-        (0..num_shards)
-            .into_iter()
-            .map(|shard| self.make_shard_server(local_ip_addr, shard, storage.clone()))
-            .collect()
+        (state, shard_id, shard.clone())
     }
 }
 
@@ -94,20 +71,40 @@ where
         // Allow local IP address to be different from the public one.
         let listen_address = "0.0.0.0";
         // Run the server
-        let servers = match self.shard {
+        let states = match self.shard {
             Some(shard) => {
                 info!("Running shard number {}", shard);
-                vec![self.make_shard_server(listen_address, shard, storage)]
+                vec![self.make_shard_state(listen_address, shard, storage)]
             }
             None => {
                 info!("Running all shards");
-                self.make_servers(listen_address, storage)
+                let num_shards = self.server_config.internal_network.shards.len();
+                (0..num_shards)
+                    .into_iter()
+                    .map(|shard| self.make_shard_state(listen_address, shard, storage.clone()))
+                    .collect()
             }
         };
 
+        let NetworkProtocol::Simple(protocol) = self.server_config.internal_network.protocol;
+        let internal_network = self
+            .server_config
+            .internal_network
+            .clone_with_protocol(protocol);
+
         let mut handles = Vec::new();
-        for server in servers {
+        for (state, shard_id, shard) in states {
+            let internal_network = internal_network.clone();
+            let cross_chain_config = self.cross_chain_config.clone();
             handles.push(async move {
+                let server = network::Server::new(
+                    internal_network,
+                    listen_address.to_string(),
+                    shard.port,
+                    state,
+                    shard_id,
+                    cross_chain_config,
+                );
                 let spawned_server = match server.spawn().await {
                     Ok(server) => server,
                     Err(err) => {
