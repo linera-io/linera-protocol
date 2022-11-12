@@ -14,7 +14,8 @@ use linera_rpc::{
         CrossChainConfig, ShardConfig, ShardId, ValidatorInternalNetworkConfig,
         ValidatorPublicNetworkConfig,
     },
-    network, transport,
+    network,
+    transport::TransportProtocol,
 };
 use linera_service::{
     config::{
@@ -146,10 +147,10 @@ struct ValidatorOptions {
     port: u16,
 
     /// The network protocol for the frontend.
-    external_protocol: transport::NetworkProtocol,
+    external_protocol: TransportProtocol,
 
     /// The network protocol for workers.
-    internal_protocol: transport::NetworkProtocol,
+    internal_protocol: TransportProtocol,
 
     /// The public name and the port of each of the shards
     shards: Vec<ShardConfig>,
@@ -322,8 +323,8 @@ mod test {
             options,
             ValidatorOptions {
                 server_config_path: "server.json".into(),
-                external_protocol: transport::NetworkProtocol::Tcp,
-                internal_protocol: transport::NetworkProtocol::Udp,
+                external_protocol: TransportProtocol::Tcp,
+                internal_protocol: TransportProtocol::Udp,
                 host: "host".into(),
                 port: 9000,
                 shards: vec![

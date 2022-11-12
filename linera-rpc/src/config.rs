@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::transport::NetworkProtocol;
+use crate::transport::TransportProtocol;
 use linera_base::messages::ChainId;
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
@@ -34,7 +34,7 @@ pub struct ShardConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ValidatorInternalNetworkConfig {
     /// The network protocol to use for all shards.
-    pub protocol: NetworkProtocol,
+    pub protocol: TransportProtocol,
     /// The available shards. Each chain UID is mapped to a unique shard in the vector in
     /// a static way.
     pub shards: Vec<ShardConfig>,
@@ -44,7 +44,7 @@ pub struct ValidatorInternalNetworkConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ValidatorPublicNetworkConfig {
     /// The network protocol to use for the validator frontend.
-    pub protocol: NetworkProtocol,
+    pub protocol: TransportProtocol,
     /// The host name of the validator (IP or hostname).
     pub host: String,
     /// The port the validator listens on.
