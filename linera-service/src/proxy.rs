@@ -51,7 +51,8 @@ impl MessageHandler for Proxy {
 impl Proxy {
     async fn run(self) -> Result<()> {
         let address = format!("0.0.0.0:{}", self.public_config.port);
-        NetworkProtocol::Tcp
+        self.public_config
+            .protocol
             .spawn_server(&address, self)
             .await?
             .join()

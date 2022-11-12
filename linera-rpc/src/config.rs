@@ -43,6 +43,8 @@ pub struct ValidatorInternalNetworkConfig {
 /// The public network configuration for a validator.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ValidatorPublicNetworkConfig {
+    /// The network protocol to use for the validator frontend.
+    pub protocol: NetworkProtocol,
     /// The host name of the validator (IP or hostname).
     pub host: String,
     /// The port the validator listens on.
@@ -51,7 +53,7 @@ pub struct ValidatorPublicNetworkConfig {
 
 impl std::fmt::Display for ValidatorPublicNetworkConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}:{}", self.host, self.port)
+        write!(f, "{}:{}:{}", self.protocol, self.host, self.port)
     }
 }
 
@@ -60,10 +62,15 @@ impl std::str::FromStr for ValidatorPublicNetworkConfig {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let parts: Vec<&str> = s.split(':').collect();
-        anyhow::ensure!(parts.len() == 2, "Expecting format `host:port`");
-        let host = parts[0].to_owned();
-        let port = parts[1].parse()?;
-        Ok(ValidatorPublicNetworkConfig { host, port })
+        anyhow::ensure!(parts.len() == 3, "Expecting format `(tcp|udp):host:port`");
+        let protocol = parts[0].parse().map_err(|s| anyhow::anyhow!("{}", s))?;
+        let host = parts[1].to_owned();
+        let port = parts[2].parse()?;
+        Ok(ValidatorPublicNetworkConfig {
+            protocol,
+            host,
+            port,
+        })
     }
 }
 
