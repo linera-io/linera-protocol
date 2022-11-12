@@ -11,11 +11,10 @@ use linera_base::{crypto::KeyPair, messages::ValidatorName};
 use linera_core::worker::WorkerState;
 use linera_rpc::{
     config::{
-        CrossChainConfig, ShardConfig, ShardId, ValidatorInternalNetworkConfig,
+        CrossChainConfig, NetworkProtocol, ShardConfig, ShardId, ValidatorInternalNetworkConfig,
         ValidatorPublicNetworkConfig,
     },
     network,
-    transport::TransportProtocol,
 };
 use linera_service::{
     config::{
@@ -56,8 +55,13 @@ impl ServerContext {
             storage,
         )
         .allow_inactive_chains(false);
+        let NetworkProtocol::Simple(protocol) = self.server_config.internal_network.protocol;
+        let internal_network = self
+            .server_config
+            .internal_network
+            .clone_with_protocol(protocol);
         network::Server::new(
-            self.server_config.internal_network.clone(),
+            internal_network,
             local_ip_addr.to_string(),
             shard.port,
             state,
@@ -147,10 +151,10 @@ struct ValidatorOptions {
     port: u16,
 
     /// The network protocol for the frontend.
-    external_protocol: TransportProtocol,
+    external_protocol: NetworkProtocol,
 
     /// The network protocol for workers.
-    internal_protocol: TransportProtocol,
+    internal_protocol: NetworkProtocol,
 
     /// The public name and the port of each of the shards
     shards: Vec<ShardConfig>,
@@ -313,6 +317,7 @@ async fn main() {
 #[cfg(test)]
 mod test {
     use super::*;
+    use linera_rpc::transport::TransportProtocol;
 
     #[test]
     fn test_validator_options() {
@@ -323,8 +328,8 @@ mod test {
             options,
             ValidatorOptions {
                 server_config_path: "server.json".into(),
-                external_protocol: TransportProtocol::Tcp,
-                internal_protocol: TransportProtocol::Udp,
+                external_protocol: NetworkProtocol::Simple(TransportProtocol::Tcp),
+                internal_protocol: NetworkProtocol::Simple(TransportProtocol::Udp),
                 host: "host".into(),
                 port: 9000,
                 shards: vec![

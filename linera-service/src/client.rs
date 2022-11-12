@@ -23,7 +23,7 @@ use linera_execution::{
     system::{Address, Amount, Balance, SystemOperation, UserData, SYSTEM},
     Operation,
 };
-use linera_rpc::{network, Message};
+use linera_rpc::{config::NetworkProtocol, network, Message};
 use linera_service::{
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain, WalletState},
     storage::{Runnable, StorageConfig},
@@ -80,8 +80,10 @@ impl ClientContext {
     fn make_validator_mass_clients(&self, max_in_flight: u64) -> Vec<network::MassClient> {
         let mut validator_clients = Vec::new();
         for config in &self.genesis_config.committee.validators {
+            let NetworkProtocol::Simple(protocol) = config.network.protocol;
+            let network = config.network.clone_with_protocol(protocol);
             let client = network::MassClient::new(
-                config.network.clone(),
+                network,
                 self.send_timeout,
                 self.recv_timeout,
                 max_in_flight,

@@ -30,11 +30,17 @@ pub struct ShardConfig {
     pub port: u16,
 }
 
+/// The network protocol.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum NetworkProtocol {
+    Simple(TransportProtocol),
+}
+
 /// The network configuration for all shards.
-pub type ValidatorInternalNetworkConfig = ValidatorInternalNetworkPreConfig<TransportProtocol>;
+pub type ValidatorInternalNetworkConfig = ValidatorInternalNetworkPreConfig<NetworkProtocol>;
 
 /// The public network configuration for a validator.
-pub type ValidatorPublicNetworkConfig = ValidatorPublicNetworkPreConfig<TransportProtocol>;
+pub type ValidatorPublicNetworkConfig = ValidatorPublicNetworkPreConfig<NetworkProtocol>;
 
 /// The network configuration for all shards.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -44,6 +50,15 @@ pub struct ValidatorInternalNetworkPreConfig<P> {
     /// The available shards. Each chain UID is mapped to a unique shard in the vector in
     /// a static way.
     pub shards: Vec<ShardConfig>,
+}
+
+impl<P> ValidatorInternalNetworkPreConfig<P> {
+    pub fn clone_with_protocol<Q>(&self, protocol: Q) -> ValidatorInternalNetworkPreConfig<Q> {
+        ValidatorInternalNetworkPreConfig {
+            protocol,
+            shards: self.shards.clone(),
+        }
+    }
 }
 
 /// The public network configuration for a validator.
@@ -57,6 +72,16 @@ pub struct ValidatorPublicNetworkPreConfig<P> {
     pub port: u16,
 }
 
+impl<P> ValidatorPublicNetworkPreConfig<P> {
+    pub fn clone_with_protocol<Q>(&self, protocol: Q) -> ValidatorPublicNetworkPreConfig<Q> {
+        ValidatorPublicNetworkPreConfig {
+            protocol,
+            host: self.host.clone(),
+            port: self.port,
+        }
+    }
+}
+
 impl<P> std::fmt::Display for ValidatorPublicNetworkPreConfig<P>
 where
     P: std::fmt::Display,
@@ -66,7 +91,19 @@ where
     }
 }
 
-impl std::str::FromStr for ValidatorPublicNetworkPreConfig<TransportProtocol> {
+impl std::fmt::Display for NetworkProtocol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NetworkProtocol::Simple(protocol) => write!(f, "{}", protocol),
+        }
+    }
+}
+
+impl<P> std::str::FromStr for ValidatorPublicNetworkPreConfig<P>
+where
+    P: std::str::FromStr,
+    P::Err: std::fmt::Display,
+{
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -75,11 +112,20 @@ impl std::str::FromStr for ValidatorPublicNetworkPreConfig<TransportProtocol> {
         let protocol = parts[0].parse().map_err(|s| anyhow::anyhow!("{}", s))?;
         let host = parts[1].to_owned();
         let port = parts[2].parse()?;
-        Ok(ValidatorPublicNetworkConfig {
+        Ok(ValidatorPublicNetworkPreConfig {
             protocol,
             host,
             port,
         })
+    }
+}
+
+impl std::str::FromStr for NetworkProtocol {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let protocol = TransportProtocol::from_str(s)?;
+        Ok(Self::Simple(protocol))
     }
 }
 
