@@ -3,8 +3,8 @@
 
 mod codec;
 pub mod config;
-pub mod network;
 mod rpc;
+pub mod simple_network;
 pub mod transport;
 
 pub use rpc::Message;

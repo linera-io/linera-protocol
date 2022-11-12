@@ -14,7 +14,7 @@ use linera_rpc::{
         CrossChainConfig, NetworkProtocol, ShardConfig, ShardId, ValidatorInternalNetworkConfig,
         ValidatorPublicNetworkConfig,
     },
-    network,
+    simple_network,
 };
 use linera_service::{
     config::{
@@ -97,7 +97,7 @@ where
             let internal_network = internal_network.clone();
             let cross_chain_config = self.cross_chain_config.clone();
             handles.push(async move {
-                let server = network::Server::new(
+                let server = simple_network::Server::new(
                     internal_network,
                     listen_address.to_string(),
                     shard.port,
