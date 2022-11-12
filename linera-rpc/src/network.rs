@@ -5,9 +5,10 @@
 use crate::{
     codec,
     config::{
-        CrossChainConfig, ShardId, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
+        CrossChainConfig, ShardId, ValidatorInternalNetworkPreConfig,
+        ValidatorPublicNetworkPreConfig,
     },
-    transport::{MessageHandler, SpawnedServer},
+    transport::{MessageHandler, SpawnedServer, TransportProtocol},
     Message,
 };
 use async_trait::async_trait;
@@ -27,7 +28,7 @@ use tokio::time;
 
 #[derive(Clone)]
 pub struct Server<S> {
-    network: ValidatorInternalNetworkConfig,
+    network: ValidatorInternalNetworkPreConfig<TransportProtocol>,
     host: String,
     port: u16,
     state: WorkerState<S>,
@@ -41,7 +42,7 @@ pub struct Server<S> {
 impl<S> Server<S> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        network: ValidatorInternalNetworkConfig,
+        network: ValidatorInternalNetworkPreConfig<TransportProtocol>,
         host: String,
         port: u16,
         state: WorkerState<S>,
@@ -76,7 +77,7 @@ where
 {
     async fn forward_cross_chain_queries(
         nickname: String,
-        network: ValidatorInternalNetworkConfig,
+        network: ValidatorInternalNetworkPreConfig<TransportProtocol>,
         cross_chain_max_retries: usize,
         cross_chain_retry_delay: Duration,
         this_shard: ShardId,
@@ -278,7 +279,7 @@ impl ValidatorNodeProvider for NodeProvider {
     type Node = Client;
 
     fn make_node(&self, address: &str) -> Result<Self::Node, NodeError> {
-        let network = ValidatorPublicNetworkConfig::from_str(address).map_err(|_| {
+        let network = ValidatorPublicNetworkPreConfig::from_str(address).map_err(|_| {
             NodeError::CannotResolveValidatorAddress {
                 address: address.to_string(),
             }
@@ -289,14 +290,14 @@ impl ValidatorNodeProvider for NodeProvider {
 
 #[derive(Clone)]
 pub struct Client {
-    network: ValidatorPublicNetworkConfig,
+    network: ValidatorPublicNetworkPreConfig<TransportProtocol>,
     send_timeout: std::time::Duration,
     recv_timeout: std::time::Duration,
 }
 
 impl Client {
     fn new(
-        network: ValidatorPublicNetworkConfig,
+        network: ValidatorPublicNetworkPreConfig<TransportProtocol>,
         send_timeout: std::time::Duration,
         recv_timeout: std::time::Duration,
     ) -> Self {
@@ -366,7 +367,7 @@ impl ValidatorNode for Client {
 
 #[derive(Clone)]
 pub struct MassClient {
-    pub network: ValidatorPublicNetworkConfig,
+    pub network: ValidatorPublicNetworkPreConfig<TransportProtocol>,
     send_timeout: std::time::Duration,
     recv_timeout: std::time::Duration,
     max_in_flight: u64,
@@ -374,7 +375,7 @@ pub struct MassClient {
 
 impl MassClient {
     pub fn new(
-        network: ValidatorPublicNetworkConfig,
+        network: ValidatorPublicNetworkPreConfig<TransportProtocol>,
         send_timeout: std::time::Duration,
         recv_timeout: std::time::Duration,
         max_in_flight: u64,

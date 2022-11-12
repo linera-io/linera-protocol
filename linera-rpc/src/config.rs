@@ -31,10 +31,16 @@ pub struct ShardConfig {
 }
 
 /// The network configuration for all shards.
+pub type ValidatorInternalNetworkConfig = ValidatorInternalNetworkPreConfig<TransportProtocol>;
+
+/// The public network configuration for a validator.
+pub type ValidatorPublicNetworkConfig = ValidatorPublicNetworkPreConfig<TransportProtocol>;
+
+/// The network configuration for all shards.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ValidatorInternalNetworkConfig {
+pub struct ValidatorInternalNetworkPreConfig<P> {
     /// The network protocol to use for all shards.
-    pub protocol: TransportProtocol,
+    pub protocol: P,
     /// The available shards. Each chain UID is mapped to a unique shard in the vector in
     /// a static way.
     pub shards: Vec<ShardConfig>,
@@ -42,22 +48,25 @@ pub struct ValidatorInternalNetworkConfig {
 
 /// The public network configuration for a validator.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ValidatorPublicNetworkConfig {
+pub struct ValidatorPublicNetworkPreConfig<P> {
     /// The network protocol to use for the validator frontend.
-    pub protocol: TransportProtocol,
+    pub protocol: P,
     /// The host name of the validator (IP or hostname).
     pub host: String,
     /// The port the validator listens on.
     pub port: u16,
 }
 
-impl std::fmt::Display for ValidatorPublicNetworkConfig {
+impl<P> std::fmt::Display for ValidatorPublicNetworkPreConfig<P>
+where
+    P: std::fmt::Display,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}:{}:{}", self.protocol, self.host, self.port)
     }
 }
 
-impl std::str::FromStr for ValidatorPublicNetworkConfig {
+impl std::str::FromStr for ValidatorPublicNetworkPreConfig<TransportProtocol> {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -74,7 +83,7 @@ impl std::str::FromStr for ValidatorPublicNetworkConfig {
     }
 }
 
-impl ValidatorInternalNetworkConfig {
+impl<P> ValidatorInternalNetworkPreConfig<P> {
     /// Static shard assignment
     pub fn get_shard_id(&self, chain_id: ChainId) -> ShardId {
         use std::hash::{Hash, Hasher};
