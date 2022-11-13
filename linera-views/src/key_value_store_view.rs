@@ -1,10 +1,11 @@
 use crate::{
-    common::{Batch, Context},
+    common::{Batch, Context, KeyValueOperations, WriteOperation},
     views::{View, ViewError},
 };
 use async_trait::async_trait;
-//use serde::{de::DeserializeOwned, Serialize};
+use serde::de::DeserializeOwned;
 use std::{collections::BTreeMap, fmt::Debug, mem};
+
 
 /// A view that represents the KeyValueOperations
 #[derive(Debug, Clone)]
@@ -81,3 +82,87 @@ where
         Ok(())
     }
 }
+
+#[async_trait]
+impl<C> KeyValueOperations for KeyValueStoreView<C>
+where
+    C: Context + Sync + Send,
+    ViewError: std::convert::From<C::Error>,
+{
+    type Error = ViewError;
+    async fn read_key<V: DeserializeOwned>(&self, key: &[u8]) -> Result<Option<V>, ViewError> {
+        if let Some(update) = self.updates.get(key) {
+            match update.as_ref() {
+                Some(val) => {
+                    let val = bcs::from_bytes(val)?;
+                    return Ok(Some(val))
+                },
+                None => { return Ok(None) },
+            }
+        }
+	if self.was_reset_to_default {
+            return Ok(None);
+        }
+        let val = self.context.read_key(&key.to_vec()).await?;
+        Ok(val)
+    }
+
+    async fn find_keys_with_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, ViewError> {
+        let len = self.context.base_key().len();
+        let key_prefix = self.context.derive_key_u8(key_prefix);
+        let mut keys = Vec::new();
+        if !self.was_reset_to_default {
+            for key in self.context.find_keys_with_prefix(&key_prefix).await? {
+                if !self.updates.contains_key(&key) {
+                    let key = &key[len..];
+                    keys.push(key.to_vec())
+                }
+            }
+        }
+        for (key, value) in &self.updates {
+            if value.is_some() {
+                keys.push(key.to_vec())
+            }
+        }
+        Ok(keys)
+    }
+
+    async fn get_sub_keys<Key: DeserializeOwned + Send>(
+        &mut self,
+        key_prefix: &[u8],
+    ) -> Result<Vec<Key>, ViewError> {
+        let len1 = key_prefix.len();
+        let key_prefix = self.context.derive_key_u8(key_prefix);
+        let len2 = key_prefix.len();
+        let mut keys = Vec::new();
+        if !self.was_reset_to_default {
+            for key in self.context.find_keys_with_prefix(&key_prefix).await? {
+                if !self.updates.contains_key(&key) {
+                    keys.push(bcs::from_bytes(&key[len2..])?);
+                }
+            }
+        }
+        for (key, value) in &self.updates {
+            if value.is_some() {
+                keys.push(bcs::from_bytes(&key[len1..])?);
+            }
+        }
+        Ok(keys)
+    }
+
+    async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
+        let mut batch_new = Batch::default();
+        for ent in &batch.operations {
+            match ent {
+                WriteOperation::Put { key, value } => batch_new.put_key_value_u8(self.context.derive_key_u8(key), value.to_vec()),
+                WriteOperation::Delete { key } => batch_new.delete_key(self.context.derive_key_u8(key)),
+            };
+        }
+        self.context.write_batch(batch).await?;
+        Ok(())
+    }
+}
+
+
+
+

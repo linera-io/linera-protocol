@@ -115,13 +115,13 @@ pub trait Context {
     fn derive_key<I: Serialize>(&self, index: &I) -> Result<Vec<u8>, Self::Error>;
 
     /// Obtain the Vec<u8> key from the key by appending to the base_key
-    fn derive_key_u8(&self, index: &Vec<u8>) -> Vec<u8>;
+    fn derive_key_u8(&self, index: &[u8]) -> Vec<u8>;
 
     /// Retrieve a generic `Item` from the table using the provided `key` prefixed by the current
     /// context.
     /// The `Item` is deserialized using [`bcs`].
     async fn read_key<Item: DeserializeOwned>(
-        &mut self,
+        &self,
         key: &[u8],
     ) -> Result<Option<Item>, Self::Error>;
 
@@ -176,13 +176,13 @@ where
         Ok(key)
     }
 
-    fn derive_key_u8(&self, index: &Vec<u8>) -> Vec<u8> {
+    fn derive_key_u8(&self, index: &[u8]) -> Vec<u8> {
         let mut key = self.base_key.clone();
         key.clone_from_slice(index);
         key
     }
 
-    async fn read_key<Item>(&mut self, key: &[u8]) -> Result<Option<Item>, Self::Error>
+    async fn read_key<Item>(&self, key: &[u8]) -> Result<Option<Item>, Self::Error>
     where
         Item: DeserializeOwned,
     {
@@ -213,20 +213,6 @@ where
         }
     }
 }
-
-/*
-impl Context {
-    async fn delete(&self, key: &[u8]) -> Result<(), ViewError> {
-        let mut batch = Batch::default();
-        batch.delete_key(key.to_vec());
-        self.write_batch(batch).await
-    }
-}
-*/
-
-
-
-
 
 impl<E, DB> HashingContext for ContextFromDb<E, DB>
 where

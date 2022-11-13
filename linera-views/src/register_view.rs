@@ -28,7 +28,7 @@ pub trait RegisterOperations<T>: Context {
 }
 
 #[async_trait]
-impl<T, C: Context + Send> RegisterOperations<T> for C
+impl<T, C: Context + Send + Sync> RegisterOperations<T> for C
 where
     T: Default + Serialize + DeserializeOwned + Send + Sync + 'static,
 {

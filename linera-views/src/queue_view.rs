@@ -54,7 +54,7 @@ pub trait QueueOperations<T>: Context {
 }
 
 #[async_trait]
-impl<T, C: Context + Send> QueueOperations<T> for C
+impl<T, C: Context + Send + Sync> QueueOperations<T> for C
 where
     T: Serialize + DeserializeOwned + Send + Sync + 'static,
 {

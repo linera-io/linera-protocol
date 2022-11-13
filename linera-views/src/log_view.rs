@@ -42,7 +42,7 @@ pub trait LogOperations<T>: Context {
 }
 
 #[async_trait]
-impl<T, C: Context + Send> LogOperations<T> for C
+impl<T, C: Context + Send + Sync> LogOperations<T> for C
 where
     T: Serialize + DeserializeOwned + Send + Sync + 'static,
 {
