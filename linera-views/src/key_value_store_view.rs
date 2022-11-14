@@ -172,11 +172,11 @@ where
 }
 
 /// A context that stores all values in memory.
-pub type KeyValueStoreContext = ContextFromDb<usize, KeyValueStoreView<MemoryContext<usize>>>;
+pub type KeyValueStoreContext<E> = ContextFromDb<E, KeyValueStoreView<MemoryContext<()>>>;
 
-impl KeyValueStoreContext {
-    pub fn new(guard: OwnedMutexGuard<MemoryStoreMap>, base_key: Vec<u8>, extra: usize) -> Self {
-        let context = MemoryContext::new(guard, extra);
+impl<E> KeyValueStoreContext<E> {
+    pub fn new(guard: OwnedMutexGuard<MemoryStoreMap>, base_key: Vec<u8>, extra: E) -> Self {
+        let context = MemoryContext::new(guard, ());
         let key_value_store_view = KeyValueStoreView::new(context);
         Self {
             db: key_value_store_view,

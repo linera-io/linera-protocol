@@ -85,7 +85,7 @@ pub struct KeyValueStoreTestStore {
 
 #[async_trait]
 impl StateStore for KeyValueStoreTestStore {
-    type Context = KeyValueStoreContext;
+    type Context = KeyValueStoreContext<usize>;
 
     async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
         let state = self
