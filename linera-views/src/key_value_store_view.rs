@@ -1,5 +1,5 @@
 use crate::{
-    common::{Batch, Context, KeyValueOperations, WriteOperation},
+    common::{Batch, Context, KeyValueOperations},
     views::{View, ViewError},
 };
 use async_trait::async_trait;
@@ -81,6 +81,14 @@ where
         }
         Ok(())
     }
+
+    pub fn new(context: C) -> Self {
+        Self {
+            context,
+            was_reset_to_default: false,
+            updates: BTreeMap::new(),
+        }
+    }
 }
 
 #[async_trait]
@@ -151,13 +159,6 @@ where
     }
 
     async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
-        let mut batch_new = Batch::default();
-        for ent in &batch.operations {
-            match ent {
-                WriteOperation::Put { key, value } => batch_new.put_key_value_u8(self.context.derive_key_u8(key), value.to_vec()),
-                WriteOperation::Delete { key } => batch_new.delete_key(self.context.derive_key_u8(key)),
-            };
-        }
         self.context.write_batch(batch).await?;
         Ok(())
     }
