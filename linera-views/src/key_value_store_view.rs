@@ -6,6 +6,10 @@ use async_trait::async_trait;
 use serde::de::DeserializeOwned;
 use std::{collections::BTreeMap, fmt::Debug, mem};
 
+use crate::common::ContextFromDb;
+use crate::memory::MemoryContext;
+use tokio::sync::OwnedMutexGuard;
+use crate::memory::MemoryStoreMap;
 
 /// A view that represents the KeyValueOperations
 #[derive(Debug, Clone)]
@@ -166,4 +170,15 @@ where
 
 
 
+
+/// A context that stores all values in memory.
+pub type KeyValueStoreContext = ContextFromDb<usize, KeyValueStoreView<MemoryContext<usize>>>;
+
+impl KeyValueStoreContext {
+    pub fn new(guard: OwnedMutexGuard<MemoryStoreMap>, base_key: Vec<u8>, extra: usize) -> Self {
+        let context = MemoryContext::new(guard, extra);
+        let key_value_store_view = KeyValueStoreView::new(context);
+        Self { db: key_value_store_view, base_key, extra }
+    }
+}
 

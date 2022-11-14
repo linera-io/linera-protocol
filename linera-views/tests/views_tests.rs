@@ -4,7 +4,7 @@
 use async_trait::async_trait;
 use linera_views::{
     collection_view::{CollectionOperations, CollectionView, ReentrantCollectionView},
-    common::{Batch, Context},
+    common::{Batch, Context, ContextFromDb},
     dynamo_db::DynamoDbContext,
     hash::{HashView, Hasher, HashingContext},
     impl_view,
@@ -13,6 +13,7 @@ use linera_views::{
     memory::{MemoryContext, MemoryStoreMap},
     queue_view::{QueueOperations, QueueView},
     register_view::{RegisterOperations, RegisterView},
+    key_value_store_view::{KeyValueStoreView, KeyValueStoreContext},
     rocksdb::{RocksdbContext, DB},
     scoped_view::ScopedView,
     test_utils::LocalStackTestContext,
@@ -22,7 +23,7 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     sync::Arc,
 };
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, OwnedMutexGuard};
 
 #[allow(clippy::type_complexity)]
 pub struct StateView<C> {
@@ -73,6 +74,28 @@ impl StateStore for MemoryTestStore {
             .or_insert_with(|| Arc::new(Mutex::new(BTreeMap::new())));
         log::trace!("Acquiring lock on {:?}", id);
         let context = MemoryContext::new(state.clone().lock_owned().await, id);
+        StateView::load(context).await
+    }
+}
+
+#[derive(Default)]
+pub struct KeyValueStoreTestStore {
+    states: HashMap<usize, Arc<Mutex<MemoryStoreMap>>>,
+}
+
+#[async_trait]
+impl StateStore for KeyValueStoreTestStore {
+    type Context = KeyValueStoreContext;
+
+    async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
+        let state = self
+            .states
+            .entry(id)
+            .or_insert_with(|| Arc::new(Mutex::new(BTreeMap::new())));
+        log::trace!("Acquiring lock on {:?}", id);
+        let guard = state.clone().lock_owned().await;
+        let base_key = bcs::to_bytes(&id)?;
+        let context = KeyValueStoreContext::new(guard, base_key, id);
         StateView::load(context).await
     }
 }
@@ -450,6 +473,20 @@ async fn test_views_in_memory_param(config: &TestConfig) {
 async fn test_views_in_memory() {
     for config in TestConfig::samples() {
         test_views_in_memory_param(&config).await
+    }
+}
+
+#[cfg(test)]
+async fn test_views_in_key_valyue_store_view_memory_param(config: &TestConfig) {
+    log::warn!("Testing config {:?} with key_value_store_view on memory", config);
+    let mut store = KeyValueStoreTestStore::default();
+    test_store(&mut store, config).await;
+}
+
+#[tokio::test]
+async fn test_views_in_key_valyue_store_view_memory() {
+    for config in TestConfig::samples() {
+        test_views_in_key_valyue_store_view_memory_param(&config).await
     }
 }
 
