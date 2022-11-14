@@ -4,7 +4,7 @@
 use async_trait::async_trait;
 use linera_views::{
     collection_view::{CollectionOperations, CollectionView, ReentrantCollectionView},
-    common::{Batch, Context, ContextFromDb},
+    common::{Batch, Context},
     dynamo_db::DynamoDbContext,
     hash::{HashView, Hasher, HashingContext},
     impl_view,
@@ -13,7 +13,7 @@ use linera_views::{
     memory::{MemoryContext, MemoryStoreMap},
     queue_view::{QueueOperations, QueueView},
     register_view::{RegisterOperations, RegisterView},
-    key_value_store_view::{KeyValueStoreView, KeyValueStoreContext},
+    key_value_store_view::KeyValueStoreContext,
     rocksdb::{RocksdbContext, DB},
     scoped_view::ScopedView,
     test_utils::LocalStackTestContext,
@@ -23,7 +23,7 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     sync::Arc,
 };
-use tokio::sync::{Mutex, OwnedMutexGuard};
+use tokio::sync::Mutex;
 
 #[allow(clippy::type_complexity)]
 pub struct StateView<C> {

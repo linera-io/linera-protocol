@@ -178,7 +178,7 @@ where
 
     fn derive_key_u8(&self, index: &[u8]) -> Vec<u8> {
         let mut key = self.base_key.clone();
-        key.clone_from_slice(index);
+        key.extend_from_slice(index);
         key
     }
 
