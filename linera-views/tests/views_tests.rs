@@ -8,12 +8,12 @@ use linera_views::{
     dynamo_db::DynamoDbContext,
     hash::{HashView, Hasher, HashingContext},
     impl_view,
+    key_value_store_view::KeyValueStoreContext,
     log_view::{LogOperations, LogView},
     map_view::{MapOperations, MapView},
     memory::{MemoryContext, MemoryStoreMap},
     queue_view::{QueueOperations, QueueView},
     register_view::{RegisterOperations, RegisterView},
-    key_value_store_view::KeyValueStoreContext,
     rocksdb::{RocksdbContext, DB},
     scoped_view::ScopedView,
     test_utils::LocalStackTestContext,
@@ -478,7 +478,10 @@ async fn test_views_in_memory() {
 
 #[cfg(test)]
 async fn test_views_in_key_valyue_store_view_memory_param(config: &TestConfig) {
-    log::warn!("Testing config {:?} with key_value_store_view on memory", config);
+    log::warn!(
+        "Testing config {:?} with key_value_store_view on memory",
+        config
+    );
     let mut store = KeyValueStoreTestStore::default();
     test_store(&mut store, config).await;
 }

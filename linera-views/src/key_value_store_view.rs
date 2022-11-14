@@ -6,10 +6,11 @@ use async_trait::async_trait;
 use serde::de::DeserializeOwned;
 use std::{collections::BTreeMap, fmt::Debug, mem};
 
-use crate::common::ContextFromDb;
-use crate::memory::MemoryContext;
+use crate::{
+    common::ContextFromDb,
+    memory::{MemoryContext, MemoryStoreMap},
+};
 use tokio::sync::OwnedMutexGuard;
-use crate::memory::MemoryStoreMap;
 
 /// A view that represents the KeyValueOperations
 #[derive(Debug, Clone)]
@@ -55,7 +56,9 @@ where
             for (index, update) in mem::take(&mut self.updates) {
                 match update {
                     None => batch.delete_key(self.context.derive_key_u8(&index)),
-                    Some(value) => batch.put_key_value_u8(self.context.derive_key_u8(&index), value),
+                    Some(value) => {
+                        batch.put_key_value_u8(self.context.derive_key_u8(&index), value)
+                    }
                 }
             }
         }
@@ -107,15 +110,15 @@ where
             match update.as_ref() {
                 Some(val) => {
                     let val = bcs::from_bytes(val)?;
-                    return Ok(Some(val))
-                },
-                None => { return Ok(None) },
+                    return Ok(Some(val));
+                }
+                None => return Ok(None),
             }
         }
-	if self.was_reset_to_default {
+        if self.was_reset_to_default {
             return Ok(None);
         }
-        let val = self.context.read_key(&key.to_vec()).await?;
+        let val = self.context.read_key(key).await?;
         Ok(val)
     }
 
@@ -168,9 +171,6 @@ where
     }
 }
 
-
-
-
 /// A context that stores all values in memory.
 pub type KeyValueStoreContext = ContextFromDb<usize, KeyValueStoreView<MemoryContext<usize>>>;
 
@@ -178,7 +178,10 @@ impl KeyValueStoreContext {
     pub fn new(guard: OwnedMutexGuard<MemoryStoreMap>, base_key: Vec<u8>, extra: usize) -> Self {
         let context = MemoryContext::new(guard, extra);
         let key_value_store_view = KeyValueStoreView::new(context);
-        Self { db: key_value_store_view, base_key, extra }
+        Self {
+            db: key_value_store_view,
+            base_key,
+            extra,
+        }
     }
 }
-
