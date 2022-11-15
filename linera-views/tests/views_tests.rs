@@ -6,7 +6,7 @@ use linera_views::{
     collection_view::{CollectionOperations, CollectionView, ReentrantCollectionView},
     common::{Batch, Context},
     dynamo_db::DynamoDbContext,
-    hash::{HashView, Hasher, HashingContext},
+    views::{HashView, Hasher, HashingContext},
     impl_view,
     key_value_store_view::KeyValueStoreContext,
     log_view::{LogOperations, LogView},

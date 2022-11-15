@@ -1,6 +1,6 @@
 use crate::{
     common::{Batch, Context},
-    views::{View, ViewError},
+    views::{View, HashView, HashingContext, Hasher, ViewError},
 };
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
@@ -207,7 +207,7 @@ where
         Ok(indices)
     }
 
-    /// Execute a function on each index.
+    /// Execute a function on each index. The function f must be order independent
     pub async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(I) + Send,
@@ -229,3 +229,29 @@ where
         Ok(())
     }
 }
+
+#[async_trait]
+impl<C, I, V> HashView<C> for MapView<C, I, V>
+where
+    C: HashingContext + MapOperations<I, V> + Send,
+    ViewError: From<C::Error>,
+    I: Eq + Ord + Clone + Send + Sync + Serialize,
+    V: Clone + Send + Sync + Serialize,
+{
+    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
+        let mut hasher = C::Hasher::default();
+        let indices = self.indices().await?;
+        hasher.update_with_bcs_bytes(&indices.len())?;
+
+	for index in indices {
+            let value = self
+                .get(&index)
+                .await?
+                .expect("The value for the returned index should be present");
+            hasher.update_with_bcs_bytes(&index)?;
+            hasher.update_with_bcs_bytes(&value)?;
+        }
+        Ok(hasher.finalize())
+    }
+}
+

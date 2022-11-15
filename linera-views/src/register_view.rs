@@ -1,6 +1,6 @@
 use crate::{
     common::{Batch, Context},
-    views::{View, ViewError},
+    views::{View, HashView, HashingContext, Hasher, ViewError},
 };
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
@@ -129,3 +129,18 @@ where
         }
     }
 }
+
+#[async_trait]
+impl<C, T> HashView<C> for RegisterView<C, T>
+where
+    C: HashingContext + RegisterOperations<T> + Send + Sync,
+    ViewError: From<C::Error>,
+    T: Default + Send + Sync + Serialize,
+{
+    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
+        let mut hasher = C::Hasher::default();
+        hasher.update_with_bcs_bytes(self.get())?;
+        Ok(hasher.finalize())
+    }
+}
+

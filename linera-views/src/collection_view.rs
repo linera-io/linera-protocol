@@ -1,6 +1,6 @@
 use crate::{
     common::{Batch, Context},
-    views::{View, ViewError},
+    views::{View, HashView, HashingContext, Hasher, ViewError},
 };
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
@@ -10,6 +10,7 @@ use std::{
     fmt::Debug,
     mem,
     sync::Arc,
+    io::Write,
 };
 use tokio::sync::{Mutex, OwnedMutexGuard};
 
@@ -464,7 +465,7 @@ where
     I: Eq + Ord + Clone + Debug + Send + Sync,
     W: View<C> + Send + Sync,
 {
-    /// Execute a function on each index.
+    /// Execute a function on each index. The function f must be order independent.
     pub async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(I) + Send + Sync,
@@ -484,5 +485,49 @@ where
             }
         }
         Ok(())
+    }
+}
+
+#[async_trait]
+impl<C, I, W> HashView<C> for CollectionView<C, I, W>
+where
+    C: HashingContext + CollectionOperations<I> + Send,
+    ViewError: From<C::Error>,
+    I: Eq + Ord + Clone + Debug + Send + Sync + Serialize + 'static,
+    W: HashView<C> + Send + 'static,
+{
+    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
+        let mut hasher = C::Hasher::default();
+        let indices = self.indices().await?;
+        hasher.update_with_bcs_bytes(&indices.len())?;
+        for index in indices {
+            hasher.update_with_bcs_bytes(&index)?;
+            let view = self.load_entry(index).await?;
+            let hash = view.hash().await?;
+            hasher.write_all(hash.as_ref())?;
+        }
+        Ok(hasher.finalize())
+    }
+}
+
+#[async_trait]
+impl<C, I, W> HashView<C> for ReentrantCollectionView<C, I, W>
+where
+    C: HashingContext + CollectionOperations<I> + Send,
+    ViewError: From<C::Error>,
+    I: Eq + Ord + Clone + Debug + Send + Sync + Serialize + 'static,
+    W: HashView<C> + Send + 'static,
+{
+    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
+        let mut hasher = C::Hasher::default();
+        let indices = self.indices().await?;
+        hasher.update_with_bcs_bytes(&indices.len())?;
+        for index in indices {
+            hasher.update_with_bcs_bytes(&index)?;
+            let mut view = self.try_load_entry(index).await?;
+            let hash = view.hash().await?;
+            hasher.write_all(hash.as_ref())?;
+        }
+        Ok(hasher.finalize())
     }
 }
