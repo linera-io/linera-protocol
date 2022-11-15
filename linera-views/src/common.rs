@@ -49,7 +49,7 @@ impl Batch {
         Self { operations }
     }
 
-    /// Insert a put a key/value in the batch
+    /// Insert a Put { key, value } into the batch
     pub fn put_key_value(
         &mut self,
         key: Vec<u8>,
@@ -61,12 +61,12 @@ impl Batch {
         Ok(())
     }
 
-    /// Insert a put a key/value in the batch
+    /// Insert a Put {key, value } into the batch
     pub fn put_key_value_u8(&mut self, key: Vec<u8>, value: Vec<u8>) {
         self.operations.push(WriteOperation::Put { key, value });
     }
 
-    /// Delete a key and put in the batch
+    /// Insert a Delete { key } into the batch
     pub fn delete_key(&mut self, key: Vec<u8>) {
         self.operations.push(WriteOperation::Delete { key });
     }

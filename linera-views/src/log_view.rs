@@ -10,7 +10,7 @@ use std::{fmt::Debug, mem, ops::Range};
 #[derive(Debug, Clone)]
 pub struct LogView<C, T> {
     context: C,
-    was_reset_to_default: bool,
+    was_cleared: bool,
     stored_count: usize,
     new_values: Vec<T>,
 }
@@ -111,20 +111,20 @@ where
         let stored_count = context.count().await?;
         Ok(Self {
             context,
-            was_reset_to_default: false,
+            was_cleared: false,
             stored_count,
             new_values: Vec::new(),
         })
     }
 
     fn rollback(&mut self) {
-        self.was_reset_to_default = false;
+        self.was_cleared = false;
         self.new_values.clear();
     }
 
     async fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
-        if self.was_reset_to_default {
-            self.was_reset_to_default = false;
+        if self.was_cleared {
+            self.was_cleared = false;
             if self.stored_count > 0 {
                 self.context.delete(self.stored_count, batch)?;
                 self.stored_count = 0;
@@ -145,7 +145,7 @@ where
     }
 
     fn clear(&mut self) {
-        self.was_reset_to_default = true;
+        self.was_cleared = true;
         self.new_values.clear();
     }
 }
@@ -161,7 +161,7 @@ where
 
     /// Read the size of the log.
     pub fn count(&self) -> usize {
-        if self.was_reset_to_default {
+        if self.was_cleared {
             self.new_values.len()
         } else {
             self.stored_count + self.new_values.len()
@@ -181,7 +181,7 @@ where
 {
     /// Read the logged values in the given range (including staged ones).
     pub async fn get(&mut self, index: usize) -> Result<Option<T>, ViewError> {
-        let value = if self.was_reset_to_default {
+        let value = if self.was_cleared {
             self.new_values.get(index).cloned()
         } else if index < self.stored_count {
             self.context.get(index).await?
@@ -193,7 +193,7 @@ where
 
     /// Read the logged values in the given range (including staged ones).
     pub async fn read(&self, mut range: Range<usize>) -> Result<Vec<T>, ViewError> {
-        let effective_stored_count = if self.was_reset_to_default {
+        let effective_stored_count = if self.was_cleared {
             0
         } else {
             self.stored_count

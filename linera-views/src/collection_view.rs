@@ -18,7 +18,7 @@ use tokio::sync::{Mutex, OwnedMutexGuard};
 #[derive(Debug, Clone)]
 pub struct CollectionView<C, I, W> {
     context: C,
-    was_reset_to_default: bool,
+    was_cleared: bool,
     updates: BTreeMap<I, Option<W>>,
 }
 
@@ -27,7 +27,7 @@ pub struct CollectionView<C, I, W> {
 #[derive(Debug)]
 pub struct ReentrantCollectionView<C, I, W> {
     context: C,
-    was_reset_to_default: bool,
+    was_cleared: bool,
     updates: BTreeMap<I, Option<Arc<Mutex<W>>>>,
 }
 
@@ -129,19 +129,19 @@ where
     async fn load(context: C) -> Result<Self, ViewError> {
         Ok(Self {
             context,
-            was_reset_to_default: false,
+            was_cleared: false,
             updates: BTreeMap::new(),
         })
     }
 
     fn rollback(&mut self) {
-        self.was_reset_to_default = false;
+        self.was_cleared = false;
         self.updates.clear();
     }
 
     async fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
-        if self.was_reset_to_default {
-            self.was_reset_to_default = false;
+        if self.was_cleared {
+            self.was_cleared = false;
             self.delete_entries(batch).await?;
             for (index, update) in mem::take(&mut self.updates) {
                 if let Some(mut view) = update {
@@ -173,7 +173,7 @@ where
     }
 
     fn clear(&mut self) {
-        self.was_reset_to_default = true;
+        self.was_cleared = true;
         self.updates.clear();
     }
 }
@@ -218,7 +218,7 @@ where
             btree_map::Entry::Vacant(entry) => {
                 let context = self.context.clone_with_scope(&index);
                 let mut view = W::load(context).await?;
-                if self.was_reset_to_default {
+                if self.was_cleared {
                     view.clear();
                 }
                 Ok(entry.insert(Some(view)).as_mut().unwrap())
@@ -228,7 +228,7 @@ where
 
     /// Mark the entry so that it is removed in the next flush
     pub fn remove_entry(&mut self, index: I) {
-        if self.was_reset_to_default {
+        if self.was_cleared {
             self.updates.remove(&index);
         } else {
             self.updates.insert(index, None);
@@ -245,7 +245,7 @@ where
     /// Return the list of indices in the collection.
     pub async fn indices(&mut self) -> Result<Vec<I>, ViewError> {
         let mut indices = Vec::new();
-        if !self.was_reset_to_default {
+        if !self.was_cleared {
             for index in self.context.indices().await? {
                 if !self.updates.contains_key(&index) {
                     indices.push(index);
@@ -278,7 +278,7 @@ where
     where
         F: FnMut(I) + Send,
     {
-        if !self.was_reset_to_default {
+        if !self.was_cleared {
             self.context
                 .for_each_index(|index: I| {
                     if !self.updates.contains_key(&index) {
@@ -311,19 +311,19 @@ where
     async fn load(context: C) -> Result<Self, ViewError> {
         Ok(Self {
             context,
-            was_reset_to_default: false,
+            was_cleared: false,
             updates: BTreeMap::new(),
         })
     }
 
     fn rollback(&mut self) {
-        self.was_reset_to_default = false;
+        self.was_cleared = false;
         self.updates.clear();
     }
 
     async fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
-        if self.was_reset_to_default {
-            self.was_reset_to_default = false;
+        if self.was_cleared {
+            self.was_cleared = false;
             self.delete_entries(batch).await?;
             for (index, update) in mem::take(&mut self.updates) {
                 if let Some(view) = update {
@@ -361,7 +361,7 @@ where
     }
 
     fn clear(&mut self) {
-        self.was_reset_to_default = true;
+        self.was_cleared = true;
         self.updates.clear();
     }
 }
@@ -407,7 +407,7 @@ where
             btree_map::Entry::Vacant(entry) => {
                 let context = self.context.clone_with_scope(&index);
                 let mut view = W::load(context).await?;
-                if self.was_reset_to_default {
+                if self.was_cleared {
                     view.clear();
                 }
                 let wrapped_view = Arc::new(Mutex::new(view));
@@ -419,7 +419,7 @@ where
 
     /// Mark the entry so that it is removed in the next flush
     pub fn remove_entry(&mut self, index: I) {
-        if self.was_reset_to_default {
+        if self.was_cleared {
             self.updates.remove(&index);
         } else {
             self.updates.insert(index, None);
@@ -436,7 +436,7 @@ where
     /// Return the list of indices in the collection.
     pub async fn indices(&mut self) -> Result<Vec<I>, ViewError> {
         let mut indices = Vec::new();
-        if !self.was_reset_to_default {
+        if !self.was_cleared {
             for index in self.context.indices().await? {
                 if !self.updates.contains_key(&index) {
                     indices.push(index);
@@ -469,7 +469,7 @@ where
     where
         F: FnMut(I) + Send + Sync,
     {
-        if !self.was_reset_to_default {
+        if !self.was_cleared {
             self.context
                 .for_each_index(|index: I| {
                     if !self.updates.contains_key(&index) {

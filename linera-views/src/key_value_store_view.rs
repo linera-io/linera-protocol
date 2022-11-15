@@ -16,7 +16,7 @@ use tokio::sync::OwnedMutexGuard;
 #[derive(Debug, Clone)]
 pub struct KeyValueStoreView<C> {
     context: C,
-    was_reset_to_default: bool,
+    was_cleared: bool,
     updates: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
 }
 
@@ -33,19 +33,19 @@ where
     async fn load(context: C) -> Result<Self, ViewError> {
         Ok(Self {
             context,
-            was_reset_to_default: false,
+            was_cleared: false,
             updates: BTreeMap::new(),
         })
     }
 
     fn rollback(&mut self) {
-        self.was_reset_to_default = false;
+        self.was_cleared = false;
         self.updates.clear();
     }
 
     async fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
-        if self.was_reset_to_default {
-            self.was_reset_to_default = false;
+        if self.was_cleared {
+            self.was_cleared = false;
             self.delete_entries(batch).await?;
             for (index, update) in mem::take(&mut self.updates) {
                 if let Some(value) = update {
@@ -71,7 +71,7 @@ where
     }
 
     fn clear(&mut self) {
-        self.was_reset_to_default = true;
+        self.was_cleared = true;
         self.updates.clear();
     }
 }
@@ -92,7 +92,7 @@ where
     pub fn new(context: C) -> Self {
         Self {
             context,
-            was_reset_to_default: false,
+            was_cleared: false,
             updates: BTreeMap::new(),
         }
     }
@@ -116,7 +116,7 @@ where
                 None => return Ok(None),
             }
         }
-        if self.was_reset_to_default {
+        if self.was_cleared {
             return Ok(None);
         }
         let val = self.context.read_key(key).await?;
@@ -127,7 +127,7 @@ where
         let len = self.context.base_key().len();
         let key_prefix = self.context.derive_key_bytes(key_prefix);
         let mut keys = Vec::new();
-        if !self.was_reset_to_default {
+        if !self.was_cleared {
             for key in self.context.find_keys_with_prefix(&key_prefix).await? {
                 if !self.updates.contains_key(&key) {
                     let key = &key[len..];
@@ -151,7 +151,7 @@ where
         let key_prefix = self.context.derive_key_bytes(key_prefix);
         let len2 = key_prefix.len();
         let mut keys = Vec::new();
-        if !self.was_reset_to_default {
+        if !self.was_cleared {
             for key in self.context.find_keys_with_prefix(&key_prefix).await? {
                 if !self.updates.contains_key(&key) {
                     keys.push(bcs::from_bytes(&key[len2..])?);
