@@ -79,6 +79,8 @@ pub trait KeyValueOperations {
 
     async fn read_key<V: DeserializeOwned>(&self, key: &[u8]) -> Result<Option<V>, Self::Error>;
 
+    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
+
     async fn find_keys_with_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error>;
 
     async fn get_sub_keys<Key: DeserializeOwned + Send>(
@@ -112,13 +114,20 @@ pub trait Context {
     /// Obtain the Vec<u8> key from the key by appending to the base_key
     fn derive_key_bytes(&self, index: &[u8]) -> Vec<u8>;
 
-    /// Retrieve a generic `Item` from the table using the provided `key` prefixed by the current
+    /// Retrieve a generic `Item` from the database using the provided `key` prefixed by the current
     /// context.
     /// The `Item` is deserialized using [`bcs`].
     async fn read_key<Item: DeserializeOwned>(
         &self,
         key: &[u8],
     ) -> Result<Option<Item>, Self::Error>;
+
+    /// Retrieve a Vec<u8> from the database using the provided `key` prefixed by the current
+    /// context.
+    async fn read_key_bytes(
+        &self,
+        key: &[u8],
+    ) -> Result<Option<Vec<u8>>, Self::Error>;
 
     /// Find keys matching the prefix. The full keys are returned, that is including the prefix.
     async fn find_keys_with_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error>;
@@ -182,6 +191,11 @@ where
         Item: DeserializeOwned,
     {
         self.db.read_key(key).await
+    }
+
+    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>
+    {
+        self.db.read_key_bytes(key).await
     }
 
     async fn find_keys_with_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {

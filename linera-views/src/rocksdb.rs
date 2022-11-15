@@ -30,6 +30,15 @@ impl KeyValueOperations for RocksdbContainer {
         }
     }
 
+    async fn read_key_bytes(
+        &self,
+        key: &[u8],
+    ) -> Result<Option<Vec<u8>>, RocksdbContextError> {
+        let db = self.clone();
+        let key = key.to_vec();
+        Ok(tokio::task::spawn_blocking(move || db.get(&key)).await??)
+    }
+
     async fn find_keys_with_prefix(
         &self,
         key_prefix: &[u8],

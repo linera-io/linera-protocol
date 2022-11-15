@@ -126,8 +126,22 @@ where
             return Ok(None);
         }
         let key = self.context.derive_key_bytes(index);
-        let value = self.context.read_key(&key).await?;
+        let value = self.context.read_key_bytes(&key).await?;
         Ok(value)
+    }
+
+    /// Set or insert a value.
+    pub fn insert(&mut self, index: Vec<u8>, value: Vec<u8>) {
+        self.updates.insert(index, Some(value));
+    }
+
+    /// Remove a value.
+    pub fn remove(&mut self, index: Vec<u8>) {
+        if self.was_cleared {
+            self.updates.remove(&index);
+        } else {
+            self.updates.insert(index, None);
+        }
     }
 }
 
@@ -153,6 +167,17 @@ where
             return Ok(None);
         }
         let val = self.context.read_key(key).await?;
+        Ok(val)
+    }
+
+    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
+        if let Some(update) = self.updates.get(key) {
+            return Ok(update.clone());
+        }
+        if self.was_cleared {
+            return Ok(None);
+        }
+        let val = self.context.read_key_bytes(key).await?;
         Ok(val)
     }
 
