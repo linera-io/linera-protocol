@@ -1,5 +1,5 @@
 use thiserror::Error;
-use linera_base::crypto::Signature;
+use ed25519::signature::Signature as edSignature;
 
 use crate::grpc_network::grpc_network::{CrossChainRequest as CrossChainRequestRpc, medium, NameSignaturePair};
 use linera_core::messages::CrossChainRequest;
@@ -19,7 +19,7 @@ use linera_base::messages::{Origin, ValidatorName};
 use crate::grpc_network::grpc_network::Medium as MediumRpc;
 use linera_base::messages::Medium;
 
-use crate::grpc_network::grpc_network::BlockHeightRange as BlockHeaightRangeRPC;
+use crate::grpc_network::grpc_network::BlockHeightRange as BlockHeightRangeRPC;
 use linera_core::messages::BlockHeightRange;
 
 use crate::grpc_network::grpc_network::ApplicationId as ApplicationIdRPC;
@@ -28,8 +28,23 @@ use linera_base::messages::ApplicationId;
 use crate::grpc_network::grpc_network::ChainId as ChainIdRPC;
 use linera_base::messages::ChainId;
 
+use crate::grpc_network::grpc_network::PublicKey as PublicKeyRPC;
+use linera_base::crypto::PublicKey;
+
+use crate::grpc_network::grpc_network::Signature as SignatureRPC;
+use linera_base::crypto::Signature;
+
+use crate::grpc_network::grpc_network::ChainInfoResponse as ChainInfoResponseRPC;
+use linera_core::messages::ChainInfoResponse;
+
+use crate::grpc_network::grpc_network::BlockHeight as BlockHeightRPC;
+use linera_base::messages::BlockHeight;
+
+use crate::grpc_network::grpc_network::Owner as OwnerRPC;
+use linera_base::messages::Owner;
+
 #[derive(Error, Debug)]
-enum ProtoConversionError {
+pub enum ProtoConversionError {
     #[error("BCS serialization / deserialization error.")]
     BcsError(#[from] bcs::Error),
 }
@@ -52,7 +67,11 @@ impl TryFrom<Certificate> for CertificateRpc {
     fn try_from(certificate: Certificate) -> Result<Self, Self::Error> {
         Ok(Self {
             value: bcs::to_bytes(&certificate.value)?,
-            signatures: certificate.signatures.into()
+            signatures: certificate.signatures
+                .into_iter().map(|(validator_name, signature)| NameSignaturePair {
+                validator_name: Some(validator_name.into()),
+                signature: Some(signature.into())
+            }).collect()
         })
     }
 }
@@ -63,11 +82,15 @@ impl TryFrom<ChainInfoQuery> for ChainInfoQueryRpc {
     fn try_from(chain_info_query: ChainInfoQuery) -> Result<Self, Self::Error> {
         Ok(Self {
             chain_id: Some(chain_info_query.chain_id.into()),
-            block_height: Some(chain_info_query.test_next_block_height.into()),
+            test_next_block_height: chain_info_query.test_next_block_height.map(|t| t.into()),
             request_committees: chain_info_query.request_committees,
             request_pending_messages: chain_info_query.request_pending_messages,
-            request_sent_certificates_in_range: Some(chain_info_query.request_sent_certificates_in_range.into()),
-            request_received_certificates_excluding_first_nth: Some(chain_info_query.request_received_certificates_excluding_first_nth.into())
+            request_sent_certificates_in_range: chain_info_query
+                .request_sent_certificates_in_range
+                .map(|r| r.into()),
+            request_received_certificates_excluding_first_nth: chain_info_query
+                .request_received_certificates_excluding_first_nth
+                .map(|n| n as u64)
         })
     }
 }
@@ -96,11 +119,11 @@ impl From<Medium> for MediumRpc {
     }
 }
 
-impl From<BlockHeightRange> for BlockHeaightRangeRPC {
+impl From<BlockHeightRange> for BlockHeightRangeRPC {
     fn from(block_height_range: BlockHeightRange) -> Self {
         Self {
             start: Some(block_height_range.start.into()),
-            limit: block_height_range.limit
+            limit: block_height_range.limit.map(|l| l as u64)
         }
     }
 }
@@ -116,13 +139,58 @@ impl From<ApplicationId> for ApplicationIdRPC {
 impl From<ChainId> for ChainIdRPC {
     fn from(application_id: ChainId) -> Self {
         Self  {
-            bytes: application_id.0.as_bytes()
+            bytes: application_id.0.as_bytes().to_vec()
         }
     }
 }
 
-// todo
-// 1. Public Key
-// 2. Signature
-// 3. ChainInfoResponse
-// 4. BlockHeight
+impl From<PublicKey> for PublicKeyRPC {
+    fn from(public_key: PublicKey) -> Self {
+        Self {
+            bytes: public_key.0.to_vec()
+        }
+    }
+}
+
+impl From<ValidatorName> for PublicKeyRPC {
+    fn from(validator_name: ValidatorName) -> Self {
+        Self {
+            bytes: validator_name.0.0.to_vec()
+        }
+    }
+}
+
+impl From<Signature> for SignatureRPC {
+    fn from(signature: Signature) -> Self {
+        Self {
+            bytes: signature.0.as_bytes().to_vec()
+        }
+    }
+}
+
+impl TryFrom<ChainInfoResponse> for ChainInfoResponseRPC {
+    type Error = ProtoConversionError;
+
+    fn try_from(chain_info_response: ChainInfoResponse) -> Result<Self, Self::Error> {
+        Ok(Self {
+            chain_info: bcs::to_bytes(&chain_info_response.info)?,
+            signature: chain_info_response.signature.map(|s| s.into())
+        })
+    }
+}
+
+impl From<BlockHeight> for BlockHeightRPC {
+    fn from(block_height: BlockHeight) -> Self {
+        Self {
+            height: block_height.0
+        }
+    }
+}
+
+impl From<Owner> for OwnerRPC {
+    fn from(owner: Owner) -> Self {
+        Self {
+            inner: Some(owner.0.into())
+        }
+    }
+}

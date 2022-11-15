@@ -118,7 +118,7 @@ message BlockProposal {
   bytes content = 1;
 
   // byte encoded public key
-  PublicKey owner = 2;
+  Owner owner = 2;
 
   // signature value
   Signature signature = 3;
@@ -157,6 +157,10 @@ message ChainId {
 
 message PublicKey {
   bytes bytes = 1;
+}
+
+message Owner {
+  PublicKey inner = 1;
 }
 
 message Signature {

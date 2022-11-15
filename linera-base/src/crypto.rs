@@ -37,7 +37,7 @@ pub struct HashValue(generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Dige
 
 /// A signature value.
 #[derive(Eq, PartialEq, Copy, Clone)]
-pub struct Signature(dalek::Signature);
+pub struct Signature(pub dalek::Signature);
 
 #[derive(Error, Debug)]
 /// Error type for cryptographic errors.
