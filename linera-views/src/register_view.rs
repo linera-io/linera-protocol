@@ -18,13 +18,13 @@ pub struct RegisterView<C, T> {
 #[async_trait]
 pub trait RegisterOperations<T>: Context {
     /// Obtain the value in the register.
-    async fn get(&mut self) -> Result<T, Self::Error>;
+    async fn get(&self) -> Result<T, Self::Error>;
 
     /// Set the value in the register. Crash-resistant implementations should only write to `batch`.
-    fn set(&mut self, batch: &mut Batch, value: &T) -> Result<(), Self::Error>;
+    fn set(&self, batch: &mut Batch, value: &T) -> Result<(), Self::Error>;
 
     /// Delete the register. Crash-resistant implementations should only write to `batch`.
-    fn delete(&mut self, batch: &mut Batch) -> Result<(), Self::Error>;
+    fn delete(&self, batch: &mut Batch) -> Result<(), Self::Error>;
 }
 
 #[async_trait]
@@ -32,18 +32,18 @@ impl<T, C: Context + Send + Sync> RegisterOperations<T> for C
 where
     T: Default + Serialize + DeserializeOwned + Send + Sync + 'static,
 {
-    async fn get(&mut self) -> Result<T, Self::Error> {
+    async fn get(&self) -> Result<T, Self::Error> {
         let base = self.base_key();
         let value = self.read_key(&base).await?.unwrap_or_default();
         Ok(value)
     }
 
-    fn set(&mut self, batch: &mut Batch, value: &T) -> Result<(), Self::Error> {
+    fn set(&self, batch: &mut Batch, value: &T) -> Result<(), Self::Error> {
         batch.put_key_value(self.base_key(), value)?;
         Ok(())
     }
 
-    fn delete(&mut self, batch: &mut Batch) -> Result<(), Self::Error> {
+    fn delete(&self, batch: &mut Batch) -> Result<(), Self::Error> {
         batch.delete_key(self.base_key());
         Ok(())
     }
@@ -60,7 +60,7 @@ where
         &self.context
     }
 
-    async fn load(mut context: C) -> Result<Self, ViewError> {
+    async fn load(context: C) -> Result<Self, ViewError> {
         let stored_value = context.get().await?;
         Ok(Self {
             context,
