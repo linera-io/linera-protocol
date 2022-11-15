@@ -8,7 +8,7 @@ use linera_views::{
     dynamo_db::DynamoDbContext,
     views::{HashView, Hasher, HashingContext},
     impl_view,
-    key_value_store_view::KeyValueStoreContext,
+    key_value_store_view::KeyValueStoreMemoryContext,
     log_view::{LogOperations, LogView},
     map_view::{MapOperations, MapView},
     memory::{MemoryContext, MemoryStoreMap},
@@ -85,7 +85,7 @@ pub struct KeyValueStoreTestStore {
 
 #[async_trait]
 impl StateStore for KeyValueStoreTestStore {
-    type Context = KeyValueStoreContext<usize>;
+    type Context = KeyValueStoreMemoryContext<usize>;
 
     async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
         let state = self
@@ -95,7 +95,7 @@ impl StateStore for KeyValueStoreTestStore {
         log::trace!("Acquiring lock on {:?}", id);
         let guard = state.clone().lock_owned().await;
         let base_key = bcs::to_bytes(&id)?;
-        let context = KeyValueStoreContext::new(guard, base_key, id);
+        let context = KeyValueStoreMemoryContext::new(guard, base_key, id);
         StateView::load(context).await
     }
 }
