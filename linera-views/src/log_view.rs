@@ -22,10 +22,10 @@ pub trait LogOperations<T>: Context {
     async fn count(&self) -> Result<usize, Self::Error>;
 
     /// Obtain the value at the given index.
-    async fn get(&mut self, index: usize) -> Result<Option<T>, Self::Error>;
+    async fn get(&self, index: usize) -> Result<Option<T>, Self::Error>;
 
     /// Obtain the values in the given range of indices.
-    async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error>;
+    async fn read(&self, range: Range<usize>) -> Result<Vec<T>, Self::Error>;
 
     /// Append values to the logs. Crash-resistant implementations should only write to `batch`.
     fn append(
@@ -52,12 +52,12 @@ where
         Ok(count)
     }
 
-    async fn get(&mut self, index: usize) -> Result<Option<T>, Self::Error> {
+    async fn get(&self, index: usize) -> Result<Option<T>, Self::Error> {
         let key = self.derive_key(&index)?;
         self.read_key(&key).await
     }
 
-    async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error> {
+    async fn read(&self, range: Range<usize>) -> Result<Vec<T>, Self::Error> {
         let mut values = Vec::with_capacity(range.len());
         for index in range {
             let key = self.derive_key(&index)?;
@@ -192,7 +192,7 @@ where
     }
 
     /// Read the logged values in the given range (including staged ones).
-    pub async fn read(&mut self, mut range: Range<usize>) -> Result<Vec<T>, ViewError> {
+    pub async fn read(&self, mut range: Range<usize>) -> Result<Vec<T>, ViewError> {
         let effective_stored_count = if self.was_reset_to_default {
             0
         } else {
