@@ -82,7 +82,7 @@ pub trait KeyValueOperations {
     async fn find_keys_with_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error>;
 
     async fn get_sub_keys<Key: DeserializeOwned + Send>(
-        &mut self,
+        &self,
         key_prefix: &[u8],
     ) -> Result<Vec<Key>, Self::Error>;
 

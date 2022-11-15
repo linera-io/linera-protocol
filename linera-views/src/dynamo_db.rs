@@ -230,7 +230,7 @@ impl KeyValueOperations for DynamodbContainer {
     ///
     /// If the raw key bytes can't be deserialized into a `Key`.
     async fn get_sub_keys<Key>(
-        &mut self,
+        &self,
         key_prefix: &[u8],
     ) -> Result<Vec<Key>, DynamoDbContextError>
     where

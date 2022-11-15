@@ -57,7 +57,7 @@ impl KeyValueOperations for MemoryContainer {
         Ok(vals)
     }
 
-    async fn get_sub_keys<Key>(&mut self, key_prefix: &[u8]) -> Result<Vec<Key>, MemoryContextError>
+    async fn get_sub_keys<Key>(&self, key_prefix: &[u8]) -> Result<Vec<Key>, MemoryContextError>
     where
         Key: DeserializeOwned + Send,
     {

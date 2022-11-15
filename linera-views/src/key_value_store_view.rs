@@ -143,7 +143,7 @@ where
     }
 
     async fn get_sub_keys<Key: DeserializeOwned + Send>(
-        &mut self,
+        &self,
         key_prefix: &[u8],
     ) -> Result<Vec<Key>, ViewError> {
         let len1 = key_prefix.len();

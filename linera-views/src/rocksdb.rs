@@ -56,7 +56,7 @@ impl KeyValueOperations for RocksdbContainer {
     }
 
     async fn get_sub_keys<Key: DeserializeOwned + Send>(
-        &mut self,
+        &self,
         key_prefix: &[u8],
     ) -> Result<Vec<Key>, RocksdbContextError> {
         let len = key_prefix.len();
