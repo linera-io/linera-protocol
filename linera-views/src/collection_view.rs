@@ -48,11 +48,11 @@ pub trait CollectionOperations<I>: Context {
 
     /// Add the index to the list of indices. Crash-resistant implementations should only write
     /// to `batch`.
-    fn add_index(&mut self, batch: &mut Batch, index: I) -> Result<(), Self::Error>;
+    fn add_index(&self, batch: &mut Batch, index: I) -> Result<(), Self::Error>;
 
     /// Remove the index from the list of indices. Crash-resistant implementations should only
     /// write to `batch`.
-    fn remove_index(&mut self, batch: &mut Batch, index: I) -> Result<(), Self::Error>;
+    fn remove_index(&self, batch: &mut Batch, index: I) -> Result<(), Self::Error>;
 
     // TODO(#149): In contrast to other views, there is no delete operation for CollectionOperation.
 }
@@ -85,13 +85,13 @@ where
         self.clone_self(key)
     }
 
-    fn add_index(&mut self, batch: &mut Batch, index: I) -> Result<(), Self::Error> {
+    fn add_index(&self, batch: &mut Batch, index: I) -> Result<(), Self::Error> {
         let key = self.derive_key(&CollectionKey::Index(index))?;
         batch.put_key_value(key, &())?;
         Ok(())
     }
 
-    fn remove_index(&mut self, batch: &mut Batch, index: I) -> Result<(), Self::Error> {
+    fn remove_index(&self, batch: &mut Batch, index: I) -> Result<(), Self::Error> {
         let key = self.derive_key(&CollectionKey::Index(index))?;
         batch.delete_key(key);
         Ok(())

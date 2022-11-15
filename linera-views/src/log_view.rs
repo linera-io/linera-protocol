@@ -29,7 +29,7 @@ pub trait LogOperations<T>: Context {
 
     /// Append values to the logs. Crash-resistant implementations should only write to `batch`.
     fn append(
-        &mut self,
+        &self,
         stored_count: usize,
         batch: &mut Batch,
         values: Vec<T>,
@@ -38,7 +38,7 @@ pub trait LogOperations<T>: Context {
     /// Delete the log. Crash-resistant implementations should only write to `batch`.
     /// The stored_count is an invariant of the structure. It is a leaky abstraction
     /// but allows a priori better performance.
-    fn delete(&mut self, stored_count: usize, batch: &mut Batch) -> Result<(), Self::Error>;
+    fn delete(&self, stored_count: usize, batch: &mut Batch) -> Result<(), Self::Error>;
 }
 
 #[async_trait]
@@ -70,7 +70,7 @@ where
     }
 
     fn append(
-        &mut self,
+        &self,
         stored_count: usize,
         batch: &mut Batch,
         values: Vec<T>,
@@ -87,7 +87,7 @@ where
         Ok(())
     }
 
-    fn delete(&mut self, stored_count: usize, batch: &mut Batch) -> Result<(), Self::Error> {
+    fn delete(&self, stored_count: usize, batch: &mut Batch) -> Result<(), Self::Error> {
         batch.delete_key(self.base_key());
         for index in 0..stored_count {
             batch.delete_key(self.derive_key(&index)?);

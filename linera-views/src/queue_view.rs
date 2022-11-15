@@ -25,7 +25,7 @@ pub trait QueueOperations<T>: Context {
     async fn get(&mut self, index: usize) -> Result<Option<T>, Self::Error>;
 
     /// Obtain the values in the given range.
-    async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error>;
+    async fn read(&self, range: Range<usize>) -> Result<Vec<T>, Self::Error>;
 
     /// Delete `count` values from the front of the queue. Crash-resistant implementations
     /// should only write to `batch`.
@@ -39,7 +39,7 @@ pub trait QueueOperations<T>: Context {
     /// Append the given values from the back of the queue. Crash-resistant
     /// implementations should only write to `batch`.
     fn append_back(
-        &mut self,
+        &self,
         stored_indices: &mut Range<usize>,
         batch: &mut Batch,
         values: Vec<T>,
@@ -47,7 +47,7 @@ pub trait QueueOperations<T>: Context {
 
     /// Delete the queue from storage. Crash-resistant implementations should only write to `batch`.
     fn delete(
-        &mut self,
+        &self,
         stored_indices: Range<usize>,
         batch: &mut Batch,
     ) -> Result<(), Self::Error>;
@@ -69,7 +69,7 @@ where
         Ok(self.read_key(&key).await?)
     }
 
-    async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error> {
+    async fn read(&self, range: Range<usize>) -> Result<Vec<T>, Self::Error> {
         let mut values = Vec::with_capacity(range.len());
         for index in range {
             let key = self.derive_key(&index)?;
@@ -101,7 +101,7 @@ where
     }
 
     fn append_back(
-        &mut self,
+        &self,
         stored_indices: &mut Range<usize>,
         batch: &mut Batch,
         values: Vec<T>,
@@ -120,7 +120,7 @@ where
     }
 
     fn delete(
-        &mut self,
+        &self,
         stored_indices: Range<usize>,
         batch: &mut Batch,
     ) -> Result<(), Self::Error> {
