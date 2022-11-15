@@ -1,6 +1,6 @@
 use crate::{
     common::{Batch, Context},
-    views::{View, HashView, HashingContext, Hasher, ViewError},
+    views::{HashView, Hasher, HashingContext, View, ViewError},
 };
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
@@ -46,11 +46,7 @@ pub trait QueueOperations<T>: Context {
     ) -> Result<(), Self::Error>;
 
     /// Delete the queue from storage. Crash-resistant implementations should only write to `batch`.
-    fn delete(
-        &self,
-        stored_indices: Range<usize>,
-        batch: &mut Batch,
-    ) -> Result<(), Self::Error>;
+    fn delete(&self, stored_indices: Range<usize>, batch: &mut Batch) -> Result<(), Self::Error>;
 }
 
 #[async_trait]
@@ -119,11 +115,7 @@ where
         Ok(())
     }
 
-    fn delete(
-        &self,
-        stored_indices: Range<usize>,
-        batch: &mut Batch,
-    ) -> Result<(), Self::Error> {
+    fn delete(&self, stored_indices: Range<usize>, batch: &mut Batch) -> Result<(), Self::Error> {
         let base = self.base_key();
         batch.delete_key(base);
         for index in stored_indices {
@@ -307,4 +299,3 @@ where
         Ok(hasher.finalize())
     }
 }
-

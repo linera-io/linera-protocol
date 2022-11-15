@@ -1,6 +1,6 @@
 use crate::{
     common::{Batch, Context},
-    views::{View, HashView, HashingContext, Hasher, ViewError},
+    views::{HashView, Hasher, HashingContext, View, ViewError},
 };
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
@@ -243,7 +243,7 @@ where
         let indices = self.indices().await?;
         hasher.update_with_bcs_bytes(&indices.len())?;
 
-	for index in indices {
+        for index in indices {
             let value = self
                 .get(&index)
                 .await?
@@ -254,4 +254,3 @@ where
         Ok(hasher.finalize())
     }
 }
-

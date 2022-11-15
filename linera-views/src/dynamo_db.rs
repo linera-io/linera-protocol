@@ -134,8 +134,7 @@ impl DynamodbContainer {
     /// Extract the value attribute from an item and deserialize it into the `Value` type.
     fn extract_value_bytes(
         attributes: &HashMap<String, AttributeValue>,
-    ) -> Result<Vec<u8>, DynamoDbContextError>
-    {
+    ) -> Result<Vec<u8>, DynamoDbContextError> {
         let attribute = VALUE_ATTRIBUTE;
         let missing_error = DynamoDbContextError::MissingValue;
         let type_error = DynamoDbContextError::wrong_value_type;
@@ -207,8 +206,7 @@ impl KeyValueOperations for DynamodbContainer {
         }
     }
 
-    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DynamoDbContextError>
-    {
+    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DynamoDbContextError> {
         let response = self
             .client
             .get_item()
@@ -259,10 +257,7 @@ impl KeyValueOperations for DynamodbContainer {
     /// # Panics
     ///
     /// If the raw key bytes can't be deserialized into a `Key`.
-    async fn get_sub_keys<Key>(
-        &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<Key>, DynamoDbContextError>
+    async fn get_sub_keys<Key>(&self, key_prefix: &[u8]) -> Result<Vec<Key>, DynamoDbContextError>
     where
         Key: DeserializeOwned + Send,
     {

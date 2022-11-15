@@ -1,6 +1,6 @@
 use crate::{
     common::{Batch, Context},
-    views::{View, HashView, HashingContext, Hasher, ViewError},
+    views::{HashView, Hasher, HashingContext, View, ViewError},
 };
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
@@ -8,9 +8,9 @@ use std::{
     cmp::Eq,
     collections::{btree_map, BTreeMap},
     fmt::Debug,
+    io::Write,
     mem,
     sync::Arc,
-    io::Write,
 };
 use tokio::sync::{Mutex, OwnedMutexGuard};
 

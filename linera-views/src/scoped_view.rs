@@ -1,6 +1,6 @@
 use crate::{
     common::{Batch, Context},
-    views::{View, HashView, HashingContext, Hasher, ViewError},
+    views::{HashView, Hasher, HashingContext, View, ViewError},
 };
 use async_trait::async_trait;
 use std::fmt::Debug;
@@ -81,4 +81,3 @@ where
         self.view.hash().await
     }
 }
-

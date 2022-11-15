@@ -124,10 +124,7 @@ pub trait Context {
 
     /// Retrieve a Vec<u8> from the database using the provided `key` prefixed by the current
     /// context.
-    async fn read_key_bytes(
-        &self,
-        key: &[u8],
-    ) -> Result<Option<Vec<u8>>, Self::Error>;
+    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
     /// Find keys matching the prefix. The full keys are returned, that is including the prefix.
     async fn find_keys_with_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error>;
@@ -193,8 +190,7 @@ where
         self.db.read_key(key).await
     }
 
-    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>
-    {
+    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         self.db.read_key_bytes(key).await
     }
 

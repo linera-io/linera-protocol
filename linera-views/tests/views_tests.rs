@@ -1,13 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use rand::Rng;
 use async_trait::async_trait;
 use linera_views::{
     collection_view::{CollectionOperations, CollectionView, ReentrantCollectionView},
     common::{Batch, Context},
     dynamo_db::DynamoDbContext,
-    views::{HashView, Hasher, HashingContext},
     impl_view,
     key_value_store_view::{KeyValueStoreMemoryContext, KeyValueStoreView},
     log_view::{LogOperations, LogView},
@@ -18,8 +16,9 @@ use linera_views::{
     rocksdb::{RocksdbContext, DB},
     scoped_view::ScopedView,
     test_utils::LocalStackTestContext,
-    views::{View, ViewError},
+    views::{HashView, Hasher, HashingContext, View, ViewError},
 };
+use rand::Rng;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     sync::Arc,
@@ -697,14 +696,13 @@ async fn test_removal_api() -> anyhow::Result<()> {
     Ok(())
 }
 
-
 #[cfg(test)]
 fn random_shuffle<T: Clone>(l_val: &mut Vec<T>) {
     let mut rng = rand::thread_rng();
     let n = l_val.len();
-    for _ in 0..4*n {
-        let idx1 : usize = rng.gen_range(0..n);
-        let idx2 : usize = rng.gen_range(0..n);
+    for _ in 0..4 * n {
+        let idx1: usize = rng.gen_range(0..n);
+        let idx2: usize = rng.gen_range(0..n);
         if idx1 != idx2 {
             let val1 = l_val.get(idx1).unwrap().clone();
             let val2 = l_val.get(idx2).unwrap().clone();
@@ -726,7 +724,7 @@ fn get_random_vec_bytes(n: usize) -> Vec<u8> {
 }
 
 #[cfg(test)]
-fn get_random_vec_keyvalues(n: usize) -> Vec<(Vec<u8>,Vec<u8>)> {
+fn get_random_vec_keyvalues(n: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
     loop {
         let mut v_ret = Vec::new();
         let mut set_vect = HashSet::new();
@@ -743,13 +741,12 @@ fn get_random_vec_keyvalues(n: usize) -> Vec<(Vec<u8>,Vec<u8>)> {
     }
 }
 
-
-
-
-
 // Vec<
 #[cfg(test)]
-async fn compute_hash_map_keyvaluestore_view<S>(store: &mut S, l_kv: Vec<(Vec<u8>, Vec<u8>)>) -> <<S::Context as HashingContext>::Hasher as Hasher>::Output
+async fn compute_hash_map_keyvaluestore_view<S>(
+    store: &mut S,
+    l_kv: Vec<(Vec<u8>, Vec<u8>)>,
+) -> <<S::Context as HashingContext>::Hasher as Hasher>::Output
 where
     S: StateStore,
     ViewError: From<<<S as StateStore>::Context as Context>::Error>,
@@ -760,7 +757,7 @@ where
         let key = kv.0;
         let value = kv.1;
         let key_str = format!("{:?}", &key);
-        let value_usize = (*value.get(0).unwrap()) as usize;
+        let value_usize = (*value.first().unwrap()) as usize;
         view.map.insert(key_str, value_usize);
         view.keyvalueview.insert(key, value);
         //

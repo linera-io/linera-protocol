@@ -43,10 +43,7 @@ impl KeyValueOperations for MemoryContainer {
         }
     }
 
-    async fn read_key_bytes(
-        &self,
-        key: &[u8],
-    ) -> Result<Option<Vec<u8>>, MemoryContextError> {
+    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MemoryContextError> {
         let map = self.read().await;
         Ok(map.get(key).cloned())
     }

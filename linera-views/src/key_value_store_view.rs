@@ -1,6 +1,6 @@
 use crate::{
     common::{Batch, Context, KeyValueOperations},
-    views::{View, HashView, HashingContext, Hasher, ViewError},
+    views::{HashView, Hasher, HashingContext, View, ViewError},
 };
 use async_trait::async_trait;
 use serde::de::DeserializeOwned;
@@ -238,7 +238,7 @@ where
 {
     async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
         let mut hasher = C::Hasher::default();
-	let indices = self.indices().await?;
+        let indices = self.indices().await?;
         hasher.update_with_bcs_bytes(&indices.len())?;
         for index in indices {
             let value = self
@@ -247,7 +247,7 @@ where
                 .expect("The value for the returned index should be present");
             hasher.update_with_bcs_bytes(&index)?;
             hasher.update_with_bcs_bytes(&value)?;
-	}
+        }
         Ok(hasher.finalize())
     }
 }

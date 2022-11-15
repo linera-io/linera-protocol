@@ -1,6 +1,6 @@
 use crate::{
     common::{Batch, Context},
-    views::{View, HashView, HashingContext, Hasher, ViewError},
+    views::{HashView, Hasher, HashingContext, View, ViewError},
 };
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
@@ -243,4 +243,3 @@ where
         Ok(hasher.finalize())
     }
 }
-

@@ -3,11 +3,9 @@
 
 use crate::common::{Batch, Context};
 use async_trait::async_trait;
-use std::fmt::Debug;
-use thiserror::Error;
 use serde::Serialize;
-use std::io::Write;
-
+use std::{fmt::Debug, io::Write};
+use thiserror::Error;
 
 #[cfg(test)]
 #[path = "unit_tests/views.rs"]
@@ -75,7 +73,6 @@ pub enum ViewError {
     NotFound(String),
 }
 
-
 #[async_trait]
 pub trait HashView<C: HashingContext>: View<C> {
     /// Compute the hash of the values.
@@ -101,7 +98,6 @@ impl Hasher for sha2::Sha512 {
     type Output = generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Digest>::OutputSize>;
 
     fn finalize(self) -> Self::Output {
-	<sha2::Sha512 as sha2::Digest>::finalize(self)
+        <sha2::Sha512 as sha2::Digest>::finalize(self)
     }
 }
-
