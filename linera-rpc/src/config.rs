@@ -34,6 +34,7 @@ pub struct ShardConfig {
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum NetworkProtocol {
     Simple(TransportProtocol),
+    Grpc(),
 }
 
 /// The network configuration for all shards.
@@ -95,6 +96,7 @@ impl std::fmt::Display for NetworkProtocol {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             NetworkProtocol::Simple(protocol) => write!(f, "{}", protocol),
+            NetworkProtocol::Grpc() => write!(f, "{}", "grpc"),
         }
     }
 }
@@ -124,8 +126,11 @@ impl std::str::FromStr for NetworkProtocol {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let protocol = TransportProtocol::from_str(s)?;
-        Ok(Self::Simple(protocol))
+        let protocol = match s {
+            "grpc" => Self::Grpc(),
+            _ => Self::Simple(TransportProtocol::from_str(s)?),
+        };
+        Ok(protocol)
     }
 }
 

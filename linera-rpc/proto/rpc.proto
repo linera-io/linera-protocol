@@ -1,0 +1,177 @@
+// Test proto files
+
+syntax = "proto3";
+package rpc.v1;
+
+// TODO REMOVE ======================
+
+service BcsService {
+  rpc Handle (BcsMessage) returns (BcsMessage);
+}
+
+message BcsMessage {
+  bytes inner = 1;
+}
+
+// ==================================
+
+// Interface provided by each physical shard (aka "worker") of a validator or a local node.
+// * All commands return either the current chain info or an error.
+// * Repeating commands produces no changes and returns no error.
+// * Some handlers may return cross-chain requests, that is, messages
+//   to be communicated to other workers of the same validator.
+service ValidatorWorker {
+  // Propose a new block.
+  rpc handle_block_proposal(BlockProposal) returns (ChainInfoResponse);
+
+  // Process a certificate.
+  rpc handle_certificate(Certificate) returns (ChainInfoResponse);
+
+  // Handle information queries for this chain.
+  rpc handle_chain_info_query(ChainInfoQuery) returns (ChainInfoResponse);
+
+  // Handle a (trusted!) cross-chain request.
+  rpc handle_cross_chain_request(CrossChainRequest) returns (CrossChainRequest);
+}
+
+// How to communicate with a validator or a local node.
+service ValidatorNode {
+  // Propose a new block.
+  rpc handle_block_proposal(BlockProposal) returns (ChainInfoResponse);
+
+  // Process a certificate.
+  rpc handle_certificate(Certificate) returns (ChainInfoResponse);
+
+  // Handle information queries for this chain.
+  rpc handle_chain_info_query(ChainInfoQuery) returns (ChainInfoResponse);
+}
+
+// An internal message between chains within a validator.
+message CrossChainRequest {
+  oneof inner {
+    UpdateRecipient update_recipient = 1;
+    ConfirmUpdateRecipient confirm_update_recipient = 2;
+  }
+}
+
+// Communicate a number of confirmed blocks from the sender to the recipient.
+// Blocks must be given by increasing heights.
+message UpdateRecipient {
+  ApplicationId application_id = 1;
+  Origin origin = 2;
+  ChainId recipient = 3;
+  repeated Certificate certificates = 4;
+}
+
+// Acknowledge the height of the highest confirmed block communicated with `UpdateRecipient`.
+message ConfirmUpdateRecipient {
+  ApplicationId application_id = 1;
+  Origin origin = 2;
+  ChainId recipient = 3;
+  BlockHeight height = 4;
+}
+
+// Message to obtain information on a chain.
+message ChainInfoQuery {
+  // The chain id
+  ChainId chain_id = 1;
+
+  // Optionally test that block height is as expected
+  optional BlockHeight test_next_block_height = 2;
+
+  // Query the current committees
+  bool request_committees = 3;
+
+  // Query the received messages that are waiting be picked in the next block.
+  bool request_pending_messages = 4;
+
+  // Query a range of certificates sent from the chain.
+  optional BlockHeightRange request_sent_certificates_in_range = 5;
+
+  // Query new certificate removed from the chain.
+  optional uint64 request_received_certificates_excluding_first_nth = 6;
+}
+
+// The origin of a message, relative to a particular application. Used to identify each inbox.
+message Origin {
+  // The chain ID of the sender.
+  ChainId chain_id = 1;
+
+  // The medium
+  Medium medium = 2;
+}
+
+// The origin of a message coming from a particular chain. Used to identify each inbox.
+message Medium {
+  oneof inner {
+    // The message is a direct message (noe the value is not used)
+    bool direct = 1;
+
+    // The message is a channel broadcast
+    string channel = 2;
+  }
+}
+
+// An authenticated proposal for a new block.
+message BlockProposal {
+  // bcs signable
+  bytes content = 1;
+
+  // byte encoded public key
+  PublicKey owner = 2;
+
+  // signature value
+  Signature signature = 3;
+}
+
+// A certified statement from the committee.
+message Certificate {
+  // The certified value (bcs signable)
+  bytes value = 1;
+
+  // Signatures on the value
+  repeated NameSignaturePair signatures = 2;
+}
+
+/// A range of block heights as used in ChainInfoQuery.
+message BlockHeightRange {
+  // Starting point
+  BlockHeight start = 1;
+
+  // Optional limit on the number of elements.
+  optional uint64 limit = 2;
+}
+
+message NameSignaturePair {
+  PublicKey validator_name = 1;
+  Signature signature = 2;
+}
+
+message ApplicationId {
+  uint64 inner = 1;
+}
+
+message ChainId {
+  bytes bytes = 1;
+}
+
+message PublicKey {
+  bytes bytes = 1;
+}
+
+message Signature {
+  bytes bytes = 1;
+}
+
+// Response to `ChainInfoQuery`
+message ChainInfoResponse {
+  // bcs signable
+  bytes chain_info = 1;
+
+  // ?
+  optional Signature signature = 2;
+}
+
+message BlockHeight {
+  uint64 height = 1;
+}
