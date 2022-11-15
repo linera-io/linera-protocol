@@ -1,6 +1,6 @@
 use crate::{
     common::{Batch, Context, KeyValueOperations},
-    views::{View, ViewError},
+    views::{View, HashView, HashingContext, Hasher, ViewError},
 };
 use async_trait::async_trait;
 use serde::de::DeserializeOwned;
@@ -96,6 +96,39 @@ where
             updates: BTreeMap::new(),
         }
     }
+
+    async fn indices(&self) -> Result<Vec<Vec<u8>>, ViewError> {
+        let len = self.context.base_key().len();
+        let key_prefix = self.context.base_key();
+        let mut keys = Vec::new();
+        if !self.was_cleared {
+            for key in self.context.find_keys_with_prefix(&key_prefix).await? {
+                if !self.updates.contains_key(&key) {
+                    let key = &key[len..];
+                    keys.push(key.to_vec())
+                }
+            }
+        }
+        for (key, value) in &self.updates {
+            if value.is_some() {
+                keys.push(key.to_vec())
+            }
+        }
+        keys.sort();
+        Ok(keys)
+    }
+
+    pub async fn get(&self, index: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
+        if let Some(update) = self.updates.get(index) {
+            return Ok(update.as_ref().cloned());
+        }
+        if self.was_cleared {
+            return Ok(None);
+        }
+        let key = self.context.derive_key_bytes(index);
+        let value = self.context.read_key(&key).await?;
+        Ok(value)
+    }
 }
 
 #[async_trait]
@@ -169,6 +202,28 @@ where
     async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
         self.context.write_batch(batch).await?;
         Ok(())
+    }
+}
+
+#[async_trait]
+impl<C> HashView<C> for KeyValueStoreView<C>
+where
+    C: HashingContext + Send + Sync,
+    ViewError: From<C::Error>,
+{
+    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
+        let mut hasher = C::Hasher::default();
+	let indices = self.indices().await?;
+        hasher.update_with_bcs_bytes(&indices.len())?;
+        for index in indices {
+            let value = self
+                .get(&index)
+                .await?
+                .expect("The value for the returned index should be present");
+            hasher.update_with_bcs_bytes(&index)?;
+            hasher.update_with_bcs_bytes(&value)?;
+	}
+        Ok(hasher.finalize())
     }
 }
 
