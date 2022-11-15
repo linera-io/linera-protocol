@@ -477,7 +477,7 @@ async fn test_views_in_memory() {
 }
 
 #[cfg(test)]
-async fn test_views_in_key_valyue_store_view_memory_param(config: &TestConfig) {
+async fn test_views_in_key_value_store_view_memory_param(config: &TestConfig) {
     log::warn!(
         "Testing config {:?} with key_value_store_view on memory",
         config
@@ -487,9 +487,9 @@ async fn test_views_in_key_valyue_store_view_memory_param(config: &TestConfig) {
 }
 
 #[tokio::test]
-async fn test_views_in_key_valyue_store_view_memory() {
+async fn test_views_in_key_value_store_view_memory() {
     for config in TestConfig::samples() {
-        test_views_in_key_valyue_store_view_memory_param(&config).await
+        test_views_in_key_value_store_view_memory_param(&config).await
     }
 }
 

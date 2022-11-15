@@ -98,7 +98,7 @@ pub trait Context {
 
     /// The error type in use by internal operations.
     /// In practice, we always want `ViewError: From<Self::Error>` here.
-    type Error: std::error::Error + Debug + Send + Sync + 'static + std::convert::From<bcs::Error>;
+    type Error: std::error::Error + Debug + Send + Sync + 'static + From<bcs::Error>;
 
     /// Getter for the user provided data.
     fn extra(&self) -> &Self::Extra;
@@ -110,7 +110,7 @@ pub trait Context {
     fn derive_key<I: Serialize>(&self, index: &I) -> Result<Vec<u8>, Self::Error>;
 
     /// Obtain the Vec<u8> key from the key by appending to the base_key
-    fn derive_key_u8(&self, index: &[u8]) -> Vec<u8>;
+    fn derive_key_bytes(&self, index: &[u8]) -> Vec<u8>;
 
     /// Retrieve a generic `Item` from the table using the provided `key` prefixed by the current
     /// context.
@@ -147,8 +147,8 @@ impl<E, DB> Context for ContextFromDb<E, DB>
 where
     E: Clone + Send + Sync,
     DB: KeyValueOperations + Clone + Send + Sync,
-    DB::Error: std::convert::From<bcs::Error> + Send + Sync + std::error::Error + 'static,
-    ViewError: std::convert::From<DB::Error>,
+    DB::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
+    ViewError: From<DB::Error>,
 {
     type Extra = E;
     type Error = DB::Error;
@@ -171,7 +171,7 @@ where
         Ok(key)
     }
 
-    fn derive_key_u8(&self, index: &[u8]) -> Vec<u8> {
+    fn derive_key_bytes(&self, index: &[u8]) -> Vec<u8> {
         let mut key = self.base_key.clone();
         key.extend_from_slice(index);
         key
@@ -213,8 +213,8 @@ impl<E, DB> HashingContext for ContextFromDb<E, DB>
 where
     E: Clone + Send + Sync,
     DB: KeyValueOperations + Clone + Send + Sync,
-    DB::Error: std::convert::From<bcs::Error> + Send + Sync + std::error::Error + 'static,
-    ViewError: std::convert::From<DB::Error>,
+    DB::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
+    ViewError: From<DB::Error>,
 {
     type Hasher = sha2::Sha512;
 }

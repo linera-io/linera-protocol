@@ -49,15 +49,15 @@ where
             self.delete_entries(batch).await?;
             for (index, update) in mem::take(&mut self.updates) {
                 if let Some(value) = update {
-                    batch.put_key_value_u8(self.context.derive_key_u8(&index), value);
+                    batch.put_key_value_u8(self.context.derive_key_bytes(&index), value);
                 }
             }
         } else {
             for (index, update) in mem::take(&mut self.updates) {
                 match update {
-                    None => batch.delete_key(self.context.derive_key_u8(&index)),
+                    None => batch.delete_key(self.context.derive_key_bytes(&index)),
                     Some(value) => {
-                        batch.put_key_value_u8(self.context.derive_key_u8(&index), value)
+                        batch.put_key_value_u8(self.context.derive_key_bytes(&index), value)
                     }
                 }
             }
@@ -102,9 +102,10 @@ where
 impl<C> KeyValueOperations for KeyValueStoreView<C>
 where
     C: Context + Sync + Send,
-    ViewError: std::convert::From<C::Error>,
+    ViewError: From<C::Error>,
 {
     type Error = ViewError;
+
     async fn read_key<V: DeserializeOwned>(&self, key: &[u8]) -> Result<Option<V>, ViewError> {
         if let Some(update) = self.updates.get(key) {
             match update.as_ref() {
@@ -124,7 +125,7 @@ where
 
     async fn find_keys_with_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, ViewError> {
         let len = self.context.base_key().len();
-        let key_prefix = self.context.derive_key_u8(key_prefix);
+        let key_prefix = self.context.derive_key_bytes(key_prefix);
         let mut keys = Vec::new();
         if !self.was_reset_to_default {
             for key in self.context.find_keys_with_prefix(&key_prefix).await? {
@@ -147,7 +148,7 @@ where
         key_prefix: &[u8],
     ) -> Result<Vec<Key>, ViewError> {
         let len1 = key_prefix.len();
-        let key_prefix = self.context.derive_key_u8(key_prefix);
+        let key_prefix = self.context.derive_key_bytes(key_prefix);
         let len2 = key_prefix.len();
         let mut keys = Vec::new();
         if !self.was_reset_to_default {
