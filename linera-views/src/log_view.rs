@@ -19,7 +19,7 @@ pub struct LogView<C, T> {
 #[async_trait]
 pub trait LogOperations<T>: Context {
     /// Return the size of the log in storage.
-    async fn count(&mut self) -> Result<usize, Self::Error>;
+    async fn count(&self) -> Result<usize, Self::Error>;
 
     /// Obtain the value at the given index.
     async fn get(&mut self, index: usize) -> Result<Option<T>, Self::Error>;
@@ -46,7 +46,7 @@ impl<T, C: Context + Send + Sync> LogOperations<T> for C
 where
     T: Serialize + DeserializeOwned + Send + Sync + 'static,
 {
-    async fn count(&mut self) -> Result<usize, Self::Error> {
+    async fn count(&self) -> Result<usize, Self::Error> {
         let base = self.base_key();
         let count = self.read_key(&base).await?.unwrap_or_default();
         Ok(count)
@@ -107,7 +107,7 @@ where
         &self.context
     }
 
-    async fn load(mut context: C) -> Result<Self, ViewError> {
+    async fn load(context: C) -> Result<Self, ViewError> {
         let stored_count = context.count().await?;
         Ok(Self {
             context,
