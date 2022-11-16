@@ -5,7 +5,7 @@
 use crate::{
     codec,
     config::{
-        CrossChainConfig, ShardId, ValidatorInternalNetworkPreConfig,
+        CrossChainConfig, NetworkProtocol, ShardId, ValidatorInternalNetworkPreConfig,
         ValidatorPublicNetworkPreConfig,
     },
     transport::{MessageHandler, SpawnedServer, TransportProtocol},
@@ -26,9 +26,11 @@ use log::{debug, error, info, warn};
 use std::{io, str::FromStr, time::Duration};
 use tokio::time;
 
+pub trait SharedStore: Store + Clone + Send + Sync + 'static {}
+
 #[derive(Clone)]
 pub struct Server<S> {
-    network: ValidatorInternalNetworkPreConfig<TransportProtocol>,
+    network: ValidatorInternalNetworkPreConfig<NetworkProtocol>,
     host: String,
     port: u16,
     state: WorkerState<S>,
@@ -42,7 +44,7 @@ pub struct Server<S> {
 impl<S> Server<S> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        network: ValidatorInternalNetworkPreConfig<TransportProtocol>,
+        network: ValidatorInternalNetworkPreConfig<NetworkProtocol>,
         host: String,
         port: u16,
         state: WorkerState<S>,
