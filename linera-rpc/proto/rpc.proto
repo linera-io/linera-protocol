@@ -103,6 +103,7 @@ message Origin {
 
 // The origin of a message coming from a particular chain. Used to identify each inbox.
 message Medium {
+  // todo change to optional instead of enum
   oneof inner {
     // The message is a direct message (noe the value is not used)
     bool direct = 1;

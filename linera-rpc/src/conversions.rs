@@ -32,7 +32,7 @@ use crate::grpc_network::grpc_network::ChainId as ChainIdRPC;
 use linera_base::messages::ChainId;
 
 use crate::grpc_network::grpc_network::PublicKey as PublicKeyRPC;
-use linera_base::crypto::{HashValue, PublicKey, PublicKeyFromStrError};
+use linera_base::crypto::{CryptoError, HashValue, PublicKey, PublicKeyFromStrError};
 
 use crate::grpc_network::grpc_network::Signature as SignatureRPC;
 use linera_base::crypto::Signature;
@@ -56,24 +56,50 @@ pub enum ProtoConversionError {
     SignatureError(#[from] ed25519_dalek::SignatureError),
     #[error("Public key error: {0}")]
     PublicKeyError(#[from] PublicKeyFromStrError),
+    // todo do we want this?
+    #[error("Cryptographic error: {0}")]
+    CryptoError(#[from] CryptoError),
 }
 
 macro_rules! proto_convert {
-    ($field_name:expr) => {
-        $field_name
-            .ok_or(ProtoConversionError::MissingField)?
-            .into()
+    ($expr:expr) => {
+        $expr.ok_or(ProtoConversionError::MissingField)?.into()
     };
 }
 
 macro_rules! try_proto_convert {
-    ($field_name:expr) => {
-        $field_name
+    ($expr:expr) => {
+        $expr
             .ok_or(ProtoConversionError::MissingField)?
             .try_into()?
     };
 }
 
+macro_rules! map_into {
+    ($expr:expr) => {
+        $expr.map(|x| x.into())
+    };
+}
+
+macro_rules! map_try_into {
+    ($expr:expr) => {
+        $expr.map(|x| x.try_into())
+    };
+}
+
+macro_rules! map_as {
+    ($expr:expr, $ty:ty) => {
+        $expr.map(|x| x as $ty)
+    };
+}
+
+macro_rules! map_invert {
+    ($expr:expr) => {
+        $expr
+            .map(|x| x.try_into())
+            .map_or(Ok(None), |v| v.map(Some))?
+    };
+}
 impl TryFrom<BlockProposal> for BlockProposalRpc {
     type Error = ProtoConversionError;
 
@@ -129,7 +155,7 @@ impl TryFrom<CrossChainRequestRpc> for CrossChainRequest {
                 application_id: proto_convert!(application_id),
                 origin: try_proto_convert!(origin),
                 recipient: try_proto_convert!(recipient),
-                height: try_proto_convert!(height),
+                height: proto_convert!(height),
             },
         };
         Ok(ccr)
@@ -178,10 +204,12 @@ impl TryFrom<CertificateRpc> for Certificate {
         let mut signatures = Vec::with_capacity(certificate.signatures.len());
 
         for name_signature_pair in certificate.signatures {
-            let validator_name = try_proto_convert!(name_signature_pair.validator_name);
-            let signature = try_proto_convert!(name_signature_pair.signature);
+            let validator_name: ValidatorName = try_proto_convert!(name_signature_pair.validator_name);
+            let signature: Signature = try_proto_convert!(name_signature_pair.signature);
             signatures.push((validator_name, signature));
         }
+
+        unimplemented!();
 
         Ok(Self {
             value: bcs::from_bytes(certificate.value.as_slice())?,
@@ -216,16 +244,15 @@ impl TryFrom<ChainInfoQueryRpc> for ChainInfoQuery {
 
     fn try_from(chain_info_query: ChainInfoQueryRpc) -> Result<Self, Self::Error> {
         Ok(Self {
-            chain_id: try_proto_convert!(chain_info_query.chain_id),
-            test_next_block_height: chain_info_query.test_next_block_height.into(),
             request_committees: chain_info_query.request_committees,
             request_pending_messages: chain_info_query.request_pending_messages,
-            request_sent_certificates_in_range: try_proto_convert!(
-                chain_info_query.request_sent_certificates_in_range
+            chain_id: try_proto_convert!(chain_info_query.chain_id),
+            request_sent_certificates_in_range: map_invert!(chain_info_query.request_sent_certificates_in_range),
+            request_received_certificates_excluding_first_nth: map_as!(
+                chain_info_query.request_received_certificates_excluding_first_nth,
+                usize
             ),
-            request_received_certificates_excluding_first_nth: try_proto_convert!(
-                chain_info_query.request_received_certificates_excluding_first_nth
-            ),
+            test_next_block_height: map_into!(chain_info_query.test_next_block_height),
         })
     }
 }
@@ -234,21 +261,21 @@ impl TryFrom<ChainInfoQuery> for ChainInfoQueryRpc {
     type Error = ProtoConversionError;
 
     fn try_from(chain_info_query: ChainInfoQuery) -> Result<Self, Self::Error> {
-        let test_next_block_height = chain_info_query.test_next_block_height.map(|t| t.into());
+        let test_next_block_height = map_into!(chain_info_query.test_next_block_height);
 
-        let request_sent_certificates_in_range = chain_info_query
-            .request_sent_certificates_in_range
-            .map(|r| r.into());
+        let request_sent_certificates_in_range =
+            map_into!(chain_info_query.request_sent_certificates_in_range);
 
-        let request_received_certificates_excluding_first_nth = chain_info_query
-            .request_received_certificates_excluding_first_nth
-            .map(|n| n as u64);
+        let request_received_certificates_excluding_first_nth = map_as!(
+            chain_info_query.request_received_certificates_excluding_first_nth,
+            u64
+        );
 
         Ok(Self {
             chain_id: Some(chain_info_query.chain_id.into()),
-            test_next_block_height,
             request_committees: chain_info_query.request_committees,
             request_pending_messages: chain_info_query.request_pending_messages,
+            test_next_block_height,
             request_sent_certificates_in_range,
             request_received_certificates_excluding_first_nth,
         })
@@ -268,6 +295,17 @@ impl From<Medium> for MediumRpc {
     }
 }
 
+impl TryFrom<MediumRpc> for Medium {
+    type Error = ProtoConversionError;
+
+    fn try_from(medium: MediumRpc) -> Result<Self, Self::Error> {
+        match medium.inner.ok_or(ProtoConversionError::MissingField)? {
+            medium::Inner::Direct(_) => Ok(Medium::Direct),
+            medium::Inner::Channel(channel) => Ok(Medium::Channel(channel)),
+        }
+    }
+}
+
 impl From<BlockHeightRange> for BlockHeightRangeRPC {
     fn from(block_height_range: BlockHeightRange) -> Self {
         Self {
@@ -280,8 +318,11 @@ impl From<BlockHeightRange> for BlockHeightRangeRPC {
 impl TryFrom<BlockHeightRangeRPC> for BlockHeightRange {
     type Error = ProtoConversionError;
 
-    fn try_from(value: BlockHeightRangeRPC) -> Result<Self, Self::Error> {
-        unimplemented!()
+    fn try_from(block_height_range: BlockHeightRangeRPC) -> Result<Self, Self::Error> {
+        Ok(Self {
+            start: proto_convert!(block_height_range.start),
+            limit: map_as!(block_height_range.limit, usize),
+        })
     }
 }
 
@@ -340,11 +381,30 @@ impl From<Origin> for OriginRpc {
     }
 }
 
+impl TryFrom<OriginRpc> for Origin {
+    type Error = ProtoConversionError;
+
+    fn try_from(origin: OriginRpc) -> Result<Self, Self::Error> {
+        Ok(Self {
+            chain_id: try_proto_convert!(origin.chain_id),
+            medium: Medium::Direct,
+        })
+    }
+}
+
 impl From<ValidatorName> for PublicKeyRPC {
     fn from(validator_name: ValidatorName) -> Self {
         Self {
             bytes: validator_name.0 .0.to_vec(),
         }
+    }
+}
+
+impl TryFrom<PublicKeyRPC> for ValidatorName {
+    type Error = ProtoConversionError;
+
+    fn try_from(public_key: PublicKeyRPC) -> Result<Self, Self::Error> {
+        public_key.try_into()
     }
 }
 
@@ -388,7 +448,7 @@ impl From<BlockHeight> for BlockHeightRPC {
 impl From<BlockHeightRPC> for BlockHeight {
     fn from(block_height: BlockHeightRPC) -> Self {
         Self {
-            0: block_height.height
+            0: block_height.height,
         }
     }
 }
