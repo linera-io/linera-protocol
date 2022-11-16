@@ -30,7 +30,7 @@ pub trait SharedStore: Store + Clone + Send + Sync + 'static {}
 
 #[derive(Clone)]
 pub struct Server<S> {
-    network: ValidatorInternalNetworkPreConfig<NetworkProtocol>,
+    network: ValidatorInternalNetworkPreConfig<TransportProtocol>,
     host: String,
     port: u16,
     state: WorkerState<S>,
@@ -44,7 +44,7 @@ pub struct Server<S> {
 impl<S> Server<S> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        network: ValidatorInternalNetworkPreConfig<NetworkProtocol>,
+        network: ValidatorInternalNetworkPreConfig<TransportProtocol>,
         host: String,
         port: u16,
         state: WorkerState<S>,
