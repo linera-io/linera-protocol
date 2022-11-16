@@ -1,4 +1,4 @@
-use crate::{
+pub use crate::{
     config::{CrossChainConfig, ShardId},
     grpc_network::grpc_network::{
         bcs_service_server::BcsService, BcsMessage, BlockProposal, Certificate, ChainInfoQuery,
@@ -10,7 +10,11 @@ use crate::{
 use linera_core::worker::{ValidatorWorker, WorkerState};
 use linera_views::views::ViewError;
 use log::info;
-use std::{net::SocketAddr, sync::Arc};
+use std::{
+    net::{IpAddr, SocketAddr},
+    str::FromStr,
+    sync::Arc,
+};
 use tokio::sync::Mutex;
 use tonic::{transport::Server, Request, Response, Status};
 
@@ -34,12 +38,15 @@ pub mod grpc_network {
 pub struct GrpcServer<S> {
     host: String,
     port: u16,
-    state: Mutex<WorkerState<S>>,
+    state: Arc<Mutex<WorkerState<S>>>,
     shard_id: ShardId,
     cross_chain_config: CrossChainConfig,
 }
 
-impl<S> GrpcServer<S> {
+impl<S: SharedStore> GrpcServer<S>
+where
+    ViewError: From<S::ContextError>,
+{
     pub fn new(
         host: String,
         port: u16,
@@ -50,7 +57,7 @@ impl<S> GrpcServer<S> {
         Self {
             host,
             port,
-            state: Mutex::new(state),
+            state: Arc::new(Mutex::new(state)),
             shard_id,
             cross_chain_config,
         }
@@ -62,14 +69,19 @@ impl<S> GrpcServer<S> {
             self.host, self.port
         );
 
-        let address = SocketAddr::new(self.host.clone().try_into()?, self.port);
+        let address = SocketAddr::new(
+            IpAddr::from_str(self.host.as_str()).expect("todo"),
+            self.port,
+        );
 
         let validator_node = ValidatorNodeServer::new(self);
 
         let server = Server::builder()
-            .add_service(service)
-            .serve_with_shutdown(address, receiver.map(|_| ()))
+            .add_service(validator_node)
+            //.serve_with_shutdown(address, receiver.map(|_| ()))
+            .serve(address)
             .await;
+        Ok(())
     }
 
     pub async fn spawn_validator_worker(self) -> Result<(), std::io::Error> {
@@ -78,22 +90,26 @@ impl<S> GrpcServer<S> {
             self.host, self.port
         );
 
-        let address = SocketAddr::new(self.host.clone().try_into()?, self.port);
+        let address = SocketAddr::new(
+            IpAddr::from_str(self.host.as_str()).expect("todo"),
+            self.port,
+        );
 
         let validator_worker = ValidatorWorkerServer::new(self);
 
         let server = Server::builder()
-            .add_service(service)
-            .serve_with_shutdown(address, receiver.map(|_| ()))
+            .add_service(validator_worker)
+            //.serve_with_shutdown(address, receiver.map(|_| ()))
+            .serve(address)
             .await;
+        Ok(())
     }
 }
 
 // probably want to change this to `impl ValidatorNode for LocalNode`?
 #[tonic::async_trait]
-impl<S> ValidatorNodeRpc for GrpcServer<S>
+impl<S: SharedStore> ValidatorNodeRpc for GrpcServer<S>
 where
-    S: SharedStore,
     ViewError: From<S::ContextError>,
 {
     async fn handle_block_proposal(
@@ -103,8 +119,9 @@ where
         self.state
             .lock()
             .await
-            .handle_block_proposal(request.into_inner().into())
-            .await
+            .handle_block_proposal(request.into_inner().try_into().unwrap())
+            .await;
+        unimplemented!()
     }
 
     async fn handle_certificate(
@@ -114,8 +131,9 @@ where
         self.state
             .lock()
             .await
-            .handle_certificate(request.into_inner().into())
-            .await
+            .handle_certificate(request.into_inner().try_into().unwrap())
+            .await;
+        unimplemented!()
     }
 
     async fn handle_chain_info_query(
@@ -125,15 +143,15 @@ where
         self.state
             .lock()
             .await
-            .handle_chain_info_query(request.into_inner().into())
-            .await
+            .handle_chain_info_query(request.into_inner().try_into().unwrap())
+            .await;
+        unimplemented!()
     }
 }
 
 #[tonic::async_trait]
-impl<S> ValidatorWorkerRpc for GrpcServer<S>
+impl<S: SharedStore> ValidatorWorkerRpc for GrpcServer<S>
 where
-    S: SharedStore,
     ViewError: From<S::ContextError>,
 {
     async fn handle_block_proposal(
@@ -143,8 +161,9 @@ where
         self.state
             .lock()
             .await
-            .handle_block_proposal(request.into_inner().into())
-            .await
+            .handle_block_proposal(request.into_inner().try_into().unwrap())
+            .await;
+        unimplemented!()
     }
 
     async fn handle_certificate(
@@ -154,8 +173,9 @@ where
         self.state
             .lock()
             .await
-            .handle_certificate(request.into_inner().into())
-            .await
+            .handle_certificate(request.into_inner().try_into().unwrap())
+            .await;
+        unimplemented!()
     }
 
     async fn handle_chain_info_query(
@@ -165,8 +185,9 @@ where
         self.state
             .lock()
             .await
-            .handle_chain_info_query(request.into_inner().into())
-            .await
+            .handle_chain_info_query(request.into_inner().try_into().unwrap())
+            .await;
+        unimplemented!()
     }
 
     async fn handle_cross_chain_request(
@@ -176,8 +197,9 @@ where
         self.state
             .lock()
             .await
-            .handle_cross_chain_request(request.into_inner().into())
-            .await
+            .handle_cross_chain_request(request.into_inner().try_into().unwrap())
+            .await;
+        unimplemented!()
     }
 }
 

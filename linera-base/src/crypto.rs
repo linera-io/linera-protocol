@@ -219,6 +219,15 @@ impl FromStr for PublicKey {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let value = hex::decode(s)?;
+        Ok((value.as_slice()).try_into()?)
+    }
+}
+
+impl TryFrom<&[u8]> for PublicKey {
+    // todo: PublicKeyFromBytesError
+    type Error = PublicKeyFromStrError;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
         if value.len() != dalek::PUBLIC_KEY_LENGTH {
             return Err(PublicKeyFromStrError::InvalidLength);
         }
@@ -243,6 +252,15 @@ impl FromStr for HashValue {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let value = hex::decode(s)?;
+        Ok((value.as_slice()).try_into()?)
+    }
+}
+
+impl TryFrom<&[u8]> for HashValue {
+    // todo: HashFromBytesError
+    type Error = HashFromStrError;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
         if value.len() != <sha2::Sha512 as sha2::Digest>::output_size() {
             return Err(HashFromStrError::InvalidLength);
         }
@@ -253,6 +271,7 @@ impl FromStr for HashValue {
         Ok(Self(bytes))
     }
 }
+
 
 /// Error when attempting to convert a string into a [`HashValue`].
 #[derive(Clone, Copy, Debug, Error)]

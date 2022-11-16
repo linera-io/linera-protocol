@@ -2,7 +2,8 @@ use ed25519::signature::Signature as edSignature;
 use thiserror::Error;
 
 use crate::grpc_network::grpc_network::{
-    medium, CrossChainRequest as CrossChainRequestRpc, NameSignaturePair,
+    medium, ConfirmUpdateRecipient, CrossChainRequest as CrossChainRequestRpc, NameSignaturePair,
+    UpdateRecipient,
 };
 use linera_core::messages::CrossChainRequest;
 
@@ -31,7 +32,7 @@ use crate::grpc_network::grpc_network::ChainId as ChainIdRPC;
 use linera_base::messages::ChainId;
 
 use crate::grpc_network::grpc_network::PublicKey as PublicKeyRPC;
-use linera_base::crypto::PublicKey;
+use linera_base::crypto::{HashValue, PublicKey, PublicKeyFromStrError};
 
 use crate::grpc_network::grpc_network::Signature as SignatureRPC;
 use linera_base::crypto::Signature;
@@ -42,13 +43,35 @@ use linera_core::messages::ChainInfoResponse;
 use crate::grpc_network::grpc_network::BlockHeight as BlockHeightRPC;
 use linera_base::messages::BlockHeight;
 
-use crate::grpc_network::grpc_network::Owner as OwnerRPC;
+use crate::grpc_network::grpc_network::{cross_chain_request::Inner, Owner as OwnerRPC};
 use linera_base::messages::Owner;
 
 #[derive(Error, Debug)]
 pub enum ProtoConversionError {
     #[error("BCS serialization / deserialization error.")]
     BcsError(#[from] bcs::Error),
+    #[error("Conversion failed due to missing field")]
+    MissingField,
+    #[error("Signature error: {0}")]
+    SignatureError(#[from] ed25519_dalek::SignatureError),
+    #[error("Public key error: {0}")]
+    PublicKeyError(#[from] PublicKeyFromStrError),
+}
+
+macro_rules! proto_convert {
+    ($field_name:expr) => {
+        $field_name
+            .ok_or(ProtoConversionError::MissingField)?
+            .into()
+    };
+}
+
+macro_rules! try_proto_convert {
+    ($field_name:expr) => {
+        $field_name
+            .ok_or(ProtoConversionError::MissingField)?
+            .try_into()?
+    };
 }
 
 impl TryFrom<BlockProposal> for BlockProposalRpc {
@@ -59,6 +82,111 @@ impl TryFrom<BlockProposal> for BlockProposalRpc {
             content: bcs::to_bytes(&block_proposal.content)?,
             owner: Some(block_proposal.owner.into()),
             signature: Some(block_proposal.signature.into()),
+        })
+    }
+}
+
+impl TryFrom<BlockProposalRpc> for BlockProposal {
+    type Error = ProtoConversionError;
+
+    fn try_from(block_proposal: BlockProposalRpc) -> Result<Self, Self::Error> {
+        Ok(Self {
+            content: bcs::from_bytes(&block_proposal.content)?,
+            owner: try_proto_convert!(block_proposal.owner),
+            signature: try_proto_convert!(block_proposal.signature),
+        })
+    }
+}
+
+impl TryFrom<CrossChainRequestRpc> for CrossChainRequest {
+    type Error = ProtoConversionError;
+
+    fn try_from(cross_chain_request: CrossChainRequestRpc) -> Result<Self, Self::Error> {
+        let ccr = match cross_chain_request
+            .inner
+            .ok_or(ProtoConversionError::MissingField)?
+        {
+            Inner::UpdateRecipient(UpdateRecipient {
+                application_id,
+                origin,
+                recipient,
+                certificates,
+            }) => CrossChainRequest::UpdateRecipient {
+                application_id: proto_convert!(application_id),
+                origin: try_proto_convert!(origin),
+                recipient: try_proto_convert!(recipient),
+                certificates: certificates
+                    .into_iter()
+                    .map(|c| c.try_into())
+                    .collect::<Result<Vec<Certificate>, ProtoConversionError>>()?,
+            },
+            Inner::ConfirmUpdateRecipient(ConfirmUpdateRecipient {
+                application_id,
+                origin,
+                recipient,
+                height,
+            }) => CrossChainRequest::ConfirmUpdatedRecipient {
+                application_id: proto_convert!(application_id),
+                origin: try_proto_convert!(origin),
+                recipient: try_proto_convert!(recipient),
+                height: try_proto_convert!(height),
+            },
+        };
+        Ok(ccr)
+    }
+}
+
+impl TryFrom<CrossChainRequest> for CrossChainRequestRpc {
+    type Error = ProtoConversionError;
+
+    fn try_from(cross_chain_request: CrossChainRequest) -> Result<Self, Self::Error> {
+        let inner = match cross_chain_request {
+            CrossChainRequest::UpdateRecipient {
+                application_id,
+                origin,
+                recipient,
+                certificates,
+            } => Inner::UpdateRecipient(UpdateRecipient {
+                application_id: Some(application_id.into()),
+                origin: Some(origin.into()),
+                recipient: Some(recipient.into()),
+                certificates: certificates
+                    .into_iter()
+                    .map(|c| c.try_into())
+                    .collect::<Result<Vec<CertificateRpc>, ProtoConversionError>>()?,
+            }),
+            CrossChainRequest::ConfirmUpdatedRecipient {
+                application_id,
+                origin,
+                recipient,
+                height,
+            } => Inner::ConfirmUpdateRecipient(ConfirmUpdateRecipient {
+                application_id: Some(application_id.into()),
+                origin: Some(origin.into()),
+                recipient: Some(recipient.into()),
+                height: Some(height.into()),
+            }),
+        };
+        Ok(Self { inner: Some(inner) })
+    }
+}
+
+impl TryFrom<CertificateRpc> for Certificate {
+    type Error = ProtoConversionError;
+
+    fn try_from(certificate: CertificateRpc) -> Result<Self, Self::Error> {
+        let mut signatures = Vec::with_capacity(certificate.signatures.len());
+
+        for name_signature_pair in certificate.signatures {
+            let validator_name = try_proto_convert!(name_signature_pair.validator_name);
+            let signature = try_proto_convert!(name_signature_pair.signature);
+            signatures.push((validator_name, signature));
+        }
+
+        Ok(Self {
+            value: bcs::from_bytes(certificate.value.as_slice())?,
+            signatures,
+            hash: todo!(),
         })
     }
 }
@@ -79,6 +207,25 @@ impl TryFrom<Certificate> for CertificateRpc {
         Ok(Self {
             value: bcs::to_bytes(&certificate.value)?,
             signatures,
+        })
+    }
+}
+
+impl TryFrom<ChainInfoQueryRpc> for ChainInfoQuery {
+    type Error = ProtoConversionError;
+
+    fn try_from(chain_info_query: ChainInfoQueryRpc) -> Result<Self, Self::Error> {
+        Ok(Self {
+            chain_id: try_proto_convert!(chain_info_query.chain_id),
+            test_next_block_height: chain_info_query.test_next_block_height.into(),
+            request_committees: chain_info_query.request_committees,
+            request_pending_messages: chain_info_query.request_pending_messages,
+            request_sent_certificates_in_range: try_proto_convert!(
+                chain_info_query.request_sent_certificates_in_range
+            ),
+            request_received_certificates_excluding_first_nth: try_proto_convert!(
+                chain_info_query.request_received_certificates_excluding_first_nth
+            ),
         })
     }
 }
@@ -108,17 +255,6 @@ impl TryFrom<ChainInfoQuery> for ChainInfoQueryRpc {
     }
 }
 
-impl TryFrom<Origin> for OriginRpc {
-    type Error = ProtoConversionError;
-
-    fn try_from(origin: Origin) -> Result<Self, Self::Error> {
-        Ok(Self {
-            chain_id: Some(origin.chain_id.into()),
-            medium: Some(origin.medium.into()),
-        })
-    }
-}
-
 impl From<Medium> for MediumRpc {
     fn from(medium: Medium) -> Self {
         match medium {
@@ -141,11 +277,25 @@ impl From<BlockHeightRange> for BlockHeightRangeRPC {
     }
 }
 
+impl TryFrom<BlockHeightRangeRPC> for BlockHeightRange {
+    type Error = ProtoConversionError;
+
+    fn try_from(value: BlockHeightRangeRPC) -> Result<Self, Self::Error> {
+        unimplemented!()
+    }
+}
+
 impl From<ApplicationId> for ApplicationIdRPC {
     fn from(application_id: ApplicationId) -> Self {
         Self {
             inner: application_id.0,
         }
+    }
+}
+
+impl From<ApplicationIdRPC> for ApplicationId {
+    fn from(application_id: ApplicationIdRPC) -> Self {
+        ApplicationId(application_id.inner)
     }
 }
 
@@ -157,10 +307,35 @@ impl From<ChainId> for ChainIdRPC {
     }
 }
 
+impl TryFrom<ChainIdRPC> for ChainId {
+    type Error = ProtoConversionError;
+
+    fn try_from(chain_id: ChainIdRPC) -> Result<Self, Self::Error> {
+        Ok(ChainId::try_from(chain_id.bytes.as_slice())?)
+    }
+}
+
 impl From<PublicKey> for PublicKeyRPC {
     fn from(public_key: PublicKey) -> Self {
         Self {
             bytes: public_key.0.to_vec(),
+        }
+    }
+}
+
+impl TryFrom<PublicKeyRPC> for PublicKey {
+    type Error = ProtoConversionError;
+
+    fn try_from(public_key: PublicKeyRPC) -> Result<Self, Self::Error> {
+        Ok(PublicKey::try_from(public_key.bytes.as_slice())?)
+    }
+}
+
+impl From<Origin> for OriginRpc {
+    fn from(origin: Origin) -> Self {
+        Self {
+            chain_id: Some(origin.chain_id.into()),
+            medium: Some(origin.medium.into()),
         }
     }
 }
@@ -178,6 +353,16 @@ impl From<Signature> for SignatureRPC {
         Self {
             bytes: signature.0.as_bytes().to_vec(),
         }
+    }
+}
+
+impl TryFrom<SignatureRPC> for Signature {
+    type Error = ProtoConversionError;
+
+    fn try_from(signature: SignatureRPC) -> Result<Self, Self::Error> {
+        Ok(Self {
+            0: ed25519_dalek::Signature::from_bytes(&signature.bytes)?,
+        })
     }
 }
 
@@ -200,10 +385,28 @@ impl From<BlockHeight> for BlockHeightRPC {
     }
 }
 
+impl From<BlockHeightRPC> for BlockHeight {
+    fn from(block_height: BlockHeightRPC) -> Self {
+        Self {
+            0: block_height.height
+        }
+    }
+}
+
 impl From<Owner> for OwnerRPC {
     fn from(owner: Owner) -> Self {
         Self {
             inner: Some(owner.0.into()),
         }
+    }
+}
+
+impl TryFrom<OwnerRPC> for Owner {
+    type Error = ProtoConversionError;
+
+    fn try_from(owner: OwnerRPC) -> Result<Self, Self::Error> {
+        Ok(Self {
+            0: try_proto_convert!(owner.inner),
+        })
     }
 }
