@@ -8,13 +8,9 @@ use linera_views::memory::MemoryContainer;
 use std::collections::BTreeMap;
 use linera_views::rocksdb::{RocksdbContainer, DB};
 use linera_views::dynamo_db::{DynamodbContainer, TableName};
-use linera_views::test_utils::LocalStackTestContext;
+use linera_views::test_utils::{LocalStackTestContext, get_random_vec_keyvalues};
 use aws_sdk_dynamodb::Client;
 use std::str::FromStr;
-
-#[cfg(test)]
-use linera_views::common_test::get_random_vec_keyvalues;
-
 
 #[cfg(test)]
 async fn test_ordering_keys<OP: KeyValueOperations>(key_value_operation: OP) {

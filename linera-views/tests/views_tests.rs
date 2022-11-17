@@ -15,7 +15,7 @@ use linera_views::{
     register_view::{RegisterOperations, RegisterView},
     rocksdb::{RocksdbContext, DB},
     scoped_view::ScopedView,
-    test_utils::LocalStackTestContext,
+    test_utils::{LocalStackTestContext, random_shuffle, get_random_vec_keyvalues},
     views::{HashView, Hasher, HashingContext, View, ViewError},
 };
 use rand::Rng;
@@ -24,9 +24,6 @@ use std::{
     sync::Arc,
 };
 use tokio::sync::Mutex;
-
-#[cfg(test)]
-use linera_views::common_test::{random_shuffle, get_random_vec_keyvalues};
 
 #[allow(clippy::type_complexity)]
 pub struct StateView<C> {
