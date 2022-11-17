@@ -7,7 +7,10 @@ pub use crate::{
     transport::MessageHandler,
     Message,
 };
-use linera_core::worker::{ValidatorWorker, WorkerState};
+use linera_core::{
+    node::NodeError,
+    worker::{ValidatorWorker, WorkerState},
+};
 use linera_views::views::ViewError;
 use log::info;
 use std::{
@@ -24,8 +27,10 @@ use crate::grpc_network::grpc_network::validator_node_server::{
 };
 // to avoid confusion with existing ValidatorNode
 use crate::{
-    grpc_network::grpc_network::validator_worker_server::{
-        ValidatorWorker as ValidatorWorkerRpc, ValidatorWorkerServer,
+    convert_response,
+    grpc_network::grpc_network::{
+        validator_worker_server::{ValidatorWorker as ValidatorWorkerRpc, ValidatorWorkerServer},
+        ChainInfoResult,
     },
     simple_network::SharedStore,
 };
@@ -106,7 +111,6 @@ where
     }
 }
 
-// probably want to change this to `impl ValidatorNode for LocalNode`?
 #[tonic::async_trait]
 impl<S: SharedStore> ValidatorNodeRpc for GrpcServer<S>
 where
@@ -115,34 +119,23 @@ where
     async fn handle_block_proposal(
         &self,
         request: Request<BlockProposal>,
-    ) -> Result<Response<ChainInfoResponse>, Status> {
-        self.state
-            .clone()
-            .handle_block_proposal(request.into_inner().try_into()?)
-            .await;
-        unimplemented!()
+    ) -> Result<Response<ChainInfoResult>, Status> {
+        convert_response!(self, handle_block_proposal, request)
     }
 
     async fn handle_certificate(
         &self,
         request: Request<Certificate>,
-    ) -> Result<Response<ChainInfoResponse>, Status> {
-        self.state
-            .clone()
-            .handle_certificate(request.into_inner().try_into()?)
-            .await;
+    ) -> Result<Response<ChainInfoResult>, Status> {
+        // convert_response!(self, handle_certificate, request)
         unimplemented!()
     }
 
     async fn handle_chain_info_query(
         &self,
         request: Request<ChainInfoQuery>,
-    ) -> Result<Response<ChainInfoResponse>, Status> {
-        self.state
-            .clone()
-            .handle_chain_info_query(request.into_inner().try_into()?)
-            .await;
-        unimplemented!()
+    ) -> Result<Response<ChainInfoResult>, Status> {
+        convert_response!(self, handle_chain_info_query, request)
     }
 }
 
@@ -154,44 +147,28 @@ where
     async fn handle_block_proposal(
         &self,
         request: Request<BlockProposal>,
-    ) -> Result<Response<ChainInfoResponse>, Status> {
-        self.state
-            .clone()
-            .handle_block_proposal(request.into_inner().try_into()?)
-            .await;
-        unimplemented!()
+    ) -> Result<Response<ChainInfoResult>, Status> {
+        convert_response!(self, handle_block_proposal, request)
     }
 
     async fn handle_certificate(
         &self,
         request: Request<Certificate>,
-    ) -> Result<Response<ChainInfoResponse>, Status> {
-        self.state
-            .clone()
-            .handle_certificate(request.into_inner().try_into()?)
-            .await;
+    ) -> Result<Response<ChainInfoResult>, Status> {
         unimplemented!()
     }
 
     async fn handle_chain_info_query(
         &self,
         request: Request<ChainInfoQuery>,
-    ) -> Result<Response<ChainInfoResponse>, Status> {
-        self.state
-            .clone()
-            .handle_chain_info_query(request.into_inner().try_into()?)
-            .await;
-        unimplemented!()
+    ) -> Result<Response<ChainInfoResult>, Status> {
+        convert_response!(self, handle_chain_info_query, request)
     }
 
     async fn handle_cross_chain_request(
         &self,
         request: Request<CrossChainRequest>,
     ) -> Result<Response<CrossChainRequest>, Status> {
-        self.state
-            .clone()
-            .handle_cross_chain_request(request.into_inner().try_into()?)
-            .await;
         unimplemented!()
     }
 }

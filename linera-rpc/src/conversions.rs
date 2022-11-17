@@ -1,10 +1,10 @@
 use ed25519::signature::Signature as edSignature;
 use thiserror::Error;
-use tonic::{Code, Status};
+use tonic::{Code, Response, Status};
 
 use crate::grpc_network::grpc_network::{
-    medium, ConfirmUpdateRecipient, CrossChainRequest as CrossChainRequestRpc, NameSignaturePair,
-    UpdateRecipient,
+    chain_info_result, medium, ChainInfoResult, ConfirmUpdateRecipient,
+    CrossChainRequest as CrossChainRequestRpc, NameSignaturePair, UpdateRecipient,
 };
 use linera_core::messages::CrossChainRequest;
 
@@ -44,7 +44,10 @@ use linera_core::messages::ChainInfoResponse;
 use crate::grpc_network::grpc_network::BlockHeight as BlockHeightRPC;
 use linera_base::messages::BlockHeight;
 
-use crate::grpc_network::grpc_network::{cross_chain_request::Inner, Owner as OwnerRPC};
+use crate::grpc_network::grpc_network::{
+    chain_info_result::Inner::ChainInfoResponse as ChainInfoResponseRpc,
+    cross_chain_request::Inner, Owner as OwnerRPC,
+};
 use linera_base::messages::Owner;
 
 #[derive(Error, Debug)]
@@ -115,6 +118,29 @@ macro_rules! map_invert {
         $expr
             .map(|x| x.try_into())
             .map_or(Ok(None), |v| v.map(Some))?
+    };
+}
+
+#[macro_export]
+macro_rules! convert_response {
+    ($self:ident, $handler:ident, $req:ident) => {
+        Ok(Response::new(match $self.state.clone().$handler($req.into_inner().try_into()?).await {
+            Ok(chain_info_response) => ChainInfoResult {
+                inner: Some(
+                    crate::grpc_network::grpc_network::chain_info_result::Inner::ChainInfoResponse(
+                        chain_info_response.try_into()?,
+                    ),
+                ),
+            },
+            Err(error) => ChainInfoResult {
+                // todo we need to serialize this properly
+                inner: Some(
+                    crate::grpc_network::grpc_network::chain_info_result::Inner::Error(
+                        NodeError::from(error).to_string(),
+                    ),
+                ),
+            },
+        }))
     };
 }
 
@@ -222,7 +248,8 @@ impl TryFrom<CertificateRpc> for Certificate {
         let mut signatures = Vec::with_capacity(certificate.signatures.len());
 
         for name_signature_pair in certificate.signatures {
-            let validator_name: ValidatorName = try_proto_convert!(name_signature_pair.validator_name);
+            let validator_name: ValidatorName =
+                try_proto_convert!(name_signature_pair.validator_name);
             let signature: Signature = try_proto_convert!(name_signature_pair.signature);
             signatures.push((validator_name, signature));
         }
@@ -265,7 +292,9 @@ impl TryFrom<ChainInfoQueryRpc> for ChainInfoQuery {
             request_committees: chain_info_query.request_committees,
             request_pending_messages: chain_info_query.request_pending_messages,
             chain_id: try_proto_convert!(chain_info_query.chain_id),
-            request_sent_certificates_in_range: map_invert!(chain_info_query.request_sent_certificates_in_range),
+            request_sent_certificates_in_range: map_invert!(
+                chain_info_query.request_sent_certificates_in_range
+            ),
             request_received_certificates_excluding_first_nth: map_as!(
                 chain_info_query.request_received_certificates_excluding_first_nth,
                 usize

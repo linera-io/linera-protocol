@@ -22,13 +22,13 @@ message BcsMessage {
 //   to be communicated to other workers of the same validator.
 service ValidatorWorker {
   // Propose a new block.
-  rpc handle_block_proposal(BlockProposal) returns (ChainInfoResponse);
+  rpc handle_block_proposal(BlockProposal) returns (ChainInfoResult);
 
   // Process a certificate.
-  rpc handle_certificate(Certificate) returns (ChainInfoResponse);
+  rpc handle_certificate(Certificate) returns (ChainInfoResult);
 
   // Handle information queries for this chain.
-  rpc handle_chain_info_query(ChainInfoQuery) returns (ChainInfoResponse);
+  rpc handle_chain_info_query(ChainInfoQuery) returns (ChainInfoResult);
 
   // Handle a (trusted!) cross-chain request.
   rpc handle_cross_chain_request(CrossChainRequest) returns (CrossChainRequest);
@@ -37,13 +37,22 @@ service ValidatorWorker {
 // How to communicate with a validator or a local node.
 service ValidatorNode {
   // Propose a new block.
-  rpc handle_block_proposal(BlockProposal) returns (ChainInfoResponse);
+  rpc handle_block_proposal(BlockProposal) returns (ChainInfoResult);
 
   // Process a certificate.
-  rpc handle_certificate(Certificate) returns (ChainInfoResponse);
+  rpc handle_certificate(Certificate) returns (ChainInfoResult);
 
   // Handle information queries for this chain.
-  rpc handle_chain_info_query(ChainInfoQuery) returns (ChainInfoResponse);
+  rpc handle_chain_info_query(ChainInfoQuery) returns (ChainInfoResult);
+}
+
+// A wrapper around ChainInfoResponse which contains a serialized error variant
+message ChainInfoResult {
+  oneof inner {
+    ChainInfoResponse chain_info_response = 1;
+    // leaving this as a string for now so that it is human readable
+    string error = 2;
+  }
 }
 
 // An internal message between chains within a validator.
