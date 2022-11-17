@@ -49,7 +49,7 @@ where
             self.delete_entries(batch).await?;
             for (index, update) in mem::take(&mut self.updates) {
                 if let Some(value) = update {
-                    batch.put_key_value_u8(self.context.derive_key_bytes(&index), value);
+                    batch.put_key_value_bytes(self.context.derive_key_bytes(&index), value);
                 }
             }
         } else {
@@ -57,7 +57,7 @@ where
                 match update {
                     None => batch.delete_key(self.context.derive_key_bytes(&index)),
                     Some(value) => {
-                        batch.put_key_value_u8(self.context.derive_key_bytes(&index), value)
+                        batch.put_key_value_bytes(self.context.derive_key_bytes(&index), value)
                     }
                 }
             }
