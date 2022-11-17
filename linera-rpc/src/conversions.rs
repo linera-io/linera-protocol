@@ -1,5 +1,6 @@
 use ed25519::signature::Signature as edSignature;
 use thiserror::Error;
+use tonic::{Code, Status};
 
 use crate::grpc_network::grpc_network::{
     medium, ConfirmUpdateRecipient, CrossChainRequest as CrossChainRequestRpc, NameSignaturePair,
@@ -61,12 +62,14 @@ pub enum ProtoConversionError {
     CryptoError(#[from] CryptoError),
 }
 
+/// Extract an optional field from a Proto type and map it.
 macro_rules! proto_convert {
     ($expr:expr) => {
         $expr.ok_or(ProtoConversionError::MissingField)?.into()
     };
 }
 
+/// Extract an optional field from a Proto type and try to map it.
 macro_rules! try_proto_convert {
     ($expr:expr) => {
         $expr
@@ -75,24 +78,38 @@ macro_rules! try_proto_convert {
     };
 }
 
+/// Try to map an iterable collection into a vector.
+macro_rules! try_proto_convert_vec {
+    ($expr:expr, $ty:ty) => {
+        $expr
+            .into_iter()
+            .map(|c| c.try_into())
+            .collect::<Result<Vec<$ty>, ProtoConversionError>>()?
+    };
+}
+
+/// Map a type into another type.
 macro_rules! map_into {
     ($expr:expr) => {
         $expr.map(|x| x.into())
     };
 }
 
+/// Try to map a type into another type.
 macro_rules! map_try_into {
     ($expr:expr) => {
         $expr.map(|x| x.try_into())
     };
 }
 
+/// Cast a type to another type via a map.
 macro_rules! map_as {
     ($expr:expr, $ty:ty) => {
         $expr.map(|x| x as $ty)
     };
 }
 
+/// Maps from Result<Option<T>,E> to Option<Result<T,E>>.
 macro_rules! map_invert {
     ($expr:expr) => {
         $expr
@@ -100,6 +117,13 @@ macro_rules! map_invert {
             .map_or(Ok(None), |v| v.map(Some))?
     };
 }
+
+impl From<ProtoConversionError> for Status {
+    fn from(error: ProtoConversionError) -> Self {
+        Status::new(Code::InvalidArgument, error.to_string())
+    }
+}
+
 impl TryFrom<BlockProposal> for BlockProposalRpc {
     type Error = ProtoConversionError;
 
@@ -141,10 +165,7 @@ impl TryFrom<CrossChainRequestRpc> for CrossChainRequest {
                 application_id: proto_convert!(application_id),
                 origin: try_proto_convert!(origin),
                 recipient: try_proto_convert!(recipient),
-                certificates: certificates
-                    .into_iter()
-                    .map(|c| c.try_into())
-                    .collect::<Result<Vec<Certificate>, ProtoConversionError>>()?,
+                certificates: try_proto_convert_vec!(certificates, Certificate),
             },
             Inner::ConfirmUpdateRecipient(ConfirmUpdateRecipient {
                 application_id,
@@ -176,10 +197,7 @@ impl TryFrom<CrossChainRequest> for CrossChainRequestRpc {
                 application_id: Some(application_id.into()),
                 origin: Some(origin.into()),
                 recipient: Some(recipient.into()),
-                certificates: certificates
-                    .into_iter()
-                    .map(|c| c.try_into())
-                    .collect::<Result<Vec<CertificateRpc>, ProtoConversionError>>()?,
+                certificates: try_proto_convert_vec!(certificates, CertificateRpc),
             }),
             CrossChainRequest::ConfirmUpdatedRecipient {
                 application_id,

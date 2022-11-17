@@ -38,7 +38,7 @@ pub mod grpc_network {
 pub struct GrpcServer<S> {
     host: String,
     port: u16,
-    state: Arc<Mutex<WorkerState<S>>>,
+    state: WorkerState<S>,
     shard_id: ShardId,
     cross_chain_config: CrossChainConfig,
 }
@@ -57,7 +57,7 @@ where
         Self {
             host,
             port,
-            state: Arc::new(Mutex::new(state)),
+            state,
             shard_id,
             cross_chain_config,
         }
@@ -117,9 +117,8 @@ where
         request: Request<BlockProposal>,
     ) -> Result<Response<ChainInfoResponse>, Status> {
         self.state
-            .lock()
-            .await
-            .handle_block_proposal(request.into_inner().try_into().unwrap())
+            .clone()
+            .handle_block_proposal(request.into_inner().try_into()?)
             .await;
         unimplemented!()
     }
@@ -129,9 +128,8 @@ where
         request: Request<Certificate>,
     ) -> Result<Response<ChainInfoResponse>, Status> {
         self.state
-            .lock()
-            .await
-            .handle_certificate(request.into_inner().try_into().unwrap())
+            .clone()
+            .handle_certificate(request.into_inner().try_into()?)
             .await;
         unimplemented!()
     }
@@ -141,9 +139,8 @@ where
         request: Request<ChainInfoQuery>,
     ) -> Result<Response<ChainInfoResponse>, Status> {
         self.state
-            .lock()
-            .await
-            .handle_chain_info_query(request.into_inner().try_into().unwrap())
+            .clone()
+            .handle_chain_info_query(request.into_inner().try_into()?)
             .await;
         unimplemented!()
     }
@@ -159,9 +156,8 @@ where
         request: Request<BlockProposal>,
     ) -> Result<Response<ChainInfoResponse>, Status> {
         self.state
-            .lock()
-            .await
-            .handle_block_proposal(request.into_inner().try_into().unwrap())
+            .clone()
+            .handle_block_proposal(request.into_inner().try_into()?)
             .await;
         unimplemented!()
     }
@@ -171,9 +167,8 @@ where
         request: Request<Certificate>,
     ) -> Result<Response<ChainInfoResponse>, Status> {
         self.state
-            .lock()
-            .await
-            .handle_certificate(request.into_inner().try_into().unwrap())
+            .clone()
+            .handle_certificate(request.into_inner().try_into()?)
             .await;
         unimplemented!()
     }
@@ -183,9 +178,8 @@ where
         request: Request<ChainInfoQuery>,
     ) -> Result<Response<ChainInfoResponse>, Status> {
         self.state
-            .lock()
-            .await
-            .handle_chain_info_query(request.into_inner().try_into().unwrap())
+            .clone()
+            .handle_chain_info_query(request.into_inner().try_into()?)
             .await;
         unimplemented!()
     }
@@ -195,9 +189,8 @@ where
         request: Request<CrossChainRequest>,
     ) -> Result<Response<CrossChainRequest>, Status> {
         self.state
-            .lock()
-            .await
-            .handle_cross_chain_request(request.into_inner().try_into().unwrap())
+            .clone()
+            .handle_cross_chain_request(request.into_inner().try_into()?)
             .await;
         unimplemented!()
     }
