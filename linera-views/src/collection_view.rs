@@ -1,6 +1,6 @@
 use crate::{
     common::{Batch, Context},
-    views::{View, ViewError},
+    views::{HashView, Hasher, HashingContext, View, ViewError},
 };
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
@@ -8,6 +8,7 @@ use std::{
     cmp::Eq,
     collections::{btree_map, BTreeMap},
     fmt::Debug,
+    io::Write,
     mem,
     sync::Arc,
 };
@@ -18,7 +19,7 @@ use tokio::sync::{Mutex, OwnedMutexGuard};
 #[derive(Debug, Clone)]
 pub struct CollectionView<C, I, W> {
     context: C,
-    was_reset_to_default: bool,
+    was_cleared: bool,
     updates: BTreeMap<I, Option<W>>,
 }
 
@@ -27,7 +28,7 @@ pub struct CollectionView<C, I, W> {
 #[derive(Debug)]
 pub struct ReentrantCollectionView<C, I, W> {
     context: C,
-    was_reset_to_default: bool,
+    was_cleared: bool,
     updates: BTreeMap<I, Option<Arc<Mutex<W>>>>,
 }
 
@@ -48,11 +49,11 @@ pub trait CollectionOperations<I>: Context {
 
     /// Add the index to the list of indices. Crash-resistant implementations should only write
     /// to `batch`.
-    fn add_index(&mut self, batch: &mut Batch, index: I) -> Result<(), Self::Error>;
+    fn add_index(&self, batch: &mut Batch, index: I) -> Result<(), Self::Error>;
 
     /// Remove the index from the list of indices. Crash-resistant implementations should only
     /// write to `batch`.
-    fn remove_index(&mut self, batch: &mut Batch, index: I) -> Result<(), Self::Error>;
+    fn remove_index(&self, batch: &mut Batch, index: I) -> Result<(), Self::Error>;
 
     // TODO(#149): In contrast to other views, there is no delete operation for CollectionOperation.
 }
@@ -85,13 +86,13 @@ where
         self.clone_self(key)
     }
 
-    fn add_index(&mut self, batch: &mut Batch, index: I) -> Result<(), Self::Error> {
+    fn add_index(&self, batch: &mut Batch, index: I) -> Result<(), Self::Error> {
         let key = self.derive_key(&CollectionKey::Index(index))?;
         batch.put_key_value(key, &())?;
         Ok(())
     }
 
-    fn remove_index(&mut self, batch: &mut Batch, index: I) -> Result<(), Self::Error> {
+    fn remove_index(&self, batch: &mut Batch, index: I) -> Result<(), Self::Error> {
         let key = self.derive_key(&CollectionKey::Index(index))?;
         batch.delete_key(key);
         Ok(())
@@ -129,19 +130,19 @@ where
     async fn load(context: C) -> Result<Self, ViewError> {
         Ok(Self {
             context,
-            was_reset_to_default: false,
+            was_cleared: false,
             updates: BTreeMap::new(),
         })
     }
 
     fn rollback(&mut self) {
-        self.was_reset_to_default = false;
+        self.was_cleared = false;
         self.updates.clear();
     }
 
     async fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
-        if self.was_reset_to_default {
-            self.was_reset_to_default = false;
+        if self.was_cleared {
+            self.was_cleared = false;
             self.delete_entries(batch).await?;
             for (index, update) in mem::take(&mut self.updates) {
                 if let Some(mut view) = update {
@@ -173,7 +174,7 @@ where
     }
 
     fn clear(&mut self) {
-        self.was_reset_to_default = true;
+        self.was_cleared = true;
         self.updates.clear();
     }
 }
@@ -218,7 +219,7 @@ where
             btree_map::Entry::Vacant(entry) => {
                 let context = self.context.clone_with_scope(&index);
                 let mut view = W::load(context).await?;
-                if self.was_reset_to_default {
+                if self.was_cleared {
                     view.clear();
                 }
                 Ok(entry.insert(Some(view)).as_mut().unwrap())
@@ -228,7 +229,7 @@ where
 
     /// Mark the entry so that it is removed in the next flush
     pub fn remove_entry(&mut self, index: I) {
-        if self.was_reset_to_default {
+        if self.was_cleared {
             self.updates.remove(&index);
         } else {
             self.updates.insert(index, None);
@@ -245,7 +246,7 @@ where
     /// Return the list of indices in the collection.
     pub async fn indices(&mut self) -> Result<Vec<I>, ViewError> {
         let mut indices = Vec::new();
-        if !self.was_reset_to_default {
+        if !self.was_cleared {
             for index in self.context.indices().await? {
                 if !self.updates.contains_key(&index) {
                     indices.push(index);
@@ -278,7 +279,7 @@ where
     where
         F: FnMut(I) + Send,
     {
-        if !self.was_reset_to_default {
+        if !self.was_cleared {
             self.context
                 .for_each_index(|index: I| {
                     if !self.updates.contains_key(&index) {
@@ -311,19 +312,19 @@ where
     async fn load(context: C) -> Result<Self, ViewError> {
         Ok(Self {
             context,
-            was_reset_to_default: false,
+            was_cleared: false,
             updates: BTreeMap::new(),
         })
     }
 
     fn rollback(&mut self) {
-        self.was_reset_to_default = false;
+        self.was_cleared = false;
         self.updates.clear();
     }
 
     async fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
-        if self.was_reset_to_default {
-            self.was_reset_to_default = false;
+        if self.was_cleared {
+            self.was_cleared = false;
             self.delete_entries(batch).await?;
             for (index, update) in mem::take(&mut self.updates) {
                 if let Some(view) = update {
@@ -361,7 +362,7 @@ where
     }
 
     fn clear(&mut self) {
-        self.was_reset_to_default = true;
+        self.was_cleared = true;
         self.updates.clear();
     }
 }
@@ -407,7 +408,7 @@ where
             btree_map::Entry::Vacant(entry) => {
                 let context = self.context.clone_with_scope(&index);
                 let mut view = W::load(context).await?;
-                if self.was_reset_to_default {
+                if self.was_cleared {
                     view.clear();
                 }
                 let wrapped_view = Arc::new(Mutex::new(view));
@@ -419,7 +420,7 @@ where
 
     /// Mark the entry so that it is removed in the next flush
     pub fn remove_entry(&mut self, index: I) {
-        if self.was_reset_to_default {
+        if self.was_cleared {
             self.updates.remove(&index);
         } else {
             self.updates.insert(index, None);
@@ -436,7 +437,7 @@ where
     /// Return the list of indices in the collection.
     pub async fn indices(&mut self) -> Result<Vec<I>, ViewError> {
         let mut indices = Vec::new();
-        if !self.was_reset_to_default {
+        if !self.was_cleared {
             for index in self.context.indices().await? {
                 if !self.updates.contains_key(&index) {
                     indices.push(index);
@@ -464,12 +465,12 @@ where
     I: Eq + Ord + Clone + Debug + Send + Sync,
     W: View<C> + Send + Sync,
 {
-    /// Execute a function on each index.
+    /// Execute a function on each index. The function f must be order independent.
     pub async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(I) + Send + Sync,
     {
-        if !self.was_reset_to_default {
+        if !self.was_cleared {
             self.context
                 .for_each_index(|index: I| {
                     if !self.updates.contains_key(&index) {
@@ -484,5 +485,49 @@ where
             }
         }
         Ok(())
+    }
+}
+
+#[async_trait]
+impl<C, I, W> HashView<C> for CollectionView<C, I, W>
+where
+    C: HashingContext + CollectionOperations<I> + Send,
+    ViewError: From<C::Error>,
+    I: Eq + Ord + Clone + Debug + Send + Sync + Serialize + 'static,
+    W: HashView<C> + Send + 'static,
+{
+    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
+        let mut hasher = C::Hasher::default();
+        let indices = self.indices().await?;
+        hasher.update_with_bcs_bytes(&indices.len())?;
+        for index in indices {
+            hasher.update_with_bcs_bytes(&index)?;
+            let view = self.load_entry(index).await?;
+            let hash = view.hash().await?;
+            hasher.write_all(hash.as_ref())?;
+        }
+        Ok(hasher.finalize())
+    }
+}
+
+#[async_trait]
+impl<C, I, W> HashView<C> for ReentrantCollectionView<C, I, W>
+where
+    C: HashingContext + CollectionOperations<I> + Send,
+    ViewError: From<C::Error>,
+    I: Eq + Ord + Clone + Debug + Send + Sync + Serialize + 'static,
+    W: HashView<C> + Send + 'static,
+{
+    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
+        let mut hasher = C::Hasher::default();
+        let indices = self.indices().await?;
+        hasher.update_with_bcs_bytes(&indices.len())?;
+        for index in indices {
+            hasher.update_with_bcs_bytes(&index)?;
+            let mut view = self.try_load_entry(index).await?;
+            let hash = view.hash().await?;
+            hasher.write_all(hash.as_ref())?;
+        }
+        Ok(hasher.finalize())
     }
 }

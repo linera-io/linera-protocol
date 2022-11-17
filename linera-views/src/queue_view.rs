@@ -1,6 +1,6 @@
 use crate::{
     common::{Batch, Context},
-    views::{View, ViewError},
+    views::{HashView, Hasher, HashingContext, View, ViewError},
 };
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
@@ -25,7 +25,7 @@ pub trait QueueOperations<T>: Context {
     async fn get(&mut self, index: usize) -> Result<Option<T>, Self::Error>;
 
     /// Obtain the values in the given range.
-    async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error>;
+    async fn read(&self, range: Range<usize>) -> Result<Vec<T>, Self::Error>;
 
     /// Delete `count` values from the front of the queue. Crash-resistant implementations
     /// should only write to `batch`.
@@ -39,22 +39,18 @@ pub trait QueueOperations<T>: Context {
     /// Append the given values from the back of the queue. Crash-resistant
     /// implementations should only write to `batch`.
     fn append_back(
-        &mut self,
+        &self,
         stored_indices: &mut Range<usize>,
         batch: &mut Batch,
         values: Vec<T>,
     ) -> Result<(), Self::Error>;
 
     /// Delete the queue from storage. Crash-resistant implementations should only write to `batch`.
-    fn delete(
-        &mut self,
-        stored_indices: Range<usize>,
-        batch: &mut Batch,
-    ) -> Result<(), Self::Error>;
+    fn delete(&self, stored_indices: Range<usize>, batch: &mut Batch) -> Result<(), Self::Error>;
 }
 
 #[async_trait]
-impl<T, C: Context + Send> QueueOperations<T> for C
+impl<T, C: Context + Send + Sync> QueueOperations<T> for C
 where
     T: Serialize + DeserializeOwned + Send + Sync + 'static,
 {
@@ -69,7 +65,7 @@ where
         Ok(self.read_key(&key).await?)
     }
 
-    async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error> {
+    async fn read(&self, range: Range<usize>) -> Result<Vec<T>, Self::Error> {
         let mut values = Vec::with_capacity(range.len());
         for index in range {
             let key = self.derive_key(&index)?;
@@ -101,7 +97,7 @@ where
     }
 
     fn append_back(
-        &mut self,
+        &self,
         stored_indices: &mut Range<usize>,
         batch: &mut Batch,
         values: Vec<T>,
@@ -119,11 +115,7 @@ where
         Ok(())
     }
 
-    fn delete(
-        &mut self,
-        stored_indices: Range<usize>,
-        batch: &mut Batch,
-    ) -> Result<(), Self::Error> {
+    fn delete(&self, stored_indices: Range<usize>, batch: &mut Batch) -> Result<(), Self::Error> {
         let base = self.base_key();
         batch.delete_key(base);
         for index in stored_indices {
@@ -289,5 +281,21 @@ where
             values.extend(self.new_back_values.iter().cloned());
         }
         Ok(values)
+    }
+}
+
+#[async_trait]
+impl<C, T> HashView<C> for QueueView<C, T>
+where
+    C: HashingContext + QueueOperations<T> + Send + Sync,
+    ViewError: From<C::Error>,
+    T: Send + Sync + Clone + Serialize,
+{
+    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
+        let count = self.count();
+        let elements = self.read_front(count).await?;
+        let mut hasher = C::Hasher::default();
+        hasher.update_with_bcs_bytes(&elements)?;
+        Ok(hasher.finalize())
     }
 }

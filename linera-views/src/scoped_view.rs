@@ -1,6 +1,6 @@
 use crate::{
     common::{Batch, Context},
-    views::{View, ViewError},
+    views::{HashView, Hasher, HashingContext, View, ViewError},
 };
 use async_trait::async_trait;
 use std::fmt::Debug;
@@ -67,5 +67,17 @@ where
 
     fn clear(&mut self) {
         self.view.clear();
+    }
+}
+
+#[async_trait]
+impl<C, W, const INDEX: u64> HashView<C> for ScopedView<INDEX, W>
+where
+    C: HashingContext + Send + Sync + ScopedOperations + 'static,
+    ViewError: From<C::Error>,
+    W: HashView<C> + Send,
+{
+    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
+        self.view.hash().await
     }
 }

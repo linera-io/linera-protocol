@@ -27,6 +27,7 @@ serde = { version = "1.0.130", features = ["derive"] }
 sha2 = "0.9.8"
 thiserror = "1.0.31"
 tokio = "1.12.0"
+rand = "0.8.5"
 
 [dev-dependencies]
 linera-views = { path = ".", features = ["test"] }

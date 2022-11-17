@@ -29,6 +29,9 @@ pub mod map_view;
 /// The collection_view
 pub mod collection_view;
 
+/// The key value store view
+pub mod key_value_store_view;
+
 /// Helper definitions for in-memory storage.
 pub mod memory;
 
@@ -37,9 +40,6 @@ pub mod rocksdb;
 
 /// Helper definitions for DynamoDB storage.
 pub mod dynamo_db;
-
-/// Module to supporting hashing.
-pub mod hash;
 
 /// Macro definitions.
 mod macros;

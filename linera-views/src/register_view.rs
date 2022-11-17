@@ -1,6 +1,6 @@
 use crate::{
     common::{Batch, Context},
-    views::{View, ViewError},
+    views::{HashView, Hasher, HashingContext, View, ViewError},
 };
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
@@ -18,32 +18,32 @@ pub struct RegisterView<C, T> {
 #[async_trait]
 pub trait RegisterOperations<T>: Context {
     /// Obtain the value in the register.
-    async fn get(&mut self) -> Result<T, Self::Error>;
+    async fn get(&self) -> Result<T, Self::Error>;
 
     /// Set the value in the register. Crash-resistant implementations should only write to `batch`.
-    fn set(&mut self, batch: &mut Batch, value: &T) -> Result<(), Self::Error>;
+    fn set(&self, batch: &mut Batch, value: &T) -> Result<(), Self::Error>;
 
     /// Delete the register. Crash-resistant implementations should only write to `batch`.
-    fn delete(&mut self, batch: &mut Batch) -> Result<(), Self::Error>;
+    fn delete(&self, batch: &mut Batch) -> Result<(), Self::Error>;
 }
 
 #[async_trait]
-impl<T, C: Context + Send> RegisterOperations<T> for C
+impl<T, C: Context + Send + Sync> RegisterOperations<T> for C
 where
     T: Default + Serialize + DeserializeOwned + Send + Sync + 'static,
 {
-    async fn get(&mut self) -> Result<T, Self::Error> {
+    async fn get(&self) -> Result<T, Self::Error> {
         let base = self.base_key();
         let value = self.read_key(&base).await?.unwrap_or_default();
         Ok(value)
     }
 
-    fn set(&mut self, batch: &mut Batch, value: &T) -> Result<(), Self::Error> {
+    fn set(&self, batch: &mut Batch, value: &T) -> Result<(), Self::Error> {
         batch.put_key_value(self.base_key(), value)?;
         Ok(())
     }
 
-    fn delete(&mut self, batch: &mut Batch) -> Result<(), Self::Error> {
+    fn delete(&self, batch: &mut Batch) -> Result<(), Self::Error> {
         batch.delete_key(self.base_key());
         Ok(())
     }
@@ -60,7 +60,7 @@ where
         &self.context
     }
 
-    async fn load(mut context: C) -> Result<Self, ViewError> {
+    async fn load(context: C) -> Result<Self, ViewError> {
         let stored_value = context.get().await?;
         Ok(Self {
             context,
@@ -127,5 +127,19 @@ where
                 update.as_mut().unwrap()
             }
         }
+    }
+}
+
+#[async_trait]
+impl<C, T> HashView<C> for RegisterView<C, T>
+where
+    C: HashingContext + RegisterOperations<T> + Send + Sync,
+    ViewError: From<C::Error>,
+    T: Default + Send + Sync + Serialize,
+{
+    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
+        let mut hasher = C::Hasher::default();
+        hasher.update_with_bcs_bytes(self.get())?;
+        Ok(hasher.finalize())
     }
 }

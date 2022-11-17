@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{hash::HashingContext, views::ViewError};
+use crate::views::{HashingContext, ViewError};
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{collections::HashMap, fmt::Debug};
@@ -49,7 +49,7 @@ impl Batch {
         Self { operations }
     }
 
-    /// Insert a put a key/value in the batch
+    /// Insert a Put { key, value } into the batch
     pub fn put_key_value(
         &mut self,
         key: Vec<u8>,
@@ -61,7 +61,12 @@ impl Batch {
         Ok(())
     }
 
-    /// Delete a key and put in the batch
+    /// Insert a Put { key, value } into the batch
+    pub fn put_key_value_u8(&mut self, key: Vec<u8>, value: Vec<u8>) {
+        self.operations.push(WriteOperation::Put { key, value });
+    }
+
+    /// Insert a Delete { key } into the batch
     pub fn delete_key(&mut self, key: Vec<u8>) {
         self.operations.push(WriteOperation::Delete { key });
     }
@@ -74,10 +79,12 @@ pub trait KeyValueOperations {
 
     async fn read_key<V: DeserializeOwned>(&self, key: &[u8]) -> Result<Option<V>, Self::Error>;
 
+    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
+
     async fn find_keys_with_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error>;
 
     async fn get_sub_keys<Key: DeserializeOwned + Send>(
-        &mut self,
+        &self,
         key_prefix: &[u8],
     ) -> Result<Vec<Key>, Self::Error>;
 
@@ -93,7 +100,7 @@ pub trait Context {
 
     /// The error type in use by internal operations.
     /// In practice, we always want `ViewError: From<Self::Error>` here.
-    type Error: std::error::Error + Debug + Send + Sync + 'static + std::convert::From<bcs::Error>;
+    type Error: std::error::Error + Debug + Send + Sync + 'static + From<bcs::Error>;
 
     /// Getter for the user provided data.
     fn extra(&self) -> &Self::Extra;
@@ -104,13 +111,20 @@ pub trait Context {
     /// Obtain the Vec<u8> key from the key by serialization and using the base_key
     fn derive_key<I: Serialize>(&self, index: &I) -> Result<Vec<u8>, Self::Error>;
 
-    /// Retrieve a generic `Item` from the table using the provided `key` prefixed by the current
+    /// Obtain the Vec<u8> key from the key by appending to the base_key
+    fn derive_key_bytes(&self, index: &[u8]) -> Vec<u8>;
+
+    /// Retrieve a generic `Item` from the database using the provided `key` prefixed by the current
     /// context.
     /// The `Item` is deserialized using [`bcs`].
     async fn read_key<Item: DeserializeOwned>(
-        &mut self,
+        &self,
         key: &[u8],
     ) -> Result<Option<Item>, Self::Error>;
+
+    /// Retrieve a Vec<u8> from the database using the provided `key` prefixed by the current
+    /// context.
+    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
     /// Find keys matching the prefix. The full keys are returned, that is including the prefix.
     async fn find_keys_with_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error>;
@@ -139,8 +153,8 @@ impl<E, DB> Context for ContextFromDb<E, DB>
 where
     E: Clone + Send + Sync,
     DB: KeyValueOperations + Clone + Send + Sync,
-    DB::Error: std::convert::From<bcs::Error> + Send + Sync + std::error::Error + 'static,
-    ViewError: std::convert::From<DB::Error>,
+    DB::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
+    ViewError: From<DB::Error>,
 {
     type Extra = E;
     type Error = DB::Error;
@@ -163,11 +177,21 @@ where
         Ok(key)
     }
 
-    async fn read_key<Item>(&mut self, key: &[u8]) -> Result<Option<Item>, Self::Error>
+    fn derive_key_bytes(&self, index: &[u8]) -> Vec<u8> {
+        let mut key = self.base_key.clone();
+        key.extend_from_slice(index);
+        key
+    }
+
+    async fn read_key<Item>(&self, key: &[u8]) -> Result<Option<Item>, Self::Error>
     where
         Item: DeserializeOwned,
     {
         self.db.read_key(key).await
+    }
+
+    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+        self.db.read_key_bytes(key).await
     }
 
     async fn find_keys_with_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
@@ -199,8 +223,8 @@ impl<E, DB> HashingContext for ContextFromDb<E, DB>
 where
     E: Clone + Send + Sync,
     DB: KeyValueOperations + Clone + Send + Sync,
-    DB::Error: std::convert::From<bcs::Error> + Send + Sync + std::error::Error + 'static,
-    ViewError: std::convert::From<DB::Error>,
+    DB::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
+    ViewError: From<DB::Error>,
 {
     type Hasher = sha2::Sha512;
 }

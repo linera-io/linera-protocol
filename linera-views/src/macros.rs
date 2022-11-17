@@ -54,9 +54,9 @@ where
 }
 
 #[$crate::async_trait]
-impl<C> $crate::hash::HashView<C> for $name<C>
+impl<C> $crate::views::HashView<C> for $name<C>
 where
-    C: $crate::hash::HashingContext
+    C: $crate::views::HashingContext
         + Send
         + Sync
         + Clone
@@ -65,8 +65,8 @@ where
         $( + $ops_trait )*,
     $crate::views::ViewError: From<C::Error>,
 {
-    async fn hash(&mut self) -> Result<<C::Hasher as $crate::hash::Hasher>::Output, $crate::views::ViewError> {
-        use $crate::hash::{Hasher, HashView};
+    async fn hash(&mut self) -> Result<<C::Hasher as $crate::views::Hasher>::Output, $crate::views::ViewError> {
+        use $crate::views::{Hasher, HashView};
         use std::io::Write;
 
         let mut hasher = C::Hasher::default();
@@ -111,7 +111,7 @@ where
 
 linera_views::paste! {
 
-pub trait [< $name Context >]: $crate::hash::HashingContext<Hasher = $crate::sha2::Sha512>
+pub trait [< $name Context >]: $crate::views::HashingContext<Hasher = $crate::sha2::Sha512>
     + Send
     + Sync
     + Clone
@@ -122,7 +122,7 @@ pub trait [< $name Context >]: $crate::hash::HashingContext<Hasher = $crate::sha
 
 impl<AnyContext> [< $name Context >] for AnyContext
 where
-    AnyContext: $crate::hash::HashingContext<Hasher = $crate::sha2::Sha512>
+    AnyContext: $crate::views::HashingContext<Hasher = $crate::sha2::Sha512>
         + Send
         + Sync
         + Clone
@@ -140,7 +140,7 @@ where
     pub async fn hash_value(&mut self) -> Result<$crate::crypto::HashValue, $crate::views::ViewError> {
         use $crate::crypto::{BcsSignable, HashValue};
         use $crate::generic_array::GenericArray;
-        use $crate::hash::HashView;
+        use $crate::views::HashView;
         use $crate::serde::{Serialize, Deserialize};
         use $crate::sha2::{Sha512, Digest};
 

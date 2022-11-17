@@ -1740,6 +1740,7 @@ dependencies = [
  "linera-views",
  "log",
  "paste",
+ "rand 0.8.5",
  "rocksdb",
  "serde",
  "sha2",

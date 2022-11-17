@@ -3,7 +3,8 @@
 
 use crate::common::{Batch, Context};
 use async_trait::async_trait;
-use std::fmt::Debug;
+use serde::Serialize;
+use std::{fmt::Debug, io::Write};
 use thiserror::Error;
 
 #[cfg(test)]
@@ -70,4 +71,33 @@ pub enum ViewError {
     /// FIXME(#148): This belongs to a future `linera_storage::StoreError`.
     #[error("Entry does not exist in memory: {0}")]
     NotFound(String),
+}
+
+#[async_trait]
+pub trait HashView<C: HashingContext>: View<C> {
+    /// Compute the hash of the values.
+    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError>;
+}
+
+pub trait HashingContext: Context {
+    type Hasher: Hasher;
+}
+
+pub trait Hasher: Default + Write + Send + Sync + 'static {
+    type Output: Debug + Clone + Eq + AsRef<[u8]> + 'static;
+
+    fn finalize(self) -> Self::Output;
+
+    fn update_with_bcs_bytes(&mut self, value: &impl Serialize) -> Result<(), ViewError> {
+        bcs::serialize_into(self, value)?;
+        Ok(())
+    }
+}
+
+impl Hasher for sha2::Sha512 {
+    type Output = generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Digest>::OutputSize>;
+
+    fn finalize(self) -> Self::Output {
+        <sha2::Sha512 as sha2::Digest>::finalize(self)
+    }
 }

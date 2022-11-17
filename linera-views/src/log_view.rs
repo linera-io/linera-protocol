@@ -1,6 +1,6 @@
 use crate::{
     common::{Batch, Context},
-    views::{View, ViewError},
+    views::{HashView, Hasher, HashingContext, View, ViewError},
 };
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
@@ -10,7 +10,7 @@ use std::{fmt::Debug, mem, ops::Range};
 #[derive(Debug, Clone)]
 pub struct LogView<C, T> {
     context: C,
-    was_reset_to_default: bool,
+    was_cleared: bool,
     stored_count: usize,
     new_values: Vec<T>,
 }
@@ -19,17 +19,17 @@ pub struct LogView<C, T> {
 #[async_trait]
 pub trait LogOperations<T>: Context {
     /// Return the size of the log in storage.
-    async fn count(&mut self) -> Result<usize, Self::Error>;
+    async fn count(&self) -> Result<usize, Self::Error>;
 
     /// Obtain the value at the given index.
-    async fn get(&mut self, index: usize) -> Result<Option<T>, Self::Error>;
+    async fn get(&self, index: usize) -> Result<Option<T>, Self::Error>;
 
     /// Obtain the values in the given range of indices.
-    async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error>;
+    async fn read(&self, range: Range<usize>) -> Result<Vec<T>, Self::Error>;
 
     /// Append values to the logs. Crash-resistant implementations should only write to `batch`.
     fn append(
-        &mut self,
+        &self,
         stored_count: usize,
         batch: &mut Batch,
         values: Vec<T>,
@@ -38,26 +38,26 @@ pub trait LogOperations<T>: Context {
     /// Delete the log. Crash-resistant implementations should only write to `batch`.
     /// The stored_count is an invariant of the structure. It is a leaky abstraction
     /// but allows a priori better performance.
-    fn delete(&mut self, stored_count: usize, batch: &mut Batch) -> Result<(), Self::Error>;
+    fn delete(&self, stored_count: usize, batch: &mut Batch) -> Result<(), Self::Error>;
 }
 
 #[async_trait]
-impl<T, C: Context + Send> LogOperations<T> for C
+impl<T, C: Context + Send + Sync> LogOperations<T> for C
 where
     T: Serialize + DeserializeOwned + Send + Sync + 'static,
 {
-    async fn count(&mut self) -> Result<usize, Self::Error> {
+    async fn count(&self) -> Result<usize, Self::Error> {
         let base = self.base_key();
         let count = self.read_key(&base).await?.unwrap_or_default();
         Ok(count)
     }
 
-    async fn get(&mut self, index: usize) -> Result<Option<T>, Self::Error> {
+    async fn get(&self, index: usize) -> Result<Option<T>, Self::Error> {
         let key = self.derive_key(&index)?;
         self.read_key(&key).await
     }
 
-    async fn read(&mut self, range: Range<usize>) -> Result<Vec<T>, Self::Error> {
+    async fn read(&self, range: Range<usize>) -> Result<Vec<T>, Self::Error> {
         let mut values = Vec::with_capacity(range.len());
         for index in range {
             let key = self.derive_key(&index)?;
@@ -70,7 +70,7 @@ where
     }
 
     fn append(
-        &mut self,
+        &self,
         stored_count: usize,
         batch: &mut Batch,
         values: Vec<T>,
@@ -87,7 +87,7 @@ where
         Ok(())
     }
 
-    fn delete(&mut self, stored_count: usize, batch: &mut Batch) -> Result<(), Self::Error> {
+    fn delete(&self, stored_count: usize, batch: &mut Batch) -> Result<(), Self::Error> {
         batch.delete_key(self.base_key());
         for index in 0..stored_count {
             batch.delete_key(self.derive_key(&index)?);
@@ -107,24 +107,24 @@ where
         &self.context
     }
 
-    async fn load(mut context: C) -> Result<Self, ViewError> {
+    async fn load(context: C) -> Result<Self, ViewError> {
         let stored_count = context.count().await?;
         Ok(Self {
             context,
-            was_reset_to_default: false,
+            was_cleared: false,
             stored_count,
             new_values: Vec::new(),
         })
     }
 
     fn rollback(&mut self) {
-        self.was_reset_to_default = false;
+        self.was_cleared = false;
         self.new_values.clear();
     }
 
     async fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
-        if self.was_reset_to_default {
-            self.was_reset_to_default = false;
+        if self.was_cleared {
+            self.was_cleared = false;
             if self.stored_count > 0 {
                 self.context.delete(self.stored_count, batch)?;
                 self.stored_count = 0;
@@ -145,7 +145,7 @@ where
     }
 
     fn clear(&mut self) {
-        self.was_reset_to_default = true;
+        self.was_cleared = true;
         self.new_values.clear();
     }
 }
@@ -161,7 +161,7 @@ where
 
     /// Read the size of the log.
     pub fn count(&self) -> usize {
-        if self.was_reset_to_default {
+        if self.was_cleared {
             self.new_values.len()
         } else {
             self.stored_count + self.new_values.len()
@@ -181,7 +181,7 @@ where
 {
     /// Read the logged values in the given range (including staged ones).
     pub async fn get(&mut self, index: usize) -> Result<Option<T>, ViewError> {
-        let value = if self.was_reset_to_default {
+        let value = if self.was_cleared {
             self.new_values.get(index).cloned()
         } else if index < self.stored_count {
             self.context.get(index).await?
@@ -192,8 +192,8 @@ where
     }
 
     /// Read the logged values in the given range (including staged ones).
-    pub async fn read(&mut self, mut range: Range<usize>) -> Result<Vec<T>, ViewError> {
-        let effective_stored_count = if self.was_reset_to_default {
+    pub async fn read(&self, mut range: Range<usize>) -> Result<Vec<T>, ViewError> {
+        let effective_stored_count = if self.was_cleared {
             0
         } else {
             self.stored_count
@@ -225,5 +225,21 @@ where
             );
         }
         Ok(values)
+    }
+}
+
+#[async_trait]
+impl<C, T> HashView<C> for LogView<C, T>
+where
+    C: HashingContext + LogOperations<T> + Send + Sync,
+    ViewError: From<C::Error>,
+    T: Send + Sync + Clone + Serialize,
+{
+    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
+        let count = self.count();
+        let elements = self.read(0..count).await?;
+        let mut hasher = C::Hasher::default();
+        hasher.update_with_bcs_bytes(&elements)?;
+        Ok(hasher.finalize())
     }
 }

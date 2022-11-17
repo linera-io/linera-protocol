@@ -43,6 +43,11 @@ impl KeyValueOperations for MemoryContainer {
         }
     }
 
+    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MemoryContextError> {
+        let map = self.read().await;
+        Ok(map.get(key).cloned())
+    }
+
     async fn find_keys_with_prefix(
         &self,
         key_prefix: &[u8],
@@ -57,7 +62,7 @@ impl KeyValueOperations for MemoryContainer {
         Ok(vals)
     }
 
-    async fn get_sub_keys<Key>(&mut self, key_prefix: &[u8]) -> Result<Vec<Key>, MemoryContextError>
+    async fn get_sub_keys<Key>(&self, key_prefix: &[u8]) -> Result<Vec<Key>, MemoryContextError>
     where
         Key: DeserializeOwned + Send,
     {

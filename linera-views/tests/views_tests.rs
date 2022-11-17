@@ -6,8 +6,8 @@ use linera_views::{
     collection_view::{CollectionOperations, CollectionView, ReentrantCollectionView},
     common::{Batch, Context},
     dynamo_db::DynamoDbContext,
-    hash::{HashView, Hasher, HashingContext},
     impl_view,
+    key_value_store_view::{KeyValueStoreMemoryContext, KeyValueStoreView},
     log_view::{LogOperations, LogView},
     map_view::{MapOperations, MapView},
     memory::{MemoryContext, MemoryStoreMap},
@@ -16,10 +16,11 @@ use linera_views::{
     rocksdb::{RocksdbContext, DB},
     scoped_view::ScopedView,
     test_utils::LocalStackTestContext,
-    views::{View, ViewError},
+    views::{HashView, Hasher, HashingContext, View, ViewError},
 };
+use rand::Rng;
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     sync::Arc,
 };
 use tokio::sync::Mutex;
@@ -36,10 +37,11 @@ pub struct StateView<C> {
         ScopedView<6, CollectionView<C, String, CollectionView<C, String, RegisterView<C, u32>>>>,
     pub collection3: ScopedView<7, CollectionView<C, String, QueueView<C, u64>>>,
     pub collection4: ScopedView<8, ReentrantCollectionView<C, String, QueueView<C, u64>>>,
+    pub keyvalueview: ScopedView<9, KeyValueStoreView<C>>,
 }
 
 // This also generates `trait StateViewContext: Context ... {}`
-impl_view!(StateView { x1, x2, log, map, queue, collection, collection2, collection3, collection4 };
+impl_view!(StateView { x1, x2, log, map, queue, collection, collection2, collection3, collection4, keyvalueview };
            RegisterOperations<u64>,
            RegisterOperations<u32>,
            LogOperations<u32>,
@@ -73,6 +75,28 @@ impl StateStore for MemoryTestStore {
             .or_insert_with(|| Arc::new(Mutex::new(BTreeMap::new())));
         log::trace!("Acquiring lock on {:?}", id);
         let context = MemoryContext::new(state.clone().lock_owned().await, id);
+        StateView::load(context).await
+    }
+}
+
+#[derive(Default)]
+pub struct KeyValueStoreTestStore {
+    states: HashMap<usize, Arc<Mutex<MemoryStoreMap>>>,
+}
+
+#[async_trait]
+impl StateStore for KeyValueStoreTestStore {
+    type Context = KeyValueStoreMemoryContext<usize>;
+
+    async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
+        let state = self
+            .states
+            .entry(id)
+            .or_insert_with(|| Arc::new(Mutex::new(BTreeMap::new())));
+        log::trace!("Acquiring lock on {:?}", id);
+        let guard = state.clone().lock_owned().await;
+        let base_key = bcs::to_bytes(&id)?;
+        let context = KeyValueStoreMemoryContext::new(guard, base_key, id);
         StateView::load(context).await
     }
 }
@@ -454,6 +478,23 @@ async fn test_views_in_memory() {
 }
 
 #[cfg(test)]
+async fn test_views_in_key_value_store_view_memory_param(config: &TestConfig) {
+    log::warn!(
+        "Testing config {:?} with key_value_store_view on memory",
+        config
+    );
+    let mut store = KeyValueStoreTestStore::default();
+    test_store(&mut store, config).await;
+}
+
+#[tokio::test]
+async fn test_views_in_key_value_store_view_memory() {
+    for config in TestConfig::samples() {
+        test_views_in_key_value_store_view_memory_param(&config).await
+    }
+}
+
+#[cfg(test)]
 async fn test_views_in_rocksdb_param(config: &TestConfig) {
     log::warn!("Testing config {:?} with rocksdb", config);
     let dir = tempfile::TempDir::new().unwrap();
@@ -653,4 +694,102 @@ async fn test_removal_api() -> anyhow::Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+fn random_shuffle<T: Clone>(l_val: &mut Vec<T>) {
+    let mut rng = rand::thread_rng();
+    let n = l_val.len();
+    for _ in 0..4 * n {
+        let idx1: usize = rng.gen_range(0..n);
+        let idx2: usize = rng.gen_range(0..n);
+        if idx1 != idx2 {
+            let val1 = l_val.get(idx1).unwrap().clone();
+            let val2 = l_val.get(idx2).unwrap().clone();
+            l_val[idx1] = val2;
+            l_val[idx2] = val1;
+        }
+    }
+}
+
+#[cfg(test)]
+fn get_random_vec_bytes(n: usize) -> Vec<u8> {
+    let mut rng = rand::thread_rng();
+    let mut v = Vec::new();
+    for _ in 0..n {
+        let val = rng.gen_range(0..256) as u8;
+        v.push(val);
+    }
+    v
+}
+
+#[cfg(test)]
+fn get_random_vec_keyvalues(n: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
+    loop {
+        let mut v_ret = Vec::new();
+        let mut set_vect = HashSet::new();
+        for _ in 0..n {
+            let v1 = get_random_vec_bytes(8);
+            let v2 = get_random_vec_bytes(8);
+            let v12 = (v1.clone(), v2);
+            set_vect.insert(v1);
+            v_ret.push(v12);
+        }
+        if set_vect.len() == n {
+            return v_ret;
+        }
+    }
+}
+
+// Vec<
+#[cfg(test)]
+async fn compute_hash_map_keyvaluestore_view<S>(
+    store: &mut S,
+    l_kv: Vec<(Vec<u8>, Vec<u8>)>,
+) -> <<S::Context as HashingContext>::Hasher as Hasher>::Output
+where
+    S: StateStore,
+    ViewError: From<<<S as StateStore>::Context as Context>::Error>,
+{
+    let mut rng = rand::thread_rng();
+    let mut view = store.load(1).await.unwrap();
+    for kv in l_kv {
+        let key = kv.0;
+        let value = kv.1;
+        let key_str = format!("{:?}", &key);
+        let value_usize = (*value.first().unwrap()) as usize;
+        view.map.insert(key_str, value_usize);
+        view.keyvalueview.insert(key, value);
+        //
+        let thr = rng.gen_range(0..20);
+        if thr == 0 {
+            view.save().await.unwrap();
+        }
+    }
+    view.hash().await.unwrap()
+}
+
+#[cfg(test)]
+async fn compute_hash_map_keyvaluestore_view_iter(l_kv: Vec<(Vec<u8>, Vec<u8>)>) {
+    let mut l_answer = Vec::new();
+    let n_iter = 4;
+    for _ in 0..n_iter {
+        let mut l_kv_b = l_kv.clone();
+        random_shuffle(&mut l_kv_b);
+        let mut store = MemoryTestStore::default();
+        l_answer.push(compute_hash_map_keyvaluestore_view(&mut store, l_kv_b).await);
+    }
+    for i in 1..n_iter {
+        assert_eq!(l_answer.get(0).unwrap(), l_answer.get(i).unwrap());
+    }
+}
+
+#[tokio::test]
+async fn compute_hash_map_keyvaluestore_view_iter_large() {
+    let n_iter = 4;
+    let n = 1000;
+    for _ in 0..n_iter {
+        let l_kv = get_random_vec_keyvalues(n);
+        compute_hash_map_keyvaluestore_view_iter(l_kv).await;
+    }
 }

@@ -258,7 +258,7 @@ where
             // Obtain chain state.
             let range = usize::from(initial_block_height)..usize::from(target_block_height);
             if !range.is_empty() {
-                let mut chain = self.store.load_chain(chain_id).await?;
+                let chain = self.store.load_chain(chain_id).await?;
                 // Send the requested certificates in order.
                 let keys = chain.confirmed_log.read(range).await?;
                 let certs = self.store.read_certificates(keys.into_iter()).await?;
