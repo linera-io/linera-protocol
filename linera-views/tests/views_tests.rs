@@ -25,6 +25,9 @@ use std::{
 };
 use tokio::sync::Mutex;
 
+#[cfg(test)]
+use linera_views::common_test::{random_shuffle, get_random_vec_keyvalues};
+
 #[allow(clippy::type_complexity)]
 pub struct StateView<C> {
     pub x1: ScopedView<0, RegisterView<C, u64>>,
