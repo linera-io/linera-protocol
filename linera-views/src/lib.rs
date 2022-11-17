@@ -8,6 +8,9 @@
 /// The definitions used for the memory/rocksdb/dynamo_db
 pub mod common;
 
+/// Some common test functionalities
+pub mod common_test;
+
 /// The main definitions.
 pub mod views;
 
