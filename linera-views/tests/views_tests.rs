@@ -37,11 +37,11 @@ pub struct StateView<C> {
         ScopedView<6, CollectionView<C, String, CollectionView<C, String, RegisterView<C, u32>>>>,
     pub collection3: ScopedView<7, CollectionView<C, String, QueueView<C, u64>>>,
     pub collection4: ScopedView<8, ReentrantCollectionView<C, String, QueueView<C, u64>>>,
-    pub keyvalueview: ScopedView<9, KeyValueStoreView<C>>,
+    pub key_value_store: ScopedView<9, KeyValueStoreView<C>>,
 }
 
 // This also generates `trait StateViewContext: Context ... {}`
-impl_view!(StateView { x1, x2, log, map, queue, collection, collection2, collection3, collection4, keyvalueview };
+impl_view!(StateView { x1, x2, log, map, queue, collection, collection2, collection3, collection4, key_value_store };
            RegisterOperations<u64>,
            RegisterOperations<u32>,
            LogOperations<u32>,
@@ -759,7 +759,7 @@ where
         let key_str = format!("{:?}", &key);
         let value_usize = (*value.first().unwrap()) as usize;
         view.map.insert(key_str, value_usize);
-        view.keyvalueview.insert(key, value);
+        view.key_value_store.insert(key, value);
         //
         let thr = rng.gen_range(0..20);
         if thr == 0 {
