@@ -5,7 +5,7 @@
 use crate::{
     codec,
     config::{
-        CrossChainConfig, NetworkProtocol, ShardId, ValidatorInternalNetworkPreConfig,
+        CrossChainConfig, ShardId, ValidatorInternalNetworkPreConfig,
         ValidatorPublicNetworkPreConfig,
     },
     transport::{MessageHandler, SpawnedServer, TransportProtocol},

@@ -81,7 +81,7 @@ where
 
         let validator_node = ValidatorNodeServer::new(self);
 
-        let server = Server::builder()
+        let _server = Server::builder()
             .add_service(validator_node)
             //.serve_with_shutdown(address, receiver.map(|_| ()))
             .serve(address)
@@ -102,7 +102,7 @@ where
 
         let validator_worker = ValidatorWorkerServer::new(self);
 
-        let server = Server::builder()
+        let _server = Server::builder()
             .add_service(validator_worker)
             //.serve_with_shutdown(address, receiver.map(|_| ()))
             .serve(address)
@@ -125,7 +125,7 @@ where
 
     async fn handle_certificate(
         &self,
-        request: Request<Certificate>,
+        _request: Request<Certificate>,
     ) -> Result<Response<ChainInfoResult>, Status> {
         // convert_response!(self, handle_certificate, request)
         unimplemented!()
@@ -153,7 +153,7 @@ where
 
     async fn handle_certificate(
         &self,
-        request: Request<Certificate>,
+        _request: Request<Certificate>,
     ) -> Result<Response<ChainInfoResult>, Status> {
         unimplemented!()
     }
@@ -167,7 +167,7 @@ where
 
     async fn handle_cross_chain_request(
         &self,
-        request: Request<CrossChainRequest>,
+        _request: Request<CrossChainRequest>,
     ) -> Result<Response<CrossChainRequest>, Status> {
         unimplemented!()
     }

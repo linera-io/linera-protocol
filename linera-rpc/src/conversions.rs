@@ -1,9 +1,9 @@
 use ed25519::signature::Signature as edSignature;
 use thiserror::Error;
-use tonic::{Code, Response, Status};
+use tonic::{Code, Status};
 
 use crate::grpc_network::grpc_network::{
-    chain_info_result, medium, ChainInfoResult, ConfirmUpdateRecipient,
+    medium, ConfirmUpdateRecipient,
     CrossChainRequest as CrossChainRequestRpc, NameSignaturePair, UpdateRecipient,
 };
 use linera_core::messages::CrossChainRequest;
@@ -33,7 +33,7 @@ use crate::grpc_network::grpc_network::ChainId as ChainIdRPC;
 use linera_base::messages::ChainId;
 
 use crate::grpc_network::grpc_network::PublicKey as PublicKeyRPC;
-use linera_base::crypto::{CryptoError, HashValue, PublicKey, PublicKeyFromStrError};
+use linera_base::crypto::{CryptoError, PublicKey, PublicKeyFromStrError};
 
 use crate::grpc_network::grpc_network::Signature as SignatureRPC;
 use linera_base::crypto::Signature;
@@ -45,7 +45,6 @@ use crate::grpc_network::grpc_network::BlockHeight as BlockHeightRPC;
 use linera_base::messages::BlockHeight;
 
 use crate::grpc_network::grpc_network::{
-    chain_info_result::Inner::ChainInfoResponse as ChainInfoResponseRpc,
     cross_chain_request::Inner, Owner as OwnerRPC,
 };
 use linera_base::messages::Owner;
