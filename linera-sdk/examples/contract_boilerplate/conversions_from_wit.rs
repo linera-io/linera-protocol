@@ -5,8 +5,8 @@
 
 use super::{contract, writable_system::PollLoad};
 use linera_sdk::{
-    ApplicationId, BlockHeight, CalleeContext, ChainId, EffectContext, EffectId, HashValue,
-    OperationContext, Session, SessionId,
+    ApplicationId, BlockHeight, BytecodeId, CalleeContext, ChainId, EffectContext, EffectId,
+    HashValue, OperationContext, Session, SessionId,
 };
 use std::task::Poll;
 
@@ -46,7 +46,21 @@ impl From<contract::CalleeContext> for CalleeContext {
             chain_id: ChainId(application_context.chain_id.into()),
             authenticated_caller_id: application_context
                 .authenticated_caller_id
-                .map(ApplicationId),
+                .map(ApplicationId::from),
+        }
+    }
+}
+
+impl From<contract::ApplicationId> for ApplicationId {
+    fn from(application_id: contract::ApplicationId) -> Self {
+        match application_id {
+            contract::ApplicationId::System => ApplicationId::System,
+            contract::ApplicationId::User(contract::UserApplicationId { bytecode, creation }) => {
+                ApplicationId::User {
+                    bytecode: BytecodeId(bytecode.into()),
+                    creation: creation.into(),
+                }
+            }
         }
     }
 }
@@ -54,7 +68,7 @@ impl From<contract::CalleeContext> for CalleeContext {
 impl From<contract::SessionId> for SessionId {
     fn from(session_id: contract::SessionId) -> Self {
         SessionId {
-            application_id: ApplicationId(session_id.application_id),
+            application_id: session_id.application_id.into(),
             kind: session_id.kind,
             index: session_id.index,
         }

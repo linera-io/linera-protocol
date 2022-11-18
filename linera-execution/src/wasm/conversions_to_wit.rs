@@ -8,7 +8,10 @@
 
 use super::runtime::{contract, service};
 use crate::{CalleeContext, EffectContext, EffectId, OperationContext, QueryContext, SessionId};
-use linera_base::{crypto::HashValue, messages::ChainId};
+use linera_base::{
+    crypto::HashValue,
+    messages::{ApplicationId, ChainId},
+};
 
 impl From<OperationContext> for contract::OperationContext {
     fn from(host: OperationContext) -> Self {
@@ -50,7 +53,9 @@ impl From<CalleeContext> for contract::CalleeContext {
     fn from(host: CalleeContext) -> Self {
         contract::CalleeContext {
             chain_id: host.chain_id.into(),
-            authenticated_caller_id: host.authenticated_caller_id.map(|app_id| app_id.0),
+            authenticated_caller_id: host
+                .authenticated_caller_id
+                .map(contract::ApplicationId::from),
         }
     }
 }
@@ -66,9 +71,23 @@ impl From<QueryContext> for service::QueryContext {
 impl From<SessionId> for contract::SessionId {
     fn from(host: SessionId) -> Self {
         contract::SessionId {
-            application_id: host.application_id.0,
+            application_id: host.application_id.into(),
             kind: host.kind,
             index: host.index,
+        }
+    }
+}
+
+impl From<ApplicationId> for contract::ApplicationId {
+    fn from(host: ApplicationId) -> Self {
+        match host {
+            ApplicationId::System => contract::ApplicationId::System,
+            ApplicationId::User { bytecode, creation } => {
+                contract::ApplicationId::User(contract::UserApplicationId {
+                    bytecode: bytecode.0.into(),
+                    creation: creation.into(),
+                })
+            }
         }
     }
 }

@@ -3,7 +3,7 @@
 
 use crate::{
     runtime::{ExecutionRuntime, SessionManager},
-    system::{SystemExecutionStateView, SystemExecutionStateViewContext, SYSTEM},
+    system::{SystemExecutionStateView, SystemExecutionStateViewContext},
     Effect, EffectContext, ExecutionError, ExecutionResult, ExecutionRuntimeContext, Operation,
     OperationContext, Query, QueryContext, Response,
 };
@@ -140,7 +140,7 @@ where
         operation: &Operation,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
-        if application_id == SYSTEM {
+        if let ApplicationId::System = application_id {
             match operation {
                 Operation::System(op) => {
                     let result = self.system.execute_operation(context, op).await?;
@@ -170,7 +170,7 @@ where
         effect: &Effect,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
-        if application_id == SYSTEM {
+        if let ApplicationId::System = application_id {
             match effect {
                 Effect::System(effect) => {
                     let result = self.system.execute_effect(context, effect)?;
@@ -200,7 +200,7 @@ where
         query: &Query,
     ) -> Result<Response, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
-        if application_id == SYSTEM {
+        if let ApplicationId::System = application_id {
             match query {
                 Query::System(query) => {
                     let response = self.system.query_application(context, query).await?;

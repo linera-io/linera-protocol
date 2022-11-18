@@ -15,9 +15,7 @@ use linera_chain::{
     ChainError, Event,
 };
 use linera_execution::{
-    system::{
-        Address, Amount, Balance, SystemEffect, SystemOperation, UserData, ADMIN_CHANNEL, SYSTEM,
-    },
+    system::{Address, Amount, Balance, SystemEffect, SystemOperation, UserData, ADMIN_CHANNEL},
     ChainOwnership, Effect, ExecutionStateView, Operation, SystemExecutionState,
 };
 use linera_storage::{
@@ -109,7 +107,10 @@ fn make_block(
         epoch,
         chain_id,
         incoming_messages,
-        operations: operations.into_iter().map(|op| (SYSTEM, op)).collect(),
+        operations: operations
+            .into_iter()
+            .map(|op| (ApplicationId::System, op))
+            .collect(),
         previous_block_hash,
         height,
     }
@@ -191,7 +192,7 @@ async fn make_transfer_certificate<S>(
     );
     let effects = match recipient {
         Address::Account(id) => vec![(
-            SYSTEM,
+            ApplicationId::System,
             Destination::Recipient(id),
             Effect::System(SystemEffect::Credit {
                 recipient: id,
@@ -598,7 +599,7 @@ where
                 incoming_messages: Vec::new(),
                 operations: vec![
                     (
-                        SYSTEM,
+                        ApplicationId::System,
                         Operation::System(SystemOperation::Transfer {
                             recipient,
                             amount: Amount::from(1),
@@ -606,7 +607,7 @@ where
                         }),
                     ),
                     (
-                        SYSTEM,
+                        ApplicationId::System,
                         Operation::System(SystemOperation::Transfer {
                             recipient,
                             amount: Amount::from(2),
@@ -619,7 +620,7 @@ where
             },
             effects: vec![
                 (
-                    SYSTEM,
+                    ApplicationId::System,
                     Destination::Recipient(ChainId::root(2)),
                     Effect::System(SystemEffect::Credit {
                         recipient: ChainId::root(2),
@@ -627,7 +628,7 @@ where
                     }),
                 ),
                 (
-                    SYSTEM,
+                    ApplicationId::System,
                     Destination::Recipient(ChainId::root(2)),
                     Effect::System(SystemEffect::Credit {
                         recipient: ChainId::root(2),
@@ -657,7 +658,7 @@ where
                 chain_id: ChainId::root(1),
                 incoming_messages: Vec::new(),
                 operations: vec![(
-                    SYSTEM,
+                    ApplicationId::System,
                     Operation::System(SystemOperation::Transfer {
                         recipient,
                         amount: Amount::from(3),
@@ -668,7 +669,7 @@ where
                 height: BlockHeight::from(1),
             },
             effects: vec![(
-                SYSTEM,
+                ApplicationId::System,
                 Destination::Recipient(ChainId::root(2)),
                 Effect::System(SystemEffect::Credit {
                     recipient: ChainId::root(2),
@@ -715,7 +716,7 @@ where
             Amount::from(5),
             vec![
                 MessageGroup {
-                    application_id: SYSTEM,
+                    application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     height: BlockHeight::from(0),
                     effects: vec![
@@ -736,7 +737,7 @@ where
                     ],
                 },
                 MessageGroup {
-                    application_id: SYSTEM,
+                    application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     height: BlockHeight::from(1),
                     effects: vec![(
@@ -766,7 +767,7 @@ where
             Amount::from(6),
             vec![
                 MessageGroup {
-                    application_id: SYSTEM,
+                    application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     height: BlockHeight::from(0),
                     effects: vec![
@@ -787,7 +788,7 @@ where
                     ],
                 },
                 MessageGroup {
-                    application_id: SYSTEM,
+                    application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     height: BlockHeight::from(1),
                     effects: vec![(
@@ -817,7 +818,7 @@ where
             Amount::from(6),
             vec![
                 MessageGroup {
-                    application_id: SYSTEM,
+                    application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     height: BlockHeight::from(1),
                     effects: vec![(
@@ -829,7 +830,7 @@ where
                     )],
                 },
                 MessageGroup {
-                    application_id: SYSTEM,
+                    application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     height: BlockHeight::from(0),
                     effects: vec![
@@ -867,7 +868,7 @@ where
             Address::Account(ChainId::root(3)),
             Amount::from(1),
             vec![MessageGroup {
-                application_id: SYSTEM,
+                application_id: ApplicationId::System,
                 origin: Origin::chain(ChainId::root(1)),
                 height: BlockHeight::from(0),
                 effects: vec![(
@@ -891,7 +892,7 @@ where
             Value::ConfirmedBlock {
                 block: block_proposal.content.block,
                 effects: vec![(
-                    SYSTEM,
+                    ApplicationId::System,
                     Destination::Recipient(ChainId::root(3)),
                     Effect::System(SystemEffect::Credit {
                         recipient: ChainId::root(3),
@@ -921,7 +922,7 @@ where
             Address::Account(ChainId::root(3)),
             Amount::from(3),
             vec![MessageGroup {
-                application_id: SYSTEM,
+                application_id: ApplicationId::System,
                 origin: Origin::chain(ChainId::root(1)),
                 height: BlockHeight::from(1),
                 effects: vec![(
@@ -1323,7 +1324,7 @@ where
         Address::Account(ChainId::root(2)),
         Amount::from(1000),
         vec![MessageGroup {
-            application_id: SYSTEM,
+            application_id: ApplicationId::System,
             origin: Origin::chain(ChainId::root(3)),
             height: BlockHeight::from(0),
             effects: vec![(
@@ -1361,7 +1362,7 @@ where
         BlockHeight::from(0),
         *chain
             .communication_states
-            .load_entry(SYSTEM)
+            .load_entry(ApplicationId::System)
             .await
             .unwrap()
             .inboxes
@@ -1374,7 +1375,7 @@ where
     assert_eq!(
         chain
             .communication_states
-            .load_entry(SYSTEM)
+            .load_entry(ApplicationId::System)
             .await
             .unwrap()
             .inboxes
@@ -1386,7 +1387,7 @@ where
         0
     );
     assert!(matches!(
-        chain.communication_states.load_entry(SYSTEM).await.unwrap().inboxes.load_entry(Origin::chain(ChainId::root(3))).await.unwrap().expected_events.front().await.unwrap().unwrap(),
+        chain.communication_states.load_entry(ApplicationId::System).await.unwrap().inboxes.load_entry(Origin::chain(ChainId::root(3))).await.unwrap().expected_events.front().await.unwrap().unwrap(),
         Event { height, index: 0, effect: Effect::System(SystemEffect::Credit { amount, .. })} if height == BlockHeight::from(0) && amount == Amount::from(995),
     ));
     assert_eq!(chain.confirmed_log.count(), 1);
@@ -1554,7 +1555,7 @@ where
         BlockHeight::from(1),
         *chain
             .communication_states
-            .load_entry(SYSTEM)
+            .load_entry(ApplicationId::System)
             .await
             .unwrap()
             .inboxes
@@ -1565,7 +1566,7 @@ where
             .get()
     );
     assert!(matches!(
-        chain.communication_states.load_entry(SYSTEM).await.unwrap().inboxes.load_entry(Origin::chain(ChainId::root(1))).await.unwrap().received_events.front().await.unwrap().unwrap(),
+        chain.communication_states.load_entry(ApplicationId::System).await.unwrap().inboxes.load_entry(Origin::chain(ChainId::root(1))).await.unwrap().received_events.front().await.unwrap().unwrap(),
         Event { height, index: 0, effect: Effect::System(SystemEffect::Credit { amount, .. })} if height == BlockHeight::from(0) && amount == Amount::from(1),
     ));
     assert_eq!(
@@ -1629,7 +1630,7 @@ where
     .await;
     worker
         .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
-            application_id: SYSTEM,
+            application_id: ApplicationId::System,
             origin: Origin::chain(ChainId::root(1)),
             recipient: ChainId::root(2),
             certificates: vec![certificate],
@@ -1653,7 +1654,7 @@ where
         BlockHeight::from(1),
         *chain
             .communication_states
-            .load_entry(SYSTEM)
+            .load_entry(ApplicationId::System)
             .await
             .unwrap()
             .inboxes
@@ -1664,7 +1665,7 @@ where
             .get()
     );
     assert!(matches!(
-        chain.communication_states.load_entry(SYSTEM).await.unwrap().inboxes.load_entry(Origin::chain(ChainId::root(1))).await.unwrap().received_events.front().await.unwrap().unwrap(),
+        chain.communication_states.load_entry(ApplicationId::System).await.unwrap().inboxes.load_entry(Origin::chain(ChainId::root(1))).await.unwrap().received_events.front().await.unwrap().unwrap(),
         Event { height, index: 0, effect: Effect::System(SystemEffect::Credit { amount, .. })} if height == BlockHeight::from(0) && amount == Amount::from(10),
     ));
     assert_eq!(chain.confirmed_log.count(), 0);
@@ -1718,7 +1719,7 @@ where
     .await;
     assert!(worker
         .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
-            application_id: SYSTEM,
+            application_id: ApplicationId::System,
             origin: Origin::chain(ChainId::root(1)),
             recipient: ChainId::root(2),
             certificates: vec![certificate],
@@ -1733,7 +1734,7 @@ where
         .indices()
         .await
         .unwrap()
-        .contains(&SYSTEM));
+        .contains(&ApplicationId::System));
 }
 
 #[test(tokio::test)]
@@ -1788,7 +1789,7 @@ async fn run_test_handle_cross_chain_request_no_recipient_chain_with_inactive_ch
     assert!(matches!(
         worker
             .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
-                application_id: SYSTEM,
+                application_id: ApplicationId::System,
                 origin: Origin::chain(ChainId::root(1)),
                 recipient: ChainId::root(2),
                 certificates: vec![certificate],
@@ -1801,7 +1802,7 @@ async fn run_test_handle_cross_chain_request_no_recipient_chain_with_inactive_ch
     let mut chain = worker.storage.load_chain(ChainId::root(2)).await.unwrap();
     assert!(!chain
         .communication_states
-        .load_entry(SYSTEM)
+        .load_entry(ApplicationId::System)
         .await
         .unwrap()
         .inboxes
@@ -1889,7 +1890,7 @@ where
         Address::Account(ChainId::root(3)),
         Amount::from(1),
         vec![MessageGroup {
-            application_id: SYSTEM,
+            application_id: ApplicationId::System,
             origin: Origin::chain(ChainId::root(1)),
             height: BlockHeight::from(0),
             effects: vec![(
@@ -2074,7 +2075,7 @@ where
                 chain_id: admin_id,
                 incoming_messages: Vec::new(),
                 operations: vec![(
-                    SYSTEM,
+                    ApplicationId::System,
                     Operation::System(SystemOperation::OpenChain {
                         id: user_id,
                         owner: key_pair.public().into(),
@@ -2088,7 +2089,7 @@ where
             },
             effects: vec![
                 (
-                    SYSTEM,
+                    ApplicationId::System,
                     Destination::Recipient(user_id),
                     Effect::System(SystemEffect::OpenChain {
                         id: user_id,
@@ -2099,7 +2100,7 @@ where
                     }),
                 ),
                 (
-                    SYSTEM,
+                    ApplicationId::System,
                     Destination::Recipient(admin_id),
                     Effect::System(SystemEffect::Subscribe {
                         id: user_id,
@@ -2132,7 +2133,7 @@ where
         );
         assert!(admin_chain
             .communication_states
-            .load_entry(SYSTEM)
+            .load_entry(ApplicationId::System)
             .await
             .unwrap()
             .outboxes
@@ -2147,7 +2148,7 @@ where
         // The root chain has no subscribers yet.
         assert!(!admin_chain
             .communication_states
-            .load_entry(SYSTEM)
+            .load_entry(ApplicationId::System)
             .await
             .unwrap()
             .channels
@@ -2174,7 +2175,7 @@ where
                 incoming_messages: Vec::new(),
                 operations: vec![
                     (
-                        SYSTEM,
+                        ApplicationId::System,
                         Operation::System(SystemOperation::CreateCommittee {
                             admin_id,
                             epoch: Epoch::from(1),
@@ -2182,7 +2183,7 @@ where
                         }),
                     ),
                     (
-                        SYSTEM,
+                        ApplicationId::System,
                         Operation::System(SystemOperation::Transfer {
                             recipient: Address::Account(user_id),
                             amount: Amount::from(2),
@@ -2195,7 +2196,7 @@ where
             },
             effects: vec![
                 (
-                    SYSTEM,
+                    ApplicationId::System,
                     Destination::Subscribers(ADMIN_CHANNEL.to_string()),
                     Effect::System(SystemEffect::SetCommittees {
                         admin_id,
@@ -2204,7 +2205,7 @@ where
                     }),
                 ),
                 (
-                    SYSTEM,
+                    ApplicationId::System,
                     Destination::Recipient(user_id),
                     Effect::System(SystemEffect::Credit {
                         recipient: user_id,
@@ -2239,7 +2240,7 @@ where
                 epoch: Epoch::from(1),
                 chain_id: admin_id,
                 incoming_messages: vec![MessageGroup {
-                    application_id: SYSTEM,
+                    application_id: ApplicationId::System,
                     origin: Origin::chain(admin_id),
                     height: BlockHeight::from(0),
                     effects: vec![(
@@ -2255,7 +2256,7 @@ where
                 height: BlockHeight::from(2),
             },
             effects: vec![(
-                SYSTEM,
+                ApplicationId::System,
                 Destination::Recipient(user_id),
                 Effect::System(SystemEffect::Notify { id: user_id }),
             )],
@@ -2283,7 +2284,7 @@ where
         assert_eq!(
             admin_chain
                 .communication_states
-                .load_entry(SYSTEM)
+                .load_entry(ApplicationId::System)
                 .await
                 .unwrap()
                 .channels
@@ -2324,7 +2325,7 @@ where
         matches!(
             user_chain
                 .communication_states
-                .load_entry(SYSTEM)
+                .load_entry(ApplicationId::System)
                 .await
                 .unwrap()
                 .inboxes
@@ -2353,7 +2354,7 @@ where
         matches!(
             user_chain
                 .communication_states
-                .load_entry(SYSTEM)
+                .load_entry(ApplicationId::System)
                 .await
                 .unwrap()
                 .inboxes
@@ -2372,7 +2373,7 @@ where
         assert_eq!(
             user_chain
                 .communication_states
-                .load_entry(SYSTEM)
+                .load_entry(ApplicationId::System)
                 .await
                 .unwrap()
                 .inboxes
@@ -2395,7 +2396,7 @@ where
                 chain_id: user_id,
                 incoming_messages: vec![
                     MessageGroup {
-                        application_id: SYSTEM,
+                        application_id: ApplicationId::System,
                         origin: admin_channel_origin.clone(),
                         height: BlockHeight::from(1),
                         effects: vec![(
@@ -2408,7 +2409,7 @@ where
                         )],
                     },
                     MessageGroup {
-                        application_id: SYSTEM,
+                        application_id: ApplicationId::System,
                         origin: Origin::chain(admin_id),
                         height: BlockHeight::from(1),
                         effects: vec![(
@@ -2420,7 +2421,7 @@ where
                         )],
                     },
                     MessageGroup {
-                        application_id: SYSTEM,
+                        application_id: ApplicationId::System,
                         origin: Origin::chain(admin_id),
                         height: BlockHeight::from(2),
                         effects: vec![(0, Effect::System(SystemEffect::Notify { id: user_id }))],
@@ -2476,7 +2477,7 @@ where
         {
             let inbox = user_chain
                 .communication_states
-                .load_entry(SYSTEM)
+                .load_entry(ApplicationId::System)
                 .await
                 .unwrap()
                 .inboxes
@@ -2490,7 +2491,7 @@ where
         {
             let inbox = user_chain
                 .communication_states
-                .load_entry(SYSTEM)
+                .load_entry(ApplicationId::System)
                 .await
                 .unwrap()
                 .inboxes
@@ -2566,7 +2567,7 @@ where
                 chain_id: user_id,
                 incoming_messages: Vec::new(),
                 operations: vec![(
-                    SYSTEM,
+                    ApplicationId::System,
                     Operation::System(SystemOperation::Transfer {
                         recipient: Address::Account(admin_id),
                         amount: Amount::from(1),
@@ -2577,7 +2578,7 @@ where
                 height: BlockHeight::from(0),
             },
             effects: vec![(
-                SYSTEM,
+                ApplicationId::System,
                 Destination::Recipient(admin_id),
                 Effect::System(SystemEffect::Credit {
                     recipient: admin_id,
@@ -2612,7 +2613,7 @@ where
                 chain_id: admin_id,
                 incoming_messages: Vec::new(),
                 operations: vec![(
-                    SYSTEM,
+                    ApplicationId::System,
                     Operation::System(SystemOperation::CreateCommittee {
                         admin_id,
                         epoch: Epoch::from(1),
@@ -2623,7 +2624,7 @@ where
                 height: BlockHeight::from(0),
             },
             effects: vec![(
-                SYSTEM,
+                ApplicationId::System,
                 Destination::Subscribers(ADMIN_CHANNEL.to_string()),
                 Effect::System(SystemEffect::SetCommittees {
                     admin_id,
@@ -2674,7 +2675,7 @@ where
     assert_eq!(
         admin_chain
             .communication_states
-            .load_entry(SYSTEM)
+            .load_entry(ApplicationId::System)
             .await
             .unwrap()
             .inboxes
@@ -2687,7 +2688,7 @@ where
     matches!(
         admin_chain
             .communication_states
-            .load_entry(SYSTEM)
+            .load_entry(ApplicationId::System)
             .await
             .unwrap()
             .inboxes
@@ -2767,7 +2768,7 @@ where
                 chain_id: user_id,
                 incoming_messages: Vec::new(),
                 operations: vec![(
-                    SYSTEM,
+                    ApplicationId::System,
                     Operation::System(SystemOperation::Transfer {
                         recipient: Address::Account(admin_id),
                         amount: Amount::from(1),
@@ -2778,7 +2779,7 @@ where
                 height: BlockHeight::from(0),
             },
             effects: vec![(
-                SYSTEM,
+                ApplicationId::System,
                 Destination::Recipient(admin_id),
                 Effect::System(SystemEffect::Credit {
                     recipient: admin_id,
@@ -2815,7 +2816,7 @@ where
                 incoming_messages: Vec::new(),
                 operations: vec![
                     (
-                        SYSTEM,
+                        ApplicationId::System,
                         Operation::System(SystemOperation::CreateCommittee {
                             admin_id,
                             epoch: Epoch::from(1),
@@ -2823,7 +2824,7 @@ where
                         }),
                     ),
                     (
-                        SYSTEM,
+                        ApplicationId::System,
                         Operation::System(SystemOperation::RemoveCommittee {
                             admin_id,
                             epoch: Epoch::from(0),
@@ -2835,7 +2836,7 @@ where
             },
             effects: vec![
                 (
-                    SYSTEM,
+                    ApplicationId::System,
                     Destination::Subscribers(ADMIN_CHANNEL.to_string()),
                     Effect::System(SystemEffect::SetCommittees {
                         admin_id,
@@ -2844,7 +2845,7 @@ where
                     }),
                 ),
                 (
-                    SYSTEM,
+                    ApplicationId::System,
                     Destination::Subscribers(ADMIN_CHANNEL.to_string()),
                     Effect::System(SystemEffect::SetCommittees {
                         admin_id,
@@ -2895,7 +2896,7 @@ where
     let mut admin_chain = worker.storage.load_active_chain(admin_id).await.unwrap();
     assert!(admin_chain
         .communication_states
-        .load_entry(SYSTEM)
+        .load_entry(ApplicationId::System)
         .await
         .unwrap()
         .inboxes

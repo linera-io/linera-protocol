@@ -10,7 +10,16 @@ Address:
 Amount:
   NEWTYPESTRUCT: U64
 ApplicationId:
-  NEWTYPESTRUCT: U64
+  ENUM:
+    0:
+      System: UNIT
+    1:
+      User:
+        STRUCT:
+          - bytecode:
+              TYPENAME: BytecodeId
+          - creation:
+              TYPENAME: EffectId
 Balance:
   NEWTYPESTRUCT: U128
 Block:
@@ -57,6 +66,9 @@ BlockProposal:
 Bytecode:
   NEWTYPESTRUCT:
     SEQ: U8
+BytecodeId:
+  NEWTYPESTRUCT:
+    TYPENAME: EffectId
 Certificate:
   STRUCT:
     - value:

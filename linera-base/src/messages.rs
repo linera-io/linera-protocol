@@ -12,16 +12,22 @@ use crate::crypto::CryptoError;
 use test_strategy::Arbitrary;
 
 /// A unique identifier for an application.
-// FIXME: placeholder
-#[derive(
-    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
-)]
-#[cfg_attr(any(test, feature = "test"), derive(Arbitrary))]
-pub struct ApplicationId(pub u64);
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
+pub enum ApplicationId {
+    /// The system application.
+    System,
+    /// A user application.
+    User {
+        /// The bytecode to use for the application.
+        bytecode: BytecodeId,
+        /// The unique ID of the application's creation.
+        creation: EffectId,
+    },
+}
 
 /// A unique identifier for an application bytecode.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
-pub struct BytecodeId(EffectId);
+pub struct BytecodeId(pub EffectId);
 
 /// A reference to where the application bytecode is stored.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]

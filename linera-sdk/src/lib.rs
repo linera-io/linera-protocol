@@ -176,9 +176,22 @@ pub enum Destination {
 }
 
 /// A unique identifier for an application.
-// FIXME: placeholder
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug)]
-pub struct ApplicationId(pub u64);
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug)]
+pub enum ApplicationId {
+    /// The system application.
+    System,
+    /// A user application.
+    User {
+        /// The bytecode to use for the application.
+        bytecode: BytecodeId,
+        /// The unique ID of the application's creation.
+        creation: EffectId,
+    },
+}
+
+/// A unique identifier for an application bytecode.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct BytecodeId(pub EffectId);
 
 /// The identifier of a session.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]

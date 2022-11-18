@@ -60,9 +60,19 @@ record callee-context {
     authenticated-caller-id: option<application-id>,
 }
 
+variant application-id {
+    system,
+    user(user-application-id),
+}
+
+record user-application-id {
+    bytecode: bytecode,
+    creation: effect-id,
+}
+
 type chain-id = hash-value
 type block-height = u64
-type application-id = u64
+type bytecode = effect-id
 
 variant poll-execution-result {
     pending,

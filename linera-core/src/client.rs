@@ -13,14 +13,16 @@ use async_trait::async_trait;
 use linera_base::{
     committee::{Committee, ValidatorState},
     crypto::{HashValue, KeyPair},
-    messages::{BlockHeight, ChainId, EffectId, Epoch, Owner, RoundNumber, ValidatorName},
+    messages::{
+        ApplicationId, BlockHeight, ChainId, EffectId, Epoch, Owner, RoundNumber, ValidatorName,
+    },
 };
 use linera_chain::{
     messages::{Block, BlockAndRound, BlockProposal, Certificate, MessageGroup, Value, Vote},
     ChainManager,
 };
 use linera_execution::{
-    system::{Address, Amount, Balance, SystemOperation, UserData, SYSTEM},
+    system::{Address, Amount, Balance, SystemOperation, UserData},
     Operation,
 };
 use linera_storage::Store;
@@ -722,7 +724,7 @@ where
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
             operations: vec![(
-                SYSTEM,
+                ApplicationId::System,
                 Operation::System(SystemOperation::Transfer {
                     recipient,
                     amount,
@@ -950,7 +952,7 @@ where
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
             operations: vec![(
-                SYSTEM,
+                ApplicationId::System,
                 Operation::System(SystemOperation::ChangeOwner { new_owner }),
             )],
             previous_block_hash: self.block_hash,
@@ -970,7 +972,7 @@ where
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
             operations: vec![(
-                SYSTEM,
+                ApplicationId::System,
                 Operation::System(SystemOperation::ChangeOwner { new_owner }),
             )],
             previous_block_hash: self.block_hash,
@@ -990,7 +992,7 @@ where
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
             operations: vec![(
-                SYSTEM,
+                ApplicationId::System,
                 Operation::System(SystemOperation::ChangeMultipleOwners {
                     new_owners: vec![owner, new_owner],
                 }),
@@ -1018,7 +1020,7 @@ where
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
             operations: vec![(
-                SYSTEM,
+                ApplicationId::System,
                 Operation::System(SystemOperation::OpenChain {
                     id,
                     owner,
@@ -1042,7 +1044,10 @@ where
             epoch: self.epoch().await?,
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
-            operations: vec![(SYSTEM, Operation::System(SystemOperation::CloseChain))],
+            operations: vec![(
+                ApplicationId::System,
+                Operation::System(SystemOperation::CloseChain),
+            )],
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
         };
@@ -1064,7 +1069,7 @@ where
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
             operations: vec![(
-                SYSTEM,
+                ApplicationId::System,
                 Operation::System(SystemOperation::CreateCommittee {
                     admin_id: self.chain_id,
                     epoch: epoch.try_add_one()?,
@@ -1111,7 +1116,7 @@ where
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
             operations: vec![(
-                SYSTEM,
+                ApplicationId::System,
                 Operation::System(SystemOperation::SubscribeToNewCommittees {
                     admin_id: self.admin_id,
                 }),
@@ -1132,7 +1137,7 @@ where
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
             operations: vec![(
-                SYSTEM,
+                ApplicationId::System,
                 Operation::System(SystemOperation::UnsubscribeToNewCommittees {
                     admin_id: self.admin_id,
                 }),
@@ -1155,7 +1160,7 @@ where
             .filter_map(|epoch| {
                 if *epoch != current_epoch {
                     Some((
-                        SYSTEM,
+                        ApplicationId::System,
                         Operation::System(SystemOperation::RemoveCommittee {
                             admin_id: self.admin_id,
                             epoch: *epoch,
@@ -1192,7 +1197,7 @@ where
             chain_id: self.chain_id,
             incoming_messages: self.pending_messages().await?,
             operations: vec![(
-                SYSTEM,
+                ApplicationId::System,
                 Operation::System(SystemOperation::Transfer {
                     recipient: Address::Account(recipient),
                     amount,

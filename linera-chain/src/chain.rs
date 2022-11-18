@@ -14,9 +14,8 @@ use linera_base::{
     },
 };
 use linera_execution::{
-    system::{SystemEffect, SYSTEM},
-    Effect, EffectContext, ExecutionResult, ExecutionRuntimeContext, ExecutionStateView,
-    ExecutionStateViewContext, OperationContext, RawExecutionResult,
+    system::SystemEffect, Effect, EffectContext, ExecutionResult, ExecutionRuntimeContext,
+    ExecutionStateView, ExecutionStateViewContext, OperationContext, RawExecutionResult,
 };
 use linera_views::{
     collection_view::CollectionView, common::Context, impl_view, log_view::LogView,
@@ -343,7 +342,7 @@ where
                 }
             }
             was_a_recipient = true;
-            if app_id == SYSTEM {
+            if let ApplicationId::System = app_id {
                 // Handle special effects to be executed immediately.
                 let effect_id = EffectId {
                     chain_id: origin.chain_id,
@@ -628,7 +627,12 @@ where
             match result {
                 ExecutionResult::System(raw) => {
                     Self::process_raw_execution_result(
-                        SYSTEM, outboxes, channels, effects, height, raw,
+                        ApplicationId::System,
+                        outboxes,
+                        channels,
+                        effects,
+                        height,
+                        raw,
                     )
                     .await?;
                 }

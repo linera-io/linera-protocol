@@ -3,9 +3,9 @@
 
 #![allow(clippy::field_reassign_with_default)]
 
-use linera_base::messages::{BlockHeight, ChainDescription, ChainId, EffectId};
+use linera_base::messages::{ApplicationId, BlockHeight, ChainDescription, ChainId, EffectId};
 use linera_execution::{
-    system::{Address, Amount, Balance, UserData, SYSTEM},
+    system::{Address, Amount, Balance, UserData},
     Effect, EffectContext, ExecutionResult, ExecutionStateView, Operation, OperationContext, Query,
     QueryContext, RawExecutionResult, Response, SystemEffect, SystemExecutionState,
     SystemOperation, SystemQuery, SystemResponse, TestExecutionRuntimeContext,
@@ -31,7 +31,11 @@ async fn test_simple_system_operation() {
         index: 0,
     };
     let result = view
-        .execute_operation(SYSTEM, &context, &Operation::System(operation))
+        .execute_operation(
+            ApplicationId::System,
+            &context,
+            &Operation::System(operation),
+        )
         .await
         .unwrap();
     assert_eq!(view.system.balance.get(), &Balance::from(0));
@@ -62,7 +66,7 @@ async fn test_simple_system_effect() {
         },
     };
     let result = view
-        .execute_effect(SYSTEM, &context, &Effect::System(effect))
+        .execute_effect(ApplicationId::System, &context, &Effect::System(effect))
         .await
         .unwrap();
     assert_eq!(view.system.balance.get(), &Balance::from(4));
@@ -84,7 +88,7 @@ async fn test_simple_system_query() {
         chain_id: ChainId::root(0),
     };
     let response = view
-        .query_application(SYSTEM, &context, &Query::System(SystemQuery))
+        .query_application(ApplicationId::System, &context, &Query::System(SystemQuery))
         .await
         .unwrap();
     assert_eq!(

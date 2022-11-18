@@ -54,7 +54,7 @@ pub(crate) struct SessionManager {
     pub(crate) states: BTreeMap<SessionId, Arc<Mutex<SessionState>>>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub(crate) struct SessionState {
     /// Track which application can call into the session.
     owner: ApplicationId,

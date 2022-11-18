@@ -3,7 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use linera_execution::system::{Address, Amount, SystemOperation, UserData, SYSTEM};
+use linera_base::messages::ApplicationId;
+use linera_execution::system::{Address, Amount, SystemOperation, UserData};
 
 #[test]
 fn test_signed_values() {
@@ -16,7 +17,7 @@ fn test_signed_values() {
         chain_id: ChainId::root(1),
         incoming_messages: Vec::new(),
         operations: vec![(
-            SYSTEM,
+            ApplicationId::System,
             Operation::System(SystemOperation::Transfer {
                 recipient: Address::Account(ChainId::root(2)),
                 amount: Amount::from(1),
@@ -54,7 +55,7 @@ fn test_certificates() {
         chain_id: ChainId::root(1),
         incoming_messages: Vec::new(),
         operations: vec![(
-            SYSTEM,
+            ApplicationId::System,
             Operation::System(SystemOperation::Transfer {
                 recipient: Address::Account(ChainId::root(1)),
                 amount: Amount::from(1),

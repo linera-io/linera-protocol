@@ -8,7 +8,10 @@ use async_trait::async_trait;
 use linera_base::{
     committee::ValidatorState,
     crypto::KeyPair,
-    messages::{BlockHeight, ChainDescription, ChainId, Epoch, Owner, RoundNumber, ValidatorName},
+    messages::{
+        ApplicationId, BlockHeight, ChainDescription, ChainId, Epoch, Owner, RoundNumber,
+        ValidatorName,
+    },
 };
 use linera_chain::messages::{
     Block, BlockAndRound, BlockProposal, Certificate, SignatureAggregator, Vote,
@@ -20,7 +23,7 @@ use linera_core::{
     worker::WorkerState,
 };
 use linera_execution::{
-    system::{Address, Amount, Balance, SystemOperation, UserData, SYSTEM},
+    system::{Address, Amount, Balance, SystemOperation, UserData},
     Operation,
 };
 use linera_rpc::{config::NetworkProtocol, simple_network, Message};
@@ -149,7 +152,7 @@ impl ClientContext {
                 chain_id: chain.chain_id,
                 incoming_messages: Vec::new(),
                 operations: vec![(
-                    SYSTEM,
+                    ApplicationId::System,
                     Operation::System(SystemOperation::Transfer {
                         recipient: Address::Account(next_recipient),
                         amount: Amount::from(1),
