@@ -5,7 +5,7 @@ use linera_views::common::{Batch, KeyValueOperations};
 use tokio::sync::{RwLock, Mutex};
 use std::sync::Arc;
 use linera_views::memory::MemoryContainer;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap,HashMap};
 use linera_views::rocksdb::{RocksdbContainer, DB};
 use linera_views::dynamo_db::{DynamodbContainer, TableName};
 use linera_views::test_utils::{LocalStackTestContext, get_random_vec_keyvalues};
@@ -23,14 +23,25 @@ async fn test_ordering_keys<OP: KeyValueOperations>(key_value_operation: OP) {
     key_value_operation.write_batch(batch).await.unwrap();
     let key_prefix = Vec::new();
     let l_keys = key_value_operation.find_keys_with_prefix(&key_prefix).await.unwrap();
-    for i in 0..l_keys.len() {
-        println!("i={} key={:?}", i, l_keys[i].clone());
-    }
     for i in 1..l_keys.len() {
         let key1 = l_keys[i-1].clone();
         let key2 = l_keys[i].clone();
-        println!("key1={:?} key2={:?}", key1, key2);
         assert!(key1 < key2);
+    }
+    let mut map = HashMap::new();
+    for i in 0..l_keys.len() {
+        let key = l_keys[i].clone();
+        for u in 1..key.len() {
+            let key_prefix = key[0..u].to_vec();
+            match map.get_mut(&key_prefix) {
+                Some(v) => { *v += 1; },
+                None => { map.insert(key_prefix, 1); },
+            }
+        }
+    }
+    for (key_prefix, value) in map {
+        let l_keys_ret = key_value_operation.find_keys_with_prefix(&key_prefix).await.unwrap();
+        assert!(l_keys_ret.len() == value);
     }
 }
 

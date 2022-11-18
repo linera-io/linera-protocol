@@ -32,6 +32,9 @@ fn get_interval(key_prefix: Vec<u8>) -> (Bound<Vec<u8>>, Bound<Vec<u8>>) {
         if val < 255 {
             let mut upper_bound = key_prefix.clone();
             upper_bound[i] += 1;
+            for j in i+1..len {
+                upper_bound[j] = 0;
+            }
             return (Included(key_prefix), Excluded(upper_bound));
         }
     }
