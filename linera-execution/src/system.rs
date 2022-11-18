@@ -578,6 +578,10 @@ where
                 };
                 Ok(application)
             }
+            BytecodePublished => {
+                // This special effect is executed immediately when cross-chain requests are received.
+                Ok(RawExecutionResult::default())
+            }
             Notify { .. } => Ok(RawExecutionResult::default()),
             OpenChain { .. } => {
                 // This special effect is executed immediately when cross-chain requests are received.

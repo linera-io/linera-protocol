@@ -8,7 +8,10 @@ use crate::{
 use linera_base::{
     crypto::HashValue,
     ensure,
-    messages::{ApplicationId, BlockHeight, ChainId, Destination, EffectId, Medium, Origin},
+    messages::{
+        ApplicationId, BlockHeight, BytecodeId, BytecodeLocation, ChainId, Destination, EffectId,
+        Medium, Origin,
+    },
 };
 use linera_execution::{
     system::{SystemEffect, SYSTEM},
@@ -51,6 +54,9 @@ pub struct ChainStateView<C> {
     /// Communication state of applications.
     pub communication_states:
         ScopedView<6, CollectionView<C, ApplicationId, CommunicationStateView<C>>>,
+
+    /// The application bytecodes that have been published.
+    pub published_bytecodes: ScopedView<7, MapView<C, BytecodeId, BytecodeLocation>>,
 }
 
 impl_view!(
@@ -62,6 +68,7 @@ impl_view!(
         confirmed_log,
         received_log,
         communication_states,
+        published_bytecodes,
     };
     RegisterOperations<Option<HashValue>>,
     RegisterOperations<ChainTipState>,
@@ -70,6 +77,7 @@ impl_view!(
     CollectionOperations<ApplicationId>,
     CommunicationStateViewContext,
     ExecutionStateViewContext,
+    MapOperations<BytecodeId, BytecodeLocation>,
 );
 
 /// Block-chaining state.
@@ -362,7 +370,7 @@ where
                     height,
                     index,
                 };
-                self.execute_immediate_effect(effect_id, &effect, chain_id)
+                self.execute_immediate_effect(effect_id, &effect, chain_id, certificate_hash)
                     .await?;
             }
             let communication_state = self.communication_states.load_entry(application_id).await?;
@@ -409,6 +417,7 @@ where
         effect_id: EffectId,
         effect: &Effect,
         chain_id: ChainId,
+        certificate_hash: HashValue,
     ) -> Result<(), ChainError> {
         match &effect {
             Effect::System(SystemEffect::OpenChain {
@@ -433,6 +442,15 @@ where
                 self.manager
                     .get_mut()
                     .reset(self.execution_state.system.ownership.get());
+            }
+            Effect::System(SystemEffect::BytecodePublished) => {
+                let bytecode_id = effect_id.into();
+                let bytecode_location = BytecodeLocation {
+                    certificate_hash,
+                    operation_index: effect_id.index,
+                };
+                self.published_bytecodes
+                    .insert(bytecode_id, bytecode_location);
             }
             _ => {}
         }
