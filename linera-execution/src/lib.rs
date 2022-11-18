@@ -441,3 +441,9 @@ impl From<Vec<u8>> for Response {
 #[derive(Clone, Copy, Debug, Error)]
 #[error("The application state can not be saved because it was not locked for writing")]
 pub struct ApplicationStateNotLocked;
+
+// TODO: Move into `wasm` module if/when a WASM runtime is chosen or having a runtime becomes
+// mandatory.
+/// A WebAssembly module's bytecode.
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+pub struct Bytecode(Vec<u8>);
