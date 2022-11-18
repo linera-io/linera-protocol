@@ -3,7 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    ChainOwnership, Effect, EffectContext, OperationContext, QueryContext, RawExecutionResult,
+    Bytecode, ChainOwnership, Effect, EffectContext, OperationContext, QueryContext,
+    RawExecutionResult,
 };
 use linera_base::{
     committee::Committee,
@@ -103,6 +104,11 @@ pub enum SystemOperation {
     /// blocks from the retired epoch will not be accepted until they are followed (hence
     /// re-certified) by a block certified by a recent committee.
     RemoveCommittee { admin_id: ChainId, epoch: Epoch },
+    /// Publish a new application bytecode.
+    PublishBytecode {
+        contract: Bytecode,
+        service: Bytecode,
+    },
 }
 
 /// The effect of a system operation to be performed on a remote chain.
@@ -128,6 +134,8 @@ pub enum SystemEffect {
     Subscribe { id: ChainId, channel: ChannelId },
     /// Unsubscribe to a channel.
     Unsubscribe { id: ChainId, channel: ChannelId },
+    /// Notify that a new application bytecode was published.
+    BytecodePublished,
     /// Does nothing. Used to debug the intended recipients of a block.
     Notify { id: ChainId },
 }
@@ -148,6 +156,9 @@ pub static SYSTEM: ApplicationId = ApplicationId(0);
 
 /// The name of the channel for the admin chain to broadcast reconfigurations.
 pub const ADMIN_CHANNEL: &str = "ADMIN";
+
+/// The name of the channel used to broadcast new published bytecodes.
+pub const PUBLISHED_BYTECODES_CHANNEL: &str = "PUBLISHED_BYTECODES";
 
 /// A recipient's address.
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Serialize, Deserialize)]
@@ -493,6 +504,17 @@ where
                                 name: ADMIN_CHANNEL.into(),
                             },
                         },
+                    )],
+                    subscribe: vec![],
+                    unsubscribe: vec![],
+                };
+                Ok(application)
+            }
+            PublishBytecode { .. } => {
+                let application = RawExecutionResult {
+                    effects: vec![(
+                        Destination::Subscribers(PUBLISHED_BYTECODES_CHANNEL.into()),
+                        SystemEffect::BytecodePublished,
                     )],
                     subscribe: vec![],
                     unsubscribe: vec![],

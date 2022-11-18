@@ -54,6 +54,9 @@ BlockProposal:
         TYPENAME: Owner
     - signature:
         TYPENAME: Signature
+Bytecode:
+  NEWTYPESTRUCT:
+    SEQ: U8
 Certificate:
   STRUCT:
     - value:
@@ -457,6 +460,8 @@ SystemEffect:
           - channel:
               TYPENAME: ChannelId
     5:
+      BytecodePublished: UNIT
+    6:
       Notify:
         STRUCT:
           - id:
@@ -528,6 +533,13 @@ SystemOperation:
               TYPENAME: ChainId
           - epoch:
               TYPENAME: Epoch
+    9:
+      PublishBytecode:
+        STRUCT:
+          - contract:
+              TYPENAME: Bytecode
+          - service:
+              TYPENAME: Bytecode
 UserData:
   NEWTYPESTRUCT:
     OPTION:
