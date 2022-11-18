@@ -21,6 +21,10 @@ use test_strategy::Arbitrary;
 #[cfg_attr(any(test, feature = "test"), derive(Arbitrary))]
 pub struct ApplicationId(pub u64);
 
+/// A unique identifier for an application bytecode.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+pub struct BytecodeId(EffectId);
+
 /// A block height to identify blocks in a chain.
 #[derive(
     Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
@@ -118,6 +122,12 @@ impl Origin {
             chain_id,
             medium: Medium::Channel(name),
         }
+    }
+}
+
+impl From<EffectId> for BytecodeId {
+    fn from(effect_id: EffectId) -> Self {
+        BytecodeId(effect_id)
     }
 }
 
