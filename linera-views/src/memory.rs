@@ -16,8 +16,6 @@ use std::{
 };
 use thiserror::Error;
 use tokio::sync::{OwnedMutexGuard, RwLock};
-use std::ops::Bound::{Excluded, Included, Unbounded};
-use std::ops::Bound;
 
 /// The data is serialized in memory just like for rocksdb / dynamodb
 /// The analogue of the database is the BTreeMap
