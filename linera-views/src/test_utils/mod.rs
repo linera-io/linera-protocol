@@ -1,10 +1,9 @@
 use anyhow::{Context, Error};
 use aws_sdk_s3::Endpoint;
 use aws_types::SdkConfig;
-use std::env;
-use tokio::sync::{Mutex, MutexGuard};
 use rand::Rng;
-use std::collections::HashSet;
+use std::{collections::HashSet, env};
+use tokio::sync::{Mutex, MutexGuard};
 
 /// A static lock to prevent multiple tests from using the same LocalStack instance at the same
 /// time.

@@ -15,7 +15,7 @@ use linera_views::{
     register_view::{RegisterOperations, RegisterView},
     rocksdb::{RocksdbContext, DB},
     scoped_view::ScopedView,
-    test_utils::{LocalStackTestContext, random_shuffle, get_random_vec_keyvalues},
+    test_utils::{get_random_vec_keyvalues, random_shuffle, LocalStackTestContext},
     views::{HashView, Hasher, HashingContext, View, ViewError},
 };
 use rand::Rng;
@@ -695,7 +695,6 @@ async fn test_removal_api() -> anyhow::Result<()> {
     }
     Ok(())
 }
-
 
 #[cfg(test)]
 async fn compute_hash_map_keyvaluestore_view<S>(
