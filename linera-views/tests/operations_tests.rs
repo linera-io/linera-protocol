@@ -1,6 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+ <<<<<<< HEAD
 use linera_views::{
     common::{Batch, KeyValueOperations},
     dynamo_db::DynamoDbContainer,
