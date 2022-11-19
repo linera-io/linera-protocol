@@ -83,39 +83,59 @@ impl DynamoDbContainer {
     }
 
     /// Extract the key attribute from an item.
-    fn extract_raw_key(
-        &self,
-        attributes: &HashMap<String, AttributeValue>,
+    fn extract_key(
+        mut attributes: HashMap<String, AttributeValue>,
     ) -> Result<Vec<u8>, DynamoDbContextError> {
-        Ok(attributes
-            .get(KEY_ATTRIBUTE)
-            .ok_or(DynamoDbContextError::MissingKey)?
-            .as_b()
-            .map_err(DynamoDbContextError::wrong_key_type)?
-            .as_ref()
-            .to_owned())
+        let key = attributes
+            .remove(KEY_ATTRIBUTE)
+            .ok_or(DynamoDbContextError::MissingKey)?;
+        match key {
+            AttributeValue::B(blob) => Ok(blob.into_inner()),
+            key => Err(DynamoDbContextError::wrong_key_type(&key)),
+        }
     }
 
     /// Extract the value attribute from an item.
-    fn extract_value_bytes(
-        attributes: &HashMap<String, AttributeValue>,
+    fn extract_value(
+        mut attributes: HashMap<String, AttributeValue>,
     ) -> Result<Vec<u8>, DynamoDbContextError> {
-        let attribute = VALUE_ATTRIBUTE;
-        let missing_error = DynamoDbContextError::MissingValue;
-        let type_error = DynamoDbContextError::wrong_value_type;
-        Ok(attributes
-            .get(attribute)
-            .ok_or(missing_error)?
-            .as_b()
-            .map_err(type_error)?
-            .as_ref()
-            .to_owned())
+        let key = attributes
+            .remove(VALUE_ATTRIBUTE)
+            .ok_or(DynamoDbContextError::MissingValue)?;
+        match key {
+            AttributeValue::B(blob) => Ok(blob.into_inner()),
+            key => Err(DynamoDbContextError::wrong_value_type(&key)),
+        }
+    }
+}
+
+// Inspired by https://depth-first.com/articles/2020/06/22/returning-rust-iterators/
+pub struct DynamoDbKeyIterator {
+    iter: std::iter::Flatten<
+        std::option::IntoIter<Vec<HashMap<std::string::String, AttributeValue>>>,
+    >,
+}
+
+impl DynamoDbKeyIterator {
+    fn new(response: aws_sdk_dynamodb::output::QueryOutput) -> Self {
+        Self {
+            iter: response.items.into_iter().flatten(),
+        }
+    }
+}
+
+impl Iterator for DynamoDbKeyIterator {
+    type Item = Result<Vec<u8>, DynamoDbContextError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().map(DynamoDbContainer::extract_key)
     }
 }
 
 #[async_trait]
 impl KeyValueOperations for DynamoDbContainer {
     type Error = DynamoDbContextError;
+    type KeyIterator = DynamoDbKeyIterator;
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DynamoDbContextError> {
         let response = self
@@ -126,8 +146,8 @@ impl KeyValueOperations for DynamoDbContainer {
             .send()
             .await?;
 
-        match response.item() {
-            Some(item) => Ok(Some(Self::extract_value_bytes(item)?)),
+        match response.item {
+            Some(item) => Ok(Some(Self::extract_value(item)?)),
             None => Ok(None),
         }
     }
@@ -135,7 +155,7 @@ impl KeyValueOperations for DynamoDbContainer {
     async fn find_keys_with_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Vec<Vec<u8>>, DynamoDbContextError> {
+    ) -> Result<Self::KeyIterator, DynamoDbContextError> {
         let response = self
             .client
             .query()
@@ -154,13 +174,7 @@ impl KeyValueOperations for DynamoDbContainer {
             )
             .send()
             .await?;
-
-        response
-            .items()
-            .into_iter()
-            .flatten()
-            .map(|item| self.extract_raw_key(item))
-            .collect()
+        Ok(DynamoDbKeyIterator::new(response))
     }
 
     /// We put submit the transaction in blocks of at most 25 so as to decrease the
