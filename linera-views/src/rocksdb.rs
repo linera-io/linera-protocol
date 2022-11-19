@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::common::{Batch, ContextFromDb, KeyValueOperations, WriteOperation};
+use crate::common::{Batch, ContextFromDb, KeyValueOperations, SimpleKeyIterator, WriteOperation};
 use async_trait::async_trait;
 use std::sync::Arc;
 use thiserror::Error;
@@ -15,6 +15,7 @@ pub type RocksdbContext<E> = ContextFromDb<E, RocksdbContainer>;
 #[async_trait]
 impl KeyValueOperations for RocksdbContainer {
     type Error = RocksdbContextError;
+    type KeyIterator = SimpleKeyIterator<RocksdbContextError>;
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RocksdbContextError> {
         let db = self.clone();
@@ -25,7 +26,7 @@ impl KeyValueOperations for RocksdbContainer {
     async fn find_keys_with_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Vec<Vec<u8>>, RocksdbContextError> {
+    ) -> Result<Self::KeyIterator, RocksdbContextError> {
         let db = self.clone();
         let prefix = key_prefix.to_vec();
         let keys = tokio::task::spawn_blocking(move || {
@@ -44,7 +45,7 @@ impl KeyValueOperations for RocksdbContainer {
             keys
         })
         .await?;
-        Ok(keys)
+        Ok(SimpleKeyIterator::new(keys))
     }
 
     async fn write_batch(&self, batch: Batch) -> Result<(), RocksdbContextError> {
