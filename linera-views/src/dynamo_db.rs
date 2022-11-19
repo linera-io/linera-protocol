@@ -14,7 +14,7 @@ use aws_sdk_dynamodb::{
     Client,
 };
 use linera_base::ensure;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::Serialize;
 use std::{collections::HashMap, str::FromStr};
 use thiserror::Error;
 
@@ -95,24 +95,6 @@ impl DynamodbContainer {
             .as_ref()
             .to_owned())
     }
-    /// Extract the key attribute from an item and deserialize it into the `Key` type.
-    fn extract_sub_key<Key>(
-        &self,
-        attributes: &HashMap<String, AttributeValue>,
-        key_length: usize,
-    ) -> Result<Key, DynamoDbContextError>
-    where
-        Key: DeserializeOwned,
-    {
-        Self::extract_attribute(
-            attributes,
-            KEY_ATTRIBUTE,
-            Some(key_length),
-            DynamoDbContextError::MissingKey,
-            DynamoDbContextError::wrong_key_type,
-            DynamoDbContextError::KeyDeserialization,
-        )
-    }
 
     /// Extract the value attribute from an item and deserialize it into the `Value` type.
     fn extract_value_bytes(
@@ -128,42 +110,6 @@ impl DynamodbContainer {
             .map_err(type_error)?
             .as_ref()
             .to_owned())
-    }
-
-    /// Extract the requested `attribute` from an item and deserialize it into the `Data` type.
-    ///
-    /// # Parameters
-    ///
-    /// - `attributes`: the attributes of the item
-    /// - `attribute`: the attribute to extract
-    /// - `bytes_to_skip`: the number of bytes from the value blob to ignore before attempting to
-    ///   deserialize it
-    /// - `missing_error`: error to return if the requested attribute is missing
-    /// - `type_error`: error to return if the attribute value is not a binary blob
-    /// - `deserialization_error`: error to return if the attribute value blob can't be
-    ///   deserialized into a `Data` instance
-    fn extract_attribute<Data>(
-        attributes: &HashMap<String, AttributeValue>,
-        attribute: &str,
-        bytes_to_skip: Option<usize>,
-        missing_error: DynamoDbContextError,
-        type_error: impl FnOnce(&AttributeValue) -> DynamoDbContextError,
-        deserialization_error: impl FnOnce(bcs::Error) -> DynamoDbContextError,
-    ) -> Result<Data, DynamoDbContextError>
-    where
-        Data: DeserializeOwned,
-    {
-        let bytes = attributes
-            .get(attribute)
-            .ok_or(missing_error)?
-            .as_b()
-            .map_err(type_error)?
-            .as_ref()
-            .to_owned();
-        let data_start = bytes_to_skip.unwrap_or(0);
-        let data_bytes = &bytes[data_start..];
-
-        bcs::from_bytes(data_bytes).map_err(deserialization_error)
     }
 }
 
@@ -211,43 +157,6 @@ impl KeyValueOperations for DynamodbContainer {
             .into_iter()
             .flatten()
             .map(|item| self.extract_raw_key(item))
-            .collect()
-    }
-
-    /// Query the table for the keys that are prefixed by the current context.
-    ///
-    /// # Panics
-    ///
-    /// If the raw key bytes can't be deserialized into a `Key`.
-    async fn get_sub_keys<Key>(&self, key_prefix: &[u8]) -> Result<Vec<Key>, DynamoDbContextError>
-    where
-        Key: DeserializeOwned + Send,
-    {
-        let key_length = key_prefix.len();
-        let response = self
-            .client
-            .query()
-            .table_name(self.table.as_ref())
-            .projection_expression(KEY_ATTRIBUTE)
-            .key_condition_expression(format!(
-                "{PARTITION_ATTRIBUTE} = :partition and begins_with({KEY_ATTRIBUTE}, :prefix)"
-            ))
-            .expression_attribute_values(
-                ":partition",
-                AttributeValue::B(Blob::new(DUMMY_PARTITION_KEY)),
-            )
-            .expression_attribute_values(
-                ":prefix",
-                AttributeValue::B(Blob::new(key_prefix.to_vec())),
-            )
-            .send()
-            .await?;
-
-        response
-            .items()
-            .into_iter()
-            .flatten()
-            .map(|item| self.extract_sub_key(item, key_length))
             .collect()
     }
 

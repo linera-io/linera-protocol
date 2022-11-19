@@ -78,19 +78,6 @@ impl KeyValueOperations for MemoryContainer {
         Ok(vals)
     }
 
-    async fn get_sub_keys<Key>(&self, key_prefix: &[u8]) -> Result<Vec<Key>, MemoryContextError>
-    where
-        Key: DeserializeOwned + Send,
-    {
-        let map = self.read().await;
-        let mut keys = Vec::new();
-        let len = key_prefix.len();
-        for (key, _value) in map.range(get_interval(key_prefix.to_vec())) {
-            keys.push(bcs::from_bytes(&key[len..])?);
-        }
-        Ok(keys)
-    }
-
     async fn write_batch(&self, batch: Batch) -> Result<(), MemoryContextError> {
         let mut map = self.write().await;
         for ent in batch.operations {
