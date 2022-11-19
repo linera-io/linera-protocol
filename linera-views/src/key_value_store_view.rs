@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use std::{collections::BTreeMap, fmt::Debug, mem};
 
 use crate::{
-    common::ContextFromDb,
+    common::{ContextFromDb, SimpleKeyIterator},
     memory::{MemoryContext, MemoryStoreMap},
 };
 use tokio::sync::OwnedMutexGuard;
@@ -151,6 +151,7 @@ where
     ViewError: From<C::Error>,
 {
     type Error = ViewError;
+    type KeyIterator = SimpleKeyIterator<ViewError>;
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
         if let Some(update) = self.updates.get(key) {
@@ -163,7 +164,10 @@ where
         Ok(val)
     }
 
-    async fn find_keys_with_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, ViewError> {
+    async fn find_keys_with_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::KeyIterator, ViewError> {
         let len = self.context.base_key().len();
         let key_prefix = self.context.derive_key_bytes(key_prefix);
         let mut keys = Vec::new();
@@ -180,7 +184,7 @@ where
                 keys.push(key.to_vec())
             }
         }
-        Ok(keys)
+        Ok(SimpleKeyIterator::new(keys))
     }
 
     async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {

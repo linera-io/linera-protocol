@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    common::{Batch, ContextFromDb, KeyValueOperations, WriteOperation},
+    common::{Batch, ContextFromDb, KeyValueOperations, SimpleKeyIterator, WriteOperation},
     views::ViewError,
 };
 use async_trait::async_trait;
@@ -31,6 +31,7 @@ impl<E> MemoryContext<E> {
 #[async_trait]
 impl KeyValueOperations for MemoryContainer {
     type Error = MemoryContextError;
+    type KeyIterator = SimpleKeyIterator<MemoryContextError>;
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MemoryContextError> {
         let map = self.read().await;
@@ -40,7 +41,7 @@ impl KeyValueOperations for MemoryContainer {
     async fn find_keys_with_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Vec<Vec<u8>>, MemoryContextError> {
+    ) -> Result<Self::KeyIterator, MemoryContextError> {
         let map = self.read().await;
         let mut vals = Vec::new();
         for key in map.keys() {
@@ -48,7 +49,7 @@ impl KeyValueOperations for MemoryContainer {
                 vals.push(key.clone())
             }
         }
-        Ok(vals)
+        Ok(SimpleKeyIterator::new(vals))
     }
 
     async fn write_batch(&self, batch: Batch) -> Result<(), MemoryContextError> {
