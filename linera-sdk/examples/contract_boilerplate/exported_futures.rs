@@ -7,10 +7,9 @@
 //! WASM module's respective endpoint. This module contains the code to forward the call to the
 //! application type that implements [`linera_sdk::Application`].
 
-use super::{super::ApplicationState, application};
+use super::{super::ContractState, contract};
 use linera_sdk::{
-    Application, ApplicationCallResult, ExecutionResult, ExportedFuture, SessionCallResult,
-    SessionId,
+    ApplicationCallResult, Contract, ExecutionResult, ExportedFuture, SessionCallResult, SessionId,
 };
 use wit_bindgen_guest_rust::Handle;
 
@@ -18,23 +17,23 @@ pub struct ExecuteOperation {
     future: ExportedFuture<Result<ExecutionResult, String>>,
 }
 
-impl application::ExecuteOperation for ExecuteOperation {
-    fn new(context: application::OperationContext, operation: Vec<u8>) -> Handle<Self> {
+impl contract::ExecuteOperation for ExecuteOperation {
+    fn new(context: contract::OperationContext, operation: Vec<u8>) -> Handle<Self> {
         Handle::new(ExecuteOperation {
             future: ExportedFuture::new(async move {
-                let mut application = ApplicationState::load_and_lock().await;
-                let result = application
+                let mut contract = ContractState::load_and_lock().await;
+                let result = contract
                     .execute_operation(&context.into(), &operation)
                     .await;
                 if result.is_ok() {
-                    application.store_and_unlock().await;
+                    contract.store_and_unlock().await;
                 }
                 result.map_err(|error| error.to_string())
             }),
         })
     }
 
-    fn poll(&self) -> application::PollExecutionResult {
+    fn poll(&self) -> contract::PollExecutionResult {
         self.future.poll()
     }
 }
@@ -43,21 +42,21 @@ pub struct ExecuteEffect {
     future: ExportedFuture<Result<ExecutionResult, String>>,
 }
 
-impl application::ExecuteEffect for ExecuteEffect {
-    fn new(context: application::EffectContext, effect: Vec<u8>) -> Handle<Self> {
+impl contract::ExecuteEffect for ExecuteEffect {
+    fn new(context: contract::EffectContext, effect: Vec<u8>) -> Handle<Self> {
         Handle::new(ExecuteEffect {
             future: ExportedFuture::new(async move {
-                let mut application = ApplicationState::load_and_lock().await;
-                let result = application.execute_effect(&context.into(), &effect).await;
+                let mut contract = ContractState::load_and_lock().await;
+                let result = contract.execute_effect(&context.into(), &effect).await;
                 if result.is_ok() {
-                    application.store_and_unlock().await;
+                    contract.store_and_unlock().await;
                 }
                 result.map_err(|error| error.to_string())
             }),
         })
     }
 
-    fn poll(&self) -> application::PollExecutionResult {
+    fn poll(&self) -> contract::PollExecutionResult {
         self.future.poll()
     }
 }
@@ -66,33 +65,33 @@ pub struct CallApplication {
     future: ExportedFuture<Result<ApplicationCallResult, String>>,
 }
 
-impl application::CallApplication for CallApplication {
+impl contract::CallApplication for CallApplication {
     fn new(
-        context: application::CalleeContext,
+        context: contract::CalleeContext,
         argument: Vec<u8>,
-        forwarded_sessions: Vec<application::SessionId>,
+        forwarded_sessions: Vec<contract::SessionId>,
     ) -> Handle<Self> {
         Handle::new(CallApplication {
             future: ExportedFuture::new(async move {
-                let mut application = ApplicationState::load_and_lock().await;
+                let mut contract = ContractState::load_and_lock().await;
 
                 let forwarded_sessions = forwarded_sessions
                     .into_iter()
                     .map(SessionId::from)
                     .collect();
 
-                let result = application
+                let result = contract
                     .call_application(&context.into(), &argument, forwarded_sessions)
                     .await;
                 if result.is_ok() {
-                    application.store_and_unlock().await;
+                    contract.store_and_unlock().await;
                 }
                 result.map_err(|error| error.to_string())
             }),
         })
     }
 
-    fn poll(&self) -> application::PollCallApplication {
+    fn poll(&self) -> contract::PollCallApplication {
         self.future.poll()
     }
 }
@@ -101,23 +100,23 @@ pub struct CallSession {
     future: ExportedFuture<Result<SessionCallResult, String>>,
 }
 
-impl application::CallSession for CallSession {
+impl contract::CallSession for CallSession {
     fn new(
-        context: application::CalleeContext,
-        session: application::Session,
+        context: contract::CalleeContext,
+        session: contract::Session,
         argument: Vec<u8>,
-        forwarded_sessions: Vec<application::SessionId>,
+        forwarded_sessions: Vec<contract::SessionId>,
     ) -> Handle<Self> {
         Handle::new(CallSession {
             future: ExportedFuture::new(async move {
-                let mut application = ApplicationState::load_and_lock().await;
+                let mut contract = ContractState::load_and_lock().await;
 
                 let forwarded_sessions = forwarded_sessions
                     .into_iter()
                     .map(SessionId::from)
                     .collect();
 
-                let result = application
+                let result = contract
                     .call_session(
                         &context.into(),
                         session.into(),
@@ -126,36 +125,14 @@ impl application::CallSession for CallSession {
                     )
                     .await;
                 if result.is_ok() {
-                    application.store_and_unlock().await;
+                    contract.store_and_unlock().await;
                 }
                 result.map_err(|error| error.to_string())
             }),
         })
     }
 
-    fn poll(&self) -> application::PollCallSession {
-        self.future.poll()
-    }
-}
-
-pub struct QueryApplication {
-    future: ExportedFuture<Result<Vec<u8>, String>>,
-}
-
-impl application::QueryApplication for QueryApplication {
-    fn new(context: application::QueryContext, argument: Vec<u8>) -> Handle<Self> {
-        Handle::new(QueryApplication {
-            future: ExportedFuture::new(async move {
-                let application = ApplicationState::load().await;
-                application
-                    .query_application(&context.into(), &argument)
-                    .await
-                    .map_err(|error| error.to_string())
-            }),
-        })
-    }
-
-    fn poll(&self) -> application::PollQuery {
+    fn poll(&self) -> contract::PollCallSession {
         self.future.poll()
     }
 }

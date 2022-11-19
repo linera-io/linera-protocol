@@ -5,8 +5,8 @@
 
 use async_trait::async_trait;
 use linera_sdk::{
-    Application, ApplicationCallResult, CalleeContext, EffectContext, ExecutionResult,
-    OperationContext, QueryContext, Session, SessionCallResult, SessionId,
+    ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
+    OperationContext, Session, SessionCallResult, SessionId,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -18,7 +18,7 @@ pub struct Counter {
 }
 
 #[async_trait]
-impl Application for Counter {
+impl Contract for Counter {
     type Error = Error;
 
     async fn execute_operation(
@@ -62,17 +62,6 @@ impl Application for Counter {
     ) -> Result<SessionCallResult, Self::Error> {
         Err(Error::SessionsNotSupported)
     }
-
-    async fn query_application(
-        &self,
-        _context: &QueryContext,
-        argument: &[u8],
-    ) -> Result<Vec<u8>, Self::Error> {
-        match argument {
-            &[] => Ok(bcs::to_bytes(&self.value).expect("Serialization should not fail")),
-            _ => Err(Error::InvalidQuery),
-        }
-    }
 }
 
 /// An error that can occur during the contract execution.
@@ -89,13 +78,9 @@ pub enum Error {
     /// Invalid serialized increment value.
     #[error("Invalid serialized increment value")]
     InvalidIncrement(#[from] bcs::Error),
-
-    /// Invalid query argument; Counter application only supports a single (empty) query.
-    #[error("Invalid query argument; Counter application only supports a single (empty) query")]
-    InvalidQuery,
 }
 
-/// Alias to the application type, so that the boilerplate module can reference it.
-type ApplicationState = Counter;
+/// Alias to the contract type, so that the boilerplate module can reference it.
+type ContractState = Counter;
 
-mod boilerplate;
+mod contract_boilerplate;

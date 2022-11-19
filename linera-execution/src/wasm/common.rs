@@ -5,9 +5,12 @@
 
 use super::{
     async_boundary::{ContextForwarder, GuestFuture, GuestFutureInterface},
-    runtime::application::{
-        self, CallApplication, CallSession, ExecuteEffect, ExecuteOperation, PollCallApplication,
-        PollCallSession, PollExecutionResult, PollQuery, QueryApplication,
+    runtime::{
+        contract::{
+            self, CallApplication, CallSession, ExecuteEffect, ExecuteOperation,
+            PollCallApplication, PollCallSession, PollExecutionResult,
+        },
+        service::{self, PollQuery, QueryApplication},
     },
     WasmExecutionError,
 };
@@ -38,65 +41,65 @@ pub trait Contract<R: Runtime> {
     fn execute_operation_new(
         &self,
         store: &mut R::Store,
-        context: application::OperationContext,
+        context: contract::OperationContext,
         operation: &[u8],
-    ) -> Result<application::ExecuteOperation, R::Error>;
+    ) -> Result<contract::ExecuteOperation, R::Error>;
 
-    /// Poll a user application future that's executing an operation.
+    /// Poll a user contract future that's executing an operation.
     fn execute_operation_poll(
         &self,
         store: &mut R::Store,
-        future: &application::ExecuteOperation,
-    ) -> Result<application::PollExecutionResult, R::Error>;
+        future: &contract::ExecuteOperation,
+    ) -> Result<contract::PollExecutionResult, R::Error>;
 
-    /// Create a new future for the user application to execute an effect.
+    /// Create a new future for the user contract to execute an effect.
     fn execute_effect_new(
         &self,
         store: &mut R::Store,
-        context: application::EffectContext,
+        context: contract::EffectContext,
         effect: &[u8],
-    ) -> Result<application::ExecuteEffect, R::Error>;
+    ) -> Result<contract::ExecuteEffect, R::Error>;
 
-    /// Poll a user application future that's executing an effect.
+    /// Poll a user contract future that's executing an effect.
     fn execute_effect_poll(
         &self,
         store: &mut R::Store,
-        future: &application::ExecuteEffect,
-    ) -> Result<application::PollExecutionResult, R::Error>;
+        future: &contract::ExecuteEffect,
+    ) -> Result<contract::PollExecutionResult, R::Error>;
 
-    /// Create a new future for the user application to handle a call from another application.
+    /// Create a new future for the user contract to handle a call from another contract.
     fn call_application_new(
         &self,
         store: &mut R::Store,
-        context: application::CalleeContext,
+        context: contract::CalleeContext,
         argument: &[u8],
-        forwarded_sessions: &[application::SessionId],
-    ) -> Result<application::CallApplication, R::Error>;
+        forwarded_sessions: &[contract::SessionId],
+    ) -> Result<contract::CallApplication, R::Error>;
 
-    /// Poll a user application future that's handling a call from another application.
+    /// Poll a user contract future that's handling a call from another contract.
     fn call_application_poll(
         &self,
         store: &mut R::Store,
-        future: &application::CallApplication,
-    ) -> Result<application::PollCallApplication, R::Error>;
+        future: &contract::CallApplication,
+    ) -> Result<contract::PollCallApplication, R::Error>;
 
-    /// Create a new future for the user application to handle a session call from another
-    /// application.
+    /// Create a new future for the user contract to handle a session call from another
+    /// contract.
     fn call_session_new(
         &self,
         store: &mut R::Store,
-        context: application::CalleeContext,
-        session: application::SessionParam,
+        context: contract::CalleeContext,
+        session: contract::SessionParam,
         argument: &[u8],
-        forwarded_sessions: &[application::SessionId],
-    ) -> Result<application::CallSession, R::Error>;
+        forwarded_sessions: &[contract::SessionId],
+    ) -> Result<contract::CallSession, R::Error>;
 
-    /// Poll a user application future that's handling a session call from another application.
+    /// Poll a user contract future that's handling a session call from another contract.
     fn call_session_poll(
         &self,
         store: &mut R::Store,
-        future: &application::CallSession,
-    ) -> Result<application::PollCallSession, R::Error>;
+        future: &contract::CallSession,
+    ) -> Result<contract::PollCallSession, R::Error>;
 }
 
 pub trait Service<R: Runtime> {
@@ -104,16 +107,16 @@ pub trait Service<R: Runtime> {
     fn query_application_new(
         &self,
         store: &mut R::Store,
-        context: application::QueryContext,
+        context: service::QueryContext,
         argument: &[u8],
-    ) -> Result<application::QueryApplication, R::Error>;
+    ) -> Result<service::QueryApplication, R::Error>;
 
-    /// Poll a user application future that's handling a query.
+    /// Poll a user contract future that's handling a query.
     fn query_application_poll(
         &self,
         store: &mut R::Store,
-        future: &application::QueryApplication,
-    ) -> Result<application::PollQuery, R::Error>;
+        future: &service::QueryApplication,
+    ) -> Result<service::PollQuery, R::Error>;
 }
 
 /// Wrapper around all types necessary to call an asynchronous method of a WASM application.
@@ -125,7 +128,7 @@ where
     /// module.
     pub(crate) context_forwarder: ContextForwarder,
 
-    /// The application type.
+    /// The contract type.
     pub(crate) application: R::Application,
 
     /// The application's memory state.
@@ -209,7 +212,7 @@ where
     ) -> GuestFuture<CallApplication, R> {
         let forwarded_sessions: Vec<_> = forwarded_sessions
             .into_iter()
-            .map(application::SessionId::from)
+            .map(contract::SessionId::from)
             .collect();
 
         let future = self.application.call_application_new(
@@ -247,10 +250,10 @@ where
     ) -> GuestFuture<CallSession, R> {
         let forwarded_sessions: Vec<_> = forwarded_sessions
             .into_iter()
-            .map(application::SessionId::from)
+            .map(contract::SessionId::from)
             .collect();
 
-        let session = application::SessionParam {
+        let session = contract::SessionParam {
             kind: session_kind,
             data: &*session_data,
         };
