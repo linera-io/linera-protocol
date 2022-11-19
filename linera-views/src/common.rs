@@ -102,21 +102,6 @@ pub trait KeyValueOperations {
         }
     }
 
-    async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error>;
-
-    async fn read_key<V: DeserializeOwned>(&self, key: &[u8]) -> Result<Option<V>, Self::Error>
-    where
-        Self::Error: From<bcs::Error>,
-    {
-        match self.read_key_bytes(key).await? {
-            Some(bytes) => {
-                let value = bcs::from_bytes(&bytes)?;
-                Ok(Some(value))
-            }
-            None => Ok(None),
-        }
-    }
-
     async fn get_sub_keys<Key: DeserializeOwned + Send>(
         &self,
         key_prefix: &[u8],
