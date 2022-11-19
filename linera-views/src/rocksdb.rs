@@ -17,18 +17,6 @@ pub type RocksdbContext<E> = ContextFromDb<E, RocksdbContainer>;
 #[async_trait]
 impl KeyValueOperations for RocksdbContainer {
     type Error = RocksdbContextError;
-    async fn read_key<V: DeserializeOwned>(
-        &self,
-        key: &[u8],
-    ) -> Result<Option<V>, RocksdbContextError> {
-        let db = self.clone();
-        let key = key.to_vec();
-        let value = tokio::task::spawn_blocking(move || db.get(&key)).await??;
-        match &value {
-            None => Ok(None),
-            Some(bytes) => Ok(Some(bcs::from_bytes(bytes)?)),
-        }
-    }
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RocksdbContextError> {
         let db = self.clone();
