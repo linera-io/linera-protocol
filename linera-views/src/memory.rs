@@ -60,16 +60,6 @@ impl<E> MemoryContext<E> {
 #[async_trait]
 impl KeyValueOperations for MemoryContainer {
     type Error = MemoryContextError;
-    async fn read_key<V: DeserializeOwned>(
-        &self,
-        key: &[u8],
-    ) -> Result<Option<V>, MemoryContextError> {
-        let map = self.read().await;
-        match map.get(key) {
-            None => Ok(None),
-            Some(bytes) => Ok(Some(bcs::from_bytes(bytes)?)),
-        }
-    }
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MemoryContextError> {
         let map = self.read().await;

@@ -50,23 +50,25 @@ impl Batch {
     }
 
     /// Insert a Put { key, value } into the batch
+    #[inline]
     pub fn put_key_value(
         &mut self,
         key: Vec<u8>,
         value: &impl Serialize,
     ) -> Result<(), bcs::Error> {
         let bytes = bcs::to_bytes(value)?;
-        self.operations
-            .push(WriteOperation::Put { key, value: bytes });
+        self.put_key_value_bytes(key, bytes);
         Ok(())
     }
 
     /// Insert a Put { key, value } into the batch
+    #[inline]
     pub fn put_key_value_bytes(&mut self, key: Vec<u8>, value: Vec<u8>) {
         self.operations.push(WriteOperation::Put { key, value });
     }
 
     /// Insert a Delete { key } into the batch
+    #[inline]
     pub fn delete_key(&mut self, key: Vec<u8>) {
         self.operations.push(WriteOperation::Delete { key });
     }
@@ -77,18 +79,29 @@ impl Batch {
 pub trait KeyValueOperations {
     type Error: Debug;
 
-    async fn read_key<V: DeserializeOwned>(&self, key: &[u8]) -> Result<Option<V>, Self::Error>;
-
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
     async fn find_keys_with_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error>;
+
+    async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error>;
+
+    async fn read_key<V: DeserializeOwned>(&self, key: &[u8]) -> Result<Option<V>, Self::Error>
+    where
+        Self::Error: From<bcs::Error>,
+    {
+        match self.read_key_bytes(key).await? {
+            Some(bytes) => {
+                let value = bcs::from_bytes(&bytes)?;
+                Ok(Some(value))
+            }
+            None => Ok(None),
+        }
+    }
 
     async fn get_sub_keys<Key: DeserializeOwned + Send>(
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<Key>, Self::Error>;
-
-    async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error>;
 }
 
 /// The context in which a view is operated. Typically, this includes the client to

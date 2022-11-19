@@ -153,23 +153,6 @@ where
 {
     type Error = ViewError;
 
-    async fn read_key<V: DeserializeOwned>(&self, key: &[u8]) -> Result<Option<V>, ViewError> {
-        if let Some(update) = self.updates.get(key) {
-            match update.as_ref() {
-                Some(val) => {
-                    let val = bcs::from_bytes(val)?;
-                    return Ok(Some(val));
-                }
-                None => return Ok(None),
-            }
-        }
-        if self.was_cleared {
-            return Ok(None);
-        }
-        let val = self.context.read_key(key).await?;
-        Ok(val)
-    }
-
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
         if let Some(update) = self.updates.get(key) {
             return Ok(update.clone());

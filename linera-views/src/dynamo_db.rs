@@ -115,23 +115,6 @@ impl DynamodbContainer {
     }
 
     /// Extract the value attribute from an item and deserialize it into the `Value` type.
-    fn extract_value<Value>(
-        attributes: &HashMap<String, AttributeValue>,
-    ) -> Result<Value, DynamoDbContextError>
-    where
-        Value: DeserializeOwned,
-    {
-        Self::extract_attribute(
-            attributes,
-            VALUE_ATTRIBUTE,
-            None,
-            DynamoDbContextError::MissingValue,
-            DynamoDbContextError::wrong_value_type,
-            DynamoDbContextError::ValueDeserialization,
-        )
-    }
-
-    /// Extract the value attribute from an item and deserialize it into the `Value` type.
     fn extract_value_bytes(
         attributes: &HashMap<String, AttributeValue>,
     ) -> Result<Vec<u8>, DynamoDbContextError> {
@@ -187,24 +170,6 @@ impl DynamodbContainer {
 #[async_trait]
 impl KeyValueOperations for DynamodbContainer {
     type Error = DynamoDbContextError;
-
-    async fn read_key<Item>(&self, key: &[u8]) -> Result<Option<Item>, DynamoDbContextError>
-    where
-        Item: DeserializeOwned,
-    {
-        let response = self
-            .client
-            .get_item()
-            .table_name(self.table.as_ref())
-            .set_key(Some(Self::build_key(key.to_vec())))
-            .send()
-            .await?;
-
-        match response.item() {
-            Some(item) => Ok(Some(Self::extract_value(item)?)),
-            None => Ok(None),
-        }
-    }
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DynamoDbContextError> {
         let response = self
