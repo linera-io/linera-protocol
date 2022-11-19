@@ -5,7 +5,6 @@ use crate::{
     views::ViewError,
 };
 use async_trait::async_trait;
-use serde::de::DeserializeOwned;
 use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
 use thiserror::Error;
 use tokio::sync::{OwnedMutexGuard, RwLock};
@@ -50,21 +49,6 @@ impl KeyValueOperations for MemoryContainer {
             }
         }
         Ok(vals)
-    }
-
-    async fn get_sub_keys<Key>(&self, key_prefix: &[u8]) -> Result<Vec<Key>, MemoryContextError>
-    where
-        Key: DeserializeOwned + Send,
-    {
-        let map = self.read().await;
-        let mut keys = Vec::new();
-        let len = key_prefix.len();
-        for key in map.keys() {
-            if key.starts_with(key_prefix) {
-                keys.push(bcs::from_bytes(&key[len..])?);
-            }
-        }
-        Ok(keys)
     }
 
     async fn write_batch(&self, batch: Batch) -> Result<(), MemoryContextError> {

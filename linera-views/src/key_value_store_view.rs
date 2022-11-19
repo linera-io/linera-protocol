@@ -3,7 +3,6 @@ use crate::{
     views::{HashView, Hasher, HashingContext, View, ViewError},
 };
 use async_trait::async_trait;
-use serde::de::DeserializeOwned;
 use std::{collections::BTreeMap, fmt::Debug, mem};
 
 use crate::{
@@ -179,29 +178,6 @@ where
         for (key, value) in &self.updates {
             if value.is_some() {
                 keys.push(key.to_vec())
-            }
-        }
-        Ok(keys)
-    }
-
-    async fn get_sub_keys<Key: DeserializeOwned + Send>(
-        &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<Key>, ViewError> {
-        let len1 = key_prefix.len();
-        let key_prefix = self.context.derive_key_bytes(key_prefix);
-        let len2 = key_prefix.len();
-        let mut keys = Vec::new();
-        if !self.was_cleared {
-            for key in self.context.find_keys_with_prefix(&key_prefix).await? {
-                if !self.updates.contains_key(&key) {
-                    keys.push(bcs::from_bytes(&key[len2..])?);
-                }
-            }
-        }
-        for (key, value) in &self.updates {
-            if value.is_some() {
-                keys.push(bcs::from_bytes(&key[len1..])?);
             }
         }
         Ok(keys)

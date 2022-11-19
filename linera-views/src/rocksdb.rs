@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::common::{Batch, ContextFromDb, KeyValueOperations, WriteOperation};
-//use linera_views::common::KeyValueOperations;
 use async_trait::async_trait;
-use serde::de::DeserializeOwned;
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -46,18 +44,6 @@ impl KeyValueOperations for RocksdbContainer {
             keys
         })
         .await?;
-        Ok(keys)
-    }
-
-    async fn get_sub_keys<Key: DeserializeOwned + Send>(
-        &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<Key>, RocksdbContextError> {
-        let len = key_prefix.len();
-        let mut keys = Vec::new();
-        for key in self.find_keys_with_prefix(key_prefix).await? {
-            keys.push(bcs::from_bytes(&key[len..])?);
-        }
         Ok(keys)
     }
 

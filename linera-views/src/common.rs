@@ -101,7 +101,17 @@ pub trait KeyValueOperations {
     async fn get_sub_keys<Key: DeserializeOwned + Send>(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Vec<Key>, Self::Error>;
+    ) -> Result<Vec<Key>, Self::Error>
+    where
+        Self::Error: From<bcs::Error>,
+    {
+        let len = key_prefix.len();
+        let mut keys = Vec::new();
+        for key in self.find_keys_with_prefix(key_prefix).await? {
+            keys.push(bcs::from_bytes(&key[len..])?);
+        }
+        Ok(keys)
+    }
 }
 
 /// The context in which a view is operated. Typically, this includes the client to
