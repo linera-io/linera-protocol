@@ -29,6 +29,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use std::{io, path::Path};
+use thiserror::Error;
 use tokio::fs;
 
 /// A user application in a compiled WebAssembly module.
@@ -43,6 +44,26 @@ impl WasmApplication {
             bytecode: fs::read(bytecode_file).await?,
         })
     }
+}
+
+/// Errors that can occur when executing a user application in a WebAssembly module.
+#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
+#[derive(Debug, Error)]
+pub enum WasmExecutionError {
+    #[cfg(feature = "wasmer")]
+    #[error("Failed to load WASM module")]
+    LoadModule(#[from] wit_bindgen_host_wasmer_rust::anyhow::Error),
+    #[cfg(feature = "wasmtime")]
+    #[error("Failed to load WASM module")]
+    LoadModule(#[from] wit_bindgen_host_wasmtime_rust::anyhow::Error),
+    #[cfg(feature = "wasmer")]
+    #[error("Failed to execute WASM module")]
+    ExecuteModule(#[from] wasmer::RuntimeError),
+    #[cfg(feature = "wasmtime")]
+    #[error("Failed to execute WASM module")]
+    ExecuteModule(#[from] wasmtime::Trap),
+    #[error("Error reported from user application: {0}")]
+    UserApplication(String),
 }
 
 #[async_trait]

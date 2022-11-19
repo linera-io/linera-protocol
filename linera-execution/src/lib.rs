@@ -12,15 +12,15 @@ pub use ownership::ChainOwnership;
 #[cfg(any(test, feature = "test"))]
 pub use system::SystemExecutionState;
 pub use system::{
-    SystemEffect, SystemExecutionStateView, SystemExecutionStateViewContext, SystemOperation,
-    SystemQuery, SystemResponse,
+    SystemEffect, SystemExecutionError, SystemExecutionStateView, SystemExecutionStateViewContext,
+    SystemOperation, SystemQuery, SystemResponse,
 };
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
-pub use wasm::WasmApplication;
+pub use wasm::{WasmApplication, WasmExecutionError};
 
 use async_trait::async_trait;
 use dashmap::DashMap;
-use linera_base::messages::{ApplicationId, BlockHeight, ChainId, Destination, EffectId, Epoch};
+use linera_base::messages::{ApplicationId, BlockHeight, ChainId, Destination, EffectId};
 use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -31,10 +31,13 @@ pub type UserApplicationCode = Arc<dyn UserApplication + Send + Sync + 'static>;
 
 #[derive(Error, Debug)]
 pub enum ExecutionError {
-    #[error("{0}")]
-    BaseError(#[from] linera_base::error::Error),
-    #[error("Error in view operation: {0}")]
+    #[error(transparent)]
     ViewError(ViewError),
+    #[error(transparent)]
+    SystemError(#[from] SystemExecutionError),
+    #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
+    #[error(transparent)]
+    WasmError(#[from] WasmExecutionError),
 
     #[error("Unknown application")]
     UnknownApplication,
@@ -58,61 +61,6 @@ pub enum ExecutionError {
     InvalidSessionOwner,
     #[error("Attempted to call an application while the state is locked")]
     ApplicationIsInUse,
-    #[error("Invalid new chain id: {0}")]
-    InvalidNewChainId(ChainId),
-    #[error("Invalid admin id in new chain: {0}")]
-    InvalidNewChainAdminId(ChainId),
-    #[error("Invalid committees")]
-    InvalidCommittees,
-    #[error("{epoch:?} is not recognized by chain {chain_id:}")]
-    InvalidEpoch { chain_id: ChainId, epoch: Epoch },
-    #[error("Transfers must have positive amount")]
-    IncorrectTransferAmount,
-    #[error(
-        "The transferred amount must be not exceed the current chain balance: {current_balance}"
-    )]
-    InsufficientFunding { current_balance: u128 },
-    #[error("Failed to create new committee")]
-    InvalidCommitteeCreation,
-    #[error("Failed to remove committee")]
-    InvalidCommitteeRemoval,
-    #[error("Invalid subscription to new committees: {0}")]
-    InvalidSubscriptionToNewCommittees(ChainId),
-    #[error("Invalid unsubscription to new committees: {0}")]
-    InvalidUnsubscriptionToNewCommittees(ChainId),
-    #[error("Amount overflow")]
-    AmountOverflow,
-    #[error("Amount underflow")]
-    AmountUnderflow,
-    #[error("Chain balance overflow")]
-    BalanceOverflow,
-    #[error("Chain balance underflow")]
-    BalanceUnderflow,
-    #[error("Cannot set epoch to a lower value")]
-    CannotRewindEpoch,
-    #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
-    #[error(transparent)]
-    Wasm(#[from] WasmExecutionError),
-}
-
-/// Errors that can occur when executing a user application in a WebAssembly module.
-#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
-#[derive(Debug, Error)]
-pub enum WasmExecutionError {
-    #[cfg(feature = "wasmer")]
-    #[error("Failed to load WASM module")]
-    LoadModule(#[from] wit_bindgen_host_wasmer_rust::anyhow::Error),
-    #[cfg(feature = "wasmtime")]
-    #[error("Failed to load WASM module")]
-    LoadModule(#[from] wit_bindgen_host_wasmtime_rust::anyhow::Error),
-    #[cfg(feature = "wasmer")]
-    #[error("Failed to execute WASM module")]
-    ExecuteModule(#[from] wasmer::RuntimeError),
-    #[cfg(feature = "wasmtime")]
-    #[error("Failed to execute WASM module")]
-    ExecuteModule(#[from] wasmtime::Trap),
-    #[error("Error reported from user application: {0}")]
-    UserApplication(String),
 }
 
 impl From<ViewError> for ExecutionError {

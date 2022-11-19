@@ -4,8 +4,10 @@
 //! Helper types to handle async code between the host WebAssembly runtime and guest WebAssembly
 //! modules.
 
-use super::common::{self, WritableRuntimeContext};
-use crate::WasmExecutionError;
+use super::{
+    common::{self, WritableRuntimeContext},
+    WasmExecutionError,
+};
 use futures::future::BoxFuture;
 use std::{
     any::type_name,

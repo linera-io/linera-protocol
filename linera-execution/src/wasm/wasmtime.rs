@@ -16,9 +16,9 @@ use self::{
 use super::{
     async_boundary::{ContextForwarder, HostFuture},
     common::{self, Runtime, WritableRuntimeContext},
-    WasmApplication,
+    WasmApplication, WasmExecutionError,
 };
-use crate::{ExecutionError, WasmExecutionError, WritableStorage};
+use crate::{ExecutionError, WritableStorage};
 use std::{marker::PhantomData, task::Poll};
 use wasmtime::{Engine, Linker, Module, Store, Trap};
 
