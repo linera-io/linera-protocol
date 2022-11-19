@@ -38,15 +38,15 @@ const KEY_ATTRIBUTE: &str = "item_key";
 const VALUE_ATTRIBUTE: &str = "item_value";
 
 #[derive(Debug, Clone)]
-pub struct DynamodbContainer {
+pub struct DynamoDbContainer {
     pub client: Client,
     pub table: TableName,
 }
 
 /// A implementation of [`Context`] based on DynamoDB.
-pub type DynamoDbContext<E> = ContextFromDb<E, DynamodbContainer>;
+pub type DynamoDbContext<E> = ContextFromDb<E, DynamoDbContainer>;
 
-impl DynamodbContainer {
+impl DynamoDbContainer {
     /// Build the key attributes for a table item.
     ///
     /// The key is composed of two attributes that are both binary blobs. The first attribute is a
@@ -114,7 +114,7 @@ impl DynamodbContainer {
 }
 
 #[async_trait]
-impl KeyValueOperations for DynamodbContainer {
+impl KeyValueOperations for DynamoDbContainer {
     type Error = DynamoDbContextError;
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DynamoDbContextError> {
@@ -265,7 +265,7 @@ where
         base_key: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), CreateTableError> {
-        let db = DynamodbContainer {
+        let db = DynamoDbContainer {
             client: Client::from_conf(config.into()),
             table,
         };
