@@ -62,7 +62,7 @@ impl Batch {
     }
 
     /// Insert a Put { key, value } into the batch
-    pub fn put_key_value_u8(&mut self, key: Vec<u8>, value: Vec<u8>) {
+    pub fn put_key_value_bytes(&mut self, key: Vec<u8>, value: Vec<u8>) {
         self.operations.push(WriteOperation::Put { key, value });
     }
 
