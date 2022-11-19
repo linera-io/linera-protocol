@@ -1,0 +1,30 @@
+resource query-application {
+    static new: func(
+        context: query-context,
+        argument: list<u8>,
+    ) -> query-application
+
+    poll: func() -> poll-query
+}
+
+record query-context {
+    chain-id: chain-id,
+}
+
+type chain-id = hash-value
+
+variant poll-query {
+    pending,
+    ready(expected<list<u8>, string>),
+}
+
+record hash-value {
+    part1: u64,
+    part2: u64,
+    part3: u64,
+    part4: u64,
+    part5: u64,
+    part6: u64,
+    part7: u64,
+    part8: u64,
+}

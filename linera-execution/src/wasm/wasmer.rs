@@ -5,10 +5,13 @@
 // Export the system interface used by a user application.
 wit_bindgen_host_wasmer_rust::export!("../linera-sdk/system.wit");
 
-// Import the interface implemented by a user application.
-wit_bindgen_host_wasmer_rust::import!("../linera-sdk/application.wit");
+// Import the interface implemented by a user contract.
+wit_bindgen_host_wasmer_rust::import!("../linera-sdk/contract.wit");
 
-use self::{application::Application, system::PollLoad};
+// Import the interface implemented by a user service.
+wit_bindgen_host_wasmer_rust::import!("../linera-sdk/service.wit");
+
+use self::{contract::Contract, service::Service, system::PollLoad};
 use super::{
     async_boundary::{ContextForwarder, HostFuture},
     common::{self, Runtime, WasmRuntimeContext},
@@ -19,19 +22,30 @@ use std::{marker::PhantomData, mem, sync::Arc, task::Poll};
 use tokio::sync::Mutex;
 use wasmer::{imports, Module, RuntimeError, Store};
 
-/// Type representing the [Wasmer](https://wasmer.io/) runtime.
+/// Type representing the [Wasmer](https://wasmer.io/) contract runtime.
 ///
 /// The runtime has a lifetime so that it does not outlive the trait object used to export the
 /// system API.
-pub struct Wasmer<'storage, S> {
+pub struct ContractWasmer<'storage> {
     _lifetime: PhantomData<&'storage ()>,
-    _dyn_trait: PhantomData<S>,
 }
 
-impl<'storage, S> Runtime for Wasmer<'storage, S> {
-    type Application = Application;
+impl<'storage> Runtime for ContractWasmer<'storage> {
+    type Application = Contract;
     type Store = Store;
-    type StorageGuard = StorageGuard<'storage, S>;
+    type StorageGuard = StorageGuard<'storage, &'static dyn WritableStorage>;
+    type Error = RuntimeError;
+}
+
+/// Type representing the [Wasmer](https://wasmer.io/) service runtime.
+pub struct ServiceWasmer<'storage> {
+    _lifetime: PhantomData<&'storage ()>,
+}
+
+impl<'storage> Runtime for ServiceWasmer<'storage> {
+    type Application = Service;
+    type Store = Store;
+    type StorageGuard = StorageGuard<'storage, &'static dyn QueryableStorage>;
     type Error = RuntimeError;
 }
 
@@ -40,20 +54,16 @@ impl WasmApplication {
     pub fn prepare_contract_runtime<'storage>(
         &self,
         storage: &'storage dyn WritableStorage,
-    ) -> Result<
-        WasmRuntimeContext<Wasmer<'storage, &'static dyn WritableStorage>>,
-        WasmExecutionError,
-    > {
+    ) -> Result<WasmRuntimeContext<ContractWasmer<'storage>>, WasmExecutionError> {
         let mut store = Store::default();
-        let module = Module::new(&store, &self.bytecode)
+        let module = Module::new(&store, &self.contract_bytecode)
             .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)?;
         let mut imports = imports! {};
         let context_forwarder = ContextForwarder::default();
         let (system_api, storage_guard) =
             SystemApi::new_writable(context_forwarder.clone(), storage);
         let system_api_setup = system::add_to_imports(&mut store, &mut imports, system_api);
-        let (application, instance) =
-            application::Application::instantiate(&mut store, &module, &mut imports)?;
+        let (application, instance) = Contract::instantiate(&mut store, &module, &mut imports)?;
 
         system_api_setup(&instance, &store)?;
 
@@ -69,20 +79,16 @@ impl WasmApplication {
     pub fn prepare_service_runtime<'storage>(
         &self,
         storage: &'storage dyn QueryableStorage,
-    ) -> Result<
-        WasmRuntimeContext<Wasmer<'storage, &'static dyn QueryableStorage>>,
-        WasmExecutionError,
-    > {
+    ) -> Result<WasmRuntimeContext<ServiceWasmer<'storage>>, WasmExecutionError> {
         let mut store = Store::default();
-        let module = Module::new(&store, &self.bytecode)
+        let module = Module::new(&store, &self.service_bytecode)
             .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)?;
         let mut imports = imports! {};
         let context_forwarder = ContextForwarder::default();
         let (system_api, storage_guard) =
             SystemApi::new_queryable(context_forwarder.clone(), storage);
         let system_api_setup = system::add_to_imports(&mut store, &mut imports, system_api);
-        let (application, instance) =
-            application::Application::instantiate(&mut store, &module, &mut imports)?;
+        let (application, instance) = Service::instantiate(&mut store, &module, &mut imports)?;
 
         system_api_setup(&instance, &store)?;
 
@@ -95,95 +101,95 @@ impl WasmApplication {
     }
 }
 
-impl<'storage> common::Contract<Wasmer<'storage, &'static dyn WritableStorage>> for Application {
+impl<'storage> common::Contract<ContractWasmer<'storage>> for Contract {
     fn execute_operation_new(
         &self,
         store: &mut Store,
-        context: application::OperationContext,
+        context: contract::OperationContext,
         operation: &[u8],
-    ) -> Result<application::ExecuteOperation, RuntimeError> {
-        Application::execute_operation_new(self, store, context, operation)
+    ) -> Result<contract::ExecuteOperation, RuntimeError> {
+        Self::execute_operation_new(self, store, context, operation)
     }
 
     fn execute_operation_poll(
         &self,
         store: &mut Store,
-        future: &application::ExecuteOperation,
-    ) -> Result<application::PollExecutionResult, RuntimeError> {
-        Application::execute_operation_poll(self, store, future)
+        future: &contract::ExecuteOperation,
+    ) -> Result<contract::PollExecutionResult, RuntimeError> {
+        Self::execute_operation_poll(self, store, future)
     }
 
     fn execute_effect_new(
         &self,
         store: &mut Store,
-        context: application::EffectContext,
+        context: contract::EffectContext,
         effect: &[u8],
-    ) -> Result<application::ExecuteEffect, RuntimeError> {
-        Application::execute_effect_new(self, store, context, effect)
+    ) -> Result<contract::ExecuteEffect, RuntimeError> {
+        Self::execute_effect_new(self, store, context, effect)
     }
 
     fn execute_effect_poll(
         &self,
         store: &mut Store,
-        future: &application::ExecuteEffect,
-    ) -> Result<application::PollExecutionResult, RuntimeError> {
-        Application::execute_effect_poll(self, store, future)
+        future: &contract::ExecuteEffect,
+    ) -> Result<contract::PollExecutionResult, RuntimeError> {
+        Self::execute_effect_poll(self, store, future)
     }
 
     fn call_application_new(
         &self,
         store: &mut Store,
-        context: application::CalleeContext,
+        context: contract::CalleeContext,
         argument: &[u8],
-        forwarded_sessions: &[application::SessionId],
-    ) -> Result<application::CallApplication, RuntimeError> {
-        Application::call_application_new(self, store, context, argument, forwarded_sessions)
+        forwarded_sessions: &[contract::SessionId],
+    ) -> Result<contract::CallApplication, RuntimeError> {
+        Self::call_application_new(self, store, context, argument, forwarded_sessions)
     }
 
     fn call_application_poll(
         &self,
         store: &mut Store,
-        future: &application::CallApplication,
-    ) -> Result<application::PollCallApplication, RuntimeError> {
-        Application::call_application_poll(self, store, future)
+        future: &contract::CallApplication,
+    ) -> Result<contract::PollCallApplication, RuntimeError> {
+        Self::call_application_poll(self, store, future)
     }
 
     fn call_session_new(
         &self,
         store: &mut Store,
-        context: application::CalleeContext,
-        session: application::SessionParam,
+        context: contract::CalleeContext,
+        session: contract::SessionParam,
         argument: &[u8],
-        forwarded_sessions: &[application::SessionId],
-    ) -> Result<application::CallSession, RuntimeError> {
-        Application::call_session_new(self, store, context, session, argument, forwarded_sessions)
+        forwarded_sessions: &[contract::SessionId],
+    ) -> Result<contract::CallSession, RuntimeError> {
+        Self::call_session_new(self, store, context, session, argument, forwarded_sessions)
     }
 
     fn call_session_poll(
         &self,
         store: &mut Store,
-        future: &application::CallSession,
-    ) -> Result<application::PollCallSession, RuntimeError> {
-        Application::call_session_poll(self, store, future)
+        future: &contract::CallSession,
+    ) -> Result<contract::PollCallSession, RuntimeError> {
+        Self::call_session_poll(self, store, future)
     }
 }
 
-impl<'storage> common::Service<Wasmer<'storage, &'static dyn QueryableStorage>> for Application {
+impl<'storage> common::Service<ServiceWasmer<'storage>> for Service {
     fn query_application_new(
         &self,
         store: &mut Store,
-        context: application::QueryContext,
+        context: service::QueryContext,
         argument: &[u8],
-    ) -> Result<application::QueryApplication, RuntimeError> {
-        Application::query_application_new(self, store, context, argument)
+    ) -> Result<service::QueryApplication, RuntimeError> {
+        Self::query_application_new(self, store, context, argument)
     }
 
     fn query_application_poll(
         &self,
         store: &mut Store,
-        future: &application::QueryApplication,
-    ) -> Result<application::PollQuery, RuntimeError> {
-        Application::query_application_poll(self, store, future)
+        future: &service::QueryApplication,
+    ) -> Result<service::PollQuery, RuntimeError> {
+        Self::query_application_poll(self, store, future)
     }
 }
 

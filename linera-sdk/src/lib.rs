@@ -8,9 +8,9 @@ use std::error::Error;
 
 pub use crate::exported_future::ExportedFuture;
 
-/// The public entry points provided by an application.
+/// The public entry points provided by a contract.
 #[async_trait]
-pub trait Application {
+pub trait Contract {
     /// Message reports for application execution errors.
     type Error: Error;
 
@@ -46,6 +46,13 @@ pub trait Application {
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<SessionCallResult, Self::Error>;
+}
+
+/// The public entry points provided by a service.
+#[async_trait]
+pub trait Service {
+    /// Message reports for service execution errors.
+    type Error: Error;
 
     /// Allow an end user to execute read-only queries on the state of this application.
     /// NOTE: This is not meant to be metered and may not be exposed by validators.

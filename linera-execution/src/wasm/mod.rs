@@ -33,14 +33,19 @@ use tokio::fs;
 
 /// A user application in a compiled WebAssembly module.
 pub struct WasmApplication {
-    bytecode: Vec<u8>,
+    contract_bytecode: Vec<u8>,
+    service_bytecode: Vec<u8>,
 }
 
 impl WasmApplication {
     /// Create a new [`WasmApplication`] using the WebAssembly module in `bytecode_file`.
-    pub async fn from_file(bytecode_file: impl AsRef<Path>) -> Result<Self, io::Error> {
+    pub async fn from_file(
+        contract_bytecode_file: impl AsRef<Path>,
+        service_bytecode_file: impl AsRef<Path>,
+    ) -> Result<Self, io::Error> {
         Ok(WasmApplication {
-            bytecode: fs::read(bytecode_file).await?,
+            contract_bytecode: fs::read(contract_bytecode_file).await?,
+            service_bytecode: fs::read(service_bytecode_file).await?,
         })
     }
 }

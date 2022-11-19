@@ -13,7 +13,7 @@
 //! applications.
 
 // Export the application interface.
-wit_bindgen_guest_rust::export!("application.wit");
+wit_bindgen_guest_rust::export!("service.wit");
 
 // Import the system interface.
 wit_bindgen_guest_rust::import!("system.wit");
@@ -23,10 +23,8 @@ mod conversions_to_wit;
 mod exported_futures;
 mod state_management;
 
-use self::exported_futures::{
-    CallApplication, CallSession, ExecuteEffect, ExecuteOperation, QueryApplication,
-};
-use super::ApplicationState as Application;
+use self::exported_futures::QueryApplication;
+use super::ServiceState as Service;
 
-/// Mark the application type to be exported.
-impl application::Application for Application {}
+/// Mark the service type to be exported.
+impl service::Service for Service {}

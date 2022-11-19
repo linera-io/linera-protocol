@@ -6,11 +6,15 @@
 // Export the system interface used by a user application.
 wit_bindgen_host_wasmtime_rust::export!("../linera-sdk/system.wit");
 
-// Import the interface implemented by a user application.
-wit_bindgen_host_wasmtime_rust::import!("../linera-sdk/application.wit");
+// Import the interface implemented by a user contract.
+wit_bindgen_host_wasmtime_rust::import!("../linera-sdk/contract.wit");
+
+// Import the interface implemented by a user service.
+wit_bindgen_host_wasmtime_rust::import!("../linera-sdk/service.wit");
 
 use self::{
-    application::{Application, ApplicationData},
+    contract::{Contract, ContractData},
+    service::{Service, ServiceData},
     system::{PollLoad, SystemTables},
 };
 use super::{
@@ -31,8 +35,8 @@ pub struct ContractWasmtime<'storage> {
 }
 
 impl<'storage> Runtime for ContractWasmtime<'storage> {
-    type Application = Application<ContractData<'storage>>;
-    type Store = Store<ContractData<'storage>>;
+    type Application = Contract<ContractState<'storage>>;
+    type Store = Store<ContractState<'storage>>;
     type StorageGuard = ();
     type Error = Trap;
 }
@@ -43,8 +47,8 @@ pub struct ServiceWasmtime<'storage> {
 }
 
 impl<'storage> Runtime for ServiceWasmtime<'storage> {
-    type Application = Application<ServiceData<'storage>>;
-    type Store = Store<ServiceData<'storage>>;
+    type Application = Service<ServiceState<'storage>>;
+    type Store = Store<ServiceState<'storage>>;
     type StorageGuard = ();
     type Error = Trap;
 }
@@ -58,14 +62,14 @@ impl WasmApplication {
         let engine = Engine::default();
         let mut linker = Linker::new(&engine);
 
-        system::add_to_linker(&mut linker, ContractData::system_api)?;
+        system::add_to_linker(&mut linker, ContractState::system_api)?;
 
-        let module = Module::new(&engine, &self.bytecode)?;
+        let module = Module::new(&engine, &self.contract_bytecode)?;
         let context_forwarder = ContextForwarder::default();
-        let data = ContractData::new(storage, context_forwarder.clone());
-        let mut store = Store::new(&engine, data);
+        let state = ContractState::new(storage, context_forwarder.clone());
+        let mut store = Store::new(&engine, state);
         let (application, _instance) =
-            Application::instantiate(&mut store, &module, &mut linker, ContractData::application)?;
+            Contract::instantiate(&mut store, &module, &mut linker, ContractState::data)?;
 
         Ok(WasmRuntimeContext {
             context_forwarder,
@@ -83,14 +87,14 @@ impl WasmApplication {
         let engine = Engine::default();
         let mut linker = Linker::new(&engine);
 
-        system::add_to_linker(&mut linker, ServiceData::system_api)?;
+        system::add_to_linker(&mut linker, ServiceState::system_api)?;
 
-        let module = Module::new(&engine, &self.bytecode)?;
+        let module = Module::new(&engine, &self.service_bytecode)?;
         let context_forwarder = ContextForwarder::default();
-        let data = ServiceData::new(storage, context_forwarder.clone());
-        let mut store = Store::new(&engine, data);
+        let state = ServiceState::new(storage, context_forwarder.clone());
+        let mut store = Store::new(&engine, state);
         let (application, _instance) =
-            Application::instantiate(&mut store, &module, &mut linker, ServiceData::application)?;
+            Service::instantiate(&mut store, &module, &mut linker, ServiceState::data)?;
 
         Ok(WasmRuntimeContext {
             context_forwarder,
@@ -102,35 +106,35 @@ impl WasmApplication {
 }
 
 /// Data stored by the runtime that's necessary for handling calls to and from the WASM module.
-pub struct ContractData<'storage> {
-    application: ApplicationData,
+pub struct ContractState<'storage> {
+    data: ContractData,
     system_api: SystemApi<&'storage dyn WritableStorage>,
     system_tables: SystemTables<SystemApi<&'storage dyn WritableStorage>>,
 }
 
 /// Data stored by the runtime that's necessary for handling queries to and from the WASM module.
-pub struct ServiceData<'storage> {
-    application: ApplicationData,
+pub struct ServiceState<'storage> {
+    data: ServiceData,
     system_api: SystemApi<&'storage dyn QueryableStorage>,
     system_tables: SystemTables<SystemApi<&'storage dyn QueryableStorage>>,
 }
 
-impl<'storage> ContractData<'storage> {
-    /// Create a new instance of [`Data`].
+impl<'storage> ContractState<'storage> {
+    /// Create a new instance of [`ContractState`].
     ///
     /// Uses `storage` to export the system API, and the `context` to be able to correctly handle
     /// asynchronous calls from the guest WASM module.
     pub fn new(storage: &'storage dyn WritableStorage, context: ContextForwarder) -> Self {
         Self {
-            application: ApplicationData::default(),
+            data: ContractData::default(),
             system_api: SystemApi { storage, context },
             system_tables: SystemTables::default(),
         }
     }
 
-    /// Obtain the runtime instance specific [`ApplicationData`].
-    pub fn application(&mut self) -> &mut ApplicationData {
-        &mut self.application
+    /// Obtain the runtime instance specific [`ContractData`].
+    pub fn data(&mut self) -> &mut ContractData {
+        &mut self.data
     }
 
     /// Obtain the data required by the runtime to export the system API.
@@ -144,22 +148,22 @@ impl<'storage> ContractData<'storage> {
     }
 }
 
-impl<'storage> ServiceData<'storage> {
-    /// Create a new instance of [`Data`].
+impl<'storage> ServiceState<'storage> {
+    /// Create a new instance of [`ServiceState`].
     ///
     /// Uses `storage` to export the system API, and the `context` to be able to correctly handle
     /// asynchronous calls from the guest WASM module.
     pub fn new(storage: &'storage dyn QueryableStorage, context: ContextForwarder) -> Self {
         Self {
-            application: ApplicationData::default(),
+            data: ServiceData::default(),
             system_api: SystemApi { storage, context },
             system_tables: SystemTables::default(),
         }
     }
 
-    /// Obtain the runtime instance specific [`ApplicationData`].
-    pub fn application(&mut self) -> &mut ApplicationData {
-        &mut self.application
+    /// Obtain the runtime instance specific [`ServiceData`].
+    pub fn data(&mut self) -> &mut ServiceData {
+        &mut self.data
     }
 
     /// Obtain the data required by the runtime to export the system API.
@@ -173,97 +177,95 @@ impl<'storage> ServiceData<'storage> {
     }
 }
 
-impl<'storage> common::Contract<ContractWasmtime<'storage>>
-    for Application<ContractData<'storage>>
-{
+impl<'storage> common::Contract<ContractWasmtime<'storage>> for Contract<ContractState<'storage>> {
     fn execute_operation_new(
         &self,
-        store: &mut Store<ContractData<'storage>>,
-        context: application::OperationContext,
+        store: &mut Store<ContractState<'storage>>,
+        context: contract::OperationContext,
         operation: &[u8],
-    ) -> Result<application::ExecuteOperation, Trap> {
-        Application::execute_operation_new(self, store, context, operation)
+    ) -> Result<contract::ExecuteOperation, Trap> {
+        Contract::execute_operation_new(self, store, context, operation)
     }
 
     fn execute_operation_poll(
         &self,
-        store: &mut Store<ContractData<'storage>>,
-        future: &application::ExecuteOperation,
-    ) -> Result<application::PollExecutionResult, Trap> {
-        Application::execute_operation_poll(self, store, future)
+        store: &mut Store<ContractState<'storage>>,
+        future: &contract::ExecuteOperation,
+    ) -> Result<contract::PollExecutionResult, Trap> {
+        Contract::execute_operation_poll(self, store, future)
     }
 
     fn execute_effect_new(
         &self,
-        store: &mut Store<ContractData<'storage>>,
-        context: application::EffectContext,
+        store: &mut Store<ContractState<'storage>>,
+        context: contract::EffectContext,
         effect: &[u8],
-    ) -> Result<application::ExecuteEffect, Trap> {
-        Application::execute_effect_new(self, store, context, effect)
+    ) -> Result<contract::ExecuteEffect, Trap> {
+        Contract::execute_effect_new(self, store, context, effect)
     }
 
     fn execute_effect_poll(
         &self,
-        store: &mut Store<ContractData<'storage>>,
-        future: &application::ExecuteEffect,
-    ) -> Result<application::PollExecutionResult, Trap> {
-        Application::execute_effect_poll(self, store, future)
+        store: &mut Store<ContractState<'storage>>,
+        future: &contract::ExecuteEffect,
+    ) -> Result<contract::PollExecutionResult, Trap> {
+        Contract::execute_effect_poll(self, store, future)
     }
 
     fn call_application_new(
         &self,
-        store: &mut Store<ContractData<'storage>>,
-        context: application::CalleeContext,
+        store: &mut Store<ContractState<'storage>>,
+        context: contract::CalleeContext,
         argument: &[u8],
-        forwarded_sessions: &[application::SessionId],
-    ) -> Result<application::CallApplication, Trap> {
-        Application::call_application_new(self, store, context, argument, forwarded_sessions)
+        forwarded_sessions: &[contract::SessionId],
+    ) -> Result<contract::CallApplication, Trap> {
+        Contract::call_application_new(self, store, context, argument, forwarded_sessions)
     }
 
     fn call_application_poll(
         &self,
-        store: &mut Store<ContractData<'storage>>,
-        future: &application::CallApplication,
-    ) -> Result<application::PollCallApplication, Trap> {
-        Application::call_application_poll(self, store, future)
+        store: &mut Store<ContractState<'storage>>,
+        future: &contract::CallApplication,
+    ) -> Result<contract::PollCallApplication, Trap> {
+        Contract::call_application_poll(self, store, future)
     }
 
     fn call_session_new(
         &self,
-        store: &mut Store<ContractData<'storage>>,
-        context: application::CalleeContext,
-        session: application::SessionParam,
+        store: &mut Store<ContractState<'storage>>,
+        context: contract::CalleeContext,
+        session: contract::SessionParam,
         argument: &[u8],
-        forwarded_sessions: &[application::SessionId],
-    ) -> Result<application::CallSession, Trap> {
-        Application::call_session_new(self, store, context, session, argument, forwarded_sessions)
+        forwarded_sessions: &[contract::SessionId],
+    ) -> Result<contract::CallSession, Trap> {
+        Contract::call_session_new(self, store, context, session, argument, forwarded_sessions)
     }
 
     fn call_session_poll(
         &self,
-        store: &mut Store<ContractData<'storage>>,
-        future: &application::CallSession,
-    ) -> Result<application::PollCallSession, Trap> {
-        Application::call_session_poll(self, store, future)
+        store: &mut Store<ContractState<'storage>>,
+        future: &contract::CallSession,
+    ) -> Result<contract::PollCallSession, Trap> {
+        Contract::call_session_poll(self, store, future)
     }
 }
 
-impl<'storage> common::Service<ServiceWasmtime<'storage>> for Application<ServiceData<'storage>> {
+impl<'storage> common::Service<ServiceWasmtime<'storage>> for Service<ServiceState<'storage>> {
     fn query_application_new(
         &self,
-        store: &mut Store<ServiceData<'storage>>,
-        context: application::QueryContext,
+        store: &mut Store<ServiceState<'storage>>,
+        context: service::QueryContext,
         argument: &[u8],
-    ) -> Result<application::QueryApplication, Trap> {
-        Application::query_application_new(self, store, context, argument)
+    ) -> Result<service::QueryApplication, Trap> {
+        Service::query_application_new(self, store, context, argument)
     }
 
     fn query_application_poll(
         &self,
-        store: &mut Store<ServiceData<'storage>>,
-        future: &application::QueryApplication,
-    ) -> Result<application::PollQuery, Trap> {
-        Application::query_application_poll(self, store, future)
+        store: &mut Store<ServiceState<'storage>>,
+        future: &service::QueryApplication,
+    ) -> Result<service::PollQuery, Trap> {
+        Service::query_application_poll(self, store, future)
     }
 }
 

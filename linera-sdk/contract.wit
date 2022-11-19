@@ -37,15 +37,6 @@ resource call-session {
     poll: func() -> poll-call-session
 }
 
-resource query-application {
-    static new: func(
-        context: query-context,
-        argument: list<u8>,
-    ) -> query-application
-
-    poll: func() -> poll-query
-}
-
 record operation-context {
     chain-id: chain-id,
     height: block-height,
@@ -69,10 +60,6 @@ record callee-context {
     authenticated-caller-id: option<application-id>,
 }
 
-record query-context {
-    chain-id: chain-id,
-}
-
 type chain-id = hash-value
 type block-height = u64
 type application-id = u64
@@ -90,11 +77,6 @@ variant poll-call-application {
 variant poll-call-session {
     pending,
     ready(expected<session-call-result, string>),
-}
-
-variant poll-query {
-    pending,
-    ready(expected<list<u8>, string>),
 }
 
 record application-call-result {

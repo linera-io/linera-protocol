@@ -15,5 +15,9 @@ thiserror = "1.0.31"
 wit-bindgen-guest-rust = { git = "https://github.com/jvff/wit-bindgen", rev = "4a9e7cc6899a9736e2a2d23dcfc4f8744b6107a1" }
 
 [[example]]
-name = "counter"
+name = "counter_contract"
+crate-type = ["cdylib"]
+
+[[example]]
+name = "counter_service"
 crate-type = ["cdylib"]

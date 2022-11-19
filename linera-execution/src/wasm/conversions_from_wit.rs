@@ -6,15 +6,15 @@
 //! Allows converting types returned from a WASM module into types that can be used with the rest
 //! of the crate.
 
-use super::runtime::application;
+use super::runtime::contract;
 use crate::{ApplicationCallResult, NewSession, RawExecutionResult, SessionCallResult};
 use linera_base::{
     crypto::HashValue,
     messages::{ChainId, Destination},
 };
 
-impl From<application::SessionCallResult> for SessionCallResult {
-    fn from(result: application::SessionCallResult) -> Self {
+impl From<contract::SessionCallResult> for SessionCallResult {
+    fn from(result: contract::SessionCallResult) -> Self {
         SessionCallResult {
             inner: result.inner.into(),
             close_session: result.data.is_some(),
@@ -22,8 +22,8 @@ impl From<application::SessionCallResult> for SessionCallResult {
     }
 }
 
-impl From<application::ApplicationCallResult> for ApplicationCallResult {
-    fn from(result: application::ApplicationCallResult) -> Self {
+impl From<contract::ApplicationCallResult> for ApplicationCallResult {
+    fn from(result: contract::ApplicationCallResult) -> Self {
         let create_sessions = result
             .create_sessions
             .into_iter()
@@ -38,8 +38,8 @@ impl From<application::ApplicationCallResult> for ApplicationCallResult {
     }
 }
 
-impl From<application::ExecutionResult> for RawExecutionResult<Vec<u8>> {
-    fn from(result: application::ExecutionResult) -> Self {
+impl From<contract::ExecutionResult> for RawExecutionResult<Vec<u8>> {
+    fn from(result: contract::ExecutionResult) -> Self {
         let effects = result
             .effects
             .into_iter()
@@ -66,21 +66,17 @@ impl From<application::ExecutionResult> for RawExecutionResult<Vec<u8>> {
     }
 }
 
-impl From<application::Destination> for Destination {
-    fn from(guest: application::Destination) -> Self {
+impl From<contract::Destination> for Destination {
+    fn from(guest: contract::Destination) -> Self {
         match guest {
-            application::Destination::Recipient(chain_id) => {
-                Destination::Recipient(chain_id.into())
-            }
-            application::Destination::Subscribers(channel_id) => {
-                Destination::Subscribers(channel_id)
-            }
+            contract::Destination::Recipient(chain_id) => Destination::Recipient(chain_id.into()),
+            contract::Destination::Subscribers(channel_id) => Destination::Subscribers(channel_id),
         }
     }
 }
 
-impl From<application::SessionResult> for NewSession {
-    fn from(guest: application::SessionResult) -> Self {
+impl From<contract::SessionResult> for NewSession {
+    fn from(guest: contract::SessionResult) -> Self {
         NewSession {
             kind: guest.kind,
             data: guest.data,
@@ -88,8 +84,8 @@ impl From<application::SessionResult> for NewSession {
     }
 }
 
-impl From<application::HashValue> for HashValue {
-    fn from(guest: application::HashValue) -> Self {
+impl From<contract::HashValue> for HashValue {
+    fn from(guest: contract::HashValue) -> Self {
         let mut bytes = [0u8; 64];
 
         bytes[0..8].copy_from_slice(&guest.part1.to_le_bytes());
@@ -105,8 +101,8 @@ impl From<application::HashValue> for HashValue {
     }
 }
 
-impl From<application::ChainId> for ChainId {
-    fn from(guest: application::ChainId) -> Self {
+impl From<contract::ChainId> for ChainId {
+    fn from(guest: contract::ChainId) -> Self {
         ChainId(guest.into())
     }
 }
