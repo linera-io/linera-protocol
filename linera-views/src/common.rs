@@ -136,7 +136,7 @@ pub trait Context {
     ) -> Result<Vec<Key>, Self::Error>;
 
     /// Apply the operations from the `batch`, persisting the changes.
-    async fn write_batch(&self, batch: Batch) -> Result<(), ViewError>;
+    async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error>;
 
     fn clone_self(&self, base_key: Vec<u8>) -> Self;
 }
@@ -205,7 +205,7 @@ where
         self.db.get_sub_keys(key_prefix).await
     }
 
-    async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
+    async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error> {
         self.db.write_batch(batch).await?;
         Ok(())
     }

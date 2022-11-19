@@ -91,7 +91,8 @@ where
 
         let mut batch = $crate::common::Batch::default();
         $( self.$field.flush(&mut batch).await?; )*
-        self.context().write_batch(batch).await
+        self.context().write_batch(batch).await?;
+        Ok(())
      }
 
     pub async fn write_delete(self) -> Result<(), $crate::views::ViewError> {
@@ -105,7 +106,8 @@ where
                 Ok(())
             })
         }).await?;
-        context.write_batch(batch).await
+        context.write_batch(batch).await?;
+        Ok(())
     }
 }
 
