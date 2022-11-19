@@ -16,8 +16,10 @@ use std::sync::Arc;
 /// called correctly.
 #[tokio::test]
 async fn test_counter_wasm_application() -> anyhow::Result<()> {
-    let mut state = SystemExecutionState::default();
-    state.description = Some(ChainDescription::Root(0));
+    let state = SystemExecutionState {
+        description: Some(ChainDescription::Root(0)),
+        ..Default::default()
+    };
     let mut view =
         ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(state)
             .await;

@@ -3,8 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    ChainOwnership, Effect, EffectContext, ExecutionError, OperationContext, QueryContext,
-    RawExecutionResult,
+    ChainOwnership, Effect, EffectContext, OperationContext, QueryContext, RawExecutionResult,
 };
 use linera_base::{
     committee::Committee,
@@ -22,6 +21,7 @@ use linera_views::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use thiserror::Error;
 
 #[cfg(any(test, feature = "test"))]
 use std::collections::BTreeSet;
@@ -193,6 +193,47 @@ impl_view!(
     RegisterOperations<Balance>,
 );
 
+#[derive(Error, Debug)]
+pub enum SystemExecutionError {
+    #[error(transparent)]
+    BaseError(#[from] linera_base::error::Error),
+    #[error(transparent)]
+    ViewError(#[from] ViewError),
+
+    #[error("Invalid new chain id: {0}")]
+    InvalidNewChainId(ChainId),
+    #[error("Invalid admin id in new chain: {0}")]
+    InvalidNewChainAdminId(ChainId),
+    #[error("Invalid committees")]
+    InvalidCommittees,
+    #[error("{epoch:?} is not recognized by chain {chain_id:}")]
+    InvalidEpoch { chain_id: ChainId, epoch: Epoch },
+    #[error("Transfers must have positive amount")]
+    IncorrectTransferAmount,
+    #[error(
+        "The transferred amount must be not exceed the current chain balance: {current_balance}"
+    )]
+    InsufficientFunding { current_balance: u128 },
+    #[error("Failed to create new committee")]
+    InvalidCommitteeCreation,
+    #[error("Failed to remove committee")]
+    InvalidCommitteeRemoval,
+    #[error("Invalid subscription to new committees: {0}")]
+    InvalidSubscriptionToNewCommittees(ChainId),
+    #[error("Invalid unsubscription to new committees: {0}")]
+    InvalidUnsubscriptionToNewCommittees(ChainId),
+    #[error("Amount overflow")]
+    AmountOverflow,
+    #[error("Amount underflow")]
+    AmountUnderflow,
+    #[error("Chain balance overflow")]
+    BalanceOverflow,
+    #[error("Chain balance underflow")]
+    BalanceUnderflow,
+    #[error("Cannot set epoch to a lower value")]
+    CannotRewindEpoch,
+}
+
 impl<C> SystemExecutionStateView<C>
 where
     C: SystemExecutionStateViewContext,
@@ -216,7 +257,7 @@ where
         &mut self,
         context: &OperationContext,
         operation: &SystemOperation,
-    ) -> Result<RawExecutionResult<SystemEffect>, ExecutionError> {
+    ) -> Result<RawExecutionResult<SystemEffect>, SystemExecutionError> {
         use SystemOperation::*;
         match operation {
             OpenChain {
@@ -227,18 +268,21 @@ where
                 epoch,
             } => {
                 let expected_id = ChainId::child((*context).into());
-                ensure!(id == &expected_id, ExecutionError::InvalidNewChainId(*id));
+                ensure!(
+                    id == &expected_id,
+                    SystemExecutionError::InvalidNewChainId(*id)
+                );
                 ensure!(
                     self.admin_id.get().as_ref() == Some(admin_id),
-                    ExecutionError::InvalidNewChainAdminId(*id)
+                    SystemExecutionError::InvalidNewChainAdminId(*id)
                 );
                 ensure!(
                     self.committees.get() == committees,
-                    ExecutionError::InvalidCommittees
+                    SystemExecutionError::InvalidCommittees
                 );
                 ensure!(
                     self.epoch.get().as_ref() == Some(epoch),
-                    ExecutionError::InvalidEpoch {
+                    SystemExecutionError::InvalidEpoch {
                         chain_id: *id,
                         epoch: *epoch
                     }
@@ -307,11 +351,11 @@ where
             } => {
                 ensure!(
                     *amount > Amount::zero(),
-                    ExecutionError::IncorrectTransferAmount
+                    SystemExecutionError::IncorrectTransferAmount
                 );
                 ensure!(
                     *self.balance.get() >= (*amount).into(),
-                    ExecutionError::InsufficientFunding {
+                    SystemExecutionError::InsufficientFunding {
                         current_balance: (*self.balance.get()).into()
                     }
                 );
@@ -340,15 +384,15 @@ where
                 // We are the admin chain and want to create a committee.
                 ensure!(
                     *admin_id == context.chain_id,
-                    ExecutionError::InvalidCommitteeCreation
+                    SystemExecutionError::InvalidCommitteeCreation
                 );
                 ensure!(
                     Some(admin_id) == self.admin_id.get().as_ref(),
-                    ExecutionError::InvalidCommitteeCreation
+                    SystemExecutionError::InvalidCommitteeCreation
                 );
                 ensure!(
                     *epoch == self.epoch.get().expect("chain is active").try_add_one()?,
-                    ExecutionError::InvalidCommitteeCreation
+                    SystemExecutionError::InvalidCommitteeCreation
                 );
                 self.committees.get_mut().insert(*epoch, committee.clone());
                 self.epoch.set(Some(*epoch));
@@ -370,15 +414,15 @@ where
                 // We are the admin chain and want to remove a committee.
                 ensure!(
                     *admin_id == context.chain_id,
-                    ExecutionError::InvalidCommitteeRemoval
+                    SystemExecutionError::InvalidCommitteeRemoval
                 );
                 ensure!(
                     Some(admin_id) == self.admin_id.get().as_ref(),
-                    ExecutionError::InvalidCommitteeRemoval
+                    SystemExecutionError::InvalidCommitteeRemoval
                 );
                 ensure!(
                     self.committees.get_mut().remove(epoch).is_some(),
-                    ExecutionError::InvalidCommitteeRemoval
+                    SystemExecutionError::InvalidCommitteeRemoval
                 );
                 let application = RawExecutionResult {
                     effects: vec![(
@@ -398,11 +442,11 @@ where
                 // We should not subscribe to ourself in this case.
                 ensure!(
                     context.chain_id != *admin_id,
-                    ExecutionError::InvalidSubscriptionToNewCommittees(context.chain_id)
+                    SystemExecutionError::InvalidSubscriptionToNewCommittees(context.chain_id)
                 );
                 ensure!(
                     self.admin_id.get().as_ref() == Some(admin_id),
-                    ExecutionError::InvalidSubscriptionToNewCommittees(context.chain_id)
+                    SystemExecutionError::InvalidSubscriptionToNewCommittees(context.chain_id)
                 );
                 let channel_id = ChannelId {
                     chain_id: *admin_id,
@@ -410,7 +454,7 @@ where
                 };
                 ensure!(
                     self.subscriptions.get(&channel_id).await?.is_none(),
-                    ExecutionError::InvalidSubscriptionToNewCommittees(context.chain_id)
+                    SystemExecutionError::InvalidSubscriptionToNewCommittees(context.chain_id)
                 );
                 self.subscriptions.insert(channel_id, ());
                 let application = RawExecutionResult {
@@ -436,7 +480,7 @@ where
                 };
                 ensure!(
                     self.subscriptions.get(&channel_id).await?.is_some(),
-                    ExecutionError::InvalidUnsubscriptionToNewCommittees(context.chain_id)
+                    SystemExecutionError::InvalidUnsubscriptionToNewCommittees(context.chain_id)
                 );
                 self.subscriptions.remove(channel_id);
                 let application = RawExecutionResult {
@@ -464,7 +508,7 @@ where
         &mut self,
         context: &EffectContext,
         effect: &SystemEffect,
-    ) -> Result<RawExecutionResult<SystemEffect>, ExecutionError> {
+    ) -> Result<RawExecutionResult<SystemEffect>, SystemExecutionError> {
         use SystemEffect::*;
         match effect {
             Credit { amount, recipient } if context.chain_id == *recipient => {
@@ -483,7 +527,7 @@ where
             } if self.admin_id.get().as_ref() == Some(admin_id) => {
                 ensure!(
                     *epoch >= self.epoch.get().expect("chain is active"),
-                    ExecutionError::CannotRewindEpoch
+                    SystemExecutionError::CannotRewindEpoch
                 );
                 self.epoch.set(Some(*epoch));
                 self.committees.set(committees.clone());
@@ -570,7 +614,7 @@ where
         &mut self,
         context: &QueryContext,
         _query: &SystemQuery,
-    ) -> Result<SystemResponse, ExecutionError> {
+    ) -> Result<SystemResponse, SystemExecutionError> {
         let response = SystemResponse {
             chain_id: context.chain_id,
             balance: *self.balance.get(),
@@ -586,38 +630,38 @@ impl Amount {
     }
 
     #[inline]
-    pub fn try_add(self, other: Self) -> Result<Self, ExecutionError> {
+    pub fn try_add(self, other: Self) -> Result<Self, SystemExecutionError> {
         let val = self
             .0
             .checked_add(other.0)
-            .ok_or(ExecutionError::AmountOverflow)?;
+            .ok_or(SystemExecutionError::AmountOverflow)?;
         Ok(Self(val))
     }
 
     #[inline]
-    pub fn try_sub(self, other: Self) -> Result<Self, ExecutionError> {
+    pub fn try_sub(self, other: Self) -> Result<Self, SystemExecutionError> {
         let val = self
             .0
             .checked_sub(other.0)
-            .ok_or(ExecutionError::AmountUnderflow)?;
+            .ok_or(SystemExecutionError::AmountUnderflow)?;
         Ok(Self(val))
     }
 
     #[inline]
-    pub fn try_add_assign(&mut self, other: Self) -> Result<(), ExecutionError> {
+    pub fn try_add_assign(&mut self, other: Self) -> Result<(), SystemExecutionError> {
         self.0 = self
             .0
             .checked_add(other.0)
-            .ok_or(ExecutionError::AmountOverflow)?;
+            .ok_or(SystemExecutionError::AmountOverflow)?;
         Ok(())
     }
 
     #[inline]
-    pub fn try_sub_assign(&mut self, other: Self) -> Result<(), ExecutionError> {
+    pub fn try_sub_assign(&mut self, other: Self) -> Result<(), SystemExecutionError> {
         self.0 = self
             .0
             .checked_sub(other.0)
-            .ok_or(ExecutionError::AmountUnderflow)?;
+            .ok_or(SystemExecutionError::AmountUnderflow)?;
         Ok(())
     }
 }
@@ -634,38 +678,38 @@ impl Balance {
     }
 
     #[inline]
-    pub fn try_add(self, other: Self) -> Result<Self, ExecutionError> {
+    pub fn try_add(self, other: Self) -> Result<Self, SystemExecutionError> {
         let val = self
             .0
             .checked_add(other.0)
-            .ok_or(ExecutionError::BalanceOverflow)?;
+            .ok_or(SystemExecutionError::BalanceOverflow)?;
         Ok(Self(val))
     }
 
     #[inline]
-    pub fn try_sub(self, other: Self) -> Result<Self, ExecutionError> {
+    pub fn try_sub(self, other: Self) -> Result<Self, SystemExecutionError> {
         let val = self
             .0
             .checked_sub(other.0)
-            .ok_or(ExecutionError::BalanceUnderflow)?;
+            .ok_or(SystemExecutionError::BalanceUnderflow)?;
         Ok(Self(val))
     }
 
     #[inline]
-    pub fn try_add_assign(&mut self, other: Self) -> Result<(), ExecutionError> {
+    pub fn try_add_assign(&mut self, other: Self) -> Result<(), SystemExecutionError> {
         self.0 = self
             .0
             .checked_add(other.0)
-            .ok_or(ExecutionError::BalanceOverflow)?;
+            .ok_or(SystemExecutionError::BalanceOverflow)?;
         Ok(())
     }
 
     #[inline]
-    pub fn try_sub_assign(&mut self, other: Self) -> Result<(), ExecutionError> {
+    pub fn try_sub_assign(&mut self, other: Self) -> Result<(), SystemExecutionError> {
         self.0 = self
             .0
             .checked_sub(other.0)
-            .ok_or(ExecutionError::BalanceUnderflow)?;
+            .ok_or(SystemExecutionError::BalanceUnderflow)?;
         Ok(())
     }
 }
