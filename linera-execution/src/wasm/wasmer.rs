@@ -12,9 +12,9 @@ use self::{application::Application, system::PollLoad};
 use super::{
     async_boundary::{ContextForwarder, HostFuture},
     common::{self, Runtime, WritableRuntimeContext},
-    WasmApplication,
+    WasmApplication, WasmExecutionError,
 };
-use crate::{ExecutionError, WasmExecutionError, WritableStorage};
+use crate::{ExecutionError, WritableStorage};
 use std::{marker::PhantomData, mem, sync::Arc, task::Poll};
 use tokio::sync::Mutex;
 use wasmer::{imports, Module, RuntimeError, Store};

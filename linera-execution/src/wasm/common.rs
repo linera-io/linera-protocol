@@ -9,12 +9,12 @@ use super::{
         self, CallApplication, CallSession, ExecuteEffect, ExecuteOperation, PollCallApplication,
         PollCallSession, PollExecutionResult, PollQuery, QueryApplication,
     },
+    WasmExecutionError,
 };
 use crate::{
     system::Balance, ApplicationCallResult, ApplicationStateNotLocked, CallResult, CalleeContext,
     EffectContext, ExecutionError, OperationContext, QueryContext, QueryableStorage,
-    RawExecutionResult, ReadableStorage, SessionCallResult, SessionId, WasmExecutionError,
-    WritableStorage,
+    RawExecutionResult, ReadableStorage, SessionCallResult, SessionId, WritableStorage,
 };
 use async_trait::async_trait;
 use linera_base::messages::{ApplicationId, ChainId};
