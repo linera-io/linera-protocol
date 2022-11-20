@@ -321,12 +321,9 @@ impl KeyValueOperations for DynamodbContainer {
     }
 }
 
-
 impl DynamodbContainer {
     /// Create a new [`DynamoDbContainer`] instance.
-    pub async fn new(
-        table: TableName,
-    ) -> Result<(Self, TableStatus), CreateTableError> {
+    pub async fn new(table: TableName) -> Result<(Self, TableStatus), CreateTableError> {
         let config = aws_config::load_from_env().await;
 
         DynamodbContainer::from_config(&config, table).await
@@ -399,9 +396,7 @@ impl DynamodbContainer {
     /// Requires a [`LOCALSTACK_ENDPOINT`] environment variable with the endpoint address to connect
     /// to the LocalStack instance. Creates the table if it doesn't exist yet, reporting a
     /// [`TableStatus`] to indicate if the table was created or if it already exists.
-    pub async fn with_localstack(
-        table: TableName,
-    ) -> Result<(Self, TableStatus), LocalStackError> {
+    pub async fn with_localstack(table: TableName) -> Result<(Self, TableStatus), LocalStackError> {
         let base_config = aws_config::load_from_env().await;
         let config = aws_sdk_dynamodb::config::Builder::from(&base_config)
             .endpoint_resolver(localstack::get_endpoint()?)
@@ -409,16 +404,19 @@ impl DynamodbContainer {
 
         Ok(DynamodbContainer::from_config(config, table).await?)
     }
-
 }
 
 impl<E> DynamoDbContext<E>
 where
     E: Clone + Sync + Send,
 {
-    pub fn create_context(db_tablestatus: (DynamodbContainer,TableStatus), base_key: Vec<u8>, extra: E) -> (Self, TableStatus) {
+    pub fn create_context(
+        db_tablestatus: (DynamodbContainer, TableStatus),
+        base_key: Vec<u8>,
+        extra: E,
+    ) -> (Self, TableStatus) {
         let storage = DynamoDbContext {
-            db : db_tablestatus.0,
+            db: db_tablestatus.0,
             base_key,
             extra,
         };
@@ -475,8 +473,6 @@ where
         })
     }
 }
-
-
 
 /// Status of a table at the creation time of a [`DynamoDbContext`] instance.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
