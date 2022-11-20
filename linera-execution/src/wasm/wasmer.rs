@@ -61,7 +61,7 @@ impl WasmApplication {
     }
 }
 
-impl<'storage> common::Application<Wasmer<'storage>> for Application {
+impl<'storage> common::Contract<Wasmer<'storage>> for Application {
     fn execute_operation_new(
         &self,
         store: &mut Store,
@@ -132,7 +132,9 @@ impl<'storage> common::Application<Wasmer<'storage>> for Application {
     ) -> Result<application::PollCallSession, RuntimeError> {
         Application::call_session_poll(self, store, future)
     }
+}
 
+impl<'storage> common::Service<Wasmer<'storage>> for Application {
     fn query_application_new(
         &self,
         store: &mut Store,

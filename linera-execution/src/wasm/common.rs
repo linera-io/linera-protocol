@@ -35,8 +35,8 @@ pub trait Runtime {
     type Error: Into<WasmExecutionError>;
 }
 
-/// Common interface to calling a user application in a WebAssembly module.
-pub trait Application<R: Runtime> {
+/// Common interface to calling a user contract in a WebAssembly module.
+pub trait Contract<R: Runtime> {
     /// Create a new future for the user application to execute an operation.
     fn execute_operation_new(
         &self,
@@ -100,7 +100,9 @@ pub trait Application<R: Runtime> {
         store: &mut R::Store,
         future: &application::CallSession,
     ) -> Result<application::PollCallSession, R::Error>;
+}
 
+pub trait Service<R: Runtime> {
     /// Create a new future for the user application to handle a query.
     fn query_application_new(
         &self,
@@ -139,7 +141,7 @@ where
 impl<R> WasmRuntimeContext<R>
 where
     R: Runtime,
-    R::Application: Application<R>,
+    R::Application: Contract<R>,
 {
     /// Call the guest WASM module's implementation of
     /// [`UserApplication::execute_operation`][`linera_execution::UserApplication::execute_operation`].
@@ -266,7 +268,13 @@ where
 
         GuestFuture::new(future, self)
     }
+}
 
+impl<R> WasmRuntimeContext<R>
+where
+    R: Runtime,
+    R::Application: Service<R>,
+{
     /// Call the guest WASM module's implementation of
     /// [`UserApplication::query_application`][`linera_execution::UserApplication::query_application`].
     ///
@@ -363,12 +371,12 @@ impl WritableStorage for WrappedQueryableStorage<'_> {
 /// a `poll_type` that must be convertible into the `output` type wrapped in a
 /// `Poll<Result<_, _>>`.
 macro_rules! impl_guest_future_interface {
-    ( $( $future:ident : $poll_func:ident -> $poll_type:ident => $output:ty ),* $(,)* ) => {
+    ( $( $future:ident : $poll_func:ident -> $poll_type:ident -> $trait:ident => $output:ty ),* $(,)* ) => {
         $(
             impl<'storage, R> GuestFutureInterface<R> for $future
             where
                 R: Runtime,
-                R::Application: Application<R>,
+                R::Application: $trait<R>,
                 WasmExecutionError: From<R::Error>,
             {
                 type Output = $output;
@@ -392,9 +400,9 @@ macro_rules! impl_guest_future_interface {
 }
 
 impl_guest_future_interface! {
-    ExecuteOperation: execute_operation_poll -> PollExecutionResult => RawExecutionResult<Vec<u8>>,
-    ExecuteEffect: execute_effect_poll -> PollExecutionResult => RawExecutionResult<Vec<u8>>,
-    CallApplication: call_application_poll -> PollCallApplication => ApplicationCallResult,
-    CallSession: call_session_poll -> PollCallSession => SessionCallResult,
-    QueryApplication: query_application_poll -> PollQuery => Vec<u8>,
+    ExecuteOperation: execute_operation_poll -> PollExecutionResult -> Contract => RawExecutionResult<Vec<u8>>,
+    ExecuteEffect: execute_effect_poll -> PollExecutionResult -> Contract => RawExecutionResult<Vec<u8>>,
+    CallApplication: call_application_poll -> PollCallApplication -> Contract => ApplicationCallResult,
+    CallSession: call_session_poll -> PollCallSession -> Contract => SessionCallResult,
+    QueryApplication: query_application_poll -> PollQuery -> Service => Vec<u8>,
 }
