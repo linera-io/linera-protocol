@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{super::ServiceState, system};
+use super::{super::ServiceState, queryable_system as system};
 use futures::future;
 use std::future::Future;
 
@@ -9,12 +9,6 @@ impl ServiceState {
     /// Load the service state, without locking it for writes.
     pub async fn load() -> Self {
         let future = system::Load::new();
-        Self::load_using(future::poll_fn(|_context| future.poll().into())).await
-    }
-
-    /// Load the service state and lock it for writes.
-    pub async fn load_and_lock() -> Self {
-        let future = system::LoadAndLock::new();
         Self::load_using(future::poll_fn(|_context| future.poll().into())).await
     }
 
@@ -26,10 +20,5 @@ impl ServiceState {
         } else {
             bcs::from_bytes(&bytes).expect("Invalid service state")
         }
-    }
-
-    /// Save the service state and unlock it.
-    pub async fn store_and_unlock(self) {
-        system::store_and_unlock(&bcs::to_bytes(&self).expect("State serialization failed"));
     }
 }

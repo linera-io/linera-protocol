@@ -1,0 +1,9 @@
+resource load {
+    static new: func() -> load
+    poll: func() -> poll-load
+}
+
+variant poll-load {
+    pending,
+    ready(expected<list<u8>, string>),
+}

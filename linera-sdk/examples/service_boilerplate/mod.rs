@@ -16,7 +16,7 @@
 wit_bindgen_guest_rust::export!("service.wit");
 
 // Import the system interface.
-wit_bindgen_guest_rust::import!("system.wit");
+wit_bindgen_guest_rust::import!("queryable_system.wit");
 
 mod conversions_from_wit;
 mod conversions_to_wit;
