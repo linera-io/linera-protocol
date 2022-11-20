@@ -206,12 +206,12 @@ impl KeyValueOperations for DynamoDbContainer {
     }
 }
 
-impl DynamodbContainer {
+impl DynamoDbContainer {
     /// Create a new [`DynamoDbContainer`] instance.
     pub async fn new(table: TableName) -> Result<(Self, TableStatus), CreateTableError> {
         let config = aws_config::load_from_env().await;
 
-        DynamodbContainer::from_config(&config, table).await
+        DynamoDbContainer::from_config(&config, table).await
     }
     /// Create the storage table if it doesn't exist.
     ///
@@ -287,7 +287,7 @@ impl DynamodbContainer {
             .endpoint_resolver(localstack::get_endpoint()?)
             .build();
 
-        Ok(DynamodbContainer::from_config(config, table).await?)
+        Ok(DynamoDbContainer::from_config(config, table).await?)
     }
 }
 
@@ -295,22 +295,26 @@ impl<E> DynamoDbContext<E>
 where
     E: Clone + Sync + Send,
 {
-    pub fn create_context(db_tablestatus: (DynamodbContainer, TableStatus), base_key: Vec<u8>, extra: E) -> (Self, TableStatus) {
+    pub fn create_context(
+        db_tablestatus: (DynamoDbContainer, TableStatus),
+        base_key: Vec<u8>,
+        extra: E,
+    ) -> (Self, TableStatus) {
         let storage = DynamoDbContext {
-            db : db_tablestatus.0,
+            db: db_tablestatus.0,
             base_key,
             extra,
         };
         (storage, db_tablestatus.1)
     }
 
-    /// Create a new [`DynamoDbContainer`] instance.
+    /// Create a new [`DynamoDbContext`] instance.
     pub async fn new(
         table: TableName,
         base_key: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), CreateTableError> {
-        let db_tablestatus = DynamodbContainer::new(table).await?;
+        let db_tablestatus = DynamoDbContainer::new(table).await?;
         Ok(Self::create_context(db_tablestatus, base_key, extra))
     }
 
@@ -320,7 +324,7 @@ where
         base_key: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), CreateTableError> {
-        let db_tablestatus = DynamodbContainer::from_config(config, table).await?;
+        let db_tablestatus = DynamoDbContainer::from_config(config, table).await?;
         Ok(Self::create_context(db_tablestatus, base_key, extra))
     }
 
@@ -334,7 +338,7 @@ where
         base_key: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), LocalStackError> {
-        let db_tablestatus = DynamodbContainer::with_localstack(table).await?;
+        let db_tablestatus = DynamoDbContainer::with_localstack(table).await?;
         Ok(Self::create_context(db_tablestatus, base_key, extra))
     }
 
@@ -354,8 +358,6 @@ where
         })
     }
 }
-
-
 
 /// Status of a table at the creation time of a [`DynamoDbContext`] instance.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

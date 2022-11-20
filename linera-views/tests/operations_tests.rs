@@ -3,7 +3,7 @@
 
 use linera_views::{
     common::{Batch, KeyValueOperations},
-    dynamo_db::DynamodbContainer,
+    dynamo_db::DynamoDbContainer,
     memory::MemoryContainer,
     rocksdb::{RocksdbContainer, DB},
     test_utils::{get_random_vec_keyvalues_prefix, LocalStackTestContext},
@@ -25,10 +25,12 @@ async fn test_ordering_keys<OP: KeyValueOperations>(key_value_operation: OP) {
         batch.put_key_value_bytes(e_kv.0, e_kv.1);
     }
     key_value_operation.write_batch(batch).await.unwrap();
-    let l_keys = key_value_operation
+    let l_keys: Vec<Vec<u8>> = key_value_operation
         .find_keys_with_prefix(&key_prefix)
         .await
-        .unwrap();
+        .unwrap()
+        .map(|x| x.expect("Failed to get vector").to_vec())
+        .collect();
     for i in 2..l_keys.len() {
         let key1 = l_keys[i - 1].clone();
         let key2 = l_keys[i].clone();
@@ -49,11 +51,12 @@ async fn test_ordering_keys<OP: KeyValueOperations>(key_value_operation: OP) {
         }
     }
     for (key_prefix, value) in map {
-        let l_keys_ret = key_value_operation
+        let n_ent = key_value_operation
             .find_keys_with_prefix(&key_prefix)
             .await
-            .unwrap();
-        assert!(l_keys_ret.len() == value);
+            .unwrap()
+            .count();
+        assert!(n_ent == value);
     }
 }
 
@@ -79,7 +82,7 @@ async fn test_ordering_rocksdb() {
 #[ignore]
 async fn test_ordering_dynamodb() {
     let localstack = LocalStackTestContext::new().await.unwrap();
-    let (key_value_operation, _) = DynamodbContainer::from_config(
+    let (key_value_operation, _) = DynamoDbContainer::from_config(
         localstack.dynamo_db_config(),
         "test_table".parse().expect("Invalid table name"),
     )
