@@ -21,7 +21,6 @@ mod runtime;
 #[path = "wasmtime.rs"]
 mod runtime;
 
-use self::common::WrappedQueryableStorage;
 use crate::{
     ApplicationCallResult, CalleeContext, EffectContext, ExecutionError, OperationContext,
     QueryContext, QueryableStorage, RawExecutionResult, SessionCallResult, SessionId,
@@ -75,7 +74,7 @@ impl UserApplication for WasmApplication {
         operation: &[u8],
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         let result = self
-            .prepare_runtime(storage)?
+            .prepare_contract_runtime(storage)?
             .execute_operation(context, operation)
             .await?;
         Ok(result)
@@ -88,7 +87,7 @@ impl UserApplication for WasmApplication {
         effect: &[u8],
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         let result = self
-            .prepare_runtime(storage)?
+            .prepare_contract_runtime(storage)?
             .execute_effect(context, effect)
             .await?;
         Ok(result)
@@ -102,7 +101,7 @@ impl UserApplication for WasmApplication {
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, ExecutionError> {
         let result = self
-            .prepare_runtime(storage)?
+            .prepare_contract_runtime(storage)?
             .call_application(context, argument, forwarded_sessions)
             .await?;
         Ok(result)
@@ -118,7 +117,7 @@ impl UserApplication for WasmApplication {
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<SessionCallResult, ExecutionError> {
         let result = self
-            .prepare_runtime(storage)?
+            .prepare_contract_runtime(storage)?
             .call_session(
                 context,
                 session_kind,
@@ -136,10 +135,8 @@ impl UserApplication for WasmApplication {
         storage: &dyn QueryableStorage,
         argument: &[u8],
     ) -> Result<Vec<u8>, ExecutionError> {
-        let wrapped_storage = WrappedQueryableStorage::new(storage);
-        let storage_reference = &wrapped_storage;
         let result = self
-            .prepare_runtime(storage_reference)?
+            .prepare_service_runtime(storage)?
             .query_application(context, argument)
             .await?;
         Ok(result)

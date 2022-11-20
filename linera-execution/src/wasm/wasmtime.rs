@@ -18,42 +18,79 @@ use super::{
     common::{self, Runtime, WasmRuntimeContext},
     WasmApplication, WasmExecutionError,
 };
-use crate::{ExecutionError, WritableStorage};
+use crate::{ExecutionError, QueryableStorage, WritableStorage};
 use std::{marker::PhantomData, task::Poll};
 use wasmtime::{Engine, Linker, Module, Store, Trap};
 
-/// Type representing the [Wasmtime](https://wasmtime.dev/) runtime.
+/// Type representing the [Wasmtime](https://wasmtime.dev/) runtime for contracts.
 ///
 /// The runtime has a lifetime so that it does not outlive the trait object used to export the
 /// system API.
-pub struct Wasmtime<'storage> {
+pub struct ContractWasmtime<'storage> {
     _lifetime: PhantomData<&'storage ()>,
 }
 
-impl<'storage> Runtime for Wasmtime<'storage> {
-    type Application = Application<Data<'storage>>;
-    type Store = Store<Data<'storage>>;
+impl<'storage> Runtime for ContractWasmtime<'storage> {
+    type Application = Application<ContractData<'storage>>;
+    type Store = Store<ContractData<'storage>>;
+    type StorageGuard = ();
+    type Error = Trap;
+}
+
+/// Type representing the [Wasmtime](https://wasmtime.dev/) runtime for services.
+pub struct ServiceWasmtime<'storage> {
+    _lifetime: PhantomData<&'storage ()>,
+}
+
+impl<'storage> Runtime for ServiceWasmtime<'storage> {
+    type Application = Application<ServiceData<'storage>>;
+    type Store = Store<ServiceData<'storage>>;
     type StorageGuard = ();
     type Error = Trap;
 }
 
 impl WasmApplication {
-    /// Prepare a runtime instance to call into the WASM application.
-    pub fn prepare_runtime<'storage>(
+    /// Prepare a runtime instance to call into the WASM contract.
+    pub fn prepare_contract_runtime<'storage>(
         &self,
         storage: &'storage dyn WritableStorage,
-    ) -> Result<WasmRuntimeContext<Wasmtime<'storage>>, WasmExecutionError> {
+    ) -> Result<WasmRuntimeContext<ContractWasmtime<'storage>>, WasmExecutionError> {
         let engine = Engine::default();
         let mut linker = Linker::new(&engine);
 
-        system::add_to_linker(&mut linker, Data::system_api)?;
+        system::add_to_linker(&mut linker, ContractData::system_api)?;
 
         let module = Module::new(&engine, &self.bytecode)?;
         let context_forwarder = ContextForwarder::default();
-        let data = Data::new(storage, context_forwarder.clone());
+        let data = ContractData::new(storage, context_forwarder.clone());
         let mut store = Store::new(&engine, data);
         let (application, _instance) =
-            Application::instantiate(&mut store, &module, &mut linker, Data::application)?;
+            Application::instantiate(&mut store, &module, &mut linker, ContractData::application)?;
+
+        Ok(WasmRuntimeContext {
+            context_forwarder,
+            application,
+            store,
+            _storage_guard: (),
+        })
+    }
+
+    /// Prepare a runtime instance to call into the WASM service.
+    pub fn prepare_service_runtime<'storage>(
+        &self,
+        storage: &'storage dyn QueryableStorage,
+    ) -> Result<WasmRuntimeContext<ServiceWasmtime<'storage>>, WasmExecutionError> {
+        let engine = Engine::default();
+        let mut linker = Linker::new(&engine);
+
+        system::add_to_linker(&mut linker, ServiceData::system_api)?;
+
+        let module = Module::new(&engine, &self.bytecode)?;
+        let context_forwarder = ContextForwarder::default();
+        let data = ServiceData::new(storage, context_forwarder.clone());
+        let mut store = Store::new(&engine, data);
+        let (application, _instance) =
+            Application::instantiate(&mut store, &module, &mut linker, ServiceData::application)?;
 
         Ok(WasmRuntimeContext {
             context_forwarder,
@@ -65,19 +102,26 @@ impl WasmApplication {
 }
 
 /// Data stored by the runtime that's necessary for handling calls to and from the WASM module.
-pub struct Data<'storage> {
+pub struct ContractData<'storage> {
     application: ApplicationData,
-    system_api: SystemApi<'storage>,
-    system_tables: SystemTables<SystemApi<'storage>>,
+    system_api: SystemApi<&'storage dyn WritableStorage>,
+    system_tables: SystemTables<SystemApi<&'storage dyn WritableStorage>>,
 }
 
-impl<'storage> Data<'storage> {
+/// Data stored by the runtime that's necessary for handling queries to and from the WASM module.
+pub struct ServiceData<'storage> {
+    application: ApplicationData,
+    system_api: SystemApi<&'storage dyn QueryableStorage>,
+    system_tables: SystemTables<SystemApi<&'storage dyn QueryableStorage>>,
+}
+
+impl<'storage> ContractData<'storage> {
     /// Create a new instance of [`Data`].
     ///
     /// Uses `storage` to export the system API, and the `context` to be able to correctly handle
     /// asynchronous calls from the guest WASM module.
     pub fn new(storage: &'storage dyn WritableStorage, context: ContextForwarder) -> Self {
-        Data {
+        Self {
             application: ApplicationData::default(),
             system_api: SystemApi { storage, context },
             system_tables: SystemTables::default(),
@@ -93,17 +137,48 @@ impl<'storage> Data<'storage> {
     pub fn system_api(
         &mut self,
     ) -> (
-        &mut SystemApi<'storage>,
-        &mut SystemTables<SystemApi<'storage>>,
+        &mut SystemApi<&'storage dyn WritableStorage>,
+        &mut SystemTables<SystemApi<&'storage dyn WritableStorage>>,
     ) {
         (&mut self.system_api, &mut self.system_tables)
     }
 }
 
-impl<'storage> common::Contract<Wasmtime<'storage>> for Application<Data<'storage>> {
+impl<'storage> ServiceData<'storage> {
+    /// Create a new instance of [`Data`].
+    ///
+    /// Uses `storage` to export the system API, and the `context` to be able to correctly handle
+    /// asynchronous calls from the guest WASM module.
+    pub fn new(storage: &'storage dyn QueryableStorage, context: ContextForwarder) -> Self {
+        Self {
+            application: ApplicationData::default(),
+            system_api: SystemApi { storage, context },
+            system_tables: SystemTables::default(),
+        }
+    }
+
+    /// Obtain the runtime instance specific [`ApplicationData`].
+    pub fn application(&mut self) -> &mut ApplicationData {
+        &mut self.application
+    }
+
+    /// Obtain the data required by the runtime to export the system API.
+    pub fn system_api(
+        &mut self,
+    ) -> (
+        &mut SystemApi<&'storage dyn QueryableStorage>,
+        &mut SystemTables<SystemApi<&'storage dyn QueryableStorage>>,
+    ) {
+        (&mut self.system_api, &mut self.system_tables)
+    }
+}
+
+impl<'storage> common::Contract<ContractWasmtime<'storage>>
+    for Application<ContractData<'storage>>
+{
     fn execute_operation_new(
         &self,
-        store: &mut Store<Data<'storage>>,
+        store: &mut Store<ContractData<'storage>>,
         context: application::OperationContext,
         operation: &[u8],
     ) -> Result<application::ExecuteOperation, Trap> {
@@ -112,7 +187,7 @@ impl<'storage> common::Contract<Wasmtime<'storage>> for Application<Data<'storag
 
     fn execute_operation_poll(
         &self,
-        store: &mut Store<Data<'storage>>,
+        store: &mut Store<ContractData<'storage>>,
         future: &application::ExecuteOperation,
     ) -> Result<application::PollExecutionResult, Trap> {
         Application::execute_operation_poll(self, store, future)
@@ -120,7 +195,7 @@ impl<'storage> common::Contract<Wasmtime<'storage>> for Application<Data<'storag
 
     fn execute_effect_new(
         &self,
-        store: &mut Store<Data<'storage>>,
+        store: &mut Store<ContractData<'storage>>,
         context: application::EffectContext,
         effect: &[u8],
     ) -> Result<application::ExecuteEffect, Trap> {
@@ -129,7 +204,7 @@ impl<'storage> common::Contract<Wasmtime<'storage>> for Application<Data<'storag
 
     fn execute_effect_poll(
         &self,
-        store: &mut Store<Data<'storage>>,
+        store: &mut Store<ContractData<'storage>>,
         future: &application::ExecuteEffect,
     ) -> Result<application::PollExecutionResult, Trap> {
         Application::execute_effect_poll(self, store, future)
@@ -137,7 +212,7 @@ impl<'storage> common::Contract<Wasmtime<'storage>> for Application<Data<'storag
 
     fn call_application_new(
         &self,
-        store: &mut Store<Data<'storage>>,
+        store: &mut Store<ContractData<'storage>>,
         context: application::CalleeContext,
         argument: &[u8],
         forwarded_sessions: &[application::SessionId],
@@ -147,7 +222,7 @@ impl<'storage> common::Contract<Wasmtime<'storage>> for Application<Data<'storag
 
     fn call_application_poll(
         &self,
-        store: &mut Store<Data<'storage>>,
+        store: &mut Store<ContractData<'storage>>,
         future: &application::CallApplication,
     ) -> Result<application::PollCallApplication, Trap> {
         Application::call_application_poll(self, store, future)
@@ -155,7 +230,7 @@ impl<'storage> common::Contract<Wasmtime<'storage>> for Application<Data<'storag
 
     fn call_session_new(
         &self,
-        store: &mut Store<Data<'storage>>,
+        store: &mut Store<ContractData<'storage>>,
         context: application::CalleeContext,
         session: application::SessionParam,
         argument: &[u8],
@@ -166,17 +241,17 @@ impl<'storage> common::Contract<Wasmtime<'storage>> for Application<Data<'storag
 
     fn call_session_poll(
         &self,
-        store: &mut Store<Data<'storage>>,
+        store: &mut Store<ContractData<'storage>>,
         future: &application::CallSession,
     ) -> Result<application::PollCallSession, Trap> {
         Application::call_session_poll(self, store, future)
     }
 }
 
-impl<'storage> common::Service<Wasmtime<'storage>> for Application<Data<'storage>> {
+impl<'storage> common::Service<ServiceWasmtime<'storage>> for Application<ServiceData<'storage>> {
     fn query_application_new(
         &self,
-        store: &mut Store<Data<'storage>>,
+        store: &mut Store<ServiceData<'storage>>,
         context: application::QueryContext,
         argument: &[u8],
     ) -> Result<application::QueryApplication, Trap> {
@@ -185,7 +260,7 @@ impl<'storage> common::Service<Wasmtime<'storage>> for Application<Data<'storage
 
     fn query_application_poll(
         &self,
-        store: &mut Store<Data<'storage>>,
+        store: &mut Store<ServiceData<'storage>>,
         future: &application::QueryApplication,
     ) -> Result<application::PollQuery, Trap> {
         Application::query_application_poll(self, store, future)
@@ -193,12 +268,12 @@ impl<'storage> common::Service<Wasmtime<'storage>> for Application<Data<'storage
 }
 
 /// Implementation to forward system calls from the guest WASM module to the host implementation.
-pub struct SystemApi<'storage> {
+pub struct SystemApi<S> {
     context: ContextForwarder,
-    storage: &'storage dyn WritableStorage,
+    storage: S,
 }
 
-impl<'storage> system::System for SystemApi<'storage> {
+impl<'storage> system::System for SystemApi<&'storage dyn WritableStorage> {
     type Load = HostFuture<'storage, Result<Vec<u8>, ExecutionError>>;
     type LoadAndLock = HostFuture<'storage, Result<Vec<u8>, ExecutionError>>;
 
@@ -230,5 +305,38 @@ impl<'storage> system::System for SystemApi<'storage> {
         self.storage
             .save_and_unlock_my_state(state.to_owned())
             .is_ok()
+    }
+}
+
+impl<'storage> system::System for SystemApi<&'storage dyn QueryableStorage> {
+    type Load = HostFuture<'storage, Result<Vec<u8>, ExecutionError>>;
+    type LoadAndLock = HostFuture<'storage, Result<Vec<u8>, ExecutionError>>;
+
+    fn load_new(&mut self) -> Self::Load {
+        HostFuture::new(self.storage.try_read_my_state())
+    }
+
+    fn load_poll(&mut self, future: &Self::Load) -> PollLoad {
+        match future.poll(&mut self.context) {
+            Poll::Pending => PollLoad::Pending,
+            Poll::Ready(Ok(bytes)) => PollLoad::Ready(Ok(bytes)),
+            Poll::Ready(Err(error)) => PollLoad::Ready(Err(error.to_string())),
+        }
+    }
+
+    fn load_and_lock_new(&mut self) -> Self::LoadAndLock {
+        panic!("not available")
+    }
+
+    fn load_and_lock_poll(&mut self, future: &Self::LoadAndLock) -> PollLoad {
+        match future.poll(&mut self.context) {
+            Poll::Pending => PollLoad::Pending,
+            Poll::Ready(Ok(bytes)) => PollLoad::Ready(Ok(bytes)),
+            Poll::Ready(Err(error)) => PollLoad::Ready(Err(error.to_string())),
+        }
+    }
+
+    fn store_and_unlock(&mut self, _state: &[u8]) -> bool {
+        panic!("not available")
     }
 }
