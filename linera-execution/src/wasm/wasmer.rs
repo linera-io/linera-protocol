@@ -11,7 +11,7 @@ wit_bindgen_host_wasmer_rust::import!("../linera-sdk/application.wit");
 use self::{application::Application, system::PollLoad};
 use super::{
     async_boundary::{ContextForwarder, HostFuture},
-    common::{self, Runtime, WritableRuntimeContext},
+    common::{self, Runtime, WasmRuntimeContext},
     WasmApplication, WasmExecutionError,
 };
 use crate::{ExecutionError, WritableStorage};
@@ -39,7 +39,7 @@ impl WasmApplication {
     pub fn prepare_runtime<'storage>(
         &self,
         storage: &'storage dyn WritableStorage,
-    ) -> Result<WritableRuntimeContext<Wasmer<'storage>>, WasmExecutionError> {
+    ) -> Result<WasmRuntimeContext<Wasmer<'storage>>, WasmExecutionError> {
         let mut store = Store::default();
         let module = Module::new(&store, &self.bytecode)
             .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)?;
@@ -52,7 +52,7 @@ impl WasmApplication {
 
         system_api_setup(&instance, &store)?;
 
-        Ok(WritableRuntimeContext {
+        Ok(WasmRuntimeContext {
             context_forwarder,
             application,
             store,

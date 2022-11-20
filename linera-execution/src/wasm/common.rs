@@ -118,7 +118,7 @@ pub trait Application<R: Runtime> {
 }
 
 /// Wrapper around all types necessary to call an asynchronous method of a WASM application.
-pub struct WritableRuntimeContext<R>
+pub struct WasmRuntimeContext<R>
 where
     R: Runtime,
 {
@@ -136,7 +136,7 @@ where
     pub(crate) _storage_guard: R::StorageGuard,
 }
 
-impl<R> WritableRuntimeContext<R>
+impl<R> WasmRuntimeContext<R>
 where
     R: Runtime,
     R::Application: Application<R>,
