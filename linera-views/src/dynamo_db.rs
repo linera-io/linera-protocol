@@ -225,7 +225,7 @@ impl KeyValueOperations for DynamodbContainer {
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<Vec<u8>>, DynamoDbContextError> {
-        let response = self
+        let pre_response = self
             .client
             .query()
             .table_name(self.table.as_ref())
@@ -236,14 +236,16 @@ impl KeyValueOperations for DynamodbContainer {
             .expression_attribute_values(
                 ":partition",
                 AttributeValue::B(Blob::new(DUMMY_PARTITION_KEY)),
-            )
-            .expression_attribute_values(
-                ":prefix",
-                AttributeValue::B(Blob::new(key_prefix.to_vec())),
-            )
-            .send()
-            .await?;
-
+            );
+        let key_prefix = key_prefix.to_vec();
+        let response = if !key_prefix.is_empty() {
+            pre_response
+                .expression_attribute_values(":prefix", AttributeValue::B(Blob::new(key_prefix)))
+                .send()
+                .await?
+        } else {
+            pre_response.send().await?
+        };
         response
             .items()
             .into_iter()
