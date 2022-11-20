@@ -21,9 +21,9 @@ use linera_base::messages::{ApplicationId, ChainId};
 use std::task::Poll;
 
 /// Types that are specific to a WebAssembly runtime.
-pub trait Runtime: Sized {
+pub trait Runtime {
     /// How to call the application interface.
-    type Application: Application<Self>;
+    type Application;
 
     /// How to store the application's in-memory state.
     type Store;
@@ -139,6 +139,7 @@ where
 impl<R> WritableRuntimeContext<R>
 where
     R: Runtime,
+    R::Application: Application<R>,
 {
     /// Call the guest WASM module's implementation of
     /// [`UserApplication::execute_operation`][`linera_execution::UserApplication::execute_operation`].
@@ -367,6 +368,7 @@ macro_rules! impl_guest_future_interface {
             impl<'storage, R> GuestFutureInterface<R> for $future
             where
                 R: Runtime,
+                R::Application: Application<R>,
                 WasmExecutionError: From<R::Error>,
             {
                 type Output = $output;
