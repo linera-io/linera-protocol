@@ -12,12 +12,9 @@ use super::{
     WasmExecutionError,
 };
 use crate::{
-    system::Balance, ApplicationCallResult, ApplicationStateNotLocked, CallResult, CalleeContext,
-    EffectContext, ExecutionError, OperationContext, QueryContext, QueryableStorage,
-    RawExecutionResult, ReadableStorage, SessionCallResult, SessionId, WritableStorage,
+    ApplicationCallResult, CalleeContext, EffectContext, OperationContext, QueryContext,
+    RawExecutionResult, SessionCallResult, SessionId,
 };
-use async_trait::async_trait;
-use linera_base::messages::{ApplicationId, ChainId};
 use std::task::Poll;
 
 /// Types that are specific to a WebAssembly runtime.
@@ -297,71 +294,6 @@ where
                 .query_application_new(&mut self.store, (*context).into(), argument);
 
         GuestFuture::new(future, self)
-    }
-}
-
-/// Wrap a [`QueryableStorage`] trait object so that it implements [`WritableStorage`] with stub
-/// methods.
-///
-/// All implemented methods will either do nothing or return an error.
-pub struct WrappedQueryableStorage<'storage>(&'storage dyn QueryableStorage);
-
-impl<'storage> WrappedQueryableStorage<'storage> {
-    /// Wrap a [`QueryableStorage`] trait object in a [`WrappedQueryableStorage`].
-    pub fn new(storage: &'storage dyn QueryableStorage) -> Self {
-        WrappedQueryableStorage(storage)
-    }
-}
-
-#[async_trait]
-impl ReadableStorage for WrappedQueryableStorage<'_> {
-    fn chain_id(&self) -> ChainId {
-        self.0.chain_id()
-    }
-
-    fn application_id(&self) -> ApplicationId {
-        self.0.application_id()
-    }
-
-    fn read_system_balance(&self) -> Balance {
-        self.0.read_system_balance()
-    }
-
-    async fn try_read_my_state(&self) -> Result<Vec<u8>, ExecutionError> {
-        self.0.try_read_my_state().await
-    }
-}
-
-#[async_trait]
-impl WritableStorage for WrappedQueryableStorage<'_> {
-    async fn try_read_and_lock_my_state(&self) -> Result<Vec<u8>, ExecutionError> {
-        Err(ExecutionError::LockStateFromQuery)
-    }
-
-    fn save_and_unlock_my_state(&self, _state: Vec<u8>) -> Result<(), ApplicationStateNotLocked> {
-        Err(ApplicationStateNotLocked)
-    }
-
-    fn unlock_my_state(&self) {}
-
-    async fn try_call_application(
-        &self,
-        _authenticated: bool,
-        _callee_id: ApplicationId,
-        _argument: &[u8],
-        _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<CallResult, ExecutionError> {
-        Err(ExecutionError::CallApplicationFromQuery)
-    }
-
-    async fn try_call_session(
-        &self,
-        _authenticated: bool,
-        _session_id: SessionId,
-        _argument: &[u8],
-        _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<CallResult, ExecutionError> {
-        Err(ExecutionError::InvalidSession)
     }
 }
 

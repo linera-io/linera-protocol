@@ -14,7 +14,7 @@ use super::{
     common::{self, Runtime, WasmRuntimeContext},
     WasmApplication, WasmExecutionError,
 };
-use crate::{ExecutionError, WritableStorage};
+use crate::{ExecutionError, QueryableStorage, WritableStorage};
 use std::{marker::PhantomData, mem, sync::Arc, task::Poll};
 use tokio::sync::Mutex;
 use wasmer::{imports, Module, RuntimeError, Store};
@@ -23,29 +23,63 @@ use wasmer::{imports, Module, RuntimeError, Store};
 ///
 /// The runtime has a lifetime so that it does not outlive the trait object used to export the
 /// system API.
-pub struct Wasmer<'storage> {
+pub struct Wasmer<'storage, S> {
     _lifetime: PhantomData<&'storage ()>,
+    _dyn_trait: PhantomData<S>,
 }
 
-impl<'storage> Runtime for Wasmer<'storage> {
+impl<'storage, S> Runtime for Wasmer<'storage, S> {
     type Application = Application;
     type Store = Store;
-    type StorageGuard = StorageGuard<'storage>;
+    type StorageGuard = StorageGuard<'storage, S>;
     type Error = RuntimeError;
 }
 
 impl WasmApplication {
-    /// Prepare a runtime instance to call into the WASM application.
-    pub fn prepare_runtime<'storage>(
+    /// Prepare a runtime instance to call into the WASM contract.
+    pub fn prepare_contract_runtime<'storage>(
         &self,
         storage: &'storage dyn WritableStorage,
-    ) -> Result<WasmRuntimeContext<Wasmer<'storage>>, WasmExecutionError> {
+    ) -> Result<
+        WasmRuntimeContext<Wasmer<'storage, &'static dyn WritableStorage>>,
+        WasmExecutionError,
+    > {
         let mut store = Store::default();
         let module = Module::new(&store, &self.bytecode)
             .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)?;
         let mut imports = imports! {};
         let context_forwarder = ContextForwarder::default();
-        let (system_api, storage_guard) = SystemApi::new(context_forwarder.clone(), storage);
+        let (system_api, storage_guard) =
+            SystemApi::new_writable(context_forwarder.clone(), storage);
+        let system_api_setup = system::add_to_imports(&mut store, &mut imports, system_api);
+        let (application, instance) =
+            application::Application::instantiate(&mut store, &module, &mut imports)?;
+
+        system_api_setup(&instance, &store)?;
+
+        Ok(WasmRuntimeContext {
+            context_forwarder,
+            application,
+            store,
+            _storage_guard: storage_guard,
+        })
+    }
+
+    /// Prepare a runtime instance to call into the WASM service.
+    pub fn prepare_service_runtime<'storage>(
+        &self,
+        storage: &'storage dyn QueryableStorage,
+    ) -> Result<
+        WasmRuntimeContext<Wasmer<'storage, &'static dyn QueryableStorage>>,
+        WasmExecutionError,
+    > {
+        let mut store = Store::default();
+        let module = Module::new(&store, &self.bytecode)
+            .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)?;
+        let mut imports = imports! {};
+        let context_forwarder = ContextForwarder::default();
+        let (system_api, storage_guard) =
+            SystemApi::new_queryable(context_forwarder.clone(), storage);
         let system_api_setup = system::add_to_imports(&mut store, &mut imports, system_api);
         let (application, instance) =
             application::Application::instantiate(&mut store, &module, &mut imports)?;
@@ -61,7 +95,7 @@ impl WasmApplication {
     }
 }
 
-impl<'storage> common::Contract<Wasmer<'storage>> for Application {
+impl<'storage> common::Contract<Wasmer<'storage, &'static dyn WritableStorage>> for Application {
     fn execute_operation_new(
         &self,
         store: &mut Store,
@@ -134,7 +168,7 @@ impl<'storage> common::Contract<Wasmer<'storage>> for Application {
     }
 }
 
-impl<'storage> common::Service<Wasmer<'storage>> for Application {
+impl<'storage> common::Service<Wasmer<'storage, &'static dyn QueryableStorage>> for Application {
     fn query_application_new(
         &self,
         store: &mut Store,
@@ -154,12 +188,12 @@ impl<'storage> common::Service<Wasmer<'storage>> for Application {
 }
 
 /// Implementation to forward system calls from the guest WASM module to the host implementation.
-pub struct SystemApi {
+pub struct SystemApi<S> {
     context: ContextForwarder,
-    storage: Arc<Mutex<Option<&'static dyn WritableStorage>>>,
+    storage: Arc<Mutex<Option<S>>>,
 }
 
-impl SystemApi {
+impl SystemApi<&'static dyn WritableStorage> {
     /// Create a new [`SystemApi`] instance, ensuring that the lifetime of the [`WritableStorage`]
     /// trait object is respected.
     ///
@@ -172,7 +206,10 @@ impl SystemApi {
     ///
     /// The [`StorageGuard`] instance must be kept alive while the trait object is still expected to
     /// be alive and usable by the WASM application.
-    pub fn new(context: ContextForwarder, storage: &dyn WritableStorage) -> (Self, StorageGuard) {
+    pub fn new_writable(
+        context: ContextForwarder,
+        storage: &dyn WritableStorage,
+    ) -> (Self, StorageGuard<'_, &'static dyn WritableStorage>) {
         let storage_without_lifetime = unsafe { mem::transmute(storage) };
         let storage = Arc::new(Mutex::new(Some(storage_without_lifetime)));
 
@@ -183,7 +220,27 @@ impl SystemApi {
 
         (SystemApi { context, storage }, guard)
     }
+}
 
+impl SystemApi<&'static dyn QueryableStorage> {
+    /// Same as `new_writable`. Didn't find how to factorizing the code.
+    pub fn new_queryable(
+        context: ContextForwarder,
+        storage: &dyn QueryableStorage,
+    ) -> (Self, StorageGuard<'_, &'static dyn QueryableStorage>) {
+        let storage_without_lifetime = unsafe { mem::transmute(storage) };
+        let storage = Arc::new(Mutex::new(Some(storage_without_lifetime)));
+
+        let guard = StorageGuard {
+            storage: storage.clone(),
+            _lifetime: PhantomData,
+        };
+
+        (SystemApi { context, storage }, guard)
+    }
+}
+
+impl<S: Copy> SystemApi<S> {
     /// Safely obtain the [`WritableStorage`] trait object instance to handle a system call.
     ///
     /// # Panics
@@ -192,7 +249,7 @@ impl SystemApi {
     /// is executed in a single thread) or if the trait object is no longer alive (or more
     /// accurately, if the [`StorageGuard`] returned by [`Self::new`] was dropped to indicate it's
     /// no longer alive).
-    fn storage(&self) -> &'static dyn WritableStorage {
+    fn storage(&self) -> S {
         *self
             .storage
             .try_lock()
@@ -202,7 +259,7 @@ impl SystemApi {
     }
 }
 
-impl system::System for SystemApi {
+impl system::System for SystemApi<&'static dyn WritableStorage> {
     type Load = HostFuture<'static, Result<Vec<u8>, ExecutionError>>;
     type LoadAndLock = HostFuture<'static, Result<Vec<u8>, ExecutionError>>;
 
@@ -237,14 +294,47 @@ impl system::System for SystemApi {
     }
 }
 
+impl system::System for SystemApi<&'static dyn QueryableStorage> {
+    type Load = HostFuture<'static, Result<Vec<u8>, ExecutionError>>;
+    type LoadAndLock = HostFuture<'static, Result<Vec<u8>, ExecutionError>>;
+
+    fn load_new(&mut self) -> Self::Load {
+        HostFuture::new(self.storage().try_read_my_state())
+    }
+
+    fn load_poll(&mut self, future: &Self::Load) -> PollLoad {
+        match future.poll(&mut self.context) {
+            Poll::Pending => PollLoad::Pending,
+            Poll::Ready(Ok(bytes)) => PollLoad::Ready(Ok(bytes)),
+            Poll::Ready(Err(error)) => PollLoad::Ready(Err(error.to_string())),
+        }
+    }
+
+    fn load_and_lock_new(&mut self) -> Self::LoadAndLock {
+        panic!("not available")
+    }
+
+    fn load_and_lock_poll(&mut self, future: &Self::LoadAndLock) -> PollLoad {
+        match future.poll(&mut self.context) {
+            Poll::Pending => PollLoad::Pending,
+            Poll::Ready(Ok(bytes)) => PollLoad::Ready(Ok(bytes)),
+            Poll::Ready(Err(error)) => PollLoad::Ready(Err(error.to_string())),
+        }
+    }
+
+    fn store_and_unlock(&mut self, _state: &[u8]) -> bool {
+        panic!("not available")
+    }
+}
+
 /// A guard to unsure that the [`WritableStorage`] trait object isn't called after it's no longer
 /// borrowed.
-pub struct StorageGuard<'storage> {
-    storage: Arc<Mutex<Option<&'static dyn WritableStorage>>>,
+pub struct StorageGuard<'storage, S> {
+    storage: Arc<Mutex<Option<S>>>,
     _lifetime: PhantomData<&'storage ()>,
 }
 
-impl Drop for StorageGuard<'_> {
+impl<S> Drop for StorageGuard<'_, S> {
     fn drop(&mut self) {
         self.storage
             .try_lock()
