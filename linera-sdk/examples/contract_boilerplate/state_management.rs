@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{super::ContractState, system};
+use super::{super::ContractState, writable_system as system};
 use futures::future;
 use std::future::Future;
 

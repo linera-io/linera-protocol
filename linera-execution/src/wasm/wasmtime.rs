@@ -3,8 +3,11 @@
 
 //! Code specific to the usage of the [Wasmtime](https://wasmtime.dev/) runtime.
 
-// Export the system interface used by a user application.
-wit_bindgen_host_wasmtime_rust::export!("../linera-sdk/system.wit");
+// Export the system interface used by a user contract.
+wit_bindgen_host_wasmtime_rust::export!("../linera-sdk/writable_system.wit");
+
+// Export the system interface used by a user service.
+wit_bindgen_host_wasmtime_rust::export!("../linera-sdk/queryable_system.wit");
 
 // Import the interface implemented by a user contract.
 wit_bindgen_host_wasmtime_rust::import!("../linera-sdk/contract.wit");
@@ -14,8 +17,9 @@ wit_bindgen_host_wasmtime_rust::import!("../linera-sdk/service.wit");
 
 use self::{
     contract::{Contract, ContractData},
+    queryable_system::{QueryableSystem, QueryableSystemTables},
     service::{Service, ServiceData},
-    system::{PollLoad, SystemTables},
+    writable_system::{WritableSystem, WritableSystemTables},
 };
 use super::{
     async_boundary::{ContextForwarder, HostFuture},
@@ -62,7 +66,7 @@ impl WasmApplication {
         let engine = Engine::default();
         let mut linker = Linker::new(&engine);
 
-        system::add_to_linker(&mut linker, ContractState::system_api)?;
+        writable_system::add_to_linker(&mut linker, ContractState::system_api)?;
 
         let module = Module::new(&engine, &self.contract_bytecode)?;
         let context_forwarder = ContextForwarder::default();
@@ -87,7 +91,7 @@ impl WasmApplication {
         let engine = Engine::default();
         let mut linker = Linker::new(&engine);
 
-        system::add_to_linker(&mut linker, ServiceState::system_api)?;
+        queryable_system::add_to_linker(&mut linker, ServiceState::system_api)?;
 
         let module = Module::new(&engine, &self.service_bytecode)?;
         let context_forwarder = ContextForwarder::default();
@@ -109,14 +113,14 @@ impl WasmApplication {
 pub struct ContractState<'storage> {
     data: ContractData,
     system_api: SystemApi<&'storage dyn WritableStorage>,
-    system_tables: SystemTables<SystemApi<&'storage dyn WritableStorage>>,
+    system_tables: WritableSystemTables<SystemApi<&'storage dyn WritableStorage>>,
 }
 
 /// Data stored by the runtime that's necessary for handling queries to and from the WASM module.
 pub struct ServiceState<'storage> {
     data: ServiceData,
     system_api: SystemApi<&'storage dyn QueryableStorage>,
-    system_tables: SystemTables<SystemApi<&'storage dyn QueryableStorage>>,
+    system_tables: QueryableSystemTables<SystemApi<&'storage dyn QueryableStorage>>,
 }
 
 impl<'storage> ContractState<'storage> {
@@ -128,7 +132,7 @@ impl<'storage> ContractState<'storage> {
         Self {
             data: ContractData::default(),
             system_api: SystemApi { storage, context },
-            system_tables: SystemTables::default(),
+            system_tables: WritableSystemTables::default(),
         }
     }
 
@@ -142,7 +146,7 @@ impl<'storage> ContractState<'storage> {
         &mut self,
     ) -> (
         &mut SystemApi<&'storage dyn WritableStorage>,
-        &mut SystemTables<SystemApi<&'storage dyn WritableStorage>>,
+        &mut WritableSystemTables<SystemApi<&'storage dyn WritableStorage>>,
     ) {
         (&mut self.system_api, &mut self.system_tables)
     }
@@ -157,7 +161,7 @@ impl<'storage> ServiceState<'storage> {
         Self {
             data: ServiceData::default(),
             system_api: SystemApi { storage, context },
-            system_tables: SystemTables::default(),
+            system_tables: QueryableSystemTables::default(),
         }
     }
 
@@ -171,7 +175,7 @@ impl<'storage> ServiceState<'storage> {
         &mut self,
     ) -> (
         &mut SystemApi<&'storage dyn QueryableStorage>,
-        &mut SystemTables<SystemApi<&'storage dyn QueryableStorage>>,
+        &mut QueryableSystemTables<SystemApi<&'storage dyn QueryableStorage>>,
     ) {
         (&mut self.system_api, &mut self.system_tables)
     }
@@ -275,7 +279,7 @@ pub struct SystemApi<S> {
     storage: S,
 }
 
-impl<'storage> system::System for SystemApi<&'storage dyn WritableStorage> {
+impl<'storage> WritableSystem for SystemApi<&'storage dyn WritableStorage> {
     type Load = HostFuture<'storage, Result<Vec<u8>, ExecutionError>>;
     type LoadAndLock = HostFuture<'storage, Result<Vec<u8>, ExecutionError>>;
 
@@ -283,7 +287,8 @@ impl<'storage> system::System for SystemApi<&'storage dyn WritableStorage> {
         HostFuture::new(self.storage.try_read_my_state())
     }
 
-    fn load_poll(&mut self, future: &Self::Load) -> PollLoad {
+    fn load_poll(&mut self, future: &Self::Load) -> writable_system::PollLoad {
+        use writable_system::PollLoad;
         match future.poll(&mut self.context) {
             Poll::Pending => PollLoad::Pending,
             Poll::Ready(Ok(bytes)) => PollLoad::Ready(Ok(bytes)),
@@ -295,7 +300,8 @@ impl<'storage> system::System for SystemApi<&'storage dyn WritableStorage> {
         HostFuture::new(self.storage.try_read_and_lock_my_state())
     }
 
-    fn load_and_lock_poll(&mut self, future: &Self::LoadAndLock) -> PollLoad {
+    fn load_and_lock_poll(&mut self, future: &Self::LoadAndLock) -> writable_system::PollLoad {
+        use writable_system::PollLoad;
         match future.poll(&mut self.context) {
             Poll::Pending => PollLoad::Pending,
             Poll::Ready(Ok(bytes)) => PollLoad::Ready(Ok(bytes)),
@@ -310,35 +316,19 @@ impl<'storage> system::System for SystemApi<&'storage dyn WritableStorage> {
     }
 }
 
-impl<'storage> system::System for SystemApi<&'storage dyn QueryableStorage> {
+impl<'storage> QueryableSystem for SystemApi<&'storage dyn QueryableStorage> {
     type Load = HostFuture<'storage, Result<Vec<u8>, ExecutionError>>;
-    type LoadAndLock = HostFuture<'storage, Result<Vec<u8>, ExecutionError>>;
 
     fn load_new(&mut self) -> Self::Load {
         HostFuture::new(self.storage.try_read_my_state())
     }
 
-    fn load_poll(&mut self, future: &Self::Load) -> PollLoad {
+    fn load_poll(&mut self, future: &Self::Load) -> queryable_system::PollLoad {
+        use queryable_system::PollLoad;
         match future.poll(&mut self.context) {
             Poll::Pending => PollLoad::Pending,
             Poll::Ready(Ok(bytes)) => PollLoad::Ready(Ok(bytes)),
             Poll::Ready(Err(error)) => PollLoad::Ready(Err(error.to_string())),
         }
-    }
-
-    fn load_and_lock_new(&mut self) -> Self::LoadAndLock {
-        panic!("not available")
-    }
-
-    fn load_and_lock_poll(&mut self, future: &Self::LoadAndLock) -> PollLoad {
-        match future.poll(&mut self.context) {
-            Poll::Pending => PollLoad::Pending,
-            Poll::Ready(Ok(bytes)) => PollLoad::Ready(Ok(bytes)),
-            Poll::Ready(Err(error)) => PollLoad::Ready(Err(error.to_string())),
-        }
-    }
-
-    fn store_and_unlock(&mut self, _state: &[u8]) -> bool {
-        panic!("not available")
     }
 }

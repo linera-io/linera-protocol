@@ -2,8 +2,11 @@
 
 //! Code specific to the usage of the [Wasmer](https://wasmer.io/) runtime.
 
-// Export the system interface used by a user application.
-wit_bindgen_host_wasmer_rust::export!("../linera-sdk/system.wit");
+// Export the writable system interface used by a user contract.
+wit_bindgen_host_wasmer_rust::export!("../linera-sdk/writable_system.wit");
+
+// Export the queryable system interface used by a user service.
+wit_bindgen_host_wasmer_rust::export!("../linera-sdk/queryable_system.wit");
 
 // Import the interface implemented by a user contract.
 wit_bindgen_host_wasmer_rust::import!("../linera-sdk/contract.wit");
@@ -11,7 +14,7 @@ wit_bindgen_host_wasmer_rust::import!("../linera-sdk/contract.wit");
 // Import the interface implemented by a user service.
 wit_bindgen_host_wasmer_rust::import!("../linera-sdk/service.wit");
 
-use self::{contract::Contract, service::Service, system::PollLoad};
+use self::{contract::Contract, service::Service};
 use super::{
     async_boundary::{ContextForwarder, HostFuture},
     common::{self, Runtime, WasmRuntimeContext},
@@ -62,7 +65,8 @@ impl WasmApplication {
         let context_forwarder = ContextForwarder::default();
         let (system_api, storage_guard) =
             SystemApi::new_writable(context_forwarder.clone(), storage);
-        let system_api_setup = system::add_to_imports(&mut store, &mut imports, system_api);
+        let system_api_setup =
+            writable_system::add_to_imports(&mut store, &mut imports, system_api);
         let (application, instance) = Contract::instantiate(&mut store, &module, &mut imports)?;
 
         system_api_setup(&instance, &store)?;
@@ -87,7 +91,8 @@ impl WasmApplication {
         let context_forwarder = ContextForwarder::default();
         let (system_api, storage_guard) =
             SystemApi::new_queryable(context_forwarder.clone(), storage);
-        let system_api_setup = system::add_to_imports(&mut store, &mut imports, system_api);
+        let system_api_setup =
+            queryable_system::add_to_imports(&mut store, &mut imports, system_api);
         let (application, instance) = Service::instantiate(&mut store, &module, &mut imports)?;
 
         system_api_setup(&instance, &store)?;
@@ -265,7 +270,7 @@ impl<S: Copy> SystemApi<S> {
     }
 }
 
-impl system::System for SystemApi<&'static dyn WritableStorage> {
+impl writable_system::WritableSystem for SystemApi<&'static dyn WritableStorage> {
     type Load = HostFuture<'static, Result<Vec<u8>, ExecutionError>>;
     type LoadAndLock = HostFuture<'static, Result<Vec<u8>, ExecutionError>>;
 
@@ -273,7 +278,8 @@ impl system::System for SystemApi<&'static dyn WritableStorage> {
         HostFuture::new(self.storage().try_read_my_state())
     }
 
-    fn load_poll(&mut self, future: &Self::Load) -> PollLoad {
+    fn load_poll(&mut self, future: &Self::Load) -> writable_system::PollLoad {
+        use writable_system::PollLoad;
         match future.poll(&mut self.context) {
             Poll::Pending => PollLoad::Pending,
             Poll::Ready(Ok(bytes)) => PollLoad::Ready(Ok(bytes)),
@@ -285,7 +291,8 @@ impl system::System for SystemApi<&'static dyn WritableStorage> {
         HostFuture::new(self.storage().try_read_and_lock_my_state())
     }
 
-    fn load_and_lock_poll(&mut self, future: &Self::LoadAndLock) -> PollLoad {
+    fn load_and_lock_poll(&mut self, future: &Self::LoadAndLock) -> writable_system::PollLoad {
+        use writable_system::PollLoad;
         match future.poll(&mut self.context) {
             Poll::Pending => PollLoad::Pending,
             Poll::Ready(Ok(bytes)) => PollLoad::Ready(Ok(bytes)),
@@ -300,36 +307,20 @@ impl system::System for SystemApi<&'static dyn WritableStorage> {
     }
 }
 
-impl system::System for SystemApi<&'static dyn QueryableStorage> {
+impl queryable_system::QueryableSystem for SystemApi<&'static dyn QueryableStorage> {
     type Load = HostFuture<'static, Result<Vec<u8>, ExecutionError>>;
-    type LoadAndLock = HostFuture<'static, Result<Vec<u8>, ExecutionError>>;
 
     fn load_new(&mut self) -> Self::Load {
         HostFuture::new(self.storage().try_read_my_state())
     }
 
-    fn load_poll(&mut self, future: &Self::Load) -> PollLoad {
+    fn load_poll(&mut self, future: &Self::Load) -> queryable_system::PollLoad {
+        use queryable_system::PollLoad;
         match future.poll(&mut self.context) {
             Poll::Pending => PollLoad::Pending,
             Poll::Ready(Ok(bytes)) => PollLoad::Ready(Ok(bytes)),
             Poll::Ready(Err(error)) => PollLoad::Ready(Err(error.to_string())),
         }
-    }
-
-    fn load_and_lock_new(&mut self) -> Self::LoadAndLock {
-        panic!("not available")
-    }
-
-    fn load_and_lock_poll(&mut self, future: &Self::LoadAndLock) -> PollLoad {
-        match future.poll(&mut self.context) {
-            Poll::Pending => PollLoad::Pending,
-            Poll::Ready(Ok(bytes)) => PollLoad::Ready(Ok(bytes)),
-            Poll::Ready(Err(error)) => PollLoad::Ready(Err(error.to_string())),
-        }
-    }
-
-    fn store_and_unlock(&mut self, _state: &[u8]) -> bool {
-        panic!("not available")
     }
 }
 
