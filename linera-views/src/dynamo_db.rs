@@ -281,7 +281,9 @@ impl DynamoDbContainer {
     /// Requires a [`LOCALSTACK_ENDPOINT`] environment variable with the endpoint address to connect
     /// to the LocalStack instance. Creates the table if it doesn't exist yet, reporting a
     /// [`TableStatus`] to indicate if the table was created or if it already exists.
-    pub async fn with_localstack(table: TableName) -> Result<(Self, TableStatus), LocalStackError> {
+    pub async fn with_localstack(
+        table: TableName,
+    ) -> Result<(Self, TableStatus), LocalStackError> {
         let base_config = aws_config::load_from_env().await;
         let config = aws_sdk_dynamodb::config::Builder::from(&base_config)
             .endpoint_resolver(localstack::get_endpoint()?)
@@ -308,7 +310,7 @@ where
         (storage, db_tablestatus.1)
     }
 
-    /// Create a new [`DynamoDbContext`] instance.
+    /// Create a new [`DynamoDbContainer`] instance.
     pub async fn new(
         table: TableName,
         base_key: Vec<u8>,
@@ -358,6 +360,8 @@ where
         })
     }
 }
+
+
 
 /// Status of a table at the creation time of a [`DynamoDbContext`] instance.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
