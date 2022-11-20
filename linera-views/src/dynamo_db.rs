@@ -156,7 +156,7 @@ impl KeyValueOperations for DynamoDbContainer {
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyIterator, DynamoDbContextError> {
-        let response = self
+        let pre_response = self
             .client
             .query()
             .table_name(self.table.as_ref())
