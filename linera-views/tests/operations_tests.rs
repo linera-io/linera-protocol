@@ -6,7 +6,7 @@ use linera_views::{
     dynamo_db::DynamodbContainer,
     memory::MemoryContainer,
     rocksdb::{RocksdbContainer, DB},
-    test_utils::get_random_vec_keyvalues,
+    test_utils::{get_random_vec_keyvalues_prefix, LocalStackTestContext},
 };
 use std::{
     collections::{BTreeMap, HashMap},
