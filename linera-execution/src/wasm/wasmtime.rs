@@ -100,7 +100,7 @@ impl<'storage> Data<'storage> {
     }
 }
 
-impl<'storage> common::Application<Wasmtime<'storage>> for Application<Data<'storage>> {
+impl<'storage> common::Contract<Wasmtime<'storage>> for Application<Data<'storage>> {
     fn execute_operation_new(
         &self,
         store: &mut Store<Data<'storage>>,
@@ -171,7 +171,9 @@ impl<'storage> common::Application<Wasmtime<'storage>> for Application<Data<'sto
     ) -> Result<application::PollCallSession, Trap> {
         Application::call_session_poll(self, store, future)
     }
+}
 
+impl<'storage> common::Service<Wasmtime<'storage>> for Application<Data<'storage>> {
     fn query_application_new(
         &self,
         store: &mut Store<Data<'storage>>,
