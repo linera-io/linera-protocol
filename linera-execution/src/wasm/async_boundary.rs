@@ -5,7 +5,7 @@
 //! modules.
 
 use super::{
-    common::{self, WritableRuntimeContext},
+    common::{self, WasmRuntimeContext},
     WasmExecutionError,
 };
 use futures::future::BoxFuture;
@@ -90,7 +90,7 @@ where
         future: Future,
 
         /// Types necessary to call the guest WASM module in order to poll the future.
-        context: WritableRuntimeContext<Runtime>,
+        context: WasmRuntimeContext<Runtime>,
     },
 }
 
@@ -104,7 +104,7 @@ where
     /// that it can be returned when the [`GuestFuture`] is polled.
     pub fn new(
         creation_result: Result<Future, Runtime::Error>,
-        context: WritableRuntimeContext<Runtime>,
+        context: WasmRuntimeContext<Runtime>,
     ) -> Self {
         match creation_result {
             Ok(future) => GuestFuture::Active { future, context },

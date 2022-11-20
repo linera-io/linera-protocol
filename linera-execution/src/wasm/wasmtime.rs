@@ -15,7 +15,7 @@ use self::{
 };
 use super::{
     async_boundary::{ContextForwarder, HostFuture},
-    common::{self, Runtime, WritableRuntimeContext},
+    common::{self, Runtime, WasmRuntimeContext},
     WasmApplication, WasmExecutionError,
 };
 use crate::{ExecutionError, WritableStorage};
@@ -42,7 +42,7 @@ impl WasmApplication {
     pub fn prepare_runtime<'storage>(
         &self,
         storage: &'storage dyn WritableStorage,
-    ) -> Result<WritableRuntimeContext<Wasmtime<'storage>>, WasmExecutionError> {
+    ) -> Result<WasmRuntimeContext<Wasmtime<'storage>>, WasmExecutionError> {
         let engine = Engine::default();
         let mut linker = Linker::new(&engine);
 
@@ -55,7 +55,7 @@ impl WasmApplication {
         let (application, _instance) =
             Application::instantiate(&mut store, &module, &mut linker, Data::application)?;
 
-        Ok(WritableRuntimeContext {
+        Ok(WasmRuntimeContext {
             context_forwarder,
             application,
             store,
