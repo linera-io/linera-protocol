@@ -3,14 +3,13 @@
 
 use linera_views::{
     common::{Batch, KeyValueOperations},
-    dynamo_db::{DynamodbContainer, TableName},
+    dynamo_db::DynamodbContainer,
     memory::MemoryContainer,
     rocksdb::{RocksdbContainer, DB},
-    test_utils::get_random_vec_keyvalues,
+    test_utils::{get_random_vec_keyvalues, LocalStackTestContext},
 };
 use std::{
     collections::{BTreeMap, HashMap},
-    str::FromStr,
     sync::Arc,
 };
 use tokio::sync::{Mutex, RwLock};
@@ -78,9 +77,13 @@ async fn test_ordering_rocksdb() {
 #[tokio::test]
 #[ignore]
 async fn test_ordering_dynamodb() {
-    let tablename_str = "test_table".to_string();
-    let table = TableName::from_str(&tablename_str).unwrap();
-    let key_value_operation = DynamodbContainer::with_localstack(table).await.unwrap().0;
+    let localstack = LocalStackTestContext::new().await.unwrap();
+    let (key_value_operation, _) = DynamodbContainer::from_config(
+        localstack.dynamo_db_config(),
+        "test_table".parse().expect("Invalid table name"),
+    )
+    .await
+    .unwrap();
     //
     test_ordering_keys(key_value_operation).await;
 }
