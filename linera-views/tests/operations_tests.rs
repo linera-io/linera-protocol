@@ -1,13 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use aws_sdk_dynamodb::Client;
 use linera_views::{
     common::{Batch, KeyValueOperations},
     dynamo_db::{DynamodbContainer, TableName},
     memory::MemoryContainer,
     rocksdb::{RocksdbContainer, DB},
-    test_utils::{get_random_vec_keyvalues, LocalStackTestContext},
+    test_utils::get_random_vec_keyvalues,
 };
 use std::{
     collections::{BTreeMap, HashMap},
@@ -79,12 +78,9 @@ async fn test_ordering_rocksdb() {
 #[tokio::test]
 #[ignore]
 async fn test_ordering_dynamodb() {
-    let localstack = LocalStackTestContext::new().await.unwrap();
-    let config = localstack.dynamo_db_config();
-    let client = Client::from_conf(config);
     let tablename_str = "test_table".to_string();
     let table = TableName::from_str(&tablename_str).unwrap();
-    let key_value_operation = DynamodbContainer { client, table };
+    let key_value_operation = DynamodbContainer::with_localstack(table).await.unwrap().0;
     //
     test_ordering_keys(key_value_operation).await;
 }
