@@ -295,13 +295,9 @@ impl<E> DynamoDbContext<E>
 where
     E: Clone + Sync + Send,
 {
-    pub fn create_context(
-        db_tablestatus: (DynamodbContainer, TableStatus),
-        base_key: Vec<u8>,
-        extra: E,
-    ) -> (Self, TableStatus) {
+    pub fn create_context(db_tablestatus: (DynamodbContainer, TableStatus), base_key: Vec<u8>, extra: E) -> (Self, TableStatus) {
         let storage = DynamoDbContext {
-            db: db_tablestatus.0,
+            db : db_tablestatus.0,
             base_key,
             extra,
         };
@@ -358,6 +354,8 @@ where
         })
     }
 }
+
+
 
 /// Status of a table at the creation time of a [`DynamoDbContext`] instance.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

@@ -1,13 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
- <<<<<<< HEAD
 use linera_views::{
     common::{Batch, KeyValueOperations},
     dynamo_db::DynamodbContainer,
     memory::MemoryContainer,
     rocksdb::{RocksdbContainer, DB},
-    test_utils::{get_random_vec_keyvalues_prefix, LocalStackTestContext},
+    test_utils::get_random_vec_keyvalues,
 };
 use std::{
     collections::{BTreeMap, HashMap},
