@@ -310,7 +310,7 @@ where
         (storage, db_tablestatus.1)
     }
 
-    /// Create a new [`DynamoDbContainer`] instance.
+    /// Create a new [`DynamoDbContext`] instance.
     pub async fn new(
         table: TableName,
         base_key: Vec<u8>,
@@ -360,8 +360,6 @@ where
         })
     }
 }
-
-
 
 /// Status of a table at the creation time of a [`DynamoDbContext`] instance.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
