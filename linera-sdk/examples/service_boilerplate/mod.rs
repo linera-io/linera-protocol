@@ -1,18 +1,18 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Contains boilerplate necessary for the application to interface with the host runtime.
+//! Contains boilerplate necessary for the service to interface with the host runtime.
 //!
 //! Ideally, this code should be exported from [`linera-sdk`], but that's currently impossible due
 //! to how [`wit_bindgen_guest_rust`] works. It expects concrete types to be available in its parent
-//! module (which in this case is this module), so it has to exist in every application
+//! module (which in this case is this module), so it has to exist in every service
 //! implementation.
 //!
 //! This should be fixable with a few changes to [`wit-bindgen`], but an alternative is to generate
 //! the code with a procedural macro. For now, this module should be included by all implemented
-//! applications.
+//! services.
 
-// Export the application interface.
+// Export the service interface.
 wit_bindgen_guest_rust::export!("service.wit");
 
 // Import the system interface.
