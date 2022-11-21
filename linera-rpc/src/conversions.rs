@@ -138,6 +138,25 @@ macro_rules! convert_and_delegate {
     };
 }
 
+#[macro_export]
+macro_rules! client_delegate {
+    ($self:ident, $handler:ident, $req:ident) => {{
+        let request = Request::new($req.try_into().expect("todo"));
+        match $self
+            .0
+            .$handler(request)
+            .await
+            .expect("todo")
+            .into_inner()
+            .inner
+            .expect("todo")
+        {
+            Inner::ChainInfoResponse(response) => Ok(response.try_into().expect("todo")),
+            Inner::Error(error) => todo!("need to add serialization logic back in"),
+        }
+    }};
+}
+
 impl From<ProtoConversionError> for Status {
     fn from(error: ProtoConversionError) -> Self {
         Status::new(Code::InvalidArgument, error.to_string())
@@ -275,7 +294,10 @@ impl TryFrom<CertificateRpc> for Certificate {
             signatures.push((validator_name, signature));
         }
 
-        Ok(Certificate::new(bcs::from_bytes(certificate.value.as_slice())?, signatures))
+        Ok(Certificate::new(
+            bcs::from_bytes(certificate.value.as_slice())?,
+            signatures,
+        ))
     }
 }
 
@@ -494,7 +516,18 @@ impl TryFrom<ChainInfoResponse> for ChainInfoResponseRPC {
     fn try_from(chain_info_response: ChainInfoResponse) -> Result<Self, Self::Error> {
         Ok(Self {
             chain_info: bcs::to_bytes(&chain_info_response.info)?,
-            signature: chain_info_response.signature.map(|s| s.into()),
+            signature: map_into!(chain_info_response.signature),
+        })
+    }
+}
+
+impl TryFrom<ChainInfoResponseRPC> for ChainInfoResponse {
+    type Error = ProtoConversionError;
+
+    fn try_from(chain_info_response: ChainInfoResponseRPC) -> Result<Self, Self::Error> {
+        Ok(Self {
+            info: bcs::from_bytes(chain_info_response.chain_info.as_slice())?,
+            signature: map_invert!(chain_info_response.signature),
         })
     }
 }

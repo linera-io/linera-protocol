@@ -273,6 +273,7 @@ where
     }
 }
 
+/// A client without an address - serves as a client factory.
 pub struct NodeProvider {
     pub send_timeout: Duration,
     pub recv_timeout: Duration,

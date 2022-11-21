@@ -7,6 +7,7 @@ pub use crate::{
     transport::MessageHandler,
     Message,
 };
+use async_trait::async_trait;
 use linera_core::{
     node::NodeError,
     worker::{ValidatorWorker, WorkerState},
@@ -25,13 +26,12 @@ use tokio::sync::Mutex;
 use tonic::{transport::Server, Request, Response, Status};
 
 // to avoid confusion with existing ValidatorNode
-use crate::grpc_network::grpc_network::validator_node_server::{
-    ValidatorNode as ValidatorNodeRpc, ValidatorNodeServer,
-};
-// to avoid confusion with existing ValidatorNode
 use crate::{
-    convert_and_delegate,
+    client_delegate, convert_and_delegate,
     grpc_network::grpc_network::{
+        validator_node_server::{
+            ValidatorNode as ValidatorNodeRpc, ValidatorNode, ValidatorNodeServer,
+        },
         validator_worker_server::{ValidatorWorker as ValidatorWorkerRpc, ValidatorWorkerServer},
         ChainInfoResult,
     },
@@ -39,9 +39,12 @@ use crate::{
 };
 
 use crate::{
-    config::{ShardConfig, ValidatorInternalNetworkConfig},
+    config::{ShardConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig},
     conversions::ProtoConversionError,
-    grpc_network::grpc_network::validator_worker_client::ValidatorWorkerClient,
+    grpc_network::grpc_network::{
+        chain_info_result::Inner, validator_node_client::ValidatorNodeClient,
+        validator_worker_client::ValidatorWorkerClient,
+    },
     transport::SpawnedServer,
 };
 use futures::{
@@ -52,6 +55,7 @@ use linera_base::messages::ChainId;
 use linera_core::worker::WorkerError;
 use tokio::task::JoinHandle;
 use tonic::transport::Channel;
+use linera_core::client::ValidatorNodeProvider;
 
 pub mod grpc_network {
     tonic::include_proto!("rpc.v1");
@@ -76,7 +80,7 @@ pub struct SpawnedGrpcServer {
 }
 
 #[derive(Error, Debug)]
-pub enum GrpcServerError {
+pub enum GrpcError {
     #[error("failed to connect to address")]
     ConnectionFailed(#[from] tonic::transport::Error),
     #[error("failed to convert to proto")]
@@ -116,7 +120,7 @@ where
         shard_id: ShardId,
         network: ValidatorInternalNetworkConfig,
         cross_chain_config: CrossChainConfig,
-    ) -> Result<SpawnedGrpcServer, GrpcServerError> {
+    ) -> Result<SpawnedGrpcServer, GrpcError> {
         info!(
             "spawning gRPC server  on {}:{} for shard {}",
             host, port, shard_id
@@ -217,7 +221,7 @@ impl Pool {
         &mut self,
         cross_chain_request: linera_core::messages::CrossChainRequest,
         remote_address: String,
-    ) -> Result<(), GrpcServerError> {
+    ) -> Result<(), GrpcError> {
         let mut client = match self.0.get_mut(&remote_address) {
             None => {
                 let client = ValidatorWorkerClient::connect(remote_address.clone()).await?;
@@ -345,6 +349,55 @@ where
         unimplemented!(
             "what do we do here since original method does not return anything to the user"
         )
+    }
+}
+
+#[derive(Clone)]
+pub struct GrpcClient(ValidatorNodeClient<Channel>);
+
+impl GrpcClient {
+    async fn new(network: ValidatorPublicNetworkConfig) -> Result<Self, GrpcError> {
+        Ok(Self(ValidatorNodeClient::connect(network.address()).await?))
+    }
+}
+
+#[async_trait]
+impl linera_core::node::ValidatorNode for GrpcClient {
+    async fn handle_block_proposal(
+        &mut self,
+        proposal: linera_chain::messages::BlockProposal,
+    ) -> Result<linera_core::messages::ChainInfoResponse, NodeError> {
+        client_delegate!(self, handle_block_proposal, proposal)
+    }
+
+    async fn handle_certificate(
+        &mut self,
+        certificate: linera_chain::messages::Certificate,
+    ) -> Result<linera_core::messages::ChainInfoResponse, NodeError> {
+        client_delegate!(self, handle_certificate, certificate)
+    }
+
+    async fn handle_chain_info_query(
+        &mut self,
+        query: linera_core::messages::ChainInfoQuery,
+    ) -> Result<linera_core::messages::ChainInfoResponse, NodeError> {
+        client_delegate!(self, handle_chain_info_query, query)
+    }
+}
+
+pub struct GrpcNodeProvider {}
+
+impl ValidatorNodeProvider for GrpcNodeProvider {
+    type Node = GrpcClient;
+
+    fn make_node(&self, address: &str) -> anyhow::Result<Self::Node, NodeError> {
+        let network = ValidatorPublicNetworkConfig::from_str(address).map_err(|_| {
+            NodeError::CannotResolveValidatorAddress {
+                address: address.to_string(),
+            }
+        })?;
+        // Ok(GrpcClient::new(network))
+        unimplemented!()
     }
 }
 
