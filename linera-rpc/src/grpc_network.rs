@@ -7,7 +7,6 @@ pub use crate::{
     transport::MessageHandler,
     Message,
 };
-use thiserror::Error;
 use linera_core::{
     node::NodeError,
     worker::{ValidatorWorker, WorkerState},
@@ -21,6 +20,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
+use thiserror::Error;
 use tokio::sync::Mutex;
 use tonic::{transport::Server, Request, Response, Status};
 
@@ -30,7 +30,7 @@ use crate::grpc_network::grpc_network::validator_node_server::{
 };
 // to avoid confusion with existing ValidatorNode
 use crate::{
-    convert_response,
+    convert_and_delegate,
     grpc_network::grpc_network::{
         validator_worker_server::{ValidatorWorker as ValidatorWorkerRpc, ValidatorWorkerServer},
         ChainInfoResult,
@@ -40,16 +40,18 @@ use crate::{
 
 use crate::{
     config::{ShardConfig, ValidatorInternalNetworkConfig},
+    conversions::ProtoConversionError,
     grpc_network::grpc_network::validator_worker_client::ValidatorWorkerClient,
     transport::SpawnedServer,
 };
-use futures::{channel::mpsc, SinkExt, StreamExt, FutureExt};
-use futures::channel::oneshot::Sender;
-use tokio::task::JoinHandle;
-use tonic::transport::Channel;
+use futures::{
+    channel::{mpsc, oneshot::Sender},
+    FutureExt, SinkExt, StreamExt,
+};
 use linera_base::messages::ChainId;
 use linera_core::worker::WorkerError;
-use crate::conversions::ProtoConversionError;
+use tokio::task::JoinHandle;
+use tonic::transport::Channel;
 
 pub mod grpc_network {
     tonic::include_proto!("rpc.v1");
@@ -70,7 +72,7 @@ pub struct GrpcServer<S> {
 
 pub struct SpawnedGrpcServer {
     complete: Sender<()>,
-    handle: JoinHandle<Result<(), tonic::transport::Error>>
+    handle: JoinHandle<Result<(), tonic::transport::Error>>,
 }
 
 #[derive(Error, Debug)]
@@ -80,7 +82,7 @@ pub enum GrpcServerError {
     #[error("failed to convert to proto")]
     ProtoConversion(#[from] ProtoConversionError),
     #[error("failed to communicate cross-chain queries")]
-    CrossChain(#[from] Status)
+    CrossChain(#[from] Status),
 }
 
 impl<S: SharedStore> GrpcServer<S>
@@ -131,8 +133,6 @@ where
                 state.nickname().to_string(),
                 network.clone(),
                 cross_chain_config.max_retries,
-                Duration::from_millis(cross_chain_config.retry_delay_ms),
-                shard_id,
                 cross_chain_receiver,
             )
         });
@@ -146,7 +146,7 @@ where
             shard_id,
             network,
             cross_chain_config,
-            cross_chain_sender
+            cross_chain_sender,
         };
 
         let validator_node = ValidatorNodeServer::new(grpc_server);
@@ -154,13 +154,10 @@ where
         let handle = tokio::spawn(
             Server::builder()
                 .add_service(validator_node)
-                .serve_with_shutdown(address, receiver.map(|_| ()))
+                .serve_with_shutdown(address, receiver.map(|_| ())),
         );
 
-        Ok(SpawnedGrpcServer {
-            complete,
-            handle
-        })
+        Ok(SpawnedGrpcServer { complete, handle })
     }
 
     async fn handle_continuation(&self, requests: Vec<linera_core::messages::CrossChainRequest>) {
@@ -184,8 +181,6 @@ where
     async fn forward_cross_chain_queries(
         nickname: String,
         network: ValidatorInternalNetworkConfig,
-        cross_chain_max_retries: usize,
-        cross_chain_retry_delay: Duration,
         this_shard: ShardId,
         mut receiver: mpsc::Receiver<(linera_core::messages::CrossChainRequest, ShardId)>,
     ) {
@@ -197,7 +192,7 @@ where
 
             match pool.send_message(message, shard.address()).await {
                 Ok(_) => queries_sent += 1,
-                Err(error) => error!("[{}] cross chain query failed: {:?}", nickname, error)
+                Err(error) => error!("[{}] cross chain query failed: {:?}", nickname, error),
             }
 
             if queries_sent % 2000 == 0 {
@@ -248,22 +243,39 @@ where
         &self,
         request: Request<BlockProposal>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        convert_response!(self, handle_block_proposal, request)
+        convert_and_delegate!(self, handle_block_proposal, request)
     }
 
     async fn handle_certificate(
         &self,
-        _request: Request<Certificate>,
+        request: Request<Certificate>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        // convert_response!(self, handle_certificate, request)
-        unimplemented!()
+        match self
+            .state
+            .clone()
+            .handle_certificate(request.into_inner().try_into()?)
+            .await
+        {
+            Ok((info, continuation)) => {
+                self.handle_continuation(continuation).await;
+                Ok(Response::new(info.try_into()?))
+            }
+            Err(error) => {
+                error!(
+                    "[{}] Failed to handle cross-chain request: {}",
+                    self.state.nickname(),
+                    error
+                );
+                Ok(Response::new(NodeError::from(error).into()))
+            }
+        }
     }
 
     async fn handle_chain_info_query(
         &self,
         request: Request<ChainInfoQuery>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        convert_response!(self, handle_chain_info_query, request)
+        convert_and_delegate!(self, handle_chain_info_query, request)
     }
 }
 
@@ -276,21 +288,39 @@ where
         &self,
         request: Request<BlockProposal>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        convert_response!(self, handle_block_proposal, request)
+        convert_and_delegate!(self, handle_block_proposal, request)
     }
 
     async fn handle_certificate(
         &self,
-        _request: Request<Certificate>,
+        request: Request<Certificate>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        unimplemented!()
+        match self
+            .state
+            .clone()
+            .handle_certificate(request.into_inner().try_into()?)
+            .await
+        {
+            Ok((info, continuation)) => {
+                self.handle_continuation(continuation).await;
+                Ok(Response::new(info.try_into()?))
+            }
+            Err(error) => {
+                error!(
+                    "[{}] Failed to handle cross-chain request: {}",
+                    self.state.nickname(),
+                    error
+                );
+                Ok(Response::new(NodeError::from(error).into()))
+            }
+        }
     }
 
     async fn handle_chain_info_query(
         &self,
         request: Request<ChainInfoQuery>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        convert_response!(self, handle_chain_info_query, request)
+        convert_and_delegate!(self, handle_chain_info_query, request)
     }
 
     async fn handle_cross_chain_request(

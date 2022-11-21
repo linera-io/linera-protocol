@@ -3,8 +3,8 @@ use thiserror::Error;
 use tonic::{Code, IntoRequest, Request, Status};
 
 use crate::grpc_network::grpc_network::{
-    medium, ConfirmUpdateRecipient, CrossChainRequest as CrossChainRequestRpc, NameSignaturePair,
-    UpdateRecipient,
+    medium, ChainInfoResult, ConfirmUpdateRecipient, CrossChainRequest as CrossChainRequestRpc,
+    NameSignaturePair, UpdateRecipient,
 };
 use linera_core::messages::CrossChainRequest;
 
@@ -46,6 +46,8 @@ use linera_base::messages::BlockHeight;
 
 use crate::grpc_network::grpc_network::{cross_chain_request::Inner, Owner as OwnerRPC};
 use linera_base::messages::Owner;
+use linera_core::{node::NodeError, worker::WorkerError};
+use linera_execution::Response;
 
 #[derive(Error, Debug)]
 pub enum ProtoConversionError {
@@ -120,31 +122,52 @@ macro_rules! map_invert {
 
 /// Delegates the call to an underlying handler and converts types to and from proto
 #[macro_export]
-macro_rules! convert_response {
+macro_rules! convert_and_delegate {
     ($self:ident, $handler:ident, $req:ident) => {
-        Ok(Response::new(match $self.state.clone().$handler($req.into_inner().try_into()?).await {
-            Ok(chain_info_response) => ChainInfoResult {
-                inner: Some(
-                    crate::grpc_network::grpc_network::chain_info_result::Inner::ChainInfoResponse(
-                        chain_info_response.try_into()?,
-                    ),
-                ),
+        Ok(Response::new(
+            match $self
+                .state
+                .clone()
+                .$handler($req.into_inner().try_into()?)
+                .await
+            {
+                Ok(chain_info_response) => chain_info_response.try_into()?,
+                Err(error) => NodeError::from(error).into(),
             },
-            Err(error) => ChainInfoResult {
-                // todo we need to serialize this properly
-                inner: Some(
-                    crate::grpc_network::grpc_network::chain_info_result::Inner::Error(
-                        NodeError::from(error).to_string(),
-                    ),
-                ),
-            },
-        }))
+        ))
     };
 }
 
 impl From<ProtoConversionError> for Status {
     fn from(error: ProtoConversionError) -> Self {
         Status::new(Code::InvalidArgument, error.to_string())
+    }
+}
+
+impl TryFrom<ChainInfoResponse> for ChainInfoResult {
+    type Error = ProtoConversionError;
+
+    fn try_from(chain_info_response: ChainInfoResponse) -> Result<Self, Self::Error> {
+        Ok(ChainInfoResult {
+            inner: Some(
+                crate::grpc_network::grpc_network::chain_info_result::Inner::ChainInfoResponse(
+                    chain_info_response.try_into()?,
+                ),
+            ),
+        })
+    }
+}
+
+impl From<NodeError> for ChainInfoResult {
+    fn from(node_error: NodeError) -> Self {
+        ChainInfoResult {
+            // todo we need to serialize this properly
+            inner: Some(
+                crate::grpc_network::grpc_network::chain_info_result::Inner::Error(
+                    node_error.to_string(),
+                ),
+            ),
+        }
     }
 }
 
