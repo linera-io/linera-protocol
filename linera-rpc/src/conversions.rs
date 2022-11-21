@@ -1,10 +1,10 @@
 use ed25519::signature::Signature as edSignature;
 use thiserror::Error;
-use tonic::{Code, Status};
+use tonic::{Code, IntoRequest, Request, Status};
 
 use crate::grpc_network::grpc_network::{
-    medium, ConfirmUpdateRecipient,
-    CrossChainRequest as CrossChainRequestRpc, NameSignaturePair, UpdateRecipient,
+    medium, ConfirmUpdateRecipient, CrossChainRequest as CrossChainRequestRpc, NameSignaturePair,
+    UpdateRecipient,
 };
 use linera_core::messages::CrossChainRequest;
 
@@ -44,9 +44,7 @@ use linera_core::messages::ChainInfoResponse;
 use crate::grpc_network::grpc_network::BlockHeight as BlockHeightRPC;
 use linera_base::messages::BlockHeight;
 
-use crate::grpc_network::grpc_network::{
-    cross_chain_request::Inner, Owner as OwnerRPC,
-};
+use crate::grpc_network::grpc_network::{cross_chain_request::Inner, Owner as OwnerRPC};
 use linera_base::messages::Owner;
 
 #[derive(Error, Debug)]
@@ -120,6 +118,7 @@ macro_rules! map_invert {
     };
 }
 
+/// Delegates the call to an underlying handler and converts types to and from proto
 #[macro_export]
 macro_rules! convert_response {
     ($self:ident, $handler:ident, $req:ident) => {

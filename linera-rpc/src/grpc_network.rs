@@ -7,16 +7,19 @@ pub use crate::{
     transport::MessageHandler,
     Message,
 };
+use thiserror::Error;
 use linera_core::{
     node::NodeError,
     worker::{ValidatorWorker, WorkerState},
 };
 use linera_views::views::ViewError;
-use log::info;
+use log::{debug, error, info};
 use std::{
+    collections::HashMap,
     net::{IpAddr, SocketAddr},
     str::FromStr,
     sync::Arc,
+    time::Duration,
 };
 use tokio::sync::Mutex;
 use tonic::{transport::Server, Request, Response, Status};
@@ -35,9 +38,24 @@ use crate::{
     simple_network::SharedStore,
 };
 
+use crate::{
+    config::{ShardConfig, ValidatorInternalNetworkConfig},
+    grpc_network::grpc_network::validator_worker_client::ValidatorWorkerClient,
+    transport::SpawnedServer,
+};
+use futures::{channel::mpsc, SinkExt, StreamExt, FutureExt};
+use futures::channel::oneshot::Sender;
+use tokio::task::JoinHandle;
+use tonic::transport::Channel;
+use linera_base::messages::ChainId;
+use linera_core::worker::WorkerError;
+use crate::conversions::ProtoConversionError;
+
 pub mod grpc_network {
     tonic::include_proto!("rpc.v1");
 }
+
+type CrossChainSender = mpsc::Sender<(linera_core::messages::CrossChainRequest, ShardId)>;
 
 #[derive(Clone)]
 pub struct GrpcServer<S> {
@@ -45,7 +63,24 @@ pub struct GrpcServer<S> {
     port: u16,
     state: WorkerState<S>,
     shard_id: ShardId,
+    network: ValidatorInternalNetworkConfig,
     cross_chain_config: CrossChainConfig,
+    cross_chain_sender: CrossChainSender,
+}
+
+pub struct SpawnedGrpcServer {
+    complete: Sender<()>,
+    handle: JoinHandle<Result<(), tonic::transport::Error>>
+}
+
+#[derive(Error, Debug)]
+pub enum GrpcServerError {
+    #[error("failed to connect to address")]
+    ConnectionFailed(#[from] tonic::transport::Error),
+    #[error("failed to convert to proto")]
+    ProtoConversion(#[from] ProtoConversionError),
+    #[error("failed to communicate cross-chain queries")]
+    CrossChain(#[from] Status)
 }
 
 impl<S: SharedStore> GrpcServer<S>
@@ -57,56 +92,149 @@ where
         port: u16,
         state: WorkerState<S>,
         shard_id: ShardId,
+        network: ValidatorInternalNetworkConfig,
         cross_chain_config: CrossChainConfig,
+        cross_chain_sender: CrossChainSender,
     ) -> Self {
         Self {
             host,
             port,
             state,
             shard_id,
+            network,
             cross_chain_config,
+            cross_chain_sender,
         }
     }
 
-    pub async fn spawn_validator_node(self) -> Result<(), std::io::Error> {
+    pub async fn spawn(
+        host: String,
+        port: u16,
+        state: WorkerState<S>,
+        shard_id: ShardId,
+        network: ValidatorInternalNetworkConfig,
+        cross_chain_config: CrossChainConfig,
+    ) -> Result<SpawnedGrpcServer, GrpcServerError> {
         info!(
-            "gRPC server listening for traffic on {}:{}",
-            self.host, self.port
+            "spawning gRPC server  on {}:{} for shard {}",
+            host, port, shard_id
         );
 
-        let address = SocketAddr::new(
-            IpAddr::from_str(self.host.as_str()).expect("todo"),
-            self.port,
+        let address = SocketAddr::new(IpAddr::from_str(host.as_str()).expect("todo"), port);
+
+        let (cross_chain_sender, cross_chain_receiver) =
+            mpsc::channel(cross_chain_config.queue_size);
+
+        tokio::spawn({
+            info!("spawning cross-chain queries thread for {}", shard_id);
+            Self::forward_cross_chain_queries(
+                state.nickname().to_string(),
+                network.clone(),
+                cross_chain_config.max_retries,
+                Duration::from_millis(cross_chain_config.retry_delay_ms),
+                shard_id,
+                cross_chain_receiver,
+            )
+        });
+
+        let (complete, receiver) = futures::channel::oneshot::channel();
+
+        let grpc_server = GrpcServer {
+            host,
+            port,
+            state,
+            shard_id,
+            network,
+            cross_chain_config,
+            cross_chain_sender
+        };
+
+        let validator_node = ValidatorNodeServer::new(grpc_server);
+
+        let handle = tokio::spawn(
+            Server::builder()
+                .add_service(validator_node)
+                .serve_with_shutdown(address, receiver.map(|_| ()))
         );
 
-        let validator_node = ValidatorNodeServer::new(self);
-
-        let _server = Server::builder()
-            .add_service(validator_node)
-            //.serve_with_shutdown(address, receiver.map(|_| ()))
-            .serve(address)
-            .await;
-        Ok(())
+        Ok(SpawnedGrpcServer {
+            complete,
+            handle
+        })
     }
 
-    pub async fn spawn_validator_worker(self) -> Result<(), std::io::Error> {
-        info!(
-            "gRPC server listening for traffic on {}:{}",
-            self.host, self.port
-        );
+    async fn handle_continuation(&self, requests: Vec<linera_core::messages::CrossChainRequest>) {
+        for request in requests {
+            let shard_id = self.network.get_shard_id(request.target_chain_id());
+            debug!(
+                "[{}] Scheduling cross-chain query: {} -> {}",
+                self.state.nickname(),
+                self.shard_id,
+                shard_id
+            );
+            // todo change to `send_all` or `feed`
+            self.cross_chain_sender
+                .clone()
+                .feed((request, shard_id))
+                .await
+                .expect("internal channel should not fail") // why would this fail?
+        }
+    }
 
-        let address = SocketAddr::new(
-            IpAddr::from_str(self.host.as_str()).expect("todo"),
-            self.port,
-        );
+    async fn forward_cross_chain_queries(
+        nickname: String,
+        network: ValidatorInternalNetworkConfig,
+        cross_chain_max_retries: usize,
+        cross_chain_retry_delay: Duration,
+        this_shard: ShardId,
+        mut receiver: mpsc::Receiver<(linera_core::messages::CrossChainRequest, ShardId)>,
+    ) {
+        let mut queries_sent = 0u64;
+        let mut pool = Pool::new();
 
-        let validator_worker = ValidatorWorkerServer::new(self);
+        while let Some((message, shard_id)) = receiver.next().await {
+            let shard = network.shard(shard_id);
 
-        let _server = Server::builder()
-            .add_service(validator_worker)
-            //.serve_with_shutdown(address, receiver.map(|_| ()))
-            .serve(address)
-            .await;
+            match pool.send_message(message, shard.address()).await {
+                Ok(_) => queries_sent += 1,
+                Err(error) => error!("[{}] cross chain query failed: {:?}", nickname, error)
+            }
+
+            if queries_sent % 2000 == 0 {
+                // is this correct? does the `shard_id` not change?
+                debug!(
+                    "[{}] {} has sent {} cross-chain queries to {}:{} (shard {})",
+                    nickname, this_shard, queries_sent, shard.host, shard.port, shard_id,
+                );
+            }
+        }
+    }
+}
+
+struct Pool(HashMap<String, ValidatorWorkerClient<Channel>>);
+
+impl Pool {
+    fn new() -> Self {
+        Self(HashMap::new())
+    }
+
+    async fn send_message(
+        &mut self,
+        cross_chain_request: linera_core::messages::CrossChainRequest,
+        remote_address: String,
+    ) -> Result<(), GrpcServerError> {
+        let mut client = match self.0.get_mut(&remote_address) {
+            None => {
+                let client = ValidatorWorkerClient::connect(remote_address.clone()).await?;
+                self.0.insert(remote_address.clone(), client);
+                self.0.get_mut(&remote_address).unwrap()
+            }
+            Some(client) => client,
+        };
+
+        let request = Request::new(cross_chain_request.try_into()?);
+        let _ = client.handle_cross_chain_request(request).await?;
+
         Ok(())
     }
 }
@@ -167,9 +295,26 @@ where
 
     async fn handle_cross_chain_request(
         &self,
-        _request: Request<CrossChainRequest>,
+        request: Request<CrossChainRequest>,
     ) -> Result<Response<CrossChainRequest>, Status> {
-        unimplemented!()
+        match self
+            .state
+            .clone()
+            .handle_cross_chain_request(request.into_inner().try_into()?)
+            .await
+        {
+            Ok(continuation) => self.handle_continuation(continuation).await,
+            Err(error) => {
+                error!(
+                    "[{}] Failed to handle cross-chain request: {}",
+                    self.state.nickname(),
+                    error
+                );
+            }
+        }
+        unimplemented!(
+            "what do we do here since original method does not return anything to the user"
+        )
     }
 }
 

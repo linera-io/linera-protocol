@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::transport::TransportProtocol;
+use crate::transport::{ConnectionPool, TransportProtocol};
 use linera_base::messages::ChainId;
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
@@ -28,6 +28,12 @@ pub struct ShardConfig {
     pub host: String,
     /// The port.
     pub port: u16,
+}
+
+impl ShardConfig {
+    pub fn address(&self) -> String {
+        format!("{}:{}", self.host, self.port)
+    }
 }
 
 /// The network protocol.
@@ -143,6 +149,7 @@ impl<P> ValidatorInternalNetworkPreConfig<P> {
         (s.finish() as ShardId) % self.shards.len()
     }
 
+    // why are we taking ownershup of ShardId?
     pub fn shard(&self, shard_id: ShardId) -> &ShardConfig {
         &self.shards[shard_id]
     }

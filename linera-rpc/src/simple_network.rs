@@ -141,6 +141,7 @@ where
 
         let (cross_chain_sender, cross_chain_receiver) =
             mpsc::channel(self.cross_chain_config.queue_size);
+
         tokio::spawn(Self::forward_cross_chain_queries(
             self.state.nickname().to_string(),
             self.network.clone(),
