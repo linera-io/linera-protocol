@@ -65,12 +65,9 @@ type CrossChainSender = mpsc::Sender<(linera_core::messages::CrossChainRequest, 
 
 #[derive(Clone)]
 pub struct GrpcServer<S> {
-    host: String,
-    port: u16,
     state: WorkerState<S>,
     shard_id: ShardId,
     network: ValidatorInternalNetworkConfig,
-    cross_chain_config: CrossChainConfig,
     cross_chain_sender: CrossChainSender,
 }
 
@@ -83,8 +80,10 @@ pub struct SpawnedGrpcServer {
 pub enum GrpcError {
     #[error("failed to connect to address")]
     ConnectionFailed(#[from] tonic::transport::Error),
+
     #[error("failed to convert to proto")]
     ProtoConversion(#[from] ProtoConversionError),
+
     #[error("failed to communicate cross-chain queries")]
     CrossChain(#[from] Status),
 }
@@ -93,25 +92,6 @@ impl<S: SharedStore> GrpcServer<S>
 where
     ViewError: From<S::ContextError>,
 {
-    pub fn new(
-        host: String,
-        port: u16,
-        state: WorkerState<S>,
-        shard_id: ShardId,
-        network: ValidatorInternalNetworkConfig,
-        cross_chain_config: CrossChainConfig,
-        cross_chain_sender: CrossChainSender,
-    ) -> Self {
-        Self {
-            host,
-            port,
-            state,
-            shard_id,
-            network,
-            cross_chain_config,
-            cross_chain_sender,
-        }
-    }
 
     pub async fn spawn(
         host: String,
@@ -144,12 +124,9 @@ where
         let (complete, receiver) = futures::channel::oneshot::channel();
 
         let grpc_server = GrpcServer {
-            host,
-            port,
             state,
             shard_id,
             network,
-            cross_chain_config,
             cross_chain_sender,
         };
 
@@ -396,8 +373,8 @@ impl ValidatorNodeProvider for GrpcNodeProvider {
                 address: address.to_string(),
             }
         })?;
-        // Ok(GrpcClient::new(network))
         unimplemented!()
+        // Ok(GrpcClient::new(network))
     }
 }
 
