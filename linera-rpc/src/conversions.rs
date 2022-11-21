@@ -275,13 +275,7 @@ impl TryFrom<CertificateRpc> for Certificate {
             signatures.push((validator_name, signature));
         }
 
-        unimplemented!();
-
-        Ok(Self {
-            value: bcs::from_bytes(certificate.value.as_slice())?,
-            signatures,
-            hash: todo!(),
-        })
+        Ok(Certificate::new(bcs::from_bytes(certificate.value.as_slice())?, signatures))
     }
 }
 
@@ -378,7 +372,7 @@ impl From<BlockHeightRange> for BlockHeightRangeRPC {
     fn from(block_height_range: BlockHeightRange) -> Self {
         Self {
             start: Some(block_height_range.start.into()),
-            limit: block_height_range.limit.map(|l| l as u64),
+            limit: map_as!(block_height_range.limit, u64),
         }
     }
 }
