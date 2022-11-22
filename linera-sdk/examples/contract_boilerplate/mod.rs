@@ -24,7 +24,7 @@ mod exported_futures;
 mod state_management;
 
 use self::exported_futures::{CallApplication, CallSession, ExecuteEffect, ExecuteOperation};
-use super::ContractState as Contract;
+use super::ApplicationState as Contract;
 
 /// Mark the contract type to be exported.
 impl contract::Contract for Contract {}

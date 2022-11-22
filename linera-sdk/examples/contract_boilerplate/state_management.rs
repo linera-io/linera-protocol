@@ -1,11 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{super::ContractState, writable_system as system};
+use super::{super::ApplicationState, writable_system as system};
 use futures::future;
 use std::future::Future;
 
-impl ContractState {
+impl ApplicationState {
     /// Load the contract state, without locking it for writes.
     pub async fn load() -> Self {
         let future = system::Load::new();

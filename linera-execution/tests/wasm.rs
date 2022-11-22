@@ -27,7 +27,7 @@ async fn test_counter_wasm_application() -> anyhow::Result<()> {
     view.context().extra.user_applications().insert(
         app_id,
         Arc::new(
-            WasmApplication::from_file(
+            WasmApplication::from_files(
                 "../target/wasm32-unknown-unknown/debug/examples/counter_contract.wasm",
                 "../target/wasm32-unknown-unknown/debug/examples/counter_service.wasm",
             )
