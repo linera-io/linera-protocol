@@ -30,6 +30,8 @@ pub type MemoryContext<E> = ContextFromDb<E, MemoryContainer>;
 /// one option is to iterate over all keys. Another is to select an interval
 /// that represents exactly the keys having that prefix. Which fortunately
 /// is possible with the way the comparison operators for vectors is built.
+///
+/// The statement is that p is a prefix of v if and only if p <= v < upper_bound(p).
 fn get_interval(key_prefix: Vec<u8>) -> (Bound<Vec<u8>>, Bound<Vec<u8>>) {
     let len = key_prefix.len();
     for i in (0..len).rev() {
