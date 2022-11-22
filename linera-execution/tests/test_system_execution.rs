@@ -3,7 +3,9 @@
 
 #![allow(clippy::field_reassign_with_default)]
 
-use linera_base::messages::{ApplicationId, BlockHeight, ChainDescription, ChainId, EffectId};
+use linera_base::messages::{
+    ApplicationDescription, BlockHeight, ChainDescription, ChainId, EffectId,
+};
 use linera_execution::{
     system::{Address, Amount, Balance, UserData},
     ApplicationRegistryView, Effect, EffectContext, ExecutionResult, ExecutionStateView, Operation,
@@ -34,7 +36,7 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
     };
     let result = view
         .execute_operation(
-            ApplicationId::System,
+            &ApplicationDescription::System,
             &context,
             &Operation::System(operation),
             &mut applications,
@@ -73,7 +75,11 @@ async fn test_simple_system_effect() {
         },
     };
     let result = view
-        .execute_effect(ApplicationId::System, &context, &Effect::System(effect))
+        .execute_effect(
+            &ApplicationDescription::System,
+            &context,
+            &Effect::System(effect),
+        )
         .await
         .unwrap();
     assert_eq!(view.system.balance.get(), &Balance::from(4));
@@ -98,7 +104,11 @@ async fn test_simple_system_query() {
         chain_id: ChainId::root(0),
     };
     let response = view
-        .query_application(ApplicationId::System, &context, &Query::System(SystemQuery))
+        .query_application(
+            &ApplicationDescription::System,
+            &context,
+            &Query::System(SystemQuery),
+        )
         .await
         .unwrap();
     assert_eq!(

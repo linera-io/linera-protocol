@@ -7,7 +7,7 @@ extern crate core;
 
 mod utils;
 
-use self::utils::create_dummy_user_application_id;
+use self::utils::create_dummy_user_application_description;
 use async_trait::async_trait;
 use linera_base::messages::{BlockHeight, ChainDescription, ChainId};
 use linera_execution::*;
@@ -23,7 +23,8 @@ async fn test_missing_user_application() -> anyhow::Result<()> {
             .await;
     let mut applications = ApplicationRegistryView::load(view.context().clone()).await?;
 
-    let app_id = create_dummy_user_application_id();
+    let app_desc = create_dummy_user_application_description();
+    let app_id = applications.register_existing_application(app_desc.clone());
 
     let context = OperationContext {
         chain_id: ChainId::root(0),
@@ -33,7 +34,7 @@ async fn test_missing_user_application() -> anyhow::Result<()> {
 
     let result = view
         .execute_operation(
-            app_id,
+            &app_desc,
             &context,
             &Operation::User(vec![]),
             &mut applications,
@@ -166,7 +167,8 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(state)
             .await;
     let mut applications = ApplicationRegistryView::load(view.context().clone()).await?;
-    let app_id = create_dummy_user_application_id();
+    let app_desc = create_dummy_user_application_description();
+    let app_id = ApplicationId::from(&app_desc);
     view.context()
         .extra()
         .user_applications()
@@ -179,7 +181,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     };
     let result = view
         .execute_operation(
-            app_id,
+            &app_desc,
             &context,
             &Operation::User(vec![1]),
             &mut applications,
@@ -199,7 +201,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         chain_id: ChainId::root(0),
     };
     assert_eq!(
-        view.query_application(app_id, &context, &Query::User(vec![]))
+        view.query_application(&app_desc, &context, &Query::User(vec![]))
             .await
             .unwrap(),
         Response::User(vec![1])
@@ -215,7 +217,8 @@ async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()>
         ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(state)
             .await;
     let mut applications = ApplicationRegistryView::load(view.context().clone()).await?;
-    let app_id = create_dummy_user_application_id();
+    let app_desc = create_dummy_user_application_description();
+    let app_id = ApplicationId::from(&app_desc);
     view.context()
         .extra()
         .user_applications()
@@ -229,7 +232,7 @@ async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()>
 
     let result = view
         .execute_operation(
-            app_id,
+            &app_desc,
             &context,
             &Operation::User(vec![]),
             &mut applications,

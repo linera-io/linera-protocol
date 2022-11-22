@@ -481,14 +481,6 @@ where
         self.check_incoming_messages(&block.incoming_messages)?;
 
         for message_group in &block.incoming_messages {
-            let communication_state = self
-                .communication_states
-                .load_entry(message_group.application_id)
-                .await?;
-            let inbox = communication_state
-                .inboxes
-                .load_entry(message_group.origin.clone())
-                .await?;
             log::trace!(
                 "Updating inbox {:?}::{:?} in chain {:?}",
                 message_group.application_id,
@@ -496,6 +488,14 @@ where
                 chain_id
             );
             for (message_index, message_effect) in &message_group.effects {
+                let communication_state = self
+                    .communication_states
+                    .load_entry(message_group.application_id)
+                    .await?;
+                let inbox = communication_state
+                    .inboxes
+                    .load_entry(message_group.origin.clone())
+                    .await?;
                 // Receivers are allowed to skip events from the received queue.
                 while let Some(
                     event @ Event {
@@ -568,11 +568,19 @@ where
                     },
                 };
 
+                let application = self
+                    .known_applications
+                    .describe_application(message_group.application_id)
+                    .await?;
                 let results = self
                     .execution_state
-                    .execute_effect(message_group.application_id, &context, message_effect)
+                    .execute_effect(&application, &context, message_effect)
                     .await?;
 
+                let communication_state = self
+                    .communication_states
+                    .load_entry(message_group.application_id)
+                    .await?;
                 Self::process_execution_results(
                     &mut communication_state.outboxes,
                     &mut communication_state.channels,
@@ -585,19 +593,23 @@ where
         }
         // Second, execute the operations in the block and remember the recipients to notify.
         for (index, (application_id, operation)) in block.operations.iter().enumerate() {
-            let communication_state = self
-                .communication_states
-                .load_entry(*application_id)
+            let application = self
+                .known_applications
+                .describe_application(*application_id)
                 .await?;
             let context = OperationContext {
                 chain_id,
                 height: block.height,
                 index,
             };
+            let communication_state = self
+                .communication_states
+                .load_entry(*application_id)
+                .await?;
             let results = self
                 .execution_state
                 .execute_operation(
-                    *application_id,
+                    &application,
                     &context,
                     operation,
                     &mut self.known_applications,
