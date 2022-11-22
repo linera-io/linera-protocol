@@ -8,6 +8,7 @@ use std::{collections::HashMap, fmt::Debug};
 
 pub enum WriteOperation {
     Delete { key: Vec<u8> },
+    DeletePrefix { key_prefix: Vec<u8> },
     Put { key: Vec<u8>, value: Vec<u8> },
 }
 
@@ -71,6 +72,12 @@ impl Batch {
     #[inline]
     pub fn delete_key(&mut self, key: Vec<u8>) {
         self.operations.push(WriteOperation::Delete { key });
+    }
+
+    /// Insert a DeletePrefix { key_prefix } into the batch
+    #[inline]
+    pub fn delete_key_prefix(&mut self, key_prefix: Vec<u8>) {
+        self.operations.push(WriteOperation::DeletePrefix { key_prefix });
     }
 }
 
