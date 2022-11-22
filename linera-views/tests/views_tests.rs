@@ -18,7 +18,7 @@ use linera_views::{
     test_utils::{get_random_key_value_vec, random_shuffle, LocalStackTestContext},
     views::{HashView, Hasher, HashingContext, View, ViewError},
 };
-use rand::Rng;
+use rand::{SeedableRng, Rng, RngCore};
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     sync::Arc,
@@ -698,6 +698,7 @@ async fn test_removal_api() -> anyhow::Result<()> {
 
 #[cfg(test)]
 async fn compute_hash_map_keyvaluestore_view<S>(
+    rng: &mut impl RngCore,
     store: &mut S,
     l_kv: Vec<(Vec<u8>, Vec<u8>)>,
 ) -> <<S::Context as HashingContext>::Hasher as Hasher>::Output
@@ -705,7 +706,6 @@ where
     S: StateStore,
     ViewError: From<<<S as StateStore>::Context as Context>::Error>,
 {
-    let mut rng = rand::thread_rng();
     let mut view = store.load(1).await.unwrap();
     for kv in l_kv {
         let key = kv.0;
@@ -724,14 +724,14 @@ where
 }
 
 #[cfg(test)]
-async fn compute_hash_map_keyvaluestore_view_iter(l_kv: Vec<(Vec<u8>, Vec<u8>)>) {
+async fn compute_hash_map_keyvaluestore_view_iter<R: RngCore>(rng: &mut R, l_kv: Vec<(Vec<u8>, Vec<u8>)>) {
     let mut l_answer = Vec::new();
     let n_iter = 4;
     for _ in 0..n_iter {
         let mut l_kv_b = l_kv.clone();
-        random_shuffle(&mut l_kv_b);
+        random_shuffle(rng, &mut l_kv_b);
         let mut store = MemoryTestStore::default();
-        l_answer.push(compute_hash_map_keyvaluestore_view(&mut store, l_kv_b).await);
+        l_answer.push(compute_hash_map_keyvaluestore_view(rng, &mut store, l_kv_b).await);
     }
     for i in 1..n_iter {
         assert_eq!(l_answer.get(0).unwrap(), l_answer.get(i).unwrap());
@@ -742,8 +742,9 @@ async fn compute_hash_map_keyvaluestore_view_iter(l_kv: Vec<(Vec<u8>, Vec<u8>)>)
 async fn compute_hash_map_keyvaluestore_view_iter_large() {
     let n_iter = 4;
     let n = 1000;
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2);
     for _ in 0..n_iter {
-        let l_kv = get_random_key_value_vec(n);
-        compute_hash_map_keyvaluestore_view_iter(l_kv).await;
+        let l_kv = get_random_key_value_vec(&mut rng, n);
+        compute_hash_map_keyvaluestore_view_iter(&mut rng, l_kv).await;
     }
 }

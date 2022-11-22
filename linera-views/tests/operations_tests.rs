@@ -13,6 +13,7 @@ use std::{
     sync::Arc,
 };
 use tokio::sync::{Mutex, RwLock};
+use rand::SeedableRng;
 
 #[cfg(test)]
 async fn test_ordering_keys_key_value_vec<OP: KeyValueOperations>(
@@ -65,7 +66,8 @@ async fn test_ordering_keys_key_value_vec<OP: KeyValueOperations>(
 async fn test_ordering_keys<OP: KeyValueOperations>(key_value_operation: OP) {
     let key_prefix = vec![0];
     let n = 1000;
-    let key_value_vec = get_random_key_value_vec_prefix(key_prefix.clone(), n);
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2);
+    let key_value_vec = get_random_key_value_vec_prefix(&mut rng, key_prefix.clone(), n);
     test_ordering_keys_key_value_vec(key_value_operation, key_value_vec).await;
 }
 

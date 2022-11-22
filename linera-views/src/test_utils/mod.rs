@@ -1,9 +1,9 @@
 use anyhow::{Context, Error};
 use aws_sdk_s3::Endpoint;
 use aws_types::SdkConfig;
-use rand::Rng;
 use std::{collections::HashSet, env};
 use tokio::sync::{Mutex, MutexGuard};
+use rand::{Rng,RngCore};
 
 /// A static lock to prevent multiple tests from using the same LocalStack instance at the same
 /// time.
@@ -141,8 +141,7 @@ pub async fn list_tables(client: &aws_sdk_dynamodb::Client) -> Result<Vec<String
         .expect("List of tables was not returned"))
 }
 
-pub fn random_shuffle<T: Clone>(values: &mut Vec<T>) {
-    let mut rng = rand::thread_rng();
+pub fn random_shuffle<R: RngCore, T: Clone>(rng: &mut R, values: &mut Vec<T>) {
     let n = values.len();
     for _ in 0..4 * n {
         let index1: usize = rng.gen_range(0..n);
@@ -156,8 +155,7 @@ pub fn random_shuffle<T: Clone>(values: &mut Vec<T>) {
     }
 }
 
-pub fn get_random_byte_vector(key_prefix: &[u8], n: usize) -> Vec<u8> {
-    let mut rng = rand::thread_rng();
+pub fn get_random_byte_vector<R: RngCore>(rng: &mut R, key_prefix: &[u8], n: usize) -> Vec<u8> {
     let mut v = key_prefix.to_vec();
     for _ in 0..n {
         let val = rng.gen_range(0..256) as u8;
@@ -166,13 +164,13 @@ pub fn get_random_byte_vector(key_prefix: &[u8], n: usize) -> Vec<u8> {
     v
 }
 
-pub fn get_random_key_value_vec_prefix(key_prefix: Vec<u8>, n: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
+pub fn get_random_key_value_vec_prefix<R: RngCore>(rng: &mut R, key_prefix: Vec<u8>, n: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
     loop {
         let mut v_ret = Vec::new();
         let mut vector_set = HashSet::new();
         for _ in 0..n {
-            let v1 = get_random_byte_vector(&key_prefix, 8);
-            let v2 = get_random_byte_vector(&Vec::new(), 8);
+            let v1 = get_random_byte_vector(rng, &key_prefix, 8);
+            let v2 = get_random_byte_vector(rng, &Vec::new(), 8);
             let v12 = (v1.clone(), v2);
             vector_set.insert(v1);
             v_ret.push(v12);
@@ -183,6 +181,6 @@ pub fn get_random_key_value_vec_prefix(key_prefix: Vec<u8>, n: usize) -> Vec<(Ve
     }
 }
 
-pub fn get_random_key_value_vec(n: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
-    get_random_key_value_vec_prefix(Vec::new(), n)
+pub fn get_random_key_value_vec<R: RngCore>(rng: &mut R, n: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
+    get_random_key_value_vec_prefix(rng, Vec::new(), n)
 }
