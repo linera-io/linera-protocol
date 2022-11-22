@@ -15,6 +15,7 @@ use linera_rpc::{
         ValidatorPublicNetworkConfig,
     },
     simple_network,
+    transport::TransportProtocol,
 };
 use linera_service::{
     config::{
@@ -30,6 +31,8 @@ use std::{
     str::FromStr,
 };
 use structopt::StructOpt;
+use linera_rpc::grpc_network::{GrpcError, GrpcServer, SpawnedGrpcServer};
+use linera_rpc::simple_network::SharedStore;
 
 struct ServerContext {
     server_config: ValidatorServerConfig,
@@ -57,39 +60,17 @@ impl ServerContext {
         .allow_inactive_chains(false);
         (state, shard_id, shard.clone())
     }
-}
 
-#[async_trait]
-impl<S> Runnable<S> for ServerContext
-where
-    S: Store + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
-{
-    type Output = ();
-
-    async fn run(self, storage: S) -> Result<(), anyhow::Error> {
-        // Allow local IP address to be different from the public one.
-        let listen_address = "0.0.0.0";
-        // Run the server
-        let states = match self.shard {
-            Some(shard) => {
-                info!("Running shard number {}", shard);
-                vec![self.make_shard_state(listen_address, shard, storage)]
-            }
-            None => {
-                info!("Running all shards");
-                let num_shards = self.server_config.internal_network.shards.len();
-                (0..num_shards)
-                    .into_iter()
-                    .map(|shard| self.make_shard_state(listen_address, shard, storage.clone()))
-                    .collect()
-            }
-        };
-
-        let protocol = match self.server_config.internal_network.protocol {
-            NetworkProtocol::Simple(protocol) => protocol,
-            NetworkProtocol::Grpc() => todo!(),
-        };
+    async fn spawn_simple<S>(
+        &self,
+        listen_address: &str,
+        states: Vec<(WorkerState<S>, ShardId, ShardConfig)>,
+        protocol: TransportProtocol,
+    ) -> Result<(), anyhow::Error>
+    where
+        S: Store + Clone + Send + Sync + 'static,
+        ViewError: From<S::ContextError>
+    {
         let internal_network = self
             .server_config
             .internal_network
@@ -121,6 +102,81 @@ where
             });
         }
         join_all(handles).await;
+
+        Ok(())
+    }
+
+    async fn spawn_grpc<S>(
+        &self,
+        listen_address: &str,
+        states: Vec<(WorkerState<S>, ShardId, ShardConfig)>,
+    ) -> Result<(), anyhow::Error>
+        where
+            S: Store + Clone + Send + Sync + 'static,
+            ViewError: From<S::ContextError>
+    {
+        let mut handles = Vec::new();
+        for (state, shard_id, shard) in states {
+            let cross_chain_config = self.cross_chain_config.clone();
+            handles.push(async move {
+                let spawned_server = match GrpcServer::spawn(
+                    listen_address.to_string(),
+                    shard.port,
+                    state,
+                    shard_id,
+                    self.server_config.internal_network.clone(),
+                    cross_chain_config,
+                ).await {
+                    Ok(spawned_server) => spawned_server,
+                    Err(err) => {
+                        error!("Failed to start server: {:?}", err);
+                        return;
+                    }
+                };
+                if let Err(err) = spawned_server.join().await {
+                    error!("Server ended with an error: {}", err);
+                }
+            });
+        }
+        join_all(handles).await;
+
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl<S> Runnable<S> for ServerContext
+where
+    S: Store + Clone + Send + Sync + 'static,
+    ViewError: From<S::ContextError>,
+{
+    type Output = ();
+
+    async fn run(self, storage: S) -> Result<(), anyhow::Error> {
+        // Allow local IP address to be different from the public one.
+        let listen_address = "0.0.0.0";
+        // Run the server
+        let states = match self.shard {
+            Some(shard) => {
+                info!("Running shard number {}", shard);
+                vec![self.make_shard_state(listen_address, shard, storage)]
+            }
+            None => {
+                info!("Running all shards");
+                let num_shards = self.server_config.internal_network.shards.len();
+                (0..num_shards)
+                    .into_iter()
+                    .map(|shard| self.make_shard_state(listen_address, shard, storage.clone()))
+                    .collect()
+            }
+        };
+
+        match self.server_config.internal_network.protocol {
+            NetworkProtocol::Simple(protocol) => self.spawn_simple(listen_address, states, protocol).await?,
+            NetworkProtocol::Grpc() => self.spawn_grpc(listen_address, states).await?,
+        };
+
+
 
         Ok(())
     }
