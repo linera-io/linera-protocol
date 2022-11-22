@@ -1,9 +1,9 @@
 use anyhow::{Context, Error};
 use aws_sdk_s3::Endpoint;
 use aws_types::SdkConfig;
+use rand::{Rng, RngCore};
 use std::{collections::HashSet, env};
 use tokio::sync::{Mutex, MutexGuard};
-use rand::{Rng,RngCore};
 
 /// A static lock to prevent multiple tests from using the same LocalStack instance at the same
 /// time.
@@ -164,7 +164,11 @@ pub fn get_random_byte_vector<R: RngCore>(rng: &mut R, key_prefix: &[u8], n: usi
     v
 }
 
-pub fn get_random_key_value_vec_prefix<R: RngCore>(rng: &mut R, key_prefix: Vec<u8>, n: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
+pub fn get_random_key_value_vec_prefix<R: RngCore>(
+    rng: &mut R,
+    key_prefix: Vec<u8>,
+    n: usize,
+) -> Vec<(Vec<u8>, Vec<u8>)> {
     loop {
         let mut v_ret = Vec::new();
         let mut vector_set = HashSet::new();

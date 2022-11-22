@@ -8,12 +8,12 @@ use linera_views::{
     rocksdb::{RocksdbContainer, DB},
     test_utils::{get_random_key_value_vec_prefix, LocalStackTestContext},
 };
+use rand::SeedableRng;
 use std::{
     collections::{BTreeMap, HashMap},
     sync::Arc,
 };
 use tokio::sync::{Mutex, RwLock};
-use rand::SeedableRng;
 
 #[cfg(test)]
 async fn test_ordering_keys_key_value_vec<OP: KeyValueOperations>(

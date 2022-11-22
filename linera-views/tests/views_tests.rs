@@ -18,7 +18,7 @@ use linera_views::{
     test_utils::{get_random_key_value_vec, random_shuffle, LocalStackTestContext},
     views::{HashView, Hasher, HashingContext, View, ViewError},
 };
-use rand::{SeedableRng, Rng, RngCore};
+use rand::{Rng, RngCore, SeedableRng};
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     sync::Arc,
@@ -724,7 +724,10 @@ where
 }
 
 #[cfg(test)]
-async fn compute_hash_map_keyvaluestore_view_iter<R: RngCore>(rng: &mut R, l_kv: Vec<(Vec<u8>, Vec<u8>)>) {
+async fn compute_hash_map_keyvaluestore_view_iter<R: RngCore>(
+    rng: &mut R,
+    l_kv: Vec<(Vec<u8>, Vec<u8>)>,
+) {
     let mut l_answer = Vec::new();
     let n_iter = 4;
     for _ in 0..n_iter {
