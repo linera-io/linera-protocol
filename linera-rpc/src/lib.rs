@@ -4,9 +4,10 @@
 mod codec;
 pub mod config;
 mod conversions;
-mod grpc_network;
+pub mod grpc_network;
 mod rpc;
 pub mod simple_network;
 pub mod transport;
+pub mod pool;
 
 pub use rpc::Message;

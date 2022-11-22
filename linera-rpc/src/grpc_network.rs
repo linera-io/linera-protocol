@@ -53,9 +53,10 @@ use futures::{
 };
 use linera_base::messages::ChainId;
 use linera_core::worker::WorkerError;
-use tokio::task::JoinHandle;
+use tokio::task::{JoinError, JoinHandle};
 use tonic::transport::Channel;
 use linera_core::client::ValidatorNodeProvider;
+use crate::pool::ClientPool;
 
 pub mod grpc_network {
     tonic::include_proto!("rpc.v1");
@@ -76,16 +77,25 @@ pub struct SpawnedGrpcServer {
     handle: JoinHandle<Result<(), tonic::transport::Error>>,
 }
 
+impl SpawnedGrpcServer {
+    pub async fn join(self) -> Result<(), GrpcError> {
+        Ok(self.handle.await??)
+    }
+}
+
 #[derive(Error, Debug)]
 pub enum GrpcError {
-    #[error("failed to connect to address")]
+    #[error("failed to connect to address: {0}")]
     ConnectionFailed(#[from] tonic::transport::Error),
 
-    #[error("failed to convert to proto")]
+    #[error("failed to convert to proto: {0}")]
     ProtoConversion(#[from] ProtoConversionError),
 
-    #[error("failed to communicate cross-chain queries")]
+    #[error("failed to communicate cross-chain queries: {0}")]
     CrossChain(#[from] Status),
+
+    #[error("failed to execute task to completion: {0}")]
+    Join(#[from] JoinError),
 }
 
 impl<S: SharedStore> GrpcServer<S>
@@ -166,12 +176,15 @@ where
         mut receiver: mpsc::Receiver<(linera_core::messages::CrossChainRequest, ShardId)>,
     ) {
         let mut queries_sent = 0u64;
-        let mut pool = Pool::new();
+        let mut pool = ClientPool::new();
 
-        while let Some((message, shard_id)) = receiver.next().await {
+        while let Some((cross_chain_request, shard_id)) = receiver.next().await {
             let shard = network.shard(shard_id);
 
-            match pool.send_message(message, shard.address()).await {
+            let request = Request::new(cross_chain_request.try_into().expect("todo"));
+            let client = pool.client_for_address(shard.address()).await.expect("todo");
+
+            match client.handle_cross_chain_request(request).await {
                 Ok(_) => queries_sent += 1,
                 Err(error) => error!("[{}] cross chain query failed: {:?}", nickname, error),
             }
@@ -184,34 +197,6 @@ where
                 );
             }
         }
-    }
-}
-
-struct Pool(HashMap<String, ValidatorWorkerClient<Channel>>);
-
-impl Pool {
-    fn new() -> Self {
-        Self(HashMap::new())
-    }
-
-    async fn send_message(
-        &mut self,
-        cross_chain_request: linera_core::messages::CrossChainRequest,
-        remote_address: String,
-    ) -> Result<(), GrpcError> {
-        let mut client = match self.0.get_mut(&remote_address) {
-            None => {
-                let client = ValidatorWorkerClient::connect(remote_address.clone()).await?;
-                self.0.insert(remote_address.clone(), client);
-                self.0.get_mut(&remote_address).unwrap()
-            }
-            Some(client) => client,
-        };
-
-        let request = Request::new(cross_chain_request.try_into()?);
-        let _ = client.handle_cross_chain_request(request).await?;
-
-        Ok(())
     }
 }
 
