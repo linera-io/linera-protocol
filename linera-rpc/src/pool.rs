@@ -1,7 +1,7 @@
 use crate::grpc_network::{
     grpc_network::validator_worker_client::ValidatorWorkerClient, GrpcError,
 };
-use std::collections::{hash_map::Entry, HashMap};
+use std::collections::{HashMap};
 use tonic::transport::Channel;
 // use an off-the-shelf pool? http://carllerche.github.io/pool/pool/
 // todo: make generic over a trait Connect?

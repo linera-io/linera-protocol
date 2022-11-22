@@ -100,7 +100,7 @@ where
 {
     type Node = LocalValidatorClient<S>;
 
-    fn make_node(&self, address: &str) -> Result<Self::Node, NodeError> {
+    async fn make_node(&self, address: &str) -> Result<Self::Node, NodeError> {
         let name = ValidatorName::from_str(address).unwrap();
         let node = self
             .0

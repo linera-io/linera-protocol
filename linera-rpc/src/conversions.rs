@@ -1,6 +1,6 @@
 use ed25519::signature::Signature as edSignature;
 use thiserror::Error;
-use tonic::{Code, IntoRequest, Request, Status};
+use tonic::{Code, Status};
 
 use crate::grpc_network::grpc_network::{
     medium, ChainInfoResult, ConfirmUpdateRecipient, CrossChainRequest as CrossChainRequestRpc,
@@ -46,8 +46,8 @@ use linera_base::messages::BlockHeight;
 
 use crate::grpc_network::grpc_network::{cross_chain_request::Inner, Owner as OwnerRPC};
 use linera_base::messages::Owner;
-use linera_core::{node::NodeError, worker::WorkerError};
-use linera_execution::Response;
+use linera_core::{node::NodeError};
+
 
 #[derive(Error, Debug)]
 pub enum ProtoConversionError {
@@ -152,7 +152,7 @@ macro_rules! client_delegate {
             .expect("todo")
         {
             Inner::ChainInfoResponse(response) => Ok(response.try_into().expect("todo")),
-            Inner::Error(error) => todo!("need to add serialization logic back in"),
+            Inner::Error(_error) => todo!("need to add serialization logic back in"),
         }
     }};
 }

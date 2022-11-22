@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::transport::{ConnectionPool, TransportProtocol};
+use crate::transport::{TransportProtocol};
 use linera_base::messages::ChainId;
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;

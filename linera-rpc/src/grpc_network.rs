@@ -15,11 +15,9 @@ use linera_core::{
 use linera_views::views::ViewError;
 use log::{debug, error, info};
 use std::{
-    collections::HashMap,
-    net::{AddrParseError, IpAddr, SocketAddr},
+    net::{AddrParseError, SocketAddr},
     str::FromStr,
     sync::Arc,
-    time::Duration,
 };
 use thiserror::Error;
 use tokio::sync::Mutex;
@@ -32,28 +30,26 @@ use crate::{
         validator_node_server::{
             ValidatorNode as ValidatorNodeRpc, ValidatorNode, ValidatorNodeServer,
         },
-        validator_worker_server::{ValidatorWorker as ValidatorWorkerRpc, ValidatorWorkerServer},
+        validator_worker_server::{ValidatorWorker as ValidatorWorkerRpc},
         ChainInfoResult,
     },
     simple_network::SharedStore,
 };
 
 use crate::{
-    config::{ShardConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig},
+    config::{ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig},
     conversions::ProtoConversionError,
     grpc_network::grpc_network::{
         chain_info_result::Inner, validator_node_client::ValidatorNodeClient,
-        validator_worker_client::ValidatorWorkerClient,
     },
     pool::ClientPool,
-    transport::SpawnedServer,
 };
 use futures::{
     channel::{mpsc, oneshot::Sender},
     FutureExt, SinkExt, StreamExt,
 };
-use linera_base::messages::ChainId;
-use linera_core::{client::ValidatorNodeProvider, worker::WorkerError};
+
+use linera_core::{client::ValidatorNodeProvider};
 use tokio::task::{JoinError, JoinHandle};
 use tonic::transport::Channel;
 
