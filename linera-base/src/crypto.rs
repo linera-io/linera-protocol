@@ -272,7 +272,6 @@ impl TryFrom<&[u8]> for HashValue {
     }
 }
 
-
 /// Error when attempting to convert a string into a [`HashValue`].
 #[derive(Clone, Copy, Debug, Error)]
 pub enum HashFromStrError {

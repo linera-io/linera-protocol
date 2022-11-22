@@ -1,9 +1,15 @@
 use anyhow::Result;
 use async_trait::async_trait;
+use linera_base::messages::ChainId;
+use linera_chain::messages::{BlockAndRound, Value};
 use linera_rpc::{
-    config::{ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig},
+    config::{ShardConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig},
     grpc_network::{
-        grpc_network::{validator_worker_server::ValidatorWorker, ChainInfoResult},
+        grpc_network::{
+            validator_worker_client::ValidatorWorkerClient,
+            validator_worker_server::{ValidatorWorker, ValidatorWorkerServer},
+            ChainInfoResult,
+        },
         BlockProposal, Certificate, ChainInfoQuery, CrossChainRequest,
     },
     pool::ClientPool,
@@ -11,21 +17,23 @@ use linera_rpc::{
 use linera_service::config::{Import, ValidatorServerConfig};
 use std::{net::SocketAddr, path::PathBuf, str::FromStr};
 use structopt::StructOpt;
-use tonic::{transport::Server, Request, Response, Status};
-use tonic::transport::Channel;
-use linera_base::messages::ChainId;
-use linera_chain::messages::{BlockAndRound, Value};
-use linera_rpc::config::ShardConfig;
-use linera_rpc::grpc_network::grpc_network::validator_worker_client::ValidatorWorkerClient;
-use linera_rpc::grpc_network::grpc_network::validator_worker_server::ValidatorWorkerServer;
+use tonic::{
+    transport::{Channel, Server},
+    Request, Response, Status,
+};
 
 /// Boilerplate to extract the underlying chain id, use it to get the corresponding shard
 /// and forward the message.
 macro_rules! proxy {
     ($self:ident, $handler:ident, $req:ident) => {{
         let inner = $req.into_inner();
-        let shard = $self.shard_for(&inner).expect("todo: map to status");
-        let mut client = $self.client_for_shard(&shard).await.expect("todo: map to status");
+        let shard = $self
+            .shard_for(&inner)
+            .ok_or(Status::not_found("could not find shard for message"))?;
+        let mut client = $self
+            .client_for_shard(&shard)
+            .await
+            .map_err(|_| Status::internal("could not connect to shard"))?;
         client.$handler(inner).await
     }};
 }
@@ -79,11 +87,18 @@ impl GrpcProxy {
     }
 
     fn shard_for(&self, proxyable: &impl Proxyable) -> Option<ShardConfig> {
-        Some(self.internal_config.get_shard_for(proxyable.chain_id()?).clone())
+        Some(
+            self.internal_config
+                .get_shard_for(proxyable.chain_id()?)
+                .clone(),
+        )
     }
 
-    // todo: if we want to use a pool here we'll need to wrap it up in an Arc<Mutex>>
-    async fn client_for_shard(&self, shard: &ShardConfig) -> Result<ValidatorWorkerClient<Channel>> {
+    // todo: if we want to use a pool here we'll need to wrap it up in an Arc<Mutex>
+    async fn client_for_shard(
+        &self,
+        shard: &ShardConfig,
+    ) -> Result<ValidatorWorkerClient<Channel>> {
         let address = format!("{}:{}", shard.host, shard.port);
         let client = ValidatorWorkerClient::connect(address).await?;
         Ok(client)
@@ -131,7 +146,7 @@ impl Proxyable for BlockProposal {
     fn chain_id(&self) -> Option<ChainId> {
         match bcs::from_bytes::<BlockAndRound>(&self.content) {
             Ok(block_and_round) => Some(block_and_round.block.chain_id),
-            Err(_) => None
+            Err(_) => None,
         }
     }
 }
@@ -140,16 +155,20 @@ impl Proxyable for Certificate {
     fn chain_id(&self) -> Option<ChainId> {
         match bcs::from_bytes::<Value>(&self.value) {
             Ok(value) => Some(value.chain_id()),
-            Err(_) => None
+            Err(_) => None,
         }
     }
 }
 
 impl Proxyable for ChainInfoQuery {
     fn chain_id(&self) -> Option<ChainId> {
-        match self.chain_id.as_ref().map(|id| ChainId::try_from(id.clone()))? {
+        match self
+            .chain_id
+            .as_ref()
+            .map(|id| ChainId::try_from(id.clone()))?
+        {
             Ok(id) => Some(id),
-            Err(_) => None
+            Err(_) => None,
         }
     }
 }
@@ -158,7 +177,7 @@ impl Proxyable for CrossChainRequest {
     fn chain_id(&self) -> Option<ChainId> {
         match linera_core::messages::CrossChainRequest::try_from(self.clone()) {
             Ok(cross_chain_request) => Some(cross_chain_request.target_chain_id()),
-            Err(_) => None
+            Err(_) => None,
         }
     }
 }
@@ -172,10 +191,7 @@ async fn main() -> Result<()> {
     let options = GrpcProxyOptions::from_args();
     let config = ValidatorServerConfig::read(&options.config_path)?;
 
-    let handler = GrpcProxy::spawn(
-        config.validator.network,
-        config.internal_network,
-    );
+    let handler = GrpcProxy::spawn(config.validator.network, config.internal_network);
 
     if let Err(error) = handler.await {
         log::error!("Failed to run proxy: {error}");

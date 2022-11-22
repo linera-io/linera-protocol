@@ -16,12 +16,11 @@ use linera_views::views::ViewError;
 use log::{debug, error, info};
 use std::{
     collections::HashMap,
-    net::{IpAddr, SocketAddr},
+    net::{AddrParseError, IpAddr, SocketAddr},
     str::FromStr,
     sync::Arc,
     time::Duration,
 };
-use std::net::AddrParseError;
 use thiserror::Error;
 use tokio::sync::Mutex;
 use tonic::{transport::Server, Request, Response, Status};
@@ -46,6 +45,7 @@ use crate::{
         chain_info_result::Inner, validator_node_client::ValidatorNodeClient,
         validator_worker_client::ValidatorWorkerClient,
     },
+    pool::ClientPool,
     transport::SpawnedServer,
 };
 use futures::{
@@ -53,11 +53,9 @@ use futures::{
     FutureExt, SinkExt, StreamExt,
 };
 use linera_base::messages::ChainId;
-use linera_core::worker::WorkerError;
+use linera_core::{client::ValidatorNodeProvider, worker::WorkerError};
 use tokio::task::{JoinError, JoinHandle};
 use tonic::transport::Channel;
-use linera_core::client::ValidatorNodeProvider;
-use crate::pool::ClientPool;
 
 pub mod grpc_network {
     tonic::include_proto!("rpc.v1");
@@ -99,14 +97,13 @@ pub enum GrpcError {
     Join(#[from] JoinError),
 
     #[error("failed to parse socket address: {0}")]
-    SocketAddr(#[from] AddrParseError)
+    SocketAddr(#[from] AddrParseError),
 }
 
 impl<S: SharedStore> GrpcServer<S>
 where
     ViewError: From<S::ContextError>,
 {
-
     pub async fn spawn(
         host: String,
         port: u16,
@@ -186,7 +183,10 @@ where
             let shard = network.shard(shard_id);
 
             let request = Request::new(cross_chain_request.try_into().expect("todo"));
-            let client = pool.mut_client_for_address(shard.address()).await.expect("todo");
+            let client = pool
+                .mut_client_for_address(shard.address())
+                .await
+                .expect("todo");
 
             match client.handle_cross_chain_request(request).await {
                 Ok(_) => queries_sent += 1,

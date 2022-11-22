@@ -120,7 +120,10 @@ where
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let parts: Vec<&str> = s.split(':').collect();
-        anyhow::ensure!(parts.len() == 3, "Expecting format `(tcp|udp|grpc):host:port`");
+        anyhow::ensure!(
+            parts.len() == 3,
+            "Expecting format `(tcp|udp|grpc):host:port`"
+        );
         let protocol = parts[0].parse().map_err(|s| anyhow::anyhow!("{}", s))?;
         let host = parts[1].to_owned();
         let port = parts[2].parse()?;
