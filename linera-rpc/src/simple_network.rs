@@ -279,10 +279,11 @@ pub struct NodeProvider {
     pub recv_timeout: Duration,
 }
 
+#[async_trait]
 impl ValidatorNodeProvider for NodeProvider {
     type Node = Client;
 
-    fn make_node(&self, address: &str) -> Result<Self::Node, NodeError> {
+    async fn make_node(&self, address: &str) -> Result<Self::Node, NodeError> {
         let network = ValidatorPublicNetworkPreConfig::from_str(address).map_err(|_| {
             NodeError::CannotResolveValidatorAddress {
                 address: address.to_string(),

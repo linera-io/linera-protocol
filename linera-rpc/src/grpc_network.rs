@@ -353,17 +353,17 @@ impl linera_core::node::ValidatorNode for GrpcClient {
 
 pub struct GrpcNodeProvider {}
 
+#[async_trait]
 impl ValidatorNodeProvider for GrpcNodeProvider {
     type Node = GrpcClient;
 
-    fn make_node(&self, address: &str) -> anyhow::Result<Self::Node, NodeError> {
+    async fn make_node(&self, address: &str) -> anyhow::Result<Self::Node, NodeError> {
         let network = ValidatorPublicNetworkConfig::from_str(address).map_err(|_| {
             NodeError::CannotResolveValidatorAddress {
                 address: address.to_string(),
             }
         })?;
-        unimplemented!()
-        // Ok(GrpcClient::new(network))
+        Ok(GrpcClient::new(network).await.expect("todo"))
     }
 }
 

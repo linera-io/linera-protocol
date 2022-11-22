@@ -92,6 +92,7 @@ impl<S> LocalValidatorClient<S> {
 
 struct NodeProvider<S>(BTreeMap<ValidatorName, LocalValidatorClient<S>>);
 
+#[async_trait]
 impl<S> ValidatorNodeProvider for NodeProvider<S>
 where
     S: Store + Clone + Send + Sync + 'static,
