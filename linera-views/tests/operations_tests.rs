@@ -6,7 +6,7 @@ use linera_views::{
     dynamo_db::DynamoDbContainer,
     memory::MemoryContainer,
     rocksdb::{RocksdbContainer, DB},
-    test_utils::{get_random_vec_keyvalues_prefix, LocalStackTestContext},
+    test_utils::{get_random_key_value_vec_prefix, LocalStackTestContext},
 };
 use std::{
     collections::{BTreeMap, HashMap},
@@ -19,7 +19,7 @@ async fn test_ordering_keys<OP: KeyValueOperations>(key_value_operation: OP) {
     let n = 1000;
     // We need a nontrivial key_prefix because dynamo requires a non-trivial prefix
     let key_prefix = vec![0];
-    let l_kv = get_random_vec_keyvalues_prefix(key_prefix.clone(), n);
+    let l_kv = get_random_key_value_vec_prefix(key_prefix.clone(), n);
     let mut batch = Batch::default();
     for e_kv in l_kv {
         batch.put_key_value_bytes(e_kv.0, e_kv.1);

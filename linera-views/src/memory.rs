@@ -34,7 +34,7 @@ fn get_interval(key_prefix: Vec<u8>) -> (Bound<Vec<u8>>, Bound<Vec<u8>>) {
     let len = key_prefix.len();
     for i in (0..len).rev() {
         let val = key_prefix[i];
-        if val < 255 {
+        if val < u8::MAX {
             let mut upper_bound = key_prefix.clone();
             upper_bound[i] += 1;
             for x in &mut upper_bound[i + 1..] {
@@ -71,11 +71,11 @@ impl KeyValueOperations for MemoryContainer {
         key_prefix: &[u8],
     ) -> Result<Self::KeyIterator, MemoryContextError> {
         let map = self.read().await;
-        let mut vals = Vec::new();
+        let mut values = Vec::new();
         for (key, _value) in map.range(get_interval(key_prefix.to_vec())) {
-            vals.push(key.clone())
+            values.push(key.clone())
         }
-        Ok(SimpleKeyIterator::new(vals))
+        Ok(SimpleKeyIterator::new(values))
     }
 
     async fn write_batch(&self, batch: Batch) -> Result<(), MemoryContextError> {

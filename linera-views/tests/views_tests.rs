@@ -15,7 +15,7 @@ use linera_views::{
     register_view::{RegisterOperations, RegisterView},
     rocksdb::{RocksdbContext, DB},
     scoped_view::ScopedView,
-    test_utils::{get_random_vec_keyvalues, random_shuffle, LocalStackTestContext},
+    test_utils::{get_random_key_value_vec, random_shuffle, LocalStackTestContext},
     views::{HashView, Hasher, HashingContext, View, ViewError},
 };
 use rand::Rng;
@@ -743,7 +743,7 @@ async fn compute_hash_map_keyvaluestore_view_iter_large() {
     let n_iter = 4;
     let n = 1000;
     for _ in 0..n_iter {
-        let l_kv = get_random_vec_keyvalues(n);
+        let l_kv = get_random_key_value_vec(n);
         compute_hash_map_keyvaluestore_view_iter(l_kv).await;
     }
 }

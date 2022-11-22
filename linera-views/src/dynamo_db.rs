@@ -295,7 +295,7 @@ impl<E> DynamoDbContext<E>
 where
     E: Clone + Sync + Send,
 {
-    pub fn create_context(
+    fn create_context(
         db_tablestatus: (DynamoDbContainer, TableStatus),
         base_key: Vec<u8>,
         extra: E,
