@@ -31,8 +31,7 @@ use std::{
     str::FromStr,
 };
 use structopt::StructOpt;
-use linera_rpc::grpc_network::{GrpcError, GrpcServer, SpawnedGrpcServer};
-use linera_rpc::simple_network::SharedStore;
+use linera_rpc::grpc_network::GrpcServer;
 
 struct ServerContext {
     server_config: ValidatorServerConfig,
