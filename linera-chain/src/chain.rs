@@ -11,8 +11,9 @@ use linera_base::{
     messages::{ApplicationId, BlockHeight, ChainId, Destination, EffectId, Medium, Origin},
 };
 use linera_execution::{
-    system::SYSTEM, Effect, EffectContext, ExecutionResult, ExecutionRuntimeContext,
-    ExecutionStateView, ExecutionStateViewContext, OperationContext, RawExecutionResult,
+    system::{SystemEffect, SYSTEM},
+    Effect, EffectContext, ExecutionResult, ExecutionRuntimeContext, ExecutionStateView,
+    ExecutionStateViewContext, OperationContext, RawExecutionResult,
 };
 use linera_views::{
     collection_view::{CollectionOperations, CollectionView},
@@ -355,26 +356,20 @@ where
             }
             was_a_recipient = true;
             if app_id == SYSTEM {
+                // Handle special effects to be executed immediately.
                 let effect_id = EffectId {
                     chain_id: origin.chain_id,
                     height,
                     index,
                 };
-                // Handle special effects to be executed immediately.
-                if self
-                    .execution_state
-                    .system
-                    .apply_immediate_effect(chain_id, effect_id, &effect)
-                {
-                    // Recompute the state hash.
-                    let hash = self.execution_state.hash_value().await?;
-                    self.execution_state_hash.set(Some(hash));
-                    // Last, reset the consensus state based on the current ownership.
-                    self.manager
-                        .get_mut()
-                        .reset(self.execution_state.system.ownership.get());
-                }
+                self.execute_immediate_effect(effect_id, &effect, chain_id)
+                    .await?;
             }
+            let communication_state = self.communication_states.load_entry(application_id).await?;
+            let inbox = communication_state
+                .inboxes
+                .load_entry(origin.clone())
+                .await?;
             // Find if the message was executed ahead of time.
             match inbox.expected_events.front().await? {
                 Some(event) => {
@@ -407,6 +402,42 @@ where
             chain_id, origin, height
         );
         Ok(true)
+    }
+
+    async fn execute_immediate_effect(
+        &mut self,
+        effect_id: EffectId,
+        effect: &Effect,
+        chain_id: ChainId,
+    ) -> Result<(), ChainError> {
+        match &effect {
+            Effect::System(SystemEffect::OpenChain {
+                id,
+                owner,
+                epoch,
+                committees,
+                admin_id,
+            }) if id == &chain_id => {
+                self.execution_state.system.open_chain(
+                    effect_id,
+                    *id,
+                    *owner,
+                    *epoch,
+                    committees.clone(),
+                    *admin_id,
+                );
+                // Recompute the state hash.
+                let hash = self.execution_state.hash_value().await?;
+                self.execution_state_hash.set(Some(hash));
+                // Last, reset the consensus state based on the current ownership.
+                self.manager
+                    .get_mut()
+                    .reset(self.execution_state.system.ownership.get());
+            }
+            _ => {}
+        }
+
+        Ok(())
     }
 
     /// Verify that the incoming_messages are in the right order. This matters for inbox

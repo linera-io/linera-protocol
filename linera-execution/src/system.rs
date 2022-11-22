@@ -3,8 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    Bytecode, ChainOwnership, Effect, EffectContext, OperationContext, QueryContext,
-    RawExecutionResult,
+    Bytecode, ChainOwnership, EffectContext, OperationContext, QueryContext, RawExecutionResult,
 };
 use linera_base::{
     committee::Committee,
@@ -591,45 +590,34 @@ where
         }
     }
 
-    /// Execute certain effects immediately upon receiving a message.
-    pub fn apply_immediate_effect(
+    /// Initialize the system application state on a newly opened chain.
+    pub fn open_chain(
         &mut self,
-        this_chain_id: ChainId,
         effect_id: EffectId,
-        effect: &Effect,
-    ) -> bool {
-        // Chain creation effects are special and executed (only) in this callback.
-        // For simplicity, they will still appear in the received messages.
-        match &effect {
-            Effect::System(SystemEffect::OpenChain {
-                id,
-                owner,
-                epoch,
-                committees,
-                admin_id,
-            }) if id == &this_chain_id => {
-                // Guaranteed under BFT assumptions.
-                assert!(self.description.get().is_none());
-                assert!(!self.ownership.get().is_active());
-                assert!(self.committees.get().is_empty());
-                let description = ChainDescription::Child(effect_id);
-                assert_eq!(this_chain_id, description.into());
-                self.description.set(Some(description));
-                self.epoch.set(Some(*epoch));
-                self.committees.set(committees.clone());
-                self.admin_id.set(Some(*admin_id));
-                self.subscriptions.insert(
-                    ChannelId {
-                        chain_id: *admin_id,
-                        name: ADMIN_CHANNEL.into(),
-                    },
-                    (),
-                );
-                self.ownership.set(ChainOwnership::single(*owner));
-                true
-            }
-            _ => false,
-        }
+        chain_id: ChainId,
+        owner: Owner,
+        epoch: Epoch,
+        committees: BTreeMap<Epoch, Committee>,
+        admin_id: ChainId,
+    ) {
+        // Guaranteed under BFT assumptions.
+        assert!(self.description.get().is_none());
+        assert!(!self.ownership.get().is_active());
+        assert!(self.committees.get().is_empty());
+        let description = ChainDescription::Child(effect_id);
+        assert_eq!(chain_id, description.into());
+        self.description.set(Some(description));
+        self.epoch.set(Some(epoch));
+        self.committees.set(committees);
+        self.admin_id.set(Some(admin_id));
+        self.subscriptions.insert(
+            ChannelId {
+                chain_id: admin_id,
+                name: ADMIN_CHANNEL.into(),
+            },
+            (),
+        );
+        self.ownership.set(ChainOwnership::single(owner));
     }
 
     pub async fn query_application(
