@@ -15,7 +15,10 @@ use std::{
 use tokio::sync::{Mutex, RwLock};
 
 #[cfg(test)]
-async fn test_ordering_keys_key_value_vec<OP: KeyValueOperations>(key_value_operation: OP, key_value_vec: Vec<(Vec<u8>,Vec<u8>)>) {
+async fn test_ordering_keys_key_value_vec<OP: KeyValueOperations>(
+    key_value_operation: OP,
+    key_value_vec: Vec<(Vec<u8>, Vec<u8>)>,
+) {
     // We need a nontrivial key_prefix because dynamo requires a non-trivial prefix
     let key_prefix = vec![0];
     let mut batch = Batch::default();
@@ -36,7 +39,7 @@ async fn test_ordering_keys_key_value_vec<OP: KeyValueOperations>(key_value_oper
     }
     let mut map = HashMap::new();
     for key in &l_keys {
-        for u in 1..key.len()+1 {
+        for u in 1..key.len() + 1 {
             let key_prefix = key[0..u].to_vec();
             match map.get_mut(&key_prefix) {
                 Some(v) => {
@@ -103,6 +106,11 @@ async fn test_ordering_memory_specific() {
     let map = Arc::new(Mutex::new(BTreeMap::new()));
     let guard = map.clone().lock_owned().await;
     let key_value_operation: MemoryContainer = Arc::new(RwLock::new(guard));
-    let key_value_vec = vec![(vec![0,1,255], Vec::new()), (vec![0,1,255,37], Vec::new()), (vec![0,2], Vec::new()), (vec![0,2,0], Vec::new())];
+    let key_value_vec = vec![
+        (vec![0, 1, 255], Vec::new()),
+        (vec![0, 1, 255, 37], Vec::new()),
+        (vec![0, 2], Vec::new()),
+        (vec![0, 2, 0], Vec::new()),
+    ];
     test_ordering_keys_key_value_vec(key_value_operation, key_value_vec).await;
 }
