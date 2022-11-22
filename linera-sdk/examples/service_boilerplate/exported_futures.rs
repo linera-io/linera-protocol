@@ -7,7 +7,7 @@
 //! WASM module's respective endpoint. This module contains the code to forward the call to the
 //! service type that implements [`linera_sdk::Service`].
 
-use super::{super::ServiceState, service};
+use super::{super::ApplicationState, service};
 use linera_sdk::{ExportedFuture, Service};
 use wit_bindgen_guest_rust::Handle;
 
@@ -19,8 +19,8 @@ impl service::QueryApplication for QueryApplication {
     fn new(context: service::QueryContext, argument: Vec<u8>) -> Handle<Self> {
         Handle::new(QueryApplication {
             future: ExportedFuture::new(async move {
-                let service = ServiceState::load().await;
-                service
+                let application = ApplicationState::load().await;
+                application
                     .query_application(&context.into(), &argument)
                     .await
                     .map_err(|error| error.to_string())

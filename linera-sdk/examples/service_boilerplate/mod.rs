@@ -24,7 +24,7 @@ mod exported_futures;
 mod state_management;
 
 use self::exported_futures::QueryApplication;
-use super::ServiceState as Service;
+use super::ApplicationState as Service;
 
 /// Mark the service type to be exported.
 impl service::Service for Service {}

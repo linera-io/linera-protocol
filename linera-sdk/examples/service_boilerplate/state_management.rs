@@ -1,11 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{super::ServiceState, queryable_system as system};
+use super::{super::ApplicationState, queryable_system as system};
 use futures::future;
 use std::future::Future;
 
-impl ServiceState {
+impl ApplicationState {
     /// Load the service state, without locking it for writes.
     pub async fn load() -> Self {
         let future = system::Load::new();

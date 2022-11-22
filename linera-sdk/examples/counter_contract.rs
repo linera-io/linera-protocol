@@ -81,6 +81,6 @@ pub enum Error {
 }
 
 /// Alias to the contract type, so that the boilerplate module can reference it.
-type ContractState = Counter;
+type ApplicationState = Counter;
 
 mod contract_boilerplate;

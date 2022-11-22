@@ -111,7 +111,7 @@ pub trait Service<R: Runtime> {
         argument: &[u8],
     ) -> Result<service::QueryApplication, R::Error>;
 
-    /// Poll a user contract future that's handling a query.
+    /// Poll a user service future that's handling a query.
     fn query_application_poll(
         &self,
         store: &mut R::Store,
@@ -128,7 +128,7 @@ where
     /// module.
     pub(crate) context_forwarder: ContextForwarder,
 
-    /// The contract type.
+    /// The application type.
     pub(crate) application: R::Application,
 
     /// The application's memory state.
