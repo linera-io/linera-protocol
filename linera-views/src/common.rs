@@ -77,7 +77,7 @@ impl Batch {
 /// Low-level, asynchronous key-value operations. Useful for storage APIs not based on views.
 #[async_trait]
 pub trait KeyValueOperations {
-    type Error;
+    type Error: Debug;
     type KeyIterator: Iterator<Item = Result<Vec<u8>, Self::Error>>;
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;

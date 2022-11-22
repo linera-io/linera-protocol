@@ -1,7 +1,8 @@
 use anyhow::{Context, Error};
 use aws_sdk_s3::Endpoint;
 use aws_types::SdkConfig;
-use std::env;
+use rand::{Rng, RngCore};
+use std::{collections::HashSet, env};
 use tokio::sync::{Mutex, MutexGuard};
 
 /// A static lock to prevent multiple tests from using the same LocalStack instance at the same
@@ -138,4 +139,52 @@ pub async fn list_tables(client: &aws_sdk_dynamodb::Client) -> Result<Vec<String
         .await?
         .table_names
         .expect("List of tables was not returned"))
+}
+
+pub fn random_shuffle<R: RngCore, T: Clone>(rng: &mut R, values: &mut Vec<T>) {
+    let n = values.len();
+    for _ in 0..4 * n {
+        let index1: usize = rng.gen_range(0..n);
+        let index2: usize = rng.gen_range(0..n);
+        if index1 != index2 {
+            let val1 = values.get(index1).unwrap().clone();
+            let val2 = values.get(index2).unwrap().clone();
+            values[index1] = val2;
+            values[index2] = val1;
+        }
+    }
+}
+
+pub fn get_random_byte_vector<R: RngCore>(rng: &mut R, key_prefix: &[u8], n: usize) -> Vec<u8> {
+    let mut v = key_prefix.to_vec();
+    for _ in 0..n {
+        let val = rng.gen_range(0..256) as u8;
+        v.push(val);
+    }
+    v
+}
+
+pub fn get_random_key_value_vec_prefix<R: RngCore>(
+    rng: &mut R,
+    key_prefix: Vec<u8>,
+    n: usize,
+) -> Vec<(Vec<u8>, Vec<u8>)> {
+    loop {
+        let mut v_ret = Vec::new();
+        let mut vector_set = HashSet::new();
+        for _ in 0..n {
+            let v1 = get_random_byte_vector(rng, &key_prefix, 8);
+            let v2 = get_random_byte_vector(rng, &Vec::new(), 8);
+            let v12 = (v1.clone(), v2);
+            vector_set.insert(v1);
+            v_ret.push(v12);
+        }
+        if vector_set.len() == n {
+            return v_ret;
+        }
+    }
+}
+
+pub fn get_random_key_value_vec<R: RngCore>(rng: &mut R, n: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
+    get_random_key_value_vec_prefix(rng, Vec::new(), n)
 }

@@ -168,10 +168,7 @@ impl KeyValueOperations for DynamoDbContainer {
                 ":partition",
                 AttributeValue::B(Blob::new(DUMMY_PARTITION_KEY)),
             )
-            .expression_attribute_values(
-                ":prefix",
-                AttributeValue::B(Blob::new(key_prefix.to_vec())),
-            )
+            .expression_attribute_values(":prefix", AttributeValue::B(Blob::new(key_prefix)))
             .send()
             .await?;
         Ok(DynamoDbKeyIterator::new(response))
@@ -209,29 +206,21 @@ impl KeyValueOperations for DynamoDbContainer {
     }
 }
 
-impl<E> DynamoDbContext<E>
-where
-    E: Clone + Sync + Send,
-{
-    /// Create a new [`DynamoDbContext`] instance.
-    pub async fn new(
-        table: TableName,
-        base_key: Vec<u8>,
-        extra: E,
-    ) -> Result<(Self, TableStatus), CreateTableError> {
+impl DynamoDbContainer {
+    /// Create a new [`DynamoDbContainer`] instance.
+    pub async fn new(table: TableName) -> Result<(Self, TableStatus), CreateTableError> {
         let config = aws_config::load_from_env().await;
 
-        DynamoDbContext::from_config(&config, table, base_key, extra).await
+        DynamoDbContainer::from_config(&config, table).await
     }
     /// Create the storage table if it doesn't exist.
     ///
     /// Attempts to create the table and ignores errors that indicate that it already exists.
     async fn create_table_if_needed(&self) -> Result<TableStatus, CreateTableError> {
         let result = self
-            .db
             .client
             .create_table()
-            .table_name(self.db.table.as_ref())
+            .table_name(self.table.as_ref())
             .attribute_definitions(
                 AttributeDefinition::builder()
                     .attribute_name(PARTITION_ATTRIBUTE)
@@ -276,22 +265,67 @@ where
     pub async fn from_config(
         config: impl Into<Config>,
         table: TableName,
-        base_key: Vec<u8>,
-        extra: E,
     ) -> Result<(Self, TableStatus), CreateTableError> {
         let db = DynamoDbContainer {
             client: Client::from_conf(config.into()),
             table,
         };
+
+        let table_status = db.create_table_if_needed().await?;
+
+        Ok((db, table_status))
+    }
+
+    /// Create a new [`DynamoDbContext`] instance using a LocalStack endpoint.
+    ///
+    /// Requires a [`LOCALSTACK_ENDPOINT`] environment variable with the endpoint address to connect
+    /// to the LocalStack instance. Creates the table if it doesn't exist yet, reporting a
+    /// [`TableStatus`] to indicate if the table was created or if it already exists.
+    pub async fn with_localstack(table: TableName) -> Result<(Self, TableStatus), LocalStackError> {
+        let base_config = aws_config::load_from_env().await;
+        let config = aws_sdk_dynamodb::config::Builder::from(&base_config)
+            .endpoint_resolver(localstack::get_endpoint()?)
+            .build();
+
+        Ok(DynamoDbContainer::from_config(config, table).await?)
+    }
+}
+
+impl<E> DynamoDbContext<E>
+where
+    E: Clone + Sync + Send,
+{
+    fn create_context(
+        db_tablestatus: (DynamoDbContainer, TableStatus),
+        base_key: Vec<u8>,
+        extra: E,
+    ) -> (Self, TableStatus) {
         let storage = DynamoDbContext {
-            db,
+            db: db_tablestatus.0,
             base_key,
             extra,
         };
+        (storage, db_tablestatus.1)
+    }
 
-        let table_status = storage.create_table_if_needed().await?;
+    /// Create a new [`DynamoDbContext`] instance.
+    pub async fn new(
+        table: TableName,
+        base_key: Vec<u8>,
+        extra: E,
+    ) -> Result<(Self, TableStatus), CreateTableError> {
+        let db_tablestatus = DynamoDbContainer::new(table).await?;
+        Ok(Self::create_context(db_tablestatus, base_key, extra))
+    }
 
-        Ok((storage, table_status))
+    pub async fn from_config(
+        config: impl Into<Config>,
+        table: TableName,
+        base_key: Vec<u8>,
+        extra: E,
+    ) -> Result<(Self, TableStatus), CreateTableError> {
+        let db_tablestatus = DynamoDbContainer::from_config(config, table).await?;
+        Ok(Self::create_context(db_tablestatus, base_key, extra))
     }
 
     /// Create a new [`DynamoDbContext`] instance using a LocalStack endpoint.
@@ -304,12 +338,8 @@ where
         base_key: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), LocalStackError> {
-        let base_config = aws_config::load_from_env().await;
-        let config = aws_sdk_dynamodb::config::Builder::from(&base_config)
-            .endpoint_resolver(localstack::get_endpoint()?)
-            .build();
-
-        Ok(DynamoDbContext::from_config(config, table, base_key, extra).await?)
+        let db_tablestatus = DynamoDbContainer::with_localstack(table).await?;
+        Ok(Self::create_context(db_tablestatus, base_key, extra))
     }
 
     /// Clone this [`DynamoDbContext`] while entering a sub-scope.
