@@ -15,14 +15,12 @@ use std::{
 use tokio::sync::{Mutex, RwLock};
 
 #[cfg(test)]
-async fn test_ordering_keys<OP: KeyValueOperations>(key_value_operation: OP) {
-    let n = 1000;
+async fn test_ordering_keys_key_value_vec<OP: KeyValueOperations>(key_value_operation: OP, key_value_vec: Vec<(Vec<u8>,Vec<u8>)>) {
     // We need a nontrivial key_prefix because dynamo requires a non-trivial prefix
     let key_prefix = vec![0];
-    let l_kv = get_random_key_value_vec_prefix(key_prefix.clone(), n);
     let mut batch = Batch::default();
-    for e_kv in l_kv {
-        batch.put_key_value_bytes(e_kv.0, e_kv.1);
+    for key_value in key_value_vec {
+        batch.put_key_value_bytes(key_value.0, key_value.1);
     }
     key_value_operation.write_batch(batch).await.unwrap();
     let l_keys: Vec<Vec<u8>> = key_value_operation
@@ -31,14 +29,14 @@ async fn test_ordering_keys<OP: KeyValueOperations>(key_value_operation: OP) {
         .unwrap()
         .map(|x| x.expect("Failed to get vector").to_vec())
         .collect();
-    for i in 2..l_keys.len() {
+    for i in 1..l_keys.len() {
         let key1 = l_keys[i - 1].clone();
         let key2 = l_keys[i].clone();
         assert!(key1 < key2);
     }
     let mut map = HashMap::new();
     for key in &l_keys {
-        for u in 1..key.len() {
+        for u in 1..key.len()+1 {
             let key_prefix = key[0..u].to_vec();
             match map.get_mut(&key_prefix) {
                 Some(v) => {
@@ -58,6 +56,14 @@ async fn test_ordering_keys<OP: KeyValueOperations>(key_value_operation: OP) {
             .count();
         assert!(n_ent == value);
     }
+}
+
+#[cfg(test)]
+async fn test_ordering_keys<OP: KeyValueOperations>(key_value_operation: OP) {
+    let key_prefix = vec![0];
+    let n = 1000;
+    let key_value_vec = get_random_key_value_vec_prefix(key_prefix.clone(), n);
+    test_ordering_keys_key_value_vec(key_value_operation, key_value_vec).await;
 }
 
 #[tokio::test]
@@ -90,4 +96,13 @@ async fn test_ordering_dynamodb() {
     .unwrap();
     //
     test_ordering_keys(key_value_operation).await;
+}
+
+#[tokio::test]
+async fn test_ordering_memory_specific() {
+    let map = Arc::new(Mutex::new(BTreeMap::new()));
+    let guard = map.clone().lock_owned().await;
+    let key_value_operation: MemoryContainer = Arc::new(RwLock::new(guard));
+    let key_value_vec = vec![(vec![0,1,255], Vec::new()), (vec![0,1,255,37], Vec::new()), (vec![0,2], Vec::new()), (vec![0,2,0], Vec::new())];
+    test_ordering_keys_key_value_vec(key_value_operation, key_value_vec).await;
 }
