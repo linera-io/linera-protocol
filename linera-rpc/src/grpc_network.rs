@@ -21,6 +21,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
+use std::net::AddrParseError;
 use thiserror::Error;
 use tokio::sync::Mutex;
 use tonic::{transport::Server, Request, Response, Status};
@@ -96,6 +97,9 @@ pub enum GrpcError {
 
     #[error("failed to execute task to completion: {0}")]
     Join(#[from] JoinError),
+
+    #[error("failed to parse socket address: {0}")]
+    SocketAddr(#[from] AddrParseError)
 }
 
 impl<S: SharedStore> GrpcServer<S>
@@ -116,7 +120,7 @@ where
             host, port, shard_id
         );
 
-        let address = SocketAddr::new(IpAddr::from_str(host.as_str()).expect("todo"), port);
+        let address = SocketAddr::from_str(&format!("{}:{}", host, port))?;
 
         let (cross_chain_sender, cross_chain_receiver) =
             mpsc::channel(cross_chain_config.queue_size);
@@ -182,7 +186,7 @@ where
             let shard = network.shard(shard_id);
 
             let request = Request::new(cross_chain_request.try_into().expect("todo"));
-            let client = pool.client_for_address(shard.address()).await.expect("todo");
+            let client = pool.mut_client_for_address(shard.address()).await.expect("todo");
 
             match client.handle_cross_chain_request(request).await {
                 Ok(_) => queries_sent += 1,

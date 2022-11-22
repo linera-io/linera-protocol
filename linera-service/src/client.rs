@@ -83,7 +83,10 @@ impl ClientContext {
     fn make_validator_mass_clients(&self, max_in_flight: u64) -> Vec<simple_network::MassClient> {
         let mut validator_clients = Vec::new();
         for config in &self.genesis_config.committee.validators {
-            let NetworkProtocol::Simple(protocol) = config.network.protocol;
+            let protocol = match config.network.protocol {
+                NetworkProtocol::Simple(protocol) => protocol,
+                NetworkProtocol::Grpc() => todo!(),
+            };
             let network = config.network.clone_with_protocol(protocol);
             let client = simple_network::MassClient::new(
                 network,

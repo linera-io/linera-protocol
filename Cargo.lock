@@ -1811,6 +1811,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util 0.6.10",
+ "tonic",
 ]
 
 [[package]]

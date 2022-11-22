@@ -86,7 +86,10 @@ where
             }
         };
 
-        let NetworkProtocol::Simple(protocol) = self.server_config.internal_network.protocol;
+        let protocol = match self.server_config.internal_network.protocol {
+            NetworkProtocol::Simple(protocol) => protocol,
+            NetworkProtocol::Grpc() => todo!(),
+        };
         let internal_network = self
             .server_config
             .internal_network

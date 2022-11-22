@@ -53,8 +53,15 @@ impl MessageHandler for Proxy {
 impl Proxy {
     async fn run(self) -> Result<()> {
         let address = format!("0.0.0.0:{}", self.public_config.port);
-        let NetworkProtocol::Simple(protocol) = self.public_config.protocol;
-        protocol.spawn_server(&address, self).await?.join().await?;
+        match self.public_config.protocol {
+            NetworkProtocol::Simple(protocol) => {
+                protocol.spawn_server(&address, self).await?.join().await?;
+            }
+            NetworkProtocol::Grpc() => {
+                unimplemented!()
+            }
+        }
+
         Ok(())
     }
 
@@ -81,7 +88,11 @@ impl Proxy {
         protocol: NetworkProtocol,
     ) -> Result<Option<Message>> {
         let shard_address = format!("{}:{}", shard.host, shard.port);
-        let NetworkProtocol::Simple(protocol) = protocol;
+        let protocol = match protocol {
+            NetworkProtocol::Simple(protocol) => protocol,
+            NetworkProtocol::Grpc() => todo!(),
+        };
+
         let mut connection = protocol.connect(shard_address).await?;
         connection.send(message).await?;
 
@@ -94,6 +105,7 @@ async fn main() -> Result<()> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
         .format_timestamp_millis()
         .init();
+
     let options = ProxyOptions::from_args();
     let config = ValidatorServerConfig::read(&options.config_path)?;
 
