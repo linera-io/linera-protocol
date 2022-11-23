@@ -618,6 +618,33 @@ where
         Ok(effects)
     }
 
+    /// Register a new application in the chain state.
+    ///
+    /// Allows executing operations and effects for that application later.
+    pub fn register_application(&mut self, application: ApplicationDescription) -> ApplicationId {
+        self.known_applications
+            .register_existing_application(application)
+    }
+
+    /// Retrieve an application description.
+    ///
+    /// Retrieves the application description (with its bytecode location) from the internal map of
+    /// applications known by this chain.
+    pub async fn describe_application(
+        &mut self,
+        application_id: ApplicationId,
+    ) -> Result<ApplicationDescription, ChainError> {
+        if let ApplicationId::System = application_id {
+            Ok(ApplicationDescription::System)
+        } else {
+            let description = self
+                .known_applications
+                .describe_application(application_id)
+                .await?;
+            Ok(description)
+        }
+    }
+
     async fn process_execution_results(
         outboxes: &mut CollectionView<C, ChainId, OutboxStateView<C>>,
         channels: &mut CollectionView<C, String, ChannelStateView<C>>,
