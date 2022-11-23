@@ -572,6 +572,13 @@ SystemOperation:
               TYPENAME: Bytecode
           - service:
               TYPENAME: Bytecode
+    10:
+      CreateNewApplication:
+        STRUCT:
+          - bytecode:
+              TYPENAME: BytecodeId
+          - argument:
+              SEQ: U8
 UserData:
   NEWTYPESTRUCT:
     OPTION:

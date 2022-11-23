@@ -3,14 +3,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    Bytecode, ChainOwnership, EffectContext, ExecutionResult, OperationContext, QueryContext,
-    RawExecutionResult,
+    Bytecode, ChainOwnership, EffectContext, ExecutionResult, NewApplication, OperationContext,
+    QueryContext, RawExecutionResult,
 };
 use linera_base::{
     committee::Committee,
     ensure,
     messages::{
-        ArithmeticError, ChainDescription, ChainId, ChannelId, Destination, EffectId, Epoch, Owner,
+        ApplicationId, ArithmeticError, BytecodeId, ChainDescription, ChainId, ChannelId,
+        Destination, EffectId, Epoch, Owner,
     },
 };
 use linera_views::{
@@ -108,6 +109,11 @@ pub enum SystemOperation {
     PublishBytecode {
         contract: Bytecode,
         service: Bytecode,
+    },
+    /// Create a new application.
+    CreateNewApplication {
+        bytecode: BytecodeId,
+        argument: Vec<u8>,
     },
 }
 
@@ -469,6 +475,15 @@ where
                     Destination::Subscribers(PUBLISHED_BYTECODES_CHANNEL.into()),
                     SystemEffect::BytecodePublished,
                 )];
+            }
+            CreateNewApplication { bytecode, argument } => {
+                new_application = Some(NewApplication {
+                    id: ApplicationId::User {
+                        bytecode: *bytecode,
+                        creation: (*context).into(),
+                    },
+                    initialization_argument: argument.clone(),
+                });
             }
         }
 
