@@ -176,29 +176,46 @@ impl KeyValueOperations for DynamoDbContainer {
 
     /// We put submit the transaction in blocks of at most 25 so as to decrease the
     /// number of needed transactions.
-    async fn write_batch(&self, batch: Batch) -> Result<(), DynamoDbContextError> {
-        for batch_chunk in batch.simplify().operations.chunks(25) {
+    async fn write_batch(&self, mut batch: Batch) -> Result<(), DynamoDbContextError> {
+        let delete_list = Vec::new();
+        let insert_list = Vec::new();
+        for op in batch.simplify().operations {
+            match op {
+                WriteOperation::Delete { key } => { delete_list.push(key); },
+                WriteOperation::Put { key, value } => { insert_list.push((key,value)); },
+                WriteOperation::DeletePrefix { key_prefix } => {
+                    for key in self.find_keys_with_prefix(&key_prefix).await? {
+                        delete_list.push(key?);
+                    }
+                },
+            };
+        }
+        for batch_chunk in delete_list.chunks(25) {
             let requests = batch_chunk
                 .iter()
-                .map(|operation| match operation {
-                    WriteOperation::Delete { key } => {
-                        let request = DeleteRequest::builder()
-                            .set_key(Some(Self::build_key(key.to_vec())))
-                            .build();
-                        WriteRequest::builder().delete_request(request).build()
-                    }
-                    WriteOperation::Put { key, value } => {
-                        let request = PutRequest::builder()
-                            .set_item(Some(Self::build_key_value(key.to_vec(), value.to_vec())))
-                            .build();
-                        WriteRequest::builder().put_request(request).build()
-                    }
-                    WriteOperation::DeletePrefix { key_prefix } => {
-                        
-                    }
+                .map(|key| {
+                    let request = DeleteRequest::builder()
+                        .set_key(Some(Self::build_key(key.to_vec())))
+                        .build();
+                    WriteRequest::builder().delete_request(request).build()
                 })
                 .collect();
-
+            self.client
+                .batch_write_item()
+                .set_request_items(Some(HashMap::from([(self.table.0.clone(), requests)])))
+                .send()
+                .await?;
+        }
+        for batch_chunk in insert_list.chunks(25) {
+            let requests = batch_chunk
+                .iter()
+                .map(|(key,value)| {
+                    let request = PutRequest::builder()
+                        .set_item(Some(Self::build_key_value(key.to_vec(), value.to_vec())))
+                        .build();
+                    WriteRequest::builder().put_request(request).build()
+                })
+                .collect();
             self.client
                 .batch_write_item()
                 .set_request_items(Some(HashMap::from([(self.table.0.clone(), requests)])))

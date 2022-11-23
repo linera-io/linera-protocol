@@ -48,7 +48,7 @@ impl KeyValueOperations for RocksdbContainer {
         Ok(SimpleKeyIterator::new(keys))
     }
 
-    async fn write_batch(&self, batch: Batch) -> Result<(), RocksdbContextError> {
+    async fn write_batch(&self, mut batch: Batch) -> Result<(), RocksdbContextError> {
         let db = self.clone();
         tokio::task::spawn_blocking(move || -> Result<(), RocksdbContextError> {
             let mut inner_batch = rocksdb::WriteBatchWithTransaction::default();

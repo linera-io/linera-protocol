@@ -54,7 +54,7 @@ impl KeyValueOperations for MemoryContainer {
         Ok(SimpleKeyIterator::new(values))
     }
 
-    async fn write_batch(&self, batch: Batch) -> Result<(), MemoryContextError> {
+    async fn write_batch(&self, mut batch: Batch) -> Result<(), MemoryContextError> {
         let mut map = self.write().await;
         for ent in batch.operations {
             match ent {

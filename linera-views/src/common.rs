@@ -144,7 +144,7 @@ pub trait KeyValueOperations {
         key_prefix: &[u8],
     ) -> Result<Self::KeyIterator, Self::Error>;
 
-    async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error>;
+    async fn write_batch(&self, mut batch: Batch) -> Result<(), Self::Error>;
 
     async fn read_key<V: DeserializeOwned>(&self, key: &[u8]) -> Result<Option<V>, Self::Error>
     where
