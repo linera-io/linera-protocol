@@ -30,7 +30,7 @@ pub enum ApplicationId {
 pub struct BytecodeId(pub EffectId);
 
 /// A reference to where the application bytecode is stored.
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct BytecodeLocation {
     /// The certificate that published the bytecode.
     pub certificate_hash: HashValue,
