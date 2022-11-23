@@ -9,6 +9,21 @@ Address:
           TYPENAME: ChainId
 Amount:
   NEWTYPESTRUCT: U64
+ApplicationDescription:
+  ENUM:
+    0:
+      System: UNIT
+    1:
+      User:
+        STRUCT:
+          - bytecode_id:
+              TYPENAME: BytecodeId
+          - bytecode:
+              TYPENAME: BytecodeLocation
+          - creation:
+              TYPENAME: EffectId
+          - initialization_argument:
+              SEQ: U8
 ApplicationId:
   ENUM:
     0:
@@ -69,6 +84,11 @@ Bytecode:
 BytecodeId:
   NEWTYPESTRUCT:
     TYPENAME: EffectId
+BytecodeLocation:
+  STRUCT:
+    - certificate_hash:
+        TYPENAME: HashValue
+    - operation_index: U64
 Certificate:
   STRUCT:
     - value:
@@ -183,8 +203,8 @@ CrossChainRequest:
     0:
       UpdateRecipient:
         STRUCT:
-          - application_id:
-              TYPENAME: ApplicationId
+          - application:
+              TYPENAME: ApplicationDescription
           - origin:
               TYPENAME: Origin
           - recipient:

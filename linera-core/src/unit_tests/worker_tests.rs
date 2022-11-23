@@ -1627,7 +1627,7 @@ where
     .await;
     worker
         .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
-            application_id: ApplicationId::System,
+            application: ApplicationDescription::System,
             origin: Origin::chain(ChainId::root(1)),
             recipient: ChainId::root(2),
             certificates: vec![certificate],
@@ -1716,7 +1716,7 @@ where
     .await;
     assert!(worker
         .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
-            application_id: ApplicationId::System,
+            application: ApplicationDescription::System,
             origin: Origin::chain(ChainId::root(1)),
             recipient: ChainId::root(2),
             certificates: vec![certificate],
@@ -1786,7 +1786,7 @@ async fn run_test_handle_cross_chain_request_no_recipient_chain_with_inactive_ch
     assert!(matches!(
         worker
             .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
-                application_id: ApplicationId::System,
+                application: ApplicationDescription::System,
                 origin: Origin::chain(ChainId::root(1)),
                 recipient: ChainId::root(2),
                 certificates: vec![certificate],

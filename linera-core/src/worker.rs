@@ -7,7 +7,9 @@ use async_trait::async_trait;
 use linera_base::{
     crypto::{HashValue, KeyPair},
     ensure,
-    messages::{ApplicationId, ArithmeticError, BlockHeight, ChainId, Epoch, Medium, Origin},
+    messages::{
+        ApplicationDescription, ArithmeticError, BlockHeight, ChainId, Epoch, Medium, Origin,
+    },
 };
 use linera_chain::{
     messages::{Block, BlockProposal, Certificate, MessageGroup, Value},
@@ -180,7 +182,7 @@ where
     async fn make_cross_chain_request(
         &mut self,
         confirmed_log: &mut LogView<Client::Context, HashValue>,
-        application_id: ApplicationId,
+        application: ApplicationDescription,
         origin: Origin,
         recipient: ChainId,
         heights: &[BlockHeight],
@@ -193,7 +195,7 @@ where
         }
         let certificates = self.storage.read_certificates(keys).await?;
         Ok(CrossChainRequest::UpdateRecipient {
-            application_id,
+            application,
             origin,
             recipient,
             certificates,
@@ -208,6 +210,7 @@ where
         let mut continuation = Vec::new();
         let chain_id = chain.chain_id();
         for application_id in chain.communication_states.indices().await? {
+            let application = chain.describe_application(application_id).await?;
             let state = chain
                 .communication_states
                 .load_entry(application_id)
@@ -222,7 +225,7 @@ where
                 let request = self
                     .make_cross_chain_request(
                         &mut chain.confirmed_log,
-                        application_id,
+                        application.clone(),
                         origin,
                         recipient,
                         &heights,
@@ -242,7 +245,7 @@ where
                     let request = self
                         .make_cross_chain_request(
                             &mut chain.confirmed_log,
-                            application_id,
+                            application.clone(),
                             origin,
                             recipient,
                             &heights,
@@ -576,7 +579,7 @@ where
         log::trace!("{} <-- {:?}", self.nickname, request);
         match request {
             CrossChainRequest::UpdateRecipient {
-                application_id,
+                application,
                 origin,
                 recipient,
                 certificates,
@@ -585,6 +588,7 @@ where
                 let mut last_height = None;
                 let mut last_epoch = None;
                 let mut need_update = false;
+                let application_id = chain.register_application(application);
                 for certificate in certificates {
                     // Start by checking a few invariants. Note that we still crucially
                     // trust the worker of the sending chain to have verified and executed

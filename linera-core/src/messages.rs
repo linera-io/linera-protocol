@@ -7,7 +7,8 @@ use linera_base::{
     committee::Committee,
     crypto::{BcsSignable, HashValue, KeyPair, Signature},
     messages::{
-        ApplicationId, BlockHeight, ChainDescription, ChainId, Epoch, Origin, ValidatorName,
+        ApplicationDescription, ApplicationId, BlockHeight, ChainDescription, ChainId, Epoch,
+        Origin, ValidatorName,
     },
 };
 use linera_chain::{
@@ -136,7 +137,7 @@ pub enum CrossChainRequest {
     /// Communicate a number of confirmed blocks from the sender to the recipient.
     /// Blocks must be given by increasing heights.
     UpdateRecipient {
-        application_id: ApplicationId,
+        application: ApplicationDescription,
         origin: Origin,
         recipient: ChainId,
         certificates: Vec<Certificate>,

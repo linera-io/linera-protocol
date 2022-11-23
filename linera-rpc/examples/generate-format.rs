@@ -30,6 +30,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<messages::Destination>(&samples)?;
     tracer.trace_type::<messages::ChainDescription>(&samples)?;
     tracer.trace_type::<messages::ApplicationId>(&samples)?;
+    tracer.trace_type::<messages::ApplicationDescription>(&samples)?;
     tracer.trace_type::<ChainManager>(&samples)?;
     tracer.trace_type::<CrossChainRequest>(&samples)?;
     tracer.trace_type::<NodeError>(&samples)?;
