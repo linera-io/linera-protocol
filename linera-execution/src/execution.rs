@@ -144,7 +144,7 @@ where
             match operation {
                 Operation::System(op) => {
                     let result = self.system.execute_operation(context, op).await?;
-                    Ok(vec![ExecutionResult::System(result)])
+                    Ok(vec![result])
                 }
                 _ => Err(ExecutionError::InvalidOperation),
             }
