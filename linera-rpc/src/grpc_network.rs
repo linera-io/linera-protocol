@@ -1,8 +1,7 @@
 pub use crate::{
     config::{CrossChainConfig, ShardId},
     grpc_network::grpc_network::{
-        bcs_service_server::BcsService, BcsMessage, BlockProposal, Certificate, ChainInfoQuery,
-        ChainInfoResponse, CrossChainRequest,
+        BlockProposal, Certificate, ChainInfoQuery, ChainInfoResponse, CrossChainRequest,
     },
     transport::MessageHandler,
     Message,
@@ -24,13 +23,18 @@ use tokio::sync::Mutex;
 use tonic::{transport::Server, Request, Response, Status};
 
 // to avoid confusion with existing ValidatorNode
-use crate::{client_delegate, convert_and_delegate, grpc_network::grpc_network::{
-    validator_node_server::{
-        ValidatorNode as ValidatorNodeRpc, ValidatorNode, ValidatorNodeServer,
+use crate::{
+    client_delegate, convert_and_delegate,
+    grpc_network::grpc_network::{
+        validator_node_server::{
+            ValidatorNode as ValidatorNodeRpc, ValidatorNode, ValidatorNodeServer,
+        },
+        validator_worker_server::ValidatorWorker as ValidatorWorkerRpc,
+        ChainInfoResult,
     },
-    validator_worker_server::ValidatorWorker as ValidatorWorkerRpc,
-    ChainInfoResult,
-}, mass_client_delegate, simple_network::SharedStore};
+    mass_client_delegate,
+    simple_network::SharedStore,
+};
 
 use crate::{
     config::{ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig},
@@ -45,11 +49,13 @@ use futures::{
     FutureExt, SinkExt, StreamExt,
 };
 
-use crate::mass::{MassClient, MassClientError};
+use crate::{
+    grpc_network::grpc_network::validator_worker_server::ValidatorWorkerServer,
+    mass::{MassClient, MassClientError},
+};
 use linera_core::client::ValidatorNodeProvider;
 use tokio::task::{JoinError, JoinHandle};
 use tonic::transport::Channel;
-use crate::grpc_network::grpc_network::validator_worker_server::ValidatorWorkerServer;
 
 pub mod grpc_network {
     tonic::include_proto!("rpc.v1");
@@ -292,7 +298,7 @@ where
     async fn handle_cross_chain_request(
         &self,
         request: Request<CrossChainRequest>,
-    ) -> Result<Response<CrossChainRequest>, Status> {
+    ) -> Result<Response<()>, Status> {
         match self
             .state
             .clone()
@@ -308,9 +314,7 @@ where
                 );
             }
         }
-        unimplemented!(
-            "what do we do here since original method does not return anything to the user"
-        )
+        Ok(Response::new(()))
     }
 }
 
@@ -392,52 +396,5 @@ impl MassClient for GrpcMassClient {
             }
         }
         Ok(responses)
-    }
-}
-
-// ------
-
-#[derive(Debug, Default)]
-pub struct GenericBcsService<S> {
-    state: Arc<Mutex<S>>,
-}
-
-impl<S> From<S> for GenericBcsService<S> {
-    fn from(s: S) -> Self {
-        GenericBcsService {
-            state: Arc::new(Mutex::new(s)),
-        }
-    }
-}
-
-#[tonic::async_trait]
-impl<S> BcsService for GenericBcsService<S>
-where
-    S: MessageHandler + Send + Sync + 'static,
-{
-    async fn handle(&self, request: Request<BcsMessage>) -> Result<Response<BcsMessage>, Status> {
-        let message: Message = bcs::from_bytes(&request.get_ref().inner).unwrap();
-
-        let mut state = self
-            .state
-            .try_lock()
-            .map_err(|_| Status::internal("service lock poisoned"))?;
-
-        let response: Option<Message> = state.handle_message(message).await;
-
-        let response_bytes = match response {
-            Some(response) => bcs::to_bytes(&response),
-            None => bcs::to_bytes::<Vec<()>>(&vec![]), // todo(security): do we want the error msg showing the serialization internals?
-        }
-        .map_err(|e| {
-            Status::data_loss(format!(
-                "there was an error while serializing the response: {:?}",
-                e
-            ))
-        })?;
-
-        Ok(Response::new(BcsMessage {
-            inner: response_bytes,
-        }))
     }
 }

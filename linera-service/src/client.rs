@@ -26,7 +26,12 @@ use linera_execution::{
     system::{Address, Amount, Balance, SystemOperation, UserData},
     Operation,
 };
-use linera_rpc::{config::NetworkProtocol, mass::MassClient, simple_network, Message};
+use linera_rpc::{
+    config::NetworkProtocol,
+    grpc_network::{GrpcMassClient, GrpcNodeProvider},
+    mass::MassClient,
+    simple_network, Message,
+};
 use linera_service::{
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain, WalletState},
     storage::{Runnable, StorageConfig},
@@ -40,7 +45,6 @@ use std::{
     time::{Duration, Instant},
 };
 use structopt::StructOpt;
-use linera_rpc::grpc_network::{GrpcMassClient, GrpcNodeProvider};
 
 struct ClientContext {
     genesis_config: GenesisConfig,
@@ -93,10 +97,8 @@ impl ClientContext {
                         self.recv_timeout,
                         max_in_flight,
                     ))
-                },
-                NetworkProtocol::Grpc() => {
-                    Box::new(GrpcMassClient::new(config.network.clone()))
-                },
+                }
+                NetworkProtocol::Grpc() => Box::new(GrpcMassClient::new(config.network.clone())),
             };
 
             validator_clients.push(client);

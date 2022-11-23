@@ -3,7 +3,7 @@ use thiserror::Error;
 use tonic::{Code, Status};
 
 use crate::grpc_network::grpc_network::{
-    medium, ChainInfoResult, ConfirmUpdateRecipient, CrossChainRequest as CrossChainRequestRpc,
+    ChainInfoResult, ConfirmUpdateRecipient, CrossChainRequest as CrossChainRequestRpc,
     NameSignaturePair, UpdateRecipient,
 };
 use linera_core::messages::CrossChainRequest;
@@ -145,13 +145,28 @@ macro_rules! client_delegate {
             .0
             .$handler(request)
             .await
-            .expect("todo")
+            .map_err(|s| NodeError::GrpcError {
+                error: format!(
+                    "remote request [{}] failed with status: {:?}",
+                    stringify!($handler),
+                    s
+                ),
+            })?
             .into_inner()
             .inner
-            .expect("todo")
-        {
-            Inner::ChainInfoResponse(response) => Ok(response.try_into().expect("todo")),
-            Inner::Error(error) => Err(bcs::from_bytes(&error).expect("todo")),
+            .ok_or(NodeError::GrpcError {
+                error: "missing body from response".to_string(),
+            })? {
+            Inner::ChainInfoResponse(response) => {
+                Ok(response.try_into().map_err(|_| NodeError::GrpcError {
+                    error: "failed to marshal response".to_string(),
+                })?)
+            }
+            Inner::Error(error) => {
+                Err(bcs::from_bytes(&error).map_err(|_| NodeError::GrpcError {
+                    error: "failed to marshal error message".to_string(),
+                })?)
+            }
         }
     }};
 }
@@ -159,9 +174,7 @@ macro_rules! client_delegate {
 #[macro_export]
 macro_rules! mass_client_delegate {
     ($client:ident, $handler:ident, $msg:ident, $responses: ident) => {{
-        let response = $client
-            .$handler(Request::new((*$msg).try_into()?))
-            .await?;
+        let response = $client.$handler(Request::new((*$msg).try_into()?)).await?;
         match response
             .into_inner()
             .inner
@@ -173,7 +186,10 @@ macro_rules! mass_client_delegate {
                 )));
             }
             Inner::Error(error) => {
-                error!("Received error response: {:?}", bcs::from_bytes::<NodeError>(&error).expect("todo"))
+                error!(
+                    "Received error response: {:?}",
+                    bcs::from_bytes::<NodeError>(&error).expect("todo")
+                )
             }
         }
     }};
@@ -202,7 +218,6 @@ impl TryFrom<ChainInfoResponse> for ChainInfoResult {
 impl From<NodeError> for ChainInfoResult {
     fn from(node_error: NodeError) -> Self {
         ChainInfoResult {
-
             inner: Some(
                 crate::grpc_network::grpc_network::chain_info_result::Inner::Error(
                     bcs::to_bytes(&node_error).expect("todo"),
@@ -392,22 +407,20 @@ impl From<Medium> for MediumRpc {
     fn from(medium: Medium) -> Self {
         match medium {
             Medium::Direct => MediumRpc {
-                inner: Some(medium::Inner::Direct(false)),
+                channel: None
             },
             Medium::Channel(channel) => MediumRpc {
-                inner: Some(medium::Inner::Channel(channel)),
+                channel: Some(channel),
             },
         }
     }
 }
 
-impl TryFrom<MediumRpc> for Medium {
-    type Error = ProtoConversionError;
-
-    fn try_from(medium: MediumRpc) -> Result<Self, Self::Error> {
-        match medium.inner.ok_or(ProtoConversionError::MissingField)? {
-            medium::Inner::Direct(_) => Ok(Medium::Direct),
-            medium::Inner::Channel(channel) => Ok(Medium::Channel(channel)),
+impl From<MediumRpc> for Medium {
+    fn from(medium: MediumRpc) -> Self {
+        match medium.channel {
+            None => Medium::Direct,
+            Some(medium) => Medium::Channel(medium)
         }
     }
 }

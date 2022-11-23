@@ -157,7 +157,6 @@ impl<P> ValidatorInternalNetworkPreConfig<P> {
         (s.finish() as ShardId) % self.shards.len()
     }
 
-    // why are we taking ownershup of ShardId?
     pub fn shard(&self, shard_id: ShardId) -> &ShardConfig {
         &self.shards[shard_id]
     }

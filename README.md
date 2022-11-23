@@ -119,7 +119,7 @@ NAME6=$(./server generate --validators \
 # Start the corresponding services
 for I in 6 5
 do
-    ./proxy server_"$I".json || exit 1 &
+    ./grpc-proxy server_"$I".json || exit 1 &
 
     # hack!
     PID5="$!"
@@ -132,13 +132,13 @@ done
 
 sleep 1
 
-${CLIENT[@]} set_validator --name "$NAME5" --address http://127.0.0.1:9500 --votes 100
+${CLIENT[@]} set_validator --name "$NAME5" --address grpc:127.0.0.1:9500 --votes 100
 
 ${CLIENT[@]} query_balance "$CHAIN1"
 ${CLIENT[@]} query_validators
 ${CLIENT[@]} query_validators "$CHAIN1"
 
-${CLIENT[@]} set_validator --name "$NAME6" --address http://127.0.0.1:9600 --votes 1
+${CLIENT[@]} set_validator --name "$NAME6" --address grpc:127.0.0.1:9600 --votes 1
 sleep 2
 
 ${CLIENT[@]} remove_validator --name "$NAME5"

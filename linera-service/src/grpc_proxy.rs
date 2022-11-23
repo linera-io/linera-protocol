@@ -131,7 +131,7 @@ impl ValidatorWorker for GrpcProxy {
     async fn handle_cross_chain_request(
         &self,
         request: Request<CrossChainRequest>,
-    ) -> Result<Response<CrossChainRequest>, Status> {
+    ) -> Result<Response<()>, Status> {
         proxy!(self, handle_cross_chain_request, request)
     }
 }

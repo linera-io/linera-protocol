@@ -3,17 +3,7 @@
 syntax = "proto3";
 package rpc.v1;
 
-// TODO REMOVE ======================
-
-service BcsService {
-  rpc Handle (BcsMessage) returns (BcsMessage);
-}
-
-message BcsMessage {
-  bytes inner = 1;
-}
-
-// ==================================
+import "google/protobuf/empty.proto";
 
 // Interface provided by each physical shard (aka "worker") of a validator or a local node.
 // * All commands return either the current chain info or an error.
@@ -31,7 +21,7 @@ service ValidatorWorker {
   rpc handle_chain_info_query(ChainInfoQuery) returns (ChainInfoResult);
 
   // Handle a (trusted!) cross-chain request.
-  rpc handle_cross_chain_request(CrossChainRequest) returns (CrossChainRequest);
+  rpc handle_cross_chain_request(CrossChainRequest) returns (google.protobuf.Empty);
 }
 
 // How to communicate with a validator or a local node.
@@ -112,14 +102,7 @@ message Origin {
 
 // The origin of a message coming from a particular chain. Used to identify each inbox.
 message Medium {
-  // todo change to optional instead of enum
-  oneof inner {
-    // The message is a direct message (noe the value is not used)
-    bool direct = 1;
-
-    // The message is a channel broadcast
-    string channel = 2;
-  }
+  optional string channel = 1;
 }
 
 // An authenticated proposal for a new block.
