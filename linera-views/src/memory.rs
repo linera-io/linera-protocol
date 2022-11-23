@@ -1,17 +1,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    common::{Batch, ContextFromDb, KeyValueOperations, SimpleKeyIterator, WriteOperation},
+    common::{get_interval, Batch, ContextFromDb, KeyValueOperations, SimpleKeyIterator, WriteOperation},
     views::ViewError,
 };
 use async_trait::async_trait;
 use std::{
     collections::BTreeMap,
     fmt::Debug,
-    ops::{
-        Bound,
-        Bound::{Excluded, Included, Unbounded},
-    },
     sync::Arc,
 };
 use thiserror::Error;
@@ -25,25 +21,6 @@ pub type MemoryContainer = Arc<RwLock<OwnedMutexGuard<MemoryStoreMap>>>;
 
 /// A context that stores all values in memory.
 pub type MemoryContext<E> = ContextFromDb<E, MemoryContainer>;
-
-/// When wanting to find the entries in a BTreeMap with a specific prefix,
-/// one option is to iterate over all keys. Another is to select an interval
-/// that represents exactly the keys having that prefix. Which fortunately
-/// is possible with the way the comparison operators for vectors is built.
-///
-/// The statement is that p is a prefix of v if and only if p <= v < upper_bound(p).
-pub fn get_interval(key_prefix: Vec<u8>) -> (Bound<Vec<u8>>, Bound<Vec<u8>>) {
-    let len = key_prefix.len();
-    for i in (0..len).rev() {
-        let val = key_prefix[i];
-        if val < u8::MAX {
-            let mut upper_bound = key_prefix[0..i + 1].to_vec();
-            upper_bound[i] += 1;
-            return (Included(key_prefix), Excluded(upper_bound));
-        }
-    }
-    (Included(key_prefix), Unbounded)
-}
 
 impl<E> MemoryContext<E> {
     pub fn new(guard: OwnedMutexGuard<MemoryStoreMap>, extra: E) -> Self {

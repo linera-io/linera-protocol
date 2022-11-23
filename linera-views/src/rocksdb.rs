@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::common::{Batch, ContextFromDb, KeyValueOperations, SimpleKeyIterator, WriteOperation};
+use crate::common::{get_interval_kernel, Batch, ContextFromDb, KeyValueOperations, SimpleKeyIterator, WriteOperation};
 use async_trait::async_trait;
 use std::sync::Arc;
 use thiserror::Error;
@@ -57,6 +57,13 @@ impl KeyValueOperations for RocksdbContainer {
                     WriteOperation::Delete { key } => inner_batch.delete(&key),
                     WriteOperation::Put { key, value } => inner_batch.put(&key, value),
                     WriteOperation::DeletePrefix { key_prefix } => {
+                        let pair = get_interval_kernel(key_prefix);
+                        let lower_bound = pair.0;
+                        let upper_bound = match pair.1 {
+                            None => Vec::new(), // That is a hack, not sure to work.
+                            Some(val) => val,
+                        };
+                        inner_batch.delete_range(lower_bound, upper_bound);
                     },
                 }
             }
