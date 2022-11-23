@@ -193,6 +193,8 @@ async fn main() -> Result<()> {
 
     let handler = GrpcProxy::spawn(config.validator.network, config.internal_network);
 
+    log::info!("Proxy spawning...");
+
     if let Err(error) = handler.await {
         log::error!("Failed to run proxy: {error}");
     }

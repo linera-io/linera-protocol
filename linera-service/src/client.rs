@@ -103,7 +103,7 @@ impl ClientContext {
         &self,
         storage: S,
         chain_id: ChainId,
-    ) -> ChainClientState<simple_network::NodeProvider, S> {
+    ) -> ChainClientState<impl ValidatorNodeProvider, S> {
         let chain = self.wallet_state.get(chain_id).expect("Unknown chain");
         let node_provider = simple_network::NodeProvider {
             send_timeout: self.send_timeout,

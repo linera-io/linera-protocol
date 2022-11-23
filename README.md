@@ -44,10 +44,10 @@ trap 'kill $(jobs -p)' EXIT
 # * Private server states are stored in `server*.json`.
 # * `committee.json` is the public description of the FastPay committee.
 ./server generate --validators \
-   server_1.json:tcp:127.0.0.1:9100:udp:127.0.0.1:9101:127.0.0.1:9102:127.0.0.1:9103:127.0.0.1:9104 \
-   server_2.json:tcp:127.0.0.1:9200:udp:127.0.0.1:9201:127.0.0.1:9202:127.0.0.1:9203:127.0.0.1:9204 \
-   server_3.json:tcp:127.0.0.1:9300:udp:127.0.0.1:9301:127.0.0.1:9302:127.0.0.1:9303:127.0.0.1:9304 \
-   server_4.json:tcp:127.0.0.1:9400:udp:127.0.0.1:9401:127.0.0.1:9402:127.0.0.1:9403:127.0.0.1:9404 \
+   server_1.json:grpc:127.0.0.1:9100:grpc:127.0.0.1:9101:127.0.0.1:9102:127.0.0.1:9103:127.0.0.1:9104 \
+   server_2.json:grpc:127.0.0.1:9200:grpc:127.0.0.1:9201:127.0.0.1:9202:127.0.0.1:9203:127.0.0.1:9204 \
+   server_3.json:grpc:127.0.0.1:9300:grpc:127.0.0.1:9301:127.0.0.1:9302:127.0.0.1:9303:127.0.0.1:9304 \
+   server_4.json:grpc:127.0.0.1:9400:grpc:127.0.0.1:9401:127.0.0.1:9402:127.0.0.1:9403:127.0.0.1:9404 \
 --committee committee.json
 
 # Create configuration files for 10 user chains.
@@ -58,7 +58,7 @@ trap 'kill $(jobs -p)' EXIT
 # Start servers and create initial chains in DB
 for I in 1 2 3 4
 do
-    ./proxy server_"$I".json &
+    ./grpc-proxy server_"$I".json &
 
     for J in $(seq 0 3)
     do
@@ -110,15 +110,15 @@ ${CLIENT[@]} query_balance "$CHAIN1"
 
 # Create two more validators
 NAME5=$(./server generate --validators \
-   server_5.json:tcp:127.0.0.1:9500:udp:127.0.0.1:9501:127.0.0.1:9502:127.0.0.1:9503:127.0.0.1:9504)
+   server_5.json:grpc:127.0.0.1:9500:grpc:127.0.0.1:9501:127.0.0.1:9502:127.0.0.1:9503:127.0.0.1:9504)
 
 NAME6=$(./server generate --validators \
-   server_6.json:tcp:127.0.0.1:9600:udp:127.0.0.1:9601:127.0.0.1:9602:127.0.0.1:9603:127.0.0.1:9604)
+   server_6.json:grpc:127.0.0.1:9600:grpc:127.0.0.1:9601:127.0.0.1:9602:127.0.0.1:9603:127.0.0.1:9604)
 
 # Start the corresponding services
 for I in 6 5
 do
-    ./proxy server_"$I".json &
+    ./proxy server_"$I".json || exit 1 &
 
     # hack!
     PID5="$!"
@@ -131,13 +131,13 @@ done
 
 sleep 1
 
-${CLIENT[@]} set_validator --name "$NAME5" --address tcp:127.0.0.1:9500 --votes 100
+${CLIENT[@]} set_validator --name "$NAME5" --address grpc:127.0.0.1:9500 --votes 100
 
 ${CLIENT[@]} query_balance "$CHAIN1"
 ${CLIENT[@]} query_validators
 ${CLIENT[@]} query_validators "$CHAIN1"
 
-${CLIENT[@]} set_validator --name "$NAME6" --address tcp:127.0.0.1:9600 --votes 1
+${CLIENT[@]} set_validator --name "$NAME6" --address grpc:127.0.0.1:9600 --votes 1
 sleep 2
 
 ${CLIENT[@]} remove_validator --name "$NAME5"
