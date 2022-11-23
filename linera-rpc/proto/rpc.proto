@@ -50,8 +50,8 @@ service ValidatorNode {
 message ChainInfoResult {
   oneof inner {
     ChainInfoResponse chain_info_response = 1;
-    // leaving this as a string for now so that it is human readable
-    string error = 2;
+    // a bcs wrapper around `NodeError`
+    bytes error = 2;
   }
 }
 

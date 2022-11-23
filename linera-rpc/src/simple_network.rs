@@ -8,6 +8,7 @@ use crate::{
         CrossChainConfig, ShardId, ValidatorInternalNetworkPreConfig,
         ValidatorPublicNetworkPreConfig,
     },
+    mass::{MassClient, MassClientError},
     transport::{MessageHandler, SpawnedServer, TransportProtocol},
     Message,
 };
@@ -27,7 +28,7 @@ use std::{io, str::FromStr, time::Duration};
 use tokio::time;
 
 pub trait SharedStore: Store + Clone + Send + Sync + 'static {}
-impl <All> SharedStore for All where All: Store + Clone + Send + Sync + 'static {}
+impl<All> SharedStore for All where All: Store + Clone + Send + Sync + 'static {}
 
 #[derive(Clone)]
 pub struct Server<S> {
@@ -372,14 +373,14 @@ impl ValidatorNode for Client {
 }
 
 #[derive(Clone)]
-pub struct MassClient {
+pub struct SimpleMassClient {
     pub network: ValidatorPublicNetworkPreConfig<TransportProtocol>,
     send_timeout: std::time::Duration,
     recv_timeout: std::time::Duration,
     max_in_flight: u64,
 }
 
-impl MassClient {
+impl SimpleMassClient {
     pub fn new(
         network: ValidatorPublicNetworkPreConfig<TransportProtocol>,
         send_timeout: std::time::Duration,
@@ -393,8 +394,11 @@ impl MassClient {
             max_in_flight,
         }
     }
+}
 
-    pub async fn send(&self, requests: Vec<Message>) -> Result<Vec<Message>, io::Error> {
+#[async_trait]
+impl MassClient for SimpleMassClient {
+    async fn send(&self, requests: Vec<Message>) -> Result<Vec<Message>, MassClientError> {
         let address = format!("{}:{}", self.network.host, self.network.port);
         let mut stream = self.network.protocol.connect(address).await?;
         let mut requests = requests.into_iter();

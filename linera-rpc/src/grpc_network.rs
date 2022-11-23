@@ -24,17 +24,13 @@ use tokio::sync::Mutex;
 use tonic::{transport::Server, Request, Response, Status};
 
 // to avoid confusion with existing ValidatorNode
-use crate::{
-    client_delegate, convert_and_delegate,
-    grpc_network::grpc_network::{
-        validator_node_server::{
-            ValidatorNode as ValidatorNodeRpc, ValidatorNode, ValidatorNodeServer,
-        },
-        validator_worker_server::{ValidatorWorker as ValidatorWorkerRpc},
-        ChainInfoResult,
+use crate::{client_delegate, convert_and_delegate, grpc_network::grpc_network::{
+    validator_node_server::{
+        ValidatorNode as ValidatorNodeRpc, ValidatorNode, ValidatorNodeServer,
     },
-    simple_network::SharedStore,
-};
+    validator_worker_server::ValidatorWorker as ValidatorWorkerRpc,
+    ChainInfoResult,
+}, mass_client_delegate, simple_network::SharedStore};
 
 use crate::{
     config::{ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig},
@@ -49,9 +45,11 @@ use futures::{
     FutureExt, SinkExt, StreamExt,
 };
 
-use linera_core::{client::ValidatorNodeProvider};
+use crate::mass::{MassClient, MassClientError};
+use linera_core::client::ValidatorNodeProvider;
 use tokio::task::{JoinError, JoinHandle};
 use tonic::transport::Channel;
+use crate::grpc_network::grpc_network::validator_worker_server::ValidatorWorkerServer;
 
 pub mod grpc_network {
     tonic::include_proto!("rpc.v1");
@@ -137,11 +135,13 @@ where
             cross_chain_sender,
         };
 
-        let validator_node = ValidatorNodeServer::new(grpc_server);
+        let validator_node = ValidatorNodeServer::new(grpc_server.clone());
+        let worker_node = ValidatorWorkerServer::new(grpc_server);
 
         let handle = tokio::spawn(
             Server::builder()
                 .add_service(validator_node)
+                .add_service(worker_node)
                 .serve_with_shutdown(address, receiver.map(|_| ())),
         );
 
@@ -354,7 +354,7 @@ impl ValidatorNodeProvider for GrpcNodeProvider {
     type Node = GrpcClient;
 
     async fn make_node(&self, address: &str) -> anyhow::Result<Self::Node, NodeError> {
-        let network = ValidatorPublicNetworkConfig::from_str(address).map_err(|_| {
+        let network = ValidatorPublicNetworkConfig::from_str(&address).map_err(|_| {
             NodeError::CannotResolveValidatorAddress {
                 address: address.to_string(),
             }
@@ -362,6 +362,40 @@ impl ValidatorNodeProvider for GrpcNodeProvider {
         Ok(GrpcClient::new(network).await.expect("todo"))
     }
 }
+
+pub struct GrpcMassClient(ValidatorPublicNetworkConfig);
+
+impl GrpcMassClient {
+    pub fn new(network: ValidatorPublicNetworkConfig) -> Self {
+        Self(network)
+    }
+}
+
+#[async_trait]
+impl MassClient for GrpcMassClient {
+    async fn send(&self, requests: Vec<Message>) -> Result<Vec<Message>, MassClientError> {
+        // todo - for now we are instantiated the client here so that we don't need the
+        // constructor to be asynchronous
+
+        let mut client = ValidatorNodeClient::connect(self.0.address()).await?;
+        let mut responses = Vec::new();
+
+        for request in requests {
+            match request {
+                Message::BlockProposal(proposal) => {
+                    mass_client_delegate!(client, handle_block_proposal, proposal, responses)
+                }
+                Message::Certificate(certificate) => {
+                    mass_client_delegate!(client, handle_certificate, certificate, responses)
+                }
+                msg => panic!("attempted to send msg: {:?}", msg),
+            }
+        }
+        Ok(responses)
+    }
+}
+
+// ------
 
 #[derive(Debug, Default)]
 pub struct GenericBcsService<S> {

@@ -5,6 +5,7 @@ mod codec;
 pub mod config;
 mod conversions;
 pub mod grpc_network;
+pub mod mass;
 pub mod pool;
 mod rpc;
 pub mod simple_network;

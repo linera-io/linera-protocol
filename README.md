@@ -97,7 +97,8 @@ ${CLIENT[@]} query_balance "$CHAIN1"
 ${CLIENT[@]} query_balance "$CHAIN2"
 
 # Launch local benchmark using all user chains
-${CLIENT[@]} benchmark --max-in-flight 50
+# TODO uncomment
+#${CLIENT[@]} benchmark --max-in-flight 50
 
 # Create derived chain
 CHAIN3="`${CLIENT[@]} open_chain --from "$CHAIN1"`"
@@ -131,13 +132,13 @@ done
 
 sleep 1
 
-${CLIENT[@]} set_validator --name "$NAME5" --address grpc:127.0.0.1:9500 --votes 100
+${CLIENT[@]} set_validator --name "$NAME5" --address http://127.0.0.1:9500 --votes 100
 
 ${CLIENT[@]} query_balance "$CHAIN1"
 ${CLIENT[@]} query_validators
 ${CLIENT[@]} query_validators "$CHAIN1"
 
-${CLIENT[@]} set_validator --name "$NAME6" --address grpc:127.0.0.1:9600 --votes 1
+${CLIENT[@]} set_validator --name "$NAME6" --address http://127.0.0.1:9600 --votes 1
 sleep 2
 
 ${CLIENT[@]} remove_validator --name "$NAME5"

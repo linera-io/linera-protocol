@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::transport::{TransportProtocol};
+use crate::transport::TransportProtocol;
 use linera_base::messages::ChainId;
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
@@ -88,8 +88,9 @@ impl<P> ValidatorPublicNetworkPreConfig<P> {
         }
     }
 
+    // todo placeholder
     pub fn address(&self) -> String {
-        format!("{}:{}", self.host, self.port)
+        format!("http://{}:{}", self.host, self.port)
     }
 }
 

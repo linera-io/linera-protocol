@@ -26,7 +26,7 @@ use linera_execution::{
     system::{Address, Amount, Balance, SystemOperation, UserData},
     Operation,
 };
-use linera_rpc::{config::NetworkProtocol, simple_network, Message};
+use linera_rpc::{config::NetworkProtocol, mass::MassClient, simple_network, Message};
 use linera_service::{
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain, WalletState},
     storage::{Runnable, StorageConfig},
@@ -40,6 +40,7 @@ use std::{
     time::{Duration, Instant},
 };
 use structopt::StructOpt;
+use linera_rpc::grpc_network::{GrpcMassClient, GrpcNodeProvider};
 
 struct ClientContext {
     genesis_config: GenesisConfig,
@@ -80,20 +81,24 @@ impl ClientContext {
         }
     }
 
-    fn make_validator_mass_clients(&self, max_in_flight: u64) -> Vec<simple_network::MassClient> {
+    async fn make_validator_mass_clients(&self, max_in_flight: u64) -> Vec<Box<dyn MassClient>> {
         let mut validator_clients = Vec::new();
         for config in &self.genesis_config.committee.validators {
-            let protocol = match config.network.protocol {
-                NetworkProtocol::Simple(protocol) => protocol,
-                NetworkProtocol::Grpc() => todo!(),
+            let client: Box<dyn MassClient> = match config.network.protocol {
+                NetworkProtocol::Simple(protocol) => {
+                    let network = config.network.clone_with_protocol(protocol);
+                    Box::new(simple_network::SimpleMassClient::new(
+                        network,
+                        self.send_timeout,
+                        self.recv_timeout,
+                        max_in_flight,
+                    ))
+                },
+                NetworkProtocol::Grpc() => {
+                    Box::new(GrpcMassClient::new(config.network.clone()))
+                },
             };
-            let network = config.network.clone_with_protocol(protocol);
-            let client = simple_network::MassClient::new(
-                network,
-                self.send_timeout,
-                self.recv_timeout,
-                max_in_flight,
-            );
+
             validator_clients.push(client);
         }
         validator_clients
@@ -105,10 +110,12 @@ impl ClientContext {
         chain_id: ChainId,
     ) -> ChainClientState<impl ValidatorNodeProvider, S> {
         let chain = self.wallet_state.get(chain_id).expect("Unknown chain");
-        let node_provider = simple_network::NodeProvider {
-            send_timeout: self.send_timeout,
-            recv_timeout: self.recv_timeout,
-        };
+        // TODO need to switch on some sort of config
+        // let node_provider = simple_network::NodeProvider {
+        //     send_timeout: self.send_timeout,
+        //     recv_timeout: self.recv_timeout,
+        // };
+        let node_provider = GrpcNodeProvider {};
         ChainClientState::new(
             chain_id,
             chain
@@ -229,7 +236,7 @@ impl ClientContext {
         let time_start = Instant::now();
         info!("Broadcasting {} {}", proposals.len(), phase);
         let mut handles = Vec::new();
-        for client in self.make_validator_mass_clients(max_in_flight) {
+        for client in self.make_validator_mass_clients(max_in_flight).await {
             let proposals = proposals.clone();
             handles.push(tokio::spawn(async move {
                 info!("Sending {} requests", proposals.len());

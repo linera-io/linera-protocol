@@ -46,8 +46,7 @@ use linera_base::messages::BlockHeight;
 
 use crate::grpc_network::grpc_network::{cross_chain_request::Inner, Owner as OwnerRPC};
 use linera_base::messages::Owner;
-use linera_core::{node::NodeError};
-
+use linera_core::node::NodeError;
 
 #[derive(Error, Debug)]
 pub enum ProtoConversionError {
@@ -152,7 +151,30 @@ macro_rules! client_delegate {
             .expect("todo")
         {
             Inner::ChainInfoResponse(response) => Ok(response.try_into().expect("todo")),
-            Inner::Error(_error) => todo!("need to add serialization logic back in"),
+            Inner::Error(error) => Err(bcs::from_bytes(&error).expect("todo")),
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! mass_client_delegate {
+    ($client:ident, $handler:ident, $msg:ident, $responses: ident) => {{
+        let response = $client
+            .$handler(Request::new((*$msg).try_into()?))
+            .await?;
+        match response
+            .into_inner()
+            .inner
+            .ok_or(ProtoConversionError::MissingField)?
+        {
+            Inner::ChainInfoResponse(chain_info_response) => {
+                $responses.push(Message::ChainInfoResponse(Box::new(
+                    chain_info_response.try_into()?,
+                )));
+            }
+            Inner::Error(error) => {
+                error!("Received error response: {:?}", bcs::from_bytes::<NodeError>(&error).expect("todo"))
+            }
         }
     }};
 }
@@ -180,10 +202,10 @@ impl TryFrom<ChainInfoResponse> for ChainInfoResult {
 impl From<NodeError> for ChainInfoResult {
     fn from(node_error: NodeError) -> Self {
         ChainInfoResult {
-            // todo we need to serialize this properly
+
             inner: Some(
                 crate::grpc_network::grpc_network::chain_info_result::Inner::Error(
-                    node_error.to_string(),
+                    bcs::to_bytes(&node_error).expect("todo"),
                 ),
             ),
         }

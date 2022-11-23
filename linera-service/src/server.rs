@@ -14,6 +14,7 @@ use linera_rpc::{
         CrossChainConfig, NetworkProtocol, ShardConfig, ShardId, ValidatorInternalNetworkConfig,
         ValidatorPublicNetworkConfig,
     },
+    grpc_network::GrpcServer,
     simple_network,
     transport::TransportProtocol,
 };
@@ -31,7 +32,6 @@ use std::{
     str::FromStr,
 };
 use structopt::StructOpt;
-use linera_rpc::grpc_network::GrpcServer;
 
 struct ServerContext {
     server_config: ValidatorServerConfig,
@@ -68,7 +68,7 @@ impl ServerContext {
     ) -> Result<(), anyhow::Error>
     where
         S: Store + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>
+        ViewError: From<S::ContextError>,
     {
         let internal_network = self
             .server_config
@@ -110,9 +110,9 @@ impl ServerContext {
         listen_address: &str,
         states: Vec<(WorkerState<S>, ShardId, ShardConfig)>,
     ) -> Result<(), anyhow::Error>
-        where
-            S: Store + Clone + Send + Sync + 'static,
-            ViewError: From<S::ContextError>
+    where
+        S: Store + Clone + Send + Sync + 'static,
+        ViewError: From<S::ContextError>,
     {
         let mut handles = Vec::new();
         for (state, shard_id, shard) in states {
@@ -125,7 +125,9 @@ impl ServerContext {
                     shard_id,
                     self.server_config.internal_network.clone(),
                     cross_chain_config,
-                ).await {
+                )
+                .await
+                {
                     Ok(spawned_server) => spawned_server,
                     Err(err) => {
                         error!("Failed to start server: {:?}", err);
@@ -171,11 +173,11 @@ where
         };
 
         match self.server_config.internal_network.protocol {
-            NetworkProtocol::Simple(protocol) => self.spawn_simple(listen_address, states, protocol).await?,
+            NetworkProtocol::Simple(protocol) => {
+                self.spawn_simple(listen_address, states, protocol).await?
+            }
             NetworkProtocol::Grpc() => self.spawn_grpc(listen_address, states).await?,
         };
-
-
 
         Ok(())
     }
