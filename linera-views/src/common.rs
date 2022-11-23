@@ -55,6 +55,16 @@ pub fn get_interval(key_prefix: Vec<u8>) -> (Bound<Vec<u8>>, Bound<Vec<u8>>) {
     (Included(pair.0), upper_bound)
 }
 
+pub fn has_natural_prefix_upper_bound(key_prefix: &[u8]) -> bool {
+    for val in key_prefix {
+        if *val != u8::MAX {
+            return true;
+        }
+    }
+    false
+}
+
+
 impl Batch {
     /// building a batch from a function
     pub async fn build<F>(builder: F) -> Result<Self, ViewError>
@@ -77,11 +87,13 @@ impl Batch {
                 WriteOperation::Delete { key } => { map_delete_insert.insert(key, None); },
                 WriteOperation::Put { key, value } => { map_delete_insert.insert(key, Some(value)); },
                 WriteOperation::DeletePrefix { key_prefix } => {
-                    for (key,_) in map_delete_insert.range(get_interval(key_prefix.clone())) {
-                        map_delete_insert.remove(key);
+                    let key_list : Vec<Vec<u8>> = map_delete_insert.range(get_interval(key_prefix.clone())).map(|x| x.0.to_vec()).collect();
+                    for key in key_list {
+                        map_delete_insert.remove(&key);
                     }
-                    for key in set_key_prefix.range(get_interval(key_prefix.clone())) {
-                        set_key_prefix.remove(key);
+                    let key_prefix_list : Vec<Vec<u8>> = set_key_prefix.range(get_interval(key_prefix.clone())).map(|x: &Vec<u8>| x.to_vec()).collect();
+                    for key_prefix in key_prefix_list {
+                        set_key_prefix.remove(&key_prefix);
                     }
                     set_key_prefix.insert(key_prefix);
                 },

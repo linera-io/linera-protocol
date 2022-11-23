@@ -54,15 +54,16 @@ impl KeyValueOperations for MemoryContainer {
         Ok(SimpleKeyIterator::new(values))
     }
 
-    async fn write_batch(&self, mut batch: Batch) -> Result<(), MemoryContextError> {
+    async fn write_batch(&self, batch: Batch) -> Result<(), MemoryContextError> {
         let mut map = self.write().await;
         for ent in batch.operations {
             match ent {
                 WriteOperation::Put { key, value } => { map.insert(key, value); },
                 WriteOperation::Delete { key } => { map.remove(&key); },
                 WriteOperation::DeletePrefix { key_prefix } => {
-                    for (key, _value) in map.range(get_interval(key_prefix)) {
-                        map.remove(key);
+                    let key_list : Vec<Vec<u8>> = map.range(get_interval(key_prefix)).map(|x| x.0.to_vec()).collect();
+                    for key in key_list {
+                        map.remove(&key);
                     }
                 }
             }

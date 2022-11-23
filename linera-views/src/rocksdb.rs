@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::common::{get_interval_kernel, Batch, ContextFromDb, KeyValueOperations, SimpleKeyIterator, WriteOperation};
+use crate::common::{get_interval_kernel, has_natural_prefix_upper_bound, Batch, ContextFromDb, KeyValueOperations, SimpleKeyIterator, WriteOperation};
 use async_trait::async_trait;
 use std::sync::Arc;
 use thiserror::Error;
@@ -50,6 +50,20 @@ impl KeyValueOperations for RocksdbContainer {
 
     async fn write_batch(&self, mut batch: Batch) -> Result<(), RocksdbContextError> {
         let db = self.clone();
+        let len = batch.operations.len();
+        for i in 0..len {
+            let op = batch.operations.get(i).unwrap();
+            match op {
+                WriteOperation::DeletePrefix { key_prefix } => {
+                    if !has_natural_prefix_upper_bound(key_prefix) {
+                        for key in self.find_keys_with_prefix(&key_prefix).await? {
+                            batch.operations.push(WriteOperation::Delete { key: key? });
+                        }
+                    }
+                },
+                _ => {},
+            }
+        }
         tokio::task::spawn_blocking(move || -> Result<(), RocksdbContextError> {
             let mut inner_batch = rocksdb::WriteBatchWithTransaction::default();
             for e_ent in batch.operations {
@@ -59,11 +73,12 @@ impl KeyValueOperations for RocksdbContainer {
                     WriteOperation::DeletePrefix { key_prefix } => {
                         let pair = get_interval_kernel(key_prefix);
                         let lower_bound = pair.0;
-                        let upper_bound = match pair.1 {
-                            None => Vec::new(), // That is a hack, not sure to work.
-                            Some(val) => val,
-                        };
-                        inner_batch.delete_range(lower_bound, upper_bound);
+                        match pair.1 {
+                            None => {},
+                            Some(upper_bound) => {
+                                inner_batch.delete_range(lower_bound, upper_bound);
+                            },
+                        }
                     },
                 }
             }

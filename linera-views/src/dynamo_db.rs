@@ -176,9 +176,9 @@ impl KeyValueOperations for DynamoDbContainer {
 
     /// We put submit the transaction in blocks of at most 25 so as to decrease the
     /// number of needed transactions.
-    async fn write_batch(&self, mut batch: Batch) -> Result<(), DynamoDbContextError> {
-        let delete_list = Vec::new();
-        let insert_list = Vec::new();
+    async fn write_batch(&self, batch: Batch) -> Result<(), DynamoDbContextError> {
+        let mut delete_list = Vec::new();
+        let mut insert_list = Vec::new();
         for op in batch.simplify().operations {
             match op {
                 WriteOperation::Delete { key } => { delete_list.push(key); },
