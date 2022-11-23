@@ -7,7 +7,7 @@ use super::{
     async_boundary::{ContextForwarder, GuestFuture, GuestFutureInterface},
     runtime::{
         contract::{
-            self, CallApplication, CallSession, ExecuteEffect, ExecuteOperation,
+            self, CallApplication, CallSession, ExecuteEffect, ExecuteOperation, Initialize,
             PollCallApplication, PollCallSession, PollExecutionResult,
         },
         service::{self, PollQuery, QueryApplication},
@@ -37,6 +37,21 @@ pub trait Runtime {
 
 /// Common interface to calling a user contract in a WebAssembly module.
 pub trait Contract<R: Runtime> {
+    /// Create a new future for the user application to initialize itself on the owner chain.
+    fn initialize_new(
+        &self,
+        store: &mut R::Store,
+        context: contract::OperationContext,
+        argument: &[u8],
+    ) -> Result<contract::Initialize, R::Error>;
+
+    /// Poll a user contract future that's initializing the application.
+    fn initialize_poll(
+        &self,
+        store: &mut R::Store,
+        future: &contract::Initialize,
+    ) -> Result<contract::PollExecutionResult, R::Error>;
+
     /// Create a new future for the user application to execute an operation.
     fn execute_operation_new(
         &self,
@@ -143,6 +158,30 @@ where
     R: Runtime,
     R::Application: Contract<R>,
 {
+    /// Call the guest WASM module's implementation of
+    /// [`UserApplication::initialize`][`linera_execution::UserApplication::initialize`].
+    ///
+    /// This method returns a [`Future`][`std::future::Future`], and is equivalent to
+    ///
+    /// ```ignore
+    /// pub async fn initialize(
+    ///     mut self,
+    ///     context: &OperationContext,
+    ///     argument: &[u8],
+    /// ) -> Result<RawExecutionResult<Vec<u8>>, WasmExecutionError>
+    /// ```
+    pub fn initialize(
+        mut self,
+        context: &OperationContext,
+        argument: &[u8],
+    ) -> GuestFuture<Initialize, R> {
+        let future = self
+            .application
+            .initialize_new(&mut self.store, (*context).into(), argument);
+
+        GuestFuture::new(future, self)
+    }
+
     /// Call the guest WASM module's implementation of
     /// [`UserApplication::execute_operation`][`linera_execution::UserApplication::execute_operation`].
     ///
@@ -335,6 +374,7 @@ macro_rules! impl_guest_future_interface {
 }
 
 impl_guest_future_interface! {
+    Initialize: initialize_poll -> PollExecutionResult -> Contract => RawExecutionResult<Vec<u8>>,
     ExecuteOperation: execute_operation_poll -> PollExecutionResult -> Contract => RawExecutionResult<Vec<u8>>,
     ExecuteEffect: execute_effect_poll -> PollExecutionResult -> Contract => RawExecutionResult<Vec<u8>>,
     CallApplication: call_application_poll -> PollCallApplication -> Contract => ApplicationCallResult,

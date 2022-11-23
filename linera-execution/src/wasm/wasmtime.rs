@@ -182,6 +182,23 @@ impl<'storage> ServiceState<'storage> {
 }
 
 impl<'storage> common::Contract<ContractWasmtime<'storage>> for Contract<ContractState<'storage>> {
+    fn initialize_new(
+        &self,
+        store: &mut Store<ContractState<'storage>>,
+        context: contract::OperationContext,
+        argument: &[u8],
+    ) -> Result<contract::Initialize, Trap> {
+        Contract::initialize_new(self, store, context, argument)
+    }
+
+    fn initialize_poll(
+        &self,
+        store: &mut Store<ContractState<'storage>>,
+        future: &contract::Initialize,
+    ) -> Result<contract::PollExecutionResult, Trap> {
+        Contract::initialize_poll(self, store, future)
+    }
+
     fn execute_operation_new(
         &self,
         store: &mut Store<ContractState<'storage>>,

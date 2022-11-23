@@ -14,6 +14,13 @@ pub trait Contract {
     /// Message reports for application execution errors.
     type Error: Error;
 
+    /// Initialize the application on the chain that created it.
+    async fn initialize(
+        &mut self,
+        context: &OperationContext,
+        argument: &[u8],
+    ) -> Result<ExecutionResult, Self::Error>;
+
     /// Apply an operation from the current block.
     async fn execute_operation(
         &mut self,

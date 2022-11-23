@@ -13,6 +13,29 @@ use linera_sdk::{
 };
 use wit_bindgen_guest_rust::Handle;
 
+pub struct Initialize {
+    future: ExportedFuture<Result<ExecutionResult, String>>,
+}
+
+impl contract::Initialize for Initialize {
+    fn new(context: contract::OperationContext, argument: Vec<u8>) -> Handle<Self> {
+        Handle::new(Initialize {
+            future: ExportedFuture::new(async move {
+                let mut application = ApplicationState::load_and_lock().await;
+                let result = application.initialize(&context.into(), &argument).await;
+                if result.is_ok() {
+                    application.store_and_unlock().await;
+                }
+                result.map_err(|error| error.to_string())
+            }),
+        })
+    }
+
+    fn poll(&self) -> contract::PollExecutionResult {
+        self.future.poll()
+    }
+}
+
 pub struct ExecuteOperation {
     future: ExportedFuture<Result<ExecutionResult, String>>,
 }

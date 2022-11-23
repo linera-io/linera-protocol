@@ -107,6 +107,23 @@ impl WasmApplication {
 }
 
 impl<'storage> common::Contract<ContractWasmer<'storage>> for Contract {
+    fn initialize_new(
+        &self,
+        store: &mut Store,
+        context: contract::OperationContext,
+        argument: &[u8],
+    ) -> Result<contract::Initialize, RuntimeError> {
+        Self::initialize_new(self, store, context, argument)
+    }
+
+    fn initialize_poll(
+        &self,
+        store: &mut Store,
+        future: &contract::Initialize,
+    ) -> Result<contract::PollExecutionResult, RuntimeError> {
+        Self::initialize_poll(self, store, future)
+    }
+
     fn execute_operation_new(
         &self,
         store: &mut Store,

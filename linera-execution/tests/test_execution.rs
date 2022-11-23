@@ -44,6 +44,16 @@ struct TestApplication;
 
 #[async_trait]
 impl UserApplication for TestApplication {
+    /// Nothing needs to be done during initialization.
+    async fn initialize(
+        &self,
+        _context: &OperationContext,
+        _storage: &dyn WritableStorage,
+        _argument: &[u8],
+    ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
+        Ok(RawExecutionResult::default())
+    }
+
     /// Extend the application state with the `operation` bytes.
     ///
     /// Calls itself during the operation, opening a session. The session is intentionally

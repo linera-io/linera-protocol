@@ -72,6 +72,19 @@ pub enum WasmExecutionError {
 
 #[async_trait]
 impl UserApplication for WasmApplication {
+    async fn initialize(
+        &self,
+        context: &OperationContext,
+        storage: &dyn WritableStorage,
+        argument: &[u8],
+    ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
+        let result = self
+            .prepare_contract_runtime(storage)?
+            .initialize(context, argument)
+            .await?;
+        Ok(result)
+    }
+
     async fn execute_operation(
         &self,
         context: &OperationContext,

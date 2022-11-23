@@ -21,6 +21,15 @@ pub struct Counter {
 impl Contract for Counter {
     type Error = Error;
 
+    async fn initialize(
+        &mut self,
+        _context: &OperationContext,
+        argument: &[u8],
+    ) -> Result<ExecutionResult, Self::Error> {
+        self.value = bcs::from_bytes(argument)?;
+        Ok(ExecutionResult::default())
+    }
+
     async fn execute_operation(
         &mut self,
         _context: &OperationContext,

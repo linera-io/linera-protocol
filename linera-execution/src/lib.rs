@@ -78,6 +78,14 @@ impl From<ViewError> for ExecutionError {
 /// The public entry points provided by an application.
 #[async_trait]
 pub trait UserApplication {
+    /// Initialize the application state on the chain that owns the application.
+    async fn initialize(
+        &self,
+        context: &OperationContext,
+        storage: &dyn WritableStorage,
+        argument: &[u8],
+    ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError>;
+
     /// Apply an operation from the current block.
     async fn execute_operation(
         &self,
