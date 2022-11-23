@@ -32,7 +32,7 @@ pub type MemoryContext<E> = ContextFromDb<E, MemoryContainer>;
 /// is possible with the way the comparison operators for vectors is built.
 ///
 /// The statement is that p is a prefix of v if and only if p <= v < upper_bound(p).
-fn get_interval(key_prefix: Vec<u8>) -> (Bound<Vec<u8>>, Bound<Vec<u8>>) {
+pub fn get_interval(key_prefix: Vec<u8>) -> (Bound<Vec<u8>>, Bound<Vec<u8>>) {
     let len = key_prefix.len();
     for i in (0..len).rev() {
         let val = key_prefix[i];
@@ -81,9 +81,14 @@ impl KeyValueOperations for MemoryContainer {
         let mut map = self.write().await;
         for ent in batch.operations {
             match ent {
-                WriteOperation::Put { key, value } => map.insert(key, value),
-                WriteOperation::Delete { key } => map.remove(&key),
-            };
+                WriteOperation::Put { key, value } => { map.insert(key, value); },
+                WriteOperation::Delete { key } => { map.remove(&key); },
+                WriteOperation::DeletePrefix { key_prefix } => {
+                    for (key, _value) in map.range(get_interval(key_prefix)) {
+                        map.remove(key);
+                    }
+                }
+            }
         }
         Ok(())
     }

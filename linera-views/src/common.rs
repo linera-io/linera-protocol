@@ -1,16 +1,20 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::views::{HashingContext, ViewError};
+use crate::{
+    views::{HashingContext, ViewError},
+    memory::get_interval,
+};
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{collections::HashMap, fmt::Debug};
+use std::{fmt::Debug};
 
 pub enum WriteOperation {
     Delete { key: Vec<u8> },
     DeletePrefix { key_prefix: Vec<u8> },
     Put { key: Vec<u8>, value: Vec<u8> },
 }
+use std::collections::{BTreeMap, BTreeSet};
 
 /// A batch of writes inside a transaction;
 #[derive(Default)]
@@ -33,15 +37,28 @@ impl Batch {
     /// The construction of BatchWriteItem and TransactWriteItem for DynamoDb does
     /// not allow this to happen.
     pub fn simplify(self) -> Self {
-        let mut map = HashMap::new();
+        let mut map_delete_insert = BTreeMap::new();
+        let mut set_key_prefix = BTreeSet::new();
         for op in self.operations {
             match op {
-                WriteOperation::Delete { key } => map.insert(key, None),
-                WriteOperation::Put { key, value } => map.insert(key, Some(value)),
-            };
+                WriteOperation::Delete { key } => { map_delete_insert.insert(key, None); },
+                WriteOperation::Put { key, value } => { map_delete_insert.insert(key, Some(value)); },
+                WriteOperation::DeletePrefix { key_prefix } => {
+                    for (key,_) in map_delete_insert.range(get_interval(key_prefix.clone())) {
+                        map_delete_insert.remove(key);
+                    }
+                    for key in set_key_prefix.range(get_interval(key_prefix.clone())) {
+                        set_key_prefix.remove(key);
+                    }
+                    set_key_prefix.insert(key_prefix);
+                },
+            }
         }
-        let mut operations = Vec::with_capacity(map.len());
-        for (key, val) in map {
+        let mut operations = Vec::with_capacity(set_key_prefix.len() + map_delete_insert.len());
+        for key_prefix in set_key_prefix {
+            operations.push(WriteOperation::DeletePrefix { key_prefix });
+        }
+        for (key, val) in map_delete_insert {
             match val {
                 Some(value) => operations.push(WriteOperation::Put { key, value }),
                 None => operations.push(WriteOperation::Delete { key }),

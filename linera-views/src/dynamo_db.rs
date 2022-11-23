@@ -193,6 +193,9 @@ impl KeyValueOperations for DynamoDbContainer {
                             .build();
                         WriteRequest::builder().put_request(request).build()
                     }
+                    WriteOperation::DeletePrefix { key_prefix } => {
+                        
+                    }
                 })
                 .collect();
 

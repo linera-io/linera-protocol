@@ -56,6 +56,8 @@ impl KeyValueOperations for RocksdbContainer {
                 match e_ent {
                     WriteOperation::Delete { key } => inner_batch.delete(&key),
                     WriteOperation::Put { key, value } => inner_batch.put(&key, value),
+                    WriteOperation::DeletePrefix { key_prefix } => {
+                    },
                 }
             }
             db.write(inner_batch)?;
