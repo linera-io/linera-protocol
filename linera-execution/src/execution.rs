@@ -174,7 +174,10 @@ where
             match effect {
                 Effect::System(effect) => {
                     let result = self.system.execute_effect(context, effect)?;
-                    Ok(vec![ExecutionResult::System(result)])
+                    Ok(vec![ExecutionResult::System {
+                        result,
+                        new_application: None,
+                    }])
                 }
                 _ => Err(ExecutionError::InvalidEffect),
             }

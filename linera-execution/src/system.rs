@@ -261,6 +261,7 @@ where
     ) -> Result<ExecutionResult, SystemExecutionError> {
         use SystemOperation::*;
         let mut result = RawExecutionResult::default();
+        let mut new_application = None;
         match operation {
             OpenChain {
                 id,
@@ -471,7 +472,10 @@ where
             }
         }
 
-        Ok(ExecutionResult::System(result))
+        Ok(ExecutionResult::System {
+            result,
+            new_application,
+        })
     }
 
     /// Execute the recipient's side of an operation, aka a "remote effect".

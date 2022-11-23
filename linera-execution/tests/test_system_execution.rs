@@ -41,7 +41,10 @@ async fn test_simple_system_operation() {
     assert_eq!(view.system.balance.get(), &Balance::from(0));
     assert_eq!(
         result,
-        vec![ExecutionResult::System(RawExecutionResult::default())]
+        vec![ExecutionResult::System {
+            result: RawExecutionResult::default(),
+            new_application: None
+        }]
     );
 }
 
@@ -72,7 +75,10 @@ async fn test_simple_system_effect() {
     assert_eq!(view.system.balance.get(), &Balance::from(4));
     assert_eq!(
         result,
-        vec![ExecutionResult::System(RawExecutionResult::default())]
+        vec![ExecutionResult::System {
+            result: RawExecutionResult::default(),
+            new_application: None
+        }]
     );
 }
 

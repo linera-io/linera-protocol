@@ -343,8 +343,20 @@ pub struct RawExecutionResult<Effect> {
 #[derive(Debug)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub enum ExecutionResult {
-    System(RawExecutionResult<SystemEffect>),
+    System {
+        result: RawExecutionResult<SystemEffect>,
+        new_application: Option<NewApplication>,
+    },
+
     User(ApplicationId, RawExecutionResult<Vec<u8>>),
+}
+
+/// A request to create a new application.
+#[derive(Clone, Debug)]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+pub struct NewApplication {
+    id: ApplicationId,
+    initialization_argument: Vec<u8>,
 }
 
 impl<Effect> Default for RawExecutionResult<Effect> {
