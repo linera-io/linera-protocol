@@ -33,14 +33,14 @@ pub trait View<C: Context>: Sized {
     /// program running. Crash-resistant storage implementations are expected to accumulate the desired
     /// changes in the `batch` variable first. If the view is dropped without calling `flush`, staged
     /// changes are simply lost.
-    async fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError>;
+    fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError>;
 
     /// Instead of persisting changes, clear all the data that belong to this view and its
     /// subviews. Crash-resistant storage implementations are expected to accumulate the
     /// desired changes into the `batch` variable first.
     /// No data/metadata at all is left after delete. The view is consumed by delete
     /// and cannot be used in any way after delete.
-    async fn delete(self, batch: &mut Batch) -> Result<(), ViewError>;
+    fn delete(self, batch: &mut Batch) -> Result<(), ViewError>;
 }
 
 #[derive(Error, Debug)]

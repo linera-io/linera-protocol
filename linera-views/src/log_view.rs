@@ -88,10 +88,7 @@ where
     }
 
     fn delete(&self, stored_count: usize, batch: &mut Batch) -> Result<(), Self::Error> {
-        batch.delete_key(self.base_key());
-        for index in 0..stored_count {
-            batch.delete_key(self.derive_key(&index)?);
-        }
+        batch.delete_key_prefix(self.base_key());
         Ok(())
     }
 }
@@ -122,7 +119,7 @@ where
         self.new_values.clear();
     }
 
-    async fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
+    fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
         if self.was_cleared {
             self.was_cleared = false;
             if self.stored_count > 0 {
@@ -139,7 +136,7 @@ where
         Ok(())
     }
 
-    async fn delete(mut self, batch: &mut Batch) -> Result<(), ViewError> {
+    fn delete(mut self, batch: &mut Batch) -> Result<(), ViewError> {
         self.context.delete(self.stored_count, batch)?;
         Ok(())
     }

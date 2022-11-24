@@ -50,6 +50,9 @@ impl KeyValueOperations for RocksdbContainer {
 
     async fn write_batch(&self, mut batch: Batch) -> Result<(), RocksdbContextError> {
         let db = self.clone();
+        // NOTE: The delete_range functionality of rocksdb needs to have an upper bound in order to work.
+        // Thus in order to have the system working, we need to handle the unlikely case of having to
+        // delete a key starting with [255, ...., 255]
         let len = batch.operations.len();
         for i in 0..len {
             let op = batch.operations.get(i).unwrap();

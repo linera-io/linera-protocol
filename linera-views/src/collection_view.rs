@@ -140,13 +140,13 @@ where
         self.updates.clear();
     }
 
-    async fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
+    fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
         if self.was_cleared {
             self.was_cleared = false;
-            self.delete_entries(batch).await?;
+            self.delete_entries(batch);
             for (index, update) in mem::take(&mut self.updates) {
                 if let Some(mut view) = update {
-                    view.flush(batch).await?;
+                    view.flush(batch)?;
                     self.context.add_index(batch, index)?;
                 }
             }
@@ -154,14 +154,13 @@ where
             for (index, update) in mem::take(&mut self.updates) {
                 match update {
                     Some(mut view) => {
-                        view.flush(batch).await?;
+                        view.flush(batch)?;
                         self.context.add_index(batch, index)?;
                     }
                     None => {
                         let context = self.context.clone_with_scope(&index);
                         self.context.remove_index(batch, index)?;
-                        let view = W::load(context).await?;
-                        view.delete(batch).await?;
+                        batch.delete_key_prefix(context.base_key());
                     }
                 }
             }
@@ -169,8 +168,9 @@ where
         Ok(())
     }
 
-    async fn delete(mut self, batch: &mut Batch) -> Result<(), ViewError> {
-        self.delete_entries(batch).await
+    fn delete(mut self, batch: &mut Batch) -> Result<(), ViewError> {
+        self.delete_entries(batch);
+        Ok(())
     }
 
     fn clear(&mut self) {
@@ -187,15 +187,9 @@ where
     W: View<C>,
 {
     /// Delete all entries in this [`Collection`].
-    async fn delete_entries(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
-        let stored_indices = self.context.indices().await?;
-        for index in &stored_indices {
-            let context = self.context.clone_with_scope(index);
-            self.context.remove_index(batch, index.clone())?;
-            let view = W::load(context).await?;
-            view.delete(batch).await?;
-        }
-        Ok(())
+    fn delete_entries(&mut self, batch: &mut Batch) {
+        let base = self.context.base_key();
+        batch.delete_key_prefix(base);
     }
 
     /// Obtain a subview for the data at the given index in the collection. If an entry
@@ -322,16 +316,16 @@ where
         self.updates.clear();
     }
 
-    async fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
+    fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
         if self.was_cleared {
             self.was_cleared = false;
-            self.delete_entries(batch).await?;
+            self.delete_entries(batch);
             for (index, update) in mem::take(&mut self.updates) {
                 if let Some(view) = update {
                     let mut view = Arc::try_unwrap(view)
                         .map_err(|_| ViewError::CannotAcquireCollectionEntry)?
                         .into_inner();
-                    view.flush(batch).await?;
+                    view.flush(batch)?;
                     self.context.add_index(batch, index)?;
                 }
             }
@@ -342,14 +336,13 @@ where
                         let mut view = Arc::try_unwrap(view)
                             .map_err(|_| ViewError::CannotAcquireCollectionEntry)?
                             .into_inner();
-                        view.flush(batch).await?;
+                        view.flush(batch)?;
                         self.context.add_index(batch, index)?;
                     }
                     None => {
                         let context = self.context.clone_with_scope(&index);
                         self.context.remove_index(batch, index)?;
-                        let view = W::load(context).await?;
-                        view.delete(batch).await?;
+                        batch.delete_key_prefix(context.base_key());
                     }
                 }
             }
@@ -357,8 +350,9 @@ where
         Ok(())
     }
 
-    async fn delete(mut self, batch: &mut Batch) -> Result<(), ViewError> {
-        self.delete_entries(batch).await
+    fn delete(mut self, batch: &mut Batch) -> Result<(), ViewError> {
+        self.delete_entries(batch);
+        Ok(())
     }
 
     fn clear(&mut self) {
@@ -375,15 +369,9 @@ where
     W: View<C>,
 {
     /// Delete all entries in this [`Collection`].
-    async fn delete_entries(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
-        let stored_indices = self.context.indices().await?;
-        for index in &stored_indices {
-            let context = self.context.clone_with_scope(index);
-            self.context.remove_index(batch, index.clone())?;
-            let view = W::load(context).await?;
-            view.delete(batch).await?;
-        }
-        Ok(())
+    fn delete_entries(&mut self, batch: &mut Batch) {
+        let base = self.context.base_key();
+        batch.delete_key_prefix(base);
     }
 
     /// Obtain a subview for the data at the given index in the collection. If an entry

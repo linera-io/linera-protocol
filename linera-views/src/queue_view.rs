@@ -116,12 +116,7 @@ where
     }
 
     fn delete(&self, stored_indices: Range<usize>, batch: &mut Batch) -> Result<(), Self::Error> {
-        let base = self.base_key();
-        batch.delete_key(base);
-        for index in stored_indices {
-            let key = self.derive_key(&index)?;
-            batch.delete_key(key);
-        }
+        batch.delete_key_prefix(self.base_key());
         Ok(())
     }
 }
@@ -152,7 +147,7 @@ where
         self.new_back_values.clear();
     }
 
-    async fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
+    fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
         if self.front_delete_count > 0 {
             self.context
                 .delete_front(&mut self.stored_indices, batch, self.front_delete_count)?;
@@ -168,7 +163,7 @@ where
         Ok(())
     }
 
-    async fn delete(mut self, batch: &mut Batch) -> Result<(), ViewError> {
+    fn delete(mut self, batch: &mut Batch) -> Result<(), ViewError> {
         self.context.delete(self.stored_indices, batch)?;
         Ok(())
     }

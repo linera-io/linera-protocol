@@ -111,10 +111,10 @@ where
         self.updates.clear();
     }
 
-    async fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
+    fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
         if self.was_cleared {
             self.was_cleared = false;
-            self.context.delete(batch);
+            self.context.delete(batch)?;
             for (index, update) in mem::take(&mut self.updates) {
                 if let Some(value) = update {
                     self.context.insert(batch, index, value)?;
@@ -131,8 +131,8 @@ where
         Ok(())
     }
 
-    async fn delete(mut self, batch: &mut Batch) -> Result<(), ViewError> {
-        self.context.delete(batch);
+    fn delete(mut self, batch: &mut Batch) -> Result<(), ViewError> {
+        self.context.delete(batch)?;
         Ok(())
     }
 
