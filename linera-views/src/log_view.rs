@@ -36,9 +36,7 @@ pub trait LogOperations<T>: Context {
     ) -> Result<(), Self::Error>;
 
     /// Delete the log. Crash-resistant implementations should only write to `batch`.
-    /// The stored_count is an invariant of the structure. It is a leaky abstraction
-    /// but allows a priori better performance.
-    fn delete(&self, stored_count: usize, batch: &mut Batch) -> Result<(), Self::Error>;
+    fn delete(&self, batch: &mut Batch) -> Result<(), Self::Error>;
 }
 
 #[async_trait]
@@ -87,7 +85,7 @@ where
         Ok(())
     }
 
-    fn delete(&self, stored_count: usize, batch: &mut Batch) -> Result<(), Self::Error> {
+    fn delete(&self, batch: &mut Batch) -> Result<(), Self::Error> {
         batch.delete_key_prefix(self.base_key());
         Ok(())
     }
@@ -123,7 +121,7 @@ where
         if self.was_cleared {
             self.was_cleared = false;
             if self.stored_count > 0 {
-                self.context.delete(self.stored_count, batch)?;
+                self.context.delete(batch)?;
                 self.stored_count = 0;
             }
         }
@@ -136,8 +134,8 @@ where
         Ok(())
     }
 
-    fn delete(mut self, batch: &mut Batch) -> Result<(), ViewError> {
-        self.context.delete(self.stored_count, batch)?;
+    fn delete(self, batch: &mut Batch) -> Result<(), ViewError> {
+        self.context.delete(batch)?;
         Ok(())
     }
 

@@ -81,7 +81,7 @@ where
         Ok(())
     }
 
-    fn delete(mut self, batch: &mut Batch) -> Result<(), ViewError> {
+    fn delete(self, batch: &mut Batch) -> Result<(), ViewError> {
         self.context.delete(batch)?;
         Ok(())
     }
