@@ -98,7 +98,7 @@ ${CLIENT[@]} query_balance "$CHAIN2"
 
 # Launch local benchmark using all user chains
 # TODO uncomment
-#${CLIENT[@]} benchmark --max-in-flight 50
+${CLIENT[@]} benchmark --max-in-flight 50
 
 # Create derived chain
 CHAIN3="`${CLIENT[@]} open_chain --from "$CHAIN1"`"

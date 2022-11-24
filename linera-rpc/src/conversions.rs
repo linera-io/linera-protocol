@@ -122,7 +122,12 @@ macro_rules! map_invert {
 /// Delegates the call to an underlying handler and converts types to and from proto
 #[macro_export]
 macro_rules! convert_and_delegate {
-    ($self:ident, $handler:ident, $req:ident) => {
+    ($self:ident, $handler:ident, $req:ident) => {{
+        log::debug!(
+            "server handler [{}] received delegating request [{:?}] ",
+            stringify!($handler),
+            $req
+        );
         Ok(Response::new(
             match $self
                 .state
@@ -134,12 +139,17 @@ macro_rules! convert_and_delegate {
                 Err(error) => NodeError::from(error).into(),
             },
         ))
-    };
+    }};
 }
 
 #[macro_export]
 macro_rules! client_delegate {
     ($self:ident, $handler:ident, $req:ident) => {{
+        log::debug!(
+            "client handler [{}] received delegating request [{:?}] ",
+            stringify!($handler),
+            $req
+        );
         let request = Request::new($req.try_into().expect("todo"));
         match $self
             .0
@@ -406,9 +416,7 @@ impl TryFrom<ChainInfoQuery> for ChainInfoQueryRpc {
 impl From<Medium> for MediumRpc {
     fn from(medium: Medium) -> Self {
         match medium {
-            Medium::Direct => MediumRpc {
-                channel: None
-            },
+            Medium::Direct => MediumRpc { channel: None },
             Medium::Channel(channel) => MediumRpc {
                 channel: Some(channel),
             },
@@ -420,7 +428,7 @@ impl From<MediumRpc> for Medium {
     fn from(medium: MediumRpc) -> Self {
         match medium.channel {
             None => Medium::Direct,
-            Some(medium) => Medium::Channel(medium)
+            Some(medium) => Medium::Channel(medium),
         }
     }
 }
@@ -514,7 +522,7 @@ impl TryFrom<OriginRpc> for Origin {
 impl From<ValidatorName> for PublicKeyRPC {
     fn from(validator_name: ValidatorName) -> Self {
         Self {
-            bytes: validator_name.0 .0.to_vec(),
+            bytes: validator_name.0.0.to_vec(),
         }
     }
 }
@@ -523,7 +531,7 @@ impl TryFrom<PublicKeyRPC> for ValidatorName {
     type Error = ProtoConversionError;
 
     fn try_from(public_key: PublicKeyRPC) -> Result<Self, Self::Error> {
-        public_key.try_into()
+        Ok(ValidatorName(public_key.try_into()?))
     }
 }
 
@@ -598,5 +606,34 @@ impl TryFrom<OwnerRPC> for Owner {
         Ok(Self {
             0: try_proto_convert!(owner.inner),
         })
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+    use serde::{Serialize, Deserialize};
+    use linera_base::crypto::BcsSignable;
+    use std::str::FromStr;
+    use linera_base::crypto::KeyPair;
+
+    #[derive(Debug, Serialize, Deserialize)]
+    struct Foo(String);
+
+    impl BcsSignable for Foo {}
+
+    #[test]
+    pub fn test_public_key() {
+        let key_pair = KeyPair::generate();
+        let public_key_rpc = PublicKeyRPC::try_from(key_pair.public()).unwrap();
+        assert_eq!(key_pair.public(), public_key_rpc.try_into().unwrap())
+    }
+
+    #[test]
+    pub fn test_signature() {
+        let key_pair = KeyPair::generate();
+        let signature = Signature::new(&Foo("test".into()), &key_pair);
+        let signature_rpc = SignatureRPC::try_from(signature).unwrap();
+        assert_eq!(signature, signature_rpc.try_into().unwrap())
     }
 }

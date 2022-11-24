@@ -123,7 +123,12 @@ where
             mpsc::channel(cross_chain_config.queue_size);
 
         tokio::spawn({
-            info!("spawning cross-chain queries thread for {}", shard_id);
+            info!(
+                "[{}] spawning cross-chain queries thread on {} for shard {}",
+                state.nickname(),
+                host,
+                shard_id
+            );
             Self::forward_cross_chain_queries(
                 state.nickname().to_string(),
                 network.clone(),
@@ -179,6 +184,8 @@ where
         mut receiver: mpsc::Receiver<(linera_core::messages::CrossChainRequest, ShardId)>,
     ) {
         let mut queries_sent = 0u64;
+        let mut failed = 0u64;
+
         let mut pool = ClientPool::new();
 
         while let Some((cross_chain_request, shard_id)) = receiver.next().await {
@@ -186,13 +193,17 @@ where
 
             let request = Request::new(cross_chain_request.try_into().expect("todo"));
             let client = pool
-                .mut_client_for_address(shard.address())
+                .mut_client_for_address(format!("http://{}", shard.address()))
                 .await
                 .expect("todo");
 
             match client.handle_cross_chain_request(request).await {
                 Ok(_) => queries_sent += 1,
-                Err(error) => error!("[{}] cross chain query failed: {:?}", nickname, error),
+                Err(error) => {
+                    failed += 1;
+                    error!("[{}] cross chain query to {} failed: {:?}", nickname, shard.address(), error);
+                    error!("[{}] queries succeeded: {}. queries failed: {}", nickname, queries_sent, failed);
+                },
             }
 
             if queries_sent % 2000 == 0 {
@@ -222,10 +233,16 @@ where
         &self,
         request: Request<Certificate>,
     ) -> Result<Response<ChainInfoResult>, Status> {
+        debug!(
+            "server handler [handle_certificate] received delegating request [{:?}] ",
+            request
+        );
         match self
             .state
             .clone()
-            .handle_certificate(request.into_inner().try_into()?)
+            .handle_certificate({
+                request.into_inner().try_into()?
+            })
             .await
         {
             Ok((info, continuation)) => {
@@ -267,6 +284,10 @@ where
         &self,
         request: Request<Certificate>,
     ) -> Result<Response<ChainInfoResult>, Status> {
+        debug!(
+            "server handler [handle_certificate] received delegating request [{:?}] ",
+            request
+        );
         match self
             .state
             .clone()
@@ -299,6 +320,10 @@ where
         &self,
         request: Request<CrossChainRequest>,
     ) -> Result<Response<()>, Status> {
+        debug!(
+            "server handler [handle_cross_chain_request] received delegating request [{:?}] ",
+            request
+        );
         match self
             .state
             .clone()

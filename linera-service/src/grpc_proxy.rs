@@ -6,6 +6,8 @@ use linera_rpc::{
     config::{ShardConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig},
     grpc_network::{
         grpc_network::{
+            validator_node_client::ValidatorNodeClient,
+            validator_node_server::{ValidatorNode, ValidatorNodeServer},
             validator_worker_client::ValidatorWorkerClient,
             validator_worker_server::{ValidatorWorker, ValidatorWorkerServer},
             ChainInfoResult,
@@ -15,6 +17,7 @@ use linera_rpc::{
     pool::ClientPool,
 };
 use linera_service::config::{Import, ValidatorServerConfig};
+use linera_views::generic_array::typenum::Gr;
 use std::{net::SocketAddr, path::PathBuf, str::FromStr};
 use structopt::StructOpt;
 use tonic::{
@@ -25,13 +28,20 @@ use tonic::{
 /// Boilerplate to extract the underlying chain id, use it to get the corresponding shard
 /// and forward the message.
 macro_rules! proxy {
-    ($self:ident, $handler:ident, $req:ident) => {{
+    ($self:ident, $handler:ident, $req:ident, $client:ident) => {{
+        log::debug!(
+            "handler [{}:{}] proxying request [{:?}] from {:?}",
+            stringify!($client),
+            stringify!($handler),
+            $req,
+            $req.remote_addr()
+        );
         let inner = $req.into_inner();
         let shard = $self
             .shard_for(&inner)
             .ok_or(Status::not_found("could not find shard for message"))?;
         let mut client = $self
-            .client_for_shard(&shard)
+            .$client(&shard)
             .await
             .map_err(|_| Status::internal("could not connect to shard"))?;
         client.$handler(inner).await
@@ -70,13 +80,18 @@ impl GrpcProxy {
         let address = grpc_proxy.address()?;
 
         Ok(Server::builder()
-            .add_service(grpc_proxy.into_server())
+            .add_service(grpc_proxy.as_validator_worker())
+            .add_service(grpc_proxy.as_validator_node())
             .serve(address)
             .await?)
     }
 
-    fn into_server(self) -> ValidatorWorkerServer<Self> {
-        ValidatorWorkerServer::new(self)
+    fn as_validator_worker(&self) -> ValidatorWorkerServer<Self> {
+        ValidatorWorkerServer::new(self.clone())
+    }
+
+    fn as_validator_node(&self) -> ValidatorNodeServer<Self> {
+        ValidatorNodeServer::new(self.clone())
     }
 
     fn address(&self) -> Result<SocketAddr> {
@@ -95,12 +110,22 @@ impl GrpcProxy {
     }
 
     // todo: if we want to use a pool here we'll need to wrap it up in an Arc<Mutex>
-    async fn client_for_shard(
+    async fn worker_client_for_shard(
         &self,
         shard: &ShardConfig,
     ) -> Result<ValidatorWorkerClient<Channel>> {
-        let address = format!("{}:{}", shard.host, shard.port);
+        let address = format!("http://{}:{}", shard.host, shard.port);
         let client = ValidatorWorkerClient::connect(address).await?;
+
+        Ok(client)
+    }
+
+    async fn node_client_for_shard(
+        &self,
+        shard: &ShardConfig,
+    ) -> Result<ValidatorNodeClient<Channel>> {
+        let address = format!("http://{}:{}", shard.host, shard.port);
+        let client = ValidatorNodeClient::connect(address).await?;
         Ok(client)
     }
 }
@@ -111,28 +136,72 @@ impl ValidatorWorker for GrpcProxy {
         &self,
         request: Request<BlockProposal>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        proxy!(self, handle_block_proposal, request)
+        proxy!(
+            self,
+            handle_block_proposal,
+            request,
+            worker_client_for_shard
+        )
     }
 
     async fn handle_certificate(
         &self,
         request: Request<Certificate>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        proxy!(self, handle_certificate, request)
+        proxy!(self, handle_certificate, request, worker_client_for_shard)
     }
 
     async fn handle_chain_info_query(
         &self,
         request: Request<ChainInfoQuery>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        proxy!(self, handle_chain_info_query, request)
+        proxy!(
+            self,
+            handle_chain_info_query,
+            request,
+            worker_client_for_shard
+        )
     }
 
     async fn handle_cross_chain_request(
         &self,
         request: Request<CrossChainRequest>,
     ) -> Result<Response<()>, Status> {
-        proxy!(self, handle_cross_chain_request, request)
+        proxy!(
+            self,
+            handle_cross_chain_request,
+            request,
+            worker_client_for_shard
+        )
+    }
+}
+
+#[async_trait]
+impl ValidatorNode for GrpcProxy {
+    async fn handle_block_proposal(
+        &self,
+        request: Request<BlockProposal>,
+    ) -> Result<Response<ChainInfoResult>, Status> {
+        proxy!(self, handle_block_proposal, request, node_client_for_shard)
+    }
+
+    async fn handle_certificate(
+        &self,
+        request: Request<Certificate>,
+    ) -> Result<Response<ChainInfoResult>, Status> {
+        proxy!(self, handle_certificate, request, node_client_for_shard)
+    }
+
+    async fn handle_chain_info_query(
+        &self,
+        request: Request<ChainInfoQuery>,
+    ) -> Result<Response<ChainInfoResult>, Status> {
+        proxy!(
+            self,
+            handle_chain_info_query,
+            request,
+            node_client_for_shard
+        )
     }
 }
 
