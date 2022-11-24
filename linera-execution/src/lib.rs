@@ -22,7 +22,9 @@ pub use wasm::{WasmApplication, WasmExecutionError};
 
 use async_trait::async_trait;
 use dashmap::DashMap;
-use linera_base::messages::{ApplicationId, BlockHeight, ChainId, Destination, EffectId};
+use linera_base::messages::{
+    ApplicationId, BlockHeight, BytecodeId, ChainId, Destination, EffectId,
+};
 use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -62,6 +64,8 @@ pub enum ExecutionError {
     #[error("Attempted to call an application while the state is locked")]
     ApplicationIsInUse,
 
+    #[error("Attempt to create an application using unknown bytecode {0:?}")]
+    UnknownBytecode(BytecodeId),
     #[error("Application {0:?} is not known by the chain")]
     UnknownApplication(Box<ApplicationId>),
 }
