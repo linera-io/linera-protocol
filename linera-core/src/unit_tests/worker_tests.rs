@@ -18,15 +18,13 @@ use linera_execution::{
     system::{Address, Amount, Balance, SystemEffect, SystemOperation, UserData, ADMIN_CHANNEL},
     ChainOwnership, Effect, ExecutionStateView, Operation, SystemExecutionState,
 };
-use linera_storage::{
-    ChainRuntimeContext, DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient, Store,
-};
-use linera_views::{memory::MemoryContext, test_utils::LocalStackTestContext, views::ViewError};
+use linera_storage::{DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient, Store};
+use linera_views::{test_utils::LocalStackTestContext, views::ViewError};
 use std::collections::{BTreeMap, BTreeSet};
 use test_log::test;
 
 async fn make_state_hash(state: SystemExecutionState) -> HashValue {
-    ExecutionStateView::<MemoryContext<ChainRuntimeContext>>::from_system_state(state)
+    ExecutionStateView::from_system_state(state)
         .await
         .hash_value()
         .await

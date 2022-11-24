@@ -22,8 +22,11 @@ use linera_views::{
 
 #[cfg(any(test, feature = "test"))]
 use {
-    crate::system::SystemExecutionState, linera_views::memory::MemoryContext,
-    std::collections::BTreeMap, std::sync::Arc, tokio::sync::Mutex,
+    crate::{system::SystemExecutionState, TestExecutionRuntimeContext},
+    linera_views::memory::MemoryContext,
+    std::collections::BTreeMap,
+    std::sync::Arc,
+    tokio::sync::Mutex,
 };
 
 /// A view accessing the execution state of a chain.
@@ -44,17 +47,17 @@ impl_view!(
 );
 
 #[cfg(any(test, feature = "test"))]
-impl<R> ExecutionStateView<MemoryContext<R>>
+impl ExecutionStateView<MemoryContext<TestExecutionRuntimeContext>>
 where
-    R: ExecutionRuntimeContext,
-    MemoryContext<R>: ExecutionStateViewContext,
-    ViewError: From<<MemoryContext<R> as linera_views::common::Context>::Error>,
+    MemoryContext<TestExecutionRuntimeContext>: ExecutionStateViewContext,
+    ViewError:
+        From<<MemoryContext<TestExecutionRuntimeContext> as linera_views::common::Context>::Error>,
 {
     /// Create an in-memory view where the system state is set. This is used notably to
     /// generate state hashes in tests.
     pub async fn from_system_state(state: SystemExecutionState) -> Self {
         let guard = Arc::new(Mutex::new(BTreeMap::new())).lock_owned().await;
-        let extra = ExecutionRuntimeContext::new(
+        let extra = TestExecutionRuntimeContext::new(
             state
                 .description
                 .expect("Chain description should be set")
