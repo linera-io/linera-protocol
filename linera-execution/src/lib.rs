@@ -1,12 +1,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod application_registry;
 mod execution;
 mod ownership;
 mod runtime;
 pub mod system;
 mod wasm;
 
+pub use application_registry::{ApplicationRegistryView, ApplicationRegistryViewContext};
 pub use execution::{ExecutionStateView, ExecutionStateViewContext};
 pub use ownership::ChainOwnership;
 #[cfg(any(test, feature = "test"))]
