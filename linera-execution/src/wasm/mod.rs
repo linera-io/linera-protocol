@@ -22,9 +22,9 @@ mod runtime;
 mod runtime;
 
 use crate::{
-    ApplicationCallResult, CalleeContext, EffectContext, ExecutionError, OperationContext,
-    QueryContext, QueryableStorage, RawExecutionResult, SessionCallResult, SessionId,
-    UserApplication, WritableStorage,
+    ApplicationCallResult, Bytecode, CalleeContext, EffectContext, ExecutionError,
+    OperationContext, QueryContext, QueryableStorage, RawExecutionResult, SessionCallResult,
+    SessionId, UserApplication, WritableStorage,
 };
 use async_trait::async_trait;
 use std::{io, path::Path};
@@ -33,8 +33,8 @@ use tokio::fs;
 
 /// A user application in a compiled WebAssembly module.
 pub struct WasmApplication {
-    contract_bytecode: Vec<u8>,
-    service_bytecode: Vec<u8>,
+    contract_bytecode: Bytecode,
+    service_bytecode: Bytecode,
 }
 
 impl WasmApplication {
@@ -44,8 +44,8 @@ impl WasmApplication {
         service_bytecode_file: impl AsRef<Path>,
     ) -> Result<Self, io::Error> {
         Ok(WasmApplication {
-            contract_bytecode: fs::read(contract_bytecode_file).await?,
-            service_bytecode: fs::read(service_bytecode_file).await?,
+            contract_bytecode: Bytecode(fs::read(contract_bytecode_file).await?),
+            service_bytecode: Bytecode(fs::read(service_bytecode_file).await?),
         })
     }
 }

@@ -475,3 +475,9 @@ pub struct ApplicationStateNotLocked;
 /// A WebAssembly module's bytecode.
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct Bytecode(Vec<u8>);
+
+impl AsRef<[u8]> for Bytecode {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+}
