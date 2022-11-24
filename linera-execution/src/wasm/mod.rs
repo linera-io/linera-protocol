@@ -38,6 +38,14 @@ pub struct WasmApplication {
 }
 
 impl WasmApplication {
+    /// Create a new [`WasmApplication`] using the WebAssembly module with the provided bytecodes.
+    pub fn new(contract_bytecode: Bytecode, service_bytecode: Bytecode) -> Self {
+        WasmApplication {
+            contract_bytecode,
+            service_bytecode,
+        }
+    }
+
     /// Create a new [`WasmApplication`] using the WebAssembly module in `bytecode_file`.
     pub async fn from_files(
         contract_bytecode_file: impl AsRef<Path>,
