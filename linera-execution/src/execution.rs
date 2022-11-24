@@ -77,6 +77,7 @@ where
 }
 
 enum UserAction<'a> {
+    Initialize(&'a OperationContext, &'a [u8]),
     Operation(&'a OperationContext, &'a [u8]),
     Effect(&'a EffectContext, &'a [u8]),
 }
@@ -111,6 +112,9 @@ where
         );
         // Make the call to user code.
         let result = match action {
+            UserAction::Initialize(context, argument) => {
+                application.initialize(context, &runtime, argument).await?
+            }
             UserAction::Operation(context, operation) => {
                 application
                     .execute_operation(context, &runtime, operation)
@@ -144,7 +148,12 @@ where
             match operation {
                 Operation::System(op) => {
                     let result = self.system.execute_operation(context, op).await?;
-                    Ok(vec![result])
+                    let mut results = vec![result];
+                    results.extend(
+                        self.try_initialize_new_application(context, &results[0])
+                            .await?,
+                    );
+                    Ok(results)
                 }
                 _ => Err(ExecutionError::InvalidOperation),
             }
@@ -160,6 +169,28 @@ where
                     .await
                 }
             }
+        }
+    }
+
+    /// Call a newly created application's [`initialize`][crate::UserApplication::initialize]
+    /// method, so that it can initialize its state using the initialization argument.
+    async fn try_initialize_new_application(
+        &mut self,
+        context: &OperationContext,
+        result: &ExecutionResult,
+    ) -> Result<Vec<ExecutionResult>, ExecutionError> {
+        if let ExecutionResult::System {
+            new_application: Some(new_application),
+            ..
+        } = result
+        {
+            let user_action =
+                UserAction::Initialize(context, &new_application.initialization_argument);
+
+            self.run_user_action(new_application.id, context.chain_id, user_action)
+                .await
+        } else {
+            Ok(vec![])
         }
     }
 
