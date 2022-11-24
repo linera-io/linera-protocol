@@ -39,8 +39,6 @@ pub enum ExecutionError {
     #[error(transparent)]
     WasmError(#[from] WasmExecutionError),
 
-    #[error("Unknown application")]
-    UnknownApplication,
     #[error("A session is still opened at the end of a transaction")]
     SessionWasNotClosed,
     #[error("Invalid operation for this application")]
@@ -61,6 +59,9 @@ pub enum ExecutionError {
     InvalidSessionOwner,
     #[error("Attempted to call an application while the state is locked")]
     ApplicationIsInUse,
+
+    #[error("Application {0:?} is not known by the chain")]
+    UnknownApplication(Box<ApplicationId>),
 }
 
 impl From<ViewError> for ExecutionError {
@@ -169,7 +170,7 @@ pub trait ExecutionRuntimeContext {
         Ok(self
             .user_applications()
             .get(&application_id)
-            .ok_or(ExecutionError::UnknownApplication)?
+            .ok_or(ExecutionError::UnknownApplication(application_id))?
             .clone())
     }
 }

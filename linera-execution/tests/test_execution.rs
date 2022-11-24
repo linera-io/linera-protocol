@@ -34,7 +34,10 @@ async fn test_missing_user_application() {
         .execute_operation(app_id, &context, &Operation::User(vec![]))
         .await;
 
-    assert!(matches!(result, Err(ExecutionError::UnknownApplication)))
+    assert!(matches!(
+        result,
+        Err(ExecutionError::UnknownApplication(id)) if *id == app_id
+    ));
 }
 
 struct TestApplication;
