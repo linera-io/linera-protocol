@@ -1,14 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    views::{HashingContext, ViewError},
-};
+use crate::views::{HashingContext, ViewError};
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
-use std::fmt::Debug;
 use std::{
     collections::{BTreeMap, BTreeSet},
+    fmt::Debug,
     ops::{
         Bound,
         Bound::{Excluded, Included, Unbounded},
@@ -64,7 +62,6 @@ pub fn has_natural_prefix_upper_bound(key_prefix: &[u8]) -> bool {
     false
 }
 
-
 impl Batch {
     /// building a batch from a function
     pub async fn build<F>(builder: F) -> Result<Self, ViewError>
@@ -84,19 +81,29 @@ impl Batch {
         let mut set_key_prefix = BTreeSet::new();
         for op in self.operations {
             match op {
-                WriteOperation::Delete { key } => { map_delete_insert.insert(key, None); },
-                WriteOperation::Put { key, value } => { map_delete_insert.insert(key, Some(value)); },
+                WriteOperation::Delete { key } => {
+                    map_delete_insert.insert(key, None);
+                }
+                WriteOperation::Put { key, value } => {
+                    map_delete_insert.insert(key, Some(value));
+                }
                 WriteOperation::DeletePrefix { key_prefix } => {
-                    let key_list : Vec<Vec<u8>> = map_delete_insert.range(get_interval(key_prefix.clone())).map(|x| x.0.to_vec()).collect();
+                    let key_list: Vec<Vec<u8>> = map_delete_insert
+                        .range(get_interval(key_prefix.clone()))
+                        .map(|x| x.0.to_vec())
+                        .collect();
                     for key in key_list {
                         map_delete_insert.remove(&key);
                     }
-                    let key_prefix_list : Vec<Vec<u8>> = set_key_prefix.range(get_interval(key_prefix.clone())).map(|x: &Vec<u8>| x.to_vec()).collect();
+                    let key_prefix_list: Vec<Vec<u8>> = set_key_prefix
+                        .range(get_interval(key_prefix.clone()))
+                        .map(|x: &Vec<u8>| x.to_vec())
+                        .collect();
                     for key_prefix in key_prefix_list {
                         set_key_prefix.remove(&key_prefix);
                     }
                     set_key_prefix.insert(key_prefix);
-                },
+                }
             }
         }
         let mut operations = Vec::with_capacity(set_key_prefix.len() + map_delete_insert.len());
@@ -139,7 +146,8 @@ impl Batch {
     /// Insert a DeletePrefix { key_prefix } into the batch
     #[inline]
     pub fn delete_key_prefix(&mut self, key_prefix: Vec<u8>) {
-        self.operations.push(WriteOperation::DeletePrefix { key_prefix });
+        self.operations
+            .push(WriteOperation::DeletePrefix { key_prefix });
     }
 }
 

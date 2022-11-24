@@ -181,13 +181,17 @@ impl KeyValueOperations for DynamoDbContainer {
         let mut insert_list = Vec::new();
         for op in batch.simplify().operations {
             match op {
-                WriteOperation::Delete { key } => { delete_list.push(key); },
-                WriteOperation::Put { key, value } => { insert_list.push((key,value)); },
+                WriteOperation::Delete { key } => {
+                    delete_list.push(key);
+                }
+                WriteOperation::Put { key, value } => {
+                    insert_list.push((key, value));
+                }
                 WriteOperation::DeletePrefix { key_prefix } => {
                     for key in self.find_keys_with_prefix(&key_prefix).await? {
                         delete_list.push(key?);
                     }
-                },
+                }
             };
         }
         for batch_chunk in delete_list.chunks(25) {
@@ -209,7 +213,7 @@ impl KeyValueOperations for DynamoDbContainer {
         for batch_chunk in insert_list.chunks(25) {
             let requests = batch_chunk
                 .iter()
-                .map(|(key,value)| {
+                .map(|(key, value)| {
                     let request = PutRequest::builder()
                         .set_item(Some(Self::build_key_value(key.to_vec(), value.to_vec())))
                         .build();

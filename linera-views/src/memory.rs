@@ -1,15 +1,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    common::{get_interval, Batch, ContextFromDb, KeyValueOperations, SimpleKeyIterator, WriteOperation},
+    common::{
+        get_interval, Batch, ContextFromDb, KeyValueOperations, SimpleKeyIterator, WriteOperation,
+    },
     views::ViewError,
 };
 use async_trait::async_trait;
-use std::{
-    collections::BTreeMap,
-    fmt::Debug,
-    sync::Arc,
-};
+use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
 use thiserror::Error;
 use tokio::sync::{OwnedMutexGuard, RwLock};
 
@@ -58,10 +56,17 @@ impl KeyValueOperations for MemoryContainer {
         let mut map = self.write().await;
         for ent in batch.operations {
             match ent {
-                WriteOperation::Put { key, value } => { map.insert(key, value); },
-                WriteOperation::Delete { key } => { map.remove(&key); },
+                WriteOperation::Put { key, value } => {
+                    map.insert(key, value);
+                }
+                WriteOperation::Delete { key } => {
+                    map.remove(&key);
+                }
                 WriteOperation::DeletePrefix { key_prefix } => {
-                    let key_list : Vec<Vec<u8>> = map.range(get_interval(key_prefix)).map(|x| x.0.to_vec()).collect();
+                    let key_list: Vec<Vec<u8>> = map
+                        .range(get_interval(key_prefix))
+                        .map(|x| x.0.to_vec())
+                        .collect();
                     for key in key_list {
                         map.remove(&key);
                     }
