@@ -53,6 +53,9 @@ impl<C: Connect> ConnectionPool<C> {
     }
 
     /// Get a mutable reference to a client if it exists - if not creates a new one.
+    ///
+    /// If a single thread is going to have sporadic access to an underlying client,
+    /// this method is more efficient as there is no cloning overhead.
     pub async fn mut_client_for_address(
         &self,
         remote_address: C::Address,
@@ -65,8 +68,10 @@ impl<C: Connect> ConnectionPool<C> {
     }
 
     /// Clone's a client for the given address if it exists - if not, creates a new one.
-    /// Cloning a gRPC client will re-use the underlying transport
-    /// without needing to instantiate a new connection.
+    /// Cloning a gRPC client will re-use the underlying transport without needing to instantiate a new connection.
+    ///
+    /// For applications with a lot of contention, that is threads accessing the same client
+    /// concurrently,this option is going to be faster then getting a mutable reference.
     pub async fn cloned_client_for_address(
         &self,
         remote_address: C::Address,
