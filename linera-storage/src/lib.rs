@@ -125,14 +125,6 @@ pub struct ChainRuntimeContext {
 }
 
 impl ExecutionRuntimeContext for ChainRuntimeContext {
-    fn new(chain_id: ChainId) -> Self {
-        Self {
-            chain_id,
-            user_applications: Arc::default(),
-            chain_guard: None,
-        }
-    }
-
     fn chain_id(&self) -> ChainId {
         self.chain_id
     }

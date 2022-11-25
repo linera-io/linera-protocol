@@ -170,9 +170,6 @@ pub struct NewSession {
 /// Requirements for the `extra` field in our state views (and notably the
 /// [`ExecutionStateView`]).
 pub trait ExecutionRuntimeContext {
-    #[cfg(any(test, feature = "test"))]
-    fn new(chain_id: ChainId) -> Self;
-
     fn chain_id(&self) -> ChainId;
 
     fn user_applications(&self) -> &Arc<DashMap<ApplicationId, UserApplicationCode>>;
@@ -399,14 +396,17 @@ pub struct TestExecutionRuntimeContext {
 }
 
 #[cfg(any(test, feature = "test"))]
-impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
+impl TestExecutionRuntimeContext {
     fn new(chain_id: ChainId) -> Self {
         Self {
             chain_id,
             user_applications: Arc::default(),
         }
     }
+}
 
+#[cfg(any(test, feature = "test"))]
+impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
     fn chain_id(&self) -> ChainId {
         self.chain_id
     }
