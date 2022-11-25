@@ -110,7 +110,6 @@ impl GrpcProxy {
         )
     }
 
-    // todo: if we want to use a pool here we'll need to wrap it up in an Arc<Mutex>
     async fn worker_client_for_shard(
         &self,
         shard: &ShardConfig,

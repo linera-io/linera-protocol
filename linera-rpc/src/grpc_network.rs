@@ -173,13 +173,14 @@ where
                 self.shard_id,
                 shard_id
             );
-            // todo change to `send_all` + `feed`
+
             sender
                 .feed((request, shard_id))
                 .await
                 .expect("internal channel should not fail") // why would this fail?
         }
-        let _ = sender.flush();
+
+        let _  = sender.flush();
     }
 
     async fn forward_cross_chain_queries(

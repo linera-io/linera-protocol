@@ -60,7 +60,6 @@ impl<C: Connect> ConnectionPool<C> {
         &self,
         remote_address: C::Address,
     ) -> Result<RefMut<C::Address, C>, GrpcError> {
-        // todo look into passing a Function
         Ok(self
             .0
             .entry(remote_address.clone())
@@ -68,10 +67,11 @@ impl<C: Connect> ConnectionPool<C> {
     }
 
     /// Clone's a client for the given address if it exists - if not, creates a new one.
-    /// Cloning a gRPC client will re-use the underlying transport without needing to instantiate a new connection.
+    /// Cloning a gRPC client will re-use the underlying transport without needing to
+    /// establish a new connection.
     ///
-    /// For applications with a lot of contention, that is threads accessing the same client
-    /// concurrently,this option is going to be faster then getting a mutable reference.
+    /// For applications with a lot of contention, that is, threads accessing the same client
+    /// concurrently,this option is going to be faster than getting a mutable reference.
     pub async fn cloned_client_for_address(
         &self,
         remote_address: C::Address,
