@@ -6,7 +6,7 @@ use crate::{
     execution::{ExecutionStateView, ExecutionStateViewContext},
     ApplicationStateNotLocked, CallResult, ExecutionError, ExecutionResult,
     ExecutionRuntimeContext, NewSession, QueryableStorage, ReadableStorage, SessionId,
-    WritableStorage,
+    UserApplicationCode, WritableStorage,
 };
 use async_trait::async_trait;
 use linera_base::{
@@ -126,6 +126,16 @@ where
         self.execution_results
             .try_lock()
             .expect("single-threaded execution should not lock `execution_results`")
+    }
+
+    async fn load_application(
+        &self,
+        id: ApplicationId,
+    ) -> Result<UserApplicationCode, ExecutionError> {
+        self.execution_state_mut()
+            .context()
+            .extra()
+            .get_user_application(id)
     }
 
     fn forward_sessions(
@@ -295,11 +305,7 @@ where
         argument: &[u8],
     ) -> Result<Vec<u8>, ExecutionError> {
         // Load the application.
-        let application = self
-            .execution_state_mut()
-            .context()
-            .extra()
-            .get_user_application(queried_id)?;
+        let application = self.load_application(queried_id).await?;
         // Make the call to user code.
         let query_context = crate::QueryContext {
             chain_id: self.chain_id,
@@ -357,11 +363,7 @@ where
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<CallResult, ExecutionError> {
         // Load the application.
-        let application = self
-            .execution_state_mut()
-            .context()
-            .extra()
-            .get_user_application(callee_id)?;
+        let application = self.load_application(callee_id).await?;
         // Change the owners of forwarded sessions.
         self.forward_sessions(&forwarded_sessions, self.application_id(), callee_id)?;
         // Make the call to user code.
@@ -398,11 +400,7 @@ where
     ) -> Result<CallResult, ExecutionError> {
         // Load the application.
         let callee_id = session_id.application_id;
-        let application = self
-            .execution_state_mut()
-            .context()
-            .extra()
-            .get_user_application(callee_id)?;
+        let application = self.load_application(callee_id).await?;
         // Change the owners of forwarded sessions.
         self.forward_sessions(&forwarded_sessions, self.application_id(), callee_id)?;
         // Load the session.
