@@ -613,11 +613,12 @@ impl TryFrom<OwnerRPC> for Owner {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use linera_base::crypto::{BcsSignable, KeyPair};
+    use linera_base::crypto::{BcsSignable, HashValue, KeyPair};
     use serde::{Deserialize, Serialize};
     use std::str::FromStr;
     use structopt::lazy_static::lazy_static;
-    use linera_chain::messages::{BlockAndRound, Value};
+    use linera_chain::messages::{Block, BlockAndRound, Value};
+    use linera_core::messages::ChainInfo;
 
     #[derive(Debug, Serialize, Deserialize)]
     struct Foo(String);
@@ -626,6 +627,14 @@ pub mod tests {
 
     lazy_static! {
         static ref CHAIN_ID: ChainId = ChainId::from_str("dc07bbb3e3583738cfccc9489cd0959703d6ae9fd73316ab2fdea0e8bcff2467cbd986a25b352afd422b123aa84e9b680ee6fd9f56c685cb2b5e29d87a2ac5d9").unwrap();
+        static ref BLOCK: Block = Block {
+                    chain_id: CHAIN_ID.clone(),
+                    epoch: Default::default(),
+                    incoming_messages: vec![],
+                    operations: vec![],
+                    height: Default::default(),
+                    previous_block_hash: None,
+                };
     }
 
     /// A convenience macro for testing. It converts a type into its
@@ -641,14 +650,6 @@ pub mod tests {
     pub fn test_public_key() {
         let public_key = KeyPair::generate().public();
         compare!(public_key, PublicKeyRPC);
-    }
-
-    #[test]
-    pub fn validator_name() {
-        let validator_name = ValidatorName::from(KeyPair::generate().public());
-        // This is a correct comparison - `ValidatorNameRpc` does not exist in our
-        // proto definitions.
-        compare!(validator_name, PublicKeyRPC);
     }
 
     #[test]
@@ -681,6 +682,14 @@ pub mod tests {
     }
 
     #[test]
+    pub fn validator_name() {
+        let validator_name = ValidatorName::from(KeyPair::generate().public());
+        // This is a correct comparison - `ValidatorNameRpc` does not exist in our
+        // proto definitions.
+        compare!(validator_name, PublicKeyRPC);
+    }
+
+    #[test]
     pub fn test_chain_id() {
         let chain_id = CHAIN_ID.clone();
         compare!(chain_id, ChainIdRPC);
@@ -709,7 +718,35 @@ pub mod tests {
 
     #[test]
     pub fn test_chain_info_response() {
-        unimplemented!()
+        let chain_info = ChainInfo {
+            chain_id: CHAIN_ID.clone(),
+            epoch: None,
+            description: None,
+            manager: Default::default(),
+            system_balance: Default::default(),
+            block_hash: None,
+            next_block_height: Default::default(),
+            state_hash: None,
+            requested_committees: None,
+            requested_pending_messages: vec![],
+            requested_sent_certificates: vec![],
+            count_received_certificates: 0,
+            requested_received_certificates: vec![],
+        };
+
+        let chain_info_response_none = ChainInfoResponse {
+            // `info` is bcs so no need to test extensively
+            info: chain_info.clone(),
+            signature: None,
+        };
+        compare!(chain_info_response_none, ChainInfoResponseRPC);
+
+        let chain_info_response_some = ChainInfoResponse {
+            // `info` is bcs so no need to test extensively
+            info: chain_info.clone(),
+            signature: Some(Signature::new(&Foo("test".into()), &KeyPair::generate())),
+        };
+        compare!(chain_info_response_some, ChainInfoResponseRPC);
     }
 
     #[test]
@@ -733,7 +770,20 @@ pub mod tests {
 
     #[test]
     pub fn test_certificate() {
-        unimplemented!()
+        let key_pair = KeyPair::generate();
+        let certificate_validated = Certificate::new(
+            Value::ValidatedBlock {
+                block: BLOCK.clone(),
+                round: Default::default(),
+                effects: vec![],
+                state_hash: HashValue::new(&Foo("test".into()))
+            },
+            vec![
+                (ValidatorName::from(key_pair.public()), Signature::new(&Foo("test".into()), &key_pair))
+            ]
+        );
+
+        compare!(certificate_validated, CertificateRpc);
     }
 
     #[test]
@@ -757,6 +807,17 @@ pub mod tests {
 
     #[test]
     pub fn test_block_proposal() {
-        unimplemented!()
+        use linera_chain::messages::Block;
+
+        let block_proposal = BlockProposal {
+            content: BlockAndRound {
+                block: BLOCK.clone(),
+                round: Default::default()
+            },
+            owner: Owner::from(KeyPair::generate().public()),
+            signature: Signature::new(&Foo("test".into()), &KeyPair::generate()),
+        };
+
+        compare!(block_proposal, BlockProposalRpc);
     }
 }

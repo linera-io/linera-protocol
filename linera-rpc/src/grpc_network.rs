@@ -196,6 +196,9 @@ where
                 .mut_client_for_address(format!("http://{}", shard.address()))
                 .await
                 .expect("todo");
+
+            let mut back_off = Duration::from_millis(100);
+
             for i in 0..10 {
                 let request = Request::new(cross_chain_request.clone().try_into().expect("todo"));
                 match client.handle_cross_chain_request(request).await {
@@ -206,17 +209,19 @@ where
                     Err(error) => {
                         if i < 10 {
                             failed += 1;
+                            back_off = back_off * 2;
                             error!(
-                                "[{}] cross chain query to {} failed: {:?}",
+                                "[{}] cross chain query to {} failed: {:?}, backing off for {} ms...",
                                 nickname,
                                 shard.address(),
-                                error
+                                error,
+                                back_off.as_millis()
                             );
                             error!(
                                 "[{}] queries succeeded: {}. queries failed: {}",
                                 nickname, queries_sent, failed
                             );
-                            tokio::time::sleep(Duration::from_millis(2000)).await;
+                            tokio::time::sleep(back_off).await;
                         } else {
                             error!(
                                 "[{}] Failed to send cross-chain query (giving up after {} retries): {}",
