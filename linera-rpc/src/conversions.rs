@@ -33,7 +33,7 @@ use crate::grpc_network::grpc::ChainId as ChainIdRPC;
 use linera_base::messages::ChainId;
 
 use crate::grpc_network::grpc::PublicKey as PublicKeyRPC;
-use linera_base::crypto::{CryptoError, PublicKey, PublicKeyFromStrError};
+use linera_base::crypto::{CryptoError, PublicKey};
 
 use crate::grpc_network::grpc::Signature as SignatureRPC;
 use linera_base::crypto::Signature;
@@ -56,9 +56,6 @@ pub enum ProtoConversionError {
     MissingField,
     #[error("Signature error: {0}")]
     SignatureError(#[from] ed25519_dalek::SignatureError),
-    #[error("Public key error: {0}")]
-    PublicKeyError(#[from] PublicKeyFromStrError),
-    // todo do we want this?
     #[error("Cryptographic error: {0}")]
     CryptoError(#[from] CryptoError),
 }

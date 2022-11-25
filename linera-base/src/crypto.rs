@@ -44,15 +44,18 @@ pub struct Signature(pub dalek::Signature);
 pub enum CryptoError {
     #[error("Signature for object {type_name} is not valid: {error}")]
     InvalidSignature { error: String, type_name: String },
-    #[error("Error attempting to convert a string into a public key {0}")]
-    PublicKeyFromStrError(#[from] PublicKeyFromStrError),
-    #[error("Error attempting to convert a string into a hash value {0}")]
-    HashFromStrError(#[from] HashFromStrError),
+    #[error("String contains non-hexadecimal digits")]
+    NonHexDigits(#[from] hex::FromHexError),
     #[error(
         "Byte slice has length {0} but a `HashValue` requires exactly {expected} bytes",
         expected = <sha2::Sha512 as sha2::Digest>::OutputSize::to_usize(),
     )]
     IncorrectHashSize(usize),
+    #[error(
+    "Byte slice has length {0} but a `PublicKey` requires exactly {expected} bytes",
+    expected = dalek::PUBLIC_KEY_LENGTH,
+    )]
+    IncorrectPublicKeySize(usize),
 }
 
 impl PublicKey {
@@ -215,7 +218,7 @@ impl<'de> Deserialize<'de> for Signature {
 }
 
 impl FromStr for PublicKey {
-    type Err = PublicKeyFromStrError;
+    type Err = CryptoError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let value = hex::decode(s)?;
@@ -224,12 +227,11 @@ impl FromStr for PublicKey {
 }
 
 impl TryFrom<&[u8]> for PublicKey {
-    // todo: PublicKeyFromBytesError
-    type Error = PublicKeyFromStrError;
+    type Error = CryptoError;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
         if value.len() != dalek::PUBLIC_KEY_LENGTH {
-            return Err(PublicKeyFromStrError::InvalidLength);
+            return Err(CryptoError::IncorrectPublicKeySize(value.len()));
         }
         let mut pubkey = [0u8; dalek::PUBLIC_KEY_LENGTH];
         pubkey.copy_from_slice(&value[..dalek::PUBLIC_KEY_LENGTH]);
@@ -237,18 +239,8 @@ impl TryFrom<&[u8]> for PublicKey {
     }
 }
 
-/// Error when attempting to convert a string into a [`PublicKey`].
-#[derive(Clone, Copy, Debug, Error)]
-pub enum PublicKeyFromStrError {
-    #[error("Invalid length for hex-encoded public key value")]
-    InvalidLength,
-
-    #[error("String contains non-hexadecimal digits")]
-    NonHexDigits(#[from] hex::FromHexError),
-}
-
 impl FromStr for HashValue {
-    type Err = HashFromStrError;
+    type Err = CryptoError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let value = hex::decode(s)?;
@@ -257,12 +249,11 @@ impl FromStr for HashValue {
 }
 
 impl TryFrom<&[u8]> for HashValue {
-    // todo: HashFromBytesError
-    type Error = HashFromStrError;
+    type Error = CryptoError;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
         if value.len() != <sha2::Sha512 as sha2::Digest>::output_size() {
-            return Err(HashFromStrError::InvalidLength);
+            return Err(CryptoError::IncorrectHashSize(value.len()));
         }
         let mut bytes =
             generic_array::GenericArray::<u8, <sha2::Sha512 as sha2::Digest>::OutputSize>::default(
@@ -428,18 +419,6 @@ impl Signature {
                 type_name: T::type_name().to_string(),
             }
         })
-    }
-}
-
-impl TryFrom<&[u8]> for HashValue {
-    type Error = CryptoError;
-
-    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-        if bytes.len() == <sha2::Sha512 as sha2::Digest>::OutputSize::to_usize() {
-            Ok(HashValue(*generic_array::GenericArray::from_slice(bytes)))
-        } else {
-            Err(CryptoError::IncorrectHashSize(bytes.len()))
-        }
     }
 }
 
