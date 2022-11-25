@@ -58,7 +58,7 @@ enum BaseKey {
 
 #[async_trait]
 impl Store for RocksdbStoreClient {
-    type Context = RocksdbContext<ChainRuntimeContext>;
+    type Context = RocksdbContext<ChainRuntimeContext<Self>>;
     type ContextError = RocksdbContextError;
 
     async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError> {
@@ -67,6 +67,7 @@ impl Store for RocksdbStoreClient {
         log::trace!("Acquiring lock on {:?}", id);
         let guard = self.0.guards.guard(id).await;
         let runtime_context = ChainRuntimeContext {
+            store: self.clone(),
             chain_id: id,
             user_applications: self.0.user_applications.clone(),
             chain_guard: Some(Arc::new(guard)),

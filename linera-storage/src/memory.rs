@@ -29,7 +29,7 @@ pub struct MemoryStoreClient(Arc<MemoryStore>);
 
 #[async_trait]
 impl Store for MemoryStoreClient {
-    type Context = MemoryContext<ChainRuntimeContext>;
+    type Context = MemoryContext<ChainRuntimeContext<Self>>;
     type ContextError = MemoryContextError;
 
     async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError> {
@@ -41,6 +41,7 @@ impl Store for MemoryStoreClient {
             .clone();
         log::trace!("Acquiring lock on {:?}", id);
         let runtime_context = ChainRuntimeContext {
+            store: self.clone(),
             chain_id: id,
             user_applications: self.0.user_applications.clone(),
             chain_guard: None,

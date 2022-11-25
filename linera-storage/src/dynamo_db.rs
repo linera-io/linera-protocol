@@ -129,13 +129,14 @@ enum BaseKey {
 
 #[async_trait]
 impl Store for DynamoDbStoreClient {
-    type Context = DynamoDbContext<ChainRuntimeContext>;
+    type Context = DynamoDbContext<ChainRuntimeContext<Self>>;
     type ContextError = DynamoDbContextError;
 
     async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError> {
         log::trace!("Acquiring lock on {:?}", id);
         let guard = self.0.guards.guard(id).await;
         let runtime_context = ChainRuntimeContext {
+            store: self.clone(),
             chain_id: id,
             user_applications: self.0.user_applications.clone(),
             chain_guard: Some(Arc::new(guard)),

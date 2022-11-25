@@ -28,9 +28,12 @@ use std::{fmt::Debug, sync::Arc};
 
 /// Communicate with a persistent storage using the "views" abstraction.
 #[async_trait]
-pub trait Store {
+pub trait Store: Sized {
     /// The low-level storage implementation in use.
-    type Context: ChainStateViewContext<Extra = ChainRuntimeContext, Error = Self::ContextError>;
+    type Context: ChainStateViewContext<
+        Extra = ChainRuntimeContext<Self>,
+        Error = Self::ContextError,
+    >;
 
     /// Alias to provide simpler trait bounds `ViewError: From<Self::ContextError>`
     type ContextError: std::error::Error + Debug + Sync + Send;
@@ -50,6 +53,7 @@ pub trait Store {
         id: ChainId,
     ) -> Result<ChainStateView<Self::Context>, linera_chain::ChainError>
     where
+        ChainRuntimeContext<Self>: ExecutionRuntimeContext,
         ViewError: From<Self::ContextError>,
     {
         let chain = self.load_chain(id).await?;
@@ -91,6 +95,7 @@ pub trait Store {
         balance: Balance,
     ) -> Result<(), ChainError>
     where
+        ChainRuntimeContext<Self>: ExecutionRuntimeContext,
         ViewError: From<Self::ContextError>,
     {
         let id = description.into();
@@ -118,13 +123,14 @@ pub trait Store {
 }
 
 #[derive(Clone)]
-pub struct ChainRuntimeContext {
+pub struct ChainRuntimeContext<StoreClient> {
+    store: StoreClient,
     pub chain_id: ChainId,
     pub user_applications: Arc<DashMap<ApplicationId, UserApplicationCode>>,
     pub chain_guard: Option<Arc<ChainGuard>>,
 }
 
-impl ExecutionRuntimeContext for ChainRuntimeContext {
+impl<StoreClient> ExecutionRuntimeContext for ChainRuntimeContext<StoreClient> {
     fn chain_id(&self) -> ChainId {
         self.chain_id
     }
