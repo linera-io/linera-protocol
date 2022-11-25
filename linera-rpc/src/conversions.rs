@@ -2,49 +2,49 @@ use ed25519::signature::Signature as edSignature;
 use thiserror::Error;
 use tonic::{Code, Status};
 
-use crate::grpc_network::grpc_network::{
+use crate::grpc_network::grpc::{
     ChainInfoResult, ConfirmUpdateRecipient, CrossChainRequest as CrossChainRequestRpc,
     NameSignaturePair, UpdateRecipient,
 };
 use linera_core::messages::CrossChainRequest;
 
-use crate::grpc_network::grpc_network::BlockProposal as BlockProposalRpc;
+use crate::grpc_network::grpc::BlockProposal as BlockProposalRpc;
 use linera_chain::messages::BlockProposal;
 
-use crate::grpc_network::grpc_network::Certificate as CertificateRpc;
+use crate::grpc_network::grpc::Certificate as CertificateRpc;
 use linera_chain::messages::Certificate;
 
-use crate::grpc_network::grpc_network::ChainInfoQuery as ChainInfoQueryRpc;
+use crate::grpc_network::grpc::ChainInfoQuery as ChainInfoQueryRpc;
 use linera_core::messages::ChainInfoQuery;
 
-use crate::grpc_network::grpc_network::Origin as OriginRpc;
+use crate::grpc_network::grpc::Origin as OriginRpc;
 use linera_base::messages::{Origin, ValidatorName};
 
-use crate::grpc_network::grpc_network::Medium as MediumRpc;
+use crate::grpc_network::grpc::Medium as MediumRpc;
 use linera_base::messages::Medium;
 
-use crate::grpc_network::grpc_network::BlockHeightRange as BlockHeightRangeRPC;
+use crate::grpc_network::grpc::BlockHeightRange as BlockHeightRangeRPC;
 use linera_core::messages::BlockHeightRange;
 
-use crate::grpc_network::grpc_network::ApplicationId as ApplicationIdRPC;
+use crate::grpc_network::grpc::ApplicationId as ApplicationIdRPC;
 use linera_base::messages::ApplicationId;
 
-use crate::grpc_network::grpc_network::ChainId as ChainIdRPC;
+use crate::grpc_network::grpc::ChainId as ChainIdRPC;
 use linera_base::messages::ChainId;
 
-use crate::grpc_network::grpc_network::PublicKey as PublicKeyRPC;
+use crate::grpc_network::grpc::PublicKey as PublicKeyRPC;
 use linera_base::crypto::{CryptoError, PublicKey, PublicKeyFromStrError};
 
-use crate::grpc_network::grpc_network::Signature as SignatureRPC;
+use crate::grpc_network::grpc::Signature as SignatureRPC;
 use linera_base::crypto::Signature;
 
-use crate::grpc_network::grpc_network::ChainInfoResponse as ChainInfoResponseRPC;
+use crate::grpc_network::grpc::ChainInfoResponse as ChainInfoResponseRPC;
 use linera_core::messages::ChainInfoResponse;
 
-use crate::grpc_network::grpc_network::BlockHeight as BlockHeightRPC;
+use crate::grpc_network::grpc::BlockHeight as BlockHeightRPC;
 use linera_base::messages::BlockHeight;
 
-use crate::grpc_network::grpc_network::{cross_chain_request::Inner, Owner as OwnerRPC};
+use crate::grpc_network::grpc::{cross_chain_request::Inner, Owner as OwnerRPC};
 use linera_base::messages::Owner;
 use linera_core::node::NodeError;
 
@@ -93,13 +93,6 @@ macro_rules! try_proto_convert_vec {
 macro_rules! map_into {
     ($expr:expr) => {
         $expr.map(|x| x.into())
-    };
-}
-
-/// Try to map a type into another type.
-macro_rules! map_try_into {
-    ($expr:expr) => {
-        $expr.map(|x| x.try_into())
     };
 }
 
@@ -218,7 +211,7 @@ impl TryFrom<ChainInfoResponse> for ChainInfoResult {
     fn try_from(chain_info_response: ChainInfoResponse) -> Result<Self, Self::Error> {
         Ok(ChainInfoResult {
             inner: Some(
-                crate::grpc_network::grpc_network::chain_info_result::Inner::ChainInfoResponse(
+                crate::grpc_network::grpc::chain_info_result::Inner::ChainInfoResponse(
                     chain_info_response.try_into()?,
                 ),
             ),
@@ -229,11 +222,9 @@ impl TryFrom<ChainInfoResponse> for ChainInfoResult {
 impl From<NodeError> for ChainInfoResult {
     fn from(node_error: NodeError) -> Self {
         ChainInfoResult {
-            inner: Some(
-                crate::grpc_network::grpc_network::chain_info_result::Inner::Error(
-                    bcs::to_bytes(&node_error).expect("todo"),
-                ),
-            ),
+            inner: Some(crate::grpc_network::grpc::chain_info_result::Inner::Error(
+                bcs::to_bytes(&node_error).expect("todo"),
+            )),
         }
     }
 }
@@ -548,9 +539,9 @@ impl TryFrom<SignatureRPC> for Signature {
     type Error = ProtoConversionError;
 
     fn try_from(signature: SignatureRPC) -> Result<Self, Self::Error> {
-        Ok(Self {
-            0: ed25519_dalek::Signature::from_bytes(&signature.bytes)?,
-        })
+        Ok(Self(ed25519_dalek::Signature::from_bytes(
+            &signature.bytes,
+        )?))
     }
 }
 
@@ -586,9 +577,7 @@ impl From<BlockHeight> for BlockHeightRPC {
 
 impl From<BlockHeightRPC> for BlockHeight {
     fn from(block_height: BlockHeightRPC) -> Self {
-        Self {
-            0: block_height.height,
-        }
+        Self(block_height.height)
     }
 }
 
@@ -604,9 +593,7 @@ impl TryFrom<OwnerRPC> for Owner {
     type Error = ProtoConversionError;
 
     fn try_from(owner: OwnerRPC) -> Result<Self, Self::Error> {
-        Ok(Self {
-            0: try_proto_convert!(owner.inner),
-        })
+        Ok(Self(try_proto_convert!(owner.inner)))
     }
 }
 
@@ -614,11 +601,11 @@ impl TryFrom<OwnerRPC> for Owner {
 pub mod tests {
     use super::*;
     use linera_base::crypto::{BcsSignable, HashValue, KeyPair};
+    use linera_chain::messages::{Block, BlockAndRound, Value};
+    use linera_core::messages::ChainInfo;
     use serde::{Deserialize, Serialize};
     use std::str::FromStr;
     use structopt::lazy_static::lazy_static;
-    use linera_chain::messages::{Block, BlockAndRound, Value};
-    use linera_core::messages::ChainInfo;
 
     #[derive(Debug, Serialize, Deserialize)]
     struct Foo(String);
@@ -628,7 +615,7 @@ pub mod tests {
     lazy_static! {
         static ref CHAIN_ID: ChainId = ChainId::from_str("dc07bbb3e3583738cfccc9489cd0959703d6ae9fd73316ab2fdea0e8bcff2467cbd986a25b352afd422b123aa84e9b680ee6fd9f56c685cb2b5e29d87a2ac5d9").unwrap();
         static ref BLOCK: Block = Block {
-                    chain_id: CHAIN_ID.clone(),
+                    chain_id: *CHAIN_ID,
                     epoch: Default::default(),
                     incoming_messages: vec![],
                     operations: vec![],
@@ -654,10 +641,10 @@ pub mod tests {
 
     #[test]
     pub fn test_origin() {
-        let origin_direct = Origin::chain(CHAIN_ID.clone());
+        let origin_direct = Origin::chain(*CHAIN_ID);
         compare!(origin_direct, OriginRpc);
 
-        let origin_medium = Origin::channel(CHAIN_ID.clone(), "some channel".to_string());
+        let origin_medium = Origin::channel(*CHAIN_ID, "some channel".to_string());
         compare!(origin_medium, OriginRpc);
     }
 
@@ -691,7 +678,7 @@ pub mod tests {
 
     #[test]
     pub fn test_chain_id() {
-        let chain_id = CHAIN_ID.clone();
+        let chain_id = *CHAIN_ID;
         compare!(chain_id, ChainIdRPC);
     }
 
@@ -719,7 +706,7 @@ pub mod tests {
     #[test]
     pub fn test_chain_info_response() {
         let chain_info = ChainInfo {
-            chain_id: CHAIN_ID.clone(),
+            chain_id: *CHAIN_ID,
             epoch: None,
             description: None,
             manager: Default::default(),
@@ -735,15 +722,15 @@ pub mod tests {
         };
 
         let chain_info_response_none = ChainInfoResponse {
-            // `info` is bcs so no need to test extensively
+            // `info` is bcs so no need to test conversions extensively
             info: chain_info.clone(),
             signature: None,
         };
         compare!(chain_info_response_none, ChainInfoResponseRPC);
 
         let chain_info_response_some = ChainInfoResponse {
-            // `info` is bcs so no need to test extensively
-            info: chain_info.clone(),
+            // `info` is bcs so no need to test conversions extensively
+            info: chain_info,
             signature: Some(Signature::new(&Foo("test".into()), &KeyPair::generate())),
         };
         compare!(chain_info_response_some, ChainInfoResponseRPC);
@@ -751,11 +738,11 @@ pub mod tests {
 
     #[test]
     pub fn test_chain_info_query() {
-        let chain_info_query_none = ChainInfoQuery::new(CHAIN_ID.clone());
+        let chain_info_query_none = ChainInfoQuery::new(*CHAIN_ID);
         compare!(chain_info_query_none, ChainInfoQueryRpc);
 
         let chain_info_query_some = ChainInfoQuery {
-            chain_id: CHAIN_ID.clone(),
+            chain_id: *CHAIN_ID,
             test_next_block_height: Some(BlockHeight::from(10)),
             request_committees: false,
             request_pending_messages: false,
@@ -776,11 +763,12 @@ pub mod tests {
                 block: BLOCK.clone(),
                 round: Default::default(),
                 effects: vec![],
-                state_hash: HashValue::new(&Foo("test".into()))
+                state_hash: HashValue::new(&Foo("test".into())),
             },
-            vec![
-                (ValidatorName::from(key_pair.public()), Signature::new(&Foo("test".into()), &key_pair))
-            ]
+            vec![(
+                ValidatorName::from(key_pair.public()),
+                Signature::new(&Foo("test".into()), &key_pair),
+            )],
         );
 
         compare!(certificate_validated, CertificateRpc);
@@ -790,29 +778,31 @@ pub mod tests {
     pub fn test_cross_chain_request() {
         let cross_chain_request_update_recipient = CrossChainRequest::UpdateRecipient {
             application_id: ApplicationId(10u64),
-            origin: Origin::chain(CHAIN_ID.clone()),
-            recipient: CHAIN_ID.clone(),
+            origin: Origin::chain(*CHAIN_ID),
+            recipient: *CHAIN_ID,
             certificates: vec![],
         };
         compare!(cross_chain_request_update_recipient, CrossChainRequestRpc);
 
-        let cross_chain_request_confirm_updated_recipient = CrossChainRequest::ConfirmUpdatedRecipient {
-            application_id: ApplicationId(10u64),
-            origin: Origin::chain(CHAIN_ID.clone()),
-            recipient: CHAIN_ID.clone(),
-            height: Default::default(),
-        };
-        compare!(cross_chain_request_confirm_updated_recipient, CrossChainRequestRpc);
+        let cross_chain_request_confirm_updated_recipient =
+            CrossChainRequest::ConfirmUpdatedRecipient {
+                application_id: ApplicationId(10u64),
+                origin: Origin::chain(*CHAIN_ID),
+                recipient: *CHAIN_ID,
+                height: Default::default(),
+            };
+        compare!(
+            cross_chain_request_confirm_updated_recipient,
+            CrossChainRequestRpc
+        );
     }
 
     #[test]
     pub fn test_block_proposal() {
-        use linera_chain::messages::Block;
-
         let block_proposal = BlockProposal {
             content: BlockAndRound {
                 block: BLOCK.clone(),
-                round: Default::default()
+                round: Default::default(),
             },
             owner: Owner::from(KeyPair::generate().public()),
             signature: Signature::new(&Foo("test".into()), &KeyPair::generate()),

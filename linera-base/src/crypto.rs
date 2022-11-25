@@ -219,7 +219,7 @@ impl FromStr for PublicKey {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let value = hex::decode(s)?;
-        Ok((value.as_slice()).try_into()?)
+        (value.as_slice()).try_into()
     }
 }
 
@@ -252,7 +252,7 @@ impl FromStr for HashValue {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let value = hex::decode(s)?;
-        Ok((value.as_slice()).try_into()?)
+        (value.as_slice()).try_into()
     }
 }
 

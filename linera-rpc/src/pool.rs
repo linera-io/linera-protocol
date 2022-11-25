@@ -1,18 +1,12 @@
-use crate::grpc_network::{
-    grpc_network::validator_worker_client::ValidatorWorkerClient, GrpcError,
-};
+use crate::grpc_network::{grpc::validator_worker_client::ValidatorWorkerClient, GrpcError};
 use std::collections::HashMap;
 use tonic::transport::Channel;
 // use an off-the-shelf pool? http://carllerche.github.io/pool/pool/
 // todo: make generic over a trait Connect?
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct ClientPool(HashMap<String, ValidatorWorkerClient<Channel>>);
 
 impl ClientPool {
-    pub fn new() -> Self {
-        Self(HashMap::new())
-    }
-
     pub async fn mut_client_for_address(
         &mut self,
         remote_address: String,

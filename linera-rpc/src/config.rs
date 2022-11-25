@@ -107,7 +107,7 @@ impl std::fmt::Display for NetworkProtocol {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             NetworkProtocol::Simple(protocol) => write!(f, "{}", protocol),
-            NetworkProtocol::Grpc() => write!(f, "{}", "grpc"),
+            NetworkProtocol::Grpc() => write!(f, "grpc"),
         }
     }
 }

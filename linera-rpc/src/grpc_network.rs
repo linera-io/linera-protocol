@@ -1,6 +1,6 @@
 pub use crate::{
     config::{CrossChainConfig, ShardId},
-    grpc_network::grpc_network::{
+    grpc_network::grpc::{
         BlockProposal, Certificate, ChainInfoQuery, ChainInfoResponse, CrossChainRequest,
     },
     transport::MessageHandler,
@@ -16,20 +16,17 @@ use log::{debug, error, info};
 use std::{
     net::{AddrParseError, SocketAddr},
     str::FromStr,
-    sync::Arc,
     time::Duration,
 };
 use thiserror::Error;
-use tokio::sync::Mutex;
+
 use tonic::{transport::Server, Request, Response, Status};
 
 // to avoid confusion with existing ValidatorNode
 use crate::{
     client_delegate, convert_and_delegate,
-    grpc_network::grpc_network::{
-        validator_node_server::{
-            ValidatorNode as ValidatorNodeRpc, ValidatorNode, ValidatorNodeServer,
-        },
+    grpc_network::grpc::{
+        validator_node_server::{ValidatorNode as ValidatorNodeRpc, ValidatorNodeServer},
         validator_worker_server::ValidatorWorker as ValidatorWorkerRpc,
         ChainInfoResult,
     },
@@ -40,9 +37,7 @@ use crate::{
 use crate::{
     config::{ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig},
     conversions::ProtoConversionError,
-    grpc_network::grpc_network::{
-        chain_info_result::Inner, validator_node_client::ValidatorNodeClient,
-    },
+    grpc_network::grpc::{chain_info_result::Inner, validator_node_client::ValidatorNodeClient},
     pool::ClientPool,
 };
 use futures::{
@@ -51,14 +46,15 @@ use futures::{
 };
 
 use crate::{
-    grpc_network::grpc_network::validator_worker_server::ValidatorWorkerServer,
+    grpc_network::grpc::validator_worker_server::ValidatorWorkerServer,
     mass::{MassClient, MassClientError},
 };
 use linera_core::client::ValidatorNodeProvider;
 use tokio::task::{JoinError, JoinHandle};
-use tonic::transport::Channel;
 
-pub mod grpc_network {
+#[allow(clippy::derive_partial_eq_without_eq)]
+// https://github.com/hyperium/tonic/issues/1056
+pub mod grpc {
     tonic::include_proto!("rpc.v1");
 }
 
@@ -73,7 +69,7 @@ pub struct GrpcServer<S> {
 }
 
 pub struct SpawnedGrpcServer {
-    complete: Sender<()>,
+    _complete: Sender<()>,
     handle: JoinHandle<Result<(), tonic::transport::Error>>,
 }
 
@@ -157,7 +153,10 @@ where
                 .serve_with_shutdown(address, receiver.map(|_| ())),
         );
 
-        Ok(SpawnedGrpcServer { complete, handle })
+        Ok(SpawnedGrpcServer {
+            _complete: complete,
+            handle,
+        })
     }
 
     async fn handle_continuation(&self, requests: Vec<linera_core::messages::CrossChainRequest>) {
@@ -187,7 +186,7 @@ where
         let mut queries_sent = 0u64;
         let mut failed = 0u64;
 
-        let mut pool = ClientPool::new();
+        let mut pool = ClientPool::default();
 
         while let Some((cross_chain_request, shard_id)) = receiver.next().await {
             let shard = network.shard(shard_id);
@@ -209,7 +208,7 @@ where
                     Err(error) => {
                         if i < 10 {
                             failed += 1;
-                            back_off = back_off * 2;
+                            back_off *= 2;
                             error!(
                                 "[{}] cross chain query to {} failed: {:?}, backing off for {} ms...",
                                 nickname,
@@ -266,7 +265,7 @@ where
         match self
             .state
             .clone()
-            .handle_certificate({ request.into_inner().try_into()? })
+            .handle_certificate(request.into_inner().try_into()?)
             .await
         {
             Ok((info, continuation)) => {
@@ -408,7 +407,7 @@ impl ValidatorNodeProvider for GrpcNodeProvider {
     type Node = GrpcClient;
 
     async fn make_node(&self, address: &str) -> anyhow::Result<Self::Node, NodeError> {
-        let network = ValidatorPublicNetworkConfig::from_str(&address).map_err(|_| {
+        let network = ValidatorPublicNetworkConfig::from_str(address).map_err(|_| {
             NodeError::CannotResolveValidatorAddress {
                 address: address.to_string(),
             }
