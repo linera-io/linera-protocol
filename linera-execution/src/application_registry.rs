@@ -1,4 +1,4 @@
-use crate::ExecutionError;
+use crate::{ExecutionError, NewApplication};
 use linera_base::messages::{ApplicationDescription, ApplicationId, BytecodeId, BytecodeLocation};
 use linera_views::{impl_view, map_view::MapView, scoped_view::ScopedView, views::ViewError};
 
@@ -39,6 +39,36 @@ where
         let id = ApplicationId::from(&application);
         self.known_applications.insert(id, application);
         id
+    }
+
+    /// Register a newly created application.
+    pub async fn register_new_application(
+        &mut self,
+        new_application: NewApplication,
+    ) -> Result<ApplicationDescription, ExecutionError> {
+        let ApplicationId::User {
+                bytecode: bytecode_id,
+                creation,
+            } = new_application.id
+                else { panic!("Attempt to create system application"); };
+
+        let bytecode_location = self
+            .published_bytecodes
+            .get(&bytecode_id)
+            .await?
+            .ok_or(ExecutionError::UnknownBytecode(bytecode_id))?;
+
+        let application_description = ApplicationDescription::User {
+            bytecode: bytecode_location,
+            bytecode_id,
+            creation,
+            initialization_argument: new_application.initialization_argument,
+        };
+
+        self.known_applications
+            .insert(new_application.id, application_description.clone());
+
+        Ok(application_description)
     }
 
     /// Retrieve an application's description.
