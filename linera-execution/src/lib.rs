@@ -171,22 +171,16 @@ pub struct NewSession {
 
 /// Requirements for the `extra` field in our state views (and notably the
 /// [`ExecutionStateView`]).
+#[async_trait]
 pub trait ExecutionRuntimeContext {
     fn chain_id(&self) -> ChainId;
 
     fn user_applications(&self) -> &Arc<DashMap<ApplicationId, UserApplicationCode>>;
 
-    fn get_user_application(
+    async fn get_user_application(
         &self,
         application_description: &ApplicationDescription,
-    ) -> Result<UserApplicationCode, ExecutionError> {
-        let application_id = application_description.into();
-        Ok(self
-            .user_applications()
-            .get(&application_id)
-            .ok_or(ExecutionError::UnknownApplication(application_id))?
-            .clone())
-    }
+    ) -> Result<UserApplicationCode, ExecutionError>;
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -409,6 +403,7 @@ impl TestExecutionRuntimeContext {
 }
 
 #[cfg(any(test, feature = "test"))]
+#[async_trait]
 impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
     fn chain_id(&self) -> ChainId {
         self.chain_id
@@ -416,6 +411,18 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
 
     fn user_applications(&self) -> &Arc<DashMap<ApplicationId, UserApplicationCode>> {
         &self.user_applications
+    }
+
+    async fn get_user_application(
+        &self,
+        application_description: &ApplicationDescription,
+    ) -> Result<UserApplicationCode, ExecutionError> {
+        let application_id = application_description.into();
+        Ok(self
+            .user_applications()
+            .get(&application_id)
+            .ok_or_else(|| ExecutionError::UnknownApplication(Box::new(application_id)))?
+            .clone())
     }
 }
 

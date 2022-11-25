@@ -12,7 +12,7 @@ pub use crate::{
 
 use async_trait::async_trait;
 use chain_guards::ChainGuard;
-use dashmap::DashMap;
+use dashmap::{mapref::entry::Entry, DashMap};
 use futures::future;
 use linera_base::{
     committee::Committee,
@@ -158,12 +158,30 @@ pub struct ChainRuntimeContext<StoreClient> {
     pub chain_guard: Option<Arc<ChainGuard>>,
 }
 
-impl<StoreClient> ExecutionRuntimeContext for ChainRuntimeContext<StoreClient> {
+#[async_trait]
+impl<StoreClient> ExecutionRuntimeContext for ChainRuntimeContext<StoreClient>
+where
+    StoreClient: Store + Send + Sync,
+{
     fn chain_id(&self) -> ChainId {
         self.chain_id
     }
 
     fn user_applications(&self) -> &Arc<DashMap<ApplicationId, UserApplicationCode>> {
         &self.user_applications
+    }
+
+    async fn get_user_application(
+        &self,
+        application_description: &ApplicationDescription,
+    ) -> Result<UserApplicationCode, ExecutionError> {
+        match self.user_applications.entry(application_description.into()) {
+            Entry::Occupied(entry) => Ok(entry.get().clone()),
+            Entry::Vacant(entry) => {
+                let application = self.store.load_application(application_description).await?;
+                entry.insert(application.clone());
+                Ok(application)
+            }
+        }
     }
 }

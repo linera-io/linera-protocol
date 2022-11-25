@@ -141,6 +141,7 @@ where
             .context()
             .extra()
             .get_user_application(&description)
+            .await
     }
 
     fn forward_sessions(
