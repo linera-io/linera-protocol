@@ -64,6 +64,8 @@ pub enum ExecutionError {
     #[error("Attempted to call an application while the state is locked")]
     ApplicationIsInUse,
 
+    #[error("Bytecode ID {0:?} is invalid")]
+    InvalidBytecodeId(BytecodeId),
     #[error("Attempt to create an application using unknown bytecode {0:?}")]
     UnknownBytecode(BytecodeId),
     #[error("Application {0:?} is not known by the chain")]

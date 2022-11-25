@@ -17,11 +17,12 @@ use futures::future;
 use linera_base::{
     committee::Committee,
     crypto::HashValue,
-    messages::{ApplicationId, ChainDescription, ChainId, Epoch, Owner},
+    messages::{ApplicationDescription, ApplicationId, ChainDescription, ChainId, Epoch, Owner},
 };
 use linera_chain::{messages::Certificate, ChainError, ChainStateView, ChainStateViewContext};
 use linera_execution::{
-    system::Balance, ChainOwnership, ExecutionRuntimeContext, UserApplicationCode,
+    system::Balance, ChainOwnership, ExecutionError, ExecutionRuntimeContext, Operation,
+    SystemOperation, UserApplicationCode, WasmApplication,
 };
 use linera_views::views::ViewError;
 use std::{fmt::Debug, sync::Arc};
@@ -119,6 +120,33 @@ pub trait Store: Sized {
             .reset(&ChainOwnership::single(owner));
         chain.save().await?;
         Ok(())
+    }
+
+    /// Create a [`UserApplication`] instance using the bytecode in storage referenced by the
+    /// `application_description`.
+    async fn load_application(
+        &self,
+        application_description: &ApplicationDescription,
+    ) -> Result<UserApplicationCode, ExecutionError> {
+        let ApplicationDescription::User { bytecode, bytecode_id, .. } = application_description
+            else { panic!("Attempt to load system application from storage"); };
+        let invalid_bytecode_id_error = || ExecutionError::InvalidBytecodeId(*bytecode_id);
+
+        let certificate = self.read_certificate(bytecode.certificate_hash).await?;
+        let (operation_application_id, bytecode_operation) = certificate
+            .value
+            .block()
+            .operations
+            .get(bytecode.operation_index)
+            .ok_or_else(invalid_bytecode_id_error)?;
+
+        let ApplicationId::System = operation_application_id
+            else { return Err(invalid_bytecode_id_error()); };
+        let Operation::System(SystemOperation::PublishBytecode { contract, service }) =
+            bytecode_operation.clone()
+            else { return Err(invalid_bytecode_id_error()); };
+
+        Ok(Arc::new(WasmApplication::new(contract, service)))
     }
 }
 
