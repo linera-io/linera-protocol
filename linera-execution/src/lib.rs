@@ -23,7 +23,7 @@ pub use wasm::{WasmApplication, WasmExecutionError};
 use async_trait::async_trait;
 use dashmap::DashMap;
 use linera_base::messages::{
-    ApplicationId, BlockHeight, BytecodeId, ChainId, Destination, EffectId,
+    ApplicationDescription, ApplicationId, BlockHeight, BytecodeId, ChainId, Destination, EffectId,
 };
 use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
@@ -176,8 +176,9 @@ pub trait ExecutionRuntimeContext {
 
     fn get_user_application(
         &self,
-        application_id: ApplicationId,
+        application_description: &ApplicationDescription,
     ) -> Result<UserApplicationCode, ExecutionError> {
+        let application_id = application_description.into();
         Ok(self
             .user_applications()
             .get(&application_id)

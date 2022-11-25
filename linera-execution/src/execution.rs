@@ -101,10 +101,7 @@ where
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
         // Load the application.
         let application_id = ApplicationId::from(application);
-        let application = self
-            .context()
-            .extra()
-            .get_user_application(application_id)?;
+        let application = self.context().extra().get_user_application(application)?;
         // Create the execution runtime for this transaction.
         let mut session_manager = SessionManager::default();
         let mut results = Vec::new();
@@ -265,10 +262,7 @@ where
                 Query::User(query) => {
                     // Load the application.
                     let application_id = ApplicationId::from(application);
-                    let application = self
-                        .context()
-                        .extra()
-                        .get_user_application(application.into())?;
+                    let application = self.context().extra().get_user_application(application)?;
                     // Create the execution runtime for this transaction.
                     let mut session_manager = SessionManager::default();
                     let mut results = Vec::new();

@@ -132,10 +132,15 @@ where
         &self,
         id: ApplicationId,
     ) -> Result<UserApplicationCode, ExecutionError> {
+        let mut registry = self
+            .application_registry
+            .try_lock()
+            .expect("single-threaded execution should not lock `application_registry`");
+        let description = registry.describe_application(id).await?;
         self.execution_state_mut()
             .context()
             .extra()
-            .get_user_application(id)
+            .get_user_application(&description)
     }
 
     fn forward_sessions(
