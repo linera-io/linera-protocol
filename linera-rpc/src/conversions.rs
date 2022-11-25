@@ -151,8 +151,9 @@ macro_rules! client_delegate {
             $req
         );
         let request = Request::new($req.try_into().expect("todo"));
-        match $self
-            .0
+        match ValidatorNodeClient::connect($self.0.address())
+            .await
+            .unwrap()
             .$handler(request)
             .await
             .map_err(|s| NodeError::GrpcError {
@@ -514,7 +515,7 @@ impl TryFrom<OriginRpc> for Origin {
     fn try_from(origin: OriginRpc) -> Result<Self, Self::Error> {
         Ok(Self {
             chain_id: try_proto_convert!(origin.chain_id),
-            medium: Medium::Direct,
+            medium: proto_convert!(origin.medium),
         })
     }
 }
@@ -522,7 +523,7 @@ impl TryFrom<OriginRpc> for Origin {
 impl From<ValidatorName> for PublicKeyRPC {
     fn from(validator_name: ValidatorName) -> Self {
         Self {
-            bytes: validator_name.0.0.to_vec(),
+            bytes: validator_name.0 .0.to_vec(),
         }
     }
 }
@@ -612,28 +613,150 @@ impl TryFrom<OwnerRPC> for Owner {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use serde::{Serialize, Deserialize};
-    use linera_base::crypto::BcsSignable;
+    use linera_base::crypto::{BcsSignable, KeyPair};
+    use serde::{Deserialize, Serialize};
     use std::str::FromStr;
-    use linera_base::crypto::KeyPair;
+    use structopt::lazy_static::lazy_static;
+    use linera_chain::messages::{BlockAndRound, Value};
 
     #[derive(Debug, Serialize, Deserialize)]
     struct Foo(String);
 
     impl BcsSignable for Foo {}
 
+    lazy_static! {
+        static ref CHAIN_ID: ChainId = ChainId::from_str("dc07bbb3e3583738cfccc9489cd0959703d6ae9fd73316ab2fdea0e8bcff2467cbd986a25b352afd422b123aa84e9b680ee6fd9f56c685cb2b5e29d87a2ac5d9").unwrap();
+    }
+
+    /// A convenience macro for testing. It converts a type into its
+    /// RPC equivalent and back - asserting that the two are equal.
+    macro_rules! compare {
+        ($msg:ident, $rpc:ident) => {
+            let rpc = $rpc::try_from($msg.clone()).unwrap();
+            assert_eq!($msg, rpc.try_into().unwrap());
+        };
+    }
+
     #[test]
     pub fn test_public_key() {
-        let key_pair = KeyPair::generate();
-        let public_key_rpc = PublicKeyRPC::try_from(key_pair.public()).unwrap();
-        assert_eq!(key_pair.public(), public_key_rpc.try_into().unwrap())
+        let public_key = KeyPair::generate().public();
+        compare!(public_key, PublicKeyRPC);
+    }
+
+    #[test]
+    pub fn validator_name() {
+        let validator_name = ValidatorName::from(KeyPair::generate().public());
+        // This is a correct comparison - `ValidatorNameRpc` does not exist in our
+        // proto definitions.
+        compare!(validator_name, PublicKeyRPC);
+    }
+
+    #[test]
+    pub fn test_origin() {
+        let origin_direct = Origin::chain(CHAIN_ID.clone());
+        compare!(origin_direct, OriginRpc);
+
+        let origin_medium = Origin::channel(CHAIN_ID.clone(), "some channel".to_string());
+        compare!(origin_medium, OriginRpc);
     }
 
     #[test]
     pub fn test_signature() {
         let key_pair = KeyPair::generate();
         let signature = Signature::new(&Foo("test".into()), &key_pair);
-        let signature_rpc = SignatureRPC::try_from(signature).unwrap();
-        assert_eq!(signature, signature_rpc.try_into().unwrap())
+        compare!(signature, SignatureRPC);
+    }
+
+    #[test]
+    pub fn test_owner() {
+        let key_pair = KeyPair::generate();
+        let owner = Owner::from(key_pair.public());
+        compare!(owner, OwnerRPC);
+    }
+
+    #[test]
+    pub fn test_block_height() {
+        let block_height = BlockHeight::from(10u64);
+        compare!(block_height, BlockHeightRPC);
+    }
+
+    #[test]
+    pub fn test_chain_id() {
+        let chain_id = CHAIN_ID.clone();
+        compare!(chain_id, ChainIdRPC);
+    }
+
+    #[test]
+    pub fn test_application_id() {
+        let application_id = ApplicationId(10u64);
+        compare!(application_id, ApplicationIdRPC);
+    }
+
+    #[test]
+    pub fn test_block_height_range() {
+        let block_height_range_none = BlockHeightRange {
+            start: BlockHeight::from(10u64),
+            limit: None,
+        };
+        compare!(block_height_range_none, BlockHeightRangeRPC);
+
+        let block_height_range_some = BlockHeightRange {
+            start: BlockHeight::from(10u64),
+            limit: Some(20),
+        };
+        compare!(block_height_range_some, BlockHeightRangeRPC);
+    }
+
+    #[test]
+    pub fn test_chain_info_response() {
+        unimplemented!()
+    }
+
+    #[test]
+    pub fn test_chain_info_query() {
+        let chain_info_query_none = ChainInfoQuery::new(CHAIN_ID.clone());
+        compare!(chain_info_query_none, ChainInfoQueryRpc);
+
+        let chain_info_query_some = ChainInfoQuery {
+            chain_id: CHAIN_ID.clone(),
+            test_next_block_height: Some(BlockHeight::from(10)),
+            request_committees: false,
+            request_pending_messages: false,
+            request_sent_certificates_in_range: Some(BlockHeightRange {
+                start: BlockHeight::from(3),
+                limit: Some(5),
+            }),
+            request_received_certificates_excluding_first_nth: None,
+        };
+        compare!(chain_info_query_some, ChainInfoQueryRpc);
+    }
+
+    #[test]
+    pub fn test_certificate() {
+        unimplemented!()
+    }
+
+    #[test]
+    pub fn test_cross_chain_request() {
+        let cross_chain_request_update_recipient = CrossChainRequest::UpdateRecipient {
+            application_id: ApplicationId(10u64),
+            origin: Origin::chain(CHAIN_ID.clone()),
+            recipient: CHAIN_ID.clone(),
+            certificates: vec![],
+        };
+        compare!(cross_chain_request_update_recipient, CrossChainRequestRpc);
+
+        let cross_chain_request_confirm_updated_recipient = CrossChainRequest::ConfirmUpdatedRecipient {
+            application_id: ApplicationId(10u64),
+            origin: Origin::chain(CHAIN_ID.clone()),
+            recipient: CHAIN_ID.clone(),
+            height: Default::default(),
+        };
+        compare!(cross_chain_request_confirm_updated_recipient, CrossChainRequestRpc);
+    }
+
+    #[test]
+    pub fn test_block_proposal() {
+        unimplemented!()
     }
 }

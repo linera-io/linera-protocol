@@ -17,6 +17,7 @@ use std::{
     net::{AddrParseError, SocketAddr},
     str::FromStr,
     sync::Arc,
+    time::Duration,
 };
 use thiserror::Error;
 use tokio::sync::Mutex;
@@ -191,19 +192,39 @@ where
         while let Some((cross_chain_request, shard_id)) = receiver.next().await {
             let shard = network.shard(shard_id);
 
-            let request = Request::new(cross_chain_request.try_into().expect("todo"));
             let client = pool
                 .mut_client_for_address(format!("http://{}", shard.address()))
                 .await
                 .expect("todo");
-
-            match client.handle_cross_chain_request(request).await {
-                Ok(_) => queries_sent += 1,
-                Err(error) => {
-                    failed += 1;
-                    error!("[{}] cross chain query to {} failed: {:?}", nickname, shard.address(), error);
-                    error!("[{}] queries succeeded: {}. queries failed: {}", nickname, queries_sent, failed);
-                },
+            for i in 0..10 {
+                let request = Request::new(cross_chain_request.clone().try_into().expect("todo"));
+                match client.handle_cross_chain_request(request).await {
+                    Ok(_) => {
+                        queries_sent += 1;
+                        break;
+                    }
+                    Err(error) => {
+                        if i < 10 {
+                            failed += 1;
+                            error!(
+                                "[{}] cross chain query to {} failed: {:?}",
+                                nickname,
+                                shard.address(),
+                                error
+                            );
+                            error!(
+                                "[{}] queries succeeded: {}. queries failed: {}",
+                                nickname, queries_sent, failed
+                            );
+                            tokio::time::sleep(Duration::from_millis(2000)).await;
+                        } else {
+                            error!(
+                                "[{}] Failed to send cross-chain query (giving up after {} retries): {}",
+                                nickname, i, error
+                            );
+                        }
+                    }
+                }
             }
 
             if queries_sent % 2000 == 0 {
@@ -240,9 +261,7 @@ where
         match self
             .state
             .clone()
-            .handle_certificate({
-                request.into_inner().try_into()?
-            })
+            .handle_certificate({ request.into_inner().try_into()? })
             .await
         {
             Ok((info, continuation)) => {
@@ -344,11 +363,12 @@ where
 }
 
 #[derive(Clone)]
-pub struct GrpcClient(ValidatorNodeClient<Channel>);
+pub struct GrpcClient(ValidatorPublicNetworkConfig);
 
 impl GrpcClient {
     async fn new(network: ValidatorPublicNetworkConfig) -> Result<Self, GrpcError> {
-        Ok(Self(ValidatorNodeClient::connect(network.address()).await?))
+        // Ok(Self(ValidatorNodeClient::connect(network.address()).await?))
+        Ok(Self(network))
     }
 }
 
