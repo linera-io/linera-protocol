@@ -118,7 +118,7 @@ NAME6=$(./server generate --validators \
 # Start the corresponding services
 for I in 6 5
 do
-    ./grpc-proxy server_"$I".json || exit 1 &
+    ./grpc-proxy server_"$I".json &
 
     # hack!
     PID5="$!"
