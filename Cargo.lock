@@ -1737,6 +1737,7 @@ dependencies = [
  "bcs",
  "bincode",
  "bytes",
+ "dashmap",
  "ed25519",
  "ed25519-dalek",
  "futures",

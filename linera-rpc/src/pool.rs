@@ -1,23 +1,81 @@
-use crate::grpc_network::{grpc::validator_worker_client::ValidatorWorkerClient, GrpcError};
-use std::collections::HashMap;
+use crate::grpc_network::{
+    grpc::{
+        validator_node_client::ValidatorNodeClient, validator_worker_client::ValidatorWorkerClient,
+    },
+    GrpcError,
+};
+use async_trait::async_trait;
+use dashmap::{mapref::one::RefMut, DashMap};
+use std::hash::Hash;
 use tonic::transport::Channel;
-// use an off-the-shelf pool? http://carllerche.github.io/pool/pool/
-// todo: make generic over a trait Connect?
-#[derive(Clone, Default)]
-pub struct ClientPool(HashMap<String, ValidatorWorkerClient<Channel>>);
 
-impl ClientPool {
+#[derive(Clone)]
+pub struct ConnectionPool<C: Connect>(DashMap<C::Address, C>);
+
+#[async_trait]
+pub trait Connect: Sized + Clone {
+    type Address: Clone + Hash + Eq;
+
+    async fn connect(address: Self::Address) -> Result<Self, GrpcError>;
+
+    fn pool() -> ConnectionPool<Self> {
+        ConnectionPool::new()
+    }
+}
+
+#[async_trait]
+impl Connect for ValidatorWorkerClient<Channel> {
+    type Address = String;
+
+    async fn connect(address: Self::Address) -> Result<Self, GrpcError> {
+        Ok(ValidatorWorkerClient::connect(address).await?)
+    }
+}
+
+#[async_trait]
+impl Connect for ValidatorNodeClient<Channel> {
+    type Address = String;
+
+    async fn connect(address: Self::Address) -> Result<Self, GrpcError> {
+        Ok(ValidatorNodeClient::connect(address).await?)
+    }
+}
+
+impl<C: Connect> Default for ConnectionPool<C> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<C: Connect> ConnectionPool<C> {
+    pub fn new() -> Self {
+        Self(DashMap::new())
+    }
+
+    /// Get a mutable reference to a client if it exists - if not creates a new one.
     pub async fn mut_client_for_address(
-        &mut self,
-        remote_address: String,
-    ) -> Result<&mut ValidatorWorkerClient<Channel>, GrpcError> {
-        let client = if self.0.contains_key(&remote_address) {
-            self.0.get_mut(&remote_address).unwrap()
-        } else {
-            let client = ValidatorWorkerClient::connect(remote_address.clone()).await?;
-            self.0.insert(remote_address.clone(), client);
-            self.0.get_mut(&remote_address).unwrap()
-        };
-        Ok(client)
+        &self,
+        remote_address: C::Address,
+    ) -> Result<RefMut<C::Address, C>, GrpcError> {
+        // todo look into passing a Function
+        Ok(self
+            .0
+            .entry(remote_address.clone())
+            .or_insert(C::connect(remote_address).await?))
+    }
+
+    /// Clone's a client for the given address if it exists - if not, creates a new one.
+    /// Cloning a gRPC client will re-use the underlying transport
+    /// without needing to instantiate a new connection.
+    pub async fn cloned_client_for_address(
+        &self,
+        remote_address: C::Address,
+    ) -> Result<C, GrpcError> {
+        Ok(self
+            .0
+            .entry(remote_address.clone())
+            .or_insert(C::connect(remote_address).await?)
+            .value()
+            .clone())
     }
 }

@@ -14,10 +14,9 @@ use linera_rpc::{
         },
         BlockProposal, Certificate, ChainInfoQuery, CrossChainRequest,
     },
-    pool::ClientPool,
+    pool::ConnectionPool,
 };
 use linera_service::config::{Import, ValidatorServerConfig};
-use linera_views::generic_array::typenum::Gr;
 use std::{net::SocketAddr, path::PathBuf, str::FromStr};
 use structopt::StructOpt;
 use tonic::{
@@ -63,7 +62,8 @@ pub struct GrpcProxyOptions {
 pub struct GrpcProxy {
     public_config: ValidatorPublicNetworkConfig,
     internal_config: ValidatorInternalNetworkConfig,
-    pool: ClientPool,
+    node_connection_pool: ConnectionPool<ValidatorNodeClient<Channel>>,
+    worker_connection_pool: ConnectionPool<ValidatorWorkerClient<Channel>>,
 }
 
 impl GrpcProxy {
@@ -74,7 +74,8 @@ impl GrpcProxy {
         let grpc_proxy = GrpcProxy {
             public_config,
             internal_config,
-            pool: ClientPool::new(),
+            node_connection_pool: ConnectionPool::new(),
+            worker_connection_pool: ConnectionPool::new(),
         };
 
         let address = grpc_proxy.address()?;
@@ -115,7 +116,10 @@ impl GrpcProxy {
         shard: &ShardConfig,
     ) -> Result<ValidatorWorkerClient<Channel>> {
         let address = format!("http://{}:{}", shard.host, shard.port);
-        let client = ValidatorWorkerClient::connect(address).await?;
+        let client = self
+            .worker_connection_pool
+            .cloned_client_for_address(address)
+            .await?;
 
         Ok(client)
     }
@@ -125,7 +129,11 @@ impl GrpcProxy {
         shard: &ShardConfig,
     ) -> Result<ValidatorNodeClient<Channel>> {
         let address = format!("http://{}:{}", shard.host, shard.port);
-        let client = ValidatorNodeClient::connect(address).await?;
+        let client = self
+            .node_connection_pool
+            .cloned_client_for_address(address)
+            .await?;
+
         Ok(client)
     }
 }

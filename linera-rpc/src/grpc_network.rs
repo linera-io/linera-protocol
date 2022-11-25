@@ -38,7 +38,6 @@ use crate::{
     config::{ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig},
     conversions::ProtoConversionError,
     grpc_network::grpc::{chain_info_result::Inner, validator_node_client::ValidatorNodeClient},
-    pool::ClientPool,
 };
 use futures::{
     channel::{mpsc, oneshot::Sender},
@@ -46,11 +45,16 @@ use futures::{
 };
 
 use crate::{
-    grpc_network::grpc::validator_worker_server::ValidatorWorkerServer,
+    grpc_network::grpc::{
+        validator_worker_client::ValidatorWorkerClient,
+        validator_worker_server::ValidatorWorkerServer,
+    },
     mass::{MassClient, MassClientError},
+    pool::Connect,
 };
 use linera_core::client::ValidatorNodeProvider;
 use tokio::task::{JoinError, JoinHandle};
+use tonic::transport::Channel;
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 // https://github.com/hyperium/tonic/issues/1056
@@ -160,6 +164,7 @@ where
     }
 
     async fn handle_continuation(&self, requests: Vec<linera_core::messages::CrossChainRequest>) {
+        let mut sender = self.cross_chain_sender.clone();
         for request in requests {
             let shard_id = self.network.get_shard_id(request.target_chain_id());
             debug!(
@@ -168,13 +173,13 @@ where
                 self.shard_id,
                 shard_id
             );
-            // todo change to `send_all` or `feed`
-            self.cross_chain_sender
-                .clone()
+            // todo change to `send_all` + `feed`
+            sender
                 .feed((request, shard_id))
                 .await
                 .expect("internal channel should not fail") // why would this fail?
         }
+        let _ = sender.flush();
     }
 
     async fn forward_cross_chain_queries(
@@ -186,12 +191,12 @@ where
         let mut queries_sent = 0u64;
         let mut failed = 0u64;
 
-        let mut pool = ClientPool::default();
+        let pool = ValidatorWorkerClient::<Channel>::pool();
 
         while let Some((cross_chain_request, shard_id)) = receiver.next().await {
             let shard = network.shard(shard_id);
 
-            let client = pool
+            let mut client = pool
                 .mut_client_for_address(format!("http://{}", shard.address()))
                 .await
                 .expect("todo");
