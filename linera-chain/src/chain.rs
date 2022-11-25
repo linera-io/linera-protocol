@@ -574,7 +574,12 @@ where
                     .await?;
                 let results = self
                     .execution_state
-                    .execute_effect(&application, &context, message_effect)
+                    .execute_effect(
+                        &application,
+                        &context,
+                        message_effect,
+                        &mut self.known_applications,
+                    )
                     .await?;
 
                 let communication_state = self

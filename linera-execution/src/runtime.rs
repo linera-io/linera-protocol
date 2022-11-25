@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    application_registry::ApplicationRegistryView,
     execution::{ExecutionStateView, ExecutionStateViewContext},
     ApplicationStateNotLocked, CallResult, ExecutionError, ExecutionResult,
     ExecutionRuntimeContext, NewSession, QueryableStorage, ReadableStorage, SessionId,
@@ -28,6 +29,8 @@ use tokio::sync::{Mutex, MutexGuard, OwnedMutexGuard};
 pub(crate) struct ExecutionRuntime<'a, C, const WRITABLE: bool> {
     /// The current chain ID.
     chain_id: ChainId,
+    /// The registry of applications known by the current chain.
+    application_registry: Arc<Mutex<&'a mut ApplicationRegistryView<C>>>,
     /// The current stack of application IDs.
     application_ids: Arc<Mutex<&'a mut Vec<ApplicationId>>>,
     /// The storage view on the execution state.
@@ -70,6 +73,7 @@ where
 {
     pub(crate) fn new(
         chain_id: ChainId,
+        application_registry: &'a mut ApplicationRegistryView<C>,
         application_ids: &'a mut Vec<ApplicationId>,
         execution_state: &'a mut ExecutionStateView<C>,
         session_manager: &'a mut SessionManager,
@@ -78,6 +82,7 @@ where
         assert_eq!(chain_id, execution_state.context().extra().chain_id());
         Self {
             chain_id,
+            application_registry: Arc::new(Mutex::new(application_registry)),
             application_ids: Arc::new(Mutex::new(application_ids)),
             execution_state: Arc::new(Mutex::new(execution_state)),
             session_manager: Arc::new(Mutex::new(session_manager)),

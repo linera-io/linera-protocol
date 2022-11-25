@@ -55,12 +55,13 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn test_simple_system_effect() {
+async fn test_simple_system_effect() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
     let mut view =
         ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(state)
             .await;
+    let mut applications = ApplicationRegistryView::load(view.context().clone()).await?;
     let effect = SystemEffect::Credit {
         amount: Amount::from(4),
         recipient: ChainId::root(0),
@@ -79,6 +80,7 @@ async fn test_simple_system_effect() {
             &ApplicationDescription::System,
             &context,
             &Effect::System(effect),
+            &mut applications,
         )
         .await
         .unwrap();
@@ -90,16 +92,18 @@ async fn test_simple_system_effect() {
             new_application: None
         }]
     );
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_simple_system_query() {
+async fn test_simple_system_query() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
     state.balance = Balance::from(4);
     let mut view =
         ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(state)
             .await;
+    let mut applications = ApplicationRegistryView::load(view.context().clone()).await?;
     let context = QueryContext {
         chain_id: ChainId::root(0),
     };
@@ -108,6 +112,7 @@ async fn test_simple_system_query() {
             &ApplicationDescription::System,
             &context,
             &Query::System(SystemQuery),
+            &mut applications,
         )
         .await
         .unwrap();
@@ -118,4 +123,5 @@ async fn test_simple_system_query() {
             balance: Balance::from(4)
         })
     );
+    Ok(())
 }

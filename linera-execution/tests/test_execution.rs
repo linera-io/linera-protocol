@@ -201,7 +201,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         chain_id: ChainId::root(0),
     };
     assert_eq!(
-        view.query_application(&app_desc, &context, &Query::User(vec![]))
+        view.query_application(&app_desc, &context, &Query::User(vec![]), &mut applications)
             .await
             .unwrap(),
         Response::User(vec![1])

@@ -64,7 +64,7 @@ async fn test_counter_wasm_application() -> anyhow::Result<()> {
     let expected_serialized_value =
         bcs::to_bytes(&expected_value).expect("Serialization of u128 failed");
     assert_eq!(
-        view.query_application(&app_desc, &context, &Query::User(vec![]))
+        view.query_application(&app_desc, &context, &Query::User(vec![]), &mut applications)
             .await?,
         Response::User(expected_serialized_value)
     );

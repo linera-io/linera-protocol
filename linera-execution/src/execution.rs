@@ -97,6 +97,7 @@ where
         application: &ApplicationDescription,
         chain_id: ChainId,
         action: UserAction<'_>,
+        applications: &mut ApplicationRegistryView<C>,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
         // Load the application.
         let application_id = ApplicationId::from(application);
@@ -110,6 +111,7 @@ where
         let mut application_ids = vec![application_id];
         let runtime = ExecutionRuntime::new(
             chain_id,
+            applications,
             &mut application_ids,
             self,
             &mut session_manager,
@@ -171,6 +173,7 @@ where
                         application,
                         context.chain_id,
                         UserAction::Operation(context, operation),
+                        applications,
                     )
                     .await
                 }
@@ -197,7 +200,7 @@ where
                 .register_new_application(new_application.clone())
                 .await?;
             let results = self
-                .run_user_action(&application, context.chain_id, user_action)
+                .run_user_action(&application, context.chain_id, user_action, applications)
                 .await?;
             Ok(results)
         } else {
@@ -210,6 +213,7 @@ where
         application: &ApplicationDescription,
         context: &EffectContext,
         effect: &Effect,
+        applications: &mut ApplicationRegistryView<C>,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         if let ApplicationDescription::System = application {
@@ -231,6 +235,7 @@ where
                         application,
                         context.chain_id,
                         UserAction::Effect(context, effect),
+                        applications,
                     )
                     .await
                 }
@@ -243,6 +248,7 @@ where
         application: &ApplicationDescription,
         context: &QueryContext,
         query: &Query,
+        applications: &mut ApplicationRegistryView<C>,
     ) -> Result<Response, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         if let ApplicationDescription::System = application {
@@ -269,6 +275,7 @@ where
                     let mut application_ids = vec![application_id];
                     let runtime = ExecutionRuntime::new(
                         context.chain_id,
+                        applications,
                         &mut application_ids,
                         self,
                         &mut session_manager,
