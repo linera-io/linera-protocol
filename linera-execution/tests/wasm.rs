@@ -8,9 +8,9 @@ mod utils;
 use self::utils::create_dummy_user_application_id;
 use linera_base::messages::{BlockHeight, ChainDescription, ChainId};
 use linera_execution::{
-    ExecutionResult, ExecutionRuntimeContext, ExecutionStateView, OperationContext, Query,
-    QueryContext, RawExecutionResult, Response, SystemExecutionState, TestExecutionRuntimeContext,
-    WasmApplication,
+    ApplicationRegistryView, ExecutionResult, ExecutionRuntimeContext, ExecutionStateView,
+    OperationContext, Query, QueryContext, RawExecutionResult, Response, SystemExecutionState,
+    TestExecutionRuntimeContext, WasmApplication,
 };
 use linera_views::{memory::MemoryContext, views::View};
 use std::sync::Arc;
@@ -26,6 +26,7 @@ async fn test_counter_wasm_application() -> anyhow::Result<()> {
     let mut view =
         ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(state)
             .await;
+    let mut applications = ApplicationRegistryView::load(view.context().clone()).await?;
     let app_id = create_dummy_user_application_id();
     view.context().extra.user_applications().insert(
         app_id,
@@ -47,7 +48,7 @@ async fn test_counter_wasm_application() -> anyhow::Result<()> {
     for increment in &increments {
         let operation = bcs::to_bytes(increment).expect("Serialization of u128 failed");
         let result = view
-            .execute_operation(app_id, &context, &operation.into())
+            .execute_operation(app_id, &context, &operation.into(), &mut applications)
             .await?;
         assert_eq!(
             result,

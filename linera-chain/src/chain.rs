@@ -596,7 +596,12 @@ where
             };
             let results = self
                 .execution_state
-                .execute_operation(*application_id, &context, operation)
+                .execute_operation(
+                    *application_id,
+                    &context,
+                    operation,
+                    &mut self.known_applications,
+                )
                 .await?;
 
             Self::process_execution_results(

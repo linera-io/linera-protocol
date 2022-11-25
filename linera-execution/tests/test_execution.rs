@@ -15,12 +15,13 @@ use linera_views::{common::Context, memory::MemoryContext, views::View};
 use std::sync::Arc;
 
 #[tokio::test]
-async fn test_missing_user_application() {
+async fn test_missing_user_application() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
     let mut view =
         ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(state)
             .await;
+    let mut applications = ApplicationRegistryView::load(view.context().clone()).await?;
 
     let app_id = create_dummy_user_application_id();
 
@@ -31,13 +32,19 @@ async fn test_missing_user_application() {
     };
 
     let result = view
-        .execute_operation(app_id, &context, &Operation::User(vec![]))
+        .execute_operation(
+            app_id,
+            &context,
+            &Operation::User(vec![]),
+            &mut applications,
+        )
         .await;
 
     assert!(matches!(
         result,
         Err(ExecutionError::UnknownApplication(id)) if *id == app_id
     ));
+    Ok(())
 }
 
 struct TestApplication;
@@ -152,12 +159,13 @@ impl UserApplication for TestApplication {
 }
 
 #[tokio::test]
-async fn test_simple_user_operation() {
+async fn test_simple_user_operation() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
     let mut view =
         ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(state)
             .await;
+    let mut applications = ApplicationRegistryView::load(view.context().clone()).await?;
     let app_id = create_dummy_user_application_id();
     view.context()
         .extra()
@@ -170,7 +178,12 @@ async fn test_simple_user_operation() {
         index: 0,
     };
     let result = view
-        .execute_operation(app_id, &context, &Operation::User(vec![1]))
+        .execute_operation(
+            app_id,
+            &context,
+            &Operation::User(vec![1]),
+            &mut applications,
+        )
         .await
         .unwrap();
     assert_eq!(
@@ -191,15 +204,17 @@ async fn test_simple_user_operation() {
             .unwrap(),
         Response::User(vec![1])
     );
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_simple_user_operation_with_leaking_session() {
+async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
     let mut view =
         ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(state)
             .await;
+    let mut applications = ApplicationRegistryView::load(view.context().clone()).await?;
     let app_id = create_dummy_user_application_id();
     view.context()
         .extra()
@@ -213,8 +228,14 @@ async fn test_simple_user_operation_with_leaking_session() {
     };
 
     let result = view
-        .execute_operation(app_id, &context, &Operation::User(vec![]))
+        .execute_operation(
+            app_id,
+            &context,
+            &Operation::User(vec![]),
+            &mut applications,
+        )
         .await;
 
-    assert!(matches!(result, Err(ExecutionError::SessionWasNotClosed)))
+    assert!(matches!(result, Err(ExecutionError::SessionWasNotClosed)));
+    Ok(())
 }

@@ -6,20 +6,22 @@
 use linera_base::messages::{ApplicationId, BlockHeight, ChainDescription, ChainId, EffectId};
 use linera_execution::{
     system::{Address, Amount, Balance, UserData},
-    Effect, EffectContext, ExecutionResult, ExecutionStateView, Operation, OperationContext, Query,
-    QueryContext, RawExecutionResult, Response, SystemEffect, SystemExecutionState,
-    SystemOperation, SystemQuery, SystemResponse, TestExecutionRuntimeContext,
+    ApplicationRegistryView, Effect, EffectContext, ExecutionResult, ExecutionStateView, Operation,
+    OperationContext, Query, QueryContext, RawExecutionResult, Response, SystemEffect,
+    SystemExecutionState, SystemOperation, SystemQuery, SystemResponse,
+    TestExecutionRuntimeContext,
 };
-use linera_views::memory::MemoryContext;
+use linera_views::{memory::MemoryContext, views::View};
 
 #[tokio::test]
-async fn test_simple_system_operation() {
+async fn test_simple_system_operation() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
     state.balance = Balance::from(4);
     let mut view =
         ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(state)
             .await;
+    let mut applications = ApplicationRegistryView::load(view.context().clone()).await?;
     let operation = SystemOperation::Transfer {
         amount: Amount::from(4),
         recipient: Address::Burn,
@@ -35,6 +37,7 @@ async fn test_simple_system_operation() {
             ApplicationId::System,
             &context,
             &Operation::System(operation),
+            &mut applications,
         )
         .await
         .unwrap();
@@ -46,6 +49,7 @@ async fn test_simple_system_operation() {
             new_application: None
         }]
     );
+    Ok(())
 }
 
 #[tokio::test]
