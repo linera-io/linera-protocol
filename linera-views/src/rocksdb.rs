@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::common::{
-    get_upper_bound, Batch, ContextFromDb, KeyValueOperations,
-    SimpleKeyIterator, WriteOperation,
+    get_upper_bound, Batch, ContextFromDb, KeyValueOperations, SimpleKeyIterator, WriteOperation,
 };
 use async_trait::async_trait;
 use std::sync::Arc;
