@@ -174,9 +174,14 @@ impl KeyValueOperations for DynamoDbContainer {
         Ok(DynamoDbKeyIterator::new(response))
     }
 
-    /// We put submit the transaction in blocks of at most 25 so as to decrease the
-    /// number of needed transactions.
+    /// We put submit the transaction in blocks (called BatchWriteItem in dynamoDb) of at most 25
+    /// so as to decrease the number of needed transactions. That constant 25 comes from
+    /// https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_BatchWriteItem.html
     async fn write_batch(&self, batch: Batch) -> Result<(), DynamoDbContextError> {
+        let max_size_batch_write_item = 25;
+        // We put the delete in insert in separate lists since the use of `DeletePrefix` forces us
+        // to download the list of prefix and insert them. Having two lists is preferable as
+        // having two types forces us to introduce a new data type that encompass just the Put and Delete.
         let mut delete_list = Vec::new();
         let mut insert_list = Vec::new();
         for op in batch.simplify().operations {
@@ -194,7 +199,7 @@ impl KeyValueOperations for DynamoDbContainer {
                 }
             };
         }
-        for batch_chunk in delete_list.chunks(25) {
+        for batch_chunk in delete_list.chunks(max_size_batch_write_item) {
             let requests = batch_chunk
                 .iter()
                 .map(|key| {
@@ -210,7 +215,7 @@ impl KeyValueOperations for DynamoDbContainer {
                 .send()
                 .await?;
         }
-        for batch_chunk in insert_list.chunks(25) {
+        for batch_chunk in insert_list.chunks(max_size_batch_write_item) {
             let requests = batch_chunk
                 .iter()
                 .map(|(key, value)| {

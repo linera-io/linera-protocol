@@ -107,6 +107,8 @@ impl Batch {
             }
         }
         let mut operations = Vec::with_capacity(set_key_prefix.len() + map_delete_insert.len());
+        // It is important to note that DeletePrefix operations have to be done before other
+        // insert operations.
         for key_prefix in set_key_prefix {
             operations.push(WriteOperation::DeletePrefix { key_prefix });
         }
