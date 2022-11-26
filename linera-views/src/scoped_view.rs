@@ -57,12 +57,12 @@ where
         self.view.rollback();
     }
 
-    async fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
-        self.view.flush(batch).await
+    fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
+        self.view.flush(batch)
     }
 
-    async fn delete(self, batch: &mut Batch) -> Result<(), ViewError> {
-        self.view.delete(batch).await
+    fn delete(self, batch: &mut Batch) {
+        self.view.delete(batch)
     }
 
     fn clear(&mut self) {

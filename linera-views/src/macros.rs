@@ -34,18 +34,17 @@ where
         $( self.$field.rollback(); )*
     }
 
-    async fn flush(&mut self, batch: &mut $crate::common::Batch) -> Result<(), $crate::views::ViewError> {
+    fn flush(&mut self, batch: &mut $crate::common::Batch) -> Result<(), $crate::views::ViewError> {
         use $crate::views::View;
 
-        $( self.$field.flush(batch).await?; )*
+        $( self.$field.flush(batch)?; )*
         Ok(())
     }
 
-    async fn delete(self, batch: &mut $crate::common::Batch) -> Result<(), $crate::views::ViewError> {
+    fn delete(self, batch: &mut $crate::common::Batch) {
         use $crate::views::View;
 
-        $( self.$field.delete(batch).await?; )*
-        Ok(())
+        $( self.$field.delete(batch); )*
     }
 
     fn clear(&mut self) {
@@ -90,7 +89,7 @@ where
         use $crate::views::View;
 
         let mut batch = $crate::common::Batch::default();
-        $( self.$field.flush(&mut batch).await?; )*
+        $( self.$field.flush(&mut batch)?; )*
         self.context().write_batch(batch).await?;
         Ok(())
      }
@@ -102,7 +101,7 @@ where
         let context = self.context().clone();
         let batch = Batch::build(move |batch| {
             Box::pin(async move {
-                $( self.$field.delete(batch).await?; )*
+                $( self.$field.delete(batch); )*
                 Ok(())
             })
         }).await?;

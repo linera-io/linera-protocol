@@ -4,10 +4,18 @@
 use crate::views::{HashingContext, ViewError};
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{collections::HashMap, fmt::Debug};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt::Debug,
+    ops::{
+        Bound,
+        Bound::{Excluded, Included, Unbounded},
+    },
+};
 
 pub enum WriteOperation {
     Delete { key: Vec<u8> },
+    DeletePrefix { key_prefix: Vec<u8> },
     Put { key: Vec<u8>, value: Vec<u8> },
 }
 
@@ -15,6 +23,33 @@ pub enum WriteOperation {
 #[derive(Default)]
 pub struct Batch {
     pub(crate) operations: Vec<WriteOperation>,
+}
+
+/// When wanting to find the entries in a BTreeMap with a specific prefix,
+/// one option is to iterate over all keys. Another is to select an interval
+/// that represents exactly the keys having that prefix. Which fortunately
+/// is possible with the way the comparison operators for vectors is built.
+///
+/// The statement is that p is a prefix of v if and only if p <= v < upper_bound(p).
+pub fn get_upper_bound(key_prefix: &[u8]) -> Option<Vec<u8>> {
+    let len = key_prefix.len();
+    for i in (0..len).rev() {
+        let val = key_prefix[i];
+        if val < u8::MAX {
+            let mut upper_bound = key_prefix[0..i + 1].to_vec();
+            upper_bound[i] += 1;
+            return Some(upper_bound);
+        }
+    }
+    None
+}
+
+pub fn get_interval(key_prefix: Vec<u8>) -> (Bound<Vec<u8>>, Bound<Vec<u8>>) {
+    let upper_bound = match get_upper_bound(&key_prefix) {
+        None => Unbounded,
+        Some(val) => Excluded(val),
+    };
+    (Included(key_prefix), upper_bound)
 }
 
 impl Batch {
@@ -32,15 +67,42 @@ impl Batch {
     /// The construction of BatchWriteItem and TransactWriteItem for DynamoDb does
     /// not allow this to happen.
     pub fn simplify(self) -> Self {
-        let mut map = HashMap::new();
+        let mut map_delete_insert = BTreeMap::new();
+        let mut set_key_prefix = BTreeSet::new();
         for op in self.operations {
             match op {
-                WriteOperation::Delete { key } => map.insert(key, None),
-                WriteOperation::Put { key, value } => map.insert(key, Some(value)),
-            };
+                WriteOperation::Delete { key } => {
+                    map_delete_insert.insert(key, None);
+                }
+                WriteOperation::Put { key, value } => {
+                    map_delete_insert.insert(key, Some(value));
+                }
+                WriteOperation::DeletePrefix { key_prefix } => {
+                    let key_list: Vec<Vec<u8>> = map_delete_insert
+                        .range(get_interval(key_prefix.clone()))
+                        .map(|x| x.0.to_vec())
+                        .collect();
+                    for key in key_list {
+                        map_delete_insert.remove(&key);
+                    }
+                    let key_prefix_list: Vec<Vec<u8>> = set_key_prefix
+                        .range(get_interval(key_prefix.clone()))
+                        .map(|x: &Vec<u8>| x.to_vec())
+                        .collect();
+                    for key_prefix in key_prefix_list {
+                        set_key_prefix.remove(&key_prefix);
+                    }
+                    set_key_prefix.insert(key_prefix);
+                }
+            }
         }
-        let mut operations = Vec::with_capacity(map.len());
-        for (key, val) in map {
+        let mut operations = Vec::with_capacity(set_key_prefix.len() + map_delete_insert.len());
+        // It is important to note that DeletePrefix operations have to be done before other
+        // insert operations.
+        for key_prefix in set_key_prefix {
+            operations.push(WriteOperation::DeletePrefix { key_prefix });
+        }
+        for (key, val) in map_delete_insert {
             match val {
                 Some(value) => operations.push(WriteOperation::Put { key, value }),
                 None => operations.push(WriteOperation::Delete { key }),
@@ -72,6 +134,13 @@ impl Batch {
     pub fn delete_key(&mut self, key: Vec<u8>) {
         self.operations.push(WriteOperation::Delete { key });
     }
+
+    /// Insert a DeletePrefix { key_prefix } into the batch
+    #[inline]
+    pub fn delete_key_prefix(&mut self, key_prefix: Vec<u8>) {
+        self.operations
+            .push(WriteOperation::DeletePrefix { key_prefix });
+    }
 }
 
 /// Low-level, asynchronous key-value operations. Useful for storage APIs not based on views.
@@ -87,7 +156,7 @@ pub trait KeyValueOperations {
         key_prefix: &[u8],
     ) -> Result<Self::KeyIterator, Self::Error>;
 
-    async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error>;
+    async fn write_batch(&self, mut batch: Batch) -> Result<(), Self::Error>;
 
     async fn read_key<V: DeserializeOwned>(&self, key: &[u8]) -> Result<Option<V>, Self::Error>
     where

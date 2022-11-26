@@ -160,7 +160,7 @@ impl Store for DynamoDbStoreClient {
         let mut certificates = self.0.certificates().await?;
         certificates.insert(certificate.hash, certificate);
         let mut batch = Batch::default();
-        certificates.flush(&mut batch).await?;
+        certificates.flush(&mut batch)?;
         self.0.context.write_batch(batch).await?;
         Ok(())
     }

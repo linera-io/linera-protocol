@@ -37,7 +37,7 @@ pub trait MapOperations<I, V>: Context {
 
     /// Delete the map and its entries from storage. Crash-resistant implementations should only
     /// write to `batch`.
-    async fn delete(&mut self, batch: &mut Batch) -> Result<(), Self::Error>;
+    fn delete(&self, batch: &mut Batch);
 }
 
 #[async_trait]
@@ -79,12 +79,8 @@ where
         Ok(())
     }
 
-    async fn delete(&mut self, batch: &mut Batch) -> Result<(), Self::Error> {
-        let base = self.base_key();
-        for key in self.find_keys_with_prefix(&base).await? {
-            batch.delete_key(key);
-        }
-        Ok(())
+    fn delete(&self, batch: &mut Batch) {
+        batch.delete_key_prefix(self.base_key());
     }
 }
 
@@ -113,10 +109,10 @@ where
         self.updates.clear();
     }
 
-    async fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
+    fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
         if self.was_cleared {
             self.was_cleared = false;
-            self.context.delete(batch).await?;
+            self.context.delete(batch);
             for (index, update) in mem::take(&mut self.updates) {
                 if let Some(value) = update {
                     self.context.insert(batch, index, value)?;
@@ -133,9 +129,8 @@ where
         Ok(())
     }
 
-    async fn delete(mut self, batch: &mut Batch) -> Result<(), ViewError> {
-        self.context.delete(batch).await?;
-        Ok(())
+    fn delete(self, batch: &mut Batch) {
+        self.context.delete(batch);
     }
 
     fn clear(&mut self) {
