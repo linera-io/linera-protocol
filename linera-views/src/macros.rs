@@ -41,11 +41,10 @@ where
         Ok(())
     }
 
-    fn delete(self, batch: &mut $crate::common::Batch) -> Result<(), $crate::views::ViewError> {
+    fn delete(self, batch: &mut $crate::common::Batch) {
         use $crate::views::View;
 
-        $( self.$field.delete(batch)?; )*
-        Ok(())
+        $( self.$field.delete(batch); )*
     }
 
     fn clear(&mut self) {
@@ -102,7 +101,7 @@ where
         let context = self.context().clone();
         let batch = Batch::build(move |batch| {
             Box::pin(async move {
-                $( self.$field.delete(batch)?; )*
+                $( self.$field.delete(batch); )*
                 Ok(())
             })
         }).await?;

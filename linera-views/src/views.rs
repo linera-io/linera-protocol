@@ -40,7 +40,7 @@ pub trait View<C: Context>: Sized {
     /// desired changes into the `batch` variable first.
     /// No data/metadata at all is left after delete. The view is consumed by delete
     /// and cannot be used in any way after delete.
-    fn delete(self, batch: &mut Batch) -> Result<(), ViewError>;
+    fn delete(self, batch: &mut Batch);
 }
 
 #[derive(Error, Debug)]

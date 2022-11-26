@@ -45,7 +45,7 @@ where
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
         if self.was_cleared {
             self.was_cleared = false;
-            self.delete_entries(batch);
+            batch.delete_key_prefix(self.context.base_key());
             for (index, update) in mem::take(&mut self.updates) {
                 if let Some(value) = update {
                     batch.put_key_value_bytes(self.context.derive_key_bytes(&index), value);
@@ -64,9 +64,8 @@ where
         Ok(())
     }
 
-    fn delete(mut self, batch: &mut Batch) -> Result<(), ViewError> {
-        self.delete_entries(batch);
-        Ok(())
+    fn delete(self, batch: &mut Batch) {
+        batch.delete_key_prefix(self.context.base_key());
     }
 
     fn clear(&mut self) {
@@ -80,11 +79,6 @@ where
     C: Send + Context,
     ViewError: From<C::Error>,
 {
-    fn delete_entries(&mut self, batch: &mut Batch) {
-        let base = self.context.base_key();
-        batch.delete_key_prefix(base);
-    }
-
     pub fn new(context: C) -> Self {
         Self {
             context,

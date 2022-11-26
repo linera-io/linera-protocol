@@ -61,7 +61,7 @@ where
         self.view.flush(batch)
     }
 
-    fn delete(self, batch: &mut Batch) -> Result<(), ViewError> {
+    fn delete(self, batch: &mut Batch) {
         self.view.delete(batch)
     }
 
