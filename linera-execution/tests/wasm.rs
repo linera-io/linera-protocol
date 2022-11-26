@@ -3,7 +3,10 @@
 
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 
-use linera_base::messages::{ApplicationId, BlockHeight, ChainDescription, ChainId};
+mod utils;
+
+use self::utils::create_dummy_user_application_id;
+use linera_base::messages::{BlockHeight, ChainDescription, ChainId};
 use linera_execution::{
     ExecutionResult, ExecutionRuntimeContext, ExecutionStateView, OperationContext, Query,
     QueryContext, RawExecutionResult, Response, SystemExecutionState, TestExecutionRuntimeContext,
@@ -23,7 +26,7 @@ async fn test_counter_wasm_application() -> anyhow::Result<()> {
     let mut view =
         ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(state)
             .await;
-    let app_id = ApplicationId(1);
+    let app_id = create_dummy_user_application_id();
     view.context().extra.user_applications().insert(
         app_id,
         Arc::new(
