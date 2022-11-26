@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::common::{
-    get_interval_kernel, has_natural_prefix_upper_bound, Batch, ContextFromDb, KeyValueOperations,
+    get_upper_bound, Batch, ContextFromDb, KeyValueOperations,
     SimpleKeyIterator, WriteOperation,
 };
 use async_trait::async_trait;
@@ -60,7 +60,7 @@ impl KeyValueOperations for RocksdbContainer {
         for i in 0..len {
             let op = batch.operations.get(i).unwrap();
             if let WriteOperation::DeletePrefix { key_prefix } = op {
-                if !has_natural_prefix_upper_bound(key_prefix) {
+                if get_upper_bound(key_prefix).is_none() {
                     for key in self.find_keys_with_prefix(key_prefix).await? {
                         batch.operations.push(WriteOperation::Delete { key: key? });
                     }
@@ -74,12 +74,10 @@ impl KeyValueOperations for RocksdbContainer {
                     WriteOperation::Delete { key } => inner_batch.delete(&key),
                     WriteOperation::Put { key, value } => inner_batch.put(&key, value),
                     WriteOperation::DeletePrefix { key_prefix } => {
-                        let pair = get_interval_kernel(key_prefix);
-                        let lower_bound = pair.0;
-                        match pair.1 {
+                        match get_upper_bound(&key_prefix) {
                             None => {}
                             Some(upper_bound) => {
-                                inner_batch.delete_range(lower_bound, upper_bound);
+                                inner_batch.delete_range(key_prefix, upper_bound);
                             }
                         }
                     }

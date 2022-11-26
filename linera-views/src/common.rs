@@ -31,35 +31,25 @@ pub struct Batch {
 /// is possible with the way the comparison operators for vectors is built.
 ///
 /// The statement is that p is a prefix of v if and only if p <= v < upper_bound(p).
-pub fn get_interval_kernel(key_prefix: Vec<u8>) -> (Vec<u8>, Option<Vec<u8>>) {
+pub fn get_upper_bound(key_prefix: &[u8]) -> Option<Vec<u8>> {
     let len = key_prefix.len();
     for i in (0..len).rev() {
         let val = key_prefix[i];
         if val < u8::MAX {
             let mut upper_bound = key_prefix[0..i + 1].to_vec();
             upper_bound[i] += 1;
-            return (key_prefix, Some(upper_bound));
+            return Some(upper_bound);
         }
     }
-    (key_prefix, None)
+    None
 }
 
 pub fn get_interval(key_prefix: Vec<u8>) -> (Bound<Vec<u8>>, Bound<Vec<u8>>) {
-    let pair = get_interval_kernel(key_prefix);
-    let upper_bound = match pair.1 {
+    let upper_bound = match get_upper_bound(&key_prefix) {
         None => Unbounded,
         Some(val) => Excluded(val),
     };
-    (Included(pair.0), upper_bound)
-}
-
-pub fn has_natural_prefix_upper_bound(key_prefix: &[u8]) -> bool {
-    for val in key_prefix {
-        if *val != u8::MAX {
-            return true;
-        }
-    }
-    false
+    (Included(key_prefix), upper_bound)
 }
 
 impl Batch {
