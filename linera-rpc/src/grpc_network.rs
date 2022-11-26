@@ -373,12 +373,11 @@ where
 }
 
 #[derive(Clone)]
-pub struct GrpcClient(ValidatorPublicNetworkConfig);
+pub struct GrpcClient(ValidatorNodeClient<Channel>);
 
 impl GrpcClient {
     async fn new(network: ValidatorPublicNetworkConfig) -> Result<Self, GrpcError> {
-        // Ok(Self(ValidatorNodeClient::connect(network.address()).await?))
-        Ok(Self(network))
+        Ok(Self(ValidatorNodeClient::connect(network.address()).await?))
     }
 }
 
@@ -418,7 +417,14 @@ impl ValidatorNodeProvider for GrpcNodeProvider {
                 address: address.to_string(),
             }
         })?;
-        Ok(GrpcClient::new(network).await.expect("todo"))
+        Ok(GrpcClient::new(network)
+            .await
+            .map_err(|e| NodeError::GrpcError {
+                error: format!(
+                    "could not initialise gRPC client for address {} with error: {}",
+                    address, e
+                ),
+            })?)
     }
 }
 
@@ -433,9 +439,8 @@ impl GrpcMassClient {
 #[async_trait]
 impl MassClient for GrpcMassClient {
     async fn send(&self, requests: Vec<Message>) -> Result<Vec<Message>, MassClientError> {
-        // todo - for now we are instantiated the client here so that we don't need the
-        // constructor to be asynchronous
-
+        // we're establishing the connection here so that the `GrpcMassClient` constructor
+        // is infallible.
         let mut client = ValidatorNodeClient::connect(self.0.address()).await?;
         let mut responses = Vec::new();
 

@@ -141,9 +141,8 @@ macro_rules! client_delegate {
             $req
         );
         let request = Request::new($req.try_into().expect("todo"));
-        match ValidatorNodeClient::connect($self.0.address())
-            .await
-            .unwrap()
+        match $self
+            .0
             .$handler(request)
             .await
             .map_err(|s| NodeError::GrpcError {
