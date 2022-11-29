@@ -44,6 +44,8 @@ jobs:
       with:
         profile: minimal
         toolchain: nightly
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v1
     - name: Install cargo-udeps
       run: cargo install cargo-udeps --locked
     - name: Check for unused dependencies
