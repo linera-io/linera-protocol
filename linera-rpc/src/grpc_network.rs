@@ -24,7 +24,7 @@ use tonic::{transport::Server, Request, Response, Status};
 
 // to avoid confusion with existing ValidatorNode
 use crate::{
-    client_delegate, convert_and_delegate,
+    convert_and_delegate,
     grpc_network::grpc::{
         validator_node_server::{ValidatorNode as ValidatorNodeRpc, ValidatorNodeServer},
         validator_worker_server::ValidatorWorker as ValidatorWorkerRpc,
@@ -52,7 +52,7 @@ use crate::{
     mass::{MassClient, MassClientError},
     pool::Connect,
 };
-use linera_core::client::ValidatorNodeProvider;
+
 use tokio::task::{JoinError, JoinHandle};
 use tonic::transport::Channel;
 

@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    codec,
     config::{
         CrossChainConfig, ShardId, ValidatorInternalNetworkPreConfig,
         ValidatorPublicNetworkPreConfig,
@@ -14,17 +13,16 @@ use crate::{
 };
 use async_trait::async_trait;
 use futures::{channel::mpsc, sink::SinkExt, stream::StreamExt};
-use linera_chain::messages::{BlockProposal, Certificate};
+
 use linera_core::{
-    client::ValidatorNodeProvider,
-    messages::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
-    node::{NodeError, ValidatorNode},
+    messages::CrossChainRequest,
+    node::NodeError,
     worker::{ValidatorWorker, WorkerState},
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
 use log::{debug, error, info, warn};
-use std::{io, str::FromStr, time::Duration};
+use std::{io, time::Duration};
 use tokio::time;
 
 pub trait SharedStore: Store + Clone + Send + Sync + 'static {}

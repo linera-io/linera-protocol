@@ -1,19 +1,15 @@
 use crate::{
-    codec,
-    client_delegate,
+    client_delegate, codec,
     config::{ValidatorPublicNetworkConfig, ValidatorPublicNetworkPreConfig},
     grpc_network::{
-        grpc::chain_info_result::Inner,
-        grpc::validator_node_client::ValidatorNodeClient,
-        GrpcError},
+        grpc::{chain_info_result::Inner, validator_node_client::ValidatorNodeClient},
+        GrpcError,
+    },
     transport::TransportProtocol,
     Message,
 };
 use async_trait::async_trait;
-use futures::{
-    SinkExt,
-    StreamExt
-};
+use futures::{SinkExt, StreamExt};
 use linera_chain::messages::{BlockProposal, Certificate};
 use linera_core::{
     messages::{ChainInfoQuery, ChainInfoResponse},
