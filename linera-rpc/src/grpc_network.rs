@@ -372,62 +372,6 @@ where
     }
 }
 
-#[derive(Clone)]
-pub struct GrpcClient(ValidatorNodeClient<Channel>);
-
-impl GrpcClient {
-    async fn new(network: ValidatorPublicNetworkConfig) -> Result<Self, GrpcError> {
-        Ok(Self(ValidatorNodeClient::connect(network.address()).await?))
-    }
-}
-
-#[async_trait]
-impl linera_core::node::ValidatorNode for GrpcClient {
-    async fn handle_block_proposal(
-        &mut self,
-        proposal: linera_chain::messages::BlockProposal,
-    ) -> Result<linera_core::messages::ChainInfoResponse, NodeError> {
-        client_delegate!(self, handle_block_proposal, proposal)
-    }
-
-    async fn handle_certificate(
-        &mut self,
-        certificate: linera_chain::messages::Certificate,
-    ) -> Result<linera_core::messages::ChainInfoResponse, NodeError> {
-        client_delegate!(self, handle_certificate, certificate)
-    }
-
-    async fn handle_chain_info_query(
-        &mut self,
-        query: linera_core::messages::ChainInfoQuery,
-    ) -> Result<linera_core::messages::ChainInfoResponse, NodeError> {
-        client_delegate!(self, handle_chain_info_query, query)
-    }
-}
-
-pub struct GrpcNodeProvider {}
-
-#[async_trait]
-impl ValidatorNodeProvider for GrpcNodeProvider {
-    type Node = GrpcClient;
-
-    async fn make_node(&self, address: &str) -> anyhow::Result<Self::Node, NodeError> {
-        let network = ValidatorPublicNetworkConfig::from_str(address).map_err(|_| {
-            NodeError::CannotResolveValidatorAddress {
-                address: address.to_string(),
-            }
-        })?;
-        Ok(GrpcClient::new(network)
-            .await
-            .map_err(|e| NodeError::GrpcError {
-                error: format!(
-                    "could not initialise gRPC client for address {} with error: {}",
-                    address, e
-                ),
-            })?)
-    }
-}
-
 pub struct GrpcMassClient(ValidatorPublicNetworkConfig);
 
 impl GrpcMassClient {
