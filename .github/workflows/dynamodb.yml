@@ -23,8 +23,6 @@ jobs:
     - uses: Swatinem/rust-cache@v2
     - name: Install Protoc
       uses: arduino/setup-protoc@v1
-      with:
-        version: '3.21.8'
     - name: Build
       run: cargo build --locked
     - name: Setup local DynamoDB instance

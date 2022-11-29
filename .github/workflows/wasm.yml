@@ -26,8 +26,6 @@ jobs:
     - uses: Swatinem/rust-cache@v2
     - name: Install Protoc
       uses: arduino/setup-protoc@v1
-      with:
-        version: '3.21.8'
     - name: Build example contract
       run: |
         cargo build --target wasm32-unknown-unknown -p linera-sdk --examples
