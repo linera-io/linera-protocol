@@ -9,7 +9,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use futures::lock::Mutex;
-use linera_base::{committee::Committee, crypto::*, ensure::Error, messages::*};
+use linera_base::{committee::Committee, crypto::*, messages::*};
 use linera_chain::messages::{Block, BlockProposal, Certificate, Value};
 use linera_execution::{
     system::{Amount, Balance, SystemOperation, UserData},

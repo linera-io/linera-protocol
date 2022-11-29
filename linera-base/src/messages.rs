@@ -2,9 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    crypto::{BcsSignable, HashValue, PublicKey}
-};
+use crate::crypto::{BcsSignable, HashValue, PublicKey};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use thiserror::Error;
@@ -184,25 +182,37 @@ impl BlockHeight {
 
     #[inline]
     pub fn try_add_one(self) -> Result<BlockHeight, ArithmeticError> {
-        let val = self.0.checked_add(1).ok_or(ArithmeticError::SequenceOverflow)?;
+        let val = self
+            .0
+            .checked_add(1)
+            .ok_or(ArithmeticError::SequenceOverflow)?;
         Ok(Self(val))
     }
 
     #[inline]
     pub fn try_sub_one(self) -> Result<BlockHeight, ArithmeticError> {
-        let val = self.0.checked_sub(1).ok_or(ArithmeticError::SequenceUnderflow)?;
+        let val = self
+            .0
+            .checked_sub(1)
+            .ok_or(ArithmeticError::SequenceUnderflow)?;
         Ok(Self(val))
     }
 
     #[inline]
     pub fn try_add_assign_one(&mut self) -> Result<(), ArithmeticError> {
-        self.0 = self.0.checked_add(1).ok_or(ArithmeticError::SequenceOverflow)?;
+        self.0 = self
+            .0
+            .checked_add(1)
+            .ok_or(ArithmeticError::SequenceOverflow)?;
         Ok(())
     }
 
     #[inline]
     pub fn try_sub_assign_one(&mut self) -> Result<(), ArithmeticError> {
-        self.0 = self.0.checked_sub(1).ok_or(ArithmeticError::SequenceUnderflow)?;
+        self.0 = self
+            .0
+            .checked_sub(1)
+            .ok_or(ArithmeticError::SequenceUnderflow)?;
         Ok(())
     }
 }
@@ -215,25 +225,37 @@ impl RoundNumber {
 
     #[inline]
     pub fn try_add_one(self) -> Result<RoundNumber, ArithmeticError> {
-        let val = self.0.checked_add(1).ok_or(ArithmeticError::SequenceOverflow)?;
+        let val = self
+            .0
+            .checked_add(1)
+            .ok_or(ArithmeticError::SequenceOverflow)?;
         Ok(Self(val))
     }
 
     #[inline]
     pub fn try_sub_one(self) -> Result<RoundNumber, ArithmeticError> {
-        let val = self.0.checked_sub(1).ok_or(ArithmeticError::SequenceUnderflow)?;
+        let val = self
+            .0
+            .checked_sub(1)
+            .ok_or(ArithmeticError::SequenceUnderflow)?;
         Ok(Self(val))
     }
 
     #[inline]
     pub fn try_add_assign_one(&mut self) -> Result<(), ArithmeticError> {
-        self.0 = self.0.checked_add(1).ok_or(ArithmeticError::SequenceOverflow)?;
+        self.0 = self
+            .0
+            .checked_add(1)
+            .ok_or(ArithmeticError::SequenceOverflow)?;
         Ok(())
     }
 
     #[inline]
     pub fn try_sub_assign_one(&mut self) -> Result<(), ArithmeticError> {
-        self.0 = self.0.checked_sub(1).ok_or(ArithmeticError::SequenceUnderflow)?;
+        self.0 = self
+            .0
+            .checked_sub(1)
+            .ok_or(ArithmeticError::SequenceUnderflow)?;
         Ok(())
     }
 }
@@ -241,13 +263,19 @@ impl RoundNumber {
 impl Epoch {
     #[inline]
     pub fn try_add_one(self) -> Result<Self, ArithmeticError> {
-        let val = self.0.checked_add(1).ok_or(ArithmeticError::SequenceOverflow)?;
+        let val = self
+            .0
+            .checked_add(1)
+            .ok_or(ArithmeticError::SequenceOverflow)?;
         Ok(Self(val))
     }
 
     #[inline]
     pub fn try_add_assign_one(&mut self) -> Result<(), ArithmeticError> {
-        self.0 = self.0.checked_add(1).ok_or(ArithmeticError::SequenceOverflow)?;
+        self.0 = self
+            .0
+            .checked_add(1)
+            .ok_or(ArithmeticError::SequenceOverflow)?;
         Ok(())
     }
 }
