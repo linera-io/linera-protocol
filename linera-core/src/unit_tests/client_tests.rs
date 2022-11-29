@@ -9,7 +9,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use futures::lock::Mutex;
-use linera_base::{committee::Committee, crypto::*, error::Error, messages::*};
+use linera_base::{committee::Committee, crypto::*, ensure::Error, messages::*};
 use linera_chain::messages::{Block, BlockProposal, Certificate, Value};
 use linera_execution::{
     system::{Amount, Balance, SystemOperation, UserData},
@@ -47,7 +47,7 @@ where
         let validator = self.0.clone();
         let mut validator = validator.lock().await;
         if validator.is_faulty {
-            Err(Error::SequenceOverflow.into())
+            Err(ArithmeticError::SequenceOverflow.into())
         } else {
             let response = validator.state.handle_block_proposal(proposal).await?;
             Ok(response)

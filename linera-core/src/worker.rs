@@ -64,7 +64,7 @@ pub enum WorkerError {
     #[error(transparent)]
     CryptoError(#[from] linera_base::crypto::CryptoError),
     #[error(transparent)]
-    BaseError(#[from] linera_base::error::Error),
+    BaseError(#[from] linera_base::messages::ArithmeticError),
     #[error(transparent)]
     ViewError(#[from] linera_views::views::ViewError),
     #[error(transparent)]

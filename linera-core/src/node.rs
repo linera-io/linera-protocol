@@ -140,8 +140,8 @@ impl From<ViewError> for NodeError {
     }
 }
 
-impl From<linera_base::error::Error> for NodeError {
-    fn from(error: linera_base::error::Error) -> Self {
+impl From<linera_base::messages::ArithmeticError> for NodeError {
+    fn from(error: linera_base::messages::ArithmeticError) -> Self {
         Self::BaseError {
             error: error.to_string(),
         }

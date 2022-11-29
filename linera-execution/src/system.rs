@@ -206,7 +206,7 @@ impl_view!(
 #[derive(Error, Debug)]
 pub enum SystemExecutionError {
     #[error(transparent)]
-    BaseError(#[from] linera_base::error::Error),
+    BaseError(#[from] linera_base::messages::ArithmeticError),
     #[error(transparent)]
     ViewError(#[from] ViewError),
 

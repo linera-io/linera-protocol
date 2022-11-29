@@ -4,5 +4,5 @@
 
 pub mod committee;
 pub mod crypto;
-pub mod error;
+pub mod ensure;
 pub mod messages;
