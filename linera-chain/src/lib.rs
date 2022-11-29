@@ -8,7 +8,7 @@ pub mod messages;
 pub use chain::{ChainStateView, ChainStateViewContext, Event};
 use linera_base::{
     crypto::CryptoError,
-    messages::{ApplicationId, BlockHeight, ChainId, Origin, RoundNumber},
+    messages::{ApplicationId, ArithmeticError, BlockHeight, ChainId, Origin, RoundNumber},
 };
 use linera_execution::ExecutionError;
 use linera_views::views::ViewError;
@@ -19,8 +19,8 @@ use thiserror::Error;
 pub enum ChainError {
     #[error("Cryptographic error: {0}")]
     CryptoError(#[from] CryptoError),
-    #[error("Base error: {0}")]
-    BaseError(#[from] linera_base::messages::ArithmeticError),
+    #[error("Arithmetic error: {0}")]
+    ArithmeticError(#[from] ArithmeticError),
     #[error("Error in view operation: {0}")]
     ViewError(#[from] ViewError),
     #[error("Execution error: {0}")]

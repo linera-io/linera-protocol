@@ -117,9 +117,8 @@ pub enum Destination {
 }
 
 #[derive(Debug, Error)]
-/// Custom error type.
+/// An error type for arithmetic errors.
 pub enum ArithmeticError {
-    // Algorithmic operations
     #[error("Sequence number overflow")]
     SequenceOverflow,
     #[error("Sequence number underflow")]

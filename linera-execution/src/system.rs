@@ -9,7 +9,8 @@ use linera_base::{
     committee::Committee,
     ensure,
     messages::{
-        ApplicationId, ChainDescription, ChainId, ChannelId, Destination, EffectId, Epoch, Owner,
+        ApplicationId, ArithmeticError, ChainDescription, ChainId, ChannelId, Destination,
+        EffectId, Epoch, Owner,
     },
 };
 use linera_views::{
@@ -206,7 +207,7 @@ impl_view!(
 #[derive(Error, Debug)]
 pub enum SystemExecutionError {
     #[error(transparent)]
-    BaseError(#[from] linera_base::messages::ArithmeticError),
+    ArithmeticError(#[from] ArithmeticError),
     #[error(transparent)]
     ViewError(#[from] ViewError),
 
