@@ -24,7 +24,7 @@ impl ValidatorNodeProvider for NodeProvider {
     type Node = Client;
 
     async fn make_node(&self, address: &str) -> anyhow::Result<Self::Node, NodeError> {
-        let client = match address {
+        let client = match &address.to_lowercase() {
             address if address.starts_with("tcp") || address.starts_with("upd") => {
                 Client::Simple(self.simple.make_node(address).await?)
             }

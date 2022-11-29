@@ -195,12 +195,23 @@ where
         let pool = ValidatorWorkerClient::<Channel>::pool();
 
         while let Some((cross_chain_request, shard_id)) = receiver.next().await {
-            let shard = network.shard(shard_id);
 
-            let mut client = pool
-                .mut_client_for_address(format!("http://{}", shard.address()))
-                .await
-                .expect("todo");
+            let shard = network.shard(shard_id);
+            let http_address = format!("http://{}", shard.address());
+            let mut client = match pool
+                .mut_client_for_address(http_address.clone())
+                .await {
+                Ok(client) => client,
+                Err(error) => {
+                    error!(
+                        "[{}] could not create client to {} with error: {}",
+                        nickname,
+                        http_address,
+                        error
+                    );
+                    continue;
+                }
+            };
 
             let mut back_off = Duration::from_millis(100);
 

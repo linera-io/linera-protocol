@@ -28,6 +28,33 @@ fn test_examples_in_readme() -> std::io::Result<()> {
     Ok(())
 }
 
+#[test]
+#[ignore]
+fn test_examples_in_readme_grpc() -> std::io::Result<()> {
+    let dir = tempdir().unwrap();
+    let file = std::io::BufReader::new(std::fs::File::open("../README.md")?);
+    let mut quotes = get_bash_quotes(file)?;
+    // Check that we have the expected number of examples starting with "```bash".
+    assert_eq!(quotes.len(), 1);
+    let mut quote = quotes.pop().unwrap();
+
+    quote = quote.replace("tcp", "grpc");
+    quote = quote.replace("udp", "grpc");
+    quote = quote.replace("./proxy", "./grpc-proxy");
+
+    let mut test_script = std::fs::File::create(dir.path().join("test.sh"))?;
+    write!(&mut test_script, "{}", quote)?;
+
+    let status = Command::new("bash")
+        .current_dir("..") // root of the repo
+        .arg("-e")
+        .arg("-x")
+        .arg(dir.path().join("test.sh"))
+        .status()?;
+    assert!(status.success());
+    Ok(())
+}
+
 #[allow(clippy::while_let_on_iterator)]
 fn get_bash_quotes<R>(reader: R) -> std::io::Result<Vec<String>>
 where
