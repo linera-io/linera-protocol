@@ -11,6 +11,8 @@ if cat <<EOF > $SCRIPT_DIR/.git/hooks/pre-push
 cargo clippy --all-targets || { echo "Error: clippy did not pass - aborting push. Please run 'cargo clippy --all-targets'." ; exit 1 ; }
 
 cargo +nightly fmt -- --check --config unstable_features=true --config imports_granularity=Crate || { echo "Error: format check failed - aborting push. Please run 'cargo +nightly fmt'." ; exit 1 ; }
+
+cargo +nightly udeps --all-targets || { echo "Error: dependency check failed - aborting push." ; exit 1 ; }
 EOF
 then
 	chmod +x $SCRIPT_DIR/.git/hooks/pre-push
