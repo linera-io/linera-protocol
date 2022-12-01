@@ -18,20 +18,6 @@ pub struct QueueView<C, T> {
 /// The context operations supporting [`QueueView`].
 #[async_trait]
 pub trait QueueOperations<T>: Context {
-    /// Obtain the value at the given index.
-    async fn get_val(&mut self, index: usize) -> Result<Option<T>, Self::Error>;
-
-    /// Obtain the values in the given range.
-    async fn read(&self, range: Range<usize>) -> Result<Vec<T>, Self::Error>;
-
-    /// Delete `count` values from the front of the queue. Crash-resistant implementations
-    /// should only write to `batch`.
-    fn delete_front(
-        &mut self,
-        stored_indices: &mut Range<usize>,
-        batch: &mut Batch,
-        count: usize,
-    ) -> Result<(), Self::Error>;
 }
 
 #[async_trait]
@@ -39,41 +25,6 @@ impl<T, C: Context + Send + Sync> QueueOperations<T> for C
 where
     T: Serialize + DeserializeOwned + Send + Sync + 'static,
 {
-    async fn get_val(&mut self, index: usize) -> Result<Option<T>, Self::Error> {
-        let key = self.derive_key(&index)?;
-        Ok(self.read_key(&key).await?)
-    }
-
-    async fn read(&self, range: Range<usize>) -> Result<Vec<T>, Self::Error> {
-        let mut values = Vec::with_capacity(range.len());
-        for index in range {
-            let key = self.derive_key(&index)?;
-            match self.read_key(&key).await? {
-                None => return Ok(values),
-                Some(value) => values.push(value),
-            }
-        }
-        Ok(values)
-    }
-
-    fn delete_front(
-        &mut self,
-        stored_indices: &mut Range<usize>,
-        batch: &mut Batch,
-        count: usize,
-    ) -> Result<(), Self::Error> {
-        if count == 0 {
-            return Ok(());
-        }
-        let deletion_range = stored_indices.clone().take(count);
-        stored_indices.start += count;
-        batch.put_key_value(self.base_key(), &stored_indices)?;
-        for index in deletion_range {
-            let key = self.derive_key(&index)?;
-            batch.delete_key(key);
-        }
-        Ok(())
-    }
 }
 
 #[async_trait]
@@ -105,8 +56,13 @@ where
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
         if self.front_delete_count > 0 {
-            self.context
-                .delete_front(&mut self.stored_indices, batch, self.front_delete_count)?;
+            let deletion_range = self.stored_indices.clone().take(self.front_delete_count);
+            self.stored_indices.start += self.front_delete_count;
+            batch.put_key_value(self.context.base_key(), &self.stored_indices)?;
+            for index in deletion_range {
+                let key = self.context.derive_key(&index)?;
+                batch.delete_key(key);
+            }
         }
         if !self.new_back_values.is_empty() {
             if self.new_back_values.len() > 0 {
@@ -138,21 +94,18 @@ impl<C, T> QueueView<C, T>
 where
     C: QueueOperations<T> + Send + Sync,
     ViewError: From<C::Error>,
-    T: Send + Sync + Clone,
+    T: Send + Sync + Clone + Serialize + DeserializeOwned,
 {
-    /*
     async fn get(&mut self, index: usize) -> Result<Option<T>, ViewError> {
         let key = self.context.derive_key(&index)?;
         Ok(self.context.read_key(&key).await?)
     }
-*/
 
     /// Read the front value, if any.
     pub async fn front(&mut self) -> Result<Option<T>, ViewError> {
         let stored_remainder = self.stored_indices.len() - self.front_delete_count;
         let value = if stored_remainder > 0 {
-            self.context
-                .get_val(self.stored_indices.end - stored_remainder)
+            self.get(self.stored_indices.end - stored_remainder)
                 .await?
         } else {
             self.new_back_values.front().cloned()
@@ -165,7 +118,7 @@ where
         let value = match self.new_back_values.back() {
             Some(value) => Some(value.clone()),
             None if self.stored_indices.len() > self.front_delete_count => {
-                self.context.get_val(self.stored_indices.end - 1).await?
+                self.get(self.stored_indices.end - 1).await?
             }
             _ => None,
         };
@@ -195,6 +148,18 @@ where
         self.context.extra()
     }
 
+    async fn read_context(&self, range: Range<usize>) -> Result<Vec<T>, ViewError> {
+        let mut values = Vec::with_capacity(range.len());
+        for index in range {
+            let key = self.context.derive_key(&index)?;
+            match self.context.read_key(&key).await? {
+                None => return Ok(values),
+                Some(value) => values.push(value),
+            }
+        }
+        Ok(values)
+    }
+
     /// Read the `count` next values in the queue (including staged ones).
     pub async fn read_front(&mut self, mut count: usize) -> Result<Vec<T>, ViewError> {
         if count > self.count() {
@@ -208,9 +173,9 @@ where
         let stored_remainder = self.stored_indices.len() - self.front_delete_count;
         let start = self.stored_indices.end - stored_remainder;
         if count <= stored_remainder {
-            values.extend(self.context.read(start..(start + count)).await?);
+            values.extend(self.read_context(start..(start + count)).await?);
         } else {
-            values.extend(self.context.read(start..self.stored_indices.end).await?);
+            values.extend(self.read_context(start..self.stored_indices.end).await?);
             values.extend(
                 self.new_back_values
                     .range(0..(count - stored_remainder))
@@ -239,7 +204,7 @@ where
             );
         } else {
             let start = self.stored_indices.end + new_back_len - count;
-            values.extend(self.context.read(start..self.stored_indices.end).await?);
+            values.extend(self.read_context(start..self.stored_indices.end).await?);
             values.extend(self.new_back_values.iter().cloned());
         }
         Ok(values)
@@ -251,7 +216,7 @@ impl<C, T> HashView<C> for QueueView<C, T>
 where
     C: HashingContext + QueueOperations<T> + Send + Sync,
     ViewError: From<C::Error>,
-    T: Send + Sync + Clone + Serialize,
+    T: Send + Sync + Clone + Serialize + DeserializeOwned,
 {
     async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
         let count = self.count();
