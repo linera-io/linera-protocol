@@ -25,22 +25,10 @@ impl<W, const INDEX: u64> std::ops::DerefMut for ScopedView<INDEX, W> {
     }
 }
 
-pub trait ScopedOperations: Context {
-    /// Clone the context and advance the (otherwise implicit) base key for all read/write
-    /// operations.
-    fn clone_with_scope(&self, index: u64) -> Self;
-}
-
-impl<C: Context> ScopedOperations for C {
-    fn clone_with_scope(&self, index: u64) -> Self {
-        self.clone_self(self.derive_key(&index).expect("derive_key should not fail"))
-    }
-}
-
 #[async_trait]
 impl<C, W, const INDEX: u64> View<C> for ScopedView<INDEX, W>
 where
-    C: Context + Send + Sync + ScopedOperations + 'static,
+    C: Context + Send + Sync + 'static,
     ViewError: From<C::Error>,
     W: View<C> + Send,
 {
@@ -49,7 +37,8 @@ where
     }
 
     async fn load(context: C) -> Result<Self, ViewError> {
-        let view = W::load(context.clone_with_scope(INDEX)).await?;
+        let context = context.clone_self(context.derive_key(&INDEX)?);
+        let view = W::load(context).await?;
         Ok(Self { view })
     }
 
@@ -73,7 +62,7 @@ where
 #[async_trait]
 impl<C, W, const INDEX: u64> HashView<C> for ScopedView<INDEX, W>
 where
-    C: HashingContext + Send + Sync + ScopedOperations + 'static,
+    C: HashingContext + Send + Sync + 'static,
     ViewError: From<C::Error>,
     W: HashView<C> + Send,
 {
