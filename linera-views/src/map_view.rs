@@ -14,23 +14,10 @@ pub struct MapView<C, I, V> {
     updates: BTreeMap<I, Option<V>>,
 }
 
-/// The context operations supporting [`MapView`].
-#[async_trait]
-pub trait MapOperations<I, V>: Context {
-}
-
-#[async_trait]
-impl<I, V, C: Context + Send + Sync> MapOperations<I, V> for C
-where
-    I: Eq + Ord + Send + Sync + Serialize + DeserializeOwned + Clone + 'static,
-    V: Send + Sync + Serialize + DeserializeOwned + 'static,
-{
-}
-
 #[async_trait]
 impl<C, I, V> View<C> for MapView<C, I, V>
 where
-    C: MapOperations<I, V> + Send,
+    C: Context + Send,
     ViewError: From<C::Error>,
     I: Eq + Ord + Send + Sync + Clone + Serialize,
     V: Clone + Send + Sync + Serialize,
@@ -108,7 +95,7 @@ where
 
 impl<C, I, V> MapView<C, I, V>
 where
-    C: MapOperations<I, V>,
+    C: Context,
     ViewError: From<C::Error>,
     I: Eq + Ord + Sync + Clone + Send + Serialize + DeserializeOwned,
     V: Clone + Sync + DeserializeOwned,
@@ -168,7 +155,7 @@ where
 #[async_trait]
 impl<C, I, V> HashView<C> for MapView<C, I, V>
 where
-    C: HashingContext + MapOperations<I, V> + Send + Sync,
+    C: HashingContext + Context + Send + Sync,
     ViewError: From<C::Error>,
     I: Eq + Ord + Clone + Send + Sync + Serialize + DeserializeOwned,
     V: Clone + Send + Sync + Serialize + DeserializeOwned,

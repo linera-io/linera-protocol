@@ -21,8 +21,8 @@ use linera_execution::{
 use linera_views::{
     collection_view::{CollectionOperations, CollectionView},
     impl_view,
-    log_view::{LogOperations, LogView},
-    map_view::{MapOperations, MapView},
+    log_view::LogView,
+    map_view::MapView,
     queue_view::{QueueOperations, QueueView},
     register_view::RegisterView,
     scoped_view::ScopedView,
@@ -70,11 +70,9 @@ impl_view!(
         communication_states,
         published_bytecodes,
     };
-    LogOperations<HashValue>,
     CollectionOperations<ApplicationId>,
     CommunicationStateViewContext,
     ExecutionStateViewContext,
-    MapOperations<BytecodeId, BytecodeLocation>,
 );
 
 /// Block-chaining state.
@@ -165,7 +163,6 @@ pub struct ChannelStateView<C> {
 
 impl_view!(
     ChannelStateView { subscribers, outboxes, block_height };
-    MapOperations<ChainId, ()>,
     CollectionOperations<ChainId>,
     OutboxStateViewContext,
 );

@@ -15,22 +15,10 @@ pub struct LogView<C, T> {
     new_values: Vec<T>,
 }
 
-/// The context operations supporting [`LogView`].
-#[async_trait]
-pub trait LogOperations<T>: Context {
-}
-
-#[async_trait]
-impl<T, C: Context + Send + Sync> LogOperations<T> for C
-where
-    T: Serialize + DeserializeOwned + Send + Sync + 'static,
-{
-}
-
 #[async_trait]
 impl<C, T> View<C> for LogView<C, T>
 where
-    C: LogOperations<T> + Send + Sync,
+    C: Context + Send + Sync,
     ViewError: From<C::Error>,
     T: Send + Sync + Clone + Serialize,
 {
@@ -111,7 +99,7 @@ where
 
 impl<C, T> LogView<C, T>
 where
-    C: LogOperations<T> + Send + Sync,
+    C: Context + Send + Sync,
     ViewError: From<C::Error>,
     T: Send + Sync + Clone + DeserializeOwned,
 {
@@ -178,7 +166,7 @@ where
 #[async_trait]
 impl<C, T> HashView<C> for LogView<C, T>
 where
-    C: HashingContext + LogOperations<T> + Send + Sync,
+    C: HashingContext + Context + Send + Sync,
     ViewError: From<C::Error>,
     T: Send + Sync + Clone + Serialize + DeserializeOwned,
 {

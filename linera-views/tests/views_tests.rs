@@ -8,8 +8,8 @@ use linera_views::{
     dynamo_db::DynamoDbContext,
     impl_view,
     key_value_store_view::{KeyValueStoreMemoryContext, KeyValueStoreView},
-    log_view::{LogOperations, LogView},
-    map_view::{MapOperations, MapView},
+    log_view::LogView,
+    map_view::MapView,
     memory::{MemoryContext, MemoryStoreMap},
     queue_view::{QueueOperations, QueueView},
     register_view::RegisterView,
@@ -42,8 +42,6 @@ pub struct StateView<C> {
 
 // This also generates `trait StateViewContext: Context ... {}`
 impl_view!(StateView { x1, x2, log, map, queue, collection, collection2, collection3, collection4, key_value_store };
-           LogOperations<u32>,
-           MapOperations<String, usize>,
            QueueOperations<u64>,
            CollectionOperations<String>,
            CollectionOperations<String>,

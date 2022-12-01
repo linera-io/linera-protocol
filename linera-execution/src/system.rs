@@ -14,7 +14,7 @@ use linera_base::{
 };
 use linera_views::{
     impl_view,
-    map_view::{MapOperations, MapView},
+    map_view::MapView,
     register_view::RegisterView,
     scoped_view::ScopedView,
     views::{View, ViewError},
@@ -194,7 +194,6 @@ impl_view!(
         ownership,
         balance,
     };
-    MapOperations<ChannelId, ()>,
 );
 
 #[derive(Error, Debug)]
