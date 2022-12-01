@@ -14,22 +14,10 @@ pub struct RegisterView<C, T> {
     update: Option<T>,
 }
 
-/// The context operations supporting [`RegisterView`].
-#[async_trait]
-pub trait RegisterOperations<T>: Context {
-}
-
-#[async_trait]
-impl<T, C: Context + Send + Sync> RegisterOperations<T> for C
-where
-    T: Default + Serialize + DeserializeOwned + Send + Sync + 'static,
-{
-}
-
 #[async_trait]
 impl<C, T> View<C> for RegisterView<C, T>
 where
-    C: RegisterOperations<T> + Send + Sync,
+    C: Context + Send + Sync,
     ViewError: From<C::Error>,
     T: Send + Sync + Default + Serialize + DeserializeOwned,
 {
@@ -110,7 +98,7 @@ where
 #[async_trait]
 impl<C, T> HashView<C> for RegisterView<C, T>
 where
-    C: HashingContext + RegisterOperations<T> + Send + Sync,
+    C: HashingContext + Send + Sync,
     ViewError: From<C::Error>,
     T: Default + Send + Sync + Serialize + DeserializeOwned,
 {

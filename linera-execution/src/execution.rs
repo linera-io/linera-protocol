@@ -14,7 +14,7 @@ use linera_base::{
 use linera_views::{
     collection_view::{CollectionOperations, ReentrantCollectionView},
     impl_view,
-    register_view::{RegisterOperations, RegisterView},
+    register_view::RegisterView,
     scoped_view::ScopedView,
     views::{View, ViewError},
 };
@@ -40,7 +40,6 @@ impl_view!(
         users,
     };
     SystemExecutionStateViewContext,
-    RegisterOperations<Vec<u8>>,
     CollectionOperations<ApplicationId>,
 );
 

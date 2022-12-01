@@ -24,7 +24,7 @@ use linera_views::{
     log_view::{LogOperations, LogView},
     map_view::{MapOperations, MapView},
     queue_view::{QueueOperations, QueueView},
-    register_view::{RegisterOperations, RegisterView},
+    register_view::RegisterView,
     scoped_view::ScopedView,
     views::ViewError,
 };
@@ -70,9 +70,6 @@ impl_view!(
         communication_states,
         published_bytecodes,
     };
-    RegisterOperations<Option<HashValue>>,
-    RegisterOperations<ChainTipState>,
-    RegisterOperations<ChainManager>,
     LogOperations<HashValue>,
     CollectionOperations<ApplicationId>,
     CommunicationStateViewContext,
@@ -152,7 +149,6 @@ pub struct InboxStateView<C> {
 
 impl_view!(
     InboxStateView { next_height_to_receive, received_events, expected_events };
-    RegisterOperations<BlockHeight>,
     QueueOperations<Event>
 );
 
@@ -171,7 +167,6 @@ impl_view!(
     ChannelStateView { subscribers, outboxes, block_height };
     MapOperations<ChainId, ()>,
     CollectionOperations<ChainId>,
-    RegisterOperations<Option<BlockHeight>>,
     OutboxStateViewContext,
 );
 
