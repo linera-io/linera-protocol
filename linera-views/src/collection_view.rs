@@ -35,9 +35,6 @@ pub struct ReentrantCollectionView<C, I, W> {
 /// The context operations supporting [`CollectionView`].
 #[async_trait]
 pub trait CollectionOperations<I>: Context {
-    /// Clone the context and advance the (otherwise implicit) base key for all read/write
-    /// operations.
-    fn clone_with_scope(&self, index: &I) -> Self;
 }
 
 /// A marker type used to distinguish keys from the current scope from the keys of sub-views.
@@ -61,12 +58,6 @@ impl<I, C: Context + Send> CollectionOperations<I> for C
 where
     I: Serialize + DeserializeOwned + Send + Sync + 'static,
 {
-    fn clone_with_scope(&self, index: &I) -> Self {
-        let key = self
-            .derive_key(&CollectionKey::Subview(index))
-            .expect("derive_key should not fail");
-        self.clone_self(key)
-    }
 }
 
 #[async_trait]
@@ -112,7 +103,7 @@ where
                         self.add_index(batch, index)?;
                     }
                     None => {
-                        let context = self.context.clone_with_scope(&index);
+                        let context = self.context.clone_self(self.context.derive_key(&CollectionKey::Subview(&index))?);
                         batch.delete_key(self.context.derive_key(&CollectionKey::Index(index))?);
                         batch.delete_key_prefix(context.base_key());
                     }
@@ -155,7 +146,7 @@ where
                 match entry {
                     Some(view) => Ok(view),
                     None => {
-                        let context = self.context.clone_with_scope(&index);
+                        let context = self.context.clone_self(self.context.derive_key(&CollectionKey::Subview(&index))?);
                         // Obtain a view and set its pending state to the default (e.g. empty) state
                         let mut view = W::load(context).await?;
                         view.clear();
@@ -165,7 +156,7 @@ where
                 }
             }
             btree_map::Entry::Vacant(entry) => {
-                let context = self.context.clone_with_scope(&index);
+                let context = self.context.clone_self(self.context.derive_key(&CollectionKey::Subview(&index))?);
                 let mut view = W::load(context).await?;
                 if self.was_cleared {
                     view.clear();
@@ -294,7 +285,7 @@ where
                         self.add_index(batch, index)?;
                     }
                     None => {
-                        let context = self.context.clone_with_scope(&index);
+                        let context = self.context.clone_self(self.context.derive_key(&CollectionKey::Subview(&index))?);
                         batch.delete_key(self.context.derive_key(&CollectionKey::Index(index))?);
                         batch.delete_key_prefix(context.base_key());
                     }
@@ -336,7 +327,7 @@ where
                 match entry {
                     Some(view) => Ok(view.clone().try_lock_owned()?),
                     None => {
-                        let context = self.context.clone_with_scope(&index);
+                        let context = self.context.clone_self(self.context.derive_key(&CollectionKey::Subview(&index))?);
                         // Obtain a view and set its pending state to the default (e.g. empty) state
                         let mut view = W::load(context).await?;
                         view.clear();
@@ -347,7 +338,7 @@ where
                 }
             }
             btree_map::Entry::Vacant(entry) => {
-                let context = self.context.clone_with_scope(&index);
+                let context = self.context.clone_self(self.context.derive_key(&CollectionKey::Subview(&index))?);
                 let mut view = W::load(context).await?;
                 if self.was_cleared {
                     view.clear();
