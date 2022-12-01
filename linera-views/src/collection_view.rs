@@ -32,11 +32,6 @@ pub struct ReentrantCollectionView<C, I, W> {
     updates: BTreeMap<I, Option<Arc<Mutex<W>>>>,
 }
 
-/// The context operations supporting [`CollectionView`].
-#[async_trait]
-pub trait CollectionOperations<I>: Context {
-}
-
 /// A marker type used to distinguish keys from the current scope from the keys of sub-views.
 ///
 /// Sub-views in a collection share a common key prefix, like in other view types. However,
@@ -54,16 +49,9 @@ enum CollectionKey<I> {
 }
 
 #[async_trait]
-impl<I, C: Context + Send> CollectionOperations<I> for C
-where
-    I: Serialize + DeserializeOwned + Send + Sync + 'static,
-{
-}
-
-#[async_trait]
 impl<C, I, W> View<C> for CollectionView<C, I, W>
 where
-    C: CollectionOperations<I> + Send,
+    C: Context + Send,
     ViewError: From<C::Error>,
     I: Send + Ord + Sync + Debug + Clone + Serialize + DeserializeOwned,
     W: View<C> + Send,
@@ -125,7 +113,7 @@ where
 
 impl<C, I, W> CollectionView<C, I, W>
 where
-    C: CollectionOperations<I> + Send,
+    C: Context + Send,
     ViewError: From<C::Error>,
     I: Eq + Ord + Sync + Clone + Send + Debug + Serialize + DeserializeOwned,
     W: View<C>,
@@ -209,7 +197,7 @@ where
 
 impl<C, I, W> CollectionView<C, I, W>
 where
-    C: CollectionOperations<I> + Send,
+    C: Context + Send,
     ViewError: From<C::Error>,
     I: Eq + Ord + Clone + Debug + Sync + Send + DeserializeOwned,
     W: View<C> + Sync,
@@ -239,7 +227,7 @@ where
 #[async_trait]
 impl<C, I, W> View<C> for ReentrantCollectionView<C, I, W>
 where
-    C: CollectionOperations<I> + Send,
+    C: Context + Send,
     ViewError: From<C::Error>,
     I: Send + Ord + Sync + Debug + Clone + Serialize + DeserializeOwned,
     W: View<C> + Send,
@@ -307,7 +295,7 @@ where
 
 impl<C, I, W> ReentrantCollectionView<C, I, W>
 where
-    C: CollectionOperations<I> + Send,
+    C: Context + Send,
     ViewError: From<C::Error>,
     I: Eq + Ord + Sync + Clone + Send + Debug + Serialize + DeserializeOwned,
     W: View<C>,
@@ -393,7 +381,7 @@ where
 
 impl<C, I, W> ReentrantCollectionView<C, I, W>
 where
-    C: CollectionOperations<I> + Send,
+    C: Context + Send,
     ViewError: From<C::Error>,
     I: Eq + Ord + Clone + Debug + Send + Sync + DeserializeOwned,
     W: View<C> + Send + Sync,
@@ -423,7 +411,7 @@ where
 #[async_trait]
 impl<C, I, W> HashView<C> for CollectionView<C, I, W>
 where
-    C: HashingContext + CollectionOperations<I> + Send,
+    C: HashingContext + Context + Send,
     ViewError: From<C::Error>,
     I: Eq + Ord + Clone + Debug + Send + Sync + Serialize + DeserializeOwned + 'static,
     W: HashView<C> + Send + 'static,
@@ -445,7 +433,7 @@ where
 #[async_trait]
 impl<C, I, W> HashView<C> for ReentrantCollectionView<C, I, W>
 where
-    C: HashingContext + CollectionOperations<I> + Send,
+    C: HashingContext + Context + Send,
     ViewError: From<C::Error>,
     I: Eq + Ord + Clone + Debug + Send + Sync + Serialize + DeserializeOwned + 'static,
     W: HashView<C> + Send + 'static,

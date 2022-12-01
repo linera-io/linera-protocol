@@ -15,22 +15,10 @@ pub struct QueueView<C, T> {
     new_back_values: VecDeque<T>,
 }
 
-/// The context operations supporting [`QueueView`].
-#[async_trait]
-pub trait QueueOperations<T>: Context {
-}
-
-#[async_trait]
-impl<T, C: Context + Send + Sync> QueueOperations<T> for C
-where
-    T: Serialize + DeserializeOwned + Send + Sync + 'static,
-{
-}
-
 #[async_trait]
 impl<C, T> View<C> for QueueView<C, T>
 where
-    C: QueueOperations<T> + Send + Sync,
+    C: Context + Send + Sync,
     ViewError: From<C::Error>,
     T: Send + Sync + Clone + Serialize,
 {
@@ -92,7 +80,7 @@ where
 
 impl<C, T> QueueView<C, T>
 where
-    C: QueueOperations<T> + Send + Sync,
+    C: Context + Send + Sync,
     ViewError: From<C::Error>,
     T: Send + Sync + Clone + Serialize + DeserializeOwned,
 {
@@ -214,7 +202,7 @@ where
 #[async_trait]
 impl<C, T> HashView<C> for QueueView<C, T>
 where
-    C: HashingContext + QueueOperations<T> + Send + Sync,
+    C: HashingContext + Context + Send + Sync,
     ViewError: From<C::Error>,
     T: Send + Sync + Clone + Serialize + DeserializeOwned,
 {

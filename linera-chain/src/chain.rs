@@ -19,11 +19,12 @@ use linera_execution::{
     ExecutionStateViewContext, OperationContext, RawExecutionResult,
 };
 use linera_views::{
-    collection_view::{CollectionOperations, CollectionView},
+    common::Context,
+    collection_view::CollectionView,
     impl_view,
     log_view::LogView,
     map_view::MapView,
-    queue_view::{QueueOperations, QueueView},
+    queue_view::QueueView,
     register_view::RegisterView,
     scoped_view::ScopedView,
     views::ViewError,
@@ -70,7 +71,6 @@ impl_view!(
         communication_states,
         published_bytecodes,
     };
-    CollectionOperations<ApplicationId>,
     CommunicationStateViewContext,
     ExecutionStateViewContext,
 );
@@ -97,9 +97,6 @@ pub struct CommunicationStateView<C> {
 
 impl_view!(
     CommunicationStateView { inboxes, outboxes, channels };
-    CollectionOperations<Origin>,
-    CollectionOperations<ChainId>,
-    CollectionOperations<String>,
     InboxStateViewContext,
     OutboxStateViewContext,
     ChannelStateViewContext,
@@ -117,7 +114,6 @@ pub struct OutboxStateView<C> {
 
 impl_view!(
     OutboxStateView { queue };
-    QueueOperations<BlockHeight>
 );
 
 impl<C> OutboxStateView<C>
@@ -147,7 +143,6 @@ pub struct InboxStateView<C> {
 
 impl_view!(
     InboxStateView { next_height_to_receive, received_events, expected_events };
-    QueueOperations<Event>
 );
 
 /// The state of a channel followed by subscribers.
@@ -163,7 +158,6 @@ pub struct ChannelStateView<C> {
 
 impl_view!(
     ChannelStateView { subscribers, outboxes, block_height };
-    CollectionOperations<ChainId>,
     OutboxStateViewContext,
 );
 
@@ -722,7 +716,7 @@ where
 
 impl<C> OutboxStateView<C>
 where
-    C: QueueOperations<BlockHeight> + Send + Sync,
+    C: Context + Send + Sync,
     ViewError: From<C::Error>,
 {
     /// Schedule a message at the given height if we haven't already.

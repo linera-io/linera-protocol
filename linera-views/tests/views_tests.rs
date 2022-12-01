@@ -3,7 +3,7 @@
 
 use async_trait::async_trait;
 use linera_views::{
-    collection_view::{CollectionOperations, CollectionView, ReentrantCollectionView},
+    collection_view::{CollectionView, ReentrantCollectionView},
     common::{Batch, Context},
     dynamo_db::DynamoDbContext,
     impl_view,
@@ -11,7 +11,7 @@ use linera_views::{
     log_view::LogView,
     map_view::MapView,
     memory::{MemoryContext, MemoryStoreMap},
-    queue_view::{QueueOperations, QueueView},
+    queue_view::QueueView,
     register_view::RegisterView,
     rocksdb::{RocksdbContext, DB},
     scoped_view::ScopedView,
@@ -42,10 +42,6 @@ pub struct StateView<C> {
 
 // This also generates `trait StateViewContext: Context ... {}`
 impl_view!(StateView { x1, x2, log, map, queue, collection, collection2, collection3, collection4, key_value_store };
-           QueueOperations<u64>,
-           CollectionOperations<String>,
-           CollectionOperations<String>,
-           CollectionOperations<String>
 );
 
 #[async_trait]
