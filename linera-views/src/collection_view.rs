@@ -42,11 +42,6 @@ pub trait CollectionOperations<I>: Context {
     /// Return the list of indices in the collection.
     async fn indices(&mut self) -> Result<Vec<I>, Self::Error>;
 
-    /// Execute a function on each index.
-    async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), Self::Error>
-    where
-        F: FnMut(I) + Send;
-
     /// Add the index to the list of indices. Crash-resistant implementations should only write
     /// to `batch`.
     fn add_index(&self, batch: &mut Batch, index: I) -> Result<(), Self::Error>;
@@ -54,8 +49,6 @@ pub trait CollectionOperations<I>: Context {
     /// Remove the index from the list of indices. Crash-resistant implementations should only
     /// write to `batch`.
     fn remove_index(&self, batch: &mut Batch, index: I) -> Result<(), Self::Error>;
-
-    // TODO(#149): In contrast to other views, there is no delete operation for CollectionOperation.
 }
 
 /// A marker type used to distinguish keys from the current scope from the keys of sub-views.
@@ -101,17 +94,6 @@ where
     async fn indices(&mut self) -> Result<Vec<I>, Self::Error> {
         let base = self.derive_key(&CollectionKey::Index(()))?;
         self.get_sub_keys(&base).await
-    }
-
-    async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), Self::Error>
-    where
-        F: FnMut(I) + Send,
-    {
-        let base = self.derive_key(&CollectionKey::Index(()))?;
-        for index in self.get_sub_keys(&base).await? {
-            f(index);
-        }
-        Ok(())
     }
 }
 
@@ -258,7 +240,7 @@ impl<C, I, W> CollectionView<C, I, W>
 where
     C: CollectionOperations<I> + Send,
     ViewError: From<C::Error>,
-    I: Eq + Ord + Clone + Debug + Sync,
+    I: Eq + Ord + Clone + Debug + Sync + Send + DeserializeOwned,
     W: View<C> + Sync,
 {
     /// Execute a function on each index.
@@ -267,13 +249,12 @@ where
         F: FnMut(I) + Send,
     {
         if !self.was_cleared {
-            self.context
-                .for_each_index(|index: I| {
-                    if !self.updates.contains_key(&index) {
-                        f(index);
-                    }
-                })
-                .await?;
+            let base = self.context.derive_key(&CollectionKey::Index(()))?;
+            for index in self.context.get_sub_keys(&base).await? {
+                if !self.updates.contains_key(&index) {
+                    f(index);
+                }
+            }
         }
         for (index, entry) in &self.updates {
             if entry.is_some() {
@@ -436,7 +417,7 @@ impl<C, I, W> ReentrantCollectionView<C, I, W>
 where
     C: CollectionOperations<I> + Send,
     ViewError: From<C::Error>,
-    I: Eq + Ord + Clone + Debug + Send + Sync,
+    I: Eq + Ord + Clone + Debug + Send + Sync + DeserializeOwned,
     W: View<C> + Send + Sync,
 {
     /// Execute a function on each index. The function f must be order independent.
@@ -445,13 +426,12 @@ where
         F: FnMut(I) + Send + Sync,
     {
         if !self.was_cleared {
-            self.context
-                .for_each_index(|index: I| {
-                    if !self.updates.contains_key(&index) {
-                        f(index);
-                    }
-                })
-                .await?;
+            let base = self.context.derive_key(&CollectionKey::Index(()))?;
+            for index in self.context.get_sub_keys(&base).await? {
+                if !self.updates.contains_key(&index) {
+                    f(index);
+                }
+            }
         }
         for (index, entry) in &self.updates {
             if entry.is_some() {
