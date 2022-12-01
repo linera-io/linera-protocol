@@ -14,3 +14,68 @@ variant poll-load {
 }
 
 store-and-unlock: func(value: list<u8>) -> bool
+
+resource try-call-application {
+    static new: func(
+        authenticated: bool,
+        application: application-id,
+        argument: list<u8>,
+        forwarded-sessions: list<session-id>,
+    ) -> try-call-application
+
+    poll: func() -> poll-call-result
+}
+
+resource try-call-session {
+    static new: func(
+        authenticated: bool,
+        session: session-id,
+        argument: list<u8>,
+        forwarded-sessions: list<session-id>,
+    ) -> try-call-application
+
+    poll: func() -> poll-call-result
+}
+
+variant poll-call-result {
+    pending,
+    ready(expected<call-result, string>),
+}
+
+record call-result {
+    value: list<u8>,
+    sessions: list<session-id>,
+}
+
+record session-id {
+    application-id: application-id,
+    kind: u64,
+    index: u64,
+}
+
+record application-id {
+    bytecode: bytecode,
+    creation: effect-id,
+}
+
+type bytecode = effect-id
+
+record effect-id {
+    chain-id: chain-id,
+    height: block-height,
+    index: u64,
+}
+
+type chain-id = hash-value
+type block-height = u64
+
+record hash-value {
+    part1: u64,
+    part2: u64,
+    part3: u64,
+    part4: u64,
+    part5: u64,
+    part6: u64,
+    part7: u64,
+    part8: u64,
+}
