@@ -18,11 +18,8 @@ pub struct QueueView<C, T> {
 /// The context operations supporting [`QueueView`].
 #[async_trait]
 pub trait QueueOperations<T>: Context {
-    /// Obtain the range of indices in the stored queue.
-    async fn indices(&mut self) -> Result<Range<usize>, Self::Error>;
-
     /// Obtain the value at the given index.
-    async fn get(&mut self, index: usize) -> Result<Option<T>, Self::Error>;
+    async fn get_val(&mut self, index: usize) -> Result<Option<T>, Self::Error>;
 
     /// Obtain the values in the given range.
     async fn read(&self, range: Range<usize>) -> Result<Vec<T>, Self::Error>;
@@ -51,13 +48,7 @@ impl<T, C: Context + Send + Sync> QueueOperations<T> for C
 where
     T: Serialize + DeserializeOwned + Send + Sync + 'static,
 {
-    async fn indices(&mut self) -> Result<Range<usize>, Self::Error> {
-        let base = self.base_key();
-        let range = self.read_key(&base).await?.unwrap_or_default();
-        Ok(range)
-    }
-
-    async fn get(&mut self, index: usize) -> Result<Option<T>, Self::Error> {
+    async fn get_val(&mut self, index: usize) -> Result<Option<T>, Self::Error> {
         let key = self.derive_key(&index)?;
         Ok(self.read_key(&key).await?)
     }
@@ -124,8 +115,9 @@ where
         &self.context
     }
 
-    async fn load(mut context: C) -> Result<Self, ViewError> {
-        let stored_indices = context.indices().await?;
+    async fn load(context: C) -> Result<Self, ViewError> {
+        let base = context.base_key();
+        let stored_indices = context.read_key(&base).await?.unwrap_or_default();
         Ok(Self {
             context,
             stored_indices,
@@ -171,12 +163,19 @@ where
     ViewError: From<C::Error>,
     T: Send + Sync + Clone,
 {
+    /*
+    async fn get(&mut self, index: usize) -> Result<Option<T>, ViewError> {
+        let key = self.context.derive_key(&index)?;
+        Ok(self.context.read_key(&key).await?)
+    }
+*/
+
     /// Read the front value, if any.
     pub async fn front(&mut self) -> Result<Option<T>, ViewError> {
         let stored_remainder = self.stored_indices.len() - self.front_delete_count;
         let value = if stored_remainder > 0 {
             self.context
-                .get(self.stored_indices.end - stored_remainder)
+                .get_val(self.stored_indices.end - stored_remainder)
                 .await?
         } else {
             self.new_back_values.front().cloned()
@@ -189,7 +188,7 @@ where
         let value = match self.new_back_values.back() {
             Some(value) => Some(value.clone()),
             None if self.stored_indices.len() > self.front_delete_count => {
-                self.context.get(self.stored_indices.end - 1).await?
+                self.context.get_val(self.stored_indices.end - 1).await?
             }
             _ => None,
         };
