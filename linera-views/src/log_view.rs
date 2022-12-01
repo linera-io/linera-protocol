@@ -18,12 +18,6 @@ pub struct LogView<C, T> {
 /// The context operations supporting [`LogView`].
 #[async_trait]
 pub trait LogOperations<T>: Context {
-    /// Return the size of the log in storage.
-    async fn count(&self) -> Result<usize, Self::Error>;
-
-    /// Obtain the value at the given index.
-    async fn get(&self, index: usize) -> Result<Option<T>, Self::Error>;
-
     /// Obtain the values in the given range of indices.
     async fn read(&self, range: Range<usize>) -> Result<Vec<T>, Self::Error>;
 
@@ -41,17 +35,6 @@ impl<T, C: Context + Send + Sync> LogOperations<T> for C
 where
     T: Serialize + DeserializeOwned + Send + Sync + 'static,
 {
-    async fn count(&self) -> Result<usize, Self::Error> {
-        let base = self.base_key();
-        let count = self.read_key(&base).await?.unwrap_or_default();
-        Ok(count)
-    }
-
-    async fn get(&self, index: usize) -> Result<Option<T>, Self::Error> {
-        let key = self.derive_key(&index)?;
-        self.read_key(&key).await
-    }
-
     async fn read(&self, range: Range<usize>) -> Result<Vec<T>, Self::Error> {
         let mut values = Vec::with_capacity(range.len());
         for index in range {
@@ -95,7 +78,8 @@ where
     }
 
     async fn load(context: C) -> Result<Self, ViewError> {
-        let stored_count = context.count().await?;
+        let base = context.base_key();
+        let stored_count = context.read_key(&base).await?.unwrap_or_default();
         Ok(Self {
             context,
             was_cleared: false,
@@ -163,14 +147,15 @@ impl<C, T> LogView<C, T>
 where
     C: LogOperations<T> + Send + Sync,
     ViewError: From<C::Error>,
-    T: Send + Sync + Clone,
+    T: Send + Sync + Clone + DeserializeOwned,
 {
     /// Read the logged values in the given range (including staged ones).
     pub async fn get(&mut self, index: usize) -> Result<Option<T>, ViewError> {
         let value = if self.was_cleared {
             self.new_values.get(index).cloned()
         } else if index < self.stored_count {
-            self.context.get(index).await?
+            let key = self.context.derive_key(&index)?;
+            self.context.read_key(&key).await?
         } else {
             self.new_values.get(index - self.stored_count).cloned()
         };
@@ -219,7 +204,7 @@ impl<C, T> HashView<C> for LogView<C, T>
 where
     C: HashingContext + LogOperations<T> + Send + Sync,
     ViewError: From<C::Error>,
-    T: Send + Sync + Clone + Serialize,
+    T: Send + Sync + Clone + Serialize + DeserializeOwned,
 {
     async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
         let count = self.count();
