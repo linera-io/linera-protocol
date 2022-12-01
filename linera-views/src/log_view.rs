@@ -18,8 +18,6 @@ pub struct LogView<C, T> {
 /// The context operations supporting [`LogView`].
 #[async_trait]
 pub trait LogOperations<T>: Context {
-    /// Obtain the values in the given range of indices.
-    async fn read(&self, range: Range<usize>) -> Result<Vec<T>, Self::Error>;
 }
 
 #[async_trait]
@@ -27,17 +25,6 @@ impl<T, C: Context + Send + Sync> LogOperations<T> for C
 where
     T: Serialize + DeserializeOwned + Send + Sync + 'static,
 {
-    async fn read(&self, range: Range<usize>) -> Result<Vec<T>, Self::Error> {
-        let mut values = Vec::with_capacity(range.len());
-        for index in range {
-            let key = self.derive_key(&index)?;
-            match self.read_key(&key).await? {
-                None => return Ok(values),
-                Some(value) => values.push(value),
-            };
-        }
-        Ok(values)
-    }
 }
 
 #[async_trait]
@@ -141,6 +128,17 @@ where
         Ok(value)
     }
 
+    async fn read_context(&self, range: Range<usize>) -> Result<Vec<T>, ViewError> {
+        let mut values = Vec::with_capacity(range.len());
+        for index in range {
+            let key = self.context.derive_key(&index)?;
+            match self.context.read_key(&key).await? {
+                None => return Ok(values),
+                Some(value) => values.push(value),
+            };
+        }
+        Ok(values)
+    }
     /// Read the logged values in the given range (including staged ones).
     pub async fn read(&self, mut range: Range<usize>) -> Result<Vec<T>, ViewError> {
         let effective_stored_count = if self.was_cleared {
@@ -158,11 +156,10 @@ where
         values.reserve(range.end - range.start);
         if range.start < effective_stored_count {
             if range.end <= effective_stored_count {
-                values.extend(self.context.read(range.start..range.end).await?);
+                values.extend(self.read_context(range.start..range.end).await?);
             } else {
                 values.extend(
-                    self.context
-                        .read(range.start..effective_stored_count)
+                    self.read_context(range.start..effective_stored_count)
                         .await?,
                 );
                 values.extend(self.new_values[0..(range.end - effective_stored_count)].to_vec());
