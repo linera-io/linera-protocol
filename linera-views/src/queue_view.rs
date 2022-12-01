@@ -4,7 +4,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{collections::VecDeque, fmt::Debug, mem, ops::Range};
+use std::{collections::VecDeque, fmt::Debug, ops::Range};
 
 /// A view that supports a FIFO queue for values of type `T`.
 #[derive(Debug, Clone)]
@@ -31,15 +31,6 @@ pub trait QueueOperations<T>: Context {
         stored_indices: &mut Range<usize>,
         batch: &mut Batch,
         count: usize,
-    ) -> Result<(), Self::Error>;
-
-    /// Append the given values from the back of the queue. Crash-resistant
-    /// implementations should only write to `batch`.
-    fn append_back(
-        &self,
-        stored_indices: &mut Range<usize>,
-        batch: &mut Batch,
-        values: Vec<T>,
     ) -> Result<(), Self::Error>;
 }
 
@@ -83,25 +74,6 @@ where
         }
         Ok(())
     }
-
-    fn append_back(
-        &self,
-        stored_indices: &mut Range<usize>,
-        batch: &mut Batch,
-        values: Vec<T>,
-    ) -> Result<(), Self::Error> {
-        if values.is_empty() {
-            return Ok(());
-        }
-        for value in values {
-            let key = self.derive_key(&stored_indices.end)?;
-            batch.put_key_value(key, &value)?;
-            stored_indices.end += 1;
-        }
-        let base = self.base_key();
-        batch.put_key_value(base, &stored_indices)?;
-        Ok(())
-    }
 }
 
 #[async_trait]
@@ -109,7 +81,7 @@ impl<C, T> View<C> for QueueView<C, T>
 where
     C: QueueOperations<T> + Send + Sync,
     ViewError: From<C::Error>,
-    T: Send + Sync + Clone,
+    T: Send + Sync + Clone + Serialize,
 {
     fn context(&self) -> &C {
         &self.context
@@ -137,11 +109,16 @@ where
                 .delete_front(&mut self.stored_indices, batch, self.front_delete_count)?;
         }
         if !self.new_back_values.is_empty() {
-            self.context.append_back(
-                &mut self.stored_indices,
-                batch,
-                mem::take(&mut self.new_back_values).into_iter().collect(),
-            )?;
+            if self.new_back_values.len() > 0 {
+                for value in &self.new_back_values {
+                    let key = self.context.derive_key(&self.stored_indices.end)?;
+                    batch.put_key_value(key, value)?;
+                    self.stored_indices.end += 1;
+                }
+                let base = self.context.base_key();
+                batch.put_key_value(base, &self.stored_indices)?;
+                self.new_back_values.clear();
+            }
         }
         self.front_delete_count = 0;
         Ok(())
