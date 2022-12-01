@@ -20,9 +20,6 @@ pub trait MapOperations<I, V>: Context {
     /// Obtain the value at the given index, if any.
     async fn get(&mut self, index: &I) -> Result<Option<V>, Self::Error>;
 
-    /// Return the list of indices in the map.
-    async fn indices(&mut self) -> Result<Vec<I>, Self::Error>;
-
     /// Execute a function on each index.
     async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), Self::Error>
     where
@@ -30,10 +27,6 @@ pub trait MapOperations<I, V>: Context {
 
     /// Set a value. Crash-resistant implementations should only write to `batch`.
     fn insert(&mut self, batch: &mut Batch, index: I, value: V) -> Result<(), Self::Error>;
-
-    /// Remove the entry at the given index. Crash-resistant implementations should only write
-    /// to `batch`.
-    fn remove(&mut self, batch: &mut Batch, index: I) -> Result<(), Self::Error>;
 }
 
 #[async_trait]
@@ -53,17 +46,6 @@ where
         Ok(())
     }
 
-    fn remove(&mut self, batch: &mut Batch, index: I) -> Result<(), Self::Error> {
-        let key = self.derive_key(&index)?;
-        batch.delete_key(key);
-        Ok(())
-    }
-
-    async fn indices(&mut self) -> Result<Vec<I>, Self::Error> {
-        let base = self.base_key();
-        self.get_sub_keys(&base).await
-    }
-
     async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), Self::Error>
     where
         F: FnMut(I) + Send,
@@ -81,7 +63,7 @@ impl<C, I, V> View<C> for MapView<C, I, V>
 where
     C: MapOperations<I, V> + Send,
     ViewError: From<C::Error>,
-    I: Eq + Ord + Send + Sync + Clone,
+    I: Eq + Ord + Send + Sync + Clone + Serialize,
     V: Clone + Send + Sync,
 {
     fn context(&self) -> &C {
@@ -113,7 +95,7 @@ where
         } else {
             for (index, update) in mem::take(&mut self.updates) {
                 match update {
-                    None => self.context.remove(batch, index)?,
+                    None => batch.delete_key(self.context.derive_key(&index)?),
                     Some(value) => self.context.insert(batch, index, value)?,
                 }
             }
@@ -177,6 +159,9 @@ where
     pub async fn indices(&mut self) -> Result<Vec<I>, ViewError> {
         let mut indices = Vec::new();
         if !self.was_cleared {
+
+
+            
             self.context
                 .for_each_index(|index: I| {
                     if !self.updates.contains_key(&index) {
