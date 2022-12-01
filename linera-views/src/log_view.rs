@@ -45,7 +45,7 @@ impl<C, T> View<C> for LogView<C, T>
 where
     C: LogOperations<T> + Send + Sync,
     ViewError: From<C::Error>,
-    T: Send + Sync + Clone + Serialize + DeserializeOwned,
+    T: Send + Sync + Clone + Serialize,
 {
     fn context(&self) -> &C {
         &self.context
@@ -83,6 +83,7 @@ where
                     self.stored_count += 1;
                 }
                 batch.put_key_value(self.context.base_key(), &self.stored_count)?;
+                self.new_values.clear();
             }
         }
         Ok(())
