@@ -173,9 +173,7 @@ impl KeyValueOperations for DynamoDbContainer {
                 .expression_attribute_values(":prefix", AttributeValue::B(Blob::new(key_prefix)))
         } else {
             response
-                .key_condition_expression(format!(
-                    "{PARTITION_ATTRIBUTE} = :partition and begins_with({KEY_ATTRIBUTE})"
-                ))
+                .key_condition_expression(format!("{PARTITION_ATTRIBUTE} = :partition"))
                 .expression_attribute_values(
                     ":partition",
                     AttributeValue::B(Blob::new(DUMMY_PARTITION_KEY)),
