@@ -160,17 +160,28 @@ impl KeyValueOperations for DynamoDbContainer {
             .client
             .query()
             .table_name(self.table.as_ref())
-            .projection_expression(KEY_ATTRIBUTE)
-            .key_condition_expression(format!(
-                "{PARTITION_ATTRIBUTE} = :partition and begins_with({KEY_ATTRIBUTE}, :prefix)"
-            ))
-            .expression_attribute_values(
-                ":partition",
-                AttributeValue::B(Blob::new(DUMMY_PARTITION_KEY)),
-            )
-            .expression_attribute_values(":prefix", AttributeValue::B(Blob::new(key_prefix)))
-            .send()
-            .await?;
+            .projection_expression(KEY_ATTRIBUTE);
+        let response = if key_prefix.len() > 0 {
+            response
+                .key_condition_expression(format!(
+                    "{PARTITION_ATTRIBUTE} = :partition and begins_with({KEY_ATTRIBUTE}, :prefix)"
+                ))
+                .expression_attribute_values(
+                    ":partition",
+                    AttributeValue::B(Blob::new(DUMMY_PARTITION_KEY)),
+                )
+                .expression_attribute_values(":prefix", AttributeValue::B(Blob::new(key_prefix)))
+        } else {
+            response
+                .key_condition_expression(format!(
+                    "{PARTITION_ATTRIBUTE} = :partition and begins_with({KEY_ATTRIBUTE})"
+                ))
+                .expression_attribute_values(
+                    ":partition",
+                    AttributeValue::B(Blob::new(DUMMY_PARTITION_KEY)),
+                )
+        };
+        let response = response.send().await?;
         Ok(DynamoDbKeyIterator::new(response))
     }
 

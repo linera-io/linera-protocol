@@ -21,7 +21,7 @@ async fn test_ordering_keys_key_value_vec<OP: KeyValueOperations>(
     key_value_vec: Vec<(Vec<u8>, Vec<u8>)>,
 ) {
     // We need a nontrivial key_prefix because dynamo requires a non-trivial prefix
-    let key_prefix = vec![0];
+    let key_prefix = Vec::new();
     let mut batch = Batch::default();
     for key_value in key_value_vec {
         batch.put_key_value_bytes(key_value.0, key_value.1);
