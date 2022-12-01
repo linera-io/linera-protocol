@@ -49,7 +49,6 @@ pub struct ChainInfoQuery {
     /// Query a range of certificates sent from the chain.
     pub request_sent_certificates_in_range: Option<BlockHeightRange>,
     /// Query new certificates received from the chain.
-    /// TODO make this u64 instead of usize
     pub request_received_certificates_excluding_first_nth: Option<usize>,
 }
 

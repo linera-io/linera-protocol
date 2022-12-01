@@ -600,24 +600,21 @@ pub mod tests {
     use linera_chain::messages::{Block, BlockAndRound, Value};
     use linera_core::messages::ChainInfo;
     use serde::{Deserialize, Serialize};
-    use std::str::FromStr;
-    use structopt::lazy_static::lazy_static;
 
     #[derive(Debug, Serialize, Deserialize)]
     struct Foo(String);
 
     impl BcsSignable for Foo {}
 
-    lazy_static! {
-        static ref CHAIN_ID: ChainId = ChainId::from_str("dc07bbb3e3583738cfccc9489cd0959703d6ae9fd73316ab2fdea0e8bcff2467cbd986a25b352afd422b123aa84e9b680ee6fd9f56c685cb2b5e29d87a2ac5d9").unwrap();
-        static ref BLOCK: Block = Block {
-                    chain_id: *CHAIN_ID,
-                    epoch: Default::default(),
-                    incoming_messages: vec![],
-                    operations: vec![],
-                    height: Default::default(),
-                    previous_block_hash: None,
-                };
+    fn get_block() -> Block {
+        Block {
+            chain_id: ChainId::root(0),
+            epoch: Default::default(),
+            incoming_messages: vec![],
+            operations: vec![],
+            height: Default::default(),
+            previous_block_hash: None,
+        }
     }
 
     /// A convenience macro for testing. It converts a type into its
@@ -637,10 +634,10 @@ pub mod tests {
 
     #[test]
     pub fn test_origin() {
-        let origin_direct = Origin::chain(*CHAIN_ID);
+        let origin_direct = Origin::chain(ChainId::root(0));
         compare!(origin_direct, OriginRpc);
 
-        let origin_medium = Origin::channel(*CHAIN_ID, "some channel".to_string());
+        let origin_medium = Origin::channel(ChainId::root(0), "some channel".to_string());
         compare!(origin_medium, OriginRpc);
     }
 
@@ -674,7 +671,7 @@ pub mod tests {
 
     #[test]
     pub fn test_chain_id() {
-        let chain_id = *CHAIN_ID;
+        let chain_id = ChainId::root(0);
         compare!(chain_id, ChainIdRPC);
     }
 
@@ -702,7 +699,7 @@ pub mod tests {
     #[test]
     pub fn test_chain_info_response() {
         let chain_info = ChainInfo {
-            chain_id: *CHAIN_ID,
+            chain_id: ChainId::root(0),
             epoch: None,
             description: None,
             manager: Default::default(),
@@ -734,11 +731,11 @@ pub mod tests {
 
     #[test]
     pub fn test_chain_info_query() {
-        let chain_info_query_none = ChainInfoQuery::new(*CHAIN_ID);
+        let chain_info_query_none = ChainInfoQuery::new(ChainId::root(0));
         compare!(chain_info_query_none, ChainInfoQueryRpc);
 
         let chain_info_query_some = ChainInfoQuery {
-            chain_id: *CHAIN_ID,
+            chain_id: ChainId::root(0),
             test_next_block_height: Some(BlockHeight::from(10)),
             request_committees: false,
             request_pending_messages: false,
@@ -756,7 +753,7 @@ pub mod tests {
         let key_pair = KeyPair::generate();
         let certificate_validated = Certificate::new(
             Value::ValidatedBlock {
-                block: BLOCK.clone(),
+                block: get_block(),
                 round: Default::default(),
                 effects: vec![],
                 state_hash: HashValue::new(&Foo("test".into())),
@@ -774,8 +771,8 @@ pub mod tests {
     pub fn test_cross_chain_request() {
         let cross_chain_request_update_recipient = CrossChainRequest::UpdateRecipient {
             application_id: ApplicationId(10u64),
-            origin: Origin::chain(*CHAIN_ID),
-            recipient: *CHAIN_ID,
+            origin: Origin::chain(ChainId::root(0)),
+            recipient: ChainId::root(0),
             certificates: vec![],
         };
         compare!(cross_chain_request_update_recipient, CrossChainRequestRpc);
@@ -783,8 +780,8 @@ pub mod tests {
         let cross_chain_request_confirm_updated_recipient =
             CrossChainRequest::ConfirmUpdatedRecipient {
                 application_id: ApplicationId(10u64),
-                origin: Origin::chain(*CHAIN_ID),
-                recipient: *CHAIN_ID,
+                origin: Origin::chain(ChainId::root(0)),
+                recipient: ChainId::root(0),
                 height: Default::default(),
             };
         compare!(
@@ -797,7 +794,7 @@ pub mod tests {
     pub fn test_block_proposal() {
         let block_proposal = BlockProposal {
             content: BlockAndRound {
-                block: BLOCK.clone(),
+                block: get_block(),
                 round: Default::default(),
             },
             owner: Owner::from(KeyPair::generate().public()),

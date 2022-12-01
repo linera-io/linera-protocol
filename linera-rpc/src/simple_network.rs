@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    codec,
     config::{
         CrossChainConfig, ShardId, ValidatorInternalNetworkPreConfig,
         ValidatorPublicNetworkPreConfig,
@@ -14,9 +15,10 @@ use crate::{
 use async_trait::async_trait;
 use futures::{channel::mpsc, sink::SinkExt, stream::StreamExt};
 
+use linera_chain::messages::{BlockProposal, Certificate};
 use linera_core::{
-    messages::CrossChainRequest,
-    node::NodeError,
+    messages::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
+    node::{NodeError, ValidatorNode},
     worker::{ValidatorWorker, WorkerState},
 };
 use linera_storage::Store;
@@ -270,6 +272,83 @@ where
                     .expect("internal channel should not fail");
             }
         })
+    }
+}
+
+#[derive(Clone)]
+pub struct SimpleClient {
+    network: ValidatorPublicNetworkPreConfig<TransportProtocol>,
+    send_timeout: Duration,
+    recv_timeout: Duration,
+}
+
+impl SimpleClient {
+    pub(crate) fn new(
+        network: ValidatorPublicNetworkPreConfig<TransportProtocol>,
+        send_timeout: Duration,
+        recv_timeout: Duration,
+    ) -> Self {
+        Self {
+            network,
+            send_timeout,
+            recv_timeout,
+        }
+    }
+
+    async fn send_recv_internal(&mut self, message: Message) -> Result<Message, codec::Error> {
+        let address = format!("{}:{}", self.network.host, self.network.port);
+        let mut stream = self.network.protocol.connect(address).await?;
+        // Send message
+        time::timeout(self.send_timeout, stream.send(message))
+            .await
+            .map_err(|timeout| codec::Error::Io(timeout.into()))??;
+        // Wait for reply
+        time::timeout(self.recv_timeout, stream.next())
+            .await
+            .map_err(|timeout| codec::Error::Io(timeout.into()))?
+            .transpose()?
+            .ok_or_else(|| codec::Error::Io(std::io::ErrorKind::UnexpectedEof.into()))
+    }
+
+    async fn send_recv_info(&mut self, message: Message) -> Result<ChainInfoResponse, NodeError> {
+        match self.send_recv_internal(message).await {
+            Ok(Message::ChainInfoResponse(response)) => Ok(*response),
+            Ok(Message::Error(error)) => Err(*error),
+            Ok(_) => Err(NodeError::UnexpectedMessage),
+            Err(error) => match error {
+                codec::Error::Io(io_error) => Err(NodeError::ClientIoError {
+                    error: format!("{}", io_error),
+                }),
+                _ => Err(NodeError::InvalidDecoding),
+            },
+        }
+    }
+}
+
+#[async_trait]
+impl ValidatorNode for SimpleClient {
+    /// Initiate a new block.
+    async fn handle_block_proposal(
+        &mut self,
+        proposal: BlockProposal,
+    ) -> Result<ChainInfoResponse, NodeError> {
+        self.send_recv_info(proposal.into()).await
+    }
+
+    /// Process a certificate.
+    async fn handle_certificate(
+        &mut self,
+        certificate: Certificate,
+    ) -> Result<ChainInfoResponse, NodeError> {
+        self.send_recv_info(certificate.into()).await
+    }
+
+    /// Handle information queries for this chain.
+    async fn handle_chain_info_query(
+        &mut self,
+        query: ChainInfoQuery,
+    ) -> Result<ChainInfoResponse, NodeError> {
+        self.send_recv_info(query.into()).await
     }
 }
 

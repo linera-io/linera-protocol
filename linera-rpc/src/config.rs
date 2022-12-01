@@ -34,6 +34,10 @@ impl ShardConfig {
     pub fn address(&self) -> String {
         format!("{}:{}", self.host, self.port)
     }
+
+    pub fn http_address(&self) -> String {
+        format!("http://{}:{}", self.host, self.port)
+    }
 }
 
 /// The network protocol.
@@ -88,8 +92,7 @@ impl<P> ValidatorPublicNetworkPreConfig<P> {
         }
     }
 
-    // todo placeholder
-    pub fn address(&self) -> String {
+    pub fn http_address(&self) -> String {
         format!("http://{}:{}", self.host, self.port)
     }
 }

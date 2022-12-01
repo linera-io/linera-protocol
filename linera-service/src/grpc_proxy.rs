@@ -114,7 +114,7 @@ impl GrpcProxy {
         &self,
         shard: &ShardConfig,
     ) -> Result<ValidatorWorkerClient<Channel>> {
-        let address = format!("http://{}:{}", shard.host, shard.port);
+        let address = shard.http_address();
         let client = self
             .worker_connection_pool
             .cloned_client_for_address(address)
@@ -127,7 +127,7 @@ impl GrpcProxy {
         &self,
         shard: &ShardConfig,
     ) -> Result<ValidatorNodeClient<Channel>> {
-        let address = format!("http://{}:{}", shard.host, shard.port);
+        let address = shard.http_address();
         let client = self
             .node_connection_pool
             .cloned_client_for_address(address)

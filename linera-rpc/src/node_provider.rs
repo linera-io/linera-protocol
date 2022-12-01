@@ -1,6 +1,8 @@
 use crate::{
-    client::{Client, GrpcClient, SimpleClient},
+    client::Client,
     config::{ValidatorPublicNetworkConfig, ValidatorPublicNetworkPreConfig},
+    grpc_network::GrpcClient,
+    simple_network::SimpleClient,
 };
 use async_trait::async_trait;
 use linera_core::{client::ValidatorNodeProvider, node::NodeError};

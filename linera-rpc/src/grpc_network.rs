@@ -24,7 +24,7 @@ use tonic::{transport::Server, Request, Response, Status};
 
 // to avoid confusion with existing ValidatorNode
 use crate::{
-    convert_and_delegate,
+    client_delegate, convert_and_delegate,
     grpc_network::grpc::{
         validator_node_server::{ValidatorNode as ValidatorNodeRpc, ValidatorNodeServer},
         validator_worker_server::ValidatorWorker as ValidatorWorkerRpc,
@@ -53,6 +53,8 @@ use crate::{
     pool::Connect,
 };
 
+use linera_chain::messages;
+use linera_core::node::ValidatorNode;
 use tokio::task::{JoinError, JoinHandle};
 use tonic::transport::Channel;
 
@@ -378,6 +380,41 @@ where
     }
 }
 
+#[derive(Clone)]
+pub struct GrpcClient(ValidatorNodeClient<Channel>);
+
+impl GrpcClient {
+    pub(crate) async fn new(network: ValidatorPublicNetworkConfig) -> Result<Self, GrpcError> {
+        Ok(Self(
+            ValidatorNodeClient::connect(network.http_address()).await?,
+        ))
+    }
+}
+
+#[async_trait]
+impl ValidatorNode for GrpcClient {
+    async fn handle_block_proposal(
+        &mut self,
+        proposal: messages::BlockProposal,
+    ) -> Result<linera_core::messages::ChainInfoResponse, NodeError> {
+        client_delegate!(self, handle_block_proposal, proposal)
+    }
+
+    async fn handle_certificate(
+        &mut self,
+        certificate: messages::Certificate,
+    ) -> Result<linera_core::messages::ChainInfoResponse, NodeError> {
+        client_delegate!(self, handle_certificate, certificate)
+    }
+
+    async fn handle_chain_info_query(
+        &mut self,
+        query: linera_core::messages::ChainInfoQuery,
+    ) -> Result<linera_core::messages::ChainInfoResponse, NodeError> {
+        client_delegate!(self, handle_chain_info_query, query)
+    }
+}
+
 pub struct GrpcMassClient(ValidatorPublicNetworkConfig);
 
 impl GrpcMassClient {
@@ -391,7 +428,7 @@ impl MassClient for GrpcMassClient {
     async fn send(&self, requests: Vec<Message>) -> Result<Vec<Message>, MassClientError> {
         // we're establishing the connection here so that the `GrpcMassClient` constructor
         // is infallible.
-        let mut client = ValidatorNodeClient::connect(self.0.address()).await?;
+        let mut client = ValidatorNodeClient::connect(self.0.http_address()).await?;
         let mut responses = Vec::new();
 
         for request in requests {
