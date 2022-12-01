@@ -34,10 +34,6 @@ pub trait MapOperations<I, V>: Context {
     /// Remove the entry at the given index. Crash-resistant implementations should only write
     /// to `batch`.
     fn remove(&mut self, batch: &mut Batch, index: I) -> Result<(), Self::Error>;
-
-    /// Delete the map and its entries from storage. Crash-resistant implementations should only
-    /// write to `batch`.
-    fn delete(&self, batch: &mut Batch);
 }
 
 #[async_trait]
@@ -78,10 +74,6 @@ where
         }
         Ok(())
     }
-
-    fn delete(&self, batch: &mut Batch) {
-        batch.delete_key_prefix(self.base_key());
-    }
 }
 
 #[async_trait]
@@ -112,7 +104,7 @@ where
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
         if self.was_cleared {
             self.was_cleared = false;
-            self.context.delete(batch);
+            batch.delete_key_prefix(self.context.base_key());
             for (index, update) in mem::take(&mut self.updates) {
                 if let Some(value) = update {
                     self.context.insert(batch, index, value)?;
@@ -130,7 +122,7 @@ where
     }
 
     fn delete(self, batch: &mut Batch) {
-        self.context.delete(batch);
+        batch.delete_key_prefix(self.context.base_key());
     }
 
     fn clear(&mut self) {

@@ -34,9 +34,6 @@ pub trait LogOperations<T>: Context {
         batch: &mut Batch,
         values: Vec<T>,
     ) -> Result<(), Self::Error>;
-
-    /// Delete the log. Crash-resistant implementations should only write to `batch`.
-    fn delete(&self, batch: &mut Batch);
 }
 
 #[async_trait]
@@ -84,10 +81,6 @@ where
         batch.put_key_value(self.base_key(), &count)?;
         Ok(())
     }
-
-    fn delete(&self, batch: &mut Batch) {
-        batch.delete_key_prefix(self.base_key());
-    }
 }
 
 #[async_trait]
@@ -120,7 +113,7 @@ where
         if self.was_cleared {
             self.was_cleared = false;
             if self.stored_count > 0 {
-                self.context.delete(batch);
+                batch.delete_key_prefix(self.context.base_key());
                 self.stored_count = 0;
             }
         }
@@ -134,7 +127,7 @@ where
     }
 
     fn delete(self, batch: &mut Batch) {
-        self.context.delete(batch);
+        batch.delete_key_prefix(self.context.base_key());
     }
 
     fn clear(&mut self) {

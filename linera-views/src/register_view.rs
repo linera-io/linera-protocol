@@ -22,9 +22,6 @@ pub trait RegisterOperations<T>: Context {
 
     /// Set the value in the register. Crash-resistant implementations should only write to `batch`.
     fn set(&self, batch: &mut Batch, value: &T) -> Result<(), Self::Error>;
-
-    /// Delete the register. Crash-resistant implementations should only write to `batch`.
-    fn delete(&self, batch: &mut Batch);
 }
 
 #[async_trait]
@@ -41,10 +38,6 @@ where
     fn set(&self, batch: &mut Batch, value: &T) -> Result<(), Self::Error> {
         batch.put_key_value(self.base_key(), value)?;
         Ok(())
-    }
-
-    fn delete(&self, batch: &mut Batch) {
-        batch.delete_key(self.base_key());
     }
 }
 
@@ -81,7 +74,7 @@ where
     }
 
     fn delete(self, batch: &mut Batch) {
-        self.context.delete(batch);
+        batch.delete_key(self.context.base_key());
     }
 
     fn clear(&mut self) {

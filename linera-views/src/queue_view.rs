@@ -44,9 +44,6 @@ pub trait QueueOperations<T>: Context {
         batch: &mut Batch,
         values: Vec<T>,
     ) -> Result<(), Self::Error>;
-
-    /// Delete the queue from storage. Crash-resistant implementations should only write to `batch`.
-    fn delete(&self, batch: &mut Batch);
 }
 
 #[async_trait]
@@ -114,10 +111,6 @@ where
         batch.put_key_value(base, &stored_indices)?;
         Ok(())
     }
-
-    fn delete(&self, batch: &mut Batch) {
-        batch.delete_key_prefix(self.base_key());
-    }
 }
 
 #[async_trait]
@@ -163,7 +156,7 @@ where
     }
 
     fn delete(self, batch: &mut Batch) {
-        self.context.delete(batch);
+        batch.delete_key_prefix(self.context.base_key());
     }
 
     fn clear(&mut self) {
