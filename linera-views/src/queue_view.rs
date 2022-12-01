@@ -53,16 +53,14 @@ where
             }
         }
         if !self.new_back_values.is_empty() {
-            if self.new_back_values.len() > 0 {
-                for value in &self.new_back_values {
-                    let key = self.context.derive_key(&self.stored_indices.end)?;
-                    batch.put_key_value(key, value)?;
-                    self.stored_indices.end += 1;
-                }
-                let base = self.context.base_key();
-                batch.put_key_value(base, &self.stored_indices)?;
-                self.new_back_values.clear();
+            for value in &self.new_back_values {
+                let key = self.context.derive_key(&self.stored_indices.end)?;
+                batch.put_key_value(key, value)?;
+                self.stored_indices.end += 1;
             }
+            let base = self.context.base_key();
+            batch.put_key_value(base, &self.stored_indices)?;
+            self.new_back_values.clear();
         }
         self.front_delete_count = 0;
         Ok(())
@@ -93,8 +91,7 @@ where
     pub async fn front(&mut self) -> Result<Option<T>, ViewError> {
         let stored_remainder = self.stored_indices.len() - self.front_delete_count;
         let value = if stored_remainder > 0 {
-            self.get(self.stored_indices.end - stored_remainder)
-                .await?
+            self.get(self.stored_indices.end - stored_remainder).await?
         } else {
             self.new_back_values.front().cloned()
         };

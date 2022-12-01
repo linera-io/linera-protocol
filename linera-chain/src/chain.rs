@@ -19,14 +19,8 @@ use linera_execution::{
     ExecutionStateViewContext, OperationContext, RawExecutionResult,
 };
 use linera_views::{
-    common::Context,
-    collection_view::CollectionView,
-    impl_view,
-    log_view::LogView,
-    map_view::MapView,
-    queue_view::QueueView,
-    register_view::RegisterView,
-    scoped_view::ScopedView,
+    collection_view::CollectionView, common::Context, impl_view, log_view::LogView,
+    map_view::MapView, queue_view::QueueView, register_view::RegisterView, scoped_view::ScopedView,
     views::ViewError,
 };
 use serde::{Deserialize, Serialize};
