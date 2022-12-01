@@ -4,7 +4,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{fmt::Debug, mem, ops::Range};
+use std::{fmt::Debug, ops::Range};
 
 /// A view that supports logging values of type `T`.
 #[derive(Debug, Clone)]
@@ -20,14 +20,6 @@ pub struct LogView<C, T> {
 pub trait LogOperations<T>: Context {
     /// Obtain the values in the given range of indices.
     async fn read(&self, range: Range<usize>) -> Result<Vec<T>, Self::Error>;
-
-    /// Append values to the logs. Crash-resistant implementations should only write to `batch`.
-    fn append(
-        &self,
-        stored_count: usize,
-        batch: &mut Batch,
-        values: Vec<T>,
-    ) -> Result<(), Self::Error>;
 }
 
 #[async_trait]
@@ -46,24 +38,6 @@ where
         }
         Ok(values)
     }
-
-    fn append(
-        &self,
-        stored_count: usize,
-        batch: &mut Batch,
-        values: Vec<T>,
-    ) -> Result<(), Self::Error> {
-        if values.is_empty() {
-            return Ok(());
-        }
-        let mut count = stored_count;
-        for value in values {
-            batch.put_key_value(self.derive_key(&count)?, &value)?;
-            count += 1;
-        }
-        batch.put_key_value(self.base_key(), &count)?;
-        Ok(())
-    }
 }
 
 #[async_trait]
@@ -71,7 +45,7 @@ impl<C, T> View<C> for LogView<C, T>
 where
     C: LogOperations<T> + Send + Sync,
     ViewError: From<C::Error>,
-    T: Send + Sync + Clone,
+    T: Send + Sync + Clone + Serialize + DeserializeOwned,
 {
     fn context(&self) -> &C {
         &self.context
@@ -103,9 +77,13 @@ where
         }
         if !self.new_values.is_empty() {
             let count = self.new_values.len();
-            self.context
-                .append(self.stored_count, batch, mem::take(&mut self.new_values))?;
-            self.stored_count += count;
+            if count > 0 {
+                for value in &self.new_values {
+                    batch.put_key_value(self.context.derive_key(&self.stored_count)?, value)?;
+                    self.stored_count += 1;
+                }
+                batch.put_key_value(self.context.base_key(), &self.stored_count)?;
+            }
         }
         Ok(())
     }
