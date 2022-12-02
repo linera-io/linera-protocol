@@ -14,83 +14,13 @@ pub struct MapView<C, I, V> {
     updates: BTreeMap<I, Option<V>>,
 }
 
-/// The context operations supporting [`MapView`].
-#[async_trait]
-pub trait MapOperations<I, V>: Context {
-    /// Obtain the value at the given index, if any.
-    async fn get(&mut self, index: &I) -> Result<Option<V>, Self::Error>;
-
-    /// Return the list of indices in the map.
-    async fn indices(&mut self) -> Result<Vec<I>, Self::Error>;
-
-    /// Execute a function on each index.
-    async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), Self::Error>
-    where
-        F: FnMut(I) + Send;
-
-    /// Set a value. Crash-resistant implementations should only write to `batch`.
-    fn insert(&mut self, batch: &mut Batch, index: I, value: V) -> Result<(), Self::Error>;
-
-    /// Remove the entry at the given index. Crash-resistant implementations should only write
-    /// to `batch`.
-    fn remove(&mut self, batch: &mut Batch, index: I) -> Result<(), Self::Error>;
-
-    /// Delete the map and its entries from storage. Crash-resistant implementations should only
-    /// write to `batch`.
-    fn delete(&self, batch: &mut Batch);
-}
-
-#[async_trait]
-impl<I, V, C: Context + Send + Sync> MapOperations<I, V> for C
-where
-    I: Eq + Ord + Send + Sync + Serialize + DeserializeOwned + Clone + 'static,
-    V: Send + Sync + Serialize + DeserializeOwned + 'static,
-{
-    async fn get(&mut self, index: &I) -> Result<Option<V>, Self::Error> {
-        let key = self.derive_key(index)?;
-        Ok(self.read_key(&key).await?)
-    }
-
-    fn insert(&mut self, batch: &mut Batch, index: I, value: V) -> Result<(), Self::Error> {
-        let key = self.derive_key(&index)?;
-        batch.put_key_value(key, &value)?;
-        Ok(())
-    }
-
-    fn remove(&mut self, batch: &mut Batch, index: I) -> Result<(), Self::Error> {
-        let key = self.derive_key(&index)?;
-        batch.delete_key(key);
-        Ok(())
-    }
-
-    async fn indices(&mut self) -> Result<Vec<I>, Self::Error> {
-        let base = self.base_key();
-        self.get_sub_keys(&base).await
-    }
-
-    async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), Self::Error>
-    where
-        F: FnMut(I) + Send,
-    {
-        let base = self.base_key();
-        for index in self.get_sub_keys(&base).await? {
-            f(index);
-        }
-        Ok(())
-    }
-
-    fn delete(&self, batch: &mut Batch) {
-        batch.delete_key_prefix(self.base_key());
-    }
-}
-
 #[async_trait]
 impl<C, I, V> View<C> for MapView<C, I, V>
 where
-    C: MapOperations<I, V> + Send,
+    C: Context + Send,
     ViewError: From<C::Error>,
-    I: Eq + Ord + Send + Sync + Clone,
-    V: Clone + Send + Sync,
+    I: Eq + Ord + Send + Sync + Clone + Serialize,
+    V: Clone + Send + Sync + Serialize,
 {
     fn context(&self) -> &C {
         &self.context
@@ -112,17 +42,17 @@ where
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
         if self.was_cleared {
             self.was_cleared = false;
-            self.context.delete(batch);
+            batch.delete_key_prefix(self.context.base_key());
             for (index, update) in mem::take(&mut self.updates) {
                 if let Some(value) = update {
-                    self.context.insert(batch, index, value)?;
+                    batch.put_key_value(self.context.derive_key(&index)?, &value)?;
                 }
             }
         } else {
             for (index, update) in mem::take(&mut self.updates) {
                 match update {
-                    None => self.context.remove(batch, index)?,
-                    Some(value) => self.context.insert(batch, index, value)?,
+                    None => batch.delete_key(self.context.derive_key(&index)?),
+                    Some(value) => batch.put_key_value(self.context.derive_key(&index)?, &value)?,
                 }
             }
         }
@@ -130,7 +60,7 @@ where
     }
 
     fn delete(self, batch: &mut Batch) {
-        self.context.delete(batch);
+        batch.delete_key_prefix(self.context.base_key());
     }
 
     fn clear(&mut self) {
@@ -165,10 +95,10 @@ where
 
 impl<C, I, V> MapView<C, I, V>
 where
-    C: MapOperations<I, V>,
+    C: Context,
     ViewError: From<C::Error>,
-    I: Eq + Ord + Sync + Clone + Send,
-    V: Clone + Sync,
+    I: Eq + Ord + Sync + Clone + Send + Serialize + DeserializeOwned,
+    V: Clone + Sync + DeserializeOwned,
 {
     /// Read the value at the given position, if any.
     pub async fn get(&mut self, index: &I) -> Result<Option<V>, ViewError> {
@@ -178,20 +108,18 @@ where
         if self.was_cleared {
             return Ok(None);
         }
-        Ok(self.context.get(index).await?)
+        let key = self.context.derive_key(index)?;
+        Ok(self.context.read_key(&key).await?)
     }
 
     /// Return the list of indices in the map.
     pub async fn indices(&mut self) -> Result<Vec<I>, ViewError> {
         let mut indices = Vec::new();
         if !self.was_cleared {
-            self.context
-                .for_each_index(|index: I| {
-                    if !self.updates.contains_key(&index) {
-                        indices.push(index);
-                    }
-                })
-                .await?;
+            let base = self.context.base_key();
+            for index in self.context.get_sub_keys(&base).await? {
+                indices.push(index);
+            }
         }
         for (index, entry) in &self.updates {
             if entry.is_some() {
@@ -208,13 +136,12 @@ where
         F: FnMut(I) + Send,
     {
         if !self.was_cleared {
-            self.context
-                .for_each_index(|index: I| {
-                    if !self.updates.contains_key(&index) {
-                        f(index);
-                    }
-                })
-                .await?;
+            let base = self.context.base_key();
+            for index in self.context.get_sub_keys(&base).await? {
+                if !self.updates.contains_key(&index) {
+                    f(index);
+                }
+            }
         }
         for (index, entry) in &self.updates {
             if entry.is_some() {
@@ -228,10 +155,10 @@ where
 #[async_trait]
 impl<C, I, V> HashView<C> for MapView<C, I, V>
 where
-    C: HashingContext + MapOperations<I, V> + Send,
+    C: HashingContext + Context + Send + Sync,
     ViewError: From<C::Error>,
-    I: Eq + Ord + Clone + Send + Sync + Serialize,
-    V: Clone + Send + Sync + Serialize,
+    I: Eq + Ord + Clone + Send + Sync + Serialize + DeserializeOwned,
+    V: Clone + Send + Sync + Serialize + DeserializeOwned,
 {
     async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
         let mut hasher = C::Hasher::default();

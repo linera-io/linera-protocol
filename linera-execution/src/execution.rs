@@ -12,9 +12,9 @@ use linera_base::{
     messages::{ApplicationId, ChainId},
 };
 use linera_views::{
-    collection_view::{CollectionOperations, ReentrantCollectionView},
+    collection_view::ReentrantCollectionView,
     impl_view,
-    register_view::{RegisterOperations, RegisterView},
+    register_view::RegisterView,
     scoped_view::ScopedView,
     views::{View, ViewError},
 };
@@ -40,8 +40,6 @@ impl_view!(
         users,
     };
     SystemExecutionStateViewContext,
-    RegisterOperations<Vec<u8>>,
-    CollectionOperations<ApplicationId>,
 );
 
 #[cfg(any(test, feature = "test"))]

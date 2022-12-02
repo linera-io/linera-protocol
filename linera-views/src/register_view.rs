@@ -14,53 +14,20 @@ pub struct RegisterView<C, T> {
     update: Option<T>,
 }
 
-/// The context operations supporting [`RegisterView`].
-#[async_trait]
-pub trait RegisterOperations<T>: Context {
-    /// Obtain the value in the register.
-    async fn get(&self) -> Result<T, Self::Error>;
-
-    /// Set the value in the register. Crash-resistant implementations should only write to `batch`.
-    fn set(&self, batch: &mut Batch, value: &T) -> Result<(), Self::Error>;
-
-    /// Delete the register. Crash-resistant implementations should only write to `batch`.
-    fn delete(&self, batch: &mut Batch);
-}
-
-#[async_trait]
-impl<T, C: Context + Send + Sync> RegisterOperations<T> for C
-where
-    T: Default + Serialize + DeserializeOwned + Send + Sync + 'static,
-{
-    async fn get(&self) -> Result<T, Self::Error> {
-        let base = self.base_key();
-        let value = self.read_key(&base).await?.unwrap_or_default();
-        Ok(value)
-    }
-
-    fn set(&self, batch: &mut Batch, value: &T) -> Result<(), Self::Error> {
-        batch.put_key_value(self.base_key(), value)?;
-        Ok(())
-    }
-
-    fn delete(&self, batch: &mut Batch) {
-        batch.delete_key(self.base_key());
-    }
-}
-
 #[async_trait]
 impl<C, T> View<C> for RegisterView<C, T>
 where
-    C: RegisterOperations<T> + Send + Sync,
+    C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    T: Send + Sync + Default,
+    T: Send + Sync + Default + Serialize + DeserializeOwned,
 {
     fn context(&self) -> &C {
         &self.context
     }
 
     async fn load(context: C) -> Result<Self, ViewError> {
-        let stored_value = context.get().await?;
+        let base = context.base_key();
+        let stored_value = context.read_key(&base).await?.unwrap_or_default();
         Ok(Self {
             context,
             stored_value,
@@ -74,14 +41,14 @@ where
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
         if let Some(value) = self.update.take() {
-            self.context.set(batch, &value)?;
+            batch.put_key_value(self.context.base_key(), &value)?;
             self.stored_value = value;
         }
         Ok(())
     }
 
     fn delete(self, batch: &mut Batch) {
-        self.context.delete(batch);
+        batch.delete_key(self.context.base_key());
     }
 
     fn clear(&mut self) {
@@ -131,9 +98,9 @@ where
 #[async_trait]
 impl<C, T> HashView<C> for RegisterView<C, T>
 where
-    C: HashingContext + RegisterOperations<T> + Send + Sync,
+    C: HashingContext + Send + Sync,
     ViewError: From<C::Error>,
-    T: Default + Send + Sync + Serialize,
+    T: Default + Send + Sync + Serialize + DeserializeOwned,
 {
     async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
         let mut hasher = C::Hasher::default();

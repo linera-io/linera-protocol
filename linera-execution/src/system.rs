@@ -14,8 +14,8 @@ use linera_base::{
 };
 use linera_views::{
     impl_view,
-    map_view::{MapOperations, MapView},
-    register_view::{RegisterOperations, RegisterView},
+    map_view::MapView,
+    register_view::RegisterView,
     scoped_view::ScopedView,
     views::{View, ViewError},
 };
@@ -194,13 +194,6 @@ impl_view!(
         ownership,
         balance,
     };
-    RegisterOperations<Option<ChainDescription>>,
-    RegisterOperations<Option<Epoch>>,
-    RegisterOperations<Option<ChainId>>,
-    MapOperations<ChannelId, ()>,
-    RegisterOperations<BTreeMap<Epoch, Committee>>,
-    RegisterOperations<ChainOwnership>,
-    RegisterOperations<Balance>,
 );
 
 #[derive(Error, Debug)]

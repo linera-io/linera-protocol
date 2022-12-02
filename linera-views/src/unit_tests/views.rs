@@ -2,7 +2,7 @@ use crate::{
     common::Batch,
     dynamo_db::DynamoDbContext,
     memory::MemoryContext,
-    queue_view::{QueueOperations, QueueView},
+    queue_view::QueueView,
     rocksdb::RocksdbContext,
     test_utils::LocalStackTestContext,
     views::{Context, View, ViewError},
@@ -111,7 +111,7 @@ async fn run_test_queue_operations<C>(
     context: C,
 ) -> Result<(), anyhow::Error>
 where
-    C: QueueOperations<usize> + Clone + Send + Sync + 'static,
+    C: Context + Clone + Send + Sync + 'static,
     ViewError: From<C::Error>,
 {
     let mut expected_state = VecDeque::new();
@@ -149,7 +149,7 @@ async fn check_queue_state<C>(
     expected_state: &VecDeque<usize>,
 ) -> Result<(), anyhow::Error>
 where
-    C: QueueOperations<usize> + Clone + Send + Sync,
+    C: Context + Clone + Send + Sync,
     ViewError: From<C::Error>,
 {
     let count = expected_state.len();
@@ -170,7 +170,7 @@ fn check_contents(contents: Vec<usize>, expected: &VecDeque<usize>) {
 
 #[async_trait]
 trait TestContextFactory {
-    type Context: QueueOperations<usize> + Clone + Send + Sync + 'static;
+    type Context: Context + Clone + Send + Sync + 'static;
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error>;
 }

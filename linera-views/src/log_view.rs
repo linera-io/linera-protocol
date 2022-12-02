@@ -4,7 +4,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{fmt::Debug, mem, ops::Range};
+use std::{fmt::Debug, ops::Range};
 
 /// A view that supports logging values of type `T`.
 #[derive(Debug, Clone)]
@@ -15,94 +15,20 @@ pub struct LogView<C, T> {
     new_values: Vec<T>,
 }
 
-/// The context operations supporting [`LogView`].
-#[async_trait]
-pub trait LogOperations<T>: Context {
-    /// Return the size of the log in storage.
-    async fn count(&self) -> Result<usize, Self::Error>;
-
-    /// Obtain the value at the given index.
-    async fn get(&self, index: usize) -> Result<Option<T>, Self::Error>;
-
-    /// Obtain the values in the given range of indices.
-    async fn read(&self, range: Range<usize>) -> Result<Vec<T>, Self::Error>;
-
-    /// Append values to the logs. Crash-resistant implementations should only write to `batch`.
-    fn append(
-        &self,
-        stored_count: usize,
-        batch: &mut Batch,
-        values: Vec<T>,
-    ) -> Result<(), Self::Error>;
-
-    /// Delete the log. Crash-resistant implementations should only write to `batch`.
-    fn delete(&self, batch: &mut Batch);
-}
-
-#[async_trait]
-impl<T, C: Context + Send + Sync> LogOperations<T> for C
-where
-    T: Serialize + DeserializeOwned + Send + Sync + 'static,
-{
-    async fn count(&self) -> Result<usize, Self::Error> {
-        let base = self.base_key();
-        let count = self.read_key(&base).await?.unwrap_or_default();
-        Ok(count)
-    }
-
-    async fn get(&self, index: usize) -> Result<Option<T>, Self::Error> {
-        let key = self.derive_key(&index)?;
-        self.read_key(&key).await
-    }
-
-    async fn read(&self, range: Range<usize>) -> Result<Vec<T>, Self::Error> {
-        let mut values = Vec::with_capacity(range.len());
-        for index in range {
-            let key = self.derive_key(&index)?;
-            match self.read_key(&key).await? {
-                None => return Ok(values),
-                Some(value) => values.push(value),
-            };
-        }
-        Ok(values)
-    }
-
-    fn append(
-        &self,
-        stored_count: usize,
-        batch: &mut Batch,
-        values: Vec<T>,
-    ) -> Result<(), Self::Error> {
-        if values.is_empty() {
-            return Ok(());
-        }
-        let mut count = stored_count;
-        for value in values {
-            batch.put_key_value(self.derive_key(&count)?, &value)?;
-            count += 1;
-        }
-        batch.put_key_value(self.base_key(), &count)?;
-        Ok(())
-    }
-
-    fn delete(&self, batch: &mut Batch) {
-        batch.delete_key_prefix(self.base_key());
-    }
-}
-
 #[async_trait]
 impl<C, T> View<C> for LogView<C, T>
 where
-    C: LogOperations<T> + Send + Sync,
+    C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    T: Send + Sync + Clone,
+    T: Send + Sync + Clone + Serialize,
 {
     fn context(&self) -> &C {
         &self.context
     }
 
     async fn load(context: C) -> Result<Self, ViewError> {
-        let stored_count = context.count().await?;
+        let base = context.base_key();
+        let stored_count = context.read_key(&base).await?.unwrap_or_default();
         Ok(Self {
             context,
             was_cleared: false,
@@ -120,21 +46,26 @@ where
         if self.was_cleared {
             self.was_cleared = false;
             if self.stored_count > 0 {
-                self.context.delete(batch);
+                batch.delete_key_prefix(self.context.base_key());
                 self.stored_count = 0;
             }
         }
         if !self.new_values.is_empty() {
             let count = self.new_values.len();
-            self.context
-                .append(self.stored_count, batch, mem::take(&mut self.new_values))?;
-            self.stored_count += count;
+            if count > 0 {
+                for value in &self.new_values {
+                    batch.put_key_value(self.context.derive_key(&self.stored_count)?, value)?;
+                    self.stored_count += 1;
+                }
+                batch.put_key_value(self.context.base_key(), &self.stored_count)?;
+                self.new_values.clear();
+            }
         }
         Ok(())
     }
 
     fn delete(self, batch: &mut Batch) {
-        self.context.delete(batch);
+        batch.delete_key_prefix(self.context.base_key());
     }
 
     fn clear(&mut self) {
@@ -168,22 +99,34 @@ where
 
 impl<C, T> LogView<C, T>
 where
-    C: LogOperations<T> + Send + Sync,
+    C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    T: Send + Sync + Clone,
+    T: Send + Sync + Clone + DeserializeOwned,
 {
     /// Read the logged values in the given range (including staged ones).
     pub async fn get(&mut self, index: usize) -> Result<Option<T>, ViewError> {
         let value = if self.was_cleared {
             self.new_values.get(index).cloned()
         } else if index < self.stored_count {
-            self.context.get(index).await?
+            let key = self.context.derive_key(&index)?;
+            self.context.read_key(&key).await?
         } else {
             self.new_values.get(index - self.stored_count).cloned()
         };
         Ok(value)
     }
 
+    async fn read_context(&self, range: Range<usize>) -> Result<Vec<T>, ViewError> {
+        let mut values = Vec::with_capacity(range.len());
+        for index in range {
+            let key = self.context.derive_key(&index)?;
+            match self.context.read_key(&key).await? {
+                None => return Ok(values),
+                Some(value) => values.push(value),
+            };
+        }
+        Ok(values)
+    }
     /// Read the logged values in the given range (including staged ones).
     pub async fn read(&self, mut range: Range<usize>) -> Result<Vec<T>, ViewError> {
         let effective_stored_count = if self.was_cleared {
@@ -201,11 +144,10 @@ where
         values.reserve(range.end - range.start);
         if range.start < effective_stored_count {
             if range.end <= effective_stored_count {
-                values.extend(self.context.read(range.start..range.end).await?);
+                values.extend(self.read_context(range.start..range.end).await?);
             } else {
                 values.extend(
-                    self.context
-                        .read(range.start..effective_stored_count)
+                    self.read_context(range.start..effective_stored_count)
                         .await?,
                 );
                 values.extend(self.new_values[0..(range.end - effective_stored_count)].to_vec());
@@ -224,9 +166,9 @@ where
 #[async_trait]
 impl<C, T> HashView<C> for LogView<C, T>
 where
-    C: HashingContext + LogOperations<T> + Send + Sync,
+    C: HashingContext + Context + Send + Sync,
     ViewError: From<C::Error>,
-    T: Send + Sync + Clone + Serialize,
+    T: Send + Sync + Clone + Serialize + DeserializeOwned,
 {
     async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
         let count = self.count();

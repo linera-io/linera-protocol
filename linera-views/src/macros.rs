@@ -14,7 +14,6 @@ where
         + Sync
         + Clone
         + 'static
-        + $crate::scoped_view::ScopedOperations
         $( + $ops_trait )*,
     $crate::views::ViewError: From<C::Error>,
 {
@@ -60,7 +59,6 @@ where
         + Sync
         + Clone
         + 'static
-        + $crate::scoped_view::ScopedOperations
         $( + $ops_trait )*,
     $crate::views::ViewError: From<C::Error>,
 {
@@ -81,7 +79,6 @@ where
         + Sync
         + Clone
         + 'static
-        + $crate::scoped_view::ScopedOperations
         $( + $ops_trait )*,
     $crate::views::ViewError: From<C::Error>,
 {
@@ -117,7 +114,6 @@ pub trait [< $name Context >]: $crate::views::HashingContext<Hasher = $crate::sh
     + Sync
     + Clone
     + 'static
-    + $crate::scoped_view::ScopedOperations
     $( + $ops_trait )*
 {}
 
@@ -128,7 +124,6 @@ where
         + Sync
         + Clone
         + 'static
-        + $crate::scoped_view::ScopedOperations
         $( + $ops_trait )*,
     $crate::views::ViewError: From<AnyContext::Error>,
 {}
