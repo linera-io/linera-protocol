@@ -297,7 +297,7 @@ NodeError:
         STRUCT:
           - error: STR
     1:
-      BaseError:
+      ArithmeticError:
         STRUCT:
           - error: STR
     2:

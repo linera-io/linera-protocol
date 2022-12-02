@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use linera_base::{
     crypto::{HashValue, KeyPair},
     ensure,
-    messages::{ApplicationId, BlockHeight, ChainId, Epoch, Medium, Origin},
+    messages::{ApplicationId, ArithmeticError, BlockHeight, ChainId, Epoch, Medium, Origin},
 };
 use linera_chain::{
     messages::{Block, BlockProposal, Certificate, MessageGroup, Value},
@@ -64,7 +64,7 @@ pub enum WorkerError {
     #[error(transparent)]
     CryptoError(#[from] linera_base::crypto::CryptoError),
     #[error(transparent)]
-    BaseError(#[from] linera_base::error::Error),
+    ArithmeticError(#[from] ArithmeticError),
     #[error(transparent)]
     ViewError(#[from] linera_views::views::ViewError),
     #[error(transparent)]

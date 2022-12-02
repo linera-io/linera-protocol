@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use futures::lock::Mutex;
 use linera_base::{
     crypto::CryptoError,
-    messages::{ApplicationId, BlockHeight, ChainId, Origin, ValidatorName},
+    messages::{ApplicationId, ArithmeticError, BlockHeight, ChainId, Origin, ValidatorName},
 };
 use linera_chain::{
     messages::{Block, BlockProposal, Certificate, Value},
@@ -54,8 +54,8 @@ pub enum NodeError {
     #[error("Cryptographic error: {error}")]
     CryptoError { error: String },
 
-    #[error("Base error: {error}")]
-    BaseError { error: String },
+    #[error("Arithmetic error: {error}")]
+    ArithmeticError { error: String },
 
     #[error("Error while accessing storage: {error}")]
     ViewError { error: String },
@@ -140,9 +140,9 @@ impl From<ViewError> for NodeError {
     }
 }
 
-impl From<linera_base::error::Error> for NodeError {
-    fn from(error: linera_base::error::Error) -> Self {
-        Self::BaseError {
+impl From<ArithmeticError> for NodeError {
+    fn from(error: ArithmeticError) -> Self {
+        Self::ArithmeticError {
             error: error.to_string(),
         }
     }

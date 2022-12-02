@@ -2,12 +2,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    crypto::{BcsSignable, HashValue, PublicKey},
-    error::Error,
-};
+use crate::crypto::{BcsSignable, HashValue, PublicKey};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
+use thiserror::Error;
 
 use crate::crypto::CryptoError;
 #[cfg(any(test, feature = "test"))]
@@ -118,6 +116,15 @@ pub enum Destination {
     Subscribers(String),
 }
 
+#[derive(Debug, Error)]
+/// An error type for arithmetic errors.
+pub enum ArithmeticError {
+    #[error("Sequence number overflow")]
+    SequenceOverflow,
+    #[error("Sequence number underflow")]
+    SequenceUnderflow,
+}
+
 impl Origin {
     pub fn chain(chain_id: ChainId) -> Self {
         Self {
@@ -173,26 +180,38 @@ impl BlockHeight {
     }
 
     #[inline]
-    pub fn try_add_one(self) -> Result<BlockHeight, Error> {
-        let val = self.0.checked_add(1).ok_or(Error::SequenceOverflow)?;
+    pub fn try_add_one(self) -> Result<BlockHeight, ArithmeticError> {
+        let val = self
+            .0
+            .checked_add(1)
+            .ok_or(ArithmeticError::SequenceOverflow)?;
         Ok(Self(val))
     }
 
     #[inline]
-    pub fn try_sub_one(self) -> Result<BlockHeight, Error> {
-        let val = self.0.checked_sub(1).ok_or(Error::SequenceUnderflow)?;
+    pub fn try_sub_one(self) -> Result<BlockHeight, ArithmeticError> {
+        let val = self
+            .0
+            .checked_sub(1)
+            .ok_or(ArithmeticError::SequenceUnderflow)?;
         Ok(Self(val))
     }
 
     #[inline]
-    pub fn try_add_assign_one(&mut self) -> Result<(), Error> {
-        self.0 = self.0.checked_add(1).ok_or(Error::SequenceOverflow)?;
+    pub fn try_add_assign_one(&mut self) -> Result<(), ArithmeticError> {
+        self.0 = self
+            .0
+            .checked_add(1)
+            .ok_or(ArithmeticError::SequenceOverflow)?;
         Ok(())
     }
 
     #[inline]
-    pub fn try_sub_assign_one(&mut self) -> Result<(), Error> {
-        self.0 = self.0.checked_sub(1).ok_or(Error::SequenceUnderflow)?;
+    pub fn try_sub_assign_one(&mut self) -> Result<(), ArithmeticError> {
+        self.0 = self
+            .0
+            .checked_sub(1)
+            .ok_or(ArithmeticError::SequenceUnderflow)?;
         Ok(())
     }
 }
@@ -204,40 +223,58 @@ impl RoundNumber {
     }
 
     #[inline]
-    pub fn try_add_one(self) -> Result<RoundNumber, Error> {
-        let val = self.0.checked_add(1).ok_or(Error::SequenceOverflow)?;
+    pub fn try_add_one(self) -> Result<RoundNumber, ArithmeticError> {
+        let val = self
+            .0
+            .checked_add(1)
+            .ok_or(ArithmeticError::SequenceOverflow)?;
         Ok(Self(val))
     }
 
     #[inline]
-    pub fn try_sub_one(self) -> Result<RoundNumber, Error> {
-        let val = self.0.checked_sub(1).ok_or(Error::SequenceUnderflow)?;
+    pub fn try_sub_one(self) -> Result<RoundNumber, ArithmeticError> {
+        let val = self
+            .0
+            .checked_sub(1)
+            .ok_or(ArithmeticError::SequenceUnderflow)?;
         Ok(Self(val))
     }
 
     #[inline]
-    pub fn try_add_assign_one(&mut self) -> Result<(), Error> {
-        self.0 = self.0.checked_add(1).ok_or(Error::SequenceOverflow)?;
+    pub fn try_add_assign_one(&mut self) -> Result<(), ArithmeticError> {
+        self.0 = self
+            .0
+            .checked_add(1)
+            .ok_or(ArithmeticError::SequenceOverflow)?;
         Ok(())
     }
 
     #[inline]
-    pub fn try_sub_assign_one(&mut self) -> Result<(), Error> {
-        self.0 = self.0.checked_sub(1).ok_or(Error::SequenceUnderflow)?;
+    pub fn try_sub_assign_one(&mut self) -> Result<(), ArithmeticError> {
+        self.0 = self
+            .0
+            .checked_sub(1)
+            .ok_or(ArithmeticError::SequenceUnderflow)?;
         Ok(())
     }
 }
 
 impl Epoch {
     #[inline]
-    pub fn try_add_one(self) -> Result<Self, Error> {
-        let val = self.0.checked_add(1).ok_or(Error::SequenceOverflow)?;
+    pub fn try_add_one(self) -> Result<Self, ArithmeticError> {
+        let val = self
+            .0
+            .checked_add(1)
+            .ok_or(ArithmeticError::SequenceOverflow)?;
         Ok(Self(val))
     }
 
     #[inline]
-    pub fn try_add_assign_one(&mut self) -> Result<(), Error> {
-        self.0 = self.0.checked_add(1).ok_or(Error::SequenceOverflow)?;
+    pub fn try_add_assign_one(&mut self) -> Result<(), ArithmeticError> {
+        self.0 = self
+            .0
+            .checked_add(1)
+            .ok_or(ArithmeticError::SequenceOverflow)?;
         Ok(())
     }
 }
