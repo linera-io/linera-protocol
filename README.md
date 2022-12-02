@@ -138,6 +138,9 @@ ${CLIENT[@]} query_validators
 ${CLIENT[@]} query_validators "$CHAIN1"
 
 ${CLIENT[@]} set_validator --name "$NAME6" --address tcp:127.0.0.1:9600 --votes 1
+
+# END_GRPC
+
 sleep 2
 
 ${CLIENT[@]} remove_validator --name "$NAME5"

@@ -29,7 +29,6 @@ fn test_examples_in_readme() -> std::io::Result<()> {
 }
 
 #[test]
-#[ignore]
 fn test_examples_in_readme_grpc() -> std::io::Result<()> {
     let dir = tempdir().unwrap();
     let file = std::io::BufReader::new(std::fs::File::open("../README.md")?);
@@ -41,6 +40,7 @@ fn test_examples_in_readme_grpc() -> std::io::Result<()> {
     quote = quote.replace("tcp", "grpc");
     quote = quote.replace("udp", "grpc");
     quote = quote.replace("./proxy", "./grpc-proxy");
+    quote = quote.replace("# END_GRPC", "exit 0;");
 
     let mut test_script = std::fs::File::create(dir.path().join("test.sh"))?;
     write!(&mut test_script, "{}", quote)?;
