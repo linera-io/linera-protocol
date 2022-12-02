@@ -5,13 +5,16 @@ use crate::{
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{cmp::Eq, collections::BTreeMap, fmt::Debug, mem};
+use std::marker::PhantomData;
+
 
 /// A view that supports inserting and removing values indexed by a key.
 #[derive(Debug, Clone)]
 pub struct MapView<C, I, V> {
     context: C,
     was_cleared: bool,
-    updates: BTreeMap<I, Option<V>>,
+    updates: BTreeMap<Vec<u8>, Option<V>>,
+    unit_type: PhantomData<I>,
 }
 
 #[async_trait]
@@ -31,6 +34,7 @@ where
             context,
             was_cleared: false,
             updates: BTreeMap::new(),
+            unit_type: PhantomData,
         })
     }
 
@@ -45,14 +49,15 @@ where
             batch.delete_key_prefix(self.context.base_key());
             for (index, update) in mem::take(&mut self.updates) {
                 if let Some(value) = update {
-                    batch.put_key_value(self.context.derive_key(&index)?, &value)?;
+                    batch.put_key_value(self.context.derive_key_bytes(&index), &value)?;
                 }
             }
         } else {
             for (index, update) in mem::take(&mut self.updates) {
+                let key = self.context.derive_key_bytes(&index);
                 match update {
-                    None => batch.delete_key(self.context.derive_key(&index)?),
-                    Some(value) => batch.put_key_value(self.context.derive_key(&index)?, &value)?,
+                    None => batch.delete_key(key),
+                    Some(value) => batch.put_key_value(key, &value)?,
                 }
             }
         }
@@ -72,20 +77,24 @@ where
 impl<C, I, V> MapView<C, I, V>
 where
     C: Context,
-    I: Eq + Ord,
+    I: Eq + Ord + Serialize,
 {
     /// Set or insert a value.
-    pub fn insert(&mut self, index: I, value: V) {
-        self.updates.insert(index, Some(value));
+    pub fn insert(&mut self, index: &I, value: V) -> Result<(),ViewError> {
+        let short_key = self.context.derive_short_key(index)?;
+        self.updates.insert(short_key, Some(value));
+        Ok(())
     }
 
     /// Remove a value.
-    pub fn remove(&mut self, index: I) {
+    pub fn remove(&mut self, index: &I) -> Result<(),ViewError> {
+        let short_key = self.context.derive_short_key(index)?;
         if self.was_cleared {
-            self.updates.remove(&index);
+            self.updates.remove(&short_key);
         } else {
-            self.updates.insert(index, None);
+            self.updates.insert(short_key, None);
         }
+        Ok(())
     }
 
     pub fn extra(&self) -> &C::Extra {
@@ -102,7 +111,8 @@ where
 {
     /// Read the value at the given position, if any.
     pub async fn get(&mut self, index: &I) -> Result<Option<V>, ViewError> {
-        if let Some(update) = self.updates.get(index) {
+        let short_key = self.context.derive_short_key(index)?;
+        if let Some(update) = self.updates.get(&short_key) {
             return Ok(update.as_ref().cloned());
         }
         if self.was_cleared {
@@ -114,16 +124,16 @@ where
 
     /// Return the list of indices in the map.
     pub async fn indices(&mut self) -> Result<Vec<I>, ViewError> {
-        let mut indices = Vec::new();
+        let mut indices = Vec::<I>::new();
         if !self.was_cleared {
             let base = self.context.base_key();
-            for index in self.context.get_sub_keys(&base).await? {
-                indices.push(index);
+            for index in self.context.find_keys_without_prefix(&base).await? {
+                indices.push(self.context.get_value(&index)?);
             }
         }
         for (index, entry) in &self.updates {
             if entry.is_some() {
-                indices.push(index.clone());
+                indices.push(self.context.get_value(index)?);
             }
         }
         indices.sort();
@@ -137,15 +147,17 @@ where
     {
         if !self.was_cleared {
             let base = self.context.base_key();
-            for index in self.context.get_sub_keys(&base).await? {
-                if !self.updates.contains_key(&index) {
+            for short_key in self.context.find_keys_without_prefix(&base).await? {
+                if !self.updates.contains_key(&short_key) {
+                    let index = self.context.get_value(&short_key)?;
                     f(index);
                 }
             }
         }
-        for (index, entry) in &self.updates {
+        for (short_key, entry) in &self.updates {
             if entry.is_some() {
-                f(index.clone());
+                let index = self.context.get_value(&short_key)?;
+                f(index);
             }
         }
         Ok(())

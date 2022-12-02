@@ -84,13 +84,14 @@ impl DynamoDbContainer {
 
     /// Extract the key attribute from an item.
     fn extract_key(
+        len_prefix: usize,
         mut attributes: HashMap<String, AttributeValue>,
     ) -> Result<Vec<u8>, DynamoDbContextError> {
         let key = attributes
             .remove(KEY_ATTRIBUTE)
             .ok_or(DynamoDbContextError::MissingKey)?;
         match key {
-            AttributeValue::B(blob) => Ok(blob.into_inner()),
+            AttributeValue::B(blob) => Ok(blob.into_inner()[len_prefix..].to_vec()),
             key => Err(DynamoDbContextError::wrong_key_type(&key)),
         }
     }
@@ -111,14 +112,16 @@ impl DynamoDbContainer {
 
 // Inspired by https://depth-first.com/articles/2020/06/22/returning-rust-iterators/
 pub struct DynamoDbKeyIterator {
+    len_prefix: usize,
     iter: std::iter::Flatten<
         std::option::IntoIter<Vec<HashMap<std::string::String, AttributeValue>>>,
     >,
 }
 
 impl DynamoDbKeyIterator {
-    fn new(response: aws_sdk_dynamodb::output::QueryOutput) -> Self {
+    fn new(len_prefix: usize, response: aws_sdk_dynamodb::output::QueryOutput) -> Self {
         Self {
+            len_prefix,
             iter: response.items.into_iter().flatten(),
         }
     }
@@ -128,7 +131,7 @@ impl Iterator for DynamoDbKeyIterator {
     type Item = Result<Vec<u8>, DynamoDbContextError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next().map(DynamoDbContainer::extract_key)
+        self.iter.next().map(|x| { DynamoDbContainer::extract_key(self.len_prefix, x) })
     }
 }
 
@@ -152,7 +155,7 @@ impl KeyValueOperations for DynamoDbContainer {
         }
     }
 
-    async fn find_keys_with_prefix(
+    async fn find_keys_without_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyIterator, DynamoDbContextError> {
@@ -171,7 +174,7 @@ impl KeyValueOperations for DynamoDbContainer {
             .expression_attribute_values(":prefix", AttributeValue::B(Blob::new(key_prefix)))
             .send()
             .await?;
-        Ok(DynamoDbKeyIterator::new(response))
+        Ok(DynamoDbKeyIterator::new(key_prefix.len(), response))
     }
 
     /// We put submit the transaction in blocks (called BatchWriteItem in dynamoDb) of at most 25
@@ -193,8 +196,10 @@ impl KeyValueOperations for DynamoDbContainer {
                     insert_list.push((key, value));
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
-                    for key in self.find_keys_with_prefix(&key_prefix).await? {
-                        delete_list.push(key?);
+                    for short_key in self.find_keys_without_prefix(&key_prefix).await? {
+                        let mut key = key_prefix.clone();
+                        key.extend_from_slice(&short_key?);
+                        delete_list.push(key);
                     }
                 }
             };

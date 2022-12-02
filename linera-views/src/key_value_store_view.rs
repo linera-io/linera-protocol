@@ -88,14 +88,12 @@ where
     }
 
     async fn indices(&self) -> Result<Vec<Vec<u8>>, ViewError> {
-        let len = self.context.base_key().len();
         let key_prefix = self.context.base_key();
         let mut keys = Vec::new();
         if !self.was_cleared {
-            for key in self.context.find_keys_with_prefix(&key_prefix).await? {
+            for key in self.context.find_keys_without_prefix(&key_prefix).await? {
                 if !self.updates.contains_key(&key) {
-                    let key = &key[len..];
-                    keys.push(key.to_vec())
+                    keys.push(key)
                 }
             }
         }
@@ -155,24 +153,25 @@ where
         Ok(val)
     }
 
-    async fn find_keys_with_prefix(
+    async fn find_keys_without_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyIterator, ViewError> {
-        let len = self.context.base_key().len();
-        let key_prefix = self.context.derive_key_bytes(key_prefix);
+        let len = key_prefix.len();
+        let key_prefix_full = self.context.derive_key_bytes(key_prefix);
         let mut keys = Vec::new();
         if !self.was_cleared {
-            for key in self.context.find_keys_with_prefix(&key_prefix).await? {
+            for short_key in self.context.find_keys_without_prefix(&key_prefix_full).await? {
+                let mut key = key_prefix.to_vec();
+                key.extend_from_slice(&short_key);
                 if !self.updates.contains_key(&key) {
-                    let key = &key[len..];
-                    keys.push(key.to_vec())
+                    keys.push(short_key)
                 }
             }
         }
         for (key, value) in &self.updates {
-            if value.is_some() {
-                keys.push(key.to_vec())
+            if value.is_some() && key.starts_with(&key_prefix) {
+                keys.push(key[len..].to_vec())
             }
         }
         Ok(SimpleKeyIterator::new(keys))

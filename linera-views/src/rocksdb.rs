@@ -25,12 +25,13 @@ impl KeyValueOperations for RocksdbContainer {
         Ok(tokio::task::spawn_blocking(move || db.get(&key)).await??)
     }
 
-    async fn find_keys_with_prefix(
+    async fn find_keys_without_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyIterator, RocksdbContextError> {
         let db = self.clone();
         let prefix = key_prefix.to_vec();
+        let len = prefix.len();
         let keys = tokio::task::spawn_blocking(move || {
             let mut iter = db.raw_iterator();
             let mut keys = Vec::new();
@@ -40,7 +41,7 @@ impl KeyValueOperations for RocksdbContainer {
                 if !key.starts_with(&prefix) {
                     break;
                 }
-                keys.push(key.to_vec());
+                keys.push(key[len..].to_vec());
                 iter.next();
                 next_key = iter.key();
             }
@@ -60,8 +61,10 @@ impl KeyValueOperations for RocksdbContainer {
             let op = batch.operations.get(i).unwrap();
             if let WriteOperation::DeletePrefix { key_prefix } = op {
                 if get_upper_bound(key_prefix).is_none() {
-                    for key in self.find_keys_with_prefix(key_prefix).await? {
-                        batch.operations.push(WriteOperation::Delete { key: key? });
+                    for short_key in self.find_keys_without_prefix(key_prefix).await? {
+                        let mut key = key_prefix.clone();
+                        key.extend_from_slice(&short_key?);
+                        batch.operations.push(WriteOperation::Delete { key });
                     }
                 }
             }

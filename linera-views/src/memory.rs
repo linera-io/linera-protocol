@@ -40,14 +40,15 @@ impl KeyValueOperations for MemoryContainer {
         Ok(map.get(key).cloned())
     }
 
-    async fn find_keys_with_prefix(
+    async fn find_keys_without_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyIterator, MemoryContextError> {
         let map = self.read().await;
         let mut values = Vec::new();
+        let len = key_prefix.len();
         for (key, _value) in map.range(get_interval(key_prefix.to_vec())) {
-            values.push(key.clone())
+            values.push(key[len..].to_vec())
         }
         Ok(SimpleKeyIterator::new(values))
     }

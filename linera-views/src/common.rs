@@ -151,10 +151,23 @@ pub trait KeyValueOperations {
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
-    async fn find_keys_with_prefix(
+    async fn find_keys_without_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyIterator, Self::Error>;
+
+    async fn find_keys_with_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Vec<Vec<u8>>, Self::Error> {
+        let mut keys = Vec::new();
+        for short_key in self.find_keys_without_prefix(key_prefix).await? {
+            let mut key = key_prefix.to_vec();
+            key.extend_from_slice(&short_key?);
+            keys.push(key);
+        }
+        Ok(keys)
+    }
 
     async fn write_batch(&self, mut batch: Batch) -> Result<(), Self::Error>;
 
@@ -180,9 +193,9 @@ pub trait KeyValueOperations {
     {
         let len = key_prefix.len();
         let mut keys = Vec::new();
-        for key in self.find_keys_with_prefix(key_prefix).await? {
+        for key in self.find_keys_without_prefix(key_prefix).await? {
             let key = key?;
-            keys.push(bcs::from_bytes(&key[len..])?);
+            keys.push(bcs::from_bytes(&key)?);
         }
         Ok(keys)
     }
@@ -232,8 +245,14 @@ pub trait Context {
     /// Obtain the Vec<u8> key from the key by serialization and using the base_key
     fn derive_key<I: Serialize>(&self, index: &I) -> Result<Vec<u8>, Self::Error>;
 
+    /// Obtain the short Vec<u8> key from the key by serialization
+    fn derive_short_key<I: Serialize>(&self, index: &I) -> Result<Vec<u8>, Self::Error>;
+
     /// Obtain the Vec<u8> key from the key by appending to the base_key
     fn derive_key_bytes(&self, index: &[u8]) -> Vec<u8>;
+
+    /// We do the deserialization of the value_byte
+    fn get_value<Item: DeserializeOwned>(&self, value_byte: &[u8]) -> Result<Item, Self::Error>;
 
     /// Retrieve a generic `Item` from the database using the provided `key` prefixed by the current
     /// context.
@@ -248,7 +267,7 @@ pub trait Context {
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
     /// Find keys matching the prefix. The full keys are returned, that is including the prefix.
-    async fn find_keys_with_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error>;
+    async fn find_keys_without_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error>;
 
     /// Find the keys matching the prefix. The remainder of the key are parsed back into elements.
     async fn get_sub_keys<Key: DeserializeOwned + Send>(
@@ -298,10 +317,21 @@ where
         Ok(key)
     }
 
+    fn derive_short_key<I: Serialize>(&self, index: &I) -> Result<Vec<u8>, Self::Error> {
+        let mut key = Vec::new();
+        bcs::serialize_into(&mut key, index)?;
+        Ok(key)
+    }
+
     fn derive_key_bytes(&self, index: &[u8]) -> Vec<u8> {
         let mut key = self.base_key.clone();
         key.extend_from_slice(index);
         key
+    }
+
+    fn get_value<Item: DeserializeOwned>(&self, value_byte: &[u8]) -> Result<Item, Self::Error> {
+        let value = bcs::from_bytes(&value_byte)?;
+        Ok(value)
     }
 
     async fn read_key<Item>(&self, key: &[u8]) -> Result<Option<Item>, Self::Error>
@@ -315,8 +345,8 @@ where
         self.db.read_key_bytes(key).await
     }
 
-    async fn find_keys_with_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
-        self.db.find_keys_with_prefix(key_prefix).await?.collect()
+    async fn find_keys_without_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
+        self.db.find_keys_without_prefix(key_prefix).await?.collect()
     }
 
     async fn get_sub_keys<Key>(&mut self, key_prefix: &[u8]) -> Result<Vec<Key>, Self::Error>
