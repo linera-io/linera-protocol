@@ -159,14 +159,10 @@ pub trait KeyValueOperations {
     async fn find_keys_with_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Vec<Vec<u8>>, Self::Error> {
-        let mut keys = Vec::new();
-        for short_key in self.find_keys_without_prefix(key_prefix).await? {
-            let mut key = key_prefix.to_vec();
-            key.extend_from_slice(&short_key?);
-            keys.push(key);
-        }
-        Ok(keys)
+    ) -> Result<PrefixAppendIterator<Self::KeyIterator,Self::Error>,Self::Error> {
+        let iter = self.find_keys_without_prefix(key_prefix).await?;
+        let key_prefix = key_prefix.to_vec();
+        Ok(PrefixAppendIterator::new(key_prefix, iter))
     }
 
     async fn write_batch(&self, mut batch: Batch) -> Result<(), Self::Error>;

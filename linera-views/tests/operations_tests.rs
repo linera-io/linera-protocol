@@ -30,7 +30,9 @@ async fn test_ordering_keys_key_value_vec<OP: KeyValueOperations + Sync>(
     let l_keys: Vec<Vec<u8>> = key_value_operation
         .find_keys_with_prefix(&key_prefix)
         .await
-        .unwrap();
+        .unwrap()
+        .map(|x| x.expect("Failed to get vector").to_vec())
+        .collect();
     for i in 1..l_keys.len() {
         let key1 = l_keys[i - 1].clone();
         let key2 = l_keys[i].clone();
@@ -54,7 +56,7 @@ async fn test_ordering_keys_key_value_vec<OP: KeyValueOperations + Sync>(
         let n_ent = key_value_operation
             .find_keys_with_prefix(&key_prefix)
             .await
-            .unwrap().len();
+            .unwrap().count();
         assert!(n_ent == value);
     }
 }
