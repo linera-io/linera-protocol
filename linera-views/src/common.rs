@@ -200,6 +200,49 @@ pub trait KeyValueOperations {
     }
 }
 
+
+// A prefix append iterator
+pub struct PrefixAppendIterator<IT,E> {
+    key_prefix: Vec<u8>,
+    iter: IT,
+    _phantom: std::marker::PhantomData<E>,
+}
+
+impl<IT,E> PrefixAppendIterator<IT,E> {
+    pub(crate) fn new(key_prefix: Vec<u8>, iter: IT) -> Self {
+        Self {
+            key_prefix,
+            iter,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<IT,E> Iterator for PrefixAppendIterator<IT,E>
+where
+    IT: Iterator<Item = Result<Vec<u8>, E>>,
+{
+    type Item = Result<Vec<u8>, E>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.iter.next() {
+            None => None,
+            Some(val) => {
+                match val {
+                    Ok(val) => {
+                        let mut key = self.key_prefix.clone();
+                        key.extend_from_slice(&val);
+                        Some(Ok(key))
+                    },
+                    Err(err) => Some(Err(err)),
+                }
+            },
+        }
+    }
+}
+
+
+
 // A non-optimized iterator for simple DB implementations.
 // Inspired by https://depth-first.com/articles/2020/06/22/returning-rust-iterators/
 pub struct SimpleKeyIterator<E> {
