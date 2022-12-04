@@ -191,7 +191,6 @@ pub trait KeyValueOperations {
     where
         Self::Error: From<bcs::Error>,
     {
-        let len = key_prefix.len();
         let mut keys = Vec::new();
         for key in self.find_keys_without_prefix(key_prefix).await? {
             let key = key?;

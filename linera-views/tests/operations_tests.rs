@@ -16,7 +16,7 @@ use std::{
 use tokio::sync::{Mutex, RwLock};
 
 #[cfg(test)]
-async fn test_ordering_keys_key_value_vec<OP: KeyValueOperations>(
+async fn test_ordering_keys_key_value_vec<OP: KeyValueOperations + Sync>(
     key_value_operation: OP,
     key_value_vec: Vec<(Vec<u8>, Vec<u8>)>,
 ) {
@@ -30,9 +30,7 @@ async fn test_ordering_keys_key_value_vec<OP: KeyValueOperations>(
     let l_keys: Vec<Vec<u8>> = key_value_operation
         .find_keys_with_prefix(&key_prefix)
         .await
-        .unwrap()
-        .map(|x| x.expect("Failed to get vector").to_vec())
-        .collect();
+        .unwrap();
     for i in 1..l_keys.len() {
         let key1 = l_keys[i - 1].clone();
         let key2 = l_keys[i].clone();
@@ -56,14 +54,13 @@ async fn test_ordering_keys_key_value_vec<OP: KeyValueOperations>(
         let n_ent = key_value_operation
             .find_keys_with_prefix(&key_prefix)
             .await
-            .unwrap()
-            .count();
+            .unwrap().len();
         assert!(n_ent == value);
     }
 }
 
 #[cfg(test)]
-async fn test_ordering_keys<OP: KeyValueOperations>(key_value_operation: OP) {
+async fn test_ordering_keys<OP: KeyValueOperations + Sync>(key_value_operation: OP) {
     let key_prefix = vec![0];
     let n = 1000;
     let mut rng = rand::rngs::StdRng::seed_from_u64(2);

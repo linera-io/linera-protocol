@@ -77,6 +77,7 @@ where
 impl<C, I, V> MapView<C, I, V>
 where
     C: Context,
+    ViewError: From<C::Error>,
     I: Eq + Ord + Serialize,
 {
     /// Set or insert a value.

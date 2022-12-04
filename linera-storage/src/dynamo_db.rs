@@ -159,7 +159,7 @@ impl Store for DynamoDbStoreClient {
 
     async fn write_certificate(&self, certificate: Certificate) -> Result<(), ViewError> {
         let mut certificates = self.0.certificates().await?;
-        certificates.insert(certificate.hash, certificate);
+        certificates.insert(&certificate.hash.clone(), certificate)?;
         let mut batch = Batch::default();
         certificates.flush(&mut batch)?;
         self.0.context.write_batch(batch).await?;

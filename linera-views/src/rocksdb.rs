@@ -57,17 +57,21 @@ impl KeyValueOperations for RocksdbContainer {
         // Thus in order to have the system working, we need to handle the unlikely case of having to
         // delete a key starting with [255, ...., 255]
         let len = batch.operations.len();
+        let mut keys = Vec::new();
         for i in 0..len {
             let op = batch.operations.get(i).unwrap();
             if let WriteOperation::DeletePrefix { key_prefix } = op {
                 if get_upper_bound(key_prefix).is_none() {
-                    for short_key in self.find_keys_without_prefix(key_prefix).await? {
+                    for short_key in self.find_keys_without_prefix(&key_prefix).await? {
                         let mut key = key_prefix.clone();
                         key.extend_from_slice(&short_key?);
-                        batch.operations.push(WriteOperation::Delete { key });
+                        keys.push(key);
                     }
                 }
             }
+        }
+        for key in keys {
+            batch.operations.push(WriteOperation::Delete { key });
         }
         tokio::task::spawn_blocking(move || -> Result<(), RocksdbContextError> {
             let mut inner_batch = rocksdb::WriteBatchWithTransaction::default();

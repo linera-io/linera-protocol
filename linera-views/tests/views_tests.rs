@@ -243,7 +243,7 @@ where
             view.queue.delete_front();
         }
         if config.with_map {
-            view.map.insert("Hello".to_string(), 5);
+            view.map.insert(&"Hello".to_string(), 5).unwrap();
             assert_eq!(view.map.indices().await.unwrap(), vec!["Hello".to_string()]);
             let mut count = 0;
             view.map
@@ -331,9 +331,9 @@ where
             view.queue.push_back(7);
         }
         if config.with_map {
-            view.map.insert("Hello".to_string(), 5);
-            view.map.insert("Hi".to_string(), 2);
-            view.map.remove("Hi".to_string());
+            view.map.insert(&"Hello".to_string(), 5).unwrap();
+            view.map.insert(&"Hi".to_string(), 2).unwrap();
+            view.map.remove(&"Hi".to_string()).unwrap();
         }
         {
             let subview = view
@@ -534,7 +534,7 @@ where
     {
         let mut view = store.load(1).await.unwrap();
         view.queue.push_back(8);
-        view.map.insert("Hello".to_string(), 5);
+        view.map.insert(&"Hello".to_string(), 5).unwrap();
         let subview = view
             .collection
             .load_entry("hola".to_string())
@@ -546,7 +546,7 @@ where
     {
         let mut view = store.load(1).await.unwrap();
         view.queue.push_back(7);
-        view.map.insert("Hello".to_string(), 4);
+        view.map.insert(&"Hello".to_string(), 4).unwrap();
         let subview = view
             .collection
             .load_entry("DobryDen".to_string())
@@ -704,7 +704,7 @@ where
         let value = kv.1;
         let key_str = format!("{:?}", &key);
         let value_usize = (*value.first().unwrap()) as usize;
-        view.map.insert(key_str, value_usize);
+        view.map.insert(&key_str, value_usize).unwrap();
         view.key_value_store.insert(key, value);
         //
         let thr = rng.gen_range(0..20);

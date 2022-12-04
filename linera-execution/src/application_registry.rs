@@ -26,7 +26,7 @@ where
     ///
     /// Keeps track of the bytecode's location so that it can be loaded when needed.
     pub fn register_published_bytecode(&mut self, id: BytecodeId, location: BytecodeLocation) {
-        self.published_bytecodes.insert(id, location);
+        self.published_bytecodes.insert(&id, location);
     }
 
     /// Register an existing application.

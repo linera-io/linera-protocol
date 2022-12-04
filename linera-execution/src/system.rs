@@ -437,7 +437,7 @@ where
                     self.subscriptions.get(&channel_id).await?.is_none(),
                     SystemExecutionError::InvalidSubscriptionToNewCommittees(context.chain_id)
                 );
-                self.subscriptions.insert(channel_id, ());
+                self.subscriptions.insert(&channel_id, ())?;
                 result.effects = vec![(
                     Destination::Recipient(*admin_id),
                     SystemEffect::Subscribe {
@@ -458,7 +458,7 @@ where
                     self.subscriptions.get(&channel_id).await?.is_some(),
                     SystemExecutionError::InvalidUnsubscriptionToNewCommittees(context.chain_id)
                 );
-                self.subscriptions.remove(channel_id);
+                self.subscriptions.remove(&channel_id)?;
                 result.effects = vec![(
                     Destination::Recipient(*admin_id),
                     SystemEffect::Unsubscribe {
@@ -585,12 +585,12 @@ where
         self.committees.set(committees);
         self.admin_id.set(Some(admin_id));
         self.subscriptions.insert(
-            ChannelId {
+            &ChannelId {
                 chain_id: admin_id,
                 name: ADMIN_CHANNEL.into(),
             },
             (),
-        );
+        ).expect("serialization failed");
         self.ownership.set(ChainOwnership::single(owner));
     }
 
