@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::common::{
-    get_upper_bound, Batch, ContextFromDb, KeyValueOperations, SimpleKeyIterator, WriteOperation,
+    get_upper_bound, Batch, ContextFromDb, KeyValueOperations, SimpleTypeIterator, WriteOperation,
 };
 use async_trait::async_trait;
 use std::sync::Arc;
@@ -17,7 +17,8 @@ pub type RocksdbContext<E> = ContextFromDb<E, RocksdbContainer>;
 #[async_trait]
 impl KeyValueOperations for RocksdbContainer {
     type Error = RocksdbContextError;
-    type KeyIterator = SimpleKeyIterator<RocksdbContextError>;
+    type KeyIterator = SimpleTypeIterator<Vec<u8>,RocksdbContextError>;
+    type KeyValueIterator = SimpleTypeIterator<(Vec<u8>,Vec<u8>),RocksdbContextError>;
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RocksdbContextError> {
         let db = self.clone();
@@ -48,7 +49,36 @@ impl KeyValueOperations for RocksdbContainer {
             keys
         })
         .await?;
-        Ok(SimpleKeyIterator::new(keys))
+        Ok(Self::KeyIterator::new(keys))
+    }
+
+    async fn find_key_values_without_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::KeyValueIterator, RocksdbContextError> {
+        let db = self.clone();
+        let prefix = key_prefix.to_vec();
+        let len = prefix.len();
+        let key_values = tokio::task::spawn_blocking(move || {
+            let mut iter = db.raw_iterator();
+            let mut key_values = Vec::new();
+            iter.seek(&prefix);
+            let mut next_key = iter.key();
+            while let Some(key) = next_key {
+                if !key.starts_with(&prefix) {
+                    break;
+                }
+                if let Some(value) = iter.value() {
+                    let key_value = (key[len..].to_vec(), value.to_vec());
+                    key_values.push(key_value);
+                }
+                iter.next();
+                next_key = iter.key();
+            }
+            key_values
+        })
+        .await?;
+        Ok(Self::KeyValueIterator::new(key_values))
     }
 
     async fn write_batch(&self, mut batch: Batch) -> Result<(), RocksdbContextError> {

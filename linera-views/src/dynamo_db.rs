@@ -85,7 +85,7 @@ impl DynamoDbContainer {
     /// Extract the key attribute from an item.
     fn extract_key(
         len_prefix: usize,
-        mut attributes: HashMap<String, AttributeValue>,
+        attributes: &mut HashMap<String, AttributeValue>,
     ) -> Result<Vec<u8>, DynamoDbContextError> {
         let key = attributes
             .remove(KEY_ATTRIBUTE)
@@ -98,15 +98,25 @@ impl DynamoDbContainer {
 
     /// Extract the value attribute from an item.
     fn extract_value(
-        mut attributes: HashMap<String, AttributeValue>,
+        attributes: &mut HashMap<String, AttributeValue>,
     ) -> Result<Vec<u8>, DynamoDbContextError> {
-        let key = attributes
+        let value = attributes
             .remove(VALUE_ATTRIBUTE)
             .ok_or(DynamoDbContextError::MissingValue)?;
-        match key {
+        match value {
             AttributeValue::B(blob) => Ok(blob.into_inner()),
-            key => Err(DynamoDbContextError::wrong_value_type(&key)),
+            value => Err(DynamoDbContextError::wrong_value_type(&value)),
         }
+    }
+
+    /// Extract the key attribute from an item.
+    fn extract_key_value(
+        len_prefix: usize,
+        mut attributes: HashMap<String, AttributeValue>,
+    ) -> Result<(Vec<u8>,Vec<u8>), DynamoDbContextError> {
+        let key = Self::extract_key(len_prefix, &mut attributes)?;
+        let value = Self::extract_value(&mut attributes)?;
+        Ok((key,value))
     }
 }
 
@@ -131,7 +141,32 @@ impl Iterator for DynamoDbKeyIterator {
     type Item = Result<Vec<u8>, DynamoDbContextError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next().map(|x| { DynamoDbContainer::extract_key(self.len_prefix, x) })
+        self.iter.next().map(|mut x| { DynamoDbContainer::extract_key(self.len_prefix, &mut x) })
+    }
+}
+
+// Inspired by https://depth-first.com/articles/2020/06/22/returning-rust-iterators/
+pub struct DynamoDbKeyValueIterator {
+    len_prefix: usize,
+    iter: std::iter::Flatten<
+        std::option::IntoIter<Vec<HashMap<std::string::String, AttributeValue>>>,
+    >,
+}
+
+impl DynamoDbKeyValueIterator {
+    fn new(len_prefix: usize, response: aws_sdk_dynamodb::output::QueryOutput) -> Self {
+        Self {
+            len_prefix,
+            iter: response.items.into_iter().flatten(),
+        }
+    }
+}
+
+impl Iterator for DynamoDbKeyValueIterator {
+    type Item = Result<(Vec<u8>,Vec<u8>), DynamoDbContextError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().map(|x| { DynamoDbContainer::extract_key_value(self.len_prefix, x) })
     }
 }
 
@@ -139,6 +174,7 @@ impl Iterator for DynamoDbKeyIterator {
 impl KeyValueOperations for DynamoDbContainer {
     type Error = DynamoDbContextError;
     type KeyIterator = DynamoDbKeyIterator;
+    type KeyValueIterator = DynamoDbKeyValueIterator;
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DynamoDbContextError> {
         let response = self
@@ -150,7 +186,7 @@ impl KeyValueOperations for DynamoDbContainer {
             .await?;
 
         match response.item {
-            Some(item) => Ok(Some(Self::extract_value(item)?)),
+            Some(mut item) => Ok(Some(Self::extract_value(&mut item)?)),
             None => Ok(None),
         }
     }
@@ -175,6 +211,28 @@ impl KeyValueOperations for DynamoDbContainer {
             .send()
             .await?;
         Ok(DynamoDbKeyIterator::new(key_prefix.len(), response))
+    }
+
+    async fn find_key_values_without_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::KeyValueIterator, DynamoDbContextError> {
+        let response = self
+            .client
+            .query()
+            .table_name(self.table.as_ref())
+            .projection_expression(KEY_ATTRIBUTE)
+            .key_condition_expression(format!(
+                "{PARTITION_ATTRIBUTE} = :partition and begins_with({KEY_ATTRIBUTE}, :prefix)"
+            ))
+            .expression_attribute_values(
+                ":partition",
+                AttributeValue::B(Blob::new(DUMMY_PARTITION_KEY)),
+            )
+            .expression_attribute_values(":prefix", AttributeValue::B(Blob::new(key_prefix)))
+            .send()
+            .await?;
+        Ok(DynamoDbKeyValueIterator::new(key_prefix.len(), response))
     }
 
     /// We put submit the transaction in blocks (called BatchWriteItem in dynamoDb) of at most 25

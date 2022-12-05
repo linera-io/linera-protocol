@@ -148,6 +148,7 @@ impl Batch {
 pub trait KeyValueOperations {
     type Error: Debug;
     type KeyIterator: Iterator<Item = Result<Vec<u8>, Self::Error>>;
+    type KeyValueIterator: Iterator<Item = Result<(Vec<u8>,Vec<u8>), Self::Error>>;
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
@@ -155,6 +156,11 @@ pub trait KeyValueOperations {
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyIterator, Self::Error>;
+
+    async fn find_key_values_without_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::KeyValueIterator, Self::Error>;
 
     async fn find_keys_with_prefix(
         &self,
@@ -239,13 +245,13 @@ where
 
 // A non-optimized iterator for simple DB implementations.
 // Inspired by https://depth-first.com/articles/2020/06/22/returning-rust-iterators/
-pub struct SimpleKeyIterator<E> {
-    iter: std::vec::IntoIter<Vec<u8>>,
+pub struct SimpleTypeIterator<T,E> {
+    iter: std::vec::IntoIter<T>,
     _phantom: std::marker::PhantomData<E>,
 }
 
-impl<E> SimpleKeyIterator<E> {
-    pub(crate) fn new(values: Vec<Vec<u8>>) -> Self {
+impl<T,E> SimpleTypeIterator<T,E> {
+    pub(crate) fn new(values: Vec<T>) -> Self {
         Self {
             iter: values.into_iter(),
             _phantom: std::marker::PhantomData,
@@ -253,8 +259,8 @@ impl<E> SimpleKeyIterator<E> {
     }
 }
 
-impl<E> Iterator for SimpleKeyIterator<E> {
-    type Item = Result<Vec<u8>, E>;
+impl<T,E> Iterator for SimpleTypeIterator<T,E> {
+    type Item = Result<T, E>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.iter.next().map(Result::Ok)
@@ -304,6 +310,9 @@ pub trait Context {
 
     /// Find keys matching the prefix. The full keys are returned, that is including the prefix.
     async fn find_keys_without_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error>;
+
+    /// Find keys matching the prefix. The full keys are returned, that is including the prefix.
+    async fn find_key_values_without_prefix(&self, key_prefix: &[u8]) -> Result<Vec<(Vec<u8>,Vec<u8>)>, Self::Error>;
 
     /// Find the keys matching the prefix. The remainder of the key are parsed back into elements.
     async fn get_sub_keys<Key: DeserializeOwned + Send>(
@@ -383,6 +392,10 @@ where
 
     async fn find_keys_without_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
         self.db.find_keys_without_prefix(key_prefix).await?.collect()
+    }
+
+    async fn find_key_values_without_prefix(&self, key_prefix: &[u8]) -> Result<Vec<(Vec<u8>,Vec<u8>)>, Self::Error> {
+        self.db.find_key_values_without_prefix(key_prefix).await?.collect()
     }
 
     async fn get_sub_keys<Key>(&mut self, key_prefix: &[u8]) -> Result<Vec<Key>, Self::Error>

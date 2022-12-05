@@ -1,14 +1,11 @@
 use crate::{
     common::{Batch, Context, KeyValueOperations},
+    common::{ContextFromDb, SimpleTypeIterator},
+    memory::{MemoryContext, MemoryStoreMap},
     views::{HashView, Hasher, HashingContext, View, ViewError},
 };
 use async_trait::async_trait;
 use std::{collections::BTreeMap, fmt::Debug, mem};
-
-use crate::{
-    common::{ContextFromDb, SimpleKeyIterator},
-    memory::{MemoryContext, MemoryStoreMap},
-};
 use tokio::sync::OwnedMutexGuard;
 
 /// A view that represents the KeyValueOperations
@@ -184,7 +181,8 @@ where
     ViewError: From<C::Error>,
 {
     type Error = ViewError;
-    type KeyIterator = SimpleKeyIterator<ViewError>;
+    type KeyIterator = SimpleTypeIterator<Vec<u8>,ViewError>;
+    type KeyValueIterator = SimpleTypeIterator<(Vec<u8>,Vec<u8>),ViewError>;
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
         if let Some(update) = self.updates.get(key) {
@@ -218,7 +216,34 @@ where
                 keys.push(key[len..].to_vec())
             }
         }
-        Ok(SimpleKeyIterator::new(keys))
+        Ok(Self::KeyIterator::new(keys))
+    }
+
+    async fn find_key_values_without_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::KeyValueIterator, ViewError> {
+        let len = key_prefix.len();
+        let key_prefix_full = self.context.derive_key_bytes(key_prefix);
+        let mut key_values = Vec::<(Vec<u8>,Vec<u8>)>::new();
+        if !self.was_cleared {
+            for (short_key,value) in self.context.find_key_values_without_prefix(&key_prefix_full).await? {
+                let mut key = key_prefix.to_vec();
+                key.extend_from_slice(&short_key);
+                if !self.updates.contains_key(&key) {
+                    key_values.push((short_key.to_vec(),value));
+                }
+            }
+        }
+        for (key, value) in &self.updates {
+            if key.starts_with(&key_prefix) {
+                if let Some(value) = value {
+                    let key_value : (Vec<u8>,Vec<u8>) = (key[len..].to_vec(),value.to_vec());
+                    key_values.push(key_value);
+                }
+            }
+        }
+        Ok(Self::KeyValueIterator::new(key_values))
     }
 
     async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
