@@ -87,9 +87,11 @@ where
         }
     }
 
-    async fn indices(&self) -> Result<Vec<Vec<u8>>, ViewError> {
+    pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
+    where
+        F: FnMut(Vec<u8>) -> Result<(), ViewError> + Send,
+    {
         let key_prefix = self.context.base_key();
-        let mut indices = Vec::new();
         let mut iter = self.updates.iter();
         let mut pair = iter.next();
         if !self.was_cleared {
@@ -100,14 +102,14 @@ where
                             let key = key.clone();
                             if key < index {
                                 if value.is_some() {
-                                    indices.push(key);
+                                    f(key)?;
                                 }
                             } else {
                                 if key != index {
-                                    indices.push(index);
+                                    f(index)?;
                                 } else {
                                     if value.is_some() {
-                                        indices.push(key);
+                                        f(key)?;
                                     }
                                 }
                                 break;
@@ -115,7 +117,7 @@ where
                             pair = iter.next();
                         },
                         None => {
-                            indices.push(index);
+                            f(index)?;
                             break;
                         },
                     }
@@ -127,7 +129,7 @@ where
                 Some((key,value)) => {
                     let key = key.clone();
                     if value.is_some() {
-                        indices.push(key);
+                        f(key)?;
                     }
                     pair = iter.next();
                 },
@@ -136,6 +138,15 @@ where
                 },
             }
         }
+        Ok(())
+    }
+
+    pub async fn indices(&self) -> Result<Vec<Vec<u8>>, ViewError> {
+        let mut indices = Vec::new();
+        self.for_each_index(|index: Vec<u8>| {
+            indices.push(index);
+            Ok(())
+        }).await?;
         Ok(indices)
     }
 
