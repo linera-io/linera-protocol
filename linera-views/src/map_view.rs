@@ -108,7 +108,7 @@ where
     C: Context,
     ViewError: From<C::Error>,
     I: Eq + Ord + Sync + Clone + Send + Serialize + DeserializeOwned,
-    V: Clone + Sync + DeserializeOwned,
+    V: Clone + Sync + DeserializeOwned + 'static,
 {
     /// Read the value at the given position, if any.
     pub async fn get(&mut self, index: &I) -> Result<Option<V>, ViewError> {
@@ -126,39 +126,127 @@ where
     /// Return the list of indices in the map.
     pub async fn indices(&mut self) -> Result<Vec<I>, ViewError> {
         let mut indices = Vec::<I>::new();
-        if !self.was_cleared {
-            let base = self.context.base_key();
-            for index in self.context.find_keys_without_prefix(&base).await? {
-                indices.push(self.context.get_value(&index)?);
-            }
-        }
-        for (index, entry) in &self.updates {
-            if entry.is_some() {
-                indices.push(self.context.get_value(index)?);
-            }
-        }
-        indices.sort();
+        self.for_each_index(|index: I| {
+            indices.push(index);
+            Ok(())
+        }).await?;
         Ok(indices)
     }
 
-    /// Execute a function on each index. The function f must be order independent
+    /// Execute a function on each index. The order is in which values are passed is not
+    /// the one of the index but its serialization. However said order will always be the
+    /// same
     pub async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), ViewError>
     where
-        F: FnMut(I) + Send,
+        F: FnMut(I) -> Result<(),ViewError> + Send,
     {
+        let mut iter = self.updates.iter();
+        let mut pair = iter.next();
         if !self.was_cleared {
             let base = self.context.base_key();
-            for short_key in self.context.find_keys_without_prefix(&base).await? {
-                if !self.updates.contains_key(&short_key) {
-                    let index = self.context.get_value(&short_key)?;
-                    f(index);
+            for index in self.context.find_keys_without_prefix(&base).await? {
+                let index_i = self.context.get_value(&index)?;
+                loop {
+                    match pair {
+                        Some((key,value)) => {
+                            let key = key.clone();
+                            let key_i = self.context.get_value(&key)?;
+                            if key < index {
+                                if value.is_some() {
+                                    f(key_i)?;
+                                }
+                            } else {
+                                if key != index {
+                                    f(index_i)?;
+                                } else {
+                                    if value.is_some() {
+                                        f(key_i)?;
+                                    }
+                                }
+                                break;
+                            }
+                            pair = iter.next();
+                        },
+                        None => {
+                            f(index_i)?;
+                            break;
+                        },
+                    }
                 }
             }
         }
-        for (short_key, entry) in &self.updates {
-            if entry.is_some() {
-                let index = self.context.get_value(&short_key)?;
-                f(index);
+        loop {
+            match pair {
+                Some((key,value)) => {
+                    let key_i = self.context.get_value(&key)?;
+                    if value.is_some() {
+                        f(key_i)?;
+                    }
+                    pair = iter.next();
+                },
+                None => {
+                    break;
+                },
+            }
+        }
+        Ok(())
+    }
+
+    /// Execute a function on each index. The order is in which values are passed is not
+    /// the one of the index but its serialization. However said order will always be the
+    /// same
+    pub async fn for_each_index_value<F>(&mut self, mut f: F) -> Result<(), ViewError>
+    where
+        F: FnMut(I,V) -> Result<(),ViewError> + Send,
+    {
+        let mut iter = self.updates.iter();
+        let mut pair = iter.next();
+        if !self.was_cleared {
+            let base = self.context.base_key();
+            for (index,index_val) in self.context.find_key_values_without_prefix(&base).await? {
+                let index_i = self.context.get_value(&index)?;
+                let index_val = self.context.get_value(&index_val)?;
+                loop {
+                    match pair {
+                        Some((key,value)) => {
+                            let key = key.clone();
+                            let key_i = self.context.get_value(&key)?;
+                            if key < index {
+                                if let Some(value) = value {
+                                    f(key_i,value.clone())?;
+                                }
+                            } else {
+                                if key != index {
+                                    f(index_i,index_val)?;
+                                } else {
+                                    if let Some(value) = value {
+                                        f(key_i,value.clone())?;
+                                    }
+                                }
+                                break;
+                            }
+                            pair = iter.next();
+                        },
+                        None => {
+                            f(index_i,index_val)?;
+                            break;
+                        },
+                    }
+                }
+            }
+        }
+        loop {
+            match pair {
+                Some((key,value)) => {
+                    let key_i = self.context.get_value(&key)?;
+                    if let Some(value) = value {
+                        f(key_i, value.clone())?;
+                    }
+                    pair = iter.next();
+                },
+                None => {
+                    break;
+                },
             }
         }
         Ok(())
@@ -171,21 +259,18 @@ where
     C: HashingContext + Context + Send + Sync,
     ViewError: From<C::Error>,
     I: Eq + Ord + Clone + Send + Sync + Serialize + DeserializeOwned,
-    V: Clone + Send + Sync + Serialize + DeserializeOwned,
+    V: Clone + Send + Sync + Serialize + DeserializeOwned + 'static,
 {
     async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
         let mut hasher = C::Hasher::default();
-        let indices = self.indices().await?;
-        hasher.update_with_bcs_bytes(&indices.len())?;
-
-        for index in indices {
-            let value = self
-                .get(&index)
-                .await?
-                .expect("The value for the returned index should be present");
+        let mut count = 0;
+        self.for_each_index_value(|index: I, value: V| {
+            count += 1;
             hasher.update_with_bcs_bytes(&index)?;
             hasher.update_with_bcs_bytes(&value)?;
-        }
+            Ok(())
+        }).await?;
+        hasher.update_with_bcs_bytes(&count)?;
         Ok(hasher.finalize())
     }
 }

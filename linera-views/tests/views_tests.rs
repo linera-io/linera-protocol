@@ -247,7 +247,10 @@ where
             assert_eq!(view.map.indices().await.unwrap(), vec!["Hello".to_string()]);
             let mut count = 0;
             view.map
-                .for_each_index(|_index: String| count += 1)
+                .for_each_index(|_index: String| {
+                    count += 1;
+                    Ok(())
+                })
                 .await
                 .unwrap();
             assert_eq!(count, 1);
