@@ -138,6 +138,60 @@ where
         Ok(())
     }
 
+    pub async fn for_each_index_value<F>(&self, mut f: F) -> Result<(), ViewError>
+    where
+        F: FnMut(Vec<u8>,Vec<u8>) -> Result<(), ViewError> + Send,
+    {
+        let key_prefix = self.context.base_key();
+        let mut iter = self.updates.iter();
+        let mut pair = iter.next();
+        if !self.was_cleared {
+            for (index,index_val) in self.context.find_key_values_without_prefix(&key_prefix).await? {
+                loop {
+                    match pair {
+                        Some((key,value)) => {
+                            let key = key.clone();
+                            if key < index {
+                                if let Some(value) = value {
+                                    f(key,value.to_vec())?;
+                                }
+                            } else {
+                                if key != index {
+                                    f(index, index_val)?;
+                                } else {
+                                    if let Some(value) = value {
+                                        f(key,value.to_vec())?;
+                                    }
+                                }
+                                break;
+                            }
+                            pair = iter.next();
+                        },
+                        None => {
+                            f(index,index_val)?;
+                            break;
+                        },
+                    }
+                }
+            }
+        }
+        loop {
+            match pair {
+                Some((key,value)) => {
+                    let key = key.clone();
+                    if let Some(value) = value {
+                        f(key,value.to_vec())?;
+                    }
+                    pair = iter.next();
+                },
+                None => {
+                    break;
+                },
+            }
+        }
+        Ok(())
+    }
+
     pub async fn indices(&self) -> Result<Vec<Vec<u8>>, ViewError> {
         let mut indices = Vec::new();
         self.for_each_index(|index: Vec<u8>| {
@@ -260,16 +314,14 @@ where
 {
     async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
         let mut hasher = C::Hasher::default();
-        let indices = self.indices().await?;
-        hasher.update_with_bcs_bytes(&indices.len())?;
-        for index in indices {
-            let value = self
-                .get(&index)
-                .await?
-                .expect("The value for the returned index should be present");
+        let mut count = 0;
+        self.for_each_index_value(|index: Vec<u8>, value: Vec<u8>| -> Result<(),ViewError> {
+            count += 1;
             hasher.update_with_bytes(&index)?;
             hasher.update_with_bytes(&value)?;
-        }
+            Ok(())
+        }).await?;
+        hasher.update_with_bcs_bytes(&count)?;
         Ok(hasher.finalize())
     }
 }
