@@ -38,6 +38,9 @@ const KEY_ATTRIBUTE: &str = "item_key";
 /// The attribute name of the table value blob.
 const VALUE_ATTRIBUTE: &str = "item_value";
 
+/// The attribute name of the primary key (used as a sort key).
+const KEY_VALUE_ATTRIBUTE: &str = "item_key,item_value";
+
 #[derive(Debug, Clone)]
 pub struct DynamoDbContainer {
     pub client: Client,
@@ -122,13 +125,14 @@ impl DynamoDbContainer {
 
     async fn get_query_output(
         &self,
+        attribute_str: &str,
         key_prefix: &[u8],
     ) -> Result<QueryOutput, DynamoDbContextError> {
         let response = self
             .client
             .query()
             .table_name(self.table.as_ref())
-            .projection_expression(KEY_ATTRIBUTE)
+            .projection_expression(attribute_str)
             .key_condition_expression(format!(
                 "{PARTITION_ATTRIBUTE} = :partition and begins_with({KEY_ATTRIBUTE}, :prefix)"
             ))
@@ -222,7 +226,7 @@ impl KeyValueOperations for DynamoDbContainer {
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyIterator, DynamoDbContextError> {
-        let response = self.get_query_output(key_prefix).await?;
+        let response = self.get_query_output(KEY_ATTRIBUTE, key_prefix).await?;
         Ok(DynamoDbKeyIterator::new(key_prefix.len(), response))
     }
 
@@ -230,7 +234,7 @@ impl KeyValueOperations for DynamoDbContainer {
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValueIterator, DynamoDbContextError> {
-        let response = self.get_query_output(key_prefix).await?;
+        let response = self.get_query_output(KEY_VALUE_ATTRIBUTE, key_prefix).await?;
         Ok(DynamoDbKeyValueIterator::new(key_prefix.len(), response))
     }
 
