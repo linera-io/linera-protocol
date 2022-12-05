@@ -10,6 +10,7 @@ use aws_sdk_dynamodb::{
         AttributeDefinition, AttributeValue, DeleteRequest, KeySchemaElement, KeyType,
         ProvisionedThroughput, PutRequest, ScalarAttributeType, WriteRequest,
     },
+    output::QueryOutput,
     types::{Blob, SdkError},
     Client,
 };
@@ -118,6 +119,28 @@ impl DynamoDbContainer {
         let value = Self::extract_value(&mut attributes)?;
         Ok((key,value))
     }
+
+    async fn get_query_output(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<QueryOutput, DynamoDbContextError> {
+        let response = self
+            .client
+            .query()
+            .table_name(self.table.as_ref())
+            .projection_expression(KEY_ATTRIBUTE)
+            .key_condition_expression(format!(
+                "{PARTITION_ATTRIBUTE} = :partition and begins_with({KEY_ATTRIBUTE}, :prefix)"
+            ))
+            .expression_attribute_values(
+                ":partition",
+                AttributeValue::B(Blob::new(DUMMY_PARTITION_KEY)),
+            )
+            .expression_attribute_values(":prefix", AttributeValue::B(Blob::new(key_prefix)))
+            .send()
+            .await?;
+        Ok(response)
+    }
 }
 
 // Inspired by https://depth-first.com/articles/2020/06/22/returning-rust-iterators/
@@ -195,21 +218,7 @@ impl KeyValueOperations for DynamoDbContainer {
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyIterator, DynamoDbContextError> {
-        let response = self
-            .client
-            .query()
-            .table_name(self.table.as_ref())
-            .projection_expression(KEY_ATTRIBUTE)
-            .key_condition_expression(format!(
-                "{PARTITION_ATTRIBUTE} = :partition and begins_with({KEY_ATTRIBUTE}, :prefix)"
-            ))
-            .expression_attribute_values(
-                ":partition",
-                AttributeValue::B(Blob::new(DUMMY_PARTITION_KEY)),
-            )
-            .expression_attribute_values(":prefix", AttributeValue::B(Blob::new(key_prefix)))
-            .send()
-            .await?;
+        let response = self.get_query_output(key_prefix).await?;
         Ok(DynamoDbKeyIterator::new(key_prefix.len(), response))
     }
 
@@ -217,21 +226,7 @@ impl KeyValueOperations for DynamoDbContainer {
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValueIterator, DynamoDbContextError> {
-        let response = self
-            .client
-            .query()
-            .table_name(self.table.as_ref())
-            .projection_expression(KEY_ATTRIBUTE)
-            .key_condition_expression(format!(
-                "{PARTITION_ATTRIBUTE} = :partition and begins_with({KEY_ATTRIBUTE}, :prefix)"
-            ))
-            .expression_attribute_values(
-                ":partition",
-                AttributeValue::B(Blob::new(DUMMY_PARTITION_KEY)),
-            )
-            .expression_attribute_values(":prefix", AttributeValue::B(Blob::new(key_prefix)))
-            .send()
-            .await?;
+        let response = self.get_query_output(key_prefix).await?;
         Ok(DynamoDbKeyValueIterator::new(key_prefix.len(), response))
     }
 

@@ -45,14 +45,6 @@ pub struct ReentrantCollectionView<C, I, W> {
 /// The solution to this is to use a marker type to have two sets of keys, where
 /// [`CollectionKey::Index`] serves to indicate the existence of an entry in the collection, and
 /// [`CollectionKey::Subvie`] serves as the prefix for the sub-view.
-/*
-#[derive(Serialize)]
-enum CollectionKey<I> {
-    Index(I),
-    Subview(I),
-}
-*/
-
 fn get_index_key(mut base: Vec<u8>, index: &[u8]) -> Vec<u8> {
     base.extend_from_slice(&[0]);
     base.extend_from_slice(index);
