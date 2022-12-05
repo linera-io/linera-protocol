@@ -20,7 +20,7 @@ impl<C, T> View<C> for LogView<C, T>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    T: Send + Sync + Clone + Serialize,
+    T: Send + Sync + Clone + Debug + Serialize,
 {
     fn context(&self) -> &C {
         &self.context
@@ -51,15 +51,12 @@ where
             }
         }
         if !self.new_values.is_empty() {
-            let count = self.new_values.len();
-            if count > 0 {
-                for value in &self.new_values {
-                    batch.put_key_value(self.context.derive_key(&self.stored_count)?, value)?;
-                    self.stored_count += 1;
-                }
-                batch.put_key_value(self.context.base_key(), &self.stored_count)?;
-                self.new_values.clear();
+            for value in &self.new_values {
+                batch.put_key_value(self.context.derive_key(&self.stored_count)?, value)?;
+                self.stored_count += 1;
             }
+            batch.put_key_value(self.context.base_key(), &self.stored_count)?;
+            self.new_values.clear();
         }
         Ok(())
     }
@@ -77,6 +74,7 @@ where
 impl<C, T> LogView<C, T>
 where
     C: Context,
+    T: Debug,
 {
     /// Push a value to the end of the log.
     pub fn push(&mut self, value: T) {
@@ -101,7 +99,7 @@ impl<C, T> LogView<C, T>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    T: Send + Sync + Clone + DeserializeOwned,
+    T: Send + Sync + Clone + Debug + DeserializeOwned,
 {
     /// Read the logged values in the given range (including staged ones).
     pub async fn get(&mut self, index: usize) -> Result<Option<T>, ViewError> {
@@ -168,7 +166,7 @@ impl<C, T> HashView<C> for LogView<C, T>
 where
     C: HashingContext + Context + Send + Sync,
     ViewError: From<C::Error>,
-    T: Send + Sync + Clone + Serialize + DeserializeOwned,
+    T: Send + Sync + Clone + Debug + Serialize + DeserializeOwned,
 {
     async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
         let count = self.count();

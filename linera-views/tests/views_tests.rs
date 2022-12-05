@@ -695,7 +695,7 @@ async fn test_removal_api() -> anyhow::Result<()> {
 }
 
 #[cfg(test)]
-async fn compute_hash_map_keyvaluestore_view<S>(
+async fn compute_hash_map_unordered_view<S>(
     rng: &mut impl RngCore,
     store: &mut S,
     l_kv: Vec<(Vec<u8>, Vec<u8>)>,
@@ -725,31 +725,64 @@ where
     view.hash().await.unwrap()
 }
 
+
+
 #[cfg(test)]
-async fn compute_hash_map_keyvaluestore_view_iter<R: RngCore>(
+async fn compute_hash_map_ordered_view<S>(
+    rng: &mut impl RngCore,
+    store: &mut S,
+    l_kv: Vec<(Vec<u8>, Vec<u8>)>,
+) -> <<S::Context as HashingContext>::Hasher as Hasher>::Output
+where
+    S: StateStore,
+    ViewError: From<<<S as StateStore>::Context as Context>::Error>,
+{
+    let mut view = store.load(1).await.unwrap();
+    for kv in l_kv {
+        let value = kv.1;
+        let value_usize = (*value.first().unwrap()) as usize;
+        view.log.push(value_usize as u32);
+        view.queue.push_back(value_usize as u64);
+        //
+        let thr = rng.gen_range(0..20);
+        if thr == 0 {
+            view.save().await.unwrap();
+        }
+    }
+    view.hash().await.unwrap()
+}
+
+
+
+#[cfg(test)]
+async fn compute_hash_map_view_iter<R: RngCore>(
     rng: &mut R,
     l_kv: Vec<(Vec<u8>, Vec<u8>)>,
 ) {
-    let mut l_answer = Vec::new();
+    let mut l_answer_unord = Vec::new();
+    let mut l_answer_ord = Vec::new();
     let n_iter = 4;
     for _ in 0..n_iter {
         let mut l_kv_b = l_kv.clone();
         random_shuffle(rng, &mut l_kv_b);
-        let mut store = MemoryTestStore::default();
-        l_answer.push(compute_hash_map_keyvaluestore_view(rng, &mut store, l_kv_b).await);
+        let mut store1 = MemoryTestStore::default();
+        l_answer_unord.push(compute_hash_map_unordered_view(rng, &mut store1, l_kv_b).await);
+        let mut store2 = MemoryTestStore::default();
+        l_answer_ord.push(compute_hash_map_ordered_view(rng, &mut store2, l_kv.clone()).await);
     }
     for i in 1..n_iter {
-        assert_eq!(l_answer.get(0).unwrap(), l_answer.get(i).unwrap());
+        assert_eq!(l_answer_unord.get(0).unwrap(), l_answer_unord.get(i).unwrap());
+        assert_eq!(l_answer_ord.get(0).unwrap(), l_answer_ord.get(i).unwrap());
     }
 }
 
 #[tokio::test]
-async fn compute_hash_map_keyvaluestore_view_iter_large() {
+async fn compute_hash_map_view_iter_large() {
     let n_iter = 4;
     let n = 1000;
     let mut rng = rand::rngs::StdRng::seed_from_u64(2);
     for _ in 0..n_iter {
         let l_kv = get_random_key_value_vec(&mut rng, n);
-        compute_hash_map_keyvaluestore_view_iter(&mut rng, l_kv).await;
+        compute_hash_map_view_iter(&mut rng, l_kv).await;
     }
 }
