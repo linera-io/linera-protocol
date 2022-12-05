@@ -89,21 +89,54 @@ where
 
     async fn indices(&self) -> Result<Vec<Vec<u8>>, ViewError> {
         let key_prefix = self.context.base_key();
-        let mut keys = Vec::new();
+        let mut indices = Vec::new();
+        let mut iter = self.updates.iter();
+        let mut pair = iter.next();
         if !self.was_cleared {
-            for key in self.context.find_keys_without_prefix(&key_prefix).await? {
-                if !self.updates.contains_key(&key) {
-                    keys.push(key)
+            for index in self.context.find_keys_without_prefix(&key_prefix).await? {
+                loop {
+                    match pair {
+                        Some((key,value)) => {
+                            let key = key.clone();
+                            if key < index {
+                                if value.is_some() {
+                                    indices.push(key);
+                                }
+                            } else {
+                                if key != index {
+                                    indices.push(index);
+                                } else {
+                                    if value.is_some() {
+                                        indices.push(key);
+                                    }
+                                }
+                                break;
+                            }
+                            pair = iter.next();
+                        },
+                        None => {
+                            indices.push(index);
+                            break;
+                        },
+                    }
                 }
             }
         }
-        for (key, value) in &self.updates {
-            if value.is_some() {
-                keys.push(key.to_vec())
+        loop {
+            match pair {
+                Some((key,value)) => {
+                    let key = key.clone();
+                    if value.is_some() {
+                        indices.push(key);
+                    }
+                    pair = iter.next();
+                },
+                None => {
+                    break;
+                },
             }
         }
-        keys.sort();
-        Ok(keys)
+        Ok(indices)
     }
 
     pub async fn get(&self, index: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {

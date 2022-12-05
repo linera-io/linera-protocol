@@ -4,8 +4,7 @@
 use linera_views::{
     common::{Batch, KeyValueOperations},
     dynamo_db::DynamoDbContainer,
-    memory::MemoryContainer,
-    rocksdb::{RocksdbContainer, DB},
+    rocksdb::DB,
     test_utils::{get_random_key_value_vec_prefix, LocalStackTestContext},
 };
 use rand::SeedableRng;
@@ -74,7 +73,7 @@ async fn test_ordering_keys<OP: KeyValueOperations + Sync>(key_value_operation: 
 async fn test_ordering_memory() {
     let map = Arc::new(Mutex::new(BTreeMap::new()));
     let guard = map.clone().lock_owned().await;
-    let key_value_operation: MemoryContainer = Arc::new(RwLock::new(guard));
+    let key_value_operation = Arc::new(RwLock::new(guard));
     test_ordering_keys(key_value_operation).await;
 }
 
@@ -83,7 +82,7 @@ async fn test_ordering_rocksdb() {
     let dir = tempfile::TempDir::new().unwrap();
     let mut options = rocksdb::Options::default();
     options.create_if_missing(true);
-    let key_value_operation: RocksdbContainer = Arc::new(DB::open(&options, &dir).unwrap());
+    let key_value_operation = Arc::new(DB::open(&options, &dir).unwrap());
     //
     test_ordering_keys(key_value_operation).await;
 }
@@ -106,7 +105,7 @@ async fn test_ordering_dynamodb() {
 async fn test_ordering_memory_specific() {
     let map = Arc::new(Mutex::new(BTreeMap::new()));
     let guard = map.clone().lock_owned().await;
-    let key_value_operation: MemoryContainer = Arc::new(RwLock::new(guard));
+    let key_value_operation = Arc::new(RwLock::new(guard));
     let key_value_vec = vec![
         (vec![0, 1, 255], Vec::new()),
         (vec![0, 1, 255, 37], Vec::new()),
