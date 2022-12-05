@@ -237,8 +237,6 @@ where
     }
 }
 
-
-
 // A non-optimized iterator for simple DB implementations.
 // Inspired by https://depth-first.com/articles/2020/06/22/returning-rust-iterators/
 pub struct SimpleKeyIterator<E> {

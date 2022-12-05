@@ -92,6 +92,11 @@ pub trait Hasher: Default + Write + Send + Sync + 'static {
         bcs::serialize_into(self, value)?;
         Ok(())
     }
+
+    fn update_with_bytes(&mut self, value: &[u8]) -> Result<(), ViewError> {
+        self.write_all(value)?;
+        Ok(())
+    }
 }
 
 impl Hasher for sha2::Sha512 {

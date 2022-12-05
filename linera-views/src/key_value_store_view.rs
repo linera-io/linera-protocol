@@ -231,8 +231,8 @@ where
                 .get(&index)
                 .await?
                 .expect("The value for the returned index should be present");
-            hasher.update_with_bcs_bytes(&index)?;
-            hasher.update_with_bcs_bytes(&value)?;
+            hasher.update_with_bytes(&index)?;
+            hasher.update_with_bytes(&value)?;
         }
         Ok(hasher.finalize())
     }
