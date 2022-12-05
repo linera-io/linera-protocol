@@ -281,7 +281,10 @@ where
         );
         let mut count = 0;
         view.collection
-            .for_each_index(|_index: String| count += 1)
+            .for_each_index(|_index: String| {
+                count += 1;
+                Ok(())
+            })
             .await
             .unwrap();
         assert_eq!(count, 1);
@@ -407,7 +410,7 @@ where
             view.collection.indices().await.unwrap(),
             vec!["hola".to_string()]
         );
-        view.collection.remove_entry("hola".to_string());
+        view.collection.remove_entry("hola".to_string()).unwrap();
         assert_ne!(view.hash().await.unwrap(), stored_hash);
         view.save().await.unwrap();
     }
@@ -610,7 +613,7 @@ async fn test_collection_removal() -> anyhow::Result<()> {
 
     // Remove the entry from the collection.
     let mut collection = CollectionViewType::load(context.clone()).await?;
-    collection.remove_entry(1);
+    collection.remove_entry(1).unwrap();
     let mut batch = Batch::default();
     collection.flush(&mut batch)?;
     collection.context().write_batch(batch).await?;
@@ -642,7 +645,7 @@ async fn test_removal_api_first_second_condition(
 
     // Reload the collection view and remove the entry, but don't commit yet
     let mut collection: CollectionViewType = CollectionView::load(context.clone()).await?;
-    collection.remove_entry(1);
+    collection.remove_entry(1).unwrap();
 
     // Now, read the entry with a different value if a certain condition is true
     if first_condition {

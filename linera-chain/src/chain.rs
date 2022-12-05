@@ -196,7 +196,7 @@ where
         }
         let updated = outbox.mark_messages_as_received(height).await?;
         if updated && outbox.queue.count() == 0 {
-            outboxes.remove_entry(recipient);
+            outboxes.remove_entry(recipient)?;
         }
         Ok(updated)
     }

@@ -13,6 +13,7 @@ use std::{
     sync::Arc,
 };
 use tokio::sync::{Mutex, OwnedMutexGuard};
+use std::marker::PhantomData;
 
 /// A view that supports accessing a collection of views of the same kind, indexed by a
 /// key, one subview at a time.
@@ -20,7 +21,8 @@ use tokio::sync::{Mutex, OwnedMutexGuard};
 pub struct CollectionView<C, I, W> {
     context: C,
     was_cleared: bool,
-    updates: BTreeMap<I, Option<W>>,
+    updates: BTreeMap<Vec<u8>, Option<W>>,
+    unit_type: PhantomData<I>,
 }
 
 /// A view that supports accessing a collection of views of the same kind, indexed by a
@@ -29,7 +31,8 @@ pub struct CollectionView<C, I, W> {
 pub struct ReentrantCollectionView<C, I, W> {
     context: C,
     was_cleared: bool,
-    updates: BTreeMap<I, Option<Arc<Mutex<W>>>>,
+    updates: BTreeMap<Vec<u8>, Option<Arc<Mutex<W>>>>,
+    unit_type: PhantomData<I>,
 }
 
 /// A marker type used to distinguish keys from the current scope from the keys of sub-views.
@@ -42,10 +45,24 @@ pub struct ReentrantCollectionView<C, I, W> {
 /// The solution to this is to use a marker type to have two sets of keys, where
 /// [`CollectionKey::Index`] serves to indicate the existence of an entry in the collection, and
 /// [`CollectionKey::Subvie`] serves as the prefix for the sub-view.
+/*
 #[derive(Serialize)]
 enum CollectionKey<I> {
     Index(I),
     Subview(I),
+}
+*/
+
+fn get_index_key(mut base: Vec<u8>, index: &[u8]) -> Vec<u8> {
+    base.extend_from_slice(&[0]);
+    base.extend_from_slice(index);
+    base
+}
+
+fn get_subview_key(mut base: Vec<u8>, index: &[u8]) -> Vec<u8> {
+    base.extend_from_slice(&[1]);
+    base.extend_from_slice(index);
+    base
 }
 
 #[async_trait]
@@ -54,7 +71,7 @@ where
     C: Context + Send,
     ViewError: From<C::Error>,
     I: Send + Ord + Sync + Debug + Clone + Serialize + DeserializeOwned,
-    W: View<C> + Send,
+    W: View<C> + Send + Sync,
 {
     fn context(&self) -> &C {
         &self.context
@@ -65,6 +82,7 @@ where
             context,
             was_cleared: false,
             updates: BTreeMap::new(),
+            unit_type: PhantomData,
         })
     }
 
@@ -80,7 +98,7 @@ where
             for (index, update) in mem::take(&mut self.updates) {
                 if let Some(mut view) = update {
                     view.flush(batch)?;
-                    self.add_index(batch, index)?;
+                    self.add_index(batch, &index)?;
                 }
             }
         } else {
@@ -88,13 +106,13 @@ where
                 match update {
                     Some(mut view) => {
                         view.flush(batch)?;
-                        self.add_index(batch, index)?;
+                        self.add_index(batch, &index)?;
                     }
                     None => {
-                        let context = self
-                            .context
-                            .clone_self(self.context.derive_key(&CollectionKey::Subview(&index))?);
-                        batch.delete_key(self.context.derive_key(&CollectionKey::Index(index))?);
+                        let key_subview = self.get_subview_key(&index);
+                        let key_index = self.get_index_key(&index);
+                        let context = self.context.clone_self(key_subview);
+                        batch.delete_key(key_index);
                         batch.delete_key_prefix(context.base_key());
                     }
                 }
@@ -118,11 +136,18 @@ where
     C: Context + Send,
     ViewError: From<C::Error>,
     I: Eq + Ord + Sync + Clone + Send + Debug + Serialize + DeserializeOwned,
-    W: View<C>,
+    W: View<C> + Sync,
 {
-    /// Add the index to the list of indices.
-    fn add_index(&self, batch: &mut Batch, index: I) -> Result<(), ViewError> {
-        let key = self.context.derive_key(&CollectionKey::Index(index))?;
+    fn get_index_key(&self, index: &[u8]) -> Vec<u8> {
+        get_index_key(self.context.base_key(), index)
+    }
+
+    fn get_subview_key(&self, index: &[u8]) -> Vec<u8> {
+        get_subview_key(self.context.base_key(), index)
+    }
+
+    fn add_index(&self, batch: &mut Batch, index: &[u8]) -> Result<(), ViewError> {
+        let key = self.get_index_key(index);
         batch.put_key_value(key, &())?;
         Ok(())
     }
@@ -130,7 +155,9 @@ where
     /// Obtain a subview for the data at the given index in the collection. If an entry
     /// was removed before then a default entry is put on this index.
     pub async fn load_entry(&mut self, index: I) -> Result<&mut W, ViewError> {
-        match self.updates.entry(index.clone()) {
+        let short_key = self.context.derive_short_key(&index)?;
+        let base = self.context.base_key();
+        match self.updates.entry(short_key.clone()) {
             btree_map::Entry::Occupied(entry) => {
                 let entry = entry.into_mut();
                 match entry {
@@ -138,7 +165,7 @@ where
                     None => {
                         let context = self
                             .context
-                            .clone_self(self.context.derive_key(&CollectionKey::Subview(&index))?);
+                            .clone_self(get_subview_key(base, &short_key));
                         // Obtain a view and set its pending state to the default (e.g. empty) state
                         let mut view = W::load(context).await?;
                         view.clear();
@@ -150,7 +177,7 @@ where
             btree_map::Entry::Vacant(entry) => {
                 let context = self
                     .context
-                    .clone_self(self.context.derive_key(&CollectionKey::Subview(&index))?);
+                    .clone_self(get_subview_key(base, &short_key));
                 let mut view = W::load(context).await?;
                 if self.was_cleared {
                     view.clear();
@@ -161,12 +188,14 @@ where
     }
 
     /// Mark the entry so that it is removed in the next flush
-    pub fn remove_entry(&mut self, index: I) {
+    pub fn remove_entry(&mut self, index: I) -> Result<(), ViewError> {
+        let short_key = self.context.derive_short_key(&index)?;
         if self.was_cleared {
-            self.updates.remove(&index);
+            self.updates.remove(&short_key);
         } else {
-            self.updates.insert(index, None);
+            self.updates.insert(short_key, None);
         }
+        Ok(())
     }
 
     /// Mark the entry so that it is removed in the next flush
@@ -179,20 +208,10 @@ where
     /// Return the list of indices in the collection.
     pub async fn indices(&mut self) -> Result<Vec<I>, ViewError> {
         let mut indices = Vec::new();
-        if !self.was_cleared {
-            let base = self.context.derive_key(&CollectionKey::Index(()))?;
-            for index in self.context.get_sub_keys(&base).await? {
-                if !self.updates.contains_key(&index) {
-                    indices.push(index);
-                }
-            }
-        }
-        for (index, entry) in &self.updates {
-            if entry.is_some() {
-                indices.push(index.clone());
-            }
-        }
-        indices.sort();
+        self.for_each_index(|index: I| {
+            indices.push(index);
+            Ok(())
+        }).await?;
         Ok(indices)
     }
 
@@ -205,25 +224,63 @@ impl<C, I, W> CollectionView<C, I, W>
 where
     C: Context + Send,
     ViewError: From<C::Error>,
-    I: Eq + Ord + Clone + Debug + Sync + Send + DeserializeOwned,
+    I: Eq + Ord + Clone + Debug + Sync + Send + Serialize + DeserializeOwned,
     W: View<C> + Sync,
 {
-    /// Execute a function on each index.
+    /// Execute a function on each index. The order in which the entry are passed
+    /// is not the ones of the entryies I but of their serialization
     pub async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), ViewError>
     where
-        F: FnMut(I) + Send,
+        F: FnMut(I) -> Result<(),ViewError> + Send,
     {
+        let mut iter = self.updates.iter();
+        let mut pair = iter.next();
         if !self.was_cleared {
-            let base = self.context.derive_key(&CollectionKey::Index(()))?;
-            for index in self.context.get_sub_keys(&base).await? {
-                if !self.updates.contains_key(&index) {
-                    f(index);
+            let base = self.get_index_key(&[]);
+            for index in self.context.find_keys_without_prefix(&base).await? {
+                let index_i : I = self.context.get_value(&index)?;
+                loop {
+                    match pair {
+                        Some((key,value)) => {
+                            let key = key.clone();
+                            let key_i = self.context.get_value(&key)?;
+                            if key < index {
+                                if value.is_some() {
+                                    f(key_i)?;
+                                }
+                                pair = iter.next();
+                            } else {
+                                if key != index {
+                                    f(index_i.clone())?;
+                                } else {
+                                    if value.is_some() {
+                                        f(key_i)?;
+                                    }
+                                }
+                                pair = iter.next();
+                                break;
+                            }
+                        },
+                        None => {
+                            f(index_i)?;
+                            break;
+                        },
+                    }
                 }
             }
         }
-        for (index, entry) in &self.updates {
-            if entry.is_some() {
-                f(index.clone());
+        loop {
+            match pair {
+                Some((key,value)) => {
+                    let key_i = self.context.get_value(&key)?;
+                    if value.is_some() {
+                        f(key_i)?;
+                    }
+                    pair = iter.next();
+                },
+                None => {
+                    break;
+                },
             }
         }
         Ok(())
@@ -236,7 +293,7 @@ where
     C: Context + Send,
     ViewError: From<C::Error>,
     I: Send + Ord + Sync + Debug + Clone + Serialize + DeserializeOwned,
-    W: View<C> + Send,
+    W: View<C> + Send + Sync,
 {
     fn context(&self) -> &C {
         &self.context
@@ -247,6 +304,7 @@ where
             context,
             was_cleared: false,
             updates: BTreeMap::new(),
+            unit_type: PhantomData,
         })
     }
 
@@ -265,7 +323,7 @@ where
                         .map_err(|_| ViewError::CannotAcquireCollectionEntry)?
                         .into_inner();
                     view.flush(batch)?;
-                    self.add_index(batch, index)?;
+                    self.add_index(batch, &index)?;
                 }
             }
         } else {
@@ -276,13 +334,13 @@ where
                             .map_err(|_| ViewError::CannotAcquireCollectionEntry)?
                             .into_inner();
                         view.flush(batch)?;
-                        self.add_index(batch, index)?;
+                        self.add_index(batch, &index)?;
                     }
                     None => {
-                        let context = self
-                            .context
-                            .clone_self(self.context.derive_key(&CollectionKey::Subview(&index))?);
-                        batch.delete_key(self.context.derive_key(&CollectionKey::Index(index))?);
+                        let key_subview = self.get_subview_key(&index);
+                        let key_index = self.get_index_key(&index);
+                        let context = self.context.clone_self(key_subview);
+                        batch.delete_key(key_index);
                         batch.delete_key_prefix(context.base_key());
                     }
                 }
@@ -306,10 +364,18 @@ where
     C: Context + Send,
     ViewError: From<C::Error>,
     I: Eq + Ord + Sync + Clone + Send + Debug + Serialize + DeserializeOwned,
-    W: View<C>,
+    W: View<C> + Send + Sync,
 {
-    fn add_index(&self, batch: &mut Batch, index: I) -> Result<(), ViewError> {
-        let key = self.context.derive_key(&CollectionKey::Index(index))?;
+    fn get_index_key(&self, index: &[u8]) -> Vec<u8> {
+        get_index_key(self.context.base_key(), index)
+    }
+
+    fn get_subview_key(&self, index: &[u8]) -> Vec<u8> {
+        get_subview_key(self.context.base_key(), index)
+    }
+
+    fn add_index(&self, batch: &mut Batch, index: &[u8]) -> Result<(), ViewError> {
+        let key = self.get_index_key(index);
         batch.put_key_value(key, &())?;
         Ok(())
     }
@@ -317,7 +383,9 @@ where
     /// Obtain a subview for the data at the given index in the collection. If an entry
     /// was removed before then a default entry is put on this index.
     pub async fn try_load_entry(&mut self, index: I) -> Result<OwnedMutexGuard<W>, ViewError> {
-        match self.updates.entry(index.clone()) {
+        let short_key = self.context.derive_short_key(&index)?;
+        let base = self.context.base_key();
+        match self.updates.entry(short_key.clone()) {
             btree_map::Entry::Occupied(entry) => {
                 let entry = entry.into_mut();
                 match entry {
@@ -325,7 +393,7 @@ where
                     None => {
                         let context = self
                             .context
-                            .clone_self(self.context.derive_key(&CollectionKey::Subview(&index))?);
+                            .clone_self(get_subview_key(base, &short_key));
                         // Obtain a view and set its pending state to the default (e.g. empty) state
                         let mut view = W::load(context).await?;
                         view.clear();
@@ -338,7 +406,7 @@ where
             btree_map::Entry::Vacant(entry) => {
                 let context = self
                     .context
-                    .clone_self(self.context.derive_key(&CollectionKey::Subview(&index))?);
+                    .clone_self(get_subview_key(base, &short_key));
                 let mut view = W::load(context).await?;
                 if self.was_cleared {
                     view.clear();
@@ -351,12 +419,14 @@ where
     }
 
     /// Mark the entry so that it is removed in the next flush
-    pub fn remove_entry(&mut self, index: I) {
+    pub fn remove_entry(&mut self, index: I) -> Result<(),ViewError> {
+        let short_key = self.context.derive_short_key(&index)?;
         if self.was_cleared {
-            self.updates.remove(&index);
+            self.updates.remove(&short_key);
         } else {
-            self.updates.insert(index, None);
+            self.updates.insert(short_key, None);
         }
+        Ok(())
     }
 
     /// Mark the entry so that it is removed in the next flush
@@ -369,51 +439,71 @@ where
     /// Return the list of indices in the collection.
     pub async fn indices(&mut self) -> Result<Vec<I>, ViewError> {
         let mut indices = Vec::new();
-        if !self.was_cleared {
-            let base = self.context.derive_key(&CollectionKey::Index(()))?;
-            for index in self.context.get_sub_keys(&base).await? {
-                if !self.updates.contains_key(&index) {
-                    indices.push(index);
-                }
-            }
-        }
-        for (index, entry) in &self.updates {
-            if entry.is_some() {
-                indices.push(index.clone());
-            }
-        }
-        indices.sort();
+        self.for_each_index(|index: I| {
+            indices.push(index);
+            Ok(())
+        }).await?;
         Ok(indices)
     }
 
     pub fn extra(&self) -> &C::Extra {
         self.context.extra()
     }
-}
 
-impl<C, I, W> ReentrantCollectionView<C, I, W>
-where
-    C: Context + Send,
-    ViewError: From<C::Error>,
-    I: Eq + Ord + Clone + Debug + Send + Sync + DeserializeOwned,
-    W: View<C> + Send + Sync,
-{
-    /// Execute a function on each index. The function f must be order independent.
+    /// Execute a function on each index. The order in which the entry are passed
+    /// is not the ones of the entries I but of their serialization
     pub async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), ViewError>
     where
-        F: FnMut(I) + Send + Sync,
+        F: FnMut(I) -> Result<(),ViewError> + Send,
     {
+        let mut iter = self.updates.iter();
+        let mut pair = iter.next();
         if !self.was_cleared {
-            let base = self.context.derive_key(&CollectionKey::Index(()))?;
-            for index in self.context.get_sub_keys(&base).await? {
-                if !self.updates.contains_key(&index) {
-                    f(index);
+            let base = self.get_index_key(&[]);
+            for index in self.context.find_keys_without_prefix(&base).await? {
+                let index_i : I = self.context.get_value(&index)?;
+                loop {
+                    match pair {
+                        Some((key,value)) => {
+                            let key = key.clone();
+                            let key_i = self.context.get_value(&key)?;
+                            if key < index {
+                                if value.is_some() {
+                                    f(key_i)?;
+                                }
+                                pair = iter.next();
+                            } else {
+                                if key != index {
+                                    f(index_i.clone())?;
+                                } else {
+                                    if value.is_some() {
+                                        f(key_i)?;
+                                    }
+                                }
+                                pair = iter.next();
+                                break;
+                            }
+                        },
+                        None => {
+                            f(index_i)?;
+                            break;
+                        },
+                    }
                 }
             }
         }
-        for (index, entry) in &self.updates {
-            if entry.is_some() {
-                f(index.clone());
+        loop {
+            match pair {
+                Some((key,value)) => {
+                    let key_i = self.context.get_value(&key)?;
+                    if value.is_some() {
+                        f(key_i)?;
+                    }
+                    pair = iter.next();
+                },
+                None => {
+                    break;
+                },
             }
         }
         Ok(())
@@ -423,10 +513,10 @@ where
 #[async_trait]
 impl<C, I, W> HashView<C> for CollectionView<C, I, W>
 where
-    C: HashingContext + Context + Send,
+    C: HashingContext + Context + Send + Sync,
     ViewError: From<C::Error>,
     I: Eq + Ord + Clone + Debug + Send + Sync + Serialize + DeserializeOwned + 'static,
-    W: HashView<C> + Send + 'static,
+    W: HashView<C> + Send + Sync + 'static,
 {
     async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
         let mut hasher = C::Hasher::default();
@@ -445,10 +535,10 @@ where
 #[async_trait]
 impl<C, I, W> HashView<C> for ReentrantCollectionView<C, I, W>
 where
-    C: HashingContext + Context + Send,
+    C: HashingContext + Context + Send + Sync,
     ViewError: From<C::Error>,
     I: Eq + Ord + Clone + Debug + Send + Sync + Serialize + DeserializeOwned + 'static,
-    W: HashView<C> + Send + 'static,
+    W: HashView<C> + Send + Sync + 'static,
 {
     async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
         let mut hasher = C::Hasher::default();

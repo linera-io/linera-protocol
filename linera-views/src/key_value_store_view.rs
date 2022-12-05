@@ -101,6 +101,7 @@ where
                                 if value.is_some() {
                                     f(key)?;
                                 }
+                                pair = iter.next();
                             } else {
                                 if key != index {
                                     f(index)?;
@@ -109,9 +110,9 @@ where
                                         f(key)?;
                                     }
                                 }
+                                pair = iter.next();
                                 break;
                             }
-                            pair = iter.next();
                         },
                         None => {
                             f(index)?;
@@ -155,6 +156,7 @@ where
                                 if let Some(value) = value {
                                     f(key,value.to_vec())?;
                                 }
+                                pair = iter.next();
                             } else {
                                 if key != index {
                                     f(index, index_val)?;
@@ -163,9 +165,9 @@ where
                                         f(key,value.to_vec())?;
                                     }
                                 }
+                                pair = iter.next();
                                 break;
                             }
-                            pair = iter.next();
                         },
                         None => {
                             f(index,index_val)?;

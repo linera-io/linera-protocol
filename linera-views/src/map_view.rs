@@ -155,6 +155,7 @@ where
                                 if value.is_some() {
                                     f(key_i)?;
                                 }
+                                pair = iter.next();
                             } else {
                                 if key != index {
                                     f(index_i)?;
@@ -163,9 +164,9 @@ where
                                         f(key_i)?;
                                     }
                                 }
+                                pair = iter.next();
                                 break;
                             }
-                            pair = iter.next();
                         },
                         None => {
                             f(index_i)?;
@@ -215,6 +216,7 @@ where
                                 if let Some(value) = value {
                                     f(key_i,value.clone())?;
                                 }
+                                pair = iter.next();
                             } else {
                                 if key != index {
                                     f(index_i,index_val)?;
@@ -223,9 +225,9 @@ where
                                         f(key_i,value.clone())?;
                                     }
                                 }
+                                pair = iter.next();
                                 break;
                             }
-                            pair = iter.next();
                         },
                         None => {
                             f(index_i,index_val)?;
