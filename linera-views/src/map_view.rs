@@ -4,9 +4,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{cmp::Eq, collections::BTreeMap, fmt::Debug, mem};
-use std::marker::PhantomData;
-
+use std::{cmp::Eq, collections::BTreeMap, fmt::Debug, marker::PhantomData, mem};
 
 /// A view that supports inserting and removing values indexed by a key.
 #[derive(Debug, Clone)]
@@ -81,14 +79,14 @@ where
     I: Eq + Ord + Serialize,
 {
     /// Set or insert a value.
-    pub fn insert(&mut self, index: &I, value: V) -> Result<(),ViewError> {
+    pub fn insert(&mut self, index: &I, value: V) -> Result<(), ViewError> {
         let short_key = self.context.derive_short_key(index)?;
         self.updates.insert(short_key, Some(value));
         Ok(())
     }
 
     /// Remove a value.
-    pub fn remove(&mut self, index: &I) -> Result<(),ViewError> {
+    pub fn remove(&mut self, index: &I) -> Result<(), ViewError> {
         let short_key = self.context.derive_short_key(index)?;
         if self.was_cleared {
             self.updates.remove(&short_key);
@@ -129,7 +127,8 @@ where
         self.for_each_index(|index: I| {
             indices.push(index);
             Ok(())
-        }).await?;
+        })
+        .await?;
         Ok(indices)
     }
 
@@ -138,7 +137,7 @@ where
     /// same
     pub async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), ViewError>
     where
-        F: FnMut(I) -> Result<(),ViewError> + Send,
+        F: FnMut(I) -> Result<(), ViewError> + Send,
     {
         let mut iter = self.updates.iter();
         let mut pair = iter.next();
@@ -148,7 +147,7 @@ where
                 let index_i = self.context.get_value(&index)?;
                 loop {
                     match pair {
-                        Some((key,value)) => {
+                        Some((key, value)) => {
                             let key = key.clone();
                             let key_i = self.context.get_value(&key)?;
                             if key < index {
@@ -159,36 +158,27 @@ where
                             } else {
                                 if key != index {
                                     f(index_i)?;
-                                } else {
-                                    if value.is_some() {
-                                        f(key_i)?;
-                                    }
+                                } else if value.is_some() {
+                                    f(key_i)?;
                                 }
                                 pair = iter.next();
                                 break;
                             }
-                        },
+                        }
                         None => {
                             f(index_i)?;
                             break;
-                        },
+                        }
                     }
                 }
             }
         }
-        loop {
-            match pair {
-                Some((key,value)) => {
-                    let key_i = self.context.get_value(&key)?;
-                    if value.is_some() {
-                        f(key_i)?;
-                    }
-                    pair = iter.next();
-                },
-                None => {
-                    break;
-                },
+        while let Some((key, value)) = pair {
+            let key_i = self.context.get_value(key)?;
+            if value.is_some() {
+                f(key_i)?;
             }
+            pair = iter.next();
         }
         Ok(())
     }
@@ -198,58 +188,49 @@ where
     /// same
     pub async fn for_each_index_value<F>(&mut self, mut f: F) -> Result<(), ViewError>
     where
-        F: FnMut(I,V) -> Result<(),ViewError> + Send,
+        F: FnMut(I, V) -> Result<(), ViewError> + Send,
     {
         let mut iter = self.updates.iter();
         let mut pair = iter.next();
         if !self.was_cleared {
             let base = self.context.base_key();
-            for (index,index_val) in self.context.find_key_values_without_prefix(&base).await? {
+            for (index, index_val) in self.context.find_key_values_without_prefix(&base).await? {
                 let index_i = self.context.get_value(&index)?;
                 let index_val = self.context.get_value(&index_val)?;
                 loop {
                     match pair {
-                        Some((key,value)) => {
+                        Some((key, value)) => {
                             let key = key.clone();
                             let key_i = self.context.get_value(&key)?;
                             if key < index {
                                 if let Some(value) = value {
-                                    f(key_i,value.clone())?;
+                                    f(key_i, value.clone())?;
                                 }
                                 pair = iter.next();
                             } else {
                                 if key != index {
-                                    f(index_i,index_val)?;
-                                } else {
-                                    if let Some(value) = value {
-                                        f(key_i,value.clone())?;
-                                    }
+                                    f(index_i, index_val)?;
+                                } else if let Some(value) = value {
+                                    f(key_i, value.clone())?;
                                 }
                                 pair = iter.next();
                                 break;
                             }
-                        },
+                        }
                         None => {
-                            f(index_i,index_val)?;
+                            f(index_i, index_val)?;
                             break;
-                        },
+                        }
                     }
                 }
             }
         }
-        loop {
-            match pair {
-                Some((key,value)) => {
-                    let key_i = self.context.get_value(&key)?;
-                    if let Some(value) = value {
-                        f(key_i, value.clone())?;
-                    }
-                    pair = iter.next();
-                },
-                None => {
-                    break;
-                },
+        while let Some((key, value)) = pair {
+            let key_i = self.context.get_value(key)?;
+            if let Some(value) = value {
+                f(key_i, value.clone())?;
             }
+            pair = iter.next();
         }
         Ok(())
     }
@@ -271,7 +252,8 @@ where
             hasher.update_with_bcs_bytes(&index)?;
             hasher.update_with_bcs_bytes(&value)?;
             Ok(())
-        }).await?;
+        })
+        .await?;
         hasher.update_with_bcs_bytes(&count)?;
         Ok(hasher.finalize())
     }

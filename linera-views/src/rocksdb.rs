@@ -17,8 +17,8 @@ pub type RocksdbContext<E> = ContextFromDb<E, RocksdbContainer>;
 #[async_trait]
 impl KeyValueOperations for RocksdbContainer {
     type Error = RocksdbContextError;
-    type KeyIterator = SimpleTypeIterator<Vec<u8>,RocksdbContextError>;
-    type KeyValueIterator = SimpleTypeIterator<(Vec<u8>,Vec<u8>),RocksdbContextError>;
+    type KeyIterator = SimpleTypeIterator<Vec<u8>, RocksdbContextError>;
+    type KeyValueIterator = SimpleTypeIterator<(Vec<u8>, Vec<u8>), RocksdbContextError>;
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RocksdbContextError> {
         let db = self.clone();
@@ -92,7 +92,7 @@ impl KeyValueOperations for RocksdbContainer {
             let op = batch.operations.get(i).unwrap();
             if let WriteOperation::DeletePrefix { key_prefix } = op {
                 if get_upper_bound(key_prefix).is_none() {
-                    for short_key in self.find_keys_without_prefix(&key_prefix).await? {
+                    for short_key in self.find_keys_without_prefix(key_prefix).await? {
                         let mut key = key_prefix.clone();
                         key.extend_from_slice(&short_key?);
                         keys.push(key);

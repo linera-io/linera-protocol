@@ -33,8 +33,8 @@ impl<E> MemoryContext<E> {
 #[async_trait]
 impl KeyValueOperations for MemoryContainer {
     type Error = MemoryContextError;
-    type KeyIterator = SimpleTypeIterator<Vec<u8>,MemoryContextError>;
-    type KeyValueIterator = SimpleTypeIterator<(Vec<u8>,Vec<u8>),MemoryContextError>;
+    type KeyIterator = SimpleTypeIterator<Vec<u8>, MemoryContextError>;
+    type KeyValueIterator = SimpleTypeIterator<(Vec<u8>, Vec<u8>), MemoryContextError>;
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MemoryContextError> {
         let map = self.read().await;

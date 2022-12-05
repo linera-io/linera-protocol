@@ -1,6 +1,5 @@
 use crate::{
-    common::{Batch, Context, KeyValueOperations},
-    common::{ContextFromDb, SimpleTypeIterator},
+    common::{Batch, Context, ContextFromDb, KeyValueOperations, SimpleTypeIterator},
     memory::{MemoryContext, MemoryStoreMap},
     views::{HashView, Hasher, HashingContext, View, ViewError},
 };
@@ -95,7 +94,7 @@ where
             for index in self.context.find_keys_without_prefix(&key_prefix).await? {
                 loop {
                     match pair {
-                        Some((key,value)) => {
+                        Some((key, value)) => {
                             let key = key.clone();
                             if key < index {
                                 if value.is_some() {
@@ -105,91 +104,77 @@ where
                             } else {
                                 if key != index {
                                     f(index)?;
-                                } else {
-                                    if value.is_some() {
-                                        f(key)?;
-                                    }
+                                } else if value.is_some() {
+                                    f(key)?;
                                 }
                                 pair = iter.next();
                                 break;
                             }
-                        },
+                        }
                         None => {
                             f(index)?;
                             break;
-                        },
+                        }
                     }
                 }
             }
         }
-        loop {
-            match pair {
-                Some((key,value)) => {
-                    let key = key.clone();
-                    if value.is_some() {
-                        f(key)?;
-                    }
-                    pair = iter.next();
-                },
-                None => {
-                    break;
-                },
+        while let Some((key, value)) = pair {
+            let key = key.clone();
+            if value.is_some() {
+                f(key)?;
             }
+            pair = iter.next();
         }
         Ok(())
     }
 
     pub async fn for_each_index_value<F>(&self, mut f: F) -> Result<(), ViewError>
     where
-        F: FnMut(Vec<u8>,Vec<u8>) -> Result<(), ViewError> + Send,
+        F: FnMut(Vec<u8>, Vec<u8>) -> Result<(), ViewError> + Send,
     {
         let key_prefix = self.context.base_key();
         let mut iter = self.updates.iter();
         let mut pair = iter.next();
         if !self.was_cleared {
-            for (index,index_val) in self.context.find_key_values_without_prefix(&key_prefix).await? {
+            for (index, index_val) in self
+                .context
+                .find_key_values_without_prefix(&key_prefix)
+                .await?
+            {
                 loop {
                     match pair {
-                        Some((key,value)) => {
+                        Some((key, value)) => {
                             let key = key.clone();
                             if key < index {
                                 if let Some(value) = value {
-                                    f(key,value.to_vec())?;
+                                    f(key, value.to_vec())?;
                                 }
                                 pair = iter.next();
                             } else {
                                 if key != index {
                                     f(index, index_val)?;
-                                } else {
-                                    if let Some(value) = value {
-                                        f(key,value.to_vec())?;
-                                    }
+                                } else if let Some(value) = value {
+                                    f(key, value.to_vec())?;
                                 }
                                 pair = iter.next();
                                 break;
                             }
-                        },
+                        }
                         None => {
-                            f(index,index_val)?;
+                            f(index, index_val)?;
                             break;
-                        },
+                        }
                     }
                 }
             }
         }
-        loop {
-            match pair {
-                Some((key,value)) => {
-                    let key = key.clone();
-                    if let Some(value) = value {
-                        f(key,value.to_vec())?;
-                    }
-                    pair = iter.next();
-                },
-                None => {
-                    break;
-                },
+        while let Some((key, value)) = pair {
+            let key = key.clone();
+            if let Some(value) = value {
+                f(key, value.to_vec())?;
             }
+            pair = iter.next();
         }
         Ok(())
     }
@@ -199,7 +184,8 @@ where
         self.for_each_index(|index: Vec<u8>| {
             indices.push(index);
             Ok(())
-        }).await?;
+        })
+        .await?;
         Ok(indices)
     }
 
@@ -237,8 +223,8 @@ where
     ViewError: From<C::Error>,
 {
     type Error = ViewError;
-    type KeyIterator = SimpleTypeIterator<Vec<u8>,ViewError>;
-    type KeyValueIterator = SimpleTypeIterator<(Vec<u8>,Vec<u8>),ViewError>;
+    type KeyIterator = SimpleTypeIterator<Vec<u8>, ViewError>;
+    type KeyValueIterator = SimpleTypeIterator<(Vec<u8>, Vec<u8>), ViewError>;
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
         if let Some(update) = self.updates.get(key) {
@@ -259,7 +245,11 @@ where
         let key_prefix_full = self.context.derive_key_bytes(key_prefix);
         let mut keys = Vec::new();
         if !self.was_cleared {
-            for short_key in self.context.find_keys_without_prefix(&key_prefix_full).await? {
+            for short_key in self
+                .context
+                .find_keys_without_prefix(&key_prefix_full)
+                .await?
+            {
                 let mut key = key_prefix.to_vec();
                 key.extend_from_slice(&short_key);
                 if !self.updates.contains_key(&key) {
@@ -268,7 +258,7 @@ where
             }
         }
         for (key, value) in &self.updates {
-            if value.is_some() && key.starts_with(&key_prefix) {
+            if value.is_some() && key.starts_with(key_prefix) {
                 keys.push(key[len..].to_vec())
             }
         }
@@ -281,20 +271,24 @@ where
     ) -> Result<Self::KeyValueIterator, ViewError> {
         let len = key_prefix.len();
         let key_prefix_full = self.context.derive_key_bytes(key_prefix);
-        let mut key_values = Vec::<(Vec<u8>,Vec<u8>)>::new();
+        let mut key_values = Vec::<(Vec<u8>, Vec<u8>)>::new();
         if !self.was_cleared {
-            for (short_key,value) in self.context.find_key_values_without_prefix(&key_prefix_full).await? {
+            for (short_key, value) in self
+                .context
+                .find_key_values_without_prefix(&key_prefix_full)
+                .await?
+            {
                 let mut key = key_prefix.to_vec();
                 key.extend_from_slice(&short_key);
                 if !self.updates.contains_key(&key) {
-                    key_values.push((short_key.to_vec(),value));
+                    key_values.push((short_key.to_vec(), value));
                 }
             }
         }
         for (key, value) in &self.updates {
-            if key.starts_with(&key_prefix) {
+            if key.starts_with(key_prefix) {
                 if let Some(value) = value {
-                    let key_value : (Vec<u8>,Vec<u8>) = (key[len..].to_vec(),value.to_vec());
+                    let key_value: (Vec<u8>, Vec<u8>) = (key[len..].to_vec(), value.to_vec());
                     key_values.push(key_value);
                 }
             }
@@ -317,12 +311,13 @@ where
     async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
         let mut hasher = C::Hasher::default();
         let mut count = 0;
-        self.for_each_index_value(|index: Vec<u8>, value: Vec<u8>| -> Result<(),ViewError> {
+        self.for_each_index_value(|index: Vec<u8>, value: Vec<u8>| -> Result<(), ViewError> {
             count += 1;
             hasher.update_with_bytes(&index)?;
             hasher.update_with_bytes(&value)?;
             Ok(())
-        }).await?;
+        })
+        .await?;
         hasher.update_with_bcs_bytes(&count)?;
         Ok(hasher.finalize())
     }

@@ -114,10 +114,10 @@ impl DynamoDbContainer {
     fn extract_key_value(
         len_prefix: usize,
         mut attributes: HashMap<String, AttributeValue>,
-    ) -> Result<(Vec<u8>,Vec<u8>), DynamoDbContextError> {
+    ) -> Result<(Vec<u8>, Vec<u8>), DynamoDbContextError> {
         let key = Self::extract_key(len_prefix, &mut attributes)?;
         let value = Self::extract_value(&mut attributes)?;
-        Ok((key,value))
+        Ok((key, value))
     }
 
     async fn get_query_output(
@@ -164,7 +164,9 @@ impl Iterator for DynamoDbKeyIterator {
     type Item = Result<Vec<u8>, DynamoDbContextError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next().map(|mut x| { DynamoDbContainer::extract_key(self.len_prefix, &mut x) })
+        self.iter
+            .next()
+            .map(|mut x| DynamoDbContainer::extract_key(self.len_prefix, &mut x))
     }
 }
 
@@ -186,10 +188,12 @@ impl DynamoDbKeyValueIterator {
 }
 
 impl Iterator for DynamoDbKeyValueIterator {
-    type Item = Result<(Vec<u8>,Vec<u8>), DynamoDbContextError>;
+    type Item = Result<(Vec<u8>, Vec<u8>), DynamoDbContextError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next().map(|x| { DynamoDbContainer::extract_key_value(self.len_prefix, x) })
+        self.iter
+            .next()
+            .map(|x| DynamoDbContainer::extract_key_value(self.len_prefix, x))
     }
 }
 

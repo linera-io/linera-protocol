@@ -9,11 +9,11 @@ use std::{
     collections::{btree_map, BTreeMap},
     fmt::Debug,
     io::Write,
+    marker::PhantomData,
     mem,
     sync::Arc,
 };
 use tokio::sync::{Mutex, OwnedMutexGuard};
-use std::marker::PhantomData;
 
 /// A view that supports accessing a collection of views of the same kind, indexed by a
 /// key, one subview at a time.
@@ -155,9 +155,7 @@ where
                 match entry {
                     Some(view) => Ok(view),
                     None => {
-                        let context = self
-                            .context
-                            .clone_self(get_subview_key(base, &short_key));
+                        let context = self.context.clone_self(get_subview_key(base, &short_key));
                         // Obtain a view and set its pending state to the default (e.g. empty) state
                         let mut view = W::load(context).await?;
                         view.clear();
@@ -167,9 +165,7 @@ where
                 }
             }
             btree_map::Entry::Vacant(entry) => {
-                let context = self
-                    .context
-                    .clone_self(get_subview_key(base, &short_key));
+                let context = self.context.clone_self(get_subview_key(base, &short_key));
                 let mut view = W::load(context).await?;
                 if self.was_cleared {
                     view.clear();
@@ -203,7 +199,8 @@ where
         self.for_each_index(|index: I| {
             indices.push(index);
             Ok(())
-        }).await?;
+        })
+        .await?;
         Ok(indices)
     }
 
@@ -223,17 +220,17 @@ where
     /// is not the ones of the entryies I but of their serialization
     pub async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), ViewError>
     where
-        F: FnMut(I) -> Result<(),ViewError> + Send,
+        F: FnMut(I) -> Result<(), ViewError> + Send,
     {
         let mut iter = self.updates.iter();
         let mut pair = iter.next();
         if !self.was_cleared {
             let base = self.get_index_key(&[]);
             for index in self.context.find_keys_without_prefix(&base).await? {
-                let index_i : I = self.context.get_value(&index)?;
+                let index_i: I = self.context.get_value(&index)?;
                 loop {
                     match pair {
-                        Some((key,value)) => {
+                        Some((key, value)) => {
                             let key = key.clone();
                             let key_i = self.context.get_value(&key)?;
                             if key < index {
@@ -244,36 +241,27 @@ where
                             } else {
                                 if key != index {
                                     f(index_i.clone())?;
-                                } else {
-                                    if value.is_some() {
-                                        f(key_i)?;
-                                    }
+                                } else if value.is_some() {
+                                    f(key_i)?;
                                 }
                                 pair = iter.next();
                                 break;
                             }
-                        },
+                        }
                         None => {
                             f(index_i)?;
                             break;
-                        },
+                        }
                     }
                 }
             }
         }
-        loop {
-            match pair {
-                Some((key,value)) => {
-                    let key_i = self.context.get_value(&key)?;
-                    if value.is_some() {
-                        f(key_i)?;
-                    }
-                    pair = iter.next();
-                },
-                None => {
-                    break;
-                },
+        while let Some((key, value)) = pair {
+            let key_i = self.context.get_value(key)?;
+            if value.is_some() {
+                f(key_i)?;
             }
+            pair = iter.next();
         }
         Ok(())
     }
@@ -383,9 +371,7 @@ where
                 match entry {
                     Some(view) => Ok(view.clone().try_lock_owned()?),
                     None => {
-                        let context = self
-                            .context
-                            .clone_self(get_subview_key(base, &short_key));
+                        let context = self.context.clone_self(get_subview_key(base, &short_key));
                         // Obtain a view and set its pending state to the default (e.g. empty) state
                         let mut view = W::load(context).await?;
                         view.clear();
@@ -396,9 +382,7 @@ where
                 }
             }
             btree_map::Entry::Vacant(entry) => {
-                let context = self
-                    .context
-                    .clone_self(get_subview_key(base, &short_key));
+                let context = self.context.clone_self(get_subview_key(base, &short_key));
                 let mut view = W::load(context).await?;
                 if self.was_cleared {
                     view.clear();
@@ -411,7 +395,7 @@ where
     }
 
     /// Mark the entry so that it is removed in the next flush
-    pub fn remove_entry(&mut self, index: I) -> Result<(),ViewError> {
+    pub fn remove_entry(&mut self, index: I) -> Result<(), ViewError> {
         let short_key = self.context.derive_short_key(&index)?;
         if self.was_cleared {
             self.updates.remove(&short_key);
@@ -434,7 +418,8 @@ where
         self.for_each_index(|index: I| {
             indices.push(index);
             Ok(())
-        }).await?;
+        })
+        .await?;
         Ok(indices)
     }
 
@@ -446,17 +431,17 @@ where
     /// is not the ones of the entries I but of their serialization
     pub async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), ViewError>
     where
-        F: FnMut(I) -> Result<(),ViewError> + Send,
+        F: FnMut(I) -> Result<(), ViewError> + Send,
     {
         let mut iter = self.updates.iter();
         let mut pair = iter.next();
         if !self.was_cleared {
             let base = self.get_index_key(&[]);
             for index in self.context.find_keys_without_prefix(&base).await? {
-                let index_i : I = self.context.get_value(&index)?;
+                let index_i: I = self.context.get_value(&index)?;
                 loop {
                     match pair {
-                        Some((key,value)) => {
+                        Some((key, value)) => {
                             let key = key.clone();
                             let key_i = self.context.get_value(&key)?;
                             if key < index {
@@ -467,36 +452,27 @@ where
                             } else {
                                 if key != index {
                                     f(index_i.clone())?;
-                                } else {
-                                    if value.is_some() {
-                                        f(key_i)?;
-                                    }
+                                } else if value.is_some() {
+                                    f(key_i)?;
                                 }
                                 pair = iter.next();
                                 break;
                             }
-                        },
+                        }
                         None => {
                             f(index_i)?;
                             break;
-                        },
+                        }
                     }
                 }
             }
         }
-        loop {
-            match pair {
-                Some((key,value)) => {
-                    let key_i = self.context.get_value(&key)?;
-                    if value.is_some() {
-                        f(key_i)?;
-                    }
-                    pair = iter.next();
-                },
-                None => {
-                    break;
-                },
+        while let Some((key, value)) = pair {
+            let key_i = self.context.get_value(key)?;
+            if value.is_some() {
+                f(key_i)?;
             }
+            pair = iter.next();
         }
         Ok(())
     }

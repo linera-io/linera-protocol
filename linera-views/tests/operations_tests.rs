@@ -55,7 +55,8 @@ async fn test_ordering_keys_key_value_vec<OP: KeyValueOperations + Sync>(
         let n_ent = key_value_operation
             .find_keys_with_prefix(&key_prefix)
             .await
-            .unwrap().count();
+            .unwrap()
+            .count();
         assert!(n_ent == value);
     }
 }

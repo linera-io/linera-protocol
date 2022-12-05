@@ -585,13 +585,15 @@ where
         self.epoch.set(Some(epoch));
         self.committees.set(committees);
         self.admin_id.set(Some(admin_id));
-        self.subscriptions.insert(
-            &ChannelId {
-                chain_id: admin_id,
-                name: ADMIN_CHANNEL.into(),
-            },
-            (),
-        ).expect("serialization failed");
+        self.subscriptions
+            .insert(
+                &ChannelId {
+                    chain_id: admin_id,
+                    name: ADMIN_CHANNEL.into(),
+                },
+                (),
+            )
+            .expect("serialization failed");
         self.ownership.set(ChainOwnership::single(owner));
     }
 
