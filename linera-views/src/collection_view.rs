@@ -243,8 +243,8 @@ where
                                     f(index_i.clone())?;
                                 } else if value.is_some() {
                                     f(key_i)?;
+                                    pair = iter.next();
                                 }
-                                pair = iter.next();
                                 break;
                             }
                         }
@@ -454,8 +454,8 @@ where
                                     f(index_i.clone())?;
                                 } else if value.is_some() {
                                     f(key_i)?;
+                                    pair = iter.next();
                                 }
-                                pair = iter.next();
                                 break;
                             }
                         }

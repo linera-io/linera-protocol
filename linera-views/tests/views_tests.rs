@@ -712,6 +712,10 @@ where
         let value_usize = (*value.first().unwrap()) as usize;
         view.map.insert(&key_str, value_usize).unwrap();
         view.key_value_store.insert(key, value);
+        {
+            let subview = view.collection.load_entry(key_str).await.unwrap();
+            subview.push(value_usize as u32);
+        }
         //
         let thr = rng.gen_range(0..20);
         if thr == 0 {

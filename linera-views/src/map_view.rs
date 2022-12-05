@@ -160,8 +160,8 @@ where
                                     f(index_i)?;
                                 } else if value.is_some() {
                                     f(key_i)?;
+                                    pair = iter.next();
                                 }
-                                pair = iter.next();
                                 break;
                             }
                         }
@@ -212,8 +212,8 @@ where
                                     f(index_i, index_val)?;
                                 } else if let Some(value) = value {
                                     f(key_i, value.clone())?;
+                                    pair = iter.next();
                                 }
-                                pair = iter.next();
                                 break;
                             }
                         }
