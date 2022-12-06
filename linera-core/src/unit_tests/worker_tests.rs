@@ -754,9 +754,8 @@ where
         // Inconsistent received messages.
         assert!(matches!(
             worker.handle_block_proposal(block_proposal).await,
-            Err(WorkerError::ChainError(
-                ChainError::InvalidMessageContent { .. }
-            ))
+            Err(WorkerError::ChainError(chain_error))
+                if matches!(*chain_error, ChainError::InvalidMessageContent { .. })
         ));
     }
     {
@@ -805,9 +804,8 @@ where
         // Inconsistent order in received messages (indices).
         assert!(matches!(
             worker.handle_block_proposal(block_proposal).await,
-            Err(WorkerError::ChainError(
-                ChainError::InvalidMessageOrder { .. }
-            ))
+            Err(WorkerError::ChainError(chain_error))
+                if matches!(*chain_error, ChainError::InvalidMessageOrder { .. })
         ));
     }
     {
@@ -856,9 +854,8 @@ where
         // Inconsistent order in received messages (heights).
         assert!(matches!(
             worker.handle_block_proposal(block_proposal).await,
-            Err(WorkerError::ChainError(
-                ChainError::InvalidMessageOrder { .. }
-            ))
+            Err(WorkerError::ChainError(chain_error))
+                if matches!(*chain_error, ChainError::InvalidMessageOrder { .. })
         ));
     }
     {
