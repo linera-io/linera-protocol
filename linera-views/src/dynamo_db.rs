@@ -38,7 +38,7 @@ const KEY_ATTRIBUTE: &str = "item_key";
 /// The attribute name of the table value blob.
 const VALUE_ATTRIBUTE: &str = "item_value";
 
-/// The attribute name of the primary key (used as a sort key).
+/// The attribute for obtaining the primary key (used as a sort key) with the stored value.
 const KEY_VALUE_ATTRIBUTE: &str = "item_key, item_value";
 
 #[derive(Debug, Clone)]
