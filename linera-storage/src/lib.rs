@@ -21,9 +21,10 @@ use linera_base::{
 };
 use linera_chain::{messages::Certificate, ChainError, ChainStateView, ChainStateViewContext};
 use linera_execution::{
-    system::Balance, ChainOwnership, ExecutionError, ExecutionRuntimeContext, Operation,
-    SystemOperation, UserApplicationCode, WasmApplication,
+    system::Balance, ChainOwnership, ExecutionError, ExecutionRuntimeContext, UserApplicationCode,
 };
+#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
+use linera_execution::{Operation, SystemOperation, WasmApplication};
 use linera_views::views::ViewError;
 use std::{fmt::Debug, sync::Arc};
 
@@ -124,6 +125,7 @@ pub trait Store: Sized {
 
     /// Create a [`UserApplication`] instance using the bytecode in storage referenced by the
     /// `application_description`.
+    #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
     async fn load_application(
         &self,
         application_description: &ApplicationDescription,
@@ -147,6 +149,18 @@ pub trait Store: Sized {
             else { return Err(invalid_bytecode_id_error()); };
 
         Ok(Arc::new(WasmApplication::new(contract, service)))
+    }
+
+    #[cfg(not(any(feature = "wasmer", feature = "wasmtime")))]
+    async fn load_application(
+        &self,
+        _application_description: &ApplicationDescription,
+    ) -> Result<UserApplicationCode, ExecutionError> {
+        panic!(
+            "A WASM runtime is required to load user applications. \
+            Please enable the `wasmer` or the `wasmtime` feature flags \
+            when compiling `linera-storage`."
+        );
     }
 }
 

@@ -6,6 +6,8 @@ edition = "2021"
 
 [features]
 test = ["tokio/macros", "tokio/rt", "tokio/test-util"]
+wasmer = ["linera-execution/wasmer"]
+wasmtime = ["linera-execution/wasmtime"]
 
 [dependencies]
 async-trait = "0.1.52"
