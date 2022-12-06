@@ -195,42 +195,40 @@ where
         Ok(())
     }
 
-    /// Execute a function on each index. The order is in which values are passed is not
-    /// the one of the index but its serialization. However said order will always be the
-    /// same
+    /// Execute a function on each index seralization. The order is in which values
+    /// are passed is not the one of the index but its serialization. However said
+    /// order will always be the same
     pub async fn for_each_index_value<F>(&mut self, mut f: F) -> Result<(), ViewError>
     where
-        F: FnMut(I, V) -> Result<(), ViewError> + Send,
+        F: FnMut(Vec<u8>, V) -> Result<(), ViewError> + Send,
     {
         let mut iter = self.updates.iter();
         let mut pair = iter.next();
         if !self.was_cleared {
             let base = self.context.base_key();
             for (index, index_val) in self.context.find_stripped_key_values_with_prefix(&base).await? {
-                let index_i = C::deserialize_value(&index)?;
                 let index_val = C::deserialize_value(&index_val)?;
                 loop {
                     match pair {
                         Some((key, value)) => {
                             let key = key.clone();
-                            let key_i = C::deserialize_value(&key)?;
                             if key < index {
                                 if let Some(value) = value {
-                                    f(key_i, value.clone())?;
+                                    f(key, value.clone())?;
                                 }
                                 pair = iter.next();
                             } else {
                                 if key != index {
-                                    f(index_i, index_val)?;
+                                    f(index, index_val)?;
                                 } else if let Some(value) = value {
-                                    f(key_i, value.clone())?;
+                                    f(key, value.clone())?;
                                     pair = iter.next();
                                 }
                                 break;
                             }
                         }
                         None => {
-                            f(index_i, index_val)?;
+                            f(index, index_val)?;
                             break;
                         }
                     }
@@ -238,9 +236,8 @@ where
             }
         }
         while let Some((key, value)) = pair {
-            let key_i = C::deserialize_value(key)?;
             if let Some(value) = value {
-                f(key_i, value.clone())?;
+                f(key.clone(), value.clone())?;
             }
             pair = iter.next();
         }
@@ -259,9 +256,9 @@ where
     async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
         let mut hasher = C::Hasher::default();
         let mut count = 0;
-        self.for_each_index_value(|index: I, value: V| {
+        self.for_each_index_value(|index: Vec<u8>, value: V| {
             count += 1;
-            hasher.update_with_bcs_bytes(&index)?;
+            hasher.update_with_bytes(&index)?;
             hasher.update_with_bcs_bytes(&value)?;
             Ok(())
         })
