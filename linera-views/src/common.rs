@@ -327,7 +327,7 @@ pub trait Context {
     /// Apply the operations from the `batch`, persisting the changes.
     async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error>;
 
-    fn clone_self(&self, base_key: Vec<u8>) -> Self;
+    fn clone_with_base_key(&self, base_key: Vec<u8>) -> Self;
 }
 
 #[derive(Debug, Clone)]
@@ -426,7 +426,7 @@ where
         Ok(())
     }
 
-    fn clone_self(&self, base_key: Vec<u8>) -> Self {
+    fn clone_with_base_key(&self, base_key: Vec<u8>) -> Self {
         Self {
             db: self.db.clone(),
             base_key,

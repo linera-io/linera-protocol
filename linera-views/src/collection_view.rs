@@ -102,7 +102,7 @@ where
                     None => {
                         let key_subview = self.get_subview_key(&index);
                         let key_index = self.get_index_key(&index);
-                        let context = self.context.clone_self(key_subview);
+                        let context = self.context.clone_with_base_key(key_subview);
                         batch.delete_key(key_index);
                         batch.delete_key_prefix(context.base_key());
                     }
@@ -154,7 +154,7 @@ where
                 match entry {
                     Some(view) => Ok(view),
                     None => {
-                        let context = self.context.clone_self(get_subview_key(base, &short_key));
+                        let context = self.context.clone_with_base_key(get_subview_key(base, &short_key));
                         // Obtain a view and set its pending state to the default (e.g. empty) state
                         let mut view = W::load(context).await?;
                         view.clear();
@@ -164,7 +164,7 @@ where
                 }
             }
             btree_map::Entry::Vacant(entry) => {
-                let context = self.context.clone_self(get_subview_key(base, &short_key));
+                let context = self.context.clone_with_base_key(get_subview_key(base, &short_key));
                 let mut view = W::load(context).await?;
                 if self.was_cleared {
                     view.clear();
@@ -195,7 +195,8 @@ where
     /// Return the list of indices in the collection.
     pub async fn indices(&mut self) -> Result<Vec<I>, ViewError> {
         let mut indices = Vec::new();
-        self.for_each_index(|index: I| {
+        self.for_each_index(|index: Vec<u8>| {
+            let index = C::deserialize_value(&index)?;
             indices.push(index);
             Ok(())
         })
@@ -219,36 +220,34 @@ where
     /// is not the ones of the entryies I but of their serialization
     pub async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), ViewError>
     where
-        F: FnMut(I) -> Result<(), ViewError> + Send,
+        F: FnMut(Vec<u8>) -> Result<(), ViewError> + Send,
     {
         let mut iter = self.updates.iter();
         let mut pair = iter.next();
         if !self.was_cleared {
             let base = self.get_index_key(&[]);
             for index in self.context.find_stripped_keys_with_prefix(&base).await? {
-                let index_i: I = C::deserialize_value(&index)?;
                 loop {
                     match pair {
                         Some((key, value)) => {
                             let key = key.clone();
-                            let key_i = C::deserialize_value(&key)?;
                             if key < index {
                                 if value.is_some() {
-                                    f(key_i)?;
+                                    f(key)?;
                                 }
                                 pair = iter.next();
                             } else {
                                 if key != index {
-                                    f(index_i.clone())?;
+                                    f(index)?;
                                 } else if value.is_some() {
-                                    f(key_i)?;
+                                    f(key)?;
                                     pair = iter.next();
                                 }
                                 break;
                             }
                         }
                         None => {
-                            f(index_i)?;
+                            f(index)?;
                             break;
                         }
                     }
@@ -256,9 +255,8 @@ where
             }
         }
         while let Some((key, value)) = pair {
-            let key_i = C::deserialize_value(key)?;
             if value.is_some() {
-                f(key_i)?;
+                f(key.to_vec())?;
             }
             pair = iter.next();
         }
@@ -318,7 +316,7 @@ where
                     None => {
                         let key_subview = self.get_subview_key(&index);
                         let key_index = self.get_index_key(&index);
-                        let context = self.context.clone_self(key_subview);
+                        let context = self.context.clone_with_base_key(key_subview);
                         batch.delete_key(key_index);
                         batch.delete_key_prefix(context.base_key());
                     }
@@ -370,7 +368,7 @@ where
                 match entry {
                     Some(view) => Ok(view.clone().try_lock_owned()?),
                     None => {
-                        let context = self.context.clone_self(get_subview_key(base, &short_key));
+                        let context = self.context.clone_with_base_key(get_subview_key(base, &short_key));
                         // Obtain a view and set its pending state to the default (e.g. empty) state
                         let mut view = W::load(context).await?;
                         view.clear();
@@ -381,7 +379,7 @@ where
                 }
             }
             btree_map::Entry::Vacant(entry) => {
-                let context = self.context.clone_self(get_subview_key(base, &short_key));
+                let context = self.context.clone_with_base_key(get_subview_key(base, &short_key));
                 let mut view = W::load(context).await?;
                 if self.was_cleared {
                     view.clear();
@@ -414,7 +412,8 @@ where
     /// Return the list of indices in the collection.
     pub async fn indices(&mut self) -> Result<Vec<I>, ViewError> {
         let mut indices = Vec::new();
-        self.for_each_index(|index: I| {
+        self.for_each_index(|index: Vec<u8>| {
+            let index = C::deserialize_value(&index)?;
             indices.push(index);
             Ok(())
         })
@@ -430,36 +429,34 @@ where
     /// is not the ones of the entries I but of their serialization
     pub async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), ViewError>
     where
-        F: FnMut(I) -> Result<(), ViewError> + Send,
+        F: FnMut(Vec<u8>) -> Result<(), ViewError> + Send,
     {
         let mut iter = self.updates.iter();
         let mut pair = iter.next();
         if !self.was_cleared {
             let base = self.get_index_key(&[]);
             for index in self.context.find_stripped_keys_with_prefix(&base).await? {
-                let index_i: I = C::deserialize_value(&index)?;
                 loop {
                     match pair {
                         Some((key, value)) => {
                             let key = key.clone();
-                            let key_i = C::deserialize_value(&key)?;
                             if key < index {
                                 if value.is_some() {
-                                    f(key_i)?;
+                                    f(key)?;
                                 }
                                 pair = iter.next();
                             } else {
                                 if key != index {
-                                    f(index_i.clone())?;
+                                    f(index)?;
                                 } else if value.is_some() {
-                                    f(key_i)?;
+                                    f(key)?;
                                     pair = iter.next();
                                 }
                                 break;
                             }
                         }
                         None => {
-                            f(index_i)?;
+                            f(index)?;
                             break;
                         }
                     }
@@ -467,9 +464,8 @@ where
             }
         }
         while let Some((key, value)) = pair {
-            let key_i = C::deserialize_value(key)?;
             if value.is_some() {
-                f(key_i)?;
+                f(key.to_vec())?;
             }
             pair = iter.next();
         }

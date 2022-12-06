@@ -74,7 +74,7 @@ where
             view.system
                 .subscriptions
                 .insert(&channel_id, ())
-                .expect("serialization error");
+                .expect("serialization of channel_id should not fail");
         }
         view.system.committees.set(state.committees);
         view.system.ownership.set(state.ownership);
