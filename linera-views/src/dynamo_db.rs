@@ -39,7 +39,7 @@ const KEY_ATTRIBUTE: &str = "item_key";
 const VALUE_ATTRIBUTE: &str = "item_value";
 
 /// The attribute name of the primary key (used as a sort key).
-const KEY_VALUE_ATTRIBUTE: &str = "item_key,item_value";
+const KEY_VALUE_ATTRIBUTE: &str = "item_key, item_value";
 
 #[derive(Debug, Clone)]
 pub struct DynamoDbContainer {
