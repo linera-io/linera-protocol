@@ -13,6 +13,7 @@ use std::{
     },
 };
 
+#[derive(Debug)]
 pub enum WriteOperation {
     Delete { key: Vec<u8> },
     DeletePrefix { key_prefix: Vec<u8> },

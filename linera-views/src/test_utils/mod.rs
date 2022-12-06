@@ -1,3 +1,7 @@
+use crate::common::{
+    WriteOperation,
+    WriteOperation::{Delete, Put},
+};
 use anyhow::{Context, Error};
 use aws_sdk_s3::Endpoint;
 use aws_types::SdkConfig;
@@ -164,6 +168,15 @@ pub fn get_random_byte_vector<R: RngCore>(rng: &mut R, key_prefix: &[u8], n: usi
     v
 }
 
+pub fn get_random_kset<R: RngCore>(rng: &mut R, n: usize, k: usize) -> Vec<usize> {
+    let mut values = Vec::new();
+    for u in 0..n {
+        values.push(u);
+    }
+    random_shuffle(rng, &mut values);
+    values[..k].to_vec()
+}
+
 pub fn get_random_key_value_vec_prefix<R: RngCore>(
     rng: &mut R,
     key_prefix: Vec<u8>,
@@ -187,4 +200,54 @@ pub fn get_random_key_value_vec_prefix<R: RngCore>(
 
 pub fn get_random_key_value_vec<R: RngCore>(rng: &mut R, n: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
     get_random_key_value_vec_prefix(rng, Vec::new(), n)
+}
+
+type VectorPutDelete = (Vec<(Vec<u8>, Vec<u8>)>, usize);
+
+/// A bunch of puts and some deletes.
+pub fn get_random_key_value_operations<R: RngCore>(
+    rng: &mut R,
+    n: usize,
+    k: usize,
+) -> VectorPutDelete {
+    let l_kv = get_random_key_value_vec_prefix(rng, Vec::new(), n);
+    (l_kv, k)
+}
+
+/// A random reordering of the puts and deletes.
+/// For something like MapView it should get us the same result whatever way we are calling.
+pub fn span_random_reordering_put_delete<R: RngCore>(
+    rng: &mut R,
+    info_op: VectorPutDelete,
+) -> Vec<WriteOperation> {
+    let n = info_op.0.len();
+    let k = info_op.1;
+    let mut idx_list = Vec::new();
+    for i in 0..n {
+        idx_list.push(i);
+    }
+    random_shuffle(rng, &mut idx_list);
+    let mut idx_list_rev = vec![0; n];
+    for i in 0..n {
+        idx_list_rev[idx_list[i]] = i;
+    }
+    let mut pos_remove_vector = vec![Vec::new(); n];
+    for (i, pos) in idx_list_rev.iter().enumerate().take(k) {
+        let idx = rng.gen_range(*pos..n);
+        pos_remove_vector[idx].push(i);
+    }
+    let mut l_op = Vec::new();
+    for i in 0..n {
+        let pos = idx_list[i];
+        let pair = info_op.0[pos].clone();
+        l_op.push(Put {
+            key: pair.0,
+            value: pair.1,
+        });
+        for pos_remove in pos_remove_vector[i].clone() {
+            let key = info_op.0[pos_remove].0.clone();
+            l_op.push(Delete { key });
+        }
+    }
+    l_op
 }

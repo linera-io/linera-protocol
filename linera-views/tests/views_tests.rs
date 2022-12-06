@@ -4,7 +4,10 @@
 use async_trait::async_trait;
 use linera_views::{
     collection_view::{CollectionView, ReentrantCollectionView},
-    common::{Batch, Context},
+    common::{
+        Batch, Context, WriteOperation,
+        WriteOperation::{Delete, DeletePrefix, Put},
+    },
     dynamo_db::DynamoDbContext,
     impl_view,
     key_value_store_view::{KeyValueStoreMemoryContext, KeyValueStoreView},
@@ -15,7 +18,10 @@ use linera_views::{
     register_view::RegisterView,
     rocksdb::{RocksdbContext, DB},
     scoped_view::ScopedView,
-    test_utils::{get_random_key_value_vec, random_shuffle, LocalStackTestContext},
+    test_utils::{
+        get_random_key_value_operations, get_random_key_value_vec, random_shuffle,
+        span_random_reordering_put_delete, LocalStackTestContext,
+    },
     views::{HashView, Hasher, HashingContext, View, ViewError},
 };
 use rand::{Rng, RngCore, SeedableRng};
@@ -695,7 +701,7 @@ async fn test_removal_api() -> anyhow::Result<()> {
 }
 
 #[cfg(test)]
-async fn compute_hash_map_unordered_view<S>(
+async fn compute_hash_unordered_put_view<S>(
     rng: &mut impl RngCore,
     store: &mut S,
     l_kv: Vec<(Vec<u8>, Vec<u8>)>,
@@ -726,7 +732,46 @@ where
 }
 
 #[cfg(test)]
-async fn compute_hash_map_ordered_view<S>(
+async fn compute_hash_unordered_putdelete_view<S>(
+    rng: &mut impl RngCore,
+    store: &mut S,
+    l_op: Vec<WriteOperation>,
+) -> <<S::Context as HashingContext>::Hasher as Hasher>::Output
+where
+    S: StateStore,
+    ViewError: From<<<S as StateStore>::Context as Context>::Error>,
+{
+    let mut view = store.load(1).await.unwrap();
+    for e_op in l_op {
+        match e_op {
+            Put { key, value } => {
+                let key_str = format!("{:?}", &key);
+                let value_usize = (*value.first().unwrap()) as usize;
+                view.map.insert(&key_str, value_usize).unwrap();
+                view.key_value_store.insert(key, value);
+                {
+                    let subview = view.collection.load_entry(key_str).await.unwrap();
+                    subview.push(value_usize as u32);
+                }
+            }
+            Delete { key } => {
+                let key_str = format!("{:?}", &key);
+                view.map.remove(&key_str).unwrap();
+                view.key_value_store.remove(key);
+            }
+            DeletePrefix { key_prefix: _ } => {}
+        }
+        //
+        let thr = rng.gen_range(0..10);
+        if thr == 0 {
+            view.save().await.unwrap();
+        }
+    }
+    view.hash().await.unwrap()
+}
+
+#[cfg(test)]
+async fn compute_hash_ordered_view<S>(
     rng: &mut impl RngCore,
     store: &mut S,
     l_kv: Vec<(Vec<u8>, Vec<u8>)>,
@@ -751,34 +796,39 @@ where
 }
 
 #[cfg(test)]
-async fn compute_hash_map_view_iter<R: RngCore>(rng: &mut R, l_kv: Vec<(Vec<u8>, Vec<u8>)>) {
-    let mut l_answer_unord = Vec::new();
-    let mut l_answer_ord = Vec::new();
+async fn compute_hash_view_iter<R: RngCore>(rng: &mut R, n: usize, k: usize) {
+    let mut unord1_hashes = Vec::new();
+    let mut unord2_hashes = Vec::new();
+    let mut ord_hashes = Vec::new();
+    let l_kv = get_random_key_value_vec(rng, n);
+    let info_op = get_random_key_value_operations(rng, n, k);
     let n_iter = 4;
     for _ in 0..n_iter {
         let mut l_kv_b = l_kv.clone();
         random_shuffle(rng, &mut l_kv_b);
+        let l_op = span_random_reordering_put_delete(rng, info_op.clone());
+        //
         let mut store1 = MemoryTestStore::default();
-        l_answer_unord.push(compute_hash_map_unordered_view(rng, &mut store1, l_kv_b).await);
+        unord1_hashes.push(compute_hash_unordered_put_view(rng, &mut store1, l_kv_b).await);
         let mut store2 = MemoryTestStore::default();
-        l_answer_ord.push(compute_hash_map_ordered_view(rng, &mut store2, l_kv.clone()).await);
+        unord2_hashes.push(compute_hash_unordered_putdelete_view(rng, &mut store2, l_op).await);
+        let mut store3 = MemoryTestStore::default();
+        ord_hashes.push(compute_hash_ordered_view(rng, &mut store3, l_kv.clone()).await);
     }
     for i in 1..n_iter {
-        assert_eq!(
-            l_answer_unord.get(0).unwrap(),
-            l_answer_unord.get(i).unwrap()
-        );
-        assert_eq!(l_answer_ord.get(0).unwrap(), l_answer_ord.get(i).unwrap());
+        assert_eq!(unord1_hashes.get(0).unwrap(), unord1_hashes.get(i).unwrap());
+        assert_eq!(unord2_hashes.get(0).unwrap(), unord2_hashes.get(i).unwrap());
+        assert_eq!(ord_hashes.get(0).unwrap(), ord_hashes.get(i).unwrap());
     }
 }
 
 #[tokio::test]
-async fn compute_hash_map_view_iter_large() {
-    let n_iter = 4;
-    let n = 1000;
+async fn compute_hash_view_iter_large() {
+    let n_iter = 2;
+    let n = 100;
+    let k = 30;
     let mut rng = rand::rngs::StdRng::seed_from_u64(2);
     for _ in 0..n_iter {
-        let l_kv = get_random_key_value_vec(&mut rng, n);
-        compute_hash_map_view_iter(&mut rng, l_kv).await;
+        compute_hash_view_iter(&mut rng, n, k).await;
     }
 }
