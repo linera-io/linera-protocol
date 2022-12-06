@@ -425,7 +425,7 @@ where
                     .reset(self.execution_state.system.ownership.get());
             }
             Effect::System(SystemEffect::BytecodePublished) => {
-                let bytecode_id: BytecodeId = effect_id.into();
+                let bytecode_id = effect_id.into();
                 let bytecode_location = BytecodeLocation {
                     certificate_hash,
                     operation_index: effect_id.index,
