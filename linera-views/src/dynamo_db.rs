@@ -234,7 +234,9 @@ impl KeyValueOperations for DynamoDbContainer {
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValueIterator, DynamoDbContextError> {
-        let response = self.get_query_output(KEY_VALUE_ATTRIBUTE, key_prefix).await?;
+        let response = self
+            .get_query_output(KEY_VALUE_ATTRIBUTE, key_prefix)
+            .await?;
         Ok(DynamoDbKeyValueIterator::new(key_prefix.len(), response))
     }
 

@@ -725,8 +725,6 @@ where
     view.hash().await.unwrap()
 }
 
-
-
 #[cfg(test)]
 async fn compute_hash_map_ordered_view<S>(
     rng: &mut impl RngCore,
@@ -752,13 +750,8 @@ where
     view.hash().await.unwrap()
 }
 
-
-
 #[cfg(test)]
-async fn compute_hash_map_view_iter<R: RngCore>(
-    rng: &mut R,
-    l_kv: Vec<(Vec<u8>, Vec<u8>)>,
-) {
+async fn compute_hash_map_view_iter<R: RngCore>(rng: &mut R, l_kv: Vec<(Vec<u8>, Vec<u8>)>) {
     let mut l_answer_unord = Vec::new();
     let mut l_answer_ord = Vec::new();
     let n_iter = 4;
@@ -771,7 +764,10 @@ async fn compute_hash_map_view_iter<R: RngCore>(
         l_answer_ord.push(compute_hash_map_ordered_view(rng, &mut store2, l_kv.clone()).await);
     }
     for i in 1..n_iter {
-        assert_eq!(l_answer_unord.get(0).unwrap(), l_answer_unord.get(i).unwrap());
+        assert_eq!(
+            l_answer_unord.get(0).unwrap(),
+            l_answer_unord.get(i).unwrap()
+        );
         assert_eq!(l_answer_ord.get(0).unwrap(), l_answer_ord.get(i).unwrap());
     }
 }
