@@ -19,7 +19,7 @@ use std::{
     time::Duration,
 };
 use thiserror::Error;
-
+use linera_storage::Store;
 use tonic::{transport::Server, Request, Response, Status};
 
 // to avoid confusion with existing ValidatorNode
@@ -31,7 +31,6 @@ use crate::{
         ChainInfoResult,
     },
     mass_client_delegate,
-    simple_network::SharedStore,
 };
 
 use crate::{
@@ -103,8 +102,9 @@ pub enum GrpcError {
     SocketAddr(#[from] AddrParseError),
 }
 
-impl<S: SharedStore> GrpcServer<S>
+impl<S> GrpcServer<S>
 where
+    S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
     pub async fn spawn(
@@ -257,8 +257,9 @@ where
 }
 
 #[tonic::async_trait]
-impl<S: SharedStore> ValidatorNodeRpc for GrpcServer<S>
+impl<S> ValidatorNodeRpc for GrpcServer<S>
 where
+    S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
     async fn handle_block_proposal(
@@ -306,8 +307,9 @@ where
 }
 
 #[tonic::async_trait]
-impl<S: SharedStore> ValidatorWorkerRpc for GrpcServer<S>
+impl<S> ValidatorWorkerRpc for GrpcServer<S>
 where
+    S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
     async fn handle_block_proposal(

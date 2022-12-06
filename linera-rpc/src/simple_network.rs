@@ -27,9 +27,6 @@ use log::{debug, error, info, warn};
 use std::{io, time::Duration};
 use tokio::time;
 
-pub trait SharedStore: Store + Clone + Send + Sync + 'static {}
-impl<All> SharedStore for All where All: Store + Clone + Send + Sync + 'static {}
-
 #[derive(Clone)]
 pub struct Server<S> {
     network: ValidatorInternalNetworkPreConfig<TransportProtocol>,

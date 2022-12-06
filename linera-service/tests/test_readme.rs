@@ -4,10 +4,16 @@
 
 use linera_views::test_utils::LocalStackTestContext;
 use std::{io::Write, process::Command};
+use std::sync::Mutex;
 use tempfile::tempdir;
+
+/// A static lock to prevent README examples from running in parallel.
+static README_GUARD: Mutex<()> = Mutex::new(());
 
 #[test]
 fn test_examples_in_readme() -> std::io::Result<()> {
+    let _guard = README_GUARD.lock().unwrap();
+
     let dir = tempdir().unwrap();
     let file = std::io::BufReader::new(std::fs::File::open("../README.md")?);
     let mut quotes = get_bash_quotes(file)?;
@@ -30,6 +36,8 @@ fn test_examples_in_readme() -> std::io::Result<()> {
 
 #[test]
 fn test_examples_in_readme_grpc() -> std::io::Result<()> {
+    let _guard = README_GUARD.lock().unwrap();
+
     let dir = tempdir().unwrap();
     let file = std::io::BufReader::new(std::fs::File::open("../README.md")?);
     let mut quotes = get_bash_quotes(file)?;
