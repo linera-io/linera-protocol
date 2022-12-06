@@ -11,6 +11,7 @@ use linera_core::{
     node::NodeError,
     worker::{ValidatorWorker, WorkerState},
 };
+use linera_storage::Store;
 use linera_views::views::ViewError;
 use log::{debug, error, info};
 use std::{
@@ -19,7 +20,6 @@ use std::{
     time::Duration,
 };
 use thiserror::Error;
-use linera_storage::Store;
 use tonic::{transport::Server, Request, Response, Status};
 
 // to avoid confusion with existing ValidatorNode

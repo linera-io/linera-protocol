@@ -3,8 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_views::test_utils::LocalStackTestContext;
-use std::{io::Write, process::Command};
-use std::sync::Mutex;
+use std::{io::Write, process::Command, sync::Mutex};
 use tempfile::tempdir;
 
 /// A static lock to prevent README examples from running in parallel.
