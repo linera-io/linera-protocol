@@ -291,7 +291,7 @@ pub trait Context {
     /// Obtain the Vec<u8> key from the key by appending to the base_key
     fn derive_key_bytes(&self, index: &[u8]) -> Vec<u8>;
 
-    /// We do the deserialization of the value_byte
+    /// Deserialize `value_byte`.
     fn get_value<Item: DeserializeOwned>(&self, value_byte: &[u8]) -> Result<Item, Self::Error>;
 
     /// Retrieve a generic `Item` from the database using the provided `key` prefixed by the current
