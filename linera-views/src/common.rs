@@ -203,7 +203,7 @@ pub trait KeyValueOperations {
     }
 }
 
-// A prefix append iterator
+/// An iterator that wraps another one, prefixing the items with a key prefix.
 pub struct PrefixAppendIterator<IT, E> {
     key_prefix: Vec<u8>,
     iter: IT,
