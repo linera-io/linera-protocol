@@ -24,14 +24,14 @@ jobs:
     - name: Report warnings as errors
       run: echo 'RUSTFLAGS=-D warnings' >> $GITHUB_ENV
     - uses: Swatinem/rust-cache@v2
+    - name: Rustfmt
+      run: cargo fmt -- --check --config unstable_features=true --config imports_granularity=Crate
+    - name: Clippy
+      run: cargo clippy --all-targets
     - name: Build
       run: cargo build --locked
     - name: Run tests
       run: cargo test --locked
-    - name: Clippy
-      run: cargo clippy --all-targets
-    - name: Rustfmt
-      run: cargo fmt -- --check --config unstable_features=true --config imports_granularity=Crate
 
   check-for-unused-dependencies:
     runs-on: ubuntu-latest
