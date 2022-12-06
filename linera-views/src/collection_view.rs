@@ -34,12 +34,16 @@ pub struct ReentrantCollectionView<C, I, W> {
     _phantom: PhantomData<I>,
 }
 
-/// A marker type used to distinguish keys from the current scope from the keys of sub-views.
+/// We need to find new base keys in order to implement the collection_view.
+/// We do this by appending a value to the base_key.
 ///
 /// Sub-views in a collection share a common key prefix, like in other view types. However,
 /// just concatenating the shared prefix with sub-view keys makes it impossible to distinguish if a
 /// given key belongs to child sub-view or a grandchild sub-view (consider for example if a
 /// collection is stored inside the collection).
+///
+/// Value 0 specify 
+///
 ///
 /// The solution to this is to use a marker type to have two sets of keys, where
 /// [`CollectionKey::Index`] serves to indicate the existence of an entry in the collection, and
@@ -102,9 +106,8 @@ where
                     None => {
                         let key_subview = self.get_subview_key(&index);
                         let key_index = self.get_index_key(&index);
-                        let context = self.context.clone_with_base_key(key_subview);
                         batch.delete_key(key_index);
-                        batch.delete_key_prefix(context.base_key());
+                        batch.delete_key_prefix(key_subview);
                     }
                 }
             }
@@ -316,9 +319,8 @@ where
                     None => {
                         let key_subview = self.get_subview_key(&index);
                         let key_index = self.get_index_key(&index);
-                        let context = self.context.clone_with_base_key(key_subview);
                         batch.delete_key(key_index);
-                        batch.delete_key_prefix(context.base_key());
+                        batch.delete_key_prefix(key_subview);
                     }
                 }
             }

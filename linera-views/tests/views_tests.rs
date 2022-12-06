@@ -253,7 +253,7 @@ where
             assert_eq!(view.map.indices().await.unwrap(), vec!["Hello".to_string()]);
             let mut count = 0;
             view.map
-                .for_each_index(|_index: String| {
+                .for_each_index(|_index: Vec<u8>| {
                     count += 1;
                     Ok(())
                 })
@@ -287,7 +287,7 @@ where
         );
         let mut count = 0;
         view.collection
-            .for_each_index(|_index: String| {
+            .for_each_index(|_index: Vec<u8>| {
                 count += 1;
                 Ok(())
             })

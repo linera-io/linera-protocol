@@ -124,7 +124,8 @@ where
     /// Return the list of indices in the map.
     pub async fn indices(&mut self) -> Result<Vec<I>, ViewError> {
         let mut indices = Vec::<I>::new();
-        self.for_each_index(|index: I| {
+        self.for_each_index(|index: Vec<u8>| {
+            let index = C::deserialize_value(&index)?;
             indices.push(index);
             Ok(())
         })
@@ -137,36 +138,34 @@ where
     /// same
     pub async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), ViewError>
     where
-        F: FnMut(I) -> Result<(), ViewError> + Send,
+        F: FnMut(Vec<u8>) -> Result<(), ViewError> + Send,
     {
         let mut iter = self.updates.iter();
         let mut pair = iter.next();
         if !self.was_cleared {
             let base = self.context.base_key();
             for index in self.context.find_stripped_keys_with_prefix(&base).await? {
-                let index_i = C::deserialize_value(&index)?;
                 loop {
                     match pair {
                         Some((key, value)) => {
                             let key = key.clone();
-                            let key_i = C::deserialize_value(&key)?;
                             if key < index {
                                 if value.is_some() {
-                                    f(key_i)?;
+                                    f(key)?;
                                 }
                                 pair = iter.next();
                             } else {
                                 if key != index {
-                                    f(index_i)?;
+                                    f(index)?;
                                 } else if value.is_some() {
-                                    f(key_i)?;
+                                    f(key)?;
                                     pair = iter.next();
                                 }
                                 break;
                             }
                         }
                         None => {
-                            f(index_i)?;
+                            f(index)?;
                             break;
                         }
                     }
@@ -174,12 +173,23 @@ where
             }
         }
         while let Some((key, value)) = pair {
-            let key_i = C::deserialize_value(key)?;
             if value.is_some() {
-                f(key_i)?;
+                f(key.to_vec())?;
             }
             pair = iter.next();
         }
+        Ok(())
+    }
+
+    pub async fn for_each_index_i<F>(&mut self, mut f: F) -> Result<(), ViewError>
+    where
+        F: FnMut(I) -> Result<(), ViewError> + Send,
+    {
+        self.for_each_index(|index: Vec<u8>| {
+            let index = C::deserialize_value(&index)?;
+            f(index)?;
+            Ok(())
+        }).await?;
         Ok(())
     }
 
