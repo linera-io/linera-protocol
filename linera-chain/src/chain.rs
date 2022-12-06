@@ -9,13 +9,14 @@ use linera_base::{
     crypto::HashValue,
     ensure,
     messages::{
-        ApplicationId, BlockHeight, BytecodeId, BytecodeLocation, ChainId, Destination, EffectId,
-        Medium, Origin,
+        ApplicationDescription, ApplicationId, BlockHeight, BytecodeLocation, ChainId, Destination,
+        EffectId, Medium, Origin,
     },
 };
 use linera_execution::{
-    system::SystemEffect, Effect, EffectContext, ExecutionResult, ExecutionRuntimeContext,
-    ExecutionStateView, ExecutionStateViewContext, OperationContext, RawExecutionResult,
+    system::SystemEffect, ApplicationRegistryView, ApplicationRegistryViewContext, Effect,
+    EffectContext, ExecutionResult, ExecutionRuntimeContext, ExecutionStateView,
+    ExecutionStateViewContext, OperationContext, RawExecutionResult,
 };
 use linera_views::{
     collection_view::CollectionView, common::Context, impl_view, log_view::LogView,
@@ -50,7 +51,7 @@ pub struct ChainStateView<C> {
         ScopedView<6, CollectionView<C, ApplicationId, CommunicationStateView<C>>>,
 
     /// The application bytecodes that have been published.
-    pub published_bytecodes: ScopedView<7, MapView<C, BytecodeId, BytecodeLocation>>,
+    pub known_applications: ScopedView<7, ApplicationRegistryView<C>>,
 }
 
 impl_view!(
@@ -62,10 +63,11 @@ impl_view!(
         confirmed_log,
         received_log,
         communication_states,
-        published_bytecodes,
+        known_applications,
     };
     CommunicationStateViewContext,
     ExecutionStateViewContext,
+    ApplicationRegistryViewContext,
 );
 
 /// Block-chaining state.
@@ -428,8 +430,8 @@ where
                     certificate_hash,
                     operation_index: effect_id.index,
                 };
-                self.published_bytecodes
-                    .insert(bytecode_id, bytecode_location);
+                self.known_applications
+                    .register_published_bytecode(bytecode_id, bytecode_location);
             }
             _ => {}
         }
