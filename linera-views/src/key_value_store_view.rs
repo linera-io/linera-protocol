@@ -91,7 +91,7 @@ where
         let mut iter = self.updates.iter();
         let mut pair = iter.next();
         if !self.was_cleared {
-            for index in self.context.find_keys_without_prefix(&key_prefix).await? {
+            for index in self.context.find_stripped_keys_with_prefix(&key_prefix).await? {
                 loop {
                     match pair {
                         Some((key, value)) => {
@@ -139,7 +139,7 @@ where
         if !self.was_cleared {
             for (index, index_val) in self
                 .context
-                .find_key_values_without_prefix(&key_prefix)
+                .find_stripped_key_values_with_prefix(&key_prefix)
                 .await?
             {
                 loop {
@@ -237,7 +237,7 @@ where
         Ok(val)
     }
 
-    async fn find_keys_without_prefix(
+    async fn find_stripped_keys_with_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyIterator, ViewError> {
@@ -247,7 +247,7 @@ where
         if !self.was_cleared {
             for short_key in self
                 .context
-                .find_keys_without_prefix(&key_prefix_full)
+                .find_stripped_keys_with_prefix(&key_prefix_full)
                 .await?
             {
                 let mut key = key_prefix.to_vec();
@@ -265,7 +265,7 @@ where
         Ok(Self::KeyIterator::new(keys))
     }
 
-    async fn find_key_values_without_prefix(
+    async fn find_stripped_key_values_with_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValueIterator, ViewError> {
@@ -275,7 +275,7 @@ where
         if !self.was_cleared {
             for (short_key, value) in self
                 .context
-                .find_key_values_without_prefix(&key_prefix_full)
+                .find_stripped_key_values_with_prefix(&key_prefix_full)
                 .await?
             {
                 let mut key = key_prefix.to_vec();

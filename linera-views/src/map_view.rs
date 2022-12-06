@@ -12,7 +12,7 @@ pub struct MapView<C, I, V> {
     context: C,
     was_cleared: bool,
     updates: BTreeMap<Vec<u8>, Option<V>>,
-    unit_type: PhantomData<I>,
+    _phantom: PhantomData<I>,
 }
 
 #[async_trait]
@@ -32,7 +32,7 @@ where
             context,
             was_cleared: false,
             updates: BTreeMap::new(),
-            unit_type: PhantomData,
+            _phantom: PhantomData,
         })
     }
 
@@ -143,7 +143,7 @@ where
         let mut pair = iter.next();
         if !self.was_cleared {
             let base = self.context.base_key();
-            for index in self.context.find_keys_without_prefix(&base).await? {
+            for index in self.context.find_stripped_keys_with_prefix(&base).await? {
                 let index_i = C::deserialize_value(&index)?;
                 loop {
                     match pair {
@@ -194,7 +194,7 @@ where
         let mut pair = iter.next();
         if !self.was_cleared {
             let base = self.context.base_key();
-            for (index, index_val) in self.context.find_key_values_without_prefix(&base).await? {
+            for (index, index_val) in self.context.find_stripped_key_values_with_prefix(&base).await? {
                 let index_i = C::deserialize_value(&index)?;
                 let index_val = C::deserialize_value(&index_val)?;
                 loop {

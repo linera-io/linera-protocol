@@ -21,7 +21,7 @@ pub struct CollectionView<C, I, W> {
     context: C,
     was_cleared: bool,
     updates: BTreeMap<Vec<u8>, Option<W>>,
-    unit_type: PhantomData<I>,
+    _phantom: PhantomData<I>,
 }
 
 /// A view that supports accessing a collection of views of the same kind, indexed by a
@@ -31,7 +31,7 @@ pub struct ReentrantCollectionView<C, I, W> {
     context: C,
     was_cleared: bool,
     updates: BTreeMap<Vec<u8>, Option<Arc<Mutex<W>>>>,
-    unit_type: PhantomData<I>,
+    _phantom: PhantomData<I>,
 }
 
 /// A marker type used to distinguish keys from the current scope from the keys of sub-views.
@@ -73,7 +73,7 @@ where
             context,
             was_cleared: false,
             updates: BTreeMap::new(),
-            unit_type: PhantomData,
+            _phantom: PhantomData,
         })
     }
 
@@ -225,7 +225,7 @@ where
         let mut pair = iter.next();
         if !self.was_cleared {
             let base = self.get_index_key(&[]);
-            for index in self.context.find_keys_without_prefix(&base).await? {
+            for index in self.context.find_stripped_keys_with_prefix(&base).await? {
                 let index_i: I = C::deserialize_value(&index)?;
                 loop {
                     match pair {
@@ -283,7 +283,7 @@ where
             context,
             was_cleared: false,
             updates: BTreeMap::new(),
-            unit_type: PhantomData,
+            _phantom: PhantomData,
         })
     }
 
@@ -436,7 +436,7 @@ where
         let mut pair = iter.next();
         if !self.was_cleared {
             let base = self.get_index_key(&[]);
-            for index in self.context.find_keys_without_prefix(&base).await? {
+            for index in self.context.find_stripped_keys_with_prefix(&base).await? {
                 let index_i: I = C::deserialize_value(&index)?;
                 loop {
                     match pair {
