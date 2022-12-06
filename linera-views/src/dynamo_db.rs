@@ -95,7 +95,7 @@ impl DynamoDbContainer {
             .remove(KEY_ATTRIBUTE)
             .ok_or(DynamoDbContextError::MissingKey)?;
         match key {
-            AttributeValue::B(blob) => Ok(blob.into_inner()[len_prefix..].to_vec()),
+            AttributeValue::B(blob) => Ok(blob.as_ref()[len_prefix..].to_vec()),
             key => Err(DynamoDbContextError::wrong_key_type(&key)),
         }
     }
