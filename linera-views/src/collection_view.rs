@@ -5,7 +5,6 @@ use crate::{
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
-    cmp::Eq,
     collections::{btree_map, BTreeMap},
     fmt::Debug,
     io::Write,
@@ -62,7 +61,7 @@ impl<C, I, W> View<C> for CollectionView<C, I, W>
 where
     C: Context + Send,
     ViewError: From<C::Error>,
-    I: Send + Ord + Sync + Debug + Clone + Serialize + DeserializeOwned,
+    I: Send + Sync + Debug + Clone + Serialize + DeserializeOwned,
     W: View<C> + Send + Sync,
 {
     fn context(&self) -> &C {
@@ -127,7 +126,7 @@ impl<C, I, W> CollectionView<C, I, W>
 where
     C: Context + Send,
     ViewError: From<C::Error>,
-    I: Eq + Ord + Sync + Clone + Send + Debug + Serialize + DeserializeOwned,
+    I: Sync + Clone + Send + Debug + Serialize + DeserializeOwned,
     W: View<C> + Sync,
 {
     fn get_index_key(&self, index: &[u8]) -> Vec<u8> {
@@ -213,7 +212,7 @@ impl<C, I, W> CollectionView<C, I, W>
 where
     C: Context + Send,
     ViewError: From<C::Error>,
-    I: Eq + Ord + Clone + Debug + Sync + Send + Serialize + DeserializeOwned,
+    I: Clone + Debug + Sync + Send + Serialize + DeserializeOwned,
     W: View<C> + Sync,
 {
     /// Execute a function on each index. The order in which the entry are passed
@@ -227,12 +226,12 @@ where
         if !self.was_cleared {
             let base = self.get_index_key(&[]);
             for index in self.context.find_keys_without_prefix(&base).await? {
-                let index_i: I = self.context.get_value(&index)?;
+                let index_i: I = C::deserialize_value(&index)?;
                 loop {
                     match pair {
                         Some((key, value)) => {
                             let key = key.clone();
-                            let key_i = self.context.get_value(&key)?;
+                            let key_i = C::deserialize_value(&key)?;
                             if key < index {
                                 if value.is_some() {
                                     f(key_i)?;
@@ -257,7 +256,7 @@ where
             }
         }
         while let Some((key, value)) = pair {
-            let key_i = self.context.get_value(key)?;
+            let key_i = C::deserialize_value(key)?;
             if value.is_some() {
                 f(key_i)?;
             }
@@ -272,7 +271,7 @@ impl<C, I, W> View<C> for ReentrantCollectionView<C, I, W>
 where
     C: Context + Send,
     ViewError: From<C::Error>,
-    I: Send + Ord + Sync + Debug + Clone + Serialize + DeserializeOwned,
+    I: Send + Sync + Debug + Clone + Serialize + DeserializeOwned,
     W: View<C> + Send + Sync,
 {
     fn context(&self) -> &C {
@@ -343,7 +342,7 @@ impl<C, I, W> ReentrantCollectionView<C, I, W>
 where
     C: Context + Send,
     ViewError: From<C::Error>,
-    I: Eq + Ord + Sync + Clone + Send + Debug + Serialize + DeserializeOwned,
+    I: Sync + Clone + Send + Debug + Serialize + DeserializeOwned,
     W: View<C> + Send + Sync,
 {
     fn get_index_key(&self, index: &[u8]) -> Vec<u8> {
@@ -438,12 +437,12 @@ where
         if !self.was_cleared {
             let base = self.get_index_key(&[]);
             for index in self.context.find_keys_without_prefix(&base).await? {
-                let index_i: I = self.context.get_value(&index)?;
+                let index_i: I = C::deserialize_value(&index)?;
                 loop {
                     match pair {
                         Some((key, value)) => {
                             let key = key.clone();
-                            let key_i = self.context.get_value(&key)?;
+                            let key_i = C::deserialize_value(&key)?;
                             if key < index {
                                 if value.is_some() {
                                     f(key_i)?;
@@ -468,7 +467,7 @@ where
             }
         }
         while let Some((key, value)) = pair {
-            let key_i = self.context.get_value(key)?;
+            let key_i = C::deserialize_value(key)?;
             if value.is_some() {
                 f(key_i)?;
             }
@@ -483,7 +482,7 @@ impl<C, I, W> HashView<C> for CollectionView<C, I, W>
 where
     C: HashingContext + Context + Send + Sync,
     ViewError: From<C::Error>,
-    I: Eq + Ord + Clone + Debug + Send + Sync + Serialize + DeserializeOwned + 'static,
+    I: Clone + Debug + Send + Sync + Serialize + DeserializeOwned + 'static,
     W: HashView<C> + Send + Sync + 'static,
 {
     async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
@@ -505,7 +504,7 @@ impl<C, I, W> HashView<C> for ReentrantCollectionView<C, I, W>
 where
     C: HashingContext + Context + Send + Sync,
     ViewError: From<C::Error>,
-    I: Eq + Ord + Clone + Debug + Send + Sync + Serialize + DeserializeOwned + 'static,
+    I: Clone + Debug + Send + Sync + Serialize + DeserializeOwned + 'static,
     W: HashView<C> + Send + Sync + 'static,
 {
     async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {

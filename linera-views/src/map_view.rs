@@ -4,7 +4,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{cmp::Eq, collections::BTreeMap, fmt::Debug, marker::PhantomData, mem};
+use std::{collections::BTreeMap, fmt::Debug, marker::PhantomData, mem};
 
 /// A view that supports inserting and removing values indexed by a key.
 #[derive(Debug, Clone)]
@@ -20,7 +20,7 @@ impl<C, I, V> View<C> for MapView<C, I, V>
 where
     C: Context + Send,
     ViewError: From<C::Error>,
-    I: Eq + Ord + Send + Sync + Clone + Serialize,
+    I: Send + Sync + Clone + Serialize,
     V: Clone + Send + Sync + Serialize,
 {
     fn context(&self) -> &C {
@@ -76,7 +76,7 @@ impl<C, I, V> MapView<C, I, V>
 where
     C: Context,
     ViewError: From<C::Error>,
-    I: Eq + Ord + Serialize,
+    I: Serialize,
 {
     /// Set or insert a value.
     pub fn insert(&mut self, index: &I, value: V) -> Result<(), ViewError> {
@@ -105,7 +105,7 @@ impl<C, I, V> MapView<C, I, V>
 where
     C: Context,
     ViewError: From<C::Error>,
-    I: Eq + Ord + Sync + Clone + Send + Serialize + DeserializeOwned,
+    I: Sync + Clone + Send + Serialize + DeserializeOwned,
     V: Clone + Sync + DeserializeOwned + 'static,
 {
     /// Read the value at the given position, if any.
@@ -144,12 +144,12 @@ where
         if !self.was_cleared {
             let base = self.context.base_key();
             for index in self.context.find_keys_without_prefix(&base).await? {
-                let index_i = self.context.get_value(&index)?;
+                let index_i = C::deserialize_value(&index)?;
                 loop {
                     match pair {
                         Some((key, value)) => {
                             let key = key.clone();
-                            let key_i = self.context.get_value(&key)?;
+                            let key_i = C::deserialize_value(&key)?;
                             if key < index {
                                 if value.is_some() {
                                     f(key_i)?;
@@ -174,7 +174,7 @@ where
             }
         }
         while let Some((key, value)) = pair {
-            let key_i = self.context.get_value(key)?;
+            let key_i = C::deserialize_value(key)?;
             if value.is_some() {
                 f(key_i)?;
             }
@@ -195,13 +195,13 @@ where
         if !self.was_cleared {
             let base = self.context.base_key();
             for (index, index_val) in self.context.find_key_values_without_prefix(&base).await? {
-                let index_i = self.context.get_value(&index)?;
-                let index_val = self.context.get_value(&index_val)?;
+                let index_i = C::deserialize_value(&index)?;
+                let index_val = C::deserialize_value(&index_val)?;
                 loop {
                     match pair {
                         Some((key, value)) => {
                             let key = key.clone();
-                            let key_i = self.context.get_value(&key)?;
+                            let key_i = C::deserialize_value(&key)?;
                             if key < index {
                                 if let Some(value) = value {
                                     f(key_i, value.clone())?;
@@ -226,7 +226,7 @@ where
             }
         }
         while let Some((key, value)) = pair {
-            let key_i = self.context.get_value(key)?;
+            let key_i = C::deserialize_value(key)?;
             if let Some(value) = value {
                 f(key_i, value.clone())?;
             }
@@ -241,7 +241,7 @@ impl<C, I, V> HashView<C> for MapView<C, I, V>
 where
     C: HashingContext + Context + Send + Sync,
     ViewError: From<C::Error>,
-    I: Eq + Ord + Clone + Send + Sync + Serialize + DeserializeOwned,
+    I: Clone + Send + Sync + Serialize + DeserializeOwned,
     V: Clone + Send + Sync + Serialize + DeserializeOwned + 'static,
 {
     async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {

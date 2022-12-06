@@ -292,7 +292,7 @@ pub trait Context {
     fn derive_key_bytes(&self, index: &[u8]) -> Vec<u8>;
 
     /// Deserialize `value_byte`.
-    fn get_value<Item: DeserializeOwned>(&self, value_byte: &[u8]) -> Result<Item, Self::Error>;
+    fn deserialize_value<Item: DeserializeOwned>(bytes: &[u8]) -> Result<Item, Self::Error>;
 
     /// Retrieve a generic `Item` from the database using the provided `key` prefixed by the current
     /// context.
@@ -378,8 +378,8 @@ where
         key
     }
 
-    fn get_value<Item: DeserializeOwned>(&self, value_byte: &[u8]) -> Result<Item, Self::Error> {
-        let value = bcs::from_bytes(value_byte)?;
+    fn deserialize_value<Item: DeserializeOwned>(bytes: &[u8]) -> Result<Item, Self::Error> {
+        let value = bcs::from_bytes(bytes)?;
         Ok(value)
     }
 
