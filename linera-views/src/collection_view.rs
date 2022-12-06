@@ -198,8 +198,7 @@ where
     /// Return the list of indices in the collection.
     pub async fn indices(&mut self) -> Result<Vec<I>, ViewError> {
         let mut indices = Vec::new();
-        self.for_each_index(|index: Vec<u8>| {
-            let index = C::deserialize_value(&index)?;
+        self.for_each_index_i(|index: I| {
             indices.push(index);
             Ok(())
         })
@@ -219,8 +218,8 @@ where
     I: Clone + Debug + Sync + Send + Serialize + DeserializeOwned,
     W: View<C> + Sync,
 {
-    /// Execute a function on each index. The order in which the entry are passed
-    /// is not the ones of the entryies I but of their serialization
+    /// Execute a function on each index serialization. The order in which the entry
+    /// are passed is not the ones of the entryies I but of their serialization
     pub async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(Vec<u8>) -> Result<(), ViewError> + Send,
@@ -263,6 +262,20 @@ where
             }
             pair = iter.next();
         }
+        Ok(())
+    }
+
+    /// Execute a function on each index. The order in which the entry are passed
+    /// is not the ones of the entryies I but of their serialization.
+    pub async fn for_each_index_i<F>(&mut self, mut f: F) -> Result<(), ViewError>
+    where
+        F: FnMut(I) -> Result<(), ViewError> + Send,
+    {
+        self.for_each_index(|index: Vec<u8>| {
+            let index = C::deserialize_value(&index)?;
+            f(index)?;
+            Ok(())
+	}).await?;
         Ok(())
     }
 }
@@ -414,8 +427,7 @@ where
     /// Return the list of indices in the collection.
     pub async fn indices(&mut self) -> Result<Vec<I>, ViewError> {
         let mut indices = Vec::new();
-        self.for_each_index(|index: Vec<u8>| {
-            let index = C::deserialize_value(&index)?;
+        self.for_each_index_i(|index: I| {
             indices.push(index);
             Ok(())
         })
@@ -427,8 +439,8 @@ where
         self.context.extra()
     }
 
-    /// Execute a function on each index. The order in which the entry are passed
-    /// is not the ones of the entries I but of their serialization
+    /// Execute a function on each index serialization. The order in which the entry
+    /// are passed is not the ones of the entries I but of their serialization
     pub async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(Vec<u8>) -> Result<(), ViewError> + Send,
@@ -471,6 +483,20 @@ where
             }
             pair = iter.next();
         }
+        Ok(())
+    }
+
+    /// Execute a function on each index. The order in which the entry are passed
+    /// is not the ones of the entryies I but of their serialization.
+    pub async fn for_each_index_i<F>(&mut self, mut f: F) -> Result<(), ViewError>
+    where
+        F: FnMut(I) -> Result<(), ViewError> + Send,
+    {
+        self.for_each_index(|index: Vec<u8>| {
+            let index = C::deserialize_value(&index)?;
+            f(index)?;
+            Ok(())
+	}).await?;
         Ok(())
     }
 }

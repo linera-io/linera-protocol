@@ -124,8 +124,7 @@ where
     /// Return the list of indices in the map.
     pub async fn indices(&mut self) -> Result<Vec<I>, ViewError> {
         let mut indices = Vec::<I>::new();
-        self.for_each_index(|index: Vec<u8>| {
-            let index = C::deserialize_value(&index)?;
+        self.for_each_index_i(|index: I| {
             indices.push(index);
             Ok(())
         })
@@ -133,9 +132,9 @@ where
         Ok(indices)
     }
 
-    /// Execute a function on each index. The order is in which values are passed is not
-    /// the one of the index but its serialization. However said order will always be the
-    /// same
+    /// Execute a function on each index serialization. The order is in which values
+    /// are passed is not the one of the index but its serialization. However said
+    /// order will always be the same
     pub async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(Vec<u8>) -> Result<(), ViewError> + Send,
@@ -181,6 +180,9 @@ where
         Ok(())
     }
 
+    /// Execute a function on each index. The order is in which values are passed is not
+    /// the one of the index but its serialization. However said order will always be the
+    /// same
     pub async fn for_each_index_i<F>(&mut self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(I) -> Result<(), ViewError> + Send,
