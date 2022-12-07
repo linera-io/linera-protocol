@@ -53,14 +53,9 @@ impl From<contract::CalleeContext> for CalleeContext {
 
 impl From<contract::ApplicationId> for ApplicationId {
     fn from(application_id: contract::ApplicationId) -> Self {
-        match application_id {
-            contract::ApplicationId::System => ApplicationId::System,
-            contract::ApplicationId::User(contract::UserApplicationId { bytecode, creation }) => {
-                ApplicationId::User {
-                    bytecode: BytecodeId(bytecode.into()),
-                    creation: creation.into(),
-                }
-            }
+        ApplicationId {
+            bytecode: BytecodeId(application_id.bytecode.into()),
+            creation: application_id.creation.into(),
         }
     }
 }

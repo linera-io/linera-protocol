@@ -81,13 +81,13 @@ impl From<SessionId> for contract::SessionId {
 impl From<ApplicationId> for contract::ApplicationId {
     fn from(host: ApplicationId) -> Self {
         match host {
-            ApplicationId::System => contract::ApplicationId::System,
-            ApplicationId::User { bytecode, creation } => {
-                contract::ApplicationId::User(contract::UserApplicationId {
-                    bytecode: bytecode.0.into(),
-                    creation: creation.into(),
-                })
+            ApplicationId::System => {
+                unreachable!("Attempt to allow system application access to user application")
             }
+            ApplicationId::User { bytecode, creation } => contract::ApplicationId {
+                bytecode: bytecode.0.into(),
+                creation: creation.into(),
+            },
         }
     }
 }

@@ -184,16 +184,11 @@ pub enum Destination {
 
 /// A unique identifier for an application.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug)]
-pub enum ApplicationId {
-    /// The system application.
-    System,
-    /// A user application.
-    User {
-        /// The bytecode to use for the application.
-        bytecode: BytecodeId,
-        /// The unique ID of the application's creation.
-        creation: EffectId,
-    },
+pub struct ApplicationId {
+    /// The bytecode to use for the application.
+    pub bytecode: BytecodeId,
+    /// The unique ID of the application's creation.
+    pub creation: EffectId,
 }
 
 /// A unique identifier for an application bytecode.

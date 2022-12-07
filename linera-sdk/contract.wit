@@ -69,12 +69,7 @@ record callee-context {
     authenticated-caller-id: option<application-id>,
 }
 
-variant application-id {
-    system,
-    user(user-application-id),
-}
-
-record user-application-id {
+record application-id {
     bytecode: bytecode,
     creation: effect-id,
 }
