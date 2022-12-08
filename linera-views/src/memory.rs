@@ -41,7 +41,7 @@ impl KeyValueOperations for MemoryContainer {
         Ok(map.get(key).cloned())
     }
 
-    async fn find_stripped_keys_with_prefix(
+    async fn find_stripped_keys_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyIterator, MemoryContextError> {
@@ -54,7 +54,7 @@ impl KeyValueOperations for MemoryContainer {
         Ok(Self::KeyIterator::new(values))
     }
 
-    async fn find_stripped_key_values_with_prefix(
+    async fn find_stripped_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValueIterator, MemoryContextError> {

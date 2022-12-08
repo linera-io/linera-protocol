@@ -27,7 +27,7 @@ async fn test_ordering_keys_key_value_vec<OP: KeyValueOperations + Sync>(
     }
     key_value_operation.write_batch(batch).await.unwrap();
     let l_keys: Vec<Vec<u8>> = key_value_operation
-        .find_keys_with_prefix(&key_prefix)
+        .find_keys_by_prefix(&key_prefix)
         .await
         .unwrap()
         .map(|x| x.expect("Failed to get vector").to_vec())
@@ -53,7 +53,7 @@ async fn test_ordering_keys_key_value_vec<OP: KeyValueOperations + Sync>(
     }
     for (key_prefix, value) in map {
         let n_ent = key_value_operation
-            .find_keys_with_prefix(&key_prefix)
+            .find_keys_by_prefix(&key_prefix)
             .await
             .unwrap()
             .count();

@@ -42,18 +42,16 @@ pub struct ReentrantCollectionView<C, I, W> {
 /// given key belongs to child sub-view or a grandchild sub-view (consider for example if a
 /// collection is stored inside the collection).
 ///
-/// Value 0 specify 
-///
-///
-/// The solution to this is to use a marker type to have two sets of keys, where
-/// [`CollectionKey::Index`] serves to indicate the existence of an entry in the collection, and
-/// [`CollectionKey::Subvie`] serves as the prefix for the sub-view.
+/// Value 0 specify an index and serves to indicate the existence of an entry in the collection
+/// Value 1 specify as the prefix for the sub-view.
+#[inline]
 fn get_index_key(mut base: Vec<u8>, index: &[u8]) -> Vec<u8> {
     base.extend_from_slice(&[0]);
     base.extend_from_slice(index);
     base
 }
 
+#[inline]
 fn get_subview_key(mut base: Vec<u8>, index: &[u8]) -> Vec<u8> {
     base.extend_from_slice(&[1]);
     base.extend_from_slice(index);
@@ -228,7 +226,7 @@ where
         let mut pair = iter.next();
         if !self.was_cleared {
             let base = self.get_index_key(&[]);
-            for index in self.context.find_stripped_keys_with_prefix(&base).await? {
+            for index in self.context.find_stripped_keys_by_prefix(&base).await? {
                 loop {
                     match pair {
                         Some((key, value)) => {
@@ -449,7 +447,7 @@ where
         let mut pair = iter.next();
         if !self.was_cleared {
             let base = self.get_index_key(&[]);
-            for index in self.context.find_stripped_keys_with_prefix(&base).await? {
+            for index in self.context.find_stripped_keys_by_prefix(&base).await? {
                 loop {
                     match pair {
                         Some((key, value)) => {

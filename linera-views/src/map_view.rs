@@ -143,7 +143,7 @@ where
         let mut pair = iter.next();
         if !self.was_cleared {
             let base = self.context.base_key();
-            for index in self.context.find_stripped_keys_with_prefix(&base).await? {
+            for index in self.context.find_stripped_keys_by_prefix(&base).await? {
                 loop {
                     match pair {
                         Some((key, value)) => {
@@ -206,7 +206,7 @@ where
         let mut pair = iter.next();
         if !self.was_cleared {
             let base = self.context.base_key();
-            for (index, index_val) in self.context.find_stripped_key_values_with_prefix(&base).await? {
+            for (index, index_val) in self.context.find_stripped_key_values_by_prefix(&base).await? {
                 let index_val = C::deserialize_value(&index_val)?;
                 loop {
                     match pair {

@@ -151,29 +151,35 @@ pub trait KeyValueOperations {
     type KeyIterator: Iterator<Item = Result<Vec<u8>, Self::Error>>;
     type KeyValueIterator: Iterator<Item = Result<(Vec<u8>, Vec<u8>), Self::Error>>;
 
+    /// Retrieve a Vec<u8> from the database using the provided `key`
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
-    async fn find_stripped_keys_with_prefix(
+    /// Find keys matching the prefix. The stripped keys are returned, that is excluding the prefix.
+    async fn find_stripped_keys_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyIterator, Self::Error>;
 
-    async fn find_stripped_key_values_with_prefix(
+    /// Find (key,value) matching the prefix. The stripped keys are returned, that is excluding the prefix.
+    async fn find_stripped_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValueIterator, Self::Error>;
 
-    async fn find_keys_with_prefix(
+    /// Find keys matching the prefix. The full keys are returned, that is including the prefix.
+    async fn find_keys_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<PrefixAppendIterator<Self::KeyIterator, Self::Error>, Self::Error> {
-        let iter = self.find_stripped_keys_with_prefix(key_prefix).await?;
+        let iter = self.find_stripped_keys_by_prefix(key_prefix).await?;
         let key_prefix = key_prefix.to_vec();
         Ok(PrefixAppendIterator::new(key_prefix, iter))
     }
 
+    /// Write the batch in the database.
     async fn write_batch(&self, mut batch: Batch) -> Result<(), Self::Error>;
 
+    /// Read a single key and deserialize the result if present.
     async fn read_key<V: DeserializeOwned>(&self, key: &[u8]) -> Result<Option<V>, Self::Error>
     where
         Self::Error: From<bcs::Error>,
@@ -187,6 +193,7 @@ pub trait KeyValueOperations {
         }
     }
 
+    /// Get the vector of deserialized keys matching a prefix.
     async fn get_sub_keys<Key: DeserializeOwned + Send>(
         &self,
         key_prefix: &[u8],
@@ -195,7 +202,7 @@ pub trait KeyValueOperations {
         Self::Error: From<bcs::Error>,
     {
         let mut keys = Vec::new();
-        for key in self.find_stripped_keys_with_prefix(key_prefix).await? {
+        for key in self.find_stripped_keys_by_prefix(key_prefix).await? {
             let key = key?;
             keys.push(bcs::from_bytes(&key)?);
         }
@@ -306,14 +313,14 @@ pub trait Context {
     /// context.
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
-    /// Find keys matching the prefix. The full keys are returned, that is including the prefix.
-    async fn find_stripped_keys_with_prefix(
+    /// Find keys matching the prefix. The stripped keys are returned, that is excluding the prefix.
+    async fn find_stripped_keys_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<Vec<u8>>, Self::Error>;
 
-    /// Find keys matching the prefix. The full keys are returned, that is including the prefix.
-    async fn find_stripped_key_values_with_prefix(
+    /// Find (key,value) matching the prefix. The stripped keys are returned, that is excluding the prefix.
+    async fn find_stripped_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Self::Error>;
@@ -394,22 +401,22 @@ where
         self.db.read_key_bytes(key).await
     }
 
-    async fn find_stripped_keys_with_prefix(
+    async fn find_stripped_keys_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<Vec<u8>>, Self::Error> {
         self.db
-            .find_stripped_keys_with_prefix(key_prefix)
+            .find_stripped_keys_by_prefix(key_prefix)
             .await?
             .collect()
     }
 
-    async fn find_stripped_key_values_with_prefix(
+    async fn find_stripped_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Self::Error> {
         self.db
-            .find_stripped_key_values_with_prefix(key_prefix)
+            .find_stripped_key_values_by_prefix(key_prefix)
             .await?
             .collect()
     }
