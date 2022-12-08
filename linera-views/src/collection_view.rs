@@ -155,7 +155,9 @@ where
                 match entry {
                     Some(view) => Ok(view),
                     None => {
-                        let context = self.context.clone_with_base_key(get_subview_key(base, &short_key));
+                        let context = self
+                            .context
+                            .clone_with_base_key(get_subview_key(base, &short_key));
                         // Obtain a view and set its pending state to the default (e.g. empty) state
                         let mut view = W::load(context).await?;
                         view.clear();
@@ -165,7 +167,9 @@ where
                 }
             }
             btree_map::Entry::Vacant(entry) => {
-                let context = self.context.clone_with_base_key(get_subview_key(base, &short_key));
+                let context = self
+                    .context
+                    .clone_with_base_key(get_subview_key(base, &short_key));
                 let mut view = W::load(context).await?;
                 if self.was_cleared {
                     view.clear();
@@ -273,7 +277,8 @@ where
             let index = C::deserialize_value(&index)?;
             f(index)?;
             Ok(())
-	}).await?;
+        })
+        .await?;
         Ok(())
     }
 }
@@ -381,7 +386,9 @@ where
                 match entry {
                     Some(view) => Ok(view.clone().try_lock_owned()?),
                     None => {
-                        let context = self.context.clone_with_base_key(get_subview_key(base, &short_key));
+                        let context = self
+                            .context
+                            .clone_with_base_key(get_subview_key(base, &short_key));
                         // Obtain a view and set its pending state to the default (e.g. empty) state
                         let mut view = W::load(context).await?;
                         view.clear();
@@ -392,7 +399,9 @@ where
                 }
             }
             btree_map::Entry::Vacant(entry) => {
-                let context = self.context.clone_with_base_key(get_subview_key(base, &short_key));
+                let context = self
+                    .context
+                    .clone_with_base_key(get_subview_key(base, &short_key));
                 let mut view = W::load(context).await?;
                 if self.was_cleared {
                     view.clear();
@@ -494,7 +503,8 @@ where
             let index = C::deserialize_value(&index)?;
             f(index)?;
             Ok(())
-	}).await?;
+        })
+        .await?;
         Ok(())
     }
 }

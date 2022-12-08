@@ -9,8 +9,8 @@ use linera_base::{
     crypto::HashValue,
     ensure,
     messages::{
-        ApplicationDescription, ApplicationId, BlockHeight, BytecodeLocation, ChainId, Destination,
-        EffectId, Medium, Origin,
+        ApplicationDescription, ApplicationId, BlockHeight, BytecodeId, BytecodeLocation, ChainId,
+        Destination, EffectId, Medium, Origin,
     },
 };
 use linera_execution::{

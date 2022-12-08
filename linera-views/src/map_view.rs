@@ -191,7 +191,8 @@ where
             let index = C::deserialize_value(&index)?;
             f(index)?;
             Ok(())
-        }).await?;
+        })
+        .await?;
         Ok(())
     }
 
@@ -206,7 +207,11 @@ where
         let mut pair = iter.next();
         if !self.was_cleared {
             let base = self.context.base_key();
-            for (index, index_val) in self.context.find_stripped_key_values_by_prefix(&base).await? {
+            for (index, index_val) in self
+                .context
+                .find_stripped_key_values_by_prefix(&base)
+                .await?
+            {
                 let index_val = C::deserialize_value(&index_val)?;
                 loop {
                     match pair {

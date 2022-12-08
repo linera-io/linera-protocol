@@ -91,7 +91,11 @@ where
         let mut iter = self.updates.iter();
         let mut pair = iter.next();
         if !self.was_cleared {
-            for index in self.context.find_stripped_keys_by_prefix(&key_prefix).await? {
+            for index in self
+                .context
+                .find_stripped_keys_by_prefix(&key_prefix)
+                .await?
+            {
                 loop {
                     match pair {
                         Some((key, value)) => {
