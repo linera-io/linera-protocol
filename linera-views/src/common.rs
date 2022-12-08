@@ -234,16 +234,13 @@ where
     type Item = Result<Vec<u8>, E>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.iter.next() {
-            None => None,
-            Some(val) => match val {
-                Ok(val) => {
-                    let mut key = self.key_prefix.clone();
-                    key.extend_from_slice(&val);
-                    Some(Ok(key))
-                }
-                Err(err) => Some(Err(err)),
-            },
+        match self.iter.next()? {
+            Ok(val) => {
+                let mut key = self.key_prefix.clone();
+                key.extend_from_slice(&val);
+                Some(Ok(key))
+            }
+            Err(err) => Some(Err(err)),
         }
     }
 }
