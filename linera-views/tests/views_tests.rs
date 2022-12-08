@@ -704,16 +704,16 @@ async fn test_removal_api() -> anyhow::Result<()> {
 async fn compute_hash_unordered_put_view<S>(
     rng: &mut impl RngCore,
     store: &mut S,
-    l_kv: Vec<(Vec<u8>, Vec<u8>)>,
+    key_value_list: Vec<(Vec<u8>, Vec<u8>)>,
 ) -> <<S::Context as HashingContext>::Hasher as Hasher>::Output
 where
     S: StateStore,
     ViewError: From<<<S as StateStore>::Context as Context>::Error>,
 {
     let mut view = store.load(1).await.unwrap();
-    for kv in l_kv {
-        let key = kv.0;
-        let value = kv.1;
+    for key_value in key_value_list {
+        let key = key_value.0;
+        let value = key_value.1;
         let key_str = format!("{:?}", &key);
         let value_usize = (*value.first().unwrap()) as usize;
         view.map.insert(&key_str, value_usize).unwrap();
@@ -735,14 +735,14 @@ where
 async fn compute_hash_unordered_putdelete_view<S>(
     rng: &mut impl RngCore,
     store: &mut S,
-    l_op: Vec<WriteOperation>,
+    operation_list: Vec<WriteOperation>,
 ) -> <<S::Context as HashingContext>::Hasher as Hasher>::Output
 where
     S: StateStore,
     ViewError: From<<<S as StateStore>::Context as Context>::Error>,
 {
     let mut view = store.load(1).await.unwrap();
-    for e_op in l_op {
+    for e_op in operation_list {
         match e_op {
             Put { key, value } => {
                 let key_str = format!("{:?}", &key);
@@ -774,15 +774,15 @@ where
 async fn compute_hash_ordered_view<S>(
     rng: &mut impl RngCore,
     store: &mut S,
-    l_kv: Vec<(Vec<u8>, Vec<u8>)>,
+    key_value_list: Vec<(Vec<u8>, Vec<u8>)>,
 ) -> <<S::Context as HashingContext>::Hasher as Hasher>::Output
 where
     S: StateStore,
     ViewError: From<<<S as StateStore>::Context as Context>::Error>,
 {
     let mut view = store.load(1).await.unwrap();
-    for kv in l_kv {
-        let value = kv.1;
+    for key_value in key_value_list {
+        let value = key_value.1;
         let value_usize = (*value.first().unwrap()) as usize;
         view.log.push(value_usize as u32);
         view.queue.push_back(value_usize as u64);
@@ -800,20 +800,22 @@ async fn compute_hash_view_iter<R: RngCore>(rng: &mut R, n: usize, k: usize) {
     let mut unord1_hashes = Vec::new();
     let mut unord2_hashes = Vec::new();
     let mut ord_hashes = Vec::new();
-    let l_kv = get_random_key_value_vec(rng, n);
+    let key_value_list = get_random_key_value_vec(rng, n);
     let info_op = get_random_key_value_operations(rng, n, k);
     let n_iter = 4;
     for _ in 0..n_iter {
-        let mut l_kv_b = l_kv.clone();
-        random_shuffle(rng, &mut l_kv_b);
-        let l_op = span_random_reordering_put_delete(rng, info_op.clone());
+        let mut key_value_list_b = key_value_list.clone();
+        random_shuffle(rng, &mut key_value_list_b);
+        let operation_list = span_random_reordering_put_delete(rng, info_op.clone());
         //
         let mut store1 = MemoryTestStore::default();
-        unord1_hashes.push(compute_hash_unordered_put_view(rng, &mut store1, l_kv_b).await);
+        unord1_hashes
+            .push(compute_hash_unordered_put_view(rng, &mut store1, key_value_list_b).await);
         let mut store2 = MemoryTestStore::default();
-        unord2_hashes.push(compute_hash_unordered_putdelete_view(rng, &mut store2, l_op).await);
+        unord2_hashes
+            .push(compute_hash_unordered_putdelete_view(rng, &mut store2, operation_list).await);
         let mut store3 = MemoryTestStore::default();
-        ord_hashes.push(compute_hash_ordered_view(rng, &mut store3, l_kv.clone()).await);
+        ord_hashes.push(compute_hash_ordered_view(rng, &mut store3, key_value_list.clone()).await);
     }
     for i in 1..n_iter {
         assert_eq!(unord1_hashes.get(0).unwrap(), unord1_hashes.get(i).unwrap());
