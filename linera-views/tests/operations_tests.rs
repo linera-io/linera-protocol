@@ -26,19 +26,19 @@ async fn test_ordering_keys_key_value_vec<OP: KeyValueOperations + Sync>(
         batch.put_key_value_bytes(key_value.0, key_value.1);
     }
     key_value_operation.write_batch(batch).await.unwrap();
-    let key_list: Vec<Vec<u8>> = key_value_operation
+    let keys: Vec<Vec<u8>> = key_value_operation
         .find_keys_by_prefix(&key_prefix)
         .await
         .unwrap()
         .map(|x| x.expect("Failed to get vector").to_vec())
         .collect();
-    for i in 1..key_list.len() {
-        let key1 = key_list[i - 1].clone();
-        let key2 = key_list[i].clone();
+    for i in 1..keys.len() {
+        let key1 = keys[i - 1].clone();
+        let key2 = keys[i].clone();
         assert!(key1 < key2);
     }
     let mut map = HashMap::new();
-    for key in &key_list {
+    for key in &keys {
         for u in 1..key.len() + 1 {
             let key_prefix = key[0..u].to_vec();
             match map.get_mut(&key_prefix) {

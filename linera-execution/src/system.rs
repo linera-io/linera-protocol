@@ -330,7 +330,7 @@ where
                 // Unsubscribe to all channels.
                 let mut effects = Vec::new();
                 self.subscriptions
-                    .for_each_index_i(|channel| {
+                    .for_each_index(|channel| {
                         effects.push((
                             Destination::Recipient(channel.chain_id),
                             SystemEffect::Unsubscribe {

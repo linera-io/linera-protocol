@@ -210,8 +210,8 @@ pub fn get_random_key_value_operations<R: RngCore>(
     n: usize,
     k: usize,
 ) -> VectorPutDelete {
-    let l_kv = get_random_key_value_vec_prefix(rng, Vec::new(), n);
-    (l_kv, k)
+    let key_value_vector = get_random_key_value_vec_prefix(rng, Vec::new(), n);
+    (key_value_vector, k)
 }
 
 /// A random reordering of the puts and deletes.
@@ -222,32 +222,32 @@ pub fn span_random_reordering_put_delete<R: RngCore>(
 ) -> Vec<WriteOperation> {
     let n = info_op.0.len();
     let k = info_op.1;
-    let mut idx_list = Vec::new();
+    let mut indices = Vec::new();
     for i in 0..n {
-        idx_list.push(i);
+        indices.push(i);
     }
-    random_shuffle(rng, &mut idx_list);
-    let mut idx_list_rev = vec![0; n];
+    random_shuffle(rng, &mut indices);
+    let mut indices_rev = vec![0; n];
     for i in 0..n {
-        idx_list_rev[idx_list[i]] = i;
+        indices_rev[indices[i]] = i;
     }
     let mut pos_remove_vector = vec![Vec::new(); n];
-    for (i, pos) in idx_list_rev.iter().enumerate().take(k) {
+    for (i, pos) in indices_rev.iter().enumerate().take(k) {
         let idx = rng.gen_range(*pos..n);
         pos_remove_vector[idx].push(i);
     }
-    let mut l_op = Vec::new();
+    let mut operations = Vec::new();
     for i in 0..n {
-        let pos = idx_list[i];
+        let pos = indices[i];
         let pair = info_op.0[pos].clone();
-        l_op.push(Put {
+        operations.push(Put {
             key: pair.0,
             value: pair.1,
         });
         for pos_remove in pos_remove_vector[i].clone() {
             let key = info_op.0[pos_remove].0.clone();
-            l_op.push(Delete { key });
+            operations.push(Delete { key });
         }
     }
-    l_op
+    operations
 }

@@ -124,7 +124,7 @@ where
     /// Return the list of indices in the map.
     pub async fn indices(&mut self) -> Result<Vec<I>, ViewError> {
         let mut indices = Vec::<I>::new();
-        self.for_each_index_i(|index: I| {
+        self.for_each_index(|index: I| {
             indices.push(index);
             Ok(())
         })
@@ -135,7 +135,7 @@ where
     /// Execute a function on each index serialization. The order is in which values
     /// are passed is not the one of the index but its serialization. However said
     /// order will always be the same
-    pub async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), ViewError>
+    pub async fn for_each_raw_index<F>(&mut self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(Vec<u8>) -> Result<(), ViewError> + Send,
     {
@@ -183,11 +183,11 @@ where
     /// Execute a function on each index. The order is in which values are passed is not
     /// the one of the index but its serialization. However said order will always be the
     /// same
-    pub async fn for_each_index_i<F>(&mut self, mut f: F) -> Result<(), ViewError>
+    pub async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(I) -> Result<(), ViewError> + Send,
     {
-        self.for_each_index(|index: Vec<u8>| {
+        self.for_each_raw_index(|index: Vec<u8>| {
             let index = C::deserialize_value(&index)?;
             f(index)?;
             Ok(())
@@ -199,7 +199,7 @@ where
     /// Execute a function on each index seralization. The order is in which values
     /// are passed is not the one of the index but its serialization. However said
     /// order will always be the same
-    pub async fn for_each_index_value<F>(&mut self, mut f: F) -> Result<(), ViewError>
+    pub async fn for_each_raw_index_value<F>(&mut self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(Vec<u8>, V) -> Result<(), ViewError> + Send,
     {
@@ -261,7 +261,7 @@ where
     async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
         let mut hasher = C::Hasher::default();
         let mut count = 0;
-        self.for_each_index_value(|index: Vec<u8>, value: V| {
+        self.for_each_raw_index_value(|index: Vec<u8>, value: V| {
             count += 1;
             hasher.update_with_bytes(&index)?;
             hasher.update_with_bcs_bytes(&value)?;
