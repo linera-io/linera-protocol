@@ -13,6 +13,7 @@ use std::{
     },
 };
 
+#[derive(Debug)]
 pub enum WriteOperation {
     Delete { key: Vec<u8> },
     DeletePrefix { key_prefix: Vec<u8> },
@@ -148,16 +149,37 @@ impl Batch {
 pub trait KeyValueOperations {
     type Error: Debug;
     type KeyIterator: Iterator<Item = Result<Vec<u8>, Self::Error>>;
+    type KeyValueIterator: Iterator<Item = Result<(Vec<u8>, Vec<u8>), Self::Error>>;
 
+    /// Retrieve a Vec<u8> from the database using the provided `key`
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
-    async fn find_keys_with_prefix(
+    /// Find keys matching the prefix. The stripped keys are returned, that is excluding the prefix.
+    async fn find_stripped_keys_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyIterator, Self::Error>;
 
+    /// Find (key,value) matching the prefix. The stripped keys are returned, that is excluding the prefix.
+    async fn find_stripped_key_values_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::KeyValueIterator, Self::Error>;
+
+    /// Find keys matching the prefix. The full keys are returned, that is including the prefix.
+    async fn find_keys_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<PrefixAppendIterator<Self::KeyIterator, Self::Error>, Self::Error> {
+        let iter = self.find_stripped_keys_by_prefix(key_prefix).await?;
+        let key_prefix = key_prefix.to_vec();
+        Ok(PrefixAppendIterator::new(key_prefix, iter))
+    }
+
+    /// Write the batch in the database.
     async fn write_batch(&self, mut batch: Batch) -> Result<(), Self::Error>;
 
+    /// Read a single key and deserialize the result if present.
     async fn read_key<V: DeserializeOwned>(&self, key: &[u8]) -> Result<Option<V>, Self::Error>
     where
         Self::Error: From<bcs::Error>,
@@ -171,6 +193,7 @@ pub trait KeyValueOperations {
         }
     }
 
+    /// Get the vector of deserialized keys matching a prefix.
     async fn get_sub_keys<Key: DeserializeOwned + Send>(
         &self,
         key_prefix: &[u8],
@@ -178,34 +201,68 @@ pub trait KeyValueOperations {
     where
         Self::Error: From<bcs::Error>,
     {
-        let len = key_prefix.len();
         let mut keys = Vec::new();
-        for key in self.find_keys_with_prefix(key_prefix).await? {
+        for key in self.find_stripped_keys_by_prefix(key_prefix).await? {
             let key = key?;
-            keys.push(bcs::from_bytes(&key[len..])?);
+            keys.push(bcs::from_bytes(&key)?);
         }
         Ok(keys)
     }
 }
 
-// A non-optimized iterator for simple DB implementations.
-// Inspired by https://depth-first.com/articles/2020/06/22/returning-rust-iterators/
-pub struct SimpleKeyIterator<E> {
-    iter: std::vec::IntoIter<Vec<u8>>,
-    _phantom: std::marker::PhantomData<E>,
+/// An iterator that wraps another one, prefixing the items with a key prefix.
+pub struct PrefixAppendIterator<IT, E> {
+    key_prefix: Vec<u8>,
+    iter: IT,
+    _error_type: std::marker::PhantomData<E>,
 }
 
-impl<E> SimpleKeyIterator<E> {
-    pub(crate) fn new(values: Vec<Vec<u8>>) -> Self {
+impl<IT, E> PrefixAppendIterator<IT, E> {
+    pub(crate) fn new(key_prefix: Vec<u8>, iter: IT) -> Self {
         Self {
-            iter: values.into_iter(),
-            _phantom: std::marker::PhantomData,
+            key_prefix,
+            iter,
+            _error_type: std::marker::PhantomData,
         }
     }
 }
 
-impl<E> Iterator for SimpleKeyIterator<E> {
+impl<IT, E> Iterator for PrefixAppendIterator<IT, E>
+where
+    IT: Iterator<Item = Result<Vec<u8>, E>>,
+{
     type Item = Result<Vec<u8>, E>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.iter.next()? {
+            Ok(val) => {
+                let mut key = self.key_prefix.clone();
+                key.extend_from_slice(&val);
+                Some(Ok(key))
+            }
+            Err(err) => Some(Err(err)),
+        }
+    }
+}
+
+// A non-optimized iterator for simple DB implementations.
+// Inspired by https://depth-first.com/articles/2020/06/22/returning-rust-iterators/
+pub struct SimpleTypeIterator<T, E> {
+    iter: std::vec::IntoIter<T>,
+    _error_type: std::marker::PhantomData<E>,
+}
+
+impl<T, E> SimpleTypeIterator<T, E> {
+    pub(crate) fn new(values: Vec<T>) -> Self {
+        Self {
+            iter: values.into_iter(),
+            _error_type: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<T, E> Iterator for SimpleTypeIterator<T, E> {
+    type Item = Result<T, E>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.iter.next().map(Result::Ok)
@@ -232,8 +289,14 @@ pub trait Context {
     /// Obtain the Vec<u8> key from the key by serialization and using the base_key
     fn derive_key<I: Serialize>(&self, index: &I) -> Result<Vec<u8>, Self::Error>;
 
+    /// Obtain the short Vec<u8> key from the key by serialization
+    fn derive_short_key<I: Serialize>(&self, index: &I) -> Result<Vec<u8>, Self::Error>;
+
     /// Obtain the Vec<u8> key from the key by appending to the base_key
     fn derive_key_bytes(&self, index: &[u8]) -> Vec<u8>;
+
+    /// Deserialize `value_byte`.
+    fn deserialize_value<Item: DeserializeOwned>(bytes: &[u8]) -> Result<Item, Self::Error>;
 
     /// Retrieve a generic `Item` from the database using the provided `key` prefixed by the current
     /// context.
@@ -247,8 +310,17 @@ pub trait Context {
     /// context.
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
-    /// Find keys matching the prefix. The full keys are returned, that is including the prefix.
-    async fn find_keys_with_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error>;
+    /// Find keys matching the prefix. The stripped keys are returned, that is excluding the prefix.
+    async fn find_stripped_keys_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Vec<Vec<u8>>, Self::Error>;
+
+    /// Find (key,value) matching the prefix. The stripped keys are returned, that is excluding the prefix.
+    async fn find_stripped_key_values_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Self::Error>;
 
     /// Find the keys matching the prefix. The remainder of the key are parsed back into elements.
     async fn get_sub_keys<Key: DeserializeOwned + Send>(
@@ -259,7 +331,7 @@ pub trait Context {
     /// Apply the operations from the `batch`, persisting the changes.
     async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error>;
 
-    fn clone_self(&self, base_key: Vec<u8>) -> Self;
+    fn clone_with_base_key(&self, base_key: Vec<u8>) -> Self;
 }
 
 #[derive(Debug, Clone)]
@@ -298,10 +370,21 @@ where
         Ok(key)
     }
 
+    fn derive_short_key<I: Serialize>(&self, index: &I) -> Result<Vec<u8>, Self::Error> {
+        let mut key = Vec::new();
+        bcs::serialize_into(&mut key, index)?;
+        Ok(key)
+    }
+
     fn derive_key_bytes(&self, index: &[u8]) -> Vec<u8> {
         let mut key = self.base_key.clone();
         key.extend_from_slice(index);
         key
+    }
+
+    fn deserialize_value<Item: DeserializeOwned>(bytes: &[u8]) -> Result<Item, Self::Error> {
+        let value = bcs::from_bytes(bytes)?;
+        Ok(value)
     }
 
     async fn read_key<Item>(&self, key: &[u8]) -> Result<Option<Item>, Self::Error>
@@ -315,8 +398,24 @@ where
         self.db.read_key_bytes(key).await
     }
 
-    async fn find_keys_with_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
-        self.db.find_keys_with_prefix(key_prefix).await?.collect()
+    async fn find_stripped_keys_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Vec<Vec<u8>>, Self::Error> {
+        self.db
+            .find_stripped_keys_by_prefix(key_prefix)
+            .await?
+            .collect()
+    }
+
+    async fn find_stripped_key_values_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Self::Error> {
+        self.db
+            .find_stripped_key_values_by_prefix(key_prefix)
+            .await?
+            .collect()
     }
 
     async fn get_sub_keys<Key>(&mut self, key_prefix: &[u8]) -> Result<Vec<Key>, Self::Error>
@@ -331,7 +430,7 @@ where
         Ok(())
     }
 
-    fn clone_self(&self, base_key: Vec<u8>) -> Self {
+    fn clone_with_base_key(&self, base_key: Vec<u8>) -> Self {
         Self {
             db: self.db.clone(),
             base_key,

@@ -37,7 +37,7 @@ where
     }
 
     async fn load(context: C) -> Result<Self, ViewError> {
-        let scoped_context = context.clone_self(context.derive_key(&INDEX)?);
+        let scoped_context = context.clone_with_base_key(context.derive_key(&INDEX)?);
         let view = W::load(scoped_context).await?;
         Ok(Self { view })
     }

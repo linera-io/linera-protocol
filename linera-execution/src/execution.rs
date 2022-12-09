@@ -71,7 +71,10 @@ where
         view.system.epoch.set(state.epoch);
         view.system.admin_id.set(state.admin_id);
         for channel_id in state.subscriptions {
-            view.system.subscriptions.insert(channel_id, ());
+            view.system
+                .subscriptions
+                .insert(&channel_id, ())
+                .expect("serialization of channel_id should not fail");
         }
         view.system.committees.set(state.committees);
         view.system.ownership.set(state.ownership);

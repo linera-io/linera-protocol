@@ -10,6 +10,7 @@ use aws_sdk_dynamodb::{
         AttributeDefinition, AttributeValue, DeleteRequest, KeySchemaElement, KeyType,
         ProvisionedThroughput, PutRequest, ScalarAttributeType, WriteRequest,
     },
+    output::QueryOutput,
     types::{Blob, SdkError},
     Client,
 };
@@ -36,6 +37,9 @@ const KEY_ATTRIBUTE: &str = "item_key";
 
 /// The attribute name of the table value blob.
 const VALUE_ATTRIBUTE: &str = "item_value";
+
+/// The attribute for obtaining the primary key (used as a sort key) with the stored value.
+const KEY_VALUE_ATTRIBUTE: &str = "item_key, item_value";
 
 #[derive(Debug, Clone)]
 pub struct DynamoDbContainer {
@@ -84,41 +88,77 @@ impl DynamoDbContainer {
 
     /// Extract the key attribute from an item.
     fn extract_key(
-        mut attributes: HashMap<String, AttributeValue>,
+        len_prefix: usize,
+        attributes: &mut HashMap<String, AttributeValue>,
     ) -> Result<Vec<u8>, DynamoDbContextError> {
         let key = attributes
             .remove(KEY_ATTRIBUTE)
             .ok_or(DynamoDbContextError::MissingKey)?;
         match key {
-            AttributeValue::B(blob) => Ok(blob.into_inner()),
+            AttributeValue::B(blob) => Ok(blob.as_ref()[len_prefix..].to_vec()),
             key => Err(DynamoDbContextError::wrong_key_type(&key)),
         }
     }
 
     /// Extract the value attribute from an item.
     fn extract_value(
-        mut attributes: HashMap<String, AttributeValue>,
+        attributes: &mut HashMap<String, AttributeValue>,
     ) -> Result<Vec<u8>, DynamoDbContextError> {
-        let key = attributes
+        let value = attributes
             .remove(VALUE_ATTRIBUTE)
             .ok_or(DynamoDbContextError::MissingValue)?;
-        match key {
+        match value {
             AttributeValue::B(blob) => Ok(blob.into_inner()),
-            key => Err(DynamoDbContextError::wrong_value_type(&key)),
+            value => Err(DynamoDbContextError::wrong_value_type(&value)),
         }
+    }
+
+    /// Extract the key attribute from an item.
+    fn extract_key_value(
+        len_prefix: usize,
+        mut attributes: HashMap<String, AttributeValue>,
+    ) -> Result<(Vec<u8>, Vec<u8>), DynamoDbContextError> {
+        let key = Self::extract_key(len_prefix, &mut attributes)?;
+        let value = Self::extract_value(&mut attributes)?;
+        Ok((key, value))
+    }
+
+    async fn get_query_output(
+        &self,
+        attribute_str: &str,
+        key_prefix: &[u8],
+    ) -> Result<QueryOutput, DynamoDbContextError> {
+        let response = self
+            .client
+            .query()
+            .table_name(self.table.as_ref())
+            .projection_expression(attribute_str)
+            .key_condition_expression(format!(
+                "{PARTITION_ATTRIBUTE} = :partition and begins_with({KEY_ATTRIBUTE}, :prefix)"
+            ))
+            .expression_attribute_values(
+                ":partition",
+                AttributeValue::B(Blob::new(DUMMY_PARTITION_KEY)),
+            )
+            .expression_attribute_values(":prefix", AttributeValue::B(Blob::new(key_prefix)))
+            .send()
+            .await?;
+        Ok(response)
     }
 }
 
 // Inspired by https://depth-first.com/articles/2020/06/22/returning-rust-iterators/
 pub struct DynamoDbKeyIterator {
+    len_prefix: usize,
     iter: std::iter::Flatten<
         std::option::IntoIter<Vec<HashMap<std::string::String, AttributeValue>>>,
     >,
 }
 
 impl DynamoDbKeyIterator {
-    fn new(response: aws_sdk_dynamodb::output::QueryOutput) -> Self {
+    fn new(len_prefix: usize, response: aws_sdk_dynamodb::output::QueryOutput) -> Self {
         Self {
+            len_prefix,
             iter: response.items.into_iter().flatten(),
         }
     }
@@ -128,7 +168,36 @@ impl Iterator for DynamoDbKeyIterator {
     type Item = Result<Vec<u8>, DynamoDbContextError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next().map(DynamoDbContainer::extract_key)
+        self.iter
+            .next()
+            .map(|mut x| DynamoDbContainer::extract_key(self.len_prefix, &mut x))
+    }
+}
+
+// Inspired by https://depth-first.com/articles/2020/06/22/returning-rust-iterators/
+pub struct DynamoDbKeyValueIterator {
+    len_prefix: usize,
+    iter: std::iter::Flatten<
+        std::option::IntoIter<Vec<HashMap<std::string::String, AttributeValue>>>,
+    >,
+}
+
+impl DynamoDbKeyValueIterator {
+    fn new(len_prefix: usize, response: aws_sdk_dynamodb::output::QueryOutput) -> Self {
+        Self {
+            len_prefix,
+            iter: response.items.into_iter().flatten(),
+        }
+    }
+}
+
+impl Iterator for DynamoDbKeyValueIterator {
+    type Item = Result<(Vec<u8>, Vec<u8>), DynamoDbContextError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter
+            .next()
+            .map(|x| DynamoDbContainer::extract_key_value(self.len_prefix, x))
     }
 }
 
@@ -136,6 +205,7 @@ impl Iterator for DynamoDbKeyIterator {
 impl KeyValueOperations for DynamoDbContainer {
     type Error = DynamoDbContextError;
     type KeyIterator = DynamoDbKeyIterator;
+    type KeyValueIterator = DynamoDbKeyValueIterator;
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DynamoDbContextError> {
         let response = self
@@ -147,31 +217,27 @@ impl KeyValueOperations for DynamoDbContainer {
             .await?;
 
         match response.item {
-            Some(item) => Ok(Some(Self::extract_value(item)?)),
+            Some(mut item) => Ok(Some(Self::extract_value(&mut item)?)),
             None => Ok(None),
         }
     }
 
-    async fn find_keys_with_prefix(
+    async fn find_stripped_keys_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyIterator, DynamoDbContextError> {
+        let response = self.get_query_output(KEY_ATTRIBUTE, key_prefix).await?;
+        Ok(DynamoDbKeyIterator::new(key_prefix.len(), response))
+    }
+
+    async fn find_stripped_key_values_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::KeyValueIterator, DynamoDbContextError> {
         let response = self
-            .client
-            .query()
-            .table_name(self.table.as_ref())
-            .projection_expression(KEY_ATTRIBUTE)
-            .key_condition_expression(format!(
-                "{PARTITION_ATTRIBUTE} = :partition and begins_with({KEY_ATTRIBUTE}, :prefix)"
-            ))
-            .expression_attribute_values(
-                ":partition",
-                AttributeValue::B(Blob::new(DUMMY_PARTITION_KEY)),
-            )
-            .expression_attribute_values(":prefix", AttributeValue::B(Blob::new(key_prefix)))
-            .send()
+            .get_query_output(KEY_VALUE_ATTRIBUTE, key_prefix)
             .await?;
-        Ok(DynamoDbKeyIterator::new(response))
+        Ok(DynamoDbKeyValueIterator::new(key_prefix.len(), response))
     }
 
     /// We put submit the transaction in blocks (called BatchWriteItem in dynamoDb) of at most 25
@@ -193,8 +259,10 @@ impl KeyValueOperations for DynamoDbContainer {
                     insert_list.push((key, value));
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
-                    for key in self.find_keys_with_prefix(&key_prefix).await? {
-                        delete_list.push(key?);
+                    for short_key in self.find_stripped_keys_by_prefix(&key_prefix).await? {
+                        let mut key = key_prefix.clone();
+                        key.extend_from_slice(&short_key?);
+                        delete_list.push(key);
                     }
                 }
             };

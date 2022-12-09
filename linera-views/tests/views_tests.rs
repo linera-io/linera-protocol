@@ -4,7 +4,10 @@
 use async_trait::async_trait;
 use linera_views::{
     collection_view::{CollectionView, ReentrantCollectionView},
-    common::{Batch, Context},
+    common::{
+        Batch, Context, WriteOperation,
+        WriteOperation::{Delete, DeletePrefix, Put},
+    },
     dynamo_db::DynamoDbContext,
     impl_view,
     key_value_store_view::{KeyValueStoreMemoryContext, KeyValueStoreView},
@@ -15,7 +18,10 @@ use linera_views::{
     register_view::RegisterView,
     rocksdb::{RocksdbContext, DB},
     scoped_view::ScopedView,
-    test_utils::{get_random_key_value_vec, random_shuffle, LocalStackTestContext},
+    test_utils::{
+        get_random_key_value_operations, get_random_key_value_vec, random_shuffle,
+        span_random_reordering_put_delete, LocalStackTestContext,
+    },
     views::{HashView, Hasher, HashingContext, View, ViewError},
 };
 use rand::{Rng, RngCore, SeedableRng};
@@ -243,11 +249,14 @@ where
             view.queue.delete_front();
         }
         if config.with_map {
-            view.map.insert("Hello".to_string(), 5);
+            view.map.insert(&"Hello".to_string(), 5).unwrap();
             assert_eq!(view.map.indices().await.unwrap(), vec!["Hello".to_string()]);
             let mut count = 0;
             view.map
-                .for_each_index(|_index: String| count += 1)
+                .for_each_raw_index(|_index: Vec<u8>| {
+                    count += 1;
+                    Ok(())
+                })
                 .await
                 .unwrap();
             assert_eq!(count, 1);
@@ -278,7 +287,10 @@ where
         );
         let mut count = 0;
         view.collection
-            .for_each_index(|_index: String| count += 1)
+            .for_each_raw_index(|_index: Vec<u8>| {
+                count += 1;
+                Ok(())
+            })
             .await
             .unwrap();
         assert_eq!(count, 1);
@@ -331,9 +343,9 @@ where
             view.queue.push_back(7);
         }
         if config.with_map {
-            view.map.insert("Hello".to_string(), 5);
-            view.map.insert("Hi".to_string(), 2);
-            view.map.remove("Hi".to_string());
+            view.map.insert(&"Hello".to_string(), 5).unwrap();
+            view.map.insert(&"Hi".to_string(), 2).unwrap();
+            view.map.remove(&"Hi".to_string()).unwrap();
         }
         {
             let subview = view
@@ -404,7 +416,7 @@ where
             view.collection.indices().await.unwrap(),
             vec!["hola".to_string()]
         );
-        view.collection.remove_entry("hola".to_string());
+        view.collection.remove_entry("hola".to_string()).unwrap();
         assert_ne!(view.hash().await.unwrap(), stored_hash);
         view.save().await.unwrap();
     }
@@ -534,7 +546,7 @@ where
     {
         let mut view = store.load(1).await.unwrap();
         view.queue.push_back(8);
-        view.map.insert("Hello".to_string(), 5);
+        view.map.insert(&"Hello".to_string(), 5).unwrap();
         let subview = view
             .collection
             .load_entry("hola".to_string())
@@ -546,7 +558,7 @@ where
     {
         let mut view = store.load(1).await.unwrap();
         view.queue.push_back(7);
-        view.map.insert("Hello".to_string(), 4);
+        view.map.insert(&"Hello".to_string(), 4).unwrap();
         let subview = view
             .collection
             .load_entry("DobryDen".to_string())
@@ -607,7 +619,7 @@ async fn test_collection_removal() -> anyhow::Result<()> {
 
     // Remove the entry from the collection.
     let mut collection = CollectionViewType::load(context.clone()).await?;
-    collection.remove_entry(1);
+    collection.remove_entry(1).unwrap();
     let mut batch = Batch::default();
     collection.flush(&mut batch)?;
     collection.context().write_batch(batch).await?;
@@ -639,7 +651,7 @@ async fn test_removal_api_first_second_condition(
 
     // Reload the collection view and remove the entry, but don't commit yet
     let mut collection: CollectionViewType = CollectionView::load(context.clone()).await?;
-    collection.remove_entry(1);
+    collection.remove_entry(1).unwrap();
 
     // Now, read the entry with a different value if a certain condition is true
     if first_condition {
@@ -689,23 +701,27 @@ async fn test_removal_api() -> anyhow::Result<()> {
 }
 
 #[cfg(test)]
-async fn compute_hash_map_keyvaluestore_view<S>(
+async fn compute_hash_unordered_put_view<S>(
     rng: &mut impl RngCore,
     store: &mut S,
-    l_kv: Vec<(Vec<u8>, Vec<u8>)>,
+    key_value_vector: Vec<(Vec<u8>, Vec<u8>)>,
 ) -> <<S::Context as HashingContext>::Hasher as Hasher>::Output
 where
     S: StateStore,
     ViewError: From<<<S as StateStore>::Context as Context>::Error>,
 {
     let mut view = store.load(1).await.unwrap();
-    for kv in l_kv {
-        let key = kv.0;
-        let value = kv.1;
+    for key_value in key_value_vector {
+        let key = key_value.0;
+        let value = key_value.1;
         let key_str = format!("{:?}", &key);
         let value_usize = (*value.first().unwrap()) as usize;
-        view.map.insert(key_str, value_usize);
+        view.map.insert(&key_str, value_usize).unwrap();
         view.key_value_store.insert(key, value);
+        {
+            let subview = view.collection.load_entry(key_str).await.unwrap();
+            subview.push(value_usize as u32);
+        }
         //
         let thr = rng.gen_range(0..20);
         if thr == 0 {
@@ -716,30 +732,106 @@ where
 }
 
 #[cfg(test)]
-async fn compute_hash_map_keyvaluestore_view_iter<R: RngCore>(
-    rng: &mut R,
-    l_kv: Vec<(Vec<u8>, Vec<u8>)>,
-) {
-    let mut l_answer = Vec::new();
+async fn compute_hash_unordered_putdelete_view<S>(
+    rng: &mut impl RngCore,
+    store: &mut S,
+    operations: Vec<WriteOperation>,
+) -> <<S::Context as HashingContext>::Hasher as Hasher>::Output
+where
+    S: StateStore,
+    ViewError: From<<<S as StateStore>::Context as Context>::Error>,
+{
+    let mut view = store.load(1).await.unwrap();
+    for operation in operations {
+        match operation {
+            Put { key, value } => {
+                let key_str = format!("{:?}", &key);
+                let value_usize = (*value.first().unwrap()) as usize;
+                view.map.insert(&key_str, value_usize).unwrap();
+                view.key_value_store.insert(key, value);
+                {
+                    let subview = view.collection.load_entry(key_str).await.unwrap();
+                    subview.push(value_usize as u32);
+                }
+            }
+            Delete { key } => {
+                let key_str = format!("{:?}", &key);
+                view.map.remove(&key_str).unwrap();
+                view.key_value_store.remove(key);
+            }
+            DeletePrefix { key_prefix: _ } => {}
+        }
+        //
+        let thr = rng.gen_range(0..10);
+        if thr == 0 {
+            view.save().await.unwrap();
+        }
+    }
+    view.hash().await.unwrap()
+}
+
+#[cfg(test)]
+async fn compute_hash_ordered_view<S>(
+    rng: &mut impl RngCore,
+    store: &mut S,
+    key_value_vector: Vec<(Vec<u8>, Vec<u8>)>,
+) -> <<S::Context as HashingContext>::Hasher as Hasher>::Output
+where
+    S: StateStore,
+    ViewError: From<<<S as StateStore>::Context as Context>::Error>,
+{
+    let mut view = store.load(1).await.unwrap();
+    for key_value in key_value_vector {
+        let value = key_value.1;
+        let value_usize = (*value.first().unwrap()) as usize;
+        view.log.push(value_usize as u32);
+        view.queue.push_back(value_usize as u64);
+        //
+        let thr = rng.gen_range(0..20);
+        if thr == 0 {
+            view.save().await.unwrap();
+        }
+    }
+    view.hash().await.unwrap()
+}
+
+#[cfg(test)]
+async fn compute_hash_view_iter<R: RngCore>(rng: &mut R, n: usize, k: usize) {
+    let mut unord1_hashes = Vec::new();
+    let mut unord2_hashes = Vec::new();
+    let mut ord_hashes = Vec::new();
+    let key_value_vector = get_random_key_value_vec(rng, n);
+    let info_op = get_random_key_value_operations(rng, n, k);
     let n_iter = 4;
     for _ in 0..n_iter {
-        let mut l_kv_b = l_kv.clone();
-        random_shuffle(rng, &mut l_kv_b);
-        let mut store = MemoryTestStore::default();
-        l_answer.push(compute_hash_map_keyvaluestore_view(rng, &mut store, l_kv_b).await);
+        let mut key_value_vector_b = key_value_vector.clone();
+        random_shuffle(rng, &mut key_value_vector_b);
+        let operations = span_random_reordering_put_delete(rng, info_op.clone());
+        //
+        let mut store1 = MemoryTestStore::default();
+        unord1_hashes
+            .push(compute_hash_unordered_put_view(rng, &mut store1, key_value_vector_b).await);
+        let mut store2 = MemoryTestStore::default();
+        unord2_hashes
+            .push(compute_hash_unordered_putdelete_view(rng, &mut store2, operations).await);
+        let mut store3 = MemoryTestStore::default();
+        ord_hashes
+            .push(compute_hash_ordered_view(rng, &mut store3, key_value_vector.clone()).await);
     }
     for i in 1..n_iter {
-        assert_eq!(l_answer.get(0).unwrap(), l_answer.get(i).unwrap());
+        assert_eq!(unord1_hashes.get(0).unwrap(), unord1_hashes.get(i).unwrap());
+        assert_eq!(unord2_hashes.get(0).unwrap(), unord2_hashes.get(i).unwrap());
+        assert_eq!(ord_hashes.get(0).unwrap(), ord_hashes.get(i).unwrap());
     }
 }
 
 #[tokio::test]
-async fn compute_hash_map_keyvaluestore_view_iter_large() {
-    let n_iter = 4;
-    let n = 1000;
+async fn compute_hash_view_iter_large() {
+    let n_iter = 2;
+    let n = 100;
+    let k = 30;
     let mut rng = rand::rngs::StdRng::seed_from_u64(2);
     for _ in 0..n_iter {
-        let l_kv = get_random_key_value_vec(&mut rng, n);
-        compute_hash_map_keyvaluestore_view_iter(&mut rng, l_kv).await;
+        compute_hash_view_iter(&mut rng, n, k).await;
     }
 }

@@ -4,14 +4,15 @@ use crate::{
 };
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{cmp::Eq, collections::BTreeMap, fmt::Debug, mem};
+use std::{collections::BTreeMap, fmt::Debug, marker::PhantomData, mem};
 
 /// A view that supports inserting and removing values indexed by a key.
 #[derive(Debug, Clone)]
 pub struct MapView<C, I, V> {
     context: C,
     was_cleared: bool,
-    updates: BTreeMap<I, Option<V>>,
+    updates: BTreeMap<Vec<u8>, Option<V>>,
+    _phantom: PhantomData<I>,
 }
 
 #[async_trait]
@@ -19,7 +20,7 @@ impl<C, I, V> View<C> for MapView<C, I, V>
 where
     C: Context + Send,
     ViewError: From<C::Error>,
-    I: Eq + Ord + Send + Sync + Clone + Serialize,
+    I: Send + Sync + Clone + Serialize,
     V: Clone + Send + Sync + Serialize,
 {
     fn context(&self) -> &C {
@@ -31,6 +32,7 @@ where
             context,
             was_cleared: false,
             updates: BTreeMap::new(),
+            _phantom: PhantomData,
         })
     }
 
@@ -45,14 +47,15 @@ where
             batch.delete_key_prefix(self.context.base_key());
             for (index, update) in mem::take(&mut self.updates) {
                 if let Some(value) = update {
-                    batch.put_key_value(self.context.derive_key(&index)?, &value)?;
+                    batch.put_key_value(self.context.derive_key_bytes(&index), &value)?;
                 }
             }
         } else {
             for (index, update) in mem::take(&mut self.updates) {
+                let key = self.context.derive_key_bytes(&index);
                 match update {
-                    None => batch.delete_key(self.context.derive_key(&index)?),
-                    Some(value) => batch.put_key_value(self.context.derive_key(&index)?, &value)?,
+                    None => batch.delete_key(key),
+                    Some(value) => batch.put_key_value(key, &value)?,
                 }
             }
         }
@@ -72,20 +75,25 @@ where
 impl<C, I, V> MapView<C, I, V>
 where
     C: Context,
-    I: Eq + Ord,
+    ViewError: From<C::Error>,
+    I: Serialize,
 {
     /// Set or insert a value.
-    pub fn insert(&mut self, index: I, value: V) {
-        self.updates.insert(index, Some(value));
+    pub fn insert(&mut self, index: &I, value: V) -> Result<(), ViewError> {
+        let short_key = self.context.derive_short_key(index)?;
+        self.updates.insert(short_key, Some(value));
+        Ok(())
     }
 
     /// Remove a value.
-    pub fn remove(&mut self, index: I) {
+    pub fn remove(&mut self, index: &I) -> Result<(), ViewError> {
+        let short_key = self.context.derive_short_key(index)?;
         if self.was_cleared {
-            self.updates.remove(&index);
+            self.updates.remove(&short_key);
         } else {
-            self.updates.insert(index, None);
+            self.updates.insert(short_key, None);
         }
+        Ok(())
     }
 
     pub fn extra(&self) -> &C::Extra {
@@ -97,12 +105,13 @@ impl<C, I, V> MapView<C, I, V>
 where
     C: Context,
     ViewError: From<C::Error>,
-    I: Eq + Ord + Sync + Clone + Send + Serialize + DeserializeOwned,
-    V: Clone + Sync + DeserializeOwned,
+    I: Sync + Clone + Send + Serialize + DeserializeOwned,
+    V: Clone + Sync + DeserializeOwned + 'static,
 {
     /// Read the value at the given position, if any.
     pub async fn get(&mut self, index: &I) -> Result<Option<V>, ViewError> {
-        if let Some(update) = self.updates.get(index) {
+        let short_key = self.context.derive_short_key(index)?;
+        if let Some(update) = self.updates.get(&short_key) {
             return Ok(update.as_ref().cloned());
         }
         if self.was_cleared {
@@ -114,39 +123,128 @@ where
 
     /// Return the list of indices in the map.
     pub async fn indices(&mut self) -> Result<Vec<I>, ViewError> {
-        let mut indices = Vec::new();
-        if !self.was_cleared {
-            let base = self.context.base_key();
-            for index in self.context.get_sub_keys(&base).await? {
-                indices.push(index);
-            }
-        }
-        for (index, entry) in &self.updates {
-            if entry.is_some() {
-                indices.push(index.clone());
-            }
-        }
-        indices.sort();
+        let mut indices = Vec::<I>::new();
+        self.for_each_index(|index: I| {
+            indices.push(index);
+            Ok(())
+        })
+        .await?;
         Ok(indices)
     }
 
-    /// Execute a function on each index. The function f must be order independent
-    pub async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), ViewError>
+    /// Execute a function on each index serialization. The order is in which values
+    /// are passed is not the one of the index but its serialization. However said
+    /// order will always be the same
+    pub async fn for_each_raw_index<F>(&mut self, mut f: F) -> Result<(), ViewError>
     where
-        F: FnMut(I) + Send,
+        F: FnMut(Vec<u8>) -> Result<(), ViewError> + Send,
     {
+        let mut iter = self.updates.iter();
+        let mut pair = iter.next();
         if !self.was_cleared {
             let base = self.context.base_key();
-            for index in self.context.get_sub_keys(&base).await? {
-                if !self.updates.contains_key(&index) {
-                    f(index);
+            for index in self.context.find_stripped_keys_by_prefix(&base).await? {
+                loop {
+                    match pair {
+                        Some((key, value)) => {
+                            let key = key.clone();
+                            if key < index {
+                                if value.is_some() {
+                                    f(key)?;
+                                }
+                                pair = iter.next();
+                            } else {
+                                if key != index {
+                                    f(index)?;
+                                } else if value.is_some() {
+                                    f(key)?;
+                                    pair = iter.next();
+                                }
+                                break;
+                            }
+                        }
+                        None => {
+                            f(index)?;
+                            break;
+                        }
+                    }
                 }
             }
         }
-        for (index, entry) in &self.updates {
-            if entry.is_some() {
-                f(index.clone());
+        while let Some((key, value)) = pair {
+            if value.is_some() {
+                f(key.to_vec())?;
             }
+            pair = iter.next();
+        }
+        Ok(())
+    }
+
+    /// Execute a function on each index. The order is in which values are passed is not
+    /// the one of the index but its serialization. However said order will always be the
+    /// same
+    pub async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), ViewError>
+    where
+        F: FnMut(I) -> Result<(), ViewError> + Send,
+    {
+        self.for_each_raw_index(|index: Vec<u8>| {
+            let index = C::deserialize_value(&index)?;
+            f(index)?;
+            Ok(())
+        })
+        .await?;
+        Ok(())
+    }
+
+    /// Execute a function on each index seralization. The order is in which values
+    /// are passed is not the one of the index but its serialization. However said
+    /// order will always be the same
+    pub async fn for_each_raw_index_value<F>(&mut self, mut f: F) -> Result<(), ViewError>
+    where
+        F: FnMut(Vec<u8>, V) -> Result<(), ViewError> + Send,
+    {
+        let mut iter = self.updates.iter();
+        let mut pair = iter.next();
+        if !self.was_cleared {
+            let base = self.context.base_key();
+            for (index, index_val) in self
+                .context
+                .find_stripped_key_values_by_prefix(&base)
+                .await?
+            {
+                let index_val = C::deserialize_value(&index_val)?;
+                loop {
+                    match pair {
+                        Some((key, value)) => {
+                            let key = key.clone();
+                            if key < index {
+                                if let Some(value) = value {
+                                    f(key, value.clone())?;
+                                }
+                                pair = iter.next();
+                            } else {
+                                if key != index {
+                                    f(index, index_val)?;
+                                } else if let Some(value) = value {
+                                    f(key, value.clone())?;
+                                    pair = iter.next();
+                                }
+                                break;
+                            }
+                        }
+                        None => {
+                            f(index, index_val)?;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        while let Some((key, value)) = pair {
+            if let Some(value) = value {
+                f(key.clone(), value.clone())?;
+            }
+            pair = iter.next();
         }
         Ok(())
     }
@@ -157,22 +255,20 @@ impl<C, I, V> HashView<C> for MapView<C, I, V>
 where
     C: HashingContext + Context + Send + Sync,
     ViewError: From<C::Error>,
-    I: Eq + Ord + Clone + Send + Sync + Serialize + DeserializeOwned,
-    V: Clone + Send + Sync + Serialize + DeserializeOwned,
+    I: Clone + Send + Sync + Serialize + DeserializeOwned,
+    V: Clone + Send + Sync + Serialize + DeserializeOwned + 'static,
 {
     async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
         let mut hasher = C::Hasher::default();
-        let indices = self.indices().await?;
-        hasher.update_with_bcs_bytes(&indices.len())?;
-
-        for index in indices {
-            let value = self
-                .get(&index)
-                .await?
-                .expect("The value for the returned index should be present");
-            hasher.update_with_bcs_bytes(&index)?;
+        let mut count = 0;
+        self.for_each_raw_index_value(|index: Vec<u8>, value: V| {
+            count += 1;
+            hasher.update_with_bytes(&index)?;
             hasher.update_with_bcs_bytes(&value)?;
-        }
+            Ok(())
+        })
+        .await?;
+        hasher.update_with_bcs_bytes(&count)?;
         Ok(hasher.finalize())
     }
 }

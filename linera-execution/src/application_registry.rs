@@ -26,7 +26,9 @@ where
     ///
     /// Keeps track of the bytecode's location so that it can be loaded when needed.
     pub fn register_published_bytecode(&mut self, id: BytecodeId, location: BytecodeLocation) {
-        self.published_bytecodes.insert(id, location);
+        self.published_bytecodes
+            .insert(&id, location)
+            .expect("serialization error for id");
     }
 
     /// Register an existing application.
@@ -37,7 +39,9 @@ where
         application: ApplicationDescription,
     ) -> ApplicationId {
         let id = ApplicationId::from(&application);
-        self.known_applications.insert(id, application);
+        self.known_applications
+            .insert(&id, application)
+            .expect("serialization error for id");
         id
     }
 
@@ -66,7 +70,8 @@ where
         };
 
         self.known_applications
-            .insert(new_application.id, application_description.clone());
+            .insert(&new_application.id, application_description.clone())
+            .expect("serialization error for id");
 
         Ok(application_description)
     }

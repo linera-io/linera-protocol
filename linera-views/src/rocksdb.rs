@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::common::{
-    get_upper_bound, Batch, ContextFromDb, KeyValueOperations, SimpleKeyIterator, WriteOperation,
+    get_upper_bound, Batch, ContextFromDb, KeyValueOperations, SimpleTypeIterator, WriteOperation,
 };
 use async_trait::async_trait;
 use std::sync::Arc;
@@ -17,7 +17,8 @@ pub type RocksdbContext<E> = ContextFromDb<E, RocksdbContainer>;
 #[async_trait]
 impl KeyValueOperations for RocksdbContainer {
     type Error = RocksdbContextError;
-    type KeyIterator = SimpleKeyIterator<RocksdbContextError>;
+    type KeyIterator = SimpleTypeIterator<Vec<u8>, RocksdbContextError>;
+    type KeyValueIterator = SimpleTypeIterator<(Vec<u8>, Vec<u8>), RocksdbContextError>;
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RocksdbContextError> {
         let db = self.clone();
@@ -25,12 +26,13 @@ impl KeyValueOperations for RocksdbContainer {
         Ok(tokio::task::spawn_blocking(move || db.get(&key)).await??)
     }
 
-    async fn find_keys_with_prefix(
+    async fn find_stripped_keys_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyIterator, RocksdbContextError> {
         let db = self.clone();
         let prefix = key_prefix.to_vec();
+        let len = prefix.len();
         let keys = tokio::task::spawn_blocking(move || {
             let mut iter = db.raw_iterator();
             let mut keys = Vec::new();
@@ -40,14 +42,43 @@ impl KeyValueOperations for RocksdbContainer {
                 if !key.starts_with(&prefix) {
                     break;
                 }
-                keys.push(key.to_vec());
+                keys.push(key[len..].to_vec());
                 iter.next();
                 next_key = iter.key();
             }
             keys
         })
         .await?;
-        Ok(SimpleKeyIterator::new(keys))
+        Ok(Self::KeyIterator::new(keys))
+    }
+
+    async fn find_stripped_key_values_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::KeyValueIterator, RocksdbContextError> {
+        let db = self.clone();
+        let prefix = key_prefix.to_vec();
+        let len = prefix.len();
+        let key_values = tokio::task::spawn_blocking(move || {
+            let mut iter = db.raw_iterator();
+            let mut key_values = Vec::new();
+            iter.seek(&prefix);
+            let mut next_key = iter.key();
+            while let Some(key) = next_key {
+                if !key.starts_with(&prefix) {
+                    break;
+                }
+                if let Some(value) = iter.value() {
+                    let key_value = (key[len..].to_vec(), value.to_vec());
+                    key_values.push(key_value);
+                }
+                iter.next();
+                next_key = iter.key();
+            }
+            key_values
+        })
+        .await?;
+        Ok(Self::KeyValueIterator::new(key_values))
     }
 
     async fn write_batch(&self, mut batch: Batch) -> Result<(), RocksdbContextError> {
@@ -56,15 +87,21 @@ impl KeyValueOperations for RocksdbContainer {
         // Thus in order to have the system working, we need to handle the unlikely case of having to
         // delete a key starting with [255, ...., 255]
         let len = batch.operations.len();
+        let mut keys = Vec::new();
         for i in 0..len {
             let op = batch.operations.get(i).unwrap();
             if let WriteOperation::DeletePrefix { key_prefix } = op {
                 if get_upper_bound(key_prefix).is_none() {
-                    for key in self.find_keys_with_prefix(key_prefix).await? {
-                        batch.operations.push(WriteOperation::Delete { key: key? });
+                    for short_key in self.find_stripped_keys_by_prefix(key_prefix).await? {
+                        let mut key = key_prefix.clone();
+                        key.extend_from_slice(&short_key?);
+                        keys.push(key);
                     }
                 }
             }
+        }
+        for key in keys {
+            batch.operations.push(WriteOperation::Delete { key });
         }
         tokio::task::spawn_blocking(move || -> Result<(), RocksdbContextError> {
             let mut inner_batch = rocksdb::WriteBatchWithTransaction::default();

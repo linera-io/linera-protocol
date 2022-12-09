@@ -9,8 +9,8 @@ use linera_base::{
     crypto::HashValue,
     ensure,
     messages::{
-        ApplicationDescription, ApplicationId, BlockHeight, BytecodeLocation, ChainId, Destination,
-        EffectId, Medium, Origin,
+        ApplicationDescription, ApplicationId, BlockHeight, BytecodeId, BytecodeLocation, ChainId,
+        Destination, EffectId, Medium, Origin,
     },
 };
 use linera_execution::{
@@ -196,7 +196,7 @@ where
         }
         let updated = outbox.mark_messages_as_received(height).await?;
         if updated && outbox.queue.count() == 0 {
-            outboxes.remove_entry(recipient);
+            outboxes.remove_entry(recipient)?;
         }
         Ok(updated)
     }
@@ -425,7 +425,7 @@ where
                     .reset(self.execution_state.system.ownership.get());
             }
             Effect::System(SystemEffect::BytecodePublished) => {
-                let bytecode_id = effect_id.into();
+                let bytecode_id = BytecodeId::from(effect_id);
                 let bytecode_location = BytecodeLocation {
                     certificate_hash,
                     operation_index: effect_id.index,
@@ -737,7 +737,7 @@ where
         for (name, id) in application.unsubscribe {
             let channel = channels.load_entry(name.to_string()).await?;
             // Remove subscriber. Do not remove the channel outbox yet.
-            channel.subscribers.remove(id);
+            channel.subscribers.remove(&id)?;
         }
         for name in channel_broadcasts {
             let channel = channels.load_entry(name.to_string()).await?;
@@ -757,7 +757,7 @@ where
                     outbox.schedule_message(*latest_height).await?;
                 }
             }
-            channel.subscribers.insert(id, ());
+            channel.subscribers.insert(&id, ())?;
         }
         Ok(())
     }
