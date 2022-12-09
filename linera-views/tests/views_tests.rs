@@ -815,7 +815,8 @@ async fn compute_hash_view_iter<R: RngCore>(rng: &mut R, n: usize, k: usize) {
         unord2_hashes
             .push(compute_hash_unordered_putdelete_view(rng, &mut store2, operations).await);
         let mut store3 = MemoryTestStore::default();
-        ord_hashes.push(compute_hash_ordered_view(rng, &mut store3, key_value_vector.clone()).await);
+        ord_hashes
+            .push(compute_hash_ordered_view(rng, &mut store3, key_value_vector.clone()).await);
     }
     for i in 1..n_iter {
         assert_eq!(unord1_hashes.get(0).unwrap(), unord1_hashes.get(i).unwrap());
