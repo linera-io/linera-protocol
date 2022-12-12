@@ -47,21 +47,21 @@ message ChainInfoResult {
 message CrossChainRequest {
   oneof inner {
     UpdateRecipient update_recipient = 1;
-    ConfirmUpdateRecipient confirm_update_recipient = 2;
+    ConfirmUpdatedRecipient confirm_updated_recipient = 2;
   }
 }
 
 // Communicate a number of confirmed blocks from the sender to the recipient.
 // Blocks must be given by increasing heights.
 message UpdateRecipient {
-  ApplicationId application_id = 1;
+  ApplicationDescription application = 1;
   Origin origin = 2;
   ChainId recipient = 3;
   repeated Certificate certificates = 4;
 }
 
 // Acknowledge the height of the highest confirmed block communicated with `UpdateRecipient`.
-message ConfirmUpdateRecipient {
+message ConfirmUpdatedRecipient {
   ApplicationId application_id = 1;
   Origin origin = 2;
   ChainId recipient = 3;
@@ -124,7 +124,7 @@ message Certificate {
   repeated NameSignaturePair signatures = 2;
 }
 
-/// A range of block heights as used in ChainInfoQuery.
+// A range of block heights as used in ChainInfoQuery.
 message BlockHeightRange {
   // Starting point
   BlockHeight start = 1;
@@ -138,8 +138,70 @@ message NameSignaturePair {
   Signature signature = 2;
 }
 
+// A unique identifier for an application.
 message ApplicationId {
-  uint64 inner = 1;
+  oneof inner {
+    // The system application.
+    google.protobuf.Empty system = 1;
+    // A user application.
+    UserApplicationId user = 2;
+  }
+}
+
+// A user application Id.
+message UserApplicationId {
+  // The bytecode to use for the application.
+  BytecodeId bytecode = 1;
+
+  // The unique ID of the application's creation.
+  EffectId creation = 2;
+}
+
+message ApplicationDescription {
+  oneof inner {
+    // The system application.
+    google.protobuf.Empty system = 1;
+    // A user application.
+    UserApplicationDescription user = 2;
+  }
+}
+
+// Description of the necessary information to run a user application.
+message UserApplicationDescription {
+  // The bytecode to use for the application.
+  BytecodeId bytecode_id = 1;
+
+  // The location of the bytecode to use for the application
+  BytecodeLocation bytecode = 2;
+
+  // The unique ID of the application's creation.
+  EffectId creation = 3;
+
+  // The argument used during application initialization.
+  bytes InitialisationArgument = 4;
+}
+
+// A reference to where the application bytecode is stored.
+message BytecodeLocation {
+  // The certificate that published the bytecode.
+  bytes certificate_hash = 1;
+
+  // The index in the certificate of the operation that published the bytecode.
+  uint64 operation_index = 2;
+}
+
+// A unique identifier for an application bytecode.
+message BytecodeId {
+  EffectId publish_effect = 1;
+}
+
+// The index of an effect in a chain.
+message EffectId {
+  ChainId chain_id = 1;
+
+  BlockHeight height = 2;
+
+  uint64 index = 3;
 }
 
 message ChainId {

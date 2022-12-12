@@ -1,8 +1,7 @@
 use crate::grpc_network::{
     grpc,
     grpc::{
-        cross_chain_request::Inner, ChainInfoResult, ConfirmUpdateRecipient, NameSignaturePair,
-        UpdateRecipient,
+        cross_chain_request::Inner, ChainInfoResult,  NameSignaturePair,
     },
 };
 use ed25519::signature::Signature as edSignature;
@@ -13,12 +12,19 @@ use linera_base::{
     crypto::{CryptoError, PublicKey, Signature},
     messages::{ApplicationId, BlockHeight, ChainId, Medium, Origin, ValidatorName},
 };
+use linera_base::crypto::HashValue;
 use linera_chain::messages::{BlockProposal, Certificate};
 use linera_core::messages::{
     BlockHeightRange, ChainInfoQuery, ChainInfoResponse, CrossChainRequest,
 };
 
-use linera_base::messages::Owner;
+use crate::grpc_network::grpc::{
+    application_description, UserApplicationDescription, UserApplicationId,
+};
+use linera_base::messages::{
+    ApplicationDescription, BytecodeId, BytecodeLocation, EffectId, Owner,
+};
+use linera_core::messages::CrossChainRequest::{ConfirmUpdatedRecipient, UpdateRecipient};
 use linera_core::node::NodeError;
 
 #[derive(Error, Debug)]
@@ -228,24 +234,24 @@ impl TryFrom<grpc::CrossChainRequest> for CrossChainRequest {
             .inner
             .ok_or(ProtoConversionError::MissingField)?
         {
-            Inner::UpdateRecipient(UpdateRecipient {
-                application_id,
+            Inner::UpdateRecipient(grpc::UpdateRecipient {
+                application,
                 origin,
                 recipient,
                 certificates,
-            }) => CrossChainRequest::UpdateRecipient {
-                application_id: proto_convert!(application_id),
+            }) => UpdateRecipient {
+                application: try_proto_convert!(application),
                 origin: try_proto_convert!(origin),
                 recipient: try_proto_convert!(recipient),
                 certificates: try_proto_convert_vec!(certificates, Certificate),
             },
-            Inner::ConfirmUpdateRecipient(ConfirmUpdateRecipient {
+            Inner::ConfirmUpdatedRecipient(grpc::ConfirmUpdatedRecipient {
                 application_id,
                 origin,
                 recipient,
                 height,
-            }) => CrossChainRequest::ConfirmUpdatedRecipient {
-                application_id: proto_convert!(application_id),
+            }) => ConfirmUpdatedRecipient {
+                application_id: try_proto_convert!(application_id),
                 origin: try_proto_convert!(origin),
                 recipient: try_proto_convert!(recipient),
                 height: proto_convert!(height),
@@ -260,23 +266,23 @@ impl TryFrom<CrossChainRequest> for grpc::CrossChainRequest {
 
     fn try_from(cross_chain_request: CrossChainRequest) -> Result<Self, Self::Error> {
         let inner = match cross_chain_request {
-            CrossChainRequest::UpdateRecipient {
-                application_id,
+            UpdateRecipient {
+                application,
                 origin,
                 recipient,
                 certificates,
-            } => Inner::UpdateRecipient(UpdateRecipient {
-                application_id: Some(application_id.into()),
+            } => Inner::UpdateRecipient(grpc::UpdateRecipient {
+                application: Some(application.into()),
                 origin: Some(origin.into()),
                 recipient: Some(recipient.into()),
                 certificates: try_proto_convert_vec!(certificates, grpc::Certificate),
             }),
-            CrossChainRequest::ConfirmUpdatedRecipient {
+            ConfirmUpdatedRecipient {
                 application_id,
                 origin,
                 recipient,
                 height,
-            } => Inner::ConfirmUpdateRecipient(ConfirmUpdateRecipient {
+            } => Inner::ConfirmUpdatedRecipient(grpc::ConfirmUpdatedRecipient {
                 application_id: Some(application_id.into()),
                 origin: Some(origin.into()),
                 recipient: Some(recipient.into()),
@@ -414,22 +420,151 @@ impl TryFrom<grpc::BlockHeightRange> for BlockHeightRange {
 
 impl From<ApplicationId> for grpc::ApplicationId {
     fn from(application_id: ApplicationId) -> Self {
-        Self {
-            inner: application_id.0,
+        match application_id {
+            ApplicationId::System => grpc::ApplicationId {
+                inner: Some(grpc::application_id::Inner::System(())),
+            },
+            ApplicationId::User { bytecode, creation } => grpc::ApplicationId {
+                inner: Some(grpc::application_id::Inner::User(UserApplicationId {
+                    bytecode: Some(bytecode.into()),
+                    creation: Some(creation.into()),
+                })),
+            },
         }
     }
 }
 
-impl From<grpc::ApplicationId> for ApplicationId {
-    fn from(application_id: grpc::ApplicationId) -> Self {
-        ApplicationId(application_id.inner)
+impl TryFrom<grpc::ApplicationId> for ApplicationId {
+    type Error = ProtoConversionError;
+
+    fn try_from(application_id: grpc::ApplicationId) -> Result<Self, Self::Error> {
+        Ok(
+            match application_id
+                .inner
+                .ok_or(ProtoConversionError::MissingField)?
+            {
+                grpc::application_id::Inner::System(_) => ApplicationId::System,
+                grpc::application_id::Inner::User(user_application_id) => ApplicationId::User {
+                    bytecode: try_proto_convert!(user_application_id.bytecode),
+                    creation: try_proto_convert!(user_application_id.creation),
+                },
+            },
+        )
+    }
+}
+
+impl From<ApplicationDescription> for grpc::ApplicationDescription {
+    fn from(application_description: ApplicationDescription) -> Self {
+        match application_description {
+            ApplicationDescription::System => grpc::ApplicationDescription {
+                inner: Some(application_description::Inner::System(())),
+            },
+            ApplicationDescription::User {
+                bytecode_id,
+                bytecode,
+                creation,
+                initialization_argument,
+            } => grpc::ApplicationDescription {
+                inner: Some(application_description::Inner::User(
+                    UserApplicationDescription {
+                        bytecode_id: Some(bytecode_id.into()),
+                        bytecode: Some(bytecode.into()),
+                        creation: Some(creation.into()),
+                        initialisation_argument: initialization_argument,
+                    },
+                )),
+            },
+        }
+    }
+}
+
+impl TryFrom<grpc::ApplicationDescription> for ApplicationDescription {
+    type Error = ProtoConversionError;
+
+    fn try_from(
+        application_description: grpc::ApplicationDescription,
+    ) -> Result<Self, Self::Error> {
+        Ok(
+            match application_description
+                .inner
+                .ok_or(ProtoConversionError::MissingField)?
+            {
+                application_description::Inner::System(_) => ApplicationDescription::System,
+                application_description::Inner::User(user_application_description) => {
+                    ApplicationDescription::User {
+                        bytecode_id: try_proto_convert!(user_application_description.bytecode_id),
+                        bytecode: try_proto_convert!(user_application_description.bytecode),
+                        creation: try_proto_convert!(user_application_description.creation),
+                        initialization_argument: user_application_description.initialisation_argument,
+                    }
+                }
+            },
+        )
+    }
+}
+
+impl From<BytecodeLocation> for grpc::BytecodeLocation {
+    fn from(bytecode_location: BytecodeLocation) -> Self {
+        Self {
+            certificate_hash: bytecode_location.certificate_hash.as_bytes().to_vec(),
+            operation_index: bytecode_location.operation_index as u64,
+        }
+    }
+}
+
+impl TryFrom<grpc::BytecodeLocation> for BytecodeLocation {
+    type Error = ProtoConversionError;
+
+    fn try_from(bytecode_location: grpc::BytecodeLocation) -> Result<Self, Self::Error> {
+        Ok(Self {
+            certificate_hash: HashValue::try_from(bytecode_location.certificate_hash.as_slice())?,
+            operation_index: bytecode_location.operation_index as usize,
+        })
+    }
+}
+
+impl From<BytecodeId> for grpc::BytecodeId {
+    fn from(bytecode_id: BytecodeId) -> Self {
+        Self {
+            publish_effect: Some(bytecode_id.0.into()),
+        }
+    }
+}
+
+impl TryFrom<grpc::BytecodeId> for BytecodeId {
+    type Error = ProtoConversionError;
+
+    fn try_from(bytecode_id: grpc::BytecodeId) -> Result<Self, Self::Error> {
+        Ok(Self(try_proto_convert!(bytecode_id.publish_effect)))
+    }
+}
+
+impl From<EffectId> for grpc::EffectId {
+    fn from(effect_id: EffectId) -> Self {
+        Self {
+            chain_id: Some(effect_id.chain_id.into()),
+            height: Some(effect_id.height.into()),
+            index: effect_id.index as u64,
+        }
+    }
+}
+
+impl TryFrom<grpc::EffectId> for EffectId {
+    type Error = ProtoConversionError;
+
+    fn try_from(effect_id: grpc::EffectId) -> Result<Self, Self::Error> {
+        Ok(Self {
+            chain_id: try_proto_convert!(effect_id.chain_id),
+            height: proto_convert!(effect_id.height),
+            index: effect_id.index as usize,
+        })
     }
 }
 
 impl From<ChainId> for grpc::ChainId {
-    fn from(application_id: ChainId) -> Self {
+    fn from(chain_id: ChainId) -> Self {
         Self {
-            bytes: application_id.0.as_bytes().to_vec(),
+            bytes: chain_id.0.as_bytes().to_vec(),
         }
     }
 }
