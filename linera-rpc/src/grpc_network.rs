@@ -22,7 +22,6 @@ use std::{
 use thiserror::Error;
 use tonic::{transport::Server, Request, Response, Status};
 
-// to avoid confusion with existing ValidatorNode
 use crate::{
     client_delegate, convert_and_delegate,
     grpc_network::grpc::{
@@ -293,7 +292,7 @@ where
                     self.state.nickname(),
                     error
                 );
-                Ok(Response::new(NodeError::from(error).into()))
+                Ok(Response::new(NodeError::from(error).try_into()?))
             }
         }
     }
@@ -343,7 +342,7 @@ where
                     self.state.nickname(),
                     error
                 );
-                Ok(Response::new(NodeError::from(error).into()))
+                Ok(Response::new(NodeError::from(error).try_into()?))
             }
         }
     }
@@ -428,8 +427,6 @@ impl GrpcMassClient {
 #[async_trait]
 impl MassClient for GrpcMassClient {
     async fn send(&self, requests: Vec<Message>) -> Result<Vec<Message>, MassClientError> {
-        // we're establishing the connection here so that the `GrpcMassClient` constructor
-        // is infallible.
         let mut client = ValidatorNodeClient::connect(self.0.http_address()).await?;
         let mut responses = Vec::new();
 

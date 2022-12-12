@@ -104,7 +104,7 @@ macro_rules! convert_and_delegate {
                 .await
             {
                 Ok(chain_info_response) => chain_info_response.try_into()?,
-                Err(error) => NodeError::from(error).into(),
+                Err(error) => NodeError::from(error).try_into()?,
             },
         ))
     }};
@@ -118,7 +118,10 @@ macro_rules! client_delegate {
             stringify!($handler),
             $req
         );
-        let request = Request::new($req.try_into().expect("todo"));
+        let request_inner = $req.try_into().map_err(|_| NodeError::GrpcError {
+            error: "could not convert request to proto".to_string(),
+        })?;
+        let request = Request::new(request_inner);
         match $self
             .0
             .$handler(request)
@@ -166,7 +169,8 @@ macro_rules! mass_client_delegate {
             Inner::Error(error) => {
                 error!(
                     "Received error response: {:?}",
-                    bcs::from_bytes::<NodeError>(&error).expect("todo")
+                    bcs::from_bytes::<NodeError>(&error)
+                        .map_err(|e| ProtoConversionError::BcsError(e))?
                 )
             }
         }
@@ -191,13 +195,15 @@ impl TryFrom<ChainInfoResponse> for ChainInfoResult {
     }
 }
 
-impl From<NodeError> for ChainInfoResult {
-    fn from(node_error: NodeError) -> Self {
-        ChainInfoResult {
+impl TryFrom<NodeError> for ChainInfoResult {
+    type Error = ProtoConversionError;
+
+    fn try_from(node_error: NodeError) -> Result<Self, Self::Error> {
+        Ok(ChainInfoResult {
             inner: Some(grpc::chain_info_result::Inner::Error(
-                bcs::to_bytes(&node_error).expect("todo"),
+                bcs::to_bytes(&node_error).expect("bcs::MAX_CONTAINER_DEPTH is never exceeded"),
             )),
-        }
+        })
     }
 }
 
