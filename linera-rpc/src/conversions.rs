@@ -1,18 +1,15 @@
 use crate::grpc_network::{
     grpc,
-    grpc::{
-        cross_chain_request::Inner, ChainInfoResult,  NameSignaturePair,
-    },
+    grpc::{cross_chain_request::Inner, ChainInfoResult, NameSignaturePair},
 };
 use ed25519::signature::Signature as edSignature;
 use thiserror::Error;
 use tonic::{Code, Status};
 
 use linera_base::{
-    crypto::{CryptoError, PublicKey, Signature},
+    crypto::{CryptoError, HashValue, PublicKey, Signature},
     messages::{ApplicationId, BlockHeight, ChainId, Medium, Origin, ValidatorName},
 };
-use linera_base::crypto::HashValue;
 use linera_chain::messages::{BlockProposal, Certificate};
 use linera_core::messages::{
     BlockHeightRange, ChainInfoQuery, ChainInfoResponse, CrossChainRequest,
@@ -24,8 +21,10 @@ use crate::grpc_network::grpc::{
 use linera_base::messages::{
     ApplicationDescription, BytecodeId, BytecodeLocation, EffectId, Owner,
 };
-use linera_core::messages::CrossChainRequest::{ConfirmUpdatedRecipient, UpdateRecipient};
-use linera_core::node::NodeError;
+use linera_core::{
+    messages::CrossChainRequest::{ConfirmUpdatedRecipient, UpdateRecipient},
+    node::NodeError,
+};
 
 #[derive(Error, Debug)]
 pub enum ProtoConversionError {
@@ -495,7 +494,8 @@ impl TryFrom<grpc::ApplicationDescription> for ApplicationDescription {
                         bytecode_id: try_proto_convert!(user_application_description.bytecode_id),
                         bytecode: try_proto_convert!(user_application_description.bytecode),
                         creation: try_proto_convert!(user_application_description.creation),
-                        initialization_argument: user_application_description.initialisation_argument,
+                        initialization_argument: user_application_description
+                            .initialisation_argument,
                     }
                 }
             },
@@ -788,8 +788,45 @@ pub mod tests {
 
     #[test]
     pub fn test_application_id() {
-        let application_id = ApplicationId(10u64);
-        round_trip_check::<_, grpc::ApplicationId>(application_id);
+        round_trip_check::<_, grpc::ApplicationId>(ApplicationId::System);
+
+        let effect_id = EffectId {
+            chain_id: ChainId::root(0),
+            height: BlockHeight(10),
+            index: 20,
+        };
+
+        let application_id_user = ApplicationId::User {
+            bytecode: BytecodeId(effect_id),
+            creation: effect_id,
+        };
+
+        round_trip_check::<_, grpc::ApplicationId>(application_id_user);
+    }
+
+    #[test]
+    pub fn test_application_description() {
+        round_trip_check::<_, grpc::ApplicationDescription>(ApplicationDescription::System);
+
+        let effect_id = EffectId {
+            chain_id: ChainId::root(0),
+            height: BlockHeight(10),
+            index: 20,
+        };
+
+        let bytecode_location = BytecodeLocation {
+            certificate_hash: HashValue::new(&Foo("test".into())),
+            operation_index: 30,
+        };
+
+        let application_description_user = ApplicationDescription::User {
+            bytecode_id: BytecodeId(effect_id),
+            bytecode: bytecode_location,
+            creation: effect_id,
+            initialization_argument: vec![0, 1],
+        };
+
+        round_trip_check::<_, grpc::ApplicationDescription>(application_description_user);
     }
 
     #[test]
@@ -880,21 +917,20 @@ pub mod tests {
 
     #[test]
     pub fn test_cross_chain_request() {
-        let cross_chain_request_update_recipient = CrossChainRequest::UpdateRecipient {
-            application_id: ApplicationId(10u64),
+        let cross_chain_request_update_recipient = UpdateRecipient {
+            application: ApplicationDescription::System,
             origin: Origin::chain(ChainId::root(0)),
             recipient: ChainId::root(0),
             certificates: vec![],
         };
         round_trip_check::<_, grpc::CrossChainRequest>(cross_chain_request_update_recipient);
 
-        let cross_chain_request_confirm_updated_recipient =
-            CrossChainRequest::ConfirmUpdatedRecipient {
-                application_id: ApplicationId(10u64),
-                origin: Origin::chain(ChainId::root(0)),
-                recipient: ChainId::root(0),
-                height: Default::default(),
-            };
+        let cross_chain_request_confirm_updated_recipient = ConfirmUpdatedRecipient {
+            application_id: ApplicationId::System,
+            origin: Origin::chain(ChainId::root(0)),
+            recipient: ChainId::root(0),
+            height: Default::default(),
+        };
         round_trip_check::<_, grpc::CrossChainRequest>(
             cross_chain_request_confirm_updated_recipient,
         );

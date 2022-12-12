@@ -23,7 +23,7 @@ use linera_core::{
     worker::WorkerState,
 };
 use linera_execution::{
-    system::{Address, Amount, Balance, SystemOperation, UserData, SYSTEM},
+    system::{Address, Amount, Balance, SystemOperation, UserData},
     Operation,
 };
 use linera_rpc::{
