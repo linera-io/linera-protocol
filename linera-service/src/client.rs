@@ -86,7 +86,7 @@ impl ClientContext {
         }
     }
 
-    async fn make_validator_mass_clients(&self, max_in_flight: u64) -> Vec<Box<dyn MassClient>> {
+    fn make_validator_mass_clients(&self, max_in_flight: u64) -> Vec<Box<dyn MassClient>> {
         let mut validator_clients = Vec::new();
         for config in &self.genesis_config.committee.validators {
             let client: Box<dyn MassClient> = match config.network.protocol {
@@ -99,7 +99,7 @@ impl ClientContext {
                         max_in_flight,
                     ))
                 }
-                NetworkProtocol::Grpc() => Box::new(GrpcMassClient::new(config.network.clone())),
+                NetworkProtocol::Grpc => Box::new(GrpcMassClient::new(config.network.clone())),
             };
 
             validator_clients.push(client);
@@ -239,7 +239,7 @@ impl ClientContext {
         let time_start = Instant::now();
         info!("Broadcasting {} {}", proposals.len(), phase);
         let mut handles = Vec::new();
-        for client in self.make_validator_mass_clients(max_in_flight).await {
+        for client in self.make_validator_mass_clients(max_in_flight) {
             let proposals = proposals.clone();
             handles.push(tokio::spawn(async move {
                 info!("Sending {} requests", proposals.len());

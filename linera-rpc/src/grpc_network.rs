@@ -73,12 +73,12 @@ pub struct GrpcServer<S> {
     cross_chain_sender: CrossChainSender,
 }
 
-pub struct SpawnedGrpcServer {
+pub struct GrpcServerHandle {
     _complete: Sender<()>,
     handle: JoinHandle<Result<(), tonic::transport::Error>>,
 }
 
-impl SpawnedGrpcServer {
+impl GrpcServerHandle {
     pub async fn join(self) -> Result<(), GrpcError> {
         Ok(self.handle.await??)
     }
@@ -114,7 +114,7 @@ where
         shard_id: ShardId,
         network: ValidatorInternalNetworkConfig,
         cross_chain_config: CrossChainConfig,
-    ) -> Result<SpawnedGrpcServer, GrpcError> {
+    ) -> Result<GrpcServerHandle, GrpcError> {
         info!(
             "spawning gRPC server  on {}:{} for shard {}",
             host, port, shard_id
@@ -159,7 +159,7 @@ where
                 .serve_with_shutdown(address, receiver.map(|_| ())),
         );
 
-        Ok(SpawnedGrpcServer {
+        Ok(GrpcServerHandle {
             _complete: complete,
             handle,
         })
@@ -179,7 +179,7 @@ where
             sender
                 .feed((request, shard_id))
                 .await
-                .expect("internal channel should not fail") // why would this fail?
+                .expect("sinks are never closed so `feed` should not fail.")
         }
 
         let _ = sender.flush();
@@ -199,7 +199,7 @@ where
         while let Some((cross_chain_request, shard_id)) = receiver.next().await {
             let shard = network.shard(shard_id);
             let http_address = format!("http://{}", shard.address());
-            let mut client = match pool.mut_client_for_address(http_address.clone()).await {
+            let mut client = match pool.client_for_address_mut(http_address.clone()).await {
                 Ok(client) => client,
                 Err(error) => {
                     error!(
@@ -212,7 +212,7 @@ where
 
             let mut back_off = Duration::from_millis(100);
 
-            for i in 0..10 {
+            for attempt in 0..10 {
                 let request = Request::new(cross_chain_request.clone().try_into().expect("todo"));
                 match client.handle_cross_chain_request(request).await {
                     Ok(_) => {
@@ -220,7 +220,7 @@ where
                         break;
                     }
                     Err(error) => {
-                        if i < 10 {
+                        if attempt < 10 {
                             failed += 1;
                             back_off *= 2;
                             error!(
@@ -238,7 +238,7 @@ where
                         } else {
                             error!(
                                 "[{}] Failed to send cross-chain query (giving up after {} retries): {}",
-                                nickname, i, error
+                                nickname, attempt, error
                             );
                         }
                     }

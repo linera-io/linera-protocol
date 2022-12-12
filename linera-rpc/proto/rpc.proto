@@ -1,5 +1,3 @@
-// Test proto files
-
 syntax = "proto3";
 package rpc.v1;
 
@@ -75,7 +73,7 @@ message ChainInfoQuery {
   // The chain id
   ChainId chain_id = 1;
 
-  // Optionally test that block height is as expected
+  // Optionally test that the block height is as expected
   optional BlockHeight test_next_block_height = 2;
 
   // Query the current committees
@@ -165,7 +163,7 @@ message ChainInfoResponse {
   // bcs signable
   bytes chain_info = 1;
 
-  // ?
+  // Optional signature for the response.
   optional Signature signature = 2;
 }
 

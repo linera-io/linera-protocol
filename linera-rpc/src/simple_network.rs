@@ -9,7 +9,7 @@ use crate::{
         ValidatorPublicNetworkPreConfig,
     },
     mass::{MassClient, MassClientError},
-    transport::{MessageHandler, SpawnedServer, TransportProtocol},
+    transport::{MessageHandler, ServerHandle, TransportProtocol},
     Message,
 };
 use async_trait::async_trait;
@@ -131,7 +131,7 @@ where
         }
     }
 
-    pub async fn spawn(self) -> Result<SpawnedServer, io::Error> {
+    pub async fn spawn(self) -> Result<ServerHandle, io::Error> {
         info!(
             "Listening to {} traffic on {}:{}",
             self.network.protocol, self.host, self.port

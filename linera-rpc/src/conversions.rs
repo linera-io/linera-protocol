@@ -1,50 +1,23 @@
+use crate::grpc_network::{
+    grpc,
+    grpc::{
+        cross_chain_request::Inner, ChainInfoResult, ConfirmUpdateRecipient, NameSignaturePair,
+        UpdateRecipient,
+    },
+};
 use ed25519::signature::Signature as edSignature;
 use thiserror::Error;
 use tonic::{Code, Status};
 
-use crate::grpc_network::grpc::{
-    ChainInfoResult, ConfirmUpdateRecipient, CrossChainRequest as CrossChainRequestRpc,
-    NameSignaturePair, UpdateRecipient,
+use linera_base::{
+    crypto::{CryptoError, PublicKey, Signature},
+    messages::{ApplicationId, BlockHeight, ChainId, Medium, Origin, ValidatorName},
 };
-use linera_core::messages::CrossChainRequest;
+use linera_chain::messages::{BlockProposal, Certificate};
+use linera_core::messages::{
+    BlockHeightRange, ChainInfoQuery, ChainInfoResponse, CrossChainRequest,
+};
 
-use crate::grpc_network::grpc::BlockProposal as BlockProposalRpc;
-use linera_chain::messages::BlockProposal;
-
-use crate::grpc_network::grpc::Certificate as CertificateRpc;
-use linera_chain::messages::Certificate;
-
-use crate::grpc_network::grpc::ChainInfoQuery as ChainInfoQueryRpc;
-use linera_core::messages::ChainInfoQuery;
-
-use crate::grpc_network::grpc::Origin as OriginRpc;
-use linera_base::messages::{Origin, ValidatorName};
-
-use crate::grpc_network::grpc::Medium as MediumRpc;
-use linera_base::messages::Medium;
-
-use crate::grpc_network::grpc::BlockHeightRange as BlockHeightRangeRPC;
-use linera_core::messages::BlockHeightRange;
-
-use crate::grpc_network::grpc::ApplicationId as ApplicationIdRPC;
-use linera_base::messages::ApplicationId;
-
-use crate::grpc_network::grpc::ChainId as ChainIdRPC;
-use linera_base::messages::ChainId;
-
-use crate::grpc_network::grpc::PublicKey as PublicKeyRPC;
-use linera_base::crypto::{CryptoError, PublicKey};
-
-use crate::grpc_network::grpc::Signature as SignatureRPC;
-use linera_base::crypto::Signature;
-
-use crate::grpc_network::grpc::ChainInfoResponse as ChainInfoResponseRPC;
-use linera_core::messages::ChainInfoResponse;
-
-use crate::grpc_network::grpc::BlockHeight as BlockHeightRPC;
-use linera_base::messages::BlockHeight;
-
-use crate::grpc_network::grpc::{cross_chain_request::Inner, Owner as OwnerRPC};
 use linera_base::messages::Owner;
 use linera_core::node::NodeError;
 
@@ -206,11 +179,9 @@ impl TryFrom<ChainInfoResponse> for ChainInfoResult {
 
     fn try_from(chain_info_response: ChainInfoResponse) -> Result<Self, Self::Error> {
         Ok(ChainInfoResult {
-            inner: Some(
-                crate::grpc_network::grpc::chain_info_result::Inner::ChainInfoResponse(
-                    chain_info_response.try_into()?,
-                ),
-            ),
+            inner: Some(grpc::chain_info_result::Inner::ChainInfoResponse(
+                chain_info_response.try_into()?,
+            )),
         })
     }
 }
@@ -218,14 +189,14 @@ impl TryFrom<ChainInfoResponse> for ChainInfoResult {
 impl From<NodeError> for ChainInfoResult {
     fn from(node_error: NodeError) -> Self {
         ChainInfoResult {
-            inner: Some(crate::grpc_network::grpc::chain_info_result::Inner::Error(
+            inner: Some(grpc::chain_info_result::Inner::Error(
                 bcs::to_bytes(&node_error).expect("todo"),
             )),
         }
     }
 }
 
-impl TryFrom<BlockProposal> for BlockProposalRpc {
+impl TryFrom<BlockProposal> for grpc::BlockProposal {
     type Error = ProtoConversionError;
 
     fn try_from(block_proposal: BlockProposal) -> Result<Self, Self::Error> {
@@ -237,10 +208,10 @@ impl TryFrom<BlockProposal> for BlockProposalRpc {
     }
 }
 
-impl TryFrom<BlockProposalRpc> for BlockProposal {
+impl TryFrom<grpc::BlockProposal> for BlockProposal {
     type Error = ProtoConversionError;
 
-    fn try_from(block_proposal: BlockProposalRpc) -> Result<Self, Self::Error> {
+    fn try_from(block_proposal: grpc::BlockProposal) -> Result<Self, Self::Error> {
         Ok(Self {
             content: bcs::from_bytes(&block_proposal.content)?,
             owner: try_proto_convert!(block_proposal.owner),
@@ -249,10 +220,10 @@ impl TryFrom<BlockProposalRpc> for BlockProposal {
     }
 }
 
-impl TryFrom<CrossChainRequestRpc> for CrossChainRequest {
+impl TryFrom<grpc::CrossChainRequest> for CrossChainRequest {
     type Error = ProtoConversionError;
 
-    fn try_from(cross_chain_request: CrossChainRequestRpc) -> Result<Self, Self::Error> {
+    fn try_from(cross_chain_request: grpc::CrossChainRequest) -> Result<Self, Self::Error> {
         let ccr = match cross_chain_request
             .inner
             .ok_or(ProtoConversionError::MissingField)?
@@ -284,7 +255,7 @@ impl TryFrom<CrossChainRequestRpc> for CrossChainRequest {
     }
 }
 
-impl TryFrom<CrossChainRequest> for CrossChainRequestRpc {
+impl TryFrom<CrossChainRequest> for grpc::CrossChainRequest {
     type Error = ProtoConversionError;
 
     fn try_from(cross_chain_request: CrossChainRequest) -> Result<Self, Self::Error> {
@@ -298,7 +269,7 @@ impl TryFrom<CrossChainRequest> for CrossChainRequestRpc {
                 application_id: Some(application_id.into()),
                 origin: Some(origin.into()),
                 recipient: Some(recipient.into()),
-                certificates: try_proto_convert_vec!(certificates, CertificateRpc),
+                certificates: try_proto_convert_vec!(certificates, grpc::Certificate),
             }),
             CrossChainRequest::ConfirmUpdatedRecipient {
                 application_id,
@@ -316,10 +287,10 @@ impl TryFrom<CrossChainRequest> for CrossChainRequestRpc {
     }
 }
 
-impl TryFrom<CertificateRpc> for Certificate {
+impl TryFrom<grpc::Certificate> for Certificate {
     type Error = ProtoConversionError;
 
-    fn try_from(certificate: CertificateRpc) -> Result<Self, Self::Error> {
+    fn try_from(certificate: grpc::Certificate) -> Result<Self, Self::Error> {
         let mut signatures = Vec::with_capacity(certificate.signatures.len());
 
         for name_signature_pair in certificate.signatures {
@@ -336,7 +307,7 @@ impl TryFrom<CertificateRpc> for Certificate {
     }
 }
 
-impl TryFrom<Certificate> for CertificateRpc {
+impl TryFrom<Certificate> for grpc::Certificate {
     type Error = ProtoConversionError;
 
     fn try_from(certificate: Certificate) -> Result<Self, Self::Error> {
@@ -356,10 +327,10 @@ impl TryFrom<Certificate> for CertificateRpc {
     }
 }
 
-impl TryFrom<ChainInfoQueryRpc> for ChainInfoQuery {
+impl TryFrom<grpc::ChainInfoQuery> for ChainInfoQuery {
     type Error = ProtoConversionError;
 
-    fn try_from(chain_info_query: ChainInfoQueryRpc) -> Result<Self, Self::Error> {
+    fn try_from(chain_info_query: grpc::ChainInfoQuery) -> Result<Self, Self::Error> {
         Ok(Self {
             request_committees: chain_info_query.request_committees,
             request_pending_messages: chain_info_query.request_pending_messages,
@@ -376,7 +347,7 @@ impl TryFrom<ChainInfoQueryRpc> for ChainInfoQuery {
     }
 }
 
-impl TryFrom<ChainInfoQuery> for ChainInfoQueryRpc {
+impl TryFrom<ChainInfoQuery> for grpc::ChainInfoQuery {
     type Error = ProtoConversionError;
 
     fn try_from(chain_info_query: ChainInfoQuery) -> Result<Self, Self::Error> {
@@ -401,19 +372,19 @@ impl TryFrom<ChainInfoQuery> for ChainInfoQueryRpc {
     }
 }
 
-impl From<Medium> for MediumRpc {
+impl From<Medium> for grpc::Medium {
     fn from(medium: Medium) -> Self {
         match medium {
-            Medium::Direct => MediumRpc { channel: None },
-            Medium::Channel(channel) => MediumRpc {
+            Medium::Direct => grpc::Medium { channel: None },
+            Medium::Channel(channel) => grpc::Medium {
                 channel: Some(channel),
             },
         }
     }
 }
 
-impl From<MediumRpc> for Medium {
-    fn from(medium: MediumRpc) -> Self {
+impl From<grpc::Medium> for Medium {
+    fn from(medium: grpc::Medium) -> Self {
         match medium.channel {
             None => Medium::Direct,
             Some(medium) => Medium::Channel(medium),
@@ -421,7 +392,7 @@ impl From<MediumRpc> for Medium {
     }
 }
 
-impl From<BlockHeightRange> for BlockHeightRangeRPC {
+impl From<BlockHeightRange> for grpc::BlockHeightRange {
     fn from(block_height_range: BlockHeightRange) -> Self {
         Self {
             start: Some(block_height_range.start.into()),
@@ -430,10 +401,10 @@ impl From<BlockHeightRange> for BlockHeightRangeRPC {
     }
 }
 
-impl TryFrom<BlockHeightRangeRPC> for BlockHeightRange {
+impl TryFrom<grpc::BlockHeightRange> for BlockHeightRange {
     type Error = ProtoConversionError;
 
-    fn try_from(block_height_range: BlockHeightRangeRPC) -> Result<Self, Self::Error> {
+    fn try_from(block_height_range: grpc::BlockHeightRange) -> Result<Self, Self::Error> {
         Ok(Self {
             start: proto_convert!(block_height_range.start),
             limit: map_as!(block_height_range.limit, usize),
@@ -441,7 +412,7 @@ impl TryFrom<BlockHeightRangeRPC> for BlockHeightRange {
     }
 }
 
-impl From<ApplicationId> for ApplicationIdRPC {
+impl From<ApplicationId> for grpc::ApplicationId {
     fn from(application_id: ApplicationId) -> Self {
         Self {
             inner: application_id.0,
@@ -449,13 +420,13 @@ impl From<ApplicationId> for ApplicationIdRPC {
     }
 }
 
-impl From<ApplicationIdRPC> for ApplicationId {
-    fn from(application_id: ApplicationIdRPC) -> Self {
+impl From<grpc::ApplicationId> for ApplicationId {
+    fn from(application_id: grpc::ApplicationId) -> Self {
         ApplicationId(application_id.inner)
     }
 }
 
-impl From<ChainId> for ChainIdRPC {
+impl From<ChainId> for grpc::ChainId {
     fn from(application_id: ChainId) -> Self {
         Self {
             bytes: application_id.0.as_bytes().to_vec(),
@@ -463,15 +434,15 @@ impl From<ChainId> for ChainIdRPC {
     }
 }
 
-impl TryFrom<ChainIdRPC> for ChainId {
+impl TryFrom<grpc::ChainId> for ChainId {
     type Error = ProtoConversionError;
 
-    fn try_from(chain_id: ChainIdRPC) -> Result<Self, Self::Error> {
+    fn try_from(chain_id: grpc::ChainId) -> Result<Self, Self::Error> {
         Ok(ChainId::try_from(chain_id.bytes.as_slice())?)
     }
 }
 
-impl From<PublicKey> for PublicKeyRPC {
+impl From<PublicKey> for grpc::PublicKey {
     fn from(public_key: PublicKey) -> Self {
         Self {
             bytes: public_key.0.to_vec(),
@@ -479,15 +450,15 @@ impl From<PublicKey> for PublicKeyRPC {
     }
 }
 
-impl TryFrom<PublicKeyRPC> for PublicKey {
+impl TryFrom<grpc::PublicKey> for PublicKey {
     type Error = ProtoConversionError;
 
-    fn try_from(public_key: PublicKeyRPC) -> Result<Self, Self::Error> {
+    fn try_from(public_key: grpc::PublicKey) -> Result<Self, Self::Error> {
         Ok(PublicKey::try_from(public_key.bytes.as_slice())?)
     }
 }
 
-impl From<Origin> for OriginRpc {
+impl From<Origin> for grpc::Origin {
     fn from(origin: Origin) -> Self {
         Self {
             chain_id: Some(origin.chain_id.into()),
@@ -496,10 +467,10 @@ impl From<Origin> for OriginRpc {
     }
 }
 
-impl TryFrom<OriginRpc> for Origin {
+impl TryFrom<grpc::Origin> for Origin {
     type Error = ProtoConversionError;
 
-    fn try_from(origin: OriginRpc) -> Result<Self, Self::Error> {
+    fn try_from(origin: grpc::Origin) -> Result<Self, Self::Error> {
         Ok(Self {
             chain_id: try_proto_convert!(origin.chain_id),
             medium: proto_convert!(origin.medium),
@@ -507,7 +478,7 @@ impl TryFrom<OriginRpc> for Origin {
     }
 }
 
-impl From<ValidatorName> for PublicKeyRPC {
+impl From<ValidatorName> for grpc::PublicKey {
     fn from(validator_name: ValidatorName) -> Self {
         Self {
             bytes: validator_name.0 .0.to_vec(),
@@ -515,15 +486,15 @@ impl From<ValidatorName> for PublicKeyRPC {
     }
 }
 
-impl TryFrom<PublicKeyRPC> for ValidatorName {
+impl TryFrom<grpc::PublicKey> for ValidatorName {
     type Error = ProtoConversionError;
 
-    fn try_from(public_key: PublicKeyRPC) -> Result<Self, Self::Error> {
+    fn try_from(public_key: grpc::PublicKey) -> Result<Self, Self::Error> {
         Ok(ValidatorName(public_key.try_into()?))
     }
 }
 
-impl From<Signature> for SignatureRPC {
+impl From<Signature> for grpc::Signature {
     fn from(signature: Signature) -> Self {
         Self {
             bytes: signature.0.as_bytes().to_vec(),
@@ -531,17 +502,17 @@ impl From<Signature> for SignatureRPC {
     }
 }
 
-impl TryFrom<SignatureRPC> for Signature {
+impl TryFrom<grpc::Signature> for Signature {
     type Error = ProtoConversionError;
 
-    fn try_from(signature: SignatureRPC) -> Result<Self, Self::Error> {
+    fn try_from(signature: grpc::Signature) -> Result<Self, Self::Error> {
         Ok(Self(ed25519_dalek::Signature::from_bytes(
             &signature.bytes,
         )?))
     }
 }
 
-impl TryFrom<ChainInfoResponse> for ChainInfoResponseRPC {
+impl TryFrom<ChainInfoResponse> for grpc::ChainInfoResponse {
     type Error = ProtoConversionError;
 
     fn try_from(chain_info_response: ChainInfoResponse) -> Result<Self, Self::Error> {
@@ -552,10 +523,10 @@ impl TryFrom<ChainInfoResponse> for ChainInfoResponseRPC {
     }
 }
 
-impl TryFrom<ChainInfoResponseRPC> for ChainInfoResponse {
+impl TryFrom<grpc::ChainInfoResponse> for ChainInfoResponse {
     type Error = ProtoConversionError;
 
-    fn try_from(chain_info_response: ChainInfoResponseRPC) -> Result<Self, Self::Error> {
+    fn try_from(chain_info_response: grpc::ChainInfoResponse) -> Result<Self, Self::Error> {
         Ok(Self {
             info: bcs::from_bytes(chain_info_response.chain_info.as_slice())?,
             signature: map_invert!(chain_info_response.signature),
@@ -563,7 +534,7 @@ impl TryFrom<ChainInfoResponseRPC> for ChainInfoResponse {
     }
 }
 
-impl From<BlockHeight> for BlockHeightRPC {
+impl From<BlockHeight> for grpc::BlockHeight {
     fn from(block_height: BlockHeight) -> Self {
         Self {
             height: block_height.0,
@@ -571,13 +542,13 @@ impl From<BlockHeight> for BlockHeightRPC {
     }
 }
 
-impl From<BlockHeightRPC> for BlockHeight {
-    fn from(block_height: BlockHeightRPC) -> Self {
+impl From<grpc::BlockHeight> for BlockHeight {
+    fn from(block_height: grpc::BlockHeight) -> Self {
         Self(block_height.height)
     }
 }
 
-impl From<Owner> for OwnerRPC {
+impl From<Owner> for grpc::Owner {
     fn from(owner: Owner) -> Self {
         Self {
             inner: Some(owner.0.into()),
@@ -585,10 +556,10 @@ impl From<Owner> for OwnerRPC {
     }
 }
 
-impl TryFrom<OwnerRPC> for Owner {
+impl TryFrom<grpc::Owner> for Owner {
     type Error = ProtoConversionError;
 
-    fn try_from(owner: OwnerRPC) -> Result<Self, Self::Error> {
+    fn try_from(owner: grpc::Owner) -> Result<Self, Self::Error> {
         Ok(Self(try_proto_convert!(owner.inner)))
     }
 }
@@ -600,6 +571,7 @@ pub mod tests {
     use linera_chain::messages::{Block, BlockAndRound, Value};
     use linera_core::messages::ChainInfo;
     use serde::{Deserialize, Serialize};
+    use std::fmt::Debug;
 
     #[derive(Debug, Serialize, Deserialize)]
     struct Foo(String);
@@ -617,48 +589,52 @@ pub mod tests {
         }
     }
 
-    /// A convenience macro for testing. It converts a type into its
+    /// A convenience function for testing. It converts a type into its
     /// RPC equivalent and back - asserting that the two are equal.
-    macro_rules! compare {
-        ($msg:ident, $rpc:ident) => {
-            let rpc = $rpc::try_from($msg.clone()).unwrap();
-            assert_eq!($msg, rpc.try_into().unwrap());
-        };
+    fn round_trip_check<T, M>(value: T)
+    where
+        T: TryFrom<M> + Clone + Debug + Eq,
+        M: TryFrom<T>,
+        T::Error: Debug,
+        M::Error: Debug,
+    {
+        let message = M::try_from(value.clone()).unwrap();
+        assert_eq!(value, message.try_into().unwrap());
     }
 
     #[test]
     pub fn test_public_key() {
         let public_key = KeyPair::generate().public();
-        compare!(public_key, PublicKeyRPC);
+        round_trip_check::<_, grpc::PublicKey>(public_key);
     }
 
     #[test]
     pub fn test_origin() {
         let origin_direct = Origin::chain(ChainId::root(0));
-        compare!(origin_direct, OriginRpc);
+        round_trip_check::<_, grpc::Origin>(origin_direct);
 
         let origin_medium = Origin::channel(ChainId::root(0), "some channel".to_string());
-        compare!(origin_medium, OriginRpc);
+        round_trip_check::<_, grpc::Origin>(origin_medium);
     }
 
     #[test]
     pub fn test_signature() {
         let key_pair = KeyPair::generate();
         let signature = Signature::new(&Foo("test".into()), &key_pair);
-        compare!(signature, SignatureRPC);
+        round_trip_check::<_, grpc::Signature>(signature);
     }
 
     #[test]
     pub fn test_owner() {
         let key_pair = KeyPair::generate();
         let owner = Owner::from(key_pair.public());
-        compare!(owner, OwnerRPC);
+        round_trip_check::<_, grpc::Owner>(owner);
     }
 
     #[test]
     pub fn test_block_height() {
         let block_height = BlockHeight::from(10u64);
-        compare!(block_height, BlockHeightRPC);
+        round_trip_check::<_, grpc::BlockHeight>(block_height);
     }
 
     #[test]
@@ -666,19 +642,19 @@ pub mod tests {
         let validator_name = ValidatorName::from(KeyPair::generate().public());
         // This is a correct comparison - `ValidatorNameRpc` does not exist in our
         // proto definitions.
-        compare!(validator_name, PublicKeyRPC);
+        round_trip_check::<_, grpc::PublicKey>(validator_name);
     }
 
     #[test]
     pub fn test_chain_id() {
         let chain_id = ChainId::root(0);
-        compare!(chain_id, ChainIdRPC);
+        round_trip_check::<_, grpc::ChainId>(chain_id);
     }
 
     #[test]
     pub fn test_application_id() {
         let application_id = ApplicationId(10u64);
-        compare!(application_id, ApplicationIdRPC);
+        round_trip_check::<_, grpc::ApplicationId>(application_id);
     }
 
     #[test]
@@ -687,13 +663,13 @@ pub mod tests {
             start: BlockHeight::from(10u64),
             limit: None,
         };
-        compare!(block_height_range_none, BlockHeightRangeRPC);
+        round_trip_check::<_, grpc::BlockHeightRange>(block_height_range_none);
 
         let block_height_range_some = BlockHeightRange {
             start: BlockHeight::from(10u64),
             limit: Some(20),
         };
-        compare!(block_height_range_some, BlockHeightRangeRPC);
+        round_trip_check::<_, grpc::BlockHeightRange>(block_height_range_some);
     }
 
     #[test]
@@ -719,20 +695,20 @@ pub mod tests {
             info: chain_info.clone(),
             signature: None,
         };
-        compare!(chain_info_response_none, ChainInfoResponseRPC);
+        round_trip_check::<_, grpc::ChainInfoResponse>(chain_info_response_none);
 
         let chain_info_response_some = ChainInfoResponse {
             // `info` is bcs so no need to test conversions extensively
             info: chain_info,
             signature: Some(Signature::new(&Foo("test".into()), &KeyPair::generate())),
         };
-        compare!(chain_info_response_some, ChainInfoResponseRPC);
+        round_trip_check::<_, grpc::ChainInfoResponse>(chain_info_response_some);
     }
 
     #[test]
     pub fn test_chain_info_query() {
         let chain_info_query_none = ChainInfoQuery::new(ChainId::root(0));
-        compare!(chain_info_query_none, ChainInfoQueryRpc);
+        round_trip_check::<_, grpc::ChainInfoQuery>(chain_info_query_none);
 
         let chain_info_query_some = ChainInfoQuery {
             chain_id: ChainId::root(0),
@@ -745,7 +721,7 @@ pub mod tests {
             }),
             request_received_certificates_excluding_first_nth: None,
         };
-        compare!(chain_info_query_some, ChainInfoQueryRpc);
+        round_trip_check::<_, grpc::ChainInfoQuery>(chain_info_query_some);
     }
 
     #[test]
@@ -764,7 +740,7 @@ pub mod tests {
             )],
         );
 
-        compare!(certificate_validated, CertificateRpc);
+        round_trip_check::<_, grpc::Certificate>(certificate_validated);
     }
 
     #[test]
@@ -775,7 +751,7 @@ pub mod tests {
             recipient: ChainId::root(0),
             certificates: vec![],
         };
-        compare!(cross_chain_request_update_recipient, CrossChainRequestRpc);
+        round_trip_check::<_, grpc::CrossChainRequest>(cross_chain_request_update_recipient);
 
         let cross_chain_request_confirm_updated_recipient =
             CrossChainRequest::ConfirmUpdatedRecipient {
@@ -784,9 +760,8 @@ pub mod tests {
                 recipient: ChainId::root(0),
                 height: Default::default(),
             };
-        compare!(
+        round_trip_check::<_, grpc::CrossChainRequest>(
             cross_chain_request_confirm_updated_recipient,
-            CrossChainRequestRpc
         );
     }
 
@@ -801,6 +776,6 @@ pub mod tests {
             signature: Signature::new(&Foo("test".into()), &KeyPair::generate()),
         };
 
-        compare!(block_proposal, BlockProposalRpc);
+        round_trip_check::<_, grpc::BlockProposal>(block_proposal);
     }
 }

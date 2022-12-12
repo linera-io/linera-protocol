@@ -56,7 +56,7 @@ impl<C: Connect> ConnectionPool<C> {
     ///
     /// If a single thread is going to have sporadic access to an underlying client,
     /// this method is more efficient as there is no cloning overhead.
-    pub async fn mut_client_for_address(
+    pub async fn client_for_address_mut(
         &self,
         remote_address: C::Address,
     ) -> Result<RefMut<C::Address, C>, GrpcError> {

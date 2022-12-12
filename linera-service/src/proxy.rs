@@ -57,7 +57,7 @@ impl Proxy {
             NetworkProtocol::Simple(protocol) => {
                 protocol.spawn_server(&address, self).await?.join().await?;
             }
-            NetworkProtocol::Grpc() => {
+            NetworkProtocol::Grpc => {
                 unimplemented!()
             }
         }
@@ -90,7 +90,7 @@ impl Proxy {
         let shard_address = format!("{}:{}", shard.host, shard.port);
         let protocol = match protocol {
             NetworkProtocol::Simple(protocol) => protocol,
-            NetworkProtocol::Grpc() => todo!(),
+            NetworkProtocol::Grpc => todo!(),
         };
 
         let mut connection = protocol.connect(shard_address).await?;

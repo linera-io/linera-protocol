@@ -176,7 +176,7 @@ where
             NetworkProtocol::Simple(protocol) => {
                 self.spawn_simple(listen_address, states, protocol).await?
             }
-            NetworkProtocol::Grpc() => self.spawn_grpc(listen_address, states).await?,
+            NetworkProtocol::Grpc => self.spawn_grpc(listen_address, states).await?,
         };
 
         Ok(())

@@ -52,8 +52,8 @@ pub enum CryptoError {
     )]
     IncorrectHashSize(usize),
     #[error(
-    "Byte slice has length {0} but a `PublicKey` requires exactly {expected} bytes",
-    expected = dalek::PUBLIC_KEY_LENGTH,
+        "Byte slice has length {0} but a `PublicKey` requires exactly {expected} bytes",
+        expected = dalek::PUBLIC_KEY_LENGTH,
     )]
     IncorrectPublicKeySize(usize),
 }

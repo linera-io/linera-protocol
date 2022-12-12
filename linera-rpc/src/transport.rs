@@ -44,12 +44,12 @@ pub trait MessageHandler: Clone {
 }
 
 /// The result of spawning a server is oneshot channel to kill it and a handle to track completion.
-pub struct SpawnedServer {
+pub struct ServerHandle {
     pub complete: futures::channel::oneshot::Sender<()>,
     pub handle: tokio::task::JoinHandle<Result<(), std::io::Error>>,
 }
 
-impl SpawnedServer {
+impl ServerHandle {
     pub async fn join(self) -> Result<(), std::io::Error> {
         // Note that dropping `self.complete` would terminate the server.
         self.handle.await??;
@@ -122,7 +122,7 @@ impl TransportProtocol {
         self,
         address: &str,
         state: S,
-    ) -> Result<SpawnedServer, std::io::Error>
+    ) -> Result<ServerHandle, std::io::Error>
     where
         S: MessageHandler + Send + 'static,
     {
@@ -137,7 +137,7 @@ impl TransportProtocol {
                 tokio::spawn(Self::run_tcp_server(listener, state, receiver))
             }
         };
-        Ok(SpawnedServer { complete, handle })
+        Ok(ServerHandle { complete, handle })
     }
 }
 

@@ -17,7 +17,7 @@ use linera_rpc::{
     pool::ConnectionPool,
 };
 use linera_service::config::{Import, ValidatorServerConfig};
-use std::{net::SocketAddr, path::PathBuf, str::FromStr};
+use std::{net::SocketAddr, path::PathBuf};
 use structopt::StructOpt;
 use tonic::{
     transport::{Channel, Server},
@@ -78,7 +78,7 @@ impl GrpcProxy {
             worker_connection_pool: ConnectionPool::new(),
         };
 
-        let address = grpc_proxy.address()?;
+        let address = grpc_proxy.address();
 
         Ok(Server::builder()
             .add_service(grpc_proxy.as_validator_worker())
@@ -95,11 +95,8 @@ impl GrpcProxy {
         ValidatorNodeServer::new(self.clone())
     }
 
-    fn address(&self) -> Result<SocketAddr> {
-        Ok(SocketAddr::from_str(&format!(
-            "0.0.0.0:{}",
-            self.public_config.port
-        ))?)
+    fn address(&self) -> SocketAddr {
+        SocketAddr::from(([0, 0, 0, 0], self.public_config.port))
     }
 
     fn shard_for(&self, proxyable: &impl Proxyable) -> Option<ShardConfig> {
@@ -238,14 +235,7 @@ impl Proxyable for Certificate {
 
 impl Proxyable for ChainInfoQuery {
     fn chain_id(&self) -> Option<ChainId> {
-        match self
-            .chain_id
-            .as_ref()
-            .map(|id| ChainId::try_from(id.clone()))?
-        {
-            Ok(id) => Some(id),
-            Err(_) => None,
-        }
+        self.chain_id.clone()?.try_into().ok()
     }
 }
 

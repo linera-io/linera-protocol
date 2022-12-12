@@ -44,7 +44,7 @@ impl ValidatorNodeProvider for NodeProvider {
     }
 }
 
-pub struct GrpcNodeProvider {}
+pub struct GrpcNodeProvider;
 
 #[async_trait]
 impl ValidatorNodeProvider for GrpcNodeProvider {
@@ -61,7 +61,7 @@ impl ValidatorNodeProvider for GrpcNodeProvider {
             .await
             .map_err(|e| NodeError::GrpcError {
                 error: format!(
-                    "could not initialise gRPC client for address {} with error: {}",
+                    "could not initialise gRPC client for address {} : {}",
                     address, e
                 ),
             })?;
