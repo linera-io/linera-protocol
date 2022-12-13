@@ -31,18 +31,22 @@ pub struct Address {
 }
 
 impl Address {
+    /// Create a new [`Address`] from a host and port combination.
     pub fn new(host: String, port: u16) -> Self {
         Self { host, port }
     }
 
+    /// Get a reference to the [`Address`] host.
     pub fn host(&self) -> &str {
         &self.host
     }
 
+    /// Get the [`Address`] port.
     pub fn port(&self) -> u16 {
         self.port
     }
 
+    /// Get the [`Address`] as an HTTP formatted [`String`].
     pub fn http_address(&self) -> String {
         format!("http://{}", self)
     }
@@ -176,18 +180,19 @@ impl<P> ValidatorInternalNetworkPreConfig<P> {
         self.shards.get_shard_id(chain_id)
     }
 
-    /// Get a shard for a give [`ShardId`]
+    /// Get a shard for a given [`ShardId`]
     pub fn shard_address(&self, shard_id: ShardId) -> &Address {
         self.shards.shard_address(shard_id)
     }
 
-    /// Get the [`ShardConfig`] of the shard assigned to the `chain_id`.
+    /// Get the [`Address`] of the shard assigned to the `chain_id`.
     pub fn get_shard_for(&self, chain_id: ChainId) -> &Address {
         self.shards.get_shard_for(chain_id)
     }
 }
 
 impl Shards {
+    /// Static shard assignment
     pub fn get_shard_id(&self, chain_id: ChainId) -> ShardId {
         use std::hash::{Hash, Hasher};
         let mut s = std::collections::hash_map::DefaultHasher::new();
@@ -195,18 +200,22 @@ impl Shards {
         (s.finish() as ShardId) % self.0.len()
     }
 
+    /// Get a shard for a given [`ShardId`]
     pub fn shard_address(&self, shard_id: ShardId) -> &Address {
         &self.0[shard_id]
     }
 
+    /// Get the [`Address`] of the shard assigned to the `chain_id`.
     pub fn get_shard_for(&self, chain_id: ChainId) -> &Address {
         self.shard_address(self.get_shard_id(chain_id))
     }
 
+    /// Get the number of shards.
     pub fn len(&self) -> usize {
         self.0.len()
     }
 
+    /// Returns if the number of shards is 0.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }

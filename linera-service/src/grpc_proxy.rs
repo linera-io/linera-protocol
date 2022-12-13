@@ -66,7 +66,7 @@ impl GrpcProxy {
         ValidatorNodeServer::new(self.clone())
     }
 
-    fn address(&self) -> SocketAddr {
+    fn socket_address(&self) -> SocketAddr {
         SocketAddr::from(([0, 0, 0, 0], self.public_config.address.port()))
     }
 
@@ -89,9 +89,10 @@ impl GrpcProxy {
     }
 
     pub async fn run(self) -> Result<()> {
+        log::info!("Starting gRPC proxy on {}...", self.socket_address());
         Ok(Server::builder()
             .add_service(self.as_validator_node())
-            .serve(self.address())
+            .serve(self.socket_address())
             .await?)
     }
 }

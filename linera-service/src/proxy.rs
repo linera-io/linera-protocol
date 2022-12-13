@@ -23,12 +23,16 @@ pub struct ProxyOptions {
     config_path: PathBuf,
 }
 
+/// A Linera Proxy, either gRPC or over 'Simple Transport', meaning TCP or UDP.
+/// The proxy can be configured to have a gRPC ingress and egress, or a combination
+/// of TCP / UDP ingress and egress.
 enum Proxy {
     Simple(SimpleProxy),
     Grpc(GrpcProxy),
 }
 
 impl Proxy {
+    /// Run the proxy.
     async fn run(self) -> Result<()> {
         match self {
             Proxy::Simple(simple_proxy) => simple_proxy.run().await,
@@ -36,6 +40,7 @@ impl Proxy {
         }
     }
 
+    /// Constructs and configures the [`Proxy`] given [`ProxyOptions`].
     fn from_options(options: ProxyOptions) -> Result<Self> {
         let config = ValidatorServerConfig::read(&options.config_path)?;
         let internal_protocol = config.internal_network.protocol;
@@ -128,6 +133,7 @@ impl SimpleProxy {
 
     async fn run(self) -> Result<()> {
         let address = self.address.to_string();
+        log::info!("Starting simple proxy on {}...", &address);
         self.public_transport
             .spawn_server(&address, self)
             .await?
@@ -146,8 +152,6 @@ async fn main() -> Result<()> {
     log::info!("Initialising proxy...");
 
     let proxy = Proxy::from_options(ProxyOptions::from_args())?;
-
-    log::info!("Starting proxy running...");
 
     if let Err(error) = proxy.run().await {
         log::error!("Failed to run proxy: {error}");
