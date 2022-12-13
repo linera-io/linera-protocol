@@ -24,7 +24,7 @@ impl From<OperationContext> for contract::OperationContext {
             index: host
                 .index
                 .try_into()
-                .expect("Operation index should fit in an `u64`"),
+                .expect("Operation index should fit in a `u64`"),
         }
     }
 }
@@ -47,7 +47,7 @@ impl From<EffectId> for queryable_system::EffectId {
             index: host
                 .index
                 .try_into()
-                .expect("Effect index should fit in an `u64`"),
+                .expect("Effect index should fit in a `u64`"),
         }
     }
 }
@@ -60,7 +60,7 @@ impl From<EffectId> for writable_system::EffectId {
             index: host
                 .index
                 .try_into()
-                .expect("Effect index should fit in an `u64`"),
+                .expect("Effect index should fit in a `u64`"),
         }
     }
 }
@@ -73,7 +73,7 @@ impl From<EffectId> for contract::EffectId {
             index: host
                 .index
                 .try_into()
-                .expect("Effect index should fit in an `u64`"),
+                .expect("Effect index should fit in a `u64`"),
         }
     }
 }
