@@ -21,7 +21,7 @@ wit_bindgen_guest_rust::import!("queryable_system.wit");
 mod conversions_from_wit;
 mod conversions_to_wit;
 mod exported_futures;
-mod state_management;
+mod system_api;
 
 use self::exported_futures::QueryApplication;
 use super::ApplicationState as Service;
