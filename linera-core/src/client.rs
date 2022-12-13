@@ -233,7 +233,7 @@ where
         Ok(response.info)
     }
 
-    /// Obtain the pending messaes for the local chain.
+    /// Obtain the pending messages for the local chain.
     async fn pending_messages(&mut self) -> Result<Vec<MessageGroup>, NodeError> {
         let query = ChainInfoQuery::new(self.chain_id).with_pending_messages();
         let response = self.node_client.handle_chain_info_query(query).await?;
