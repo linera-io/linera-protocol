@@ -28,6 +28,7 @@ structopt = "0.3.23"
 thiserror = "1.0.31"
 tokio = "1.12.0"
 tokio-util = { version = "0.6.9", features = ["codec", "net"] }
+tonic = "0.8"
 
 [dev-dependencies]
 linera-base = { path = "../linera-base", features = ["test"] }
@@ -53,3 +54,7 @@ path = "src/server.rs"
 [[bin]]
 name = "proxy"
 path = "src/proxy.rs"
+
+[[bin]]
+name = "grpc-proxy"
+path = "src/grpc_proxy.rs"

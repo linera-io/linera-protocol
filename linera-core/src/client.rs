@@ -122,11 +122,12 @@ pub trait ChainClient {
 }
 
 /// Turn an address into a validator node (local node or client to a remote node).
+#[async_trait]
 pub trait ValidatorNodeProvider {
     type Node: ValidatorNode + Clone + Send + Sync + 'static;
 
     #[allow(clippy::result_large_err)]
-    fn make_node(&self, address: &str) -> Result<Self::Node, NodeError>;
+    async fn make_node(&self, address: &str) -> Result<Self::Node, NodeError>;
 }
 
 /// Reference implementation of the `ChainClient` trait using many instances of some
@@ -299,7 +300,7 @@ where
     /// Obtain the validators trusted by the local chain.
     async fn validator_nodes(&mut self) -> Result<Vec<(ValidatorName, P::Node)>, NodeError> {
         match self.local_committee().await {
-            Ok(committee) => self.make_validator_nodes(&committee),
+            Ok(committee) => self.make_validator_nodes(&committee).await,
             Err(NodeError::InactiveChain(_)) | Err(NodeError::InactiveLocalChain(_)) => {
                 Ok(Vec::new())
             }
@@ -364,7 +365,7 @@ where
     }
 
     #[allow(clippy::result_large_err)]
-    fn make_validator_nodes(
+    async fn make_validator_nodes(
         &self,
         committee: &Committee,
     ) -> Result<Vec<(ValidatorName, P::Node)>, NodeError> {
@@ -372,7 +373,8 @@ where
         for (name, validator) in &committee.validators {
             let node = self
                 .validator_node_provider
-                .make_node(&validator.network_address)?;
+                .make_node(&validator.network_address)
+                .await?;
             nodes.push((*name, node));
         }
         Ok(nodes)
@@ -381,7 +383,7 @@ where
 
 impl<P, S> ChainClientState<P, S>
 where
-    P: ValidatorNodeProvider + Send + 'static,
+    P: ValidatorNodeProvider + Send + 'static + Sync,
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
@@ -434,7 +436,7 @@ where
         let storage_client = self.node_client.storage_client().await;
         let cross_chain_delay = self.cross_chain_delay;
         let cross_chain_retries = self.cross_chain_retries;
-        let nodes = self.make_validator_nodes(committee)?;
+        let nodes = self.make_validator_nodes(committee).await?;
         let result = communicate_with_quorum(
             &nodes,
             committee,
@@ -564,7 +566,7 @@ where
         }
         // Recover history from the network. We assume that the committee that signed the
         // certificate is still active.
-        let nodes = self.make_validator_nodes(remote_committee)?;
+        let nodes = self.make_validator_nodes(remote_committee).await?;
         self.node_client
             .download_certificates(nodes, block.chain_id, block.height)
             .await?;
@@ -594,7 +596,7 @@ where
         // Use network information from the local chain.
         let chain_id = self.chain_id;
         let local_committee = self.local_committee().await?;
-        let nodes = self.make_validator_nodes(&local_committee)?;
+        let nodes = self.make_validator_nodes(&local_committee).await?;
         // Synchronize the state of the admin chain from the network.
         self.node_client
             .synchronize_chain_state(nodes.clone(), self.admin_id)
@@ -861,7 +863,7 @@ where
 #[async_trait]
 impl<P, S> ChainClient for ChainClientState<P, S>
 where
-    P: ValidatorNodeProvider + Send + 'static,
+    P: ValidatorNodeProvider + Send + 'static + Sync,
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {

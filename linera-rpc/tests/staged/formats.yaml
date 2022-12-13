@@ -345,10 +345,14 @@ NodeError:
         STRUCT:
           - error: STR
     5:
+      GrpcError:
+        STRUCT:
+          - error: STR
+    6:
       InactiveChain:
         NEWTYPE:
           TYPENAME: ChainId
-    6:
+    7:
       MissingCrossChainUpdate:
         STRUCT:
           - chain_id:
@@ -359,44 +363,44 @@ NodeError:
               TYPENAME: Origin
           - height:
               TYPENAME: BlockHeight
-    7:
+    8:
       CannotDownloadCertificates:
         STRUCT:
           - chain_id:
               TYPENAME: ChainId
           - target_next_block_height:
               TYPENAME: BlockHeight
-    8:
-      MissingVoteInValidatorResponse: UNIT
     9:
+      MissingVoteInValidatorResponse: UNIT
+    10:
       InactiveLocalChain:
         NEWTYPE:
           TYPENAME: ChainId
-    10:
-      InvalidLocalBlockChaining: UNIT
     11:
-      InvalidChainInfoResponse: UNIT
+      InvalidLocalBlockChaining: UNIT
     12:
+      InvalidChainInfoResponse: UNIT
+    13:
       ProposedBlockToInactiveChain:
         STRUCT:
           - chain_id:
               TYPENAME: ChainId
           - retries: U64
-    13:
+    14:
       ProposedBlockWithLaggingMessages:
         STRUCT:
           - chain_id:
               TYPENAME: ChainId
           - retries: U64
-    14:
-      InvalidDecoding: UNIT
     15:
-      UnexpectedMessage: UNIT
+      InvalidDecoding: UNIT
     16:
+      UnexpectedMessage: UNIT
+    17:
       ClientIoError:
         STRUCT:
           - error: STR
-    17:
+    18:
       CannotResolveValidatorAddress:
         STRUCT:
           - address: STR

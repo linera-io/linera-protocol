@@ -26,7 +26,13 @@ use linera_execution::{
     system::{Address, Amount, Balance, SystemOperation, UserData},
     Operation,
 };
-use linera_rpc::{config::NetworkProtocol, simple_network, Message};
+use linera_rpc::{
+    config::NetworkProtocol,
+    grpc_network::GrpcMassClient,
+    mass::MassClient,
+    node_provider::{GrpcNodeProvider, NodeProvider, SimpleNodeProvider},
+    simple_network, Message,
+};
 use linera_service::{
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain, WalletState},
     storage::{Runnable, StorageConfig},
@@ -80,17 +86,22 @@ impl ClientContext {
         }
     }
 
-    fn make_validator_mass_clients(&self, max_in_flight: u64) -> Vec<simple_network::MassClient> {
+    fn make_validator_mass_clients(&self, max_in_flight: u64) -> Vec<Box<dyn MassClient>> {
         let mut validator_clients = Vec::new();
         for config in &self.genesis_config.committee.validators {
-            let NetworkProtocol::Simple(protocol) = config.network.protocol;
-            let network = config.network.clone_with_protocol(protocol);
-            let client = simple_network::MassClient::new(
-                network,
-                self.send_timeout,
-                self.recv_timeout,
-                max_in_flight,
-            );
+            let client: Box<dyn MassClient> = match config.network.protocol {
+                NetworkProtocol::Simple(protocol) => {
+                    let network = config.network.clone_with_protocol(protocol);
+                    Box::new(simple_network::SimpleMassClient::new(
+                        network,
+                        self.send_timeout,
+                        self.recv_timeout,
+                        max_in_flight,
+                    ))
+                }
+                NetworkProtocol::Grpc => Box::new(GrpcMassClient::new(config.network.clone())),
+            };
+
             validator_clients.push(client);
         }
         validator_clients
@@ -100,12 +111,14 @@ impl ClientContext {
         &self,
         storage: S,
         chain_id: ChainId,
-    ) -> ChainClientState<simple_network::NodeProvider, S> {
+    ) -> ChainClientState<impl ValidatorNodeProvider, S> {
         let chain = self.wallet_state.get(chain_id).expect("Unknown chain");
-        let node_provider = simple_network::NodeProvider {
-            send_timeout: self.send_timeout,
-            recv_timeout: self.recv_timeout,
-        };
+
+        let node_provider = NodeProvider::new(
+            GrpcNodeProvider {},
+            SimpleNodeProvider::new(self.send_timeout, self.recv_timeout),
+        );
+
         ChainClientState::new(
             chain_id,
             chain

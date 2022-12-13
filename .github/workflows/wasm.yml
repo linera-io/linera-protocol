@@ -24,6 +24,8 @@ jobs:
     - name: Report warnings as errors
       run: echo 'RUSTFLAGS=-D warnings' >> $GITHUB_ENV
     - uses: Swatinem/rust-cache@v2
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v1
     - name: Build example contract
       run: |
         cargo build --target wasm32-unknown-unknown -p linera-sdk --examples

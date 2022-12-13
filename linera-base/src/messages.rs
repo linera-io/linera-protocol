@@ -378,6 +378,14 @@ impl FromStr for ChainId {
     }
 }
 
+impl TryFrom<&[u8]> for ChainId {
+    type Error = CryptoError;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        Ok(ChainId(HashValue::try_from(value)?))
+    }
+}
+
 impl std::fmt::Debug for ChainId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         write!(f, "{:?}", self.0)

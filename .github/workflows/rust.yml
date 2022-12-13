@@ -24,6 +24,8 @@ jobs:
     - name: Report warnings as errors
       run: echo 'RUSTFLAGS=-D warnings' >> $GITHUB_ENV
     - uses: Swatinem/rust-cache@v2
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v1
     - name: Rustfmt
       run: cargo fmt -- --check --config unstable_features=true --config imports_granularity=Crate
     - name: Clippy
@@ -42,6 +44,8 @@ jobs:
       with:
         profile: minimal
         toolchain: nightly
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v1
     - name: Install cargo-udeps
       run: cargo install cargo-udeps --locked
     - name: Check for unused dependencies

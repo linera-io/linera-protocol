@@ -8,14 +8,15 @@ use crate::{
         CrossChainConfig, ShardId, ValidatorInternalNetworkPreConfig,
         ValidatorPublicNetworkPreConfig,
     },
-    transport::{MessageHandler, SpawnedServer, TransportProtocol},
+    mass::{MassClient, MassClientError},
+    transport::{MessageHandler, ServerHandle, TransportProtocol},
     Message,
 };
 use async_trait::async_trait;
 use futures::{channel::mpsc, sink::SinkExt, stream::StreamExt};
+
 use linera_chain::messages::{BlockProposal, Certificate};
 use linera_core::{
-    client::ValidatorNodeProvider,
     messages::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     node::{NodeError, ValidatorNode},
     worker::{ValidatorWorker, WorkerState},
@@ -23,7 +24,7 @@ use linera_core::{
 use linera_storage::Store;
 use linera_views::views::ViewError;
 use log::{debug, error, info, warn};
-use std::{io, str::FromStr, time::Duration};
+use std::{io, time::Duration};
 use tokio::time;
 
 #[derive(Clone)]
@@ -130,7 +131,7 @@ where
         }
     }
 
-    pub async fn spawn(self) -> Result<SpawnedServer, io::Error> {
+    pub async fn spawn(self) -> Result<ServerHandle, io::Error> {
         info!(
             "Listening to {} traffic on {}:{}",
             self.network.protocol, self.host, self.port
@@ -139,6 +140,7 @@ where
 
         let (cross_chain_sender, cross_chain_receiver) =
             mpsc::channel(self.cross_chain_config.queue_size);
+
         tokio::spawn(Self::forward_cross_chain_queries(
             self.state.nickname().to_string(),
             self.network.clone(),
@@ -270,36 +272,18 @@ where
     }
 }
 
-pub struct NodeProvider {
-    pub send_timeout: Duration,
-    pub recv_timeout: Duration,
-}
-
-impl ValidatorNodeProvider for NodeProvider {
-    type Node = Client;
-
-    fn make_node(&self, address: &str) -> Result<Self::Node, NodeError> {
-        let network = ValidatorPublicNetworkPreConfig::from_str(address).map_err(|_| {
-            NodeError::CannotResolveValidatorAddress {
-                address: address.to_string(),
-            }
-        })?;
-        Ok(Client::new(network, self.send_timeout, self.recv_timeout))
-    }
-}
-
 #[derive(Clone)]
-pub struct Client {
+pub struct SimpleClient {
     network: ValidatorPublicNetworkPreConfig<TransportProtocol>,
-    send_timeout: std::time::Duration,
-    recv_timeout: std::time::Duration,
+    send_timeout: Duration,
+    recv_timeout: Duration,
 }
 
-impl Client {
-    fn new(
+impl SimpleClient {
+    pub(crate) fn new(
         network: ValidatorPublicNetworkPreConfig<TransportProtocol>,
-        send_timeout: std::time::Duration,
-        recv_timeout: std::time::Duration,
+        send_timeout: Duration,
+        recv_timeout: Duration,
     ) -> Self {
         Self {
             network,
@@ -339,7 +323,7 @@ impl Client {
 }
 
 #[async_trait]
-impl ValidatorNode for Client {
+impl ValidatorNode for SimpleClient {
     /// Initiate a new block.
     async fn handle_block_proposal(
         &mut self,
@@ -366,14 +350,14 @@ impl ValidatorNode for Client {
 }
 
 #[derive(Clone)]
-pub struct MassClient {
+pub struct SimpleMassClient {
     pub network: ValidatorPublicNetworkPreConfig<TransportProtocol>,
     send_timeout: std::time::Duration,
     recv_timeout: std::time::Duration,
     max_in_flight: u64,
 }
 
-impl MassClient {
+impl SimpleMassClient {
     pub fn new(
         network: ValidatorPublicNetworkPreConfig<TransportProtocol>,
         send_timeout: std::time::Duration,
@@ -387,8 +371,11 @@ impl MassClient {
             max_in_flight,
         }
     }
+}
 
-    pub async fn send(&self, requests: Vec<Message>) -> Result<Vec<Message>, io::Error> {
+#[async_trait]
+impl MassClient for SimpleMassClient {
+    async fn send(&self, requests: Vec<Message>) -> Result<Vec<Message>, MassClientError> {
         let address = format!("{}:{}", self.network.host, self.network.port);
         let mut stream = self.network.protocol.connect(address).await?;
         let mut requests = requests.into_iter();

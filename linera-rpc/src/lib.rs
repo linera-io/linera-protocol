@@ -1,10 +1,17 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-mod codec;
 pub mod config;
-mod rpc;
+pub mod grpc_network;
+pub mod mass;
+pub mod node_provider;
+pub mod pool;
 pub mod simple_network;
 pub mod transport;
+
+mod client;
+mod codec;
+mod conversions;
+mod rpc;
 
 pub use rpc::Message;
