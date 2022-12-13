@@ -92,5 +92,5 @@ pub enum Error {
 /// Alias to the contract type, so that the boilerplate module can reference it.
 type ApplicationState = Counter;
 
-#[path = "../contract_boilerplate/mod.rs"]
+#[path = "../boilerplate/contract/mod.rs"]
 mod boilerplate;
