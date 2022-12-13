@@ -11,7 +11,7 @@ use linera_base::{crypto::KeyPair, messages::ValidatorName};
 use linera_core::worker::WorkerState;
 use linera_rpc::{
     config::{
-        CrossChainConfig, NetworkProtocol, Address, ShardId, Shards,
+        Address, CrossChainConfig, NetworkProtocol, ShardId, Shards,
         ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
     },
     grpc_network::GrpcServer,
@@ -255,7 +255,7 @@ impl FromStr for ValidatorOptions {
 fn make_server_config(options: ValidatorOptions) -> ValidatorServerConfig {
     let network = ValidatorPublicNetworkConfig {
         protocol: options.external_protocol,
-        address: Address::new(options.host, options.port)
+        address: Address::new(options.host, options.port),
     };
     let internal_network = ValidatorInternalNetworkConfig {
         protocol: options.internal_protocol,
@@ -387,15 +387,11 @@ mod test {
                 host: "host".into(),
                 port: 9000,
                 shards: vec![
-                    Address::new(
-                        "host1".into(),
-                        9001,
-                    ),
-                    Address::new(
-                        "host2".into(),
-                        9002,
-                    ),
-                ].into_iter().collect(),
+                    Address::new("host1".into(), 9001,),
+                    Address::new("host2".into(), 9002,),
+                ]
+                .into_iter()
+                .collect(),
             }
         );
     }

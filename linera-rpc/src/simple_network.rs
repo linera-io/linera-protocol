@@ -15,6 +15,7 @@ use crate::{
 use async_trait::async_trait;
 use futures::{channel::mpsc, sink::SinkExt, stream::StreamExt};
 
+use crate::config::Address;
 use linera_chain::messages::{BlockProposal, Certificate};
 use linera_core::{
     messages::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
@@ -26,7 +27,6 @@ use linera_views::views::ViewError;
 use log::{debug, error, info, warn};
 use std::{io, time::Duration};
 use tokio::time;
-use crate::config::Address;
 
 #[derive(Clone)]
 pub struct Server<S> {
@@ -123,7 +123,12 @@ where
             if queries_sent % 2000 == 0 {
                 debug!(
                     "[{}] {} has sent {} cross-chain queries to {}:{} (shard {})",
-                    nickname, this_shard, queries_sent, shard.host(), shard.port(), shard_id,
+                    nickname,
+                    this_shard,
+                    queries_sent,
+                    shard.host(),
+                    shard.port(),
+                    shard_id,
                 );
             }
         }
@@ -292,7 +297,11 @@ impl SimpleClient {
     }
 
     async fn send_recv_internal(&mut self, message: Message) -> Result<Message, codec::Error> {
-        let mut stream = self.network.protocol.connect(self.network.address.to_string()).await?;
+        let mut stream = self
+            .network
+            .protocol
+            .connect(self.network.address.to_string())
+            .await?;
         // Send message
         time::timeout(self.send_timeout, stream.send(message))
             .await

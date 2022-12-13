@@ -78,10 +78,7 @@ impl GrpcProxy {
         )
     }
 
-    async fn node_client_for_shard(
-        &self,
-        shard: &Address,
-    ) -> Result<ValidatorNodeClient<Channel>> {
+    async fn node_client_for_shard(&self, shard: &Address) -> Result<ValidatorNodeClient<Channel>> {
         let address = shard.http_address();
         let client = self
             .node_connection_pool
@@ -92,12 +89,10 @@ impl GrpcProxy {
     }
 
     pub async fn run(self) -> Result<()> {
-        Ok(
-            Server::builder()
+        Ok(Server::builder()
             .add_service(self.as_validator_node())
             .serve(self.address())
-            .await?
-        )
+            .await?)
     }
 }
 

@@ -1,13 +1,13 @@
-use linera_service::{
-    config::{Import, ValidatorServerConfig},
-    grpc_proxy::GrpcProxy,
-};
 use anyhow::{bail, Result};
 use futures::{future::BoxFuture, FutureExt, SinkExt, StreamExt};
 use linera_rpc::{
-    config::{NetworkProtocol, Address, Shards},
+    config::{Address, NetworkProtocol, Shards},
     transport::{MessageHandler, TransportProtocol},
     Message,
+};
+use linera_service::{
+    config::{Import, ValidatorServerConfig},
+    grpc_proxy::GrpcProxy,
 };
 use std::path::PathBuf;
 use structopt::StructOpt;
@@ -25,19 +25,18 @@ pub struct ProxyOptions {
 
 enum Proxy {
     Simple(SimpleProxy),
-    Grpc(GrpcProxy)
+    Grpc(GrpcProxy),
 }
 
 impl Proxy {
     async fn run(self) -> Result<()> {
         match self {
             Proxy::Simple(simple_proxy) => simple_proxy.run().await,
-            Proxy::Grpc(grpc_proxy) => grpc_proxy.run().await
+            Proxy::Grpc(grpc_proxy) => grpc_proxy.run().await,
         }
     }
 
     fn from_options(options: ProxyOptions) -> Result<Self> {
-
         let config = ValidatorServerConfig::read(&options.config_path)?;
         let internal_protocol = config.internal_network.protocol;
         let external_protocol = config.validator.network.protocol;
@@ -58,17 +57,16 @@ impl Proxy {
             }),
             _ => {
                 bail!(
-                "network protocol mismatch: cannot have {} and {} ",
-                internal_protocol,
-                external_protocol,
-            );
+                    "network protocol mismatch: cannot have {} and {} ",
+                    internal_protocol,
+                    external_protocol,
+                );
             }
         };
 
         Ok(proxy)
     }
 }
-
 
 #[derive(Clone)]
 pub struct SimpleProxy {

@@ -32,10 +32,7 @@ pub struct Address {
 
 impl Address {
     pub fn new(host: String, port: u16) -> Self {
-        Self {
-            host,
-            port
-        }
+        Self { host, port }
     }
 
     pub fn host(&self) -> &str {
@@ -151,10 +148,7 @@ where
         let port = parts[2].parse()?;
         Ok(ValidatorPublicNetworkPreConfig {
             protocol,
-            address: Address {
-                host,
-                port,
-            }
+            address: Address { host, port },
         })
     }
 }
@@ -212,10 +206,14 @@ impl Shards {
     pub fn len(&self) -> usize {
         self.0.len()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 impl FromIterator<Address> for Shards {
-    fn from_iter<T: IntoIterator<Item =Address>>(iter: T) -> Self {
+    fn from_iter<T: IntoIterator<Item = Address>>(iter: T) -> Self {
         Shards(iter.into_iter().collect())
     }
 }

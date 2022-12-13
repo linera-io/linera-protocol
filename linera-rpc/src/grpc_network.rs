@@ -248,7 +248,12 @@ where
                 // is this correct? does the `shard_id` not change?
                 debug!(
                     "[{}] {} has sent {} cross-chain queries to {}:{} (shard {})",
-                    nickname, this_shard, queries_sent, shard.host(), shard.port(), shard_id,
+                    nickname,
+                    this_shard,
+                    queries_sent,
+                    shard.host(),
+                    shard.port(),
+                    shard_id,
                 );
             }
         }
