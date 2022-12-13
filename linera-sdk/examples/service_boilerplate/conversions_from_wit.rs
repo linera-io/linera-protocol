@@ -9,6 +9,7 @@ use super::{
 };
 use linera_sdk::{
     ApplicationId, BlockHeight, BytecodeId, ChainId, EffectId, HashValue, QueryContext,
+    SystemBalance,
 };
 use std::task::Poll;
 
@@ -66,6 +67,13 @@ impl From<queryable_system::EffectId> for EffectId {
             height: BlockHeight(effect_id.height),
             index: effect_id.index,
         }
+    }
+}
+
+impl From<queryable_system::SystemBalance> for SystemBalance {
+    fn from(balance: queryable_system::SystemBalance) -> Self {
+        let value = ((balance.upper_half as u128) << 64) | (balance.lower_half as u128);
+        SystemBalance(value)
     }
 }
 

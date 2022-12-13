@@ -9,7 +9,7 @@ use super::{
 };
 use linera_sdk::{
     ApplicationId, BlockHeight, BytecodeId, CalleeContext, ChainId, EffectContext, EffectId,
-    HashValue, OperationContext, Session, SessionId,
+    HashValue, OperationContext, Session, SessionId, SystemBalance,
 };
 use std::task::Poll;
 
@@ -128,6 +128,13 @@ impl From<writable_system::HashValue> for HashValue {
             hash_value.part7,
             hash_value.part8,
         ])
+    }
+}
+
+impl From<writable_system::SystemBalance> for SystemBalance {
+    fn from(balance: writable_system::SystemBalance) -> Self {
+        let value = ((balance.upper_half as u128) << 64) | (balance.lower_half as u128);
+        SystemBalance(value)
     }
 }
 
