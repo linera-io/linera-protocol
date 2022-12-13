@@ -91,10 +91,9 @@ where
         let mut queries_sent = 0u64;
         while let Some((message, shard_id)) = receiver.next().await {
             // Send cross-chain query.
-            let shard = network.shard_address(shard_id);
-            let remote_address = format!("{}:{}", shard.host(), shard.port());
+            let shard_address = network.shard_address(shard_id).to_string();
             for i in 0..cross_chain_max_retries {
-                let status = pool.send_message_to(message.clone(), &remote_address).await;
+                let status = pool.send_message_to(message.clone(), &shard_address).await;
                 match status {
                     Err(error) => {
                         if i < cross_chain_max_retries {
@@ -122,13 +121,8 @@ where
             }
             if queries_sent % 2000 == 0 {
                 debug!(
-                    "[{}] {} has sent {} cross-chain queries to {}:{} (shard {})",
-                    nickname,
-                    this_shard,
-                    queries_sent,
-                    shard.host(),
-                    shard.port(),
-                    shard_id,
+                    "[{}] {} has sent {} cross-chain queries to {} (shard {})",
+                    nickname, this_shard, queries_sent, shard_address, shard_id,
                 );
             }
         }
