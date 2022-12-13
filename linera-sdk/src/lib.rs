@@ -234,3 +234,7 @@ pub struct SessionCallResult {
     /// If `call_session` was called, this tells the system to clean up the session.
     pub data: Option<Vec<u8>>,
 }
+
+/// The balance of a chain.
+#[derive(Default, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+pub struct SystemBalance(pub u128);
