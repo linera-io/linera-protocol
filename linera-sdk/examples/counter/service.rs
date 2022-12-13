@@ -41,4 +41,5 @@ pub enum Error {
 /// Alias to the application type, so that the boilerplate module can reference it.
 type ApplicationState = Counter;
 
-mod service_boilerplate;
+#[path = "../service_boilerplate/mod.rs"]
+mod boilerplate;
