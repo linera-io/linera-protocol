@@ -302,6 +302,10 @@ impl writable_system::WritableSystem for SystemApi<&'static dyn WritableStorage>
         self.storage().application_id().into()
     }
 
+    fn read_system_balance(&mut self) -> writable_system::SystemBalance {
+        self.storage().read_system_balance().into()
+    }
+
     fn load_new(&mut self) -> Self::Load {
         HostFuture::new(self.storage().try_read_my_state())
     }
@@ -417,6 +421,10 @@ impl queryable_system::QueryableSystem for SystemApi<&'static dyn QueryableStora
 
     fn application_id(&mut self) -> queryable_system::ApplicationId {
         self.storage().application_id().into()
+    }
+
+    fn read_system_balance(&mut self) -> queryable_system::SystemBalance {
+        self.storage().read_system_balance().into()
     }
 
     fn load_new(&mut self) -> Self::Load {

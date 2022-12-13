@@ -1,5 +1,6 @@
 chain-id: func() -> chain-id
 application-id: func() -> application-id
+read-system-balance: func() -> system-balance
 
 resource load {
     static new: func() -> load
@@ -81,4 +82,9 @@ record hash-value {
     part6: u64,
     part7: u64,
     part8: u64,
+}
+
+record system-balance {
+    lower-half: u64,
+    upper-half: u64,
 }
