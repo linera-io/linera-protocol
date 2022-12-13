@@ -38,6 +38,19 @@ impl From<EffectContext> for contract::EffectContext {
     }
 }
 
+impl From<EffectId> for queryable_system::EffectId {
+    fn from(host: EffectId) -> Self {
+        queryable_system::EffectId {
+            chain_id: host.chain_id.into(),
+            height: host.height.0,
+            index: host
+                .index
+                .try_into()
+                .expect("Effect index should fit in an `u64`"),
+        }
+    }
+}
+
 impl From<EffectId> for writable_system::EffectId {
     fn from(host: EffectId) -> Self {
         writable_system::EffectId {
@@ -110,6 +123,20 @@ impl From<ApplicationId> for contract::ApplicationId {
                 unreachable!("Attempt to allow system application access to user application")
             }
             ApplicationId::User { bytecode, creation } => contract::ApplicationId {
+                bytecode: bytecode.0.into(),
+                creation: creation.into(),
+            },
+        }
+    }
+}
+
+impl From<ApplicationId> for queryable_system::ApplicationId {
+    fn from(host: ApplicationId) -> Self {
+        match host {
+            ApplicationId::System => {
+                unreachable!("Attempt to allow system application access to user application")
+            }
+            ApplicationId::User { bytecode, creation } => queryable_system::ApplicationId {
                 bytecode: bytecode.0.into(),
                 creation: creation.into(),
             },

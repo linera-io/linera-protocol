@@ -298,6 +298,10 @@ impl writable_system::WritableSystem for SystemApi<&'static dyn WritableStorage>
         self.storage().chain_id().into()
     }
 
+    fn application_id(&mut self) -> writable_system::ApplicationId {
+        self.storage().application_id().into()
+    }
+
     fn load_new(&mut self) -> Self::Load {
         HostFuture::new(self.storage().try_read_my_state())
     }
@@ -409,6 +413,10 @@ impl queryable_system::QueryableSystem for SystemApi<&'static dyn QueryableStora
 
     fn chain_id(&mut self) -> queryable_system::ChainId {
         self.storage().chain_id().into()
+    }
+
+    fn application_id(&mut self) -> queryable_system::ApplicationId {
+        self.storage().application_id().into()
     }
 
     fn load_new(&mut self) -> Self::Load {

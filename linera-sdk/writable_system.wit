@@ -1,4 +1,5 @@
 chain-id: func() -> chain-id
+application-id: func() -> application-id
 
 resource load {
     static new: func() -> load

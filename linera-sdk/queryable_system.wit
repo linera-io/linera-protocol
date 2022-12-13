@@ -1,4 +1,5 @@
 chain-id: func() -> chain-id
+application-id: func() -> application-id
 
 resource load {
     static new: func() -> load
@@ -10,7 +11,21 @@ variant poll-load {
     ready(expected<list<u8>, string>),
 }
 
+record application-id {
+    bytecode: bytecode,
+    creation: effect-id,
+}
+
+type bytecode = effect-id
+
+record effect-id {
+    chain-id: chain-id,
+    height: block-height,
+    index: u64,
+}
+
 type chain-id = hash-value
+type block-height = u64
 
 record hash-value {
     part1: u64,
