@@ -1,3 +1,5 @@
+chain-id: func() -> chain-id
+
 resource load {
     static new: func() -> load
     poll: func() -> poll-load

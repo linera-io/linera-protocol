@@ -294,6 +294,10 @@ impl writable_system::WritableSystem for SystemApi<&'static dyn WritableStorage>
     type TryCallApplication = HostFuture<'static, Result<CallResult, ExecutionError>>;
     type TryCallSession = HostFuture<'static, Result<CallResult, ExecutionError>>;
 
+    fn chain_id(&mut self) -> writable_system::ChainId {
+        self.storage().chain_id().into()
+    }
+
     fn load_new(&mut self) -> Self::Load {
         HostFuture::new(self.storage().try_read_my_state())
     }
@@ -402,6 +406,10 @@ impl writable_system::WritableSystem for SystemApi<&'static dyn WritableStorage>
 
 impl queryable_system::QueryableSystem for SystemApi<&'static dyn QueryableStorage> {
     type Load = HostFuture<'static, Result<Vec<u8>, ExecutionError>>;
+
+    fn chain_id(&mut self) -> queryable_system::ChainId {
+        self.storage().chain_id().into()
+    }
 
     fn load_new(&mut self) -> Self::Load {
         HostFuture::new(self.storage().try_read_my_state())

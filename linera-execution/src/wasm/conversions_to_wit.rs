@@ -6,7 +6,7 @@
 //! Allows converting types used in `linera-execution` to types that can be sent to the guest WASM
 //! module.
 
-use super::runtime::{contract, service, writable_system};
+use super::runtime::{contract, queryable_system, service, writable_system};
 use crate::{
     CallResult, CalleeContext, EffectContext, EffectId, OperationContext, QueryContext, SessionId,
 };
@@ -131,6 +131,12 @@ impl From<ApplicationId> for writable_system::ApplicationId {
     }
 }
 
+impl From<ChainId> for queryable_system::ChainId {
+    fn from(chain_id: ChainId) -> Self {
+        chain_id.0.into()
+    }
+}
+
 impl From<ChainId> for writable_system::ChainId {
     fn from(chain_id: ChainId) -> Self {
         chain_id.0.into()
@@ -171,6 +177,23 @@ impl From<HashValue> for service::HashValue {
         let bytes = hash_value.as_bytes();
 
         service::HashValue {
+            part1: u64::from_le_bytes(bytes[0..8].try_into().expect("incorrect indices")),
+            part2: u64::from_le_bytes(bytes[8..16].try_into().expect("incorrect indices")),
+            part3: u64::from_le_bytes(bytes[16..24].try_into().expect("incorrect indices")),
+            part4: u64::from_le_bytes(bytes[24..32].try_into().expect("incorrect indices")),
+            part5: u64::from_le_bytes(bytes[32..40].try_into().expect("incorrect indices")),
+            part6: u64::from_le_bytes(bytes[40..48].try_into().expect("incorrect indices")),
+            part7: u64::from_le_bytes(bytes[48..56].try_into().expect("incorrect indices")),
+            part8: u64::from_le_bytes(bytes[56..64].try_into().expect("incorrect indices")),
+        }
+    }
+}
+
+impl From<HashValue> for queryable_system::HashValue {
+    fn from(hash_value: HashValue) -> Self {
+        let bytes = hash_value.as_bytes();
+
+        queryable_system::HashValue {
             part1: u64::from_le_bytes(bytes[0..8].try_into().expect("incorrect indices")),
             part2: u64::from_le_bytes(bytes[8..16].try_into().expect("incorrect indices")),
             part3: u64::from_le_bytes(bytes[16..24].try_into().expect("incorrect indices")),
