@@ -43,6 +43,16 @@ impl From<contract::EffectId> for EffectId {
     }
 }
 
+impl From<writable_system::EffectId> for EffectId {
+    fn from(effect_id: writable_system::EffectId) -> Self {
+        EffectId {
+            chain_id: ChainId(effect_id.chain_id.into()),
+            height: BlockHeight(effect_id.height),
+            index: effect_id.index,
+        }
+    }
+}
+
 impl From<contract::CalleeContext> for CalleeContext {
     fn from(application_context: contract::CalleeContext) -> Self {
         CalleeContext {
@@ -56,6 +66,15 @@ impl From<contract::CalleeContext> for CalleeContext {
 
 impl From<contract::ApplicationId> for ApplicationId {
     fn from(application_id: contract::ApplicationId) -> Self {
+        ApplicationId {
+            bytecode: BytecodeId(application_id.bytecode.into()),
+            creation: application_id.creation.into(),
+        }
+    }
+}
+
+impl From<writable_system::ApplicationId> for ApplicationId {
+    fn from(application_id: writable_system::ApplicationId) -> Self {
         ApplicationId {
             bytecode: BytecodeId(application_id.bytecode.into()),
             creation: application_id.creation.into(),

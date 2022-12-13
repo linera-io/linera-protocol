@@ -3,7 +3,7 @@
 
 use super::{super::ApplicationState, writable_system as system};
 use futures::future;
-use linera_sdk::ChainId;
+use linera_sdk::{ApplicationId, ChainId};
 use std::future::Future;
 
 impl ApplicationState {
@@ -38,5 +38,11 @@ impl ApplicationState {
     #[allow(dead_code)]
     pub fn current_chain_id() -> ChainId {
         ChainId(system::chain_id().into())
+    }
+
+    /// Retrieve the current application ID.
+    #[allow(dead_code)]
+    pub fn current_application_id() -> ApplicationId {
+        system::application_id().into()
     }
 }

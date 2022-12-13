@@ -7,7 +7,9 @@ use super::{
     queryable_system::{self, PollLoad},
     service,
 };
-use linera_sdk::{ChainId, HashValue, QueryContext};
+use linera_sdk::{
+    ApplicationId, BlockHeight, BytecodeId, ChainId, EffectId, HashValue, QueryContext,
+};
 use std::task::Poll;
 
 impl From<service::QueryContext> for QueryContext {
@@ -45,6 +47,25 @@ impl From<queryable_system::HashValue> for HashValue {
             hash_value.part7,
             hash_value.part8,
         ])
+    }
+}
+
+impl From<queryable_system::ApplicationId> for ApplicationId {
+    fn from(application_id: queryable_system::ApplicationId) -> Self {
+        ApplicationId {
+            bytecode: BytecodeId(application_id.bytecode.into()),
+            creation: application_id.creation.into(),
+        }
+    }
+}
+
+impl From<queryable_system::EffectId> for EffectId {
+    fn from(effect_id: queryable_system::EffectId) -> Self {
+        EffectId {
+            chain_id: ChainId(effect_id.chain_id.into()),
+            height: BlockHeight(effect_id.height),
+            index: effect_id.index,
+        }
     }
 }
 
