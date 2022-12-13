@@ -3,16 +3,12 @@
 
 #![cfg(target_arch = "wasm32")]
 
+mod state;
+
+use self::state::{ApplicationState, Counter};
 use async_trait::async_trait;
 use linera_sdk::{QueryContext, Service};
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
-
-/// The application state.
-#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
-pub struct Counter {
-    value: u128,
-}
 
 #[async_trait]
 impl Service for Counter {
@@ -37,9 +33,6 @@ pub enum Error {
     #[error("Invalid query argument; Counter application only supports a single (empty) query")]
     InvalidQuery,
 }
-
-/// Alias to the application type, so that the boilerplate module can reference it.
-type ApplicationState = Counter;
 
 #[path = "../boilerplate/service/mod.rs"]
 mod boilerplate;

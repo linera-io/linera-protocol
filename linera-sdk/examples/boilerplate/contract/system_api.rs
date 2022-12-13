@@ -6,6 +6,7 @@ use futures::future;
 use linera_sdk::{ApplicationId, ChainId, SystemBalance};
 use std::future::Future;
 
+#[allow(dead_code)]
 impl ApplicationState {
     /// Load the contract state, without locking it for writes.
     pub async fn load() -> Self {

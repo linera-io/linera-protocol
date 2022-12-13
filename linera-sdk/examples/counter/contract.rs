@@ -3,19 +3,15 @@
 
 #![cfg(target_arch = "wasm32")]
 
+mod state;
+
+use self::state::{ApplicationState, Counter};
 use async_trait::async_trait;
 use linera_sdk::{
     ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
     OperationContext, Session, SessionCallResult, SessionId,
 };
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
-
-/// The application state.
-#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
-pub struct Counter {
-    value: u128,
-}
 
 #[async_trait]
 impl Contract for Counter {
@@ -88,9 +84,6 @@ pub enum Error {
     #[error("Invalid serialized increment value")]
     InvalidIncrement(#[from] bcs::Error),
 }
-
-/// Alias to the contract type, so that the boilerplate module can reference it.
-type ApplicationState = Counter;
 
 #[path = "../boilerplate/contract/mod.rs"]
 mod boilerplate;
