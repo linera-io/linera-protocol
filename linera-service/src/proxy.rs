@@ -1,13 +1,14 @@
-use anyhow::Result;
+use linera_service::{
+    config::{Import, ValidatorServerConfig},
+    grpc_proxy::GrpcProxy,
+};
+use anyhow::{bail, Result};
 use futures::{future::BoxFuture, FutureExt, SinkExt, StreamExt};
 use linera_rpc::{
-    config::{
-        NetworkProtocol, ShardConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
-    },
-    transport::MessageHandler,
+    config::{NetworkProtocol, Address, Shards},
+    transport::{MessageHandler, TransportProtocol},
     Message,
 };
-use linera_service::config::{Import, ValidatorServerConfig};
 use std::path::PathBuf;
 use structopt::StructOpt;
 
@@ -22,16 +23,65 @@ pub struct ProxyOptions {
     config_path: PathBuf,
 }
 
-#[derive(Clone)]
-pub struct Proxy {
-    public_config: ValidatorPublicNetworkConfig,
-    internal_config: ValidatorInternalNetworkConfig,
+enum Proxy {
+    Simple(SimpleProxy),
+    Grpc(GrpcProxy)
 }
 
-impl MessageHandler for Proxy {
+impl Proxy {
+    async fn run(self) -> Result<()> {
+        match self {
+            Proxy::Simple(simple_proxy) => simple_proxy.run().await,
+            Proxy::Grpc(grpc_proxy) => grpc_proxy.run().await
+        }
+    }
+
+    fn from_options(options: ProxyOptions) -> Result<Self> {
+
+        let config = ValidatorServerConfig::read(&options.config_path)?;
+        let internal_protocol = config.internal_network.protocol;
+        let external_protocol = config.validator.network.protocol;
+
+        let proxy = match (internal_protocol, external_protocol) {
+            (NetworkProtocol::Grpc, NetworkProtocol::Grpc) => Self::Grpc(GrpcProxy::new(
+                config.validator.network,
+                config.internal_network,
+            )),
+            (
+                NetworkProtocol::Simple(internal_transport),
+                NetworkProtocol::Simple(public_transport),
+            ) => Self::Simple(SimpleProxy {
+                public_transport,
+                address: config.validator.network.address,
+                internal_transport,
+                shards: config.internal_network.shards,
+            }),
+            _ => {
+                bail!(
+                "network protocol mismatch: cannot have {} and {} ",
+                internal_protocol,
+                external_protocol,
+            );
+            }
+        };
+
+        Ok(proxy)
+    }
+}
+
+
+#[derive(Clone)]
+pub struct SimpleProxy {
+    public_transport: TransportProtocol,
+    address: Address,
+    internal_transport: TransportProtocol,
+    shards: Shards,
+}
+
+impl MessageHandler for SimpleProxy {
     fn handle_message(&mut self, message: Message) -> BoxFuture<Option<Message>> {
         let shard = self.select_shard_for(&message);
-        let protocol = self.internal_config.protocol;
+        let protocol = self.internal_transport;
 
         async move {
             if let Some(shard) = shard {
@@ -50,22 +100,8 @@ impl MessageHandler for Proxy {
     }
 }
 
-impl Proxy {
-    async fn run(self) -> Result<()> {
-        let address = format!("0.0.0.0:{}", self.public_config.port);
-        match self.public_config.protocol {
-            NetworkProtocol::Simple(protocol) => {
-                protocol.spawn_server(&address, self).await?.join().await?;
-            }
-            NetworkProtocol::Grpc => {
-                unimplemented!()
-            }
-        }
-
-        Ok(())
-    }
-
-    fn select_shard_for(&self, request: &Message) -> Option<ShardConfig> {
+impl SimpleProxy {
+    fn select_shard_for(&self, request: &Message) -> Option<Address> {
         let chain_id = match request {
             Message::BlockProposal(proposal) => proposal.content.block.chain_id,
             Message::Certificate(certificate) => certificate.value.chain_id(),
@@ -79,24 +115,27 @@ impl Proxy {
             }
         };
 
-        Some(self.internal_config.get_shard_for(chain_id).clone())
+        Some(self.shards.get_shard_for(chain_id).clone())
     }
 
     async fn try_proxy_message(
         message: Message,
-        shard: ShardConfig,
-        protocol: NetworkProtocol,
+        shard: Address,
+        protocol: TransportProtocol,
     ) -> Result<Option<Message>> {
-        let shard_address = format!("{}:{}", shard.host, shard.port);
-        let protocol = match protocol {
-            NetworkProtocol::Simple(protocol) => protocol,
-            NetworkProtocol::Grpc => todo!(),
-        };
-
-        let mut connection = protocol.connect(shard_address).await?;
+        let mut connection = protocol.connect(shard.to_string()).await?;
         connection.send(message).await?;
-
         Ok(connection.next().await.transpose()?)
+    }
+
+    async fn run(self) -> Result<()> {
+        let address = self.address.to_string();
+        self.public_transport
+            .spawn_server(&address, self)
+            .await?
+            .join()
+            .await?;
+        Ok(())
     }
 }
 
@@ -106,15 +145,13 @@ async fn main() -> Result<()> {
         .format_timestamp_millis()
         .init();
 
-    let options = ProxyOptions::from_args();
-    let config = ValidatorServerConfig::read(&options.config_path)?;
+    log::info!("Initialising proxy...");
 
-    let handler = Proxy {
-        public_config: config.validator.network,
-        internal_config: config.internal_network,
-    };
+    let proxy = Proxy::from_options(ProxyOptions::from_args())?;
 
-    if let Err(error) = handler.run().await {
+    log::info!("Starting proxy running...");
+
+    if let Err(error) = proxy.run().await {
         log::error!("Failed to run proxy: {error}");
     }
 

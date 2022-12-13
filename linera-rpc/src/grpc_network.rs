@@ -196,8 +196,8 @@ where
         let pool = ValidatorWorkerClient::<Channel>::pool();
 
         while let Some((cross_chain_request, shard_id)) = receiver.next().await {
-            let shard = network.shard(shard_id);
-            let http_address = format!("http://{}", shard.address());
+            let shard = network.shard_address(shard_id);
+            let http_address = shard.http_address();
             let mut client = match pool.client_for_address_mut(http_address.clone()).await {
                 Ok(client) => client,
                 Err(error) => {
@@ -225,7 +225,7 @@ where
                             error!(
                                 "[{}] cross chain query to {} failed: {:?}, backing off for {} ms...",
                                 nickname,
-                                shard.address(),
+                                shard,
                                 error,
                                 back_off.as_millis()
                             );
@@ -248,7 +248,7 @@ where
                 // is this correct? does the `shard_id` not change?
                 debug!(
                     "[{}] {} has sent {} cross-chain queries to {}:{} (shard {})",
-                    nickname, this_shard, queries_sent, shard.host, shard.port, shard_id,
+                    nickname, this_shard, queries_sent, shard.host(), shard.port(), shard_id,
                 );
             }
         }

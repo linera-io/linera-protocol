@@ -11,8 +11,8 @@ use linera_base::{crypto::KeyPair, messages::ValidatorName};
 use linera_core::worker::WorkerState;
 use linera_rpc::{
     config::{
-        CrossChainConfig, NetworkProtocol, ShardConfig, ShardId, ValidatorInternalNetworkConfig,
-        ValidatorPublicNetworkConfig,
+        CrossChainConfig, NetworkProtocol, Address, ShardId, Shards,
+        ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
     },
     grpc_network::GrpcServer,
     simple_network,
@@ -45,14 +45,14 @@ impl ServerContext {
         local_ip_addr: &str,
         shard_id: ShardId,
         storage: S,
-    ) -> (WorkerState<S>, ShardId, ShardConfig)
+    ) -> (WorkerState<S>, ShardId, Address)
     where
         S: Store + Clone + Send + Sync + 'static,
     {
-        let shard = self.server_config.internal_network.shard(shard_id);
-        info!("Shard booted on {}", shard.host);
+        let shard = self.server_config.internal_network.shard_address(shard_id);
+        info!("Shard booted on {}", shard.host());
         let state = WorkerState::new(
-            format!("Shard {} @ {}:{}", shard_id, local_ip_addr, shard.port),
+            format!("Shard {} @ {}:{}", shard_id, local_ip_addr, shard.port()),
             Some(self.server_config.key.copy()),
             storage,
         )
@@ -63,7 +63,7 @@ impl ServerContext {
     async fn spawn_simple<S>(
         &self,
         listen_address: &str,
-        states: Vec<(WorkerState<S>, ShardId, ShardConfig)>,
+        states: Vec<(WorkerState<S>, ShardId, Address)>,
         protocol: TransportProtocol,
     ) -> Result<(), anyhow::Error>
     where
@@ -79,11 +79,11 @@ impl ServerContext {
         for (state, shard_id, shard) in states {
             let internal_network = internal_network.clone();
             let cross_chain_config = self.cross_chain_config.clone();
+            let address = Address::new(listen_address.to_string(), shard.port());
             handles.push(async move {
                 let server = simple_network::Server::new(
                     internal_network,
-                    listen_address.to_string(),
-                    shard.port,
+                    address,
                     state,
                     shard_id,
                     cross_chain_config,
@@ -108,7 +108,7 @@ impl ServerContext {
     async fn spawn_grpc<S>(
         &self,
         listen_address: &str,
-        states: Vec<(WorkerState<S>, ShardId, ShardConfig)>,
+        states: Vec<(WorkerState<S>, ShardId, Address)>,
     ) -> Result<(), anyhow::Error>
     where
         S: Store + Clone + Send + Sync + 'static,
@@ -120,7 +120,7 @@ impl ServerContext {
             handles.push(async move {
                 let spawned_server = match GrpcServer::spawn(
                     listen_address.to_string(),
-                    shard.port,
+                    shard.port(),
                     state,
                     shard_id,
                     self.server_config.internal_network.clone(),
@@ -212,7 +212,7 @@ struct ValidatorOptions {
     internal_protocol: NetworkProtocol,
 
     /// The public name and the port of each of the shards
-    shards: Vec<ShardConfig>,
+    shards: Shards,
 }
 
 impl FromStr for ValidatorOptions {
@@ -237,7 +237,7 @@ impl FromStr for ValidatorOptions {
                 let host = shard_address[0].to_owned();
                 let port = shard_address[1].parse()?;
 
-                Ok(ShardConfig { host, port })
+                Ok(Address::new(host, port))
             })
             .collect::<Result<_, Self::Err>>()?;
 
@@ -255,8 +255,7 @@ impl FromStr for ValidatorOptions {
 fn make_server_config(options: ValidatorOptions) -> ValidatorServerConfig {
     let network = ValidatorPublicNetworkConfig {
         protocol: options.external_protocol,
-        host: options.host,
-        port: options.port,
+        address: Address::new(options.host, options.port)
     };
     let internal_network = ValidatorInternalNetworkConfig {
         protocol: options.internal_protocol,
@@ -388,15 +387,15 @@ mod test {
                 host: "host".into(),
                 port: 9000,
                 shards: vec![
-                    ShardConfig {
-                        host: "host1".into(),
-                        port: 9001,
-                    },
-                    ShardConfig {
-                        host: "host2".into(),
-                        port: 9002,
-                    },
-                ],
+                    Address::new(
+                        "host1".into(),
+                        9001,
+                    ),
+                    Address::new(
+                        "host2".into(),
+                        9002,
+                    ),
+                ].into_iter().collect(),
             }
         );
     }

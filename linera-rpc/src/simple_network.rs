@@ -26,12 +26,12 @@ use linera_views::views::ViewError;
 use log::{debug, error, info, warn};
 use std::{io, time::Duration};
 use tokio::time;
+use crate::config::Address;
 
 #[derive(Clone)]
 pub struct Server<S> {
     network: ValidatorInternalNetworkPreConfig<TransportProtocol>,
-    host: String,
-    port: u16,
+    address: Address,
     state: WorkerState<S>,
     shard_id: ShardId,
     cross_chain_config: CrossChainConfig,
@@ -44,16 +44,14 @@ impl<S> Server<S> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         network: ValidatorInternalNetworkPreConfig<TransportProtocol>,
-        host: String,
-        port: u16,
+        address: Address,
         state: WorkerState<S>,
         shard_id: ShardId,
         cross_chain_config: CrossChainConfig,
     ) -> Self {
         Self {
             network,
-            host,
-            port,
+            address,
             state,
             shard_id,
             cross_chain_config,
@@ -93,8 +91,8 @@ where
         let mut queries_sent = 0u64;
         while let Some((message, shard_id)) = receiver.next().await {
             // Send cross-chain query.
-            let shard = network.shard(shard_id);
-            let remote_address = format!("{}:{}", shard.host, shard.port);
+            let shard = network.shard_address(shard_id);
+            let remote_address = format!("{}:{}", shard.host(), shard.port());
             for i in 0..cross_chain_max_retries {
                 let status = pool.send_message_to(message.clone(), &remote_address).await;
                 match status {
@@ -125,7 +123,7 @@ where
             if queries_sent % 2000 == 0 {
                 debug!(
                     "[{}] {} has sent {} cross-chain queries to {}:{} (shard {})",
-                    nickname, this_shard, queries_sent, shard.host, shard.port, shard_id,
+                    nickname, this_shard, queries_sent, shard.host(), shard.port(), shard_id,
                 );
             }
         }
@@ -133,10 +131,9 @@ where
 
     pub async fn spawn(self) -> Result<ServerHandle, io::Error> {
         info!(
-            "Listening to {} traffic on {}:{}",
-            self.network.protocol, self.host, self.port
+            "Listening to {} traffic on {}",
+            self.network.protocol, self.address
         );
-        let address = format!("{}:{}", self.host, self.port);
 
         let (cross_chain_sender, cross_chain_receiver) =
             mpsc::channel(self.cross_chain_config.queue_size);
@@ -151,10 +148,13 @@ where
         ));
 
         let protocol = self.network.protocol;
+        let address = self.address.to_string();
+
         let state = RunningServerState {
             server: self,
             cross_chain_sender,
         };
+
         // Launch server for the appropriate protocol.
         protocol.spawn_server(&address, state).await
     }
@@ -221,10 +221,9 @@ where
             self.server.packets_processed += 1;
             if self.server.packets_processed % 5000 == 0 {
                 debug!(
-                    "[{}] {}:{} (shard {}) has processed {} packets",
+                    "[{}] {} (shard {}) has processed {} packets",
                     self.server.state.nickname(),
-                    self.server.host,
-                    self.server.port,
+                    self.server.address,
                     self.server.shard_id,
                     self.server.packets_processed
                 );
@@ -293,8 +292,7 @@ impl SimpleClient {
     }
 
     async fn send_recv_internal(&mut self, message: Message) -> Result<Message, codec::Error> {
-        let address = format!("{}:{}", self.network.host, self.network.port);
-        let mut stream = self.network.protocol.connect(address).await?;
+        let mut stream = self.network.protocol.connect(self.network.address.to_string()).await?;
         // Send message
         time::timeout(self.send_timeout, stream.send(message))
             .await
@@ -376,7 +374,7 @@ impl SimpleMassClient {
 #[async_trait]
 impl MassClient for SimpleMassClient {
     async fn send(&self, requests: Vec<Message>) -> Result<Vec<Message>, MassClientError> {
-        let address = format!("{}:{}", self.network.host, self.network.port);
+        let address = self.network.address.to_string();
         let mut stream = self.network.protocol.connect(address).await?;
         let mut requests = requests.into_iter();
         let mut in_flight: u64 = 0;

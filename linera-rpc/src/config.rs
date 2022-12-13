@@ -23,20 +23,37 @@ pub type ShardId = usize;
 
 /// The network configuration of a shard.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ShardConfig {
+pub struct Address {
     /// The host name (e.g an IP address).
-    pub host: String,
+    host: String,
     /// The port.
-    pub port: u16,
+    port: u16,
 }
 
-impl ShardConfig {
-    pub fn address(&self) -> String {
-        format!("{}:{}", self.host, self.port)
+impl Address {
+    pub fn new(host: String, port: u16) -> Self {
+        Self {
+            host,
+            port
+        }
+    }
+
+    pub fn host(&self) -> &str {
+        &self.host
+    }
+
+    pub fn port(&self) -> u16 {
+        self.port
     }
 
     pub fn http_address(&self) -> String {
-        format!("http://{}:{}", self.host, self.port)
+        format!("http://{}", self)
+    }
+}
+
+impl std::fmt::Display for Address {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}", self.host, self.port)
     }
 }
 
@@ -60,7 +77,7 @@ pub struct ValidatorInternalNetworkPreConfig<P> {
     pub protocol: P,
     /// The available shards. Each chain UID is mapped to a unique shard in the vector in
     /// a static way.
-    pub shards: Vec<ShardConfig>,
+    pub shards: Shards,
 }
 
 impl<P> ValidatorInternalNetworkPreConfig<P> {
@@ -72,28 +89,29 @@ impl<P> ValidatorInternalNetworkPreConfig<P> {
     }
 }
 
+/// A structure holding the internal sharding configuration
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Shards(Vec<Address>);
+
 /// The public network configuration for a validator.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ValidatorPublicNetworkPreConfig<P> {
     /// The network protocol to use for the validator frontend.
     pub protocol: P,
-    /// The host name of the validator (IP or hostname).
-    pub host: String,
-    /// The port the validator listens on.
-    pub port: u16,
+    /// The address of the validator.
+    pub address: Address,
 }
 
 impl<P> ValidatorPublicNetworkPreConfig<P> {
     pub fn clone_with_protocol<Q>(&self, protocol: Q) -> ValidatorPublicNetworkPreConfig<Q> {
         ValidatorPublicNetworkPreConfig {
             protocol,
-            host: self.host.clone(),
-            port: self.port,
+            address: self.address.clone(),
         }
     }
 
     pub fn http_address(&self) -> String {
-        format!("http://{}:{}", self.host, self.port)
+        self.address.http_address()
     }
 }
 
@@ -102,7 +120,7 @@ where
     P: std::fmt::Display,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}:{}:{}", self.protocol, self.host, self.port)
+        write!(f, "{}:{}", self.protocol, self.address)
     }
 }
 
@@ -133,8 +151,10 @@ where
         let port = parts[2].parse()?;
         Ok(ValidatorPublicNetworkPreConfig {
             protocol,
-            host,
-            port,
+            address: Address {
+                host,
+                port,
+            }
         })
     }
 }
@@ -152,20 +172,50 @@ impl std::str::FromStr for NetworkProtocol {
 }
 
 impl<P> ValidatorInternalNetworkPreConfig<P> {
+    /// Return a reference to internal [`Shards`]
+    pub fn shards(&self) -> &Shards {
+        &self.shards
+    }
+
     /// Static shard assignment
+    pub fn get_shard_id(&self, chain_id: ChainId) -> ShardId {
+        self.shards.get_shard_id(chain_id)
+    }
+
+    /// Get a shard for a give [`ShardId`]
+    pub fn shard_address(&self, shard_id: ShardId) -> &Address {
+        self.shards.shard_address(shard_id)
+    }
+
+    /// Get the [`ShardConfig`] of the shard assigned to the `chain_id`.
+    pub fn get_shard_for(&self, chain_id: ChainId) -> &Address {
+        self.shards.get_shard_for(chain_id)
+    }
+}
+
+impl Shards {
     pub fn get_shard_id(&self, chain_id: ChainId) -> ShardId {
         use std::hash::{Hash, Hasher};
         let mut s = std::collections::hash_map::DefaultHasher::new();
         chain_id.hash(&mut s);
-        (s.finish() as ShardId) % self.shards.len()
+        (s.finish() as ShardId) % self.0.len()
     }
 
-    pub fn shard(&self, shard_id: ShardId) -> &ShardConfig {
-        &self.shards[shard_id]
+    pub fn shard_address(&self, shard_id: ShardId) -> &Address {
+        &self.0[shard_id]
     }
 
-    /// Get the [`ShardConfig`] of the shard assigned to the `chain_id`.
-    pub fn get_shard_for(&self, chain_id: ChainId) -> &ShardConfig {
-        self.shard(self.get_shard_id(chain_id))
+    pub fn get_shard_for(&self, chain_id: ChainId) -> &Address {
+        self.shard_address(self.get_shard_id(chain_id))
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+}
+
+impl FromIterator<Address> for Shards {
+    fn from_iter<T: IntoIterator<Item =Address>>(iter: T) -> Self {
+        Shards(iter.into_iter().collect())
     }
 }
