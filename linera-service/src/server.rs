@@ -387,8 +387,8 @@ mod test {
                 host: "host".into(),
                 port: 9000,
                 shards: vec![
-                    Address::new("host1".into(), 9001,),
-                    Address::new("host2".into(), 9002,),
+                    Address::new("host1".into(), 9001),
+                    Address::new("host2".into(), 9002),
                 ]
                 .into_iter()
                 .collect(),

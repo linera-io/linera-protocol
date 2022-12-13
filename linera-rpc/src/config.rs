@@ -21,7 +21,7 @@ pub struct CrossChainConfig {
 
 pub type ShardId = usize;
 
-/// The network configuration of a shard.
+/// An address on the Linera network.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Address {
     /// The host name (e.g an IP address).
