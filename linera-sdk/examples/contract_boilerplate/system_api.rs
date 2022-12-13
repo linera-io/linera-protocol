@@ -3,6 +3,7 @@
 
 use super::{super::ApplicationState, writable_system as system};
 use futures::future;
+use linera_sdk::ChainId;
 use std::future::Future;
 
 impl ApplicationState {
@@ -31,5 +32,11 @@ impl ApplicationState {
     /// Save the contract state and unlock it.
     pub async fn store_and_unlock(self) {
         system::store_and_unlock(&bcs::to_bytes(&self).expect("State serialization failed"));
+    }
+
+    /// Retrieve the current chain ID.
+    #[allow(dead_code)]
+    pub fn current_chain_id() -> ChainId {
+        ChainId(system::chain_id().into())
     }
 }

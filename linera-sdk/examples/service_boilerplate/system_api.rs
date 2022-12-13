@@ -3,6 +3,7 @@
 
 use super::{super::ApplicationState, queryable_system as system};
 use futures::future;
+use linera_sdk::ChainId;
 use std::future::Future;
 
 impl ApplicationState {
@@ -20,5 +21,11 @@ impl ApplicationState {
         } else {
             bcs::from_bytes(&bytes).expect("Invalid service state")
         }
+    }
+
+    /// Retrieve the current chain ID.
+    #[allow(dead_code)]
+    pub fn current_chain_id() -> ChainId {
+        ChainId(system::chain_id().into())
     }
 }
