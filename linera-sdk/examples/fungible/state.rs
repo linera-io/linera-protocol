@@ -25,5 +25,13 @@ pub enum AccountOwner {
 #[derive(Debug, Default, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct Nonce(u64);
 
+#[allow(dead_code)]
+impl FungibleToken {
+    /// Obtain the balance for an `account`.
+    pub(crate) fn balance(&self, account: &AccountOwner) -> u128 {
+        self.accounts.get(&account).copied().unwrap_or(0)
+    }
+}
+
 /// Alias to the application type, so that the boilerplate module can reference it.
 pub type ApplicationState = FungibleToken;
