@@ -36,6 +36,11 @@ impl FungibleToken {
     pub(crate) fn balance(&self, account: &AccountOwner) -> u128 {
         self.accounts.get(&account).copied().unwrap_or(0)
     }
+
+    /// Credit an `account` with the provided `amount`.
+    pub(crate) fn credit(&mut self, account: AccountOwner, amount: u128) {
+        *self.accounts.entry(account).or_default() += amount;
+    }
 }
 
 /// Alias to the application type, so that the boilerplate module can reference it.
