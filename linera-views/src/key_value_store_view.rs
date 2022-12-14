@@ -1,5 +1,5 @@
 use crate::{
-    common::{Batch, Context, ContextFromDb, KeyValueOperations, SimpleTypeIterator},
+    common::{Batch, Context, ContextFromDb, HashOutput, KeyValueOperations, SimpleTypeIterator},
     memory::{MemoryContext, MemoryStoreMap},
     views::{HashView, Hasher, View, ViewError},
 };
@@ -13,6 +13,7 @@ pub struct KeyValueStoreView<C> {
     context: C,
     was_cleared: bool,
     updates: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
+    hash: Option<HashOutput>,
 }
 
 #[async_trait]
@@ -30,12 +31,14 @@ where
             context,
             was_cleared: false,
             updates: BTreeMap::new(),
+            hash: None,
         })
     }
 
     fn rollback(&mut self) {
         self.was_cleared = false;
         self.updates.clear();
+        self.hash = None;
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
@@ -67,6 +70,7 @@ where
     fn clear(&mut self) {
         self.was_cleared = true;
         self.updates.clear();
+        self.hash = None;
     }
 }
 
@@ -80,6 +84,7 @@ where
             context,
             was_cleared: false,
             updates: BTreeMap::new(),
+            hash: None,
         }
     }
 
@@ -208,10 +213,12 @@ where
     /// Set or insert a value.
     pub fn insert(&mut self, index: Vec<u8>, value: Vec<u8>) {
         self.updates.insert(index, Some(value));
+        self.hash = None;
     }
 
     /// Remove a value.
     pub fn remove(&mut self, index: Vec<u8>) {
+        self.hash = None;
         if self.was_cleared {
             self.updates.remove(&index);
         } else {
@@ -275,7 +282,7 @@ where
     ) -> Result<Self::KeyValueIterator, ViewError> {
         let len = key_prefix.len();
         let key_prefix_full = self.context.derive_key_bytes(key_prefix);
-        let mut key_values = Vec::<(Vec<u8>, Vec<u8>)>::new();
+        let mut key_values = Vec::new();
         if !self.was_cleared {
             for (short_key, value) in self
                 .context
@@ -315,17 +322,26 @@ where
     type Hasher = sha2::Sha512;
 
     async fn hash(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        let mut hasher = Self::Hasher::default();
-        let mut count = 0;
-        self.for_each_index_value(|index: Vec<u8>, value: Vec<u8>| -> Result<(), ViewError> {
-            count += 1;
-            hasher.update_with_bytes(&index)?;
-            hasher.update_with_bytes(&value)?;
-            Ok(())
-        })
-        .await?;
-        hasher.update_with_bcs_bytes(&count)?;
-        Ok(hasher.finalize())
+        match self.hash {
+            Some(hash) => Ok(hash),
+            None => {
+                let mut hasher = Self::Hasher::default();
+                let mut count = 0;
+                self.for_each_index_value(
+                    |index: Vec<u8>, value: Vec<u8>| -> Result<(), ViewError> {
+                        count += 1;
+                        hasher.update_with_bytes(&index)?;
+                        hasher.update_with_bytes(&value)?;
+                        Ok(())
+                    },
+                )
+                .await?;
+                hasher.update_with_bcs_bytes(&count)?;
+                let hash = hasher.finalize();
+                self.hash = Some(hash);
+                Ok(hash)
+            }
+        }
     }
 }
 

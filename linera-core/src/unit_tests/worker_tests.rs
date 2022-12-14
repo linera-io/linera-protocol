@@ -1722,7 +1722,7 @@ where
         .await
         .unwrap()
         .is_empty());
-    let mut chain = worker.storage.load_chain(ChainId::root(2)).await.unwrap();
+    let chain = worker.storage.load_chain(ChainId::root(2)).await.unwrap();
     // The target chain did not receive the message
     assert!(!chain
         .communication_states

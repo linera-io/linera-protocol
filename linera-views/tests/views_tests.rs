@@ -574,7 +574,7 @@ where
         view.save().await.unwrap();
     }
     {
-        let mut view = store.load(1).await.unwrap();
+        let view = store.load(1).await.unwrap();
         assert_eq!(view.queue.front().await.unwrap(), Some(8));
         assert_eq!(view.map.get(&"Hello".to_string()).await.unwrap(), Some(5));
         assert_eq!(
@@ -622,7 +622,7 @@ async fn test_collection_removal() -> anyhow::Result<()> {
     collection.context().write_batch(batch).await?;
 
     // Check that the entry was removed.
-    let mut collection = CollectionViewType::load(context.clone()).await?;
+    let collection = CollectionViewType::load(context.clone()).await?;
     assert!(!collection.indices().await?.contains(&1));
 
     Ok(())
@@ -743,12 +743,17 @@ where
         match operation {
             Put { key, value } => {
                 let key_str = format!("{:?}", &key);
-                let value_usize = (*value.first().unwrap()) as usize;
-                view.map.insert(&key_str, value_usize).unwrap();
+                let first_value = *value.first().unwrap();
+                let first_value_usize = first_value as usize;
+                let first_value_u64 = first_value as u64;
+                let mut tmp = *view.x1.get();
+                tmp += first_value_u64;
+                view.x1.set(tmp);
+                view.map.insert(&key_str, first_value_usize).unwrap();
                 view.key_value_store.insert(key, value);
                 {
                     let subview = view.collection.load_entry(key_str).await.unwrap();
-                    subview.push(value_usize as u32);
+                    subview.push(first_value as u32);
                 }
             }
             Delete { key } => {

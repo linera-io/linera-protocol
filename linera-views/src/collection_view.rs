@@ -1,5 +1,5 @@
 use crate::{
-    common::{Batch, Context},
+    common::{concatenate_base_flag, concatenate_base_flag_index, Batch, Context, HashOutput},
     views::{HashView, Hasher, View, ViewError},
 };
 use async_trait::async_trait;
@@ -22,6 +22,7 @@ pub struct CollectionView<C, I, W> {
     was_cleared: bool,
     updates: BTreeMap<Vec<u8>, Option<W>>,
     _phantom: PhantomData<I>,
+    hash: Option<HashOutput>,
 }
 
 /// A view that supports accessing a collection of views of the same kind, indexed by a
@@ -32,6 +33,7 @@ pub struct ReentrantCollectionView<C, I, W> {
     was_cleared: bool,
     updates: BTreeMap<Vec<u8>, Option<Arc<Mutex<W>>>>,
     _phantom: PhantomData<I>,
+    hash: Option<HashOutput>,
 }
 
 /// We need to find new base keys in order to implement the collection_view.
@@ -44,24 +46,15 @@ pub struct ReentrantCollectionView<C, I, W> {
 ///
 /// Value 0 specify an index and serves to indicate the existence of an entry in the collection
 /// Value 1 specify as the prefix for the sub-view.
-#[inline]
-fn get_index_key(mut base: Vec<u8>, index: &[u8]) -> Vec<u8> {
-    base.extend_from_slice(&[0]);
-    base.extend_from_slice(index);
-    base
-}
-
-#[inline]
-fn get_subview_key(mut base: Vec<u8>, index: &[u8]) -> Vec<u8> {
-    base.extend_from_slice(&[1]);
-    base.extend_from_slice(index);
-    base
-}
+/// Value 2 for the hash value
+const FLAG_INDEX: u8 = 0;
+const FLAG_SUBVIEW: u8 = 1;
+const FLAG_HASH: u8 = 2;
 
 #[async_trait]
 impl<C, I, W> View<C> for CollectionView<C, I, W>
 where
-    C: Context + Send,
+    C: Context + Send + Sync,
     ViewError: From<C::Error>,
     I: Send + Sync + Debug + Clone + Serialize + DeserializeOwned,
     W: View<C> + Send + Sync,
@@ -71,17 +64,21 @@ where
     }
 
     async fn load(context: C) -> Result<Self, ViewError> {
+        let key = concatenate_base_flag(context.base_key(), FLAG_HASH);
+        let hash = context.read_key(&key).await?;
         Ok(Self {
             context,
             was_cleared: false,
             updates: BTreeMap::new(),
             _phantom: PhantomData,
+            hash,
         })
     }
 
     fn rollback(&mut self) {
         self.was_cleared = false;
         self.updates.clear();
+        self.hash = None;
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
@@ -110,6 +107,11 @@ where
                 }
             }
         }
+        let key = concatenate_base_flag(self.context.base_key(), FLAG_HASH);
+        match self.hash {
+            None => batch.delete_key(key),
+            Some(hash) => batch.put_key_value(key, &hash)?,
+        }
         Ok(())
     }
 
@@ -120,6 +122,7 @@ where
     fn clear(&mut self) {
         self.was_cleared = true;
         self.updates.clear();
+        self.hash = None;
     }
 }
 
@@ -131,11 +134,11 @@ where
     W: View<C> + Sync,
 {
     fn get_index_key(&self, index: &[u8]) -> Vec<u8> {
-        get_index_key(self.context.base_key(), index)
+        concatenate_base_flag_index(self.context.base_key(), FLAG_INDEX, index)
     }
 
     fn get_subview_key(&self, index: &[u8]) -> Vec<u8> {
-        get_subview_key(self.context.base_key(), index)
+        concatenate_base_flag_index(self.context.base_key(), FLAG_SUBVIEW, index)
     }
 
     fn add_index(&self, batch: &mut Batch, index: &[u8]) -> Result<(), ViewError> {
@@ -147,6 +150,7 @@ where
     /// Obtain a subview for the data at the given index in the collection. If an entry
     /// was removed before then a default entry is put on this index.
     pub async fn load_entry(&mut self, index: I) -> Result<&mut W, ViewError> {
+        self.hash = None;
         let short_key = self.context.derive_short_key(&index)?;
         let base = self.context.base_key();
         match self.updates.entry(short_key.clone()) {
@@ -155,9 +159,8 @@ where
                 match entry {
                     Some(view) => Ok(view),
                     None => {
-                        let context = self
-                            .context
-                            .clone_with_base_key(get_subview_key(base, &short_key));
+                        let key = concatenate_base_flag_index(base, FLAG_SUBVIEW, &short_key);
+                        let context = self.context.clone_with_base_key(key);
                         // Obtain a view and set its pending state to the default (e.g. empty) state
                         let mut view = W::load(context).await?;
                         view.clear();
@@ -167,9 +170,8 @@ where
                 }
             }
             btree_map::Entry::Vacant(entry) => {
-                let context = self
-                    .context
-                    .clone_with_base_key(get_subview_key(base, &short_key));
+                let key = concatenate_base_flag_index(base, FLAG_SUBVIEW, &short_key);
+                let context = self.context.clone_with_base_key(key);
                 let mut view = W::load(context).await?;
                 if self.was_cleared {
                     view.clear();
@@ -181,6 +183,7 @@ where
 
     /// Mark the entry so that it is removed in the next flush
     pub fn remove_entry(&mut self, index: I) -> Result<(), ViewError> {
+        self.hash = None;
         let short_key = self.context.derive_short_key(&index)?;
         if self.was_cleared {
             self.updates.remove(&short_key);
@@ -192,13 +195,14 @@ where
 
     /// Mark the entry so that it is removed in the next flush
     pub async fn reset_entry_to_default(&mut self, index: I) -> Result<(), ViewError> {
+        self.hash = None;
         let view = self.load_entry(index).await?;
         view.clear();
         Ok(())
     }
 
     /// Return the list of indices in the collection.
-    pub async fn indices(&mut self) -> Result<Vec<I>, ViewError> {
+    pub async fn indices(&self) -> Result<Vec<I>, ViewError> {
         let mut indices = Vec::new();
         self.for_each_index(|index: I| {
             indices.push(index);
@@ -222,7 +226,7 @@ where
 {
     /// Execute a function on each index serialization. The order in which the entry
     /// are passed is not the ones of the entryies I but of their serialization
-    pub async fn for_each_raw_index<F>(&mut self, mut f: F) -> Result<(), ViewError>
+    pub async fn for_each_raw_index<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(Vec<u8>) -> Result<(), ViewError> + Send,
     {
@@ -269,7 +273,7 @@ where
 
     /// Execute a function on each index. The order in which the entry are passed
     /// is not the ones of the entryies I but of their serialization.
-    pub async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), ViewError>
+    pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(I) -> Result<(), ViewError> + Send,
     {
@@ -286,7 +290,7 @@ where
 #[async_trait]
 impl<C, I, W> View<C> for ReentrantCollectionView<C, I, W>
 where
-    C: Context + Send,
+    C: Context + Send + Sync,
     ViewError: From<C::Error>,
     I: Send + Sync + Debug + Clone + Serialize + DeserializeOwned,
     W: View<C> + Send + Sync,
@@ -296,17 +300,21 @@ where
     }
 
     async fn load(context: C) -> Result<Self, ViewError> {
+        let key = concatenate_base_flag(context.base_key(), FLAG_HASH);
+        let hash = context.read_key(&key).await?;
         Ok(Self {
             context,
             was_cleared: false,
             updates: BTreeMap::new(),
             _phantom: PhantomData,
+            hash,
         })
     }
 
     fn rollback(&mut self) {
         self.was_cleared = false;
         self.updates.clear();
+        self.hash = None;
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
@@ -341,6 +349,10 @@ where
                 }
             }
         }
+        if let Some(hash) = self.hash {
+            let key = concatenate_base_flag(self.context.base_key(), FLAG_HASH);
+            batch.put_key_value(key, &hash)?;
+        }
         Ok(())
     }
 
@@ -351,6 +363,7 @@ where
     fn clear(&mut self) {
         self.was_cleared = true;
         self.updates.clear();
+        self.hash = None;
     }
 }
 
@@ -362,11 +375,11 @@ where
     W: View<C> + Send + Sync,
 {
     fn get_index_key(&self, index: &[u8]) -> Vec<u8> {
-        get_index_key(self.context.base_key(), index)
+        concatenate_base_flag_index(self.context.base_key(), FLAG_INDEX, index)
     }
 
     fn get_subview_key(&self, index: &[u8]) -> Vec<u8> {
-        get_subview_key(self.context.base_key(), index)
+        concatenate_base_flag_index(self.context.base_key(), FLAG_SUBVIEW, index)
     }
 
     fn add_index(&self, batch: &mut Batch, index: &[u8]) -> Result<(), ViewError> {
@@ -378,6 +391,7 @@ where
     /// Obtain a subview for the data at the given index in the collection. If an entry
     /// was removed before then a default entry is put on this index.
     pub async fn try_load_entry(&mut self, index: I) -> Result<OwnedMutexGuard<W>, ViewError> {
+        self.hash = None;
         let short_key = self.context.derive_short_key(&index)?;
         let base = self.context.base_key();
         match self.updates.entry(short_key.clone()) {
@@ -386,9 +400,8 @@ where
                 match entry {
                     Some(view) => Ok(view.clone().try_lock_owned()?),
                     None => {
-                        let context = self
-                            .context
-                            .clone_with_base_key(get_subview_key(base, &short_key));
+                        let key = concatenate_base_flag_index(base, FLAG_SUBVIEW, &short_key);
+                        let context = self.context.clone_with_base_key(key);
                         // Obtain a view and set its pending state to the default (e.g. empty) state
                         let mut view = W::load(context).await?;
                         view.clear();
@@ -399,9 +412,8 @@ where
                 }
             }
             btree_map::Entry::Vacant(entry) => {
-                let context = self
-                    .context
-                    .clone_with_base_key(get_subview_key(base, &short_key));
+                let key = concatenate_base_flag_index(base, FLAG_SUBVIEW, &short_key);
+                let context = self.context.clone_with_base_key(key);
                 let mut view = W::load(context).await?;
                 if self.was_cleared {
                     view.clear();
@@ -415,6 +427,7 @@ where
 
     /// Mark the entry so that it is removed in the next flush
     pub fn remove_entry(&mut self, index: I) -> Result<(), ViewError> {
+        self.hash = None;
         let short_key = self.context.derive_short_key(&index)?;
         if self.was_cleared {
             self.updates.remove(&short_key);
@@ -426,13 +439,14 @@ where
 
     /// Mark the entry so that it is removed in the next flush
     pub async fn try_reset_entry_to_default(&mut self, index: I) -> Result<(), ViewError> {
+        self.hash = None;
         let mut view = self.try_load_entry(index).await?;
         view.clear();
         Ok(())
     }
 
     /// Return the list of indices in the collection.
-    pub async fn indices(&mut self) -> Result<Vec<I>, ViewError> {
+    pub async fn indices(&self) -> Result<Vec<I>, ViewError> {
         let mut indices = Vec::new();
         self.for_each_index(|index: I| {
             indices.push(index);
@@ -448,7 +462,7 @@ where
 
     /// Execute a function on each index serialization. The order in which the entry
     /// are passed is not the ones of the entries I but of their serialization
-    pub async fn for_each_raw_index<F>(&mut self, mut f: F) -> Result<(), ViewError>
+    pub async fn for_each_raw_index<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(Vec<u8>) -> Result<(), ViewError> + Send,
     {
@@ -495,7 +509,7 @@ where
 
     /// Execute a function on each index. The order in which the entry are passed
     /// is not the ones of the entryies I but of their serialization.
-    pub async fn for_each_index<F>(&mut self, mut f: F) -> Result<(), ViewError>
+    pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(I) -> Result<(), ViewError> + Send,
     {
@@ -520,16 +534,21 @@ where
     type Hasher = sha2::Sha512;
 
     async fn hash(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        let mut hasher = Self::Hasher::default();
-        let indices = self.indices().await?;
-        hasher.update_with_bcs_bytes(&indices.len())?;
-        for index in indices {
-            hasher.update_with_bcs_bytes(&index)?;
-            let view = self.load_entry(index).await?;
-            let hash = view.hash().await?;
-            hasher.write_all(hash.as_ref())?;
+        match self.hash {
+            Some(hash) => Ok(hash),
+            None => {
+                let mut hasher = Self::Hasher::default();
+                let indices = self.indices().await?;
+                hasher.update_with_bcs_bytes(&indices.len())?;
+                for index in indices {
+                    hasher.update_with_bcs_bytes(&index)?;
+                    let view = self.load_entry(index).await?;
+                    let hash = view.hash().await?;
+                    hasher.write_all(hash.as_ref())?;
+                }
+                Ok(hasher.finalize())
+            }
         }
-        Ok(hasher.finalize())
     }
 }
 
@@ -544,15 +563,22 @@ where
     type Hasher = sha2::Sha512;
 
     async fn hash(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        let mut hasher = Self::Hasher::default();
-        let indices = self.indices().await?;
-        hasher.update_with_bcs_bytes(&indices.len())?;
-        for index in indices {
-            hasher.update_with_bcs_bytes(&index)?;
-            let mut view = self.try_load_entry(index).await?;
-            let hash = view.hash().await?;
-            hasher.write_all(hash.as_ref())?;
+        match self.hash {
+            Some(hash) => Ok(hash),
+            None => {
+                let mut hasher = Self::Hasher::default();
+                let indices = self.indices().await?;
+                hasher.update_with_bcs_bytes(&indices.len())?;
+                for index in indices {
+                    hasher.update_with_bcs_bytes(&index)?;
+                    let mut view = self.try_load_entry(index).await?;
+                    let hash = view.hash().await?;
+                    hasher.write_all(hash.as_ref())?;
+                }
+                let hash = hasher.finalize();
+                self.hash = Some(hash);
+                Ok(hash)
+            }
         }
-        Ok(hasher.finalize())
     }
 }
