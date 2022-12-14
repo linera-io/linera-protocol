@@ -129,6 +129,20 @@ pub struct ExecutionResult {
     pub unsubscribe: Vec<(String, ChainId)>,
 }
 
+impl ExecutionResult {
+    /// Add an effect to the execution result.
+    #[cfg(feature = "serde")]
+    pub fn with_effect(
+        mut self,
+        destination: impl Into<Destination>,
+        effect: &impl Serialize,
+    ) -> Self {
+        let effect_bytes = bcs::to_bytes(effect).expect("Effect should be serializable");
+        self.effects.push((destination.into(), effect_bytes));
+        self
+    }
+}
+
 /// The index of an effect in a chain.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug)]
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
