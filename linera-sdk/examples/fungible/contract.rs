@@ -8,6 +8,7 @@ mod state;
 use self::state::{AccountOwner, ApplicationState, FungibleToken};
 use async_trait::async_trait;
 use linera_sdk::{
+    crypto::{BcsSignable, CryptoError, PublicKey, Signature},
     ApplicationCallResult, CalleeContext, ChainId, Contract, EffectContext, ExecutionResult,
     FromBcsBytes, OperationContext, Session, SessionCallResult, SessionId,
 };
@@ -30,9 +31,15 @@ impl Contract for FungibleToken {
     async fn execute_operation(
         &mut self,
         _context: &OperationContext,
-        _operation: &[u8],
+        operation: &[u8],
     ) -> Result<ExecutionResult, Self::Error> {
-        todo!();
+        let signed_transfer =
+            SignedTransfer::from_bcs_bytes(operation).map_err(Error::InvalidOperation)?;
+        let (source, transfer) = self.check_signed_transfer(signed_transfer)?;
+
+        self.debit(source, transfer.amount)?;
+
+        Ok(self.finish_transfer(transfer))
     }
 
     async fn execute_effect(
@@ -79,6 +86,19 @@ impl Contract for FungibleToken {
 }
 
 impl FungibleToken {
+    /// Check if a signed transfer can be executed.
+    ///
+    /// If the transfer can be executed, return the source [`AccountOwner`] and the [`Transfer`] to
+    /// be executed.
+    fn check_signed_transfer(
+        &self,
+        signed_transfer: SignedTransfer,
+    ) -> Result<(AccountOwner, Transfer), Error> {
+        let (source, payload) = signed_transfer.check_signature()?;
+
+        Ok((source, payload.transfer))
+    }
+
     /// Credit an account or forward it to another micro-chain.
     fn finish_transfer(&mut self, transfer: Transfer) -> ExecutionResult {
         if transfer.destination_chain == Self::current_chain_id() {
@@ -91,6 +111,20 @@ impl FungibleToken {
     }
 }
 
+/// The transfer operation.
+#[derive(Deserialize, Serialize)]
+pub struct SignedTransfer {
+    source: PublicKey,
+    signature: Signature,
+    payload: SignedTransferPayload,
+}
+
+/// The payload to be signed for a signed transfer.
+#[derive(Debug, Deserialize, Serialize)]
+pub struct SignedTransferPayload {
+    transfer: Transfer,
+}
+
 /// A transfer request from an application.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Transfer {
@@ -98,6 +132,19 @@ pub struct Transfer {
     destination_chain: ChainId,
     amount: u128,
 }
+
+impl SignedTransfer {
+    /// Check that the [`SignedTransfer`] is correctly signed.
+    ///
+    /// If correctly signed, returns the source of the transfer and the [`SignedTransferPayload`].
+    pub fn check_signature(self) -> Result<(AccountOwner, SignedTransferPayload), Error> {
+        self.signature.check(&self.payload, self.source)?;
+
+        Ok((AccountOwner::Key(self.source), self.payload))
+    }
+}
+
+impl BcsSignable for SignedTransferPayload {}
 
 /// The credit effect.
 #[derive(Deserialize, Serialize)]
@@ -121,6 +168,14 @@ pub enum Error {
     /// Invalid serialized initial state.
     #[error("Serialized initial state is invalid")]
     InvalidInitialState(#[source] bcs::Error),
+
+    /// Invalid serialized [`SignedTransfer`].
+    #[error("Operation is not a valid serialized signed transfer")]
+    InvalidOperation(#[source] bcs::Error),
+
+    /// Incorrect signature for transfer.
+    #[error("Operation does not have a valid signature")]
+    IncorrectSignature(#[from] CryptoError),
 
     /// Invalid serialized [`Credit`].
     #[error("Effect is not a valid serialized credit operation")]
