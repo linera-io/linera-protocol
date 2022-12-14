@@ -14,7 +14,7 @@ impl_view!(
     ApplicationRegistryView {
         published_bytecodes,
         known_applications,
-    };
+    }
 );
 
 impl<C> ApplicationRegistryView<C>

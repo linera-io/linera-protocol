@@ -4,7 +4,7 @@
 #[macro_export]
 macro_rules! impl_view {
 
-    ($name: ident { $($field:ident),* $(,)? }; $( $ops_trait:path ),* $(,)? ) => {
+    ($name: ident { $($field:ident),* $(,)? }) => {
 
 #[$crate::async_trait]
 impl<C> $crate::views::View<C> for $name<C>
@@ -13,8 +13,7 @@ where
         + Send
         + Sync
         + Clone
-        + 'static
-        $( + $ops_trait )*,
+        + 'static,
     $crate::views::ViewError: From<C::Error>,
 {
     #[allow(unreachable_code)]
@@ -58,8 +57,7 @@ where
         + Send
         + Sync
         + Clone
-        + 'static
-        $( + $ops_trait )*,
+        + 'static,
     $crate::views::ViewError: From<C::Error>,
 {
     type Hasher = $crate::sha2::Sha512;
@@ -80,8 +78,7 @@ where
         + Send
         + Sync
         + Clone
-        + 'static
-        $( + $ops_trait )*,
+        + 'static,
     $crate::views::ViewError: From<C::Error>,
 {
     pub async fn save(&mut self) -> Result<(), $crate::views::ViewError> {
@@ -116,7 +113,6 @@ pub trait [< $name Context >]: $crate::common::Context
     + Sync
     + Clone
     + 'static
-    $( + $ops_trait )*
 {}
 
 impl<AnyContext> [< $name Context >] for AnyContext
@@ -125,8 +121,7 @@ where
         + Send
         + Sync
         + Clone
-        + 'static
-        $( + $ops_trait )*,
+        + 'static,
     $crate::views::ViewError: From<AnyContext::Error>,
 {}
 

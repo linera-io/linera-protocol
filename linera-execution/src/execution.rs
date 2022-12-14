@@ -4,7 +4,7 @@
 use crate::{
     application_registry::ApplicationRegistryView,
     runtime::{ExecutionRuntime, SessionManager},
-    system::{SystemExecutionStateView, SystemExecutionStateViewContext},
+    system::{SystemExecutionStateView},
     Effect, EffectContext, ExecutionError, ExecutionResult, ExecutionRuntimeContext, Operation,
     OperationContext, Query, QueryContext, Response,
 };
@@ -42,8 +42,7 @@ impl_view!(
     ExecutionStateView {
         system,
         users,
-    };
-    SystemExecutionStateViewContext,
+    }
 );
 
 #[cfg(any(test, feature = "test"))]

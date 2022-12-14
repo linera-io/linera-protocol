@@ -197,7 +197,7 @@ impl_view!(
         committees,
         ownership,
         balance,
-    };
+    }
 );
 
 #[derive(Error, Debug)]

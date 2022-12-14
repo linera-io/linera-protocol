@@ -47,8 +47,7 @@ pub struct StateView<C> {
 }
 
 // This also generates `trait StateViewContext: Context ... {}`
-impl_view!(StateView { x1, x2, log, map, queue, collection, collection2, collection3, collection4, key_value_store };
-);
+impl_view!(StateView { x1, x2, log, map, queue, collection, collection2, collection3, collection4, key_value_store });
 
 #[async_trait]
 pub trait StateStore {
