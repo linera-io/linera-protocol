@@ -20,7 +20,7 @@ To make a contribution to the code after discussing it in a GitHub issue,
 4. Ensure the test suite passes with `cargo test && cargo clippy --all-targets`.
 5. Run `cargo +nightly fmt` to automatically format your changes (CI will let you know if you missed this).
 
-This repository enforces a linera commit history. To remove merge commits, consider using `git filter-branch`
+This repository enforces a linear commit history. To remove merge commits, consider using `git filter-branch`
 as explained [here](https://stackoverflow.com/questions/17988099/how-do-i-trivially-linearize-my-git-history).
 
 Editing a clean commit history with `git rebase -i` and `git push -f your_PR_branch` is

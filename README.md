@@ -1,5 +1,5 @@
 [![Build Status](https://github.com/linera-io/linera-protocol/actions/workflows/rust.yml/badge.svg)](https://github.com/linera-io/linera-protocol/actions/workflows/rust.yml)
-[![License](https://img.shields.io/badge/license-Apache-green.svg)](LICENSE.md)
+[![License](https://img.shields.io/badge/license-Apache-green.svg)](LICENSE)
 
 # Linera
 
