@@ -54,7 +54,3 @@ path = "src/server.rs"
 [[bin]]
 name = "proxy"
 path = "src/proxy.rs"
-
-[[bin]]
-name = "grpc-proxy"
-path = "src/grpc_proxy.rs"

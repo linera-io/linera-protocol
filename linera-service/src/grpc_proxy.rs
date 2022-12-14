@@ -16,9 +16,7 @@ use linera_rpc::{
     },
     pool::ConnectionPool,
 };
-use linera_service::config::{Import, ValidatorServerConfig};
-use std::{net::SocketAddr, path::PathBuf};
-use structopt::StructOpt;
+use std::net::SocketAddr;
 use tonic::{
     transport::{Channel, Server},
     Request, Response, Status,
@@ -47,17 +45,6 @@ macro_rules! proxy {
     }};
 }
 
-/// Options for running the proxy.
-#[derive(Debug, StructOpt)]
-#[structopt(
-    name = "Linera gRPC Proxy",
-    about = "A proxy to redirect incoming requests to Linera Server shards"
-)]
-pub struct GrpcProxyOptions {
-    /// Path to server configuration.
-    config_path: PathBuf,
-}
-
 #[derive(Clone)]
 pub struct GrpcProxy {
     public_config: ValidatorPublicNetworkConfig,
@@ -67,24 +54,16 @@ pub struct GrpcProxy {
 }
 
 impl GrpcProxy {
-    async fn spawn(
+    pub fn new(
         public_config: ValidatorPublicNetworkConfig,
         internal_config: ValidatorInternalNetworkConfig,
-    ) -> Result<()> {
-        let grpc_proxy = GrpcProxy {
+    ) -> Self {
+        Self {
             public_config,
             internal_config,
             node_connection_pool: ConnectionPool::new(),
             worker_connection_pool: ConnectionPool::new(),
-        };
-
-        let address = grpc_proxy.address();
-
-        Ok(Server::builder()
-            .add_service(grpc_proxy.as_validator_worker())
-            .add_service(grpc_proxy.as_validator_node())
-            .serve(address)
-            .await?)
+        }
     }
 
     fn as_validator_worker(&self) -> ValidatorWorkerServer<Self> {
@@ -131,6 +110,15 @@ impl GrpcProxy {
             .await?;
 
         Ok(client)
+    }
+
+    pub async fn run(self) -> Result<()> {
+        log::info!("Starting gRPC proxy on {}...", self.address());
+        Ok(Server::builder()
+            .add_service(self.as_validator_node())
+            .add_service(self.as_validator_worker())
+            .serve(self.address())
+            .await?)
     }
 }
 
@@ -246,24 +234,4 @@ impl Proxyable for CrossChainRequest {
             Err(_) => None,
         }
     }
-}
-
-#[tokio::main]
-async fn main() -> Result<()> {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
-        .format_timestamp_millis()
-        .init();
-
-    let options = GrpcProxyOptions::from_args();
-    let config = ValidatorServerConfig::read(&options.config_path)?;
-
-    let handler = GrpcProxy::spawn(config.validator.network, config.internal_network);
-
-    log::info!("Proxy spawning...");
-
-    if let Err(error) = handler.await {
-        log::error!("Failed to run proxy: {error}");
-    }
-
-    Ok(())
 }
