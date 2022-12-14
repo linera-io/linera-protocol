@@ -20,6 +20,8 @@ pub enum WriteOperation {
     Put { key: Vec<u8>, value: Vec<u8> },
 }
 
+pub type HashOutput = generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Digest>::OutputSize>;
+
 /// A batch of writes inside a transaction;
 #[derive(Default)]
 pub struct Batch {
@@ -269,6 +271,19 @@ impl<T, E> Iterator for SimpleTypeIterator<T, E> {
     }
 }
 
+#[inline]
+pub fn concatenate_base_flag(mut base: Vec<u8>, flag: u8) -> Vec<u8> {
+    base.extend_from_slice(&[flag]);
+    base
+}
+
+#[inline]
+pub fn concatenate_base_flag_index(mut base: Vec<u8>, flag: u8, index: &[u8]) -> Vec<u8> {
+    base.extend_from_slice(&[flag]);
+    base.extend_from_slice(index);
+    base
+}
+
 /// The context in which a view is operated. Typically, this includes the client to
 /// connect to the database and the address of the current entry.
 #[async_trait]
@@ -288,6 +303,9 @@ pub trait Context {
 
     /// Obtain the Vec<u8> key from the key by serialization and using the base_key
     fn derive_key<I: Serialize>(&self, index: &I) -> Result<Vec<u8>, Self::Error>;
+
+    /// Obtain the Vec<u8> key from the key by serialization and using the base_key
+    fn derive_flag_key<I: Serialize>(&self, flag: u8, index: &I) -> Result<Vec<u8>, Self::Error>;
 
     /// Obtain the short Vec<u8> key from the key by serialization
     fn derive_short_key<I: Serialize>(&self, index: &I) -> Result<Vec<u8>, Self::Error>;
@@ -367,6 +385,13 @@ where
             key.len() > self.base_key.len(),
             "Empty indices are not allowed"
         );
+        Ok(key)
+    }
+
+    fn derive_flag_key<I: Serialize>(&self, flag: u8, index: &I) -> Result<Vec<u8>, Self::Error> {
+        let mut key = self.base_key.clone();
+        key.extend_from_slice(&[flag]);
+        bcs::serialize_into(&mut key, index)?;
         Ok(key)
     }
 
