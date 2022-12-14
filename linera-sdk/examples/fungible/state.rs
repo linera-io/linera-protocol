@@ -1,9 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_sdk::{crypto::PublicKey, ApplicationId};
+use linera_sdk::{crypto::PublicKey, ensure, ApplicationId};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use thiserror::Error;
 
 /// The application state.
 #[derive(Debug, Default, Deserialize, Serialize)]
@@ -41,7 +42,30 @@ impl FungibleToken {
     pub(crate) fn credit(&mut self, account: AccountOwner, amount: u128) {
         *self.accounts.entry(account).or_default() += amount;
     }
+
+    /// Try to debit the requested `amount` from an `account`.
+    pub(crate) fn debit(
+        &mut self,
+        account: AccountOwner,
+        amount: u128,
+    ) -> Result<(), InsufficientBalanceError> {
+        let balance = self
+            .accounts
+            .get_mut(&account)
+            .ok_or(InsufficientBalanceError)?;
+
+        ensure!(*balance >= amount, InsufficientBalanceError);
+
+        *balance -= amount;
+
+        Ok(())
+    }
 }
+
+/// Attempt to debit from an account with insufficient funds.
+#[derive(Clone, Copy, Debug, Error)]
+#[error("Insufficient balance for transfer")]
+pub struct InsufficientBalanceError;
 
 /// Alias to the application type, so that the boilerplate module can reference it.
 pub type ApplicationState = FungibleToken;
