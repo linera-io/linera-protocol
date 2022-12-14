@@ -19,23 +19,24 @@ use linera_base::{
     crypto::HashValue,
     messages::{ApplicationDescription, ApplicationId, ChainDescription, ChainId, Epoch, Owner},
 };
-use linera_chain::{messages::Certificate, ChainError, ChainStateView, ChainStateViewContext};
+use linera_chain::{messages::Certificate, ChainError, ChainStateView};
 use linera_execution::{
     system::Balance, ChainOwnership, ExecutionError, ExecutionRuntimeContext, UserApplicationCode,
 };
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 use linera_execution::{Operation, SystemOperation, WasmApplication};
-use linera_views::views::ViewError;
+use linera_views::{common::Context, views::ViewError};
 use std::{fmt::Debug, sync::Arc};
 
 /// Communicate with a persistent storage using the "views" abstraction.
 #[async_trait]
 pub trait Store: Sized {
     /// The low-level storage implementation in use.
-    type Context: ChainStateViewContext<
-        Extra = ChainRuntimeContext<Self>,
-        Error = Self::ContextError,
-    >;
+    type Context: Context<Extra = ChainRuntimeContext<Self>, Error = Self::ContextError>
+        + Clone
+        + Send
+        + Sync
+        + 'static;
 
     /// Alias to provide simpler trait bounds `ViewError: From<Self::ContextError>`
     type ContextError: std::error::Error + Debug + Sync + Send;

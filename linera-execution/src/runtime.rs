@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    application_registry::ApplicationRegistryView,
-    execution::{ExecutionStateView, ExecutionStateViewContext},
+    application_registry::ApplicationRegistryView, execution::ExecutionStateView,
     ApplicationStateNotLocked, CallResult, ExecutionError, ExecutionResult,
     ExecutionRuntimeContext, NewSession, QueryableStorage, ReadableStorage, SessionId,
     UserApplicationCode, WritableStorage,
@@ -14,6 +13,7 @@ use linera_base::{
     messages::{ApplicationId, ChainId},
 };
 use linera_views::{
+    common::Context,
     register_view::RegisterView,
     views::{View, ViewError},
 };
@@ -67,7 +67,7 @@ pub(crate) struct SessionState {
 
 impl<'a, C, const W: bool> ExecutionRuntime<'a, C, W>
 where
-    C: ExecutionStateViewContext,
+    C: Context + Clone + Send + Sync + 'static,
     ViewError: From<C::Error>,
     C::Extra: ExecutionRuntimeContext,
 {
@@ -266,7 +266,7 @@ where
 #[async_trait]
 impl<'a, C, const W: bool> ReadableStorage for ExecutionRuntime<'a, C, W>
 where
-    C: ExecutionStateViewContext,
+    C: Context + Clone + Send + Sync + 'static,
     ViewError: From<C::Error>,
     C::Extra: ExecutionRuntimeContext,
 {
@@ -300,7 +300,7 @@ where
 #[async_trait]
 impl<'a, C> QueryableStorage for ExecutionRuntime<'a, C, false>
 where
-    C: ExecutionStateViewContext,
+    C: Context + Clone + Send + Sync + 'static,
     ViewError: From<C::Error>,
     C::Extra: ExecutionRuntimeContext,
 {
@@ -328,7 +328,7 @@ where
 #[async_trait]
 impl<'a, C> WritableStorage for ExecutionRuntime<'a, C, true>
 where
-    C: ExecutionStateViewContext,
+    C: Context + Clone + Send + Sync + 'static,
     ViewError: From<C::Error>,
     C::Extra: ExecutionRuntimeContext,
 {

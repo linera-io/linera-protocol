@@ -5,7 +5,7 @@ mod chain;
 mod manager;
 pub mod messages;
 
-pub use chain::{ChainStateView, ChainStateViewContext, Event};
+pub use chain::{ChainStateView, Event};
 use linera_base::{
     crypto::CryptoError,
     messages::{ApplicationId, ArithmeticError, BlockHeight, ChainId, Origin, RoundNumber},

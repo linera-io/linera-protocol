@@ -1,6 +1,8 @@
 use crate::{ExecutionError, NewApplication};
 use linera_base::messages::{ApplicationDescription, ApplicationId, BytecodeId, BytecodeLocation};
-use linera_views::{impl_view, map_view::MapView, scoped_view::ScopedView, views::ViewError};
+use linera_views::{
+    common::Context, impl_view, map_view::MapView, scoped_view::ScopedView, views::ViewError,
+};
 
 #[derive(Debug)]
 pub struct ApplicationRegistryView<C> {
@@ -10,16 +12,14 @@ pub struct ApplicationRegistryView<C> {
     pub known_applications: ScopedView<1, MapView<C, ApplicationId, ApplicationDescription>>,
 }
 
-impl_view!(
-    ApplicationRegistryView {
-        published_bytecodes,
-        known_applications,
-    }
-);
+impl_view!(ApplicationRegistryView {
+    published_bytecodes,
+    known_applications,
+});
 
 impl<C> ApplicationRegistryView<C>
 where
-    C: ApplicationRegistryViewContext,
+    C: Context + Clone + Send + Sync + 'static,
     ViewError: From<C::Error>,
 {
     /// Register a published bytecode so that it can be used by applications.

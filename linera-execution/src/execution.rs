@@ -4,7 +4,7 @@
 use crate::{
     application_registry::ApplicationRegistryView,
     runtime::{ExecutionRuntime, SessionManager},
-    system::{SystemExecutionStateView},
+    system::SystemExecutionStateView,
     Effect, EffectContext, ExecutionError, ExecutionResult, ExecutionRuntimeContext, Operation,
     OperationContext, Query, QueryContext, Response,
 };
@@ -23,7 +23,7 @@ use linera_views::{
 #[cfg(any(test, feature = "test"))]
 use {
     crate::{system::SystemExecutionState, TestExecutionRuntimeContext},
-    linera_views::memory::MemoryContext,
+    linera_views::{common::Context, memory::MemoryContext},
     std::collections::BTreeMap,
     std::sync::Arc,
     tokio::sync::Mutex,
@@ -38,17 +38,12 @@ pub struct ExecutionStateView<C> {
     pub users: ScopedView<1, ReentrantCollectionView<C, ApplicationId, RegisterView<C, Vec<u8>>>>,
 }
 
-impl_view!(
-    ExecutionStateView {
-        system,
-        users,
-    }
-);
+impl_view!(ExecutionStateView { system, users });
 
 #[cfg(any(test, feature = "test"))]
 impl ExecutionStateView<MemoryContext<TestExecutionRuntimeContext>>
 where
-    MemoryContext<TestExecutionRuntimeContext>: ExecutionStateViewContext,
+    MemoryContext<TestExecutionRuntimeContext>: Context + Clone + Send + Sync + 'static,
     ViewError:
         From<<MemoryContext<TestExecutionRuntimeContext> as linera_views::common::Context>::Error>,
 {
@@ -90,7 +85,7 @@ enum UserAction<'a> {
 
 impl<C> ExecutionStateView<C>
 where
-    C: ExecutionStateViewContext,
+    C: Context + Clone + Send + Sync + 'static,
     ViewError: From<C::Error>,
     C::Extra: ExecutionRuntimeContext,
 {

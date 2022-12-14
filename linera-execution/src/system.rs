@@ -15,6 +15,7 @@ use linera_base::{
     },
 };
 use linera_views::{
+    common::Context,
     impl_view,
     map_view::MapView,
     register_view::RegisterView,
@@ -188,17 +189,15 @@ pub struct Balance(u128);
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]
 pub struct UserData(pub Option<[u8; 32]>);
 
-impl_view!(
-    SystemExecutionStateView {
-        description,
-        epoch,
-        admin_id,
-        subscriptions,
-        committees,
-        ownership,
-        balance,
-    }
-);
+impl_view!(SystemExecutionStateView {
+    description,
+    epoch,
+    admin_id,
+    subscriptions,
+    committees,
+    ownership,
+    balance,
+});
 
 #[derive(Error, Debug)]
 pub enum SystemExecutionError {
@@ -243,7 +242,7 @@ pub enum SystemExecutionError {
 
 impl<C> SystemExecutionStateView<C>
 where
-    C: SystemExecutionStateViewContext,
+    C: Context + Clone + Send + Sync + 'static,
     ViewError: From<C::Error>,
 {
     /// Invariant for the states of active chains.

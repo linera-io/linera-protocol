@@ -13,11 +13,11 @@ use linera_base::{
 };
 use linera_chain::{
     messages::{Certificate, MessageGroup},
-    ChainManager, ChainStateView, ChainStateViewContext,
+    ChainManager, ChainStateView,
 };
 use linera_execution::{system::Balance, ExecutionRuntimeContext};
 use linera_storage::ChainRuntimeContext;
-use linera_views::views::ViewError;
+use linera_views::{common::Context, views::ViewError};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -164,7 +164,7 @@ impl CrossChainRequest {
 
 impl<C, S> From<&ChainStateView<C>> for ChainInfo
 where
-    C: ChainStateViewContext<Extra = ChainRuntimeContext<S>>,
+    C: Context<Extra = ChainRuntimeContext<S>> + Clone + Send + Sync + 'static,
     ChainRuntimeContext<S>: ExecutionRuntimeContext,
     ViewError: From<C::Error>,
 {
