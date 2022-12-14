@@ -204,6 +204,12 @@ pub enum Destination {
     Subscribers(String),
 }
 
+impl From<ChainId> for Destination {
+    fn from(chain_id: ChainId) -> Self {
+        Destination::Recipient(chain_id)
+    }
+}
+
 /// A unique identifier for an application.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug)]
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
