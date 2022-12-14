@@ -62,18 +62,16 @@ impl Contract for FungibleToken {
         argument: &[u8],
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, Self::Error> {
-        let transfer = Transfer::from_bcs_bytes(argument).map_err(Error::InvalidArgument)?;
+        let transfer =
+            ApplicationTransfer::from_bcs_bytes(argument).map_err(Error::InvalidArgument)?;
         let caller = context
             .authenticated_caller_id
             .ok_or(Error::MissingSourceApplication)?;
         let source = AccountOwner::Application(caller);
 
-        self.debit(source, transfer.amount)?;
+        self.debit(source, transfer.amount())?;
 
-        Ok(ApplicationCallResult {
-            execution_result: self.finish_transfer(transfer),
-            ..ApplicationCallResult::default()
-        })
+        Ok(self.finish_application_transfer(transfer))
     }
 
     async fn call_session(
@@ -114,6 +112,28 @@ impl FungibleToken {
         Ok((source, payload.transfer, payload.nonce))
     }
 
+    /// Credit an account or forward it into a session or another micro-chain.
+    fn finish_application_transfer(
+        &mut self,
+        application_transfer: ApplicationTransfer,
+    ) -> ApplicationCallResult {
+        let mut result = ApplicationCallResult::default();
+
+        match application_transfer {
+            ApplicationTransfer::Static(transfer) => {
+                result.execution_result = self.finish_transfer(transfer);
+            }
+            ApplicationTransfer::Dynamic(amount) => {
+                result.create_sessions.push(Session {
+                    kind: 0,
+                    data: bcs::to_bytes(&amount).expect("Serializing a `u128` should not fail"),
+                });
+            }
+        }
+
+        result
+    }
+
     /// Credit an account or forward it to another micro-chain.
     fn finish_transfer(&mut self, transfer: Transfer) -> ExecutionResult {
         if transfer.destination_chain == Self::current_chain_id() {
@@ -150,7 +170,26 @@ pub struct SignedTransferPayload {
     transfer: Transfer,
 }
 
-/// A transfer request from an application.
+/// A cross-application transfer request.
+#[derive(Deserialize, Serialize)]
+pub enum ApplicationTransfer {
+    /// A static transfer to a specific destination.
+    Static(Transfer),
+    /// A dynamic transfer into a session, that can then be credited to destinations later.
+    Dynamic(u128),
+}
+
+impl ApplicationTransfer {
+    /// The amount of tokens to be transfered.
+    pub fn amount(&self) -> u128 {
+        match self {
+            ApplicationTransfer::Static(transfer) => transfer.amount,
+            ApplicationTransfer::Dynamic(amount) => *amount,
+        }
+    }
+}
+
+/// A transfer payload.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Transfer {
     destination_account: AccountOwner,
