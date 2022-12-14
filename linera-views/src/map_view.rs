@@ -258,7 +258,9 @@ where
     I: Clone + Send + Sync + Serialize + DeserializeOwned,
     V: Clone + Send + Sync + Serialize + DeserializeOwned + 'static,
 {
-    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
+    type Hasher = C::Hasher;
+
+    async fn hash(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         let mut hasher = C::Hasher::default();
         let mut count = 0;
         self.for_each_raw_index_value(|index: Vec<u8>, value: V| {

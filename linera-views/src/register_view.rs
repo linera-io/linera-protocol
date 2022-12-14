@@ -102,7 +102,9 @@ where
     ViewError: From<C::Error>,
     T: Default + Send + Sync + Serialize + DeserializeOwned,
 {
-    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
+    type Hasher = C::Hasher;
+
+    async fn hash(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         let mut hasher = C::Hasher::default();
         hasher.update_with_bcs_bytes(self.get())?;
         Ok(hasher.finalize())

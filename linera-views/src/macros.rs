@@ -62,6 +62,8 @@ where
         $( + $ops_trait )*,
     $crate::views::ViewError: From<C::Error>,
 {
+    type Hasher = C::Hasher;
+
     async fn hash(&mut self) -> Result<<C::Hasher as $crate::views::Hasher>::Output, $crate::views::ViewError> {
         use $crate::views::{Hasher, HashView};
         use std::io::Write;

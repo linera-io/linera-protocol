@@ -75,8 +75,11 @@ pub enum ViewError {
 
 #[async_trait]
 pub trait HashView<C: HashingContext>: View<C> {
+    /// How to compute hashes.
+    type Hasher: Hasher;
+
     /// Compute the hash of the values.
-    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError>;
+    async fn hash(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError>;
 }
 
 pub trait HashingContext: Context {
