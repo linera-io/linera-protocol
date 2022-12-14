@@ -5,12 +5,13 @@
 
 mod state;
 
-use self::state::{ApplicationState, FungibleToken};
+use self::state::{AccountOwner, ApplicationState, FungibleToken};
 use async_trait::async_trait;
 use linera_sdk::{
-    ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
+    ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult, FromBcsBytes,
     OperationContext, Session, SessionCallResult, SessionId,
 };
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[async_trait]
@@ -37,9 +38,13 @@ impl Contract for FungibleToken {
     async fn execute_effect(
         &mut self,
         _context: &EffectContext,
-        _effect: &[u8],
+        effect: &[u8],
     ) -> Result<ExecutionResult, Self::Error> {
-        todo!();
+        let credit = Credit::from_bcs_bytes(effect).map_err(Error::InvalidEffect)?;
+
+        self.credit(credit.destination, credit.amount);
+
+        Ok(ExecutionResult::default())
     }
 
     async fn call_application(
@@ -62,12 +67,23 @@ impl Contract for FungibleToken {
     }
 }
 
+/// The credit effect.
+#[derive(Deserialize, Serialize)]
+pub struct Credit {
+    destination: AccountOwner,
+    amount: u128,
+}
+
 /// An error that can occur during the contract execution.
 #[derive(Debug, Error)]
 pub enum Error {
     /// Invalid serialized initial state.
     #[error("Serialized initial state is invalid")]
     InvalidInitialState(#[source] bcs::Error),
+
+    /// Invalid serialized [`Credit`].
+    #[error("Effect is not a valid serialized credit operation")]
+    InvalidEffect(#[source] bcs::Error),
 }
 
 #[path = "../boilerplate/contract/mod.rs"]
