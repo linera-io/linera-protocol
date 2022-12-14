@@ -1,6 +1,6 @@
 use crate::{
     common::{Batch, Context},
-    views::{HashView, Hasher, HashingContext, View, ViewError},
+    views::{HashView, Hasher, View, ViewError},
 };
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
@@ -253,15 +253,15 @@ where
 #[async_trait]
 impl<C, I, V> HashView<C> for MapView<C, I, V>
 where
-    C: HashingContext + Context + Send + Sync,
+    C: Context + Send + Sync,
     ViewError: From<C::Error>,
     I: Clone + Send + Sync + Serialize + DeserializeOwned,
     V: Clone + Send + Sync + Serialize + DeserializeOwned + 'static,
 {
-    type Hasher = C::Hasher;
+    type Hasher = sha2::Sha512;
 
     async fn hash(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        let mut hasher = C::Hasher::default();
+        let mut hasher = Self::Hasher::default();
         let mut count = 0;
         self.for_each_raw_index_value(|index: Vec<u8>, value: V| {
             count += 1;

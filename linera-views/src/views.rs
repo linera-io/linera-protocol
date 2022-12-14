@@ -74,16 +74,12 @@ pub enum ViewError {
 }
 
 #[async_trait]
-pub trait HashView<C: HashingContext>: View<C> {
+pub trait HashView<C: Context>: View<C> {
     /// How to compute hashes.
     type Hasher: Hasher;
 
     /// Compute the hash of the values.
     async fn hash(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError>;
-}
-
-pub trait HashingContext: Context {
-    type Hasher: Hasher;
 }
 
 pub trait Hasher: Default + Write + Send + Sync + 'static {

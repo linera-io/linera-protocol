@@ -1,6 +1,6 @@
 use crate::{
     common::{Batch, Context},
-    views::{HashView, Hasher, HashingContext, View, ViewError},
+    views::{HashView, Hasher, View, ViewError},
 };
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
@@ -164,16 +164,16 @@ where
 #[async_trait]
 impl<C, T> HashView<C> for LogView<C, T>
 where
-    C: HashingContext + Context + Send + Sync,
+    C: Context + Send + Sync,
     ViewError: From<C::Error>,
     T: Send + Sync + Clone + Debug + Serialize + DeserializeOwned,
 {
-    type Hasher = C::Hasher;
+    type Hasher = sha2::Sha512;
 
     async fn hash(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         let count = self.count();
         let elements = self.read(0..count).await?;
-        let mut hasher = C::Hasher::default();
+        let mut hasher = Self::Hasher::default();
         hasher.update_with_bcs_bytes(&elements)?;
         Ok(hasher.finalize())
     }

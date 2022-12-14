@@ -1,7 +1,7 @@
 use crate::{
     common::{Batch, Context, ContextFromDb, KeyValueOperations, SimpleTypeIterator},
     memory::{MemoryContext, MemoryStoreMap},
-    views::{HashView, Hasher, HashingContext, View, ViewError},
+    views::{HashView, Hasher, View, ViewError},
 };
 use async_trait::async_trait;
 use std::{collections::BTreeMap, fmt::Debug, mem};
@@ -309,13 +309,13 @@ where
 #[async_trait]
 impl<C> HashView<C> for KeyValueStoreView<C>
 where
-    C: HashingContext + Send + Sync,
+    C: Context + Send + Sync,
     ViewError: From<C::Error>,
 {
-    type Hasher = C::Hasher;
+    type Hasher = sha2::Sha512;
 
     async fn hash(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        let mut hasher = C::Hasher::default();
+        let mut hasher = Self::Hasher::default();
         let mut count = 0;
         self.for_each_index_value(|index: Vec<u8>, value: Vec<u8>| -> Result<(), ViewError> {
             count += 1;

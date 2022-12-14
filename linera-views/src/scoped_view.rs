@@ -1,6 +1,6 @@
 use crate::{
     common::{Batch, Context},
-    views::{HashView, Hasher, HashingContext, View, ViewError},
+    views::{HashView, Hasher, View, ViewError},
 };
 use async_trait::async_trait;
 use std::fmt::Debug;
@@ -62,9 +62,9 @@ where
 #[async_trait]
 impl<C, W, const INDEX: u64> HashView<C> for ScopedView<INDEX, W>
 where
-    C: HashingContext + Send + Sync + 'static,
+    C: Context + Send + Sync + 'static,
     ViewError: From<C::Error>,
-    W: HashView<C, Hasher = C::Hasher> + Send,
+    W: HashView<C> + Send,
 {
     type Hasher = W::Hasher;
 

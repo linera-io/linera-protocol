@@ -1,6 +1,6 @@
 use crate::{
     common::{Batch, Context},
-    views::{HashView, Hasher, HashingContext, View, ViewError},
+    views::{HashView, Hasher, View, ViewError},
 };
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
@@ -512,15 +512,15 @@ where
 #[async_trait]
 impl<C, I, W> HashView<C> for CollectionView<C, I, W>
 where
-    C: HashingContext + Context + Send + Sync,
+    C: Context + Send + Sync,
     ViewError: From<C::Error>,
     I: Clone + Debug + Send + Sync + Serialize + DeserializeOwned + 'static,
     W: HashView<C> + Send + Sync + 'static,
 {
-    type Hasher = C::Hasher;
+    type Hasher = sha2::Sha512;
 
     async fn hash(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        let mut hasher = C::Hasher::default();
+        let mut hasher = Self::Hasher::default();
         let indices = self.indices().await?;
         hasher.update_with_bcs_bytes(&indices.len())?;
         for index in indices {
@@ -536,15 +536,15 @@ where
 #[async_trait]
 impl<C, I, W> HashView<C> for ReentrantCollectionView<C, I, W>
 where
-    C: HashingContext + Context + Send + Sync,
+    C: Context + Send + Sync,
     ViewError: From<C::Error>,
     I: Clone + Debug + Send + Sync + Serialize + DeserializeOwned + 'static,
     W: HashView<C> + Send + Sync + 'static,
 {
-    type Hasher = C::Hasher;
+    type Hasher = sha2::Sha512;
 
     async fn hash(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        let mut hasher = C::Hasher::default();
+        let mut hasher = Self::Hasher::default();
         let indices = self.indices().await?;
         hasher.update_with_bcs_bytes(&indices.len())?;
         for index in indices {
