@@ -77,11 +77,29 @@ impl Contract for FungibleToken {
     async fn call_session(
         &mut self,
         _context: &CalleeContext,
-        _session: Session,
-        _argument: &[u8],
+        session: Session,
+        argument: &[u8],
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<SessionCallResult, Self::Error> {
-        todo!();
+        let transfer =
+            ApplicationTransfer::from_bcs_bytes(argument).map_err(Error::InvalidArgument)?;
+        let mut balance =
+            u128::from_bcs_bytes(&session.data).expect("Session contains corrupt data");
+
+        ensure!(
+            balance >= transfer.amount(),
+            Error::InsufficientSessionBalance
+        );
+
+        balance -= transfer.amount();
+
+        let updated_session = (balance > 0)
+            .then(|| bcs::to_bytes(&balance).expect("Serializing a `u128` should not fail"));
+
+        Ok(SessionCallResult {
+            inner: self.finish_application_transfer(transfer),
+            data: updated_session,
+        })
     }
 }
 
@@ -124,10 +142,7 @@ impl FungibleToken {
                 result.execution_result = self.finish_transfer(transfer);
             }
             ApplicationTransfer::Dynamic(amount) => {
-                result.create_sessions.push(Session {
-                    kind: 0,
-                    data: bcs::to_bytes(&amount).expect("Serializing a `u128` should not fail"),
-                });
+                result.create_sessions.push(Self::new_session(amount));
             }
         }
 
@@ -142,6 +157,14 @@ impl FungibleToken {
         } else {
             ExecutionResult::default()
                 .with_effect(transfer.destination_chain, &Credit::from(transfer))
+        }
+    }
+
+    /// Create a new session with the specified `amount` of tokens.
+    fn new_session(amount: u128) -> Session {
+        Session {
+            kind: 0,
+            data: bcs::to_bytes(&amount).expect("Serializing a `u128` should not fail"),
         }
     }
 }
@@ -268,6 +291,14 @@ pub enum Error {
     /// Insufficient balance in source account.
     #[error("Source account does not have sufficient balance for transfer")]
     InsufficientBalance(#[from] state::InsufficientBalanceError),
+
+    /// Insufficient balance in session.
+    #[error("Session does not have sufficient balance for transfer")]
+    InsufficientSessionBalance,
+
+    /// Application doesn't support any cross-application sessions.
+    #[error("Application doesn't support any cross-application sessions")]
+    SessionsNotSupported,
 }
 
 #[path = "../boilerplate/contract/mod.rs"]
