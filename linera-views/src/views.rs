@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::common::{Batch, Context};
+use crate::common::Batch;
 use async_trait::async_trait;
 use serde::Serialize;
 use std::{fmt::Debug, io::Write};
@@ -14,7 +14,7 @@ mod tests;
 /// A view gives an exclusive access to read and write the data stored at an underlying
 /// address in storage.
 #[async_trait]
-pub trait View<C: Context>: Sized {
+pub trait View<C>: Sized {
     /// Obtain a mutable reference to the internal context.
     fn context(&self) -> &C;
 
@@ -74,7 +74,7 @@ pub enum ViewError {
 }
 
 #[async_trait]
-pub trait HashView<C: Context>: View<C> {
+pub trait HashView<C>: View<C> {
     /// How to compute hashes.
     type Hasher: Hasher;
 
