@@ -14,9 +14,9 @@ use linera_base::{
     },
 };
 use linera_execution::{
-    system::SystemEffect, ApplicationRegistryView, ApplicationRegistryViewContext, Effect,
+    system::SystemEffect, ApplicationRegistryView, Effect,
     EffectContext, ExecutionResult, ExecutionRuntimeContext, ExecutionStateView,
-    ExecutionStateViewContext, OperationContext, RawExecutionResult,
+    OperationContext, RawExecutionResult,
 };
 use linera_views::{
     collection_view::CollectionView, common::Context, impl_view, log_view::LogView,
@@ -64,10 +64,7 @@ impl_view!(
         received_log,
         communication_states,
         known_applications,
-    };
-    CommunicationStateViewContext,
-    ExecutionStateViewContext,
-    ApplicationRegistryViewContext,
+    }
 );
 
 /// Block-chaining state.
@@ -91,10 +88,7 @@ pub struct CommunicationStateView<C> {
 }
 
 impl_view!(
-    CommunicationStateView { inboxes, outboxes, channels };
-    InboxStateViewContext,
-    OutboxStateViewContext,
-    ChannelStateViewContext,
+    CommunicationStateView { inboxes, outboxes, channels }
 );
 
 /// An outbox used to send messages to another chain. NOTE: Messages are implied by the
@@ -108,7 +102,7 @@ pub struct OutboxStateView<C> {
 }
 
 impl_view!(
-    OutboxStateView { queue };
+    OutboxStateView { queue }
 );
 
 impl<C> OutboxStateView<C>
@@ -137,7 +131,7 @@ pub struct InboxStateView<C> {
 }
 
 impl_view!(
-    InboxStateView { next_height_to_receive, received_events, expected_events };
+    InboxStateView { next_height_to_receive, received_events, expected_events }
 );
 
 /// The state of a channel followed by subscribers.
@@ -152,8 +146,7 @@ pub struct ChannelStateView<C> {
 }
 
 impl_view!(
-    ChannelStateView { subscribers, outboxes, block_height };
-    OutboxStateViewContext,
+    ChannelStateView { subscribers, outboxes, block_height }
 );
 
 /// A message sent by some (unspecified) chain at a particular height and index.
