@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::views::{HashingContext, ViewError};
+use crate::views::ViewError;
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
@@ -437,14 +437,4 @@ where
             extra: self.extra.clone(),
         }
     }
-}
-
-impl<E, DB> HashingContext for ContextFromDb<E, DB>
-where
-    E: Clone + Send + Sync,
-    DB: KeyValueOperations + Clone + Send + Sync,
-    DB::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
-    ViewError: From<DB::Error>,
-{
-    type Hasher = sha2::Sha512;
 }

@@ -22,7 +22,7 @@ use linera_views::{
         get_random_key_value_operations, get_random_key_value_vec, random_shuffle,
         span_random_reordering_put_delete, LocalStackTestContext,
     },
-    views::{HashView, Hasher, HashingContext, View, ViewError},
+    views::{HashView, Hasher, View, ViewError},
 };
 use rand::{Rng, RngCore, SeedableRng};
 use std::{
@@ -216,10 +216,7 @@ impl TestConfig {
 }
 
 #[cfg(test)]
-async fn test_store<S>(
-    store: &mut S,
-    config: &TestConfig,
-) -> <<S::Context as HashingContext>::Hasher as Hasher>::Output
+async fn test_store<S>(store: &mut S, config: &TestConfig) -> <sha2::Sha512 as Hasher>::Output
 where
     S: StateStore,
     ViewError: From<<<S as StateStore>::Context as Context>::Error>,
@@ -705,7 +702,7 @@ async fn compute_hash_unordered_put_view<S>(
     rng: &mut impl RngCore,
     store: &mut S,
     key_value_vector: Vec<(Vec<u8>, Vec<u8>)>,
-) -> <<S::Context as HashingContext>::Hasher as Hasher>::Output
+) -> <sha2::Sha512 as Hasher>::Output
 where
     S: StateStore,
     ViewError: From<<<S as StateStore>::Context as Context>::Error>,
@@ -736,7 +733,7 @@ async fn compute_hash_unordered_putdelete_view<S>(
     rng: &mut impl RngCore,
     store: &mut S,
     operations: Vec<WriteOperation>,
-) -> <<S::Context as HashingContext>::Hasher as Hasher>::Output
+) -> <sha2::Sha512 as Hasher>::Output
 where
     S: StateStore,
     ViewError: From<<<S as StateStore>::Context as Context>::Error>,
@@ -775,7 +772,7 @@ async fn compute_hash_ordered_view<S>(
     rng: &mut impl RngCore,
     store: &mut S,
     key_value_vector: Vec<(Vec<u8>, Vec<u8>)>,
-) -> <<S::Context as HashingContext>::Hasher as Hasher>::Output
+) -> <sha2::Sha512 as Hasher>::Output
 where
     S: StateStore,
     ViewError: From<<<S as StateStore>::Context as Context>::Error>,
