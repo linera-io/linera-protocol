@@ -4,8 +4,13 @@ version = "0.1.0"
 authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 
+[features]
+serde = ["dep:serde", "serde_with"]
+
 [dependencies]
 async-trait = "0.1.52"
+serde = { version = "1.0.130", features = ["derive"], optional = true }
+serde_with = { version = "2.1.0", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 bcs = "0.1.3"
