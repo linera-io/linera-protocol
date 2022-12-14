@@ -168,7 +168,9 @@ where
     ViewError: From<C::Error>,
     T: Send + Sync + Clone + Debug + Serialize + DeserializeOwned,
 {
-    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
+    type Hasher = C::Hasher;
+
+    async fn hash(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         let count = self.count();
         let elements = self.read(0..count).await?;
         let mut hasher = C::Hasher::default();

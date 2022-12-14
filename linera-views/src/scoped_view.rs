@@ -64,9 +64,11 @@ impl<C, W, const INDEX: u64> HashView<C> for ScopedView<INDEX, W>
 where
     C: HashingContext + Send + Sync + 'static,
     ViewError: From<C::Error>,
-    W: HashView<C> + Send,
+    W: HashView<C, Hasher = C::Hasher> + Send,
 {
-    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
+    type Hasher = W::Hasher;
+
+    async fn hash(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         self.view.hash().await
     }
 }

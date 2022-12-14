@@ -517,7 +517,9 @@ where
     I: Clone + Debug + Send + Sync + Serialize + DeserializeOwned + 'static,
     W: HashView<C> + Send + Sync + 'static,
 {
-    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
+    type Hasher = C::Hasher;
+
+    async fn hash(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         let mut hasher = C::Hasher::default();
         let indices = self.indices().await?;
         hasher.update_with_bcs_bytes(&indices.len())?;
@@ -539,7 +541,9 @@ where
     I: Clone + Debug + Send + Sync + Serialize + DeserializeOwned + 'static,
     W: HashView<C> + Send + Sync + 'static,
 {
-    async fn hash(&mut self) -> Result<<C::Hasher as Hasher>::Output, ViewError> {
+    type Hasher = C::Hasher;
+
+    async fn hash(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         let mut hasher = C::Hasher::default();
         let indices = self.indices().await?;
         hasher.update_with_bcs_bytes(&indices.len())?;
