@@ -3,6 +3,14 @@
 
 use linera_sdk::{crypto::PublicKey, ApplicationId};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+
+/// The application state.
+#[derive(Debug, Default, Deserialize, Serialize)]
+pub struct FungibleToken {
+    accounts: BTreeMap<AccountOwner, u128>,
+    nonces: BTreeMap<AccountOwner, Nonce>,
+}
 
 /// An account owner.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -16,3 +24,6 @@ pub enum AccountOwner {
 /// A single-use number to prevent replay attacks.
 #[derive(Debug, Default, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct Nonce(u64);
+
+/// Alias to the application type, so that the boilerplate module can reference it.
+pub type ApplicationState = FungibleToken;
