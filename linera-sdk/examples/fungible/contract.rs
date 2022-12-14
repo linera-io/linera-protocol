@@ -20,9 +20,10 @@ impl Contract for FungibleToken {
     async fn initialize(
         &mut self,
         _context: &OperationContext,
-        _argument: &[u8],
+        argument: &[u8],
     ) -> Result<ExecutionResult, Self::Error> {
-        todo!();
+        self.initialize_accounts(bcs::from_bytes(argument).map_err(Error::InvalidInitialState)?);
+        Ok(ExecutionResult::default())
     }
 
     async fn execute_operation(
@@ -63,7 +64,11 @@ impl Contract for FungibleToken {
 
 /// An error that can occur during the contract execution.
 #[derive(Debug, Error)]
-pub enum Error {}
+pub enum Error {
+    /// Invalid serialized initial state.
+    #[error("Serialized initial state is invalid")]
+    InvalidInitialState(#[source] bcs::Error),
+}
 
 #[path = "../boilerplate/contract/mod.rs"]
 mod boilerplate;
