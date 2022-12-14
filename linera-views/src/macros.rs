@@ -108,26 +108,9 @@ where
 
 linera_views::paste! {
 
-pub trait [< $name Context >]: $crate::common::Context
-    + Send
-    + Sync
-    + Clone
-    + 'static
-{}
-
-impl<AnyContext> [< $name Context >] for AnyContext
-where
-    AnyContext: $crate::common::Context
-        + Send
-        + Sync
-        + Clone
-        + 'static,
-    $crate::views::ViewError: From<AnyContext::Error>,
-{}
-
 impl<C> $name<C>
 where
-    C: [< $name Context >],
+    C: $crate::common::Context + Send + Sync + Clone + 'static,
     $crate::views::ViewError: From<C::Error>,
 {
     pub async fn hash_value(&mut self) -> Result<$crate::crypto::HashValue, $crate::views::ViewError> {

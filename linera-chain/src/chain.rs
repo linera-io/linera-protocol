@@ -14,9 +14,8 @@ use linera_base::{
     },
 };
 use linera_execution::{
-    system::SystemEffect, ApplicationRegistryView, Effect,
-    EffectContext, ExecutionResult, ExecutionRuntimeContext, ExecutionStateView,
-    OperationContext, RawExecutionResult,
+    system::SystemEffect, ApplicationRegistryView, Effect, EffectContext, ExecutionResult,
+    ExecutionRuntimeContext, ExecutionStateView, OperationContext, RawExecutionResult,
 };
 use linera_views::{
     collection_view::CollectionView, common::Context, impl_view, log_view::LogView,
@@ -54,18 +53,16 @@ pub struct ChainStateView<C> {
     pub known_applications: ScopedView<7, ApplicationRegistryView<C>>,
 }
 
-impl_view!(
-    ChainStateView {
-        execution_state,
-        execution_state_hash,
-        tip_state,
-        manager,
-        confirmed_log,
-        received_log,
-        communication_states,
-        known_applications,
-    }
-);
+impl_view!(ChainStateView {
+    execution_state,
+    execution_state_hash,
+    tip_state,
+    manager,
+    confirmed_log,
+    received_log,
+    communication_states,
+    known_applications,
+});
 
 /// Block-chaining state.
 #[derive(Debug, Default, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -87,9 +84,11 @@ pub struct CommunicationStateView<C> {
     pub channels: ScopedView<2, CollectionView<C, String, ChannelStateView<C>>>,
 }
 
-impl_view!(
-    CommunicationStateView { inboxes, outboxes, channels }
-);
+impl_view!(CommunicationStateView {
+    inboxes,
+    outboxes,
+    channels
+});
 
 /// An outbox used to send messages to another chain. NOTE: Messages are implied by the
 /// execution of blocks, so currently we just send the certified blocks over and let the
@@ -101,13 +100,11 @@ pub struct OutboxStateView<C> {
     pub queue: ScopedView<0, QueueView<C, BlockHeight>>,
 }
 
-impl_view!(
-    OutboxStateView { queue }
-);
+impl_view!(OutboxStateView { queue });
 
 impl<C> OutboxStateView<C>
 where
-    C: OutboxStateViewContext,
+    C: Context + Clone + Send + Sync + 'static,
     ViewError: From<C::Error>,
 {
     pub async fn block_heights(&mut self) -> Result<Vec<BlockHeight>, ChainError> {
@@ -130,9 +127,11 @@ pub struct InboxStateView<C> {
     pub expected_events: ScopedView<2, QueueView<C, Event>>,
 }
 
-impl_view!(
-    InboxStateView { next_height_to_receive, received_events, expected_events }
-);
+impl_view!(InboxStateView {
+    next_height_to_receive,
+    received_events,
+    expected_events
+});
 
 /// The state of a channel followed by subscribers.
 #[derive(Debug)]
@@ -145,9 +144,11 @@ pub struct ChannelStateView<C> {
     pub block_height: ScopedView<2, RegisterView<C, Option<BlockHeight>>>,
 }
 
-impl_view!(
-    ChannelStateView { subscribers, outboxes, block_height }
-);
+impl_view!(ChannelStateView {
+    subscribers,
+    outboxes,
+    block_height
+});
 
 /// A message sent by some (unspecified) chain at a particular height and index.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -162,7 +163,7 @@ pub struct Event {
 
 impl<C> ChainStateView<C>
 where
-    C: ChainStateViewContext,
+    C: Context + Clone + Send + Sync + 'static,
     ViewError: From<C::Error>,
     C::Extra: ExecutionRuntimeContext,
 {

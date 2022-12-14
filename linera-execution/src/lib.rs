@@ -8,14 +8,14 @@ mod runtime;
 pub mod system;
 mod wasm;
 
-pub use application_registry::{ApplicationRegistryView, ApplicationRegistryViewContext};
-pub use execution::{ExecutionStateView, ExecutionStateViewContext};
+pub use application_registry::ApplicationRegistryView;
+pub use execution::ExecutionStateView;
 pub use ownership::ChainOwnership;
 #[cfg(any(test, feature = "test"))]
 pub use system::SystemExecutionState;
 pub use system::{
-    SystemEffect, SystemExecutionError, SystemExecutionStateView, SystemExecutionStateViewContext,
-    SystemOperation, SystemQuery, SystemResponse,
+    SystemEffect, SystemExecutionError, SystemExecutionStateView, SystemOperation, SystemQuery,
+    SystemResponse,
 };
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 pub use wasm::{WasmApplication, WasmExecutionError};
