@@ -18,7 +18,7 @@ use crate::{
     ApplicationCallResult, CalleeContext, EffectContext, OperationContext, QueryContext,
     RawExecutionResult, SessionCallResult, SessionId,
 };
-use std::task::Poll;
+use std::{future::Future, task::Poll};
 
 /// Types that are specific to a WebAssembly runtime.
 pub trait Runtime {
@@ -286,7 +286,14 @@ where
         session_data: &mut Vec<u8>,
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
-    ) -> GuestFuture<CallSession, R> {
+    ) -> impl Future<Output = Result<SessionCallResult, WasmExecutionError>>
+    where
+        R::Application: Unpin,
+        R::Store: Unpin,
+        R::StorageGuard: Unpin,
+        R::Error: Unpin,
+        WasmExecutionError: From<R::Error>,
+    {
         let forwarded_sessions: Vec<_> = forwarded_sessions
             .into_iter()
             .map(contract::SessionId::from)
