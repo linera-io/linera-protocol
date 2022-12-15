@@ -3,6 +3,20 @@ package rpc.v1;
 
 import "google/protobuf/empty.proto";
 
+// A service run by the Proxy which notifies clients when there
+// is an update for a given chain.
+service NotificationService {
+  // Subscribe to notifications for a set of Chain Ids.
+  rpc Subscribe(SubscriptionRequest) returns (stream Notification);
+}
+
+// A service run by the Proxy which listens for incoming connections
+// from workers and then notifies clients.
+service NotifierService {
+  // Notify a client that there has been an update for a `ChainId`.
+  rpc Notify(Notification) returns (google.protobuf.Empty);
+}
+
 // Interface provided by each physical shard (aka "worker") of a validator or a local node.
 // * All commands return either the current chain info or an error.
 // * Repeating commands produces no changes and returns no error.
@@ -32,6 +46,16 @@ service ValidatorNode {
 
   // Handle information queries for this chain.
   rpc HandleChainInfoQuery(ChainInfoQuery) returns (ChainInfoResult);
+}
+
+// A request for client to subscribe to notifications for a given `ChainId`
+message SubscriptionRequest {
+  repeated ChainId chain_ids = 1;
+}
+
+// A notification message that a client should poll a chain.
+message Notification {
+  ChainId chain_id = 1;
 }
 
 // A wrapper around ChainInfoResponse which contains a serialized error variant

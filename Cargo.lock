@@ -1918,6 +1918,7 @@ dependencies = [
  "test-strategy",
  "thiserror",
  "tokio",
+ "tokio-stream",
  "tokio-util 0.6.10",
  "tonic",
 ]

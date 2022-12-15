@@ -33,7 +33,7 @@ use linera_core::{
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use std::{
     net::{AddrParseError, SocketAddr},
     str::FromStr,
@@ -41,10 +41,10 @@ use std::{
 };
 use thiserror::Error;
 use tokio::task::{JoinError, JoinHandle};
-use tonic::{
-    transport::{Channel, Server},
-    Request, Response, Status,
-};
+use tonic::transport::{Channel, Server};
+use tonic::{Request, Response};
+use crate::grpc_network::grpc::{ChainId, Notification};
+use crate::grpc_network::grpc::notifier_service_client::NotifierServiceClient;
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 // https://github.com/hyperium/tonic/issues/1056
@@ -60,6 +60,7 @@ pub struct GrpcServer<S> {
     shard_id: ShardId,
     network: ValidatorInternalNetworkConfig,
     cross_chain_sender: CrossChainSender,
+    notifier_client: NotifierServiceClient<Channel>
 }
 
 pub struct GrpcServerHandle {
@@ -101,7 +102,8 @@ where
         port: u16,
         state: WorkerState<S>,
         shard_id: ShardId,
-        network: ValidatorInternalNetworkConfig,
+        internal_network: ValidatorInternalNetworkConfig,
+        public_network: ValidatorPublicNetworkConfig,
         cross_chain_config: CrossChainConfig,
     ) -> Result<GrpcServerHandle, GrpcError> {
         info!(
@@ -109,7 +111,12 @@ where
             host, port, shard_id
         );
 
-        let address = SocketAddr::from_str(&format!("{}:{}", host, port))?;
+        // this somehow feels wrong - using the proxy's public address
+        // for routing on an internal network.
+        let proxy_address = format!("http://{}:{}", host, port);
+        let notifier_client = NotifierServiceClient::connect(proxy_address).await?;
+
+        let server_address = SocketAddr::from_str(&format!("{}:{}", host, port))?;
 
         let (cross_chain_sender, cross_chain_receiver) =
             mpsc::channel(cross_chain_config.queue_size);
@@ -123,7 +130,7 @@ where
             );
             Self::forward_cross_chain_queries(
                 state.nickname().to_string(),
-                network.clone(),
+                internal_network.clone(),
                 cross_chain_config.max_retries,
                 cross_chain_receiver,
             )
@@ -134,8 +141,9 @@ where
         let grpc_server = GrpcServer {
             state,
             shard_id,
-            network,
+            network: internal_network,
             cross_chain_sender,
+            notifier_client
         };
 
         let validator_node = ValidatorNodeServer::new(grpc_server.clone());
@@ -145,13 +153,23 @@ where
             Server::builder()
                 .add_service(validator_node)
                 .add_service(worker_node)
-                .serve_with_shutdown(address, receiver.map(|_| ())),
+                .serve_with_shutdown(server_address, receiver.map(|_| ())),
         );
 
         Ok(GrpcServerHandle {
             _complete: complete,
             handle,
         })
+    }
+
+    async fn notify(&mut self, chain_id: ChainId) {
+        let notification = Notification {
+            chain_id: Some(chain_id.clone()),
+        };
+
+        if let Err(e) = self.notifier_client.notify(notification).await {
+            warn!("There was an error while trying to notify for chain {:?}.", chain_id)
+        }
     }
 
     async fn handle_network_actions(&self, actions: NetworkActions) {

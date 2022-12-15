@@ -17,10 +17,17 @@ use linera_rpc::{
     pool::ConnectionPool,
 };
 use std::{fmt::Debug, net::SocketAddr};
+use std::pin::Pin;
+use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::{
+    codegen::futures_core::Stream,
     transport::{Channel, Server},
     Request, Response, Status,
 };
+use linera_rpc::grpc_network::grpc::{Notification, SubscriptionRequest};
+use linera_rpc::grpc_network::grpc::notification_service_server::{NotificationService, NotificationServiceServer};
+use linera_rpc::grpc_network::grpc::notifier_service_server::NotifierService;
+use linera_rpc::notifier::{Notifier, NotifierError};
 
 #[derive(Clone)]
 pub struct GrpcProxy {
@@ -28,6 +35,7 @@ pub struct GrpcProxy {
     internal_config: ValidatorInternalNetworkConfig,
     node_connection_pool: ConnectionPool<ValidatorNodeClient<Channel>>,
     worker_connection_pool: ConnectionPool<ValidatorWorkerClient<Channel>>,
+    notifier: Notifier<Notification>,
 }
 
 impl GrpcProxy {
@@ -40,6 +48,7 @@ impl GrpcProxy {
             internal_config,
             node_connection_pool: ConnectionPool::new(),
             worker_connection_pool: ConnectionPool::new(),
+            notifier: Notifier::default(),
         }
     }
 
@@ -49,6 +58,10 @@ impl GrpcProxy {
 
     fn as_validator_node(&self) -> ValidatorNodeServer<Self> {
         ValidatorNodeServer::new(self.clone())
+    }
+
+    fn as_notification_service(&self) -> NotificationServiceServer<Self> {
+        NotificationServiceServer::new(self.clone())
     }
 
     fn address(&self) -> SocketAddr {
@@ -94,6 +107,7 @@ impl GrpcProxy {
         Ok(Server::builder()
             .add_service(self.as_validator_node())
             .add_service(self.as_validator_worker())
+            .add_service(self.as_notification_service())
             .serve(self.address())
             .await?)
     }
@@ -204,6 +218,49 @@ impl ValidatorNode for GrpcProxy {
     ) -> Result<Response<ChainInfoResult>, Status> {
         let (mut client, inner) = self.client_for_proxy_node(request).await?;
         client.handle_chain_info_query(inner).await
+    }
+}
+
+type NotificationStream = Pin<Box<dyn Stream<Item=Result<Notification, Status>> + Send>>;
+
+#[async_trait]
+impl NotificationService for GrpcProxy {
+    type SubscribeStream = NotificationStream;
+
+    async fn subscribe(
+        &self,
+        request: Request<SubscriptionRequest>,
+    ) -> Result<Response<Self::SubscribeStream>, Status> {
+        let subscription_request = request.into_inner();
+
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+
+        self.notifier.create_subscription(subscription_request.chain_ids, tx);
+
+        Ok(Response::new(
+            Box::pin(UnboundedReceiverStream::new(rx)) as Self::SubscribeStream
+        ))
+    }
+}
+
+#[async_trait]
+impl NotifierService for GrpcProxy {
+    async fn notify(&self, request: Request<Notification>) -> Result<Response<()>, Status> {
+        let notification = request.into_inner();
+
+        let chain_id = notification
+            .chain_id
+            .clone()
+            .ok_or(Status::invalid_argument("Missing field: chain_id."))?;
+
+        // can we get away with a partial borrow here?
+        if let Err(e) = self.notifier.notify(&chain_id, notification) {
+            match e {
+                NotifierError::ChainDoesNotExist => warn!("Tried to notify for chain {:?} which has no subscribers.", &chain_id)
+            }
+        }
+
+        Ok(Response::new(()))
     }
 }
 
