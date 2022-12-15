@@ -279,15 +279,16 @@ where
     ///     forwarded_sessions: Vec<SessionId>,
     /// ) -> Result<SessionCallResult, WasmExecutionError>
     /// ```
-    pub fn call_session(
+    pub fn call_session<'session_data>(
         mut self,
         context: &CalleeContext,
         session_kind: u64,
-        session_data: &mut Vec<u8>,
+        session_data: &'session_data mut Vec<u8>,
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
-    ) -> impl Future<Output = Result<SessionCallResult, WasmExecutionError>>
+    ) -> impl Future<Output = Result<SessionCallResult, WasmExecutionError>> + 'session_data
     where
+        R: 'session_data,
         R::Application: Unpin,
         R::Store: Unpin,
         R::StorageGuard: Unpin,
@@ -312,7 +313,13 @@ where
             &forwarded_sessions,
         );
 
-        GuestFuture::new(future, self)
+        async move {
+            let (session_call_result, updated_data) = GuestFuture::new(future, self).await?;
+
+            *session_data = updated_data;
+
+            Ok(session_call_result)
+        }
     }
 }
 
@@ -385,6 +392,6 @@ impl_guest_future_interface! {
     ExecuteOperation: execute_operation_poll -> PollExecutionResult -> Contract => RawExecutionResult<Vec<u8>>,
     ExecuteEffect: execute_effect_poll -> PollExecutionResult -> Contract => RawExecutionResult<Vec<u8>>,
     CallApplication: call_application_poll -> PollCallApplication -> Contract => ApplicationCallResult,
-    CallSession: call_session_poll -> PollCallSession -> Contract => SessionCallResult,
+    CallSession: call_session_poll -> PollCallSession -> Contract => (SessionCallResult, Vec<u8>),
     QueryApplication: query_application_poll -> PollQuery -> Service => Vec<u8>,
 }

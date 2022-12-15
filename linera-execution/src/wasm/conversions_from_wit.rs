@@ -13,12 +13,16 @@ use linera_base::{
     messages::{ApplicationId, BlockHeight, BytecodeId, ChainId, Destination, EffectId},
 };
 
-impl From<contract::SessionCallResult> for SessionCallResult {
+impl From<contract::SessionCallResult> for (SessionCallResult, Vec<u8>) {
     fn from(result: contract::SessionCallResult) -> Self {
-        SessionCallResult {
+        let session_call_result = SessionCallResult {
             inner: result.inner.into(),
             close_session: result.data.is_some(),
-        }
+        };
+
+        let updated_session_data = result.data.unwrap_or_default();
+
+        (session_call_result, updated_session_data)
     }
 }
 
