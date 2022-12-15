@@ -10,28 +10,28 @@ import "google/protobuf/empty.proto";
 //   to be communicated to other workers of the same validator.
 service ValidatorWorker {
   // Propose a new block.
-  rpc handle_block_proposal(BlockProposal) returns (ChainInfoResult);
+  rpc HandleBlockProposal(BlockProposal) returns (ChainInfoResult);
 
   // Process a certificate.
-  rpc handle_certificate(Certificate) returns (ChainInfoResult);
+  rpc HandleCertificate(Certificate) returns (ChainInfoResult);
 
   // Handle information queries for this chain.
-  rpc handle_chain_info_query(ChainInfoQuery) returns (ChainInfoResult);
+  rpc HandleChainInfoQuery(ChainInfoQuery) returns (ChainInfoResult);
 
   // Handle a (trusted!) cross-chain request.
-  rpc handle_cross_chain_request(CrossChainRequest) returns (google.protobuf.Empty);
+  rpc HandleCrossChainRequest(CrossChainRequest) returns (google.protobuf.Empty);
 }
 
 // How to communicate with a validator or a local node.
 service ValidatorNode {
   // Propose a new block.
-  rpc handle_block_proposal(BlockProposal) returns (ChainInfoResult);
+  rpc HandleBlockProposal(BlockProposal) returns (ChainInfoResult);
 
   // Process a certificate.
-  rpc handle_certificate(Certificate) returns (ChainInfoResult);
+  rpc HandleCertificate(Certificate) returns (ChainInfoResult);
 
   // Handle information queries for this chain.
-  rpc handle_chain_info_query(ChainInfoQuery) returns (ChainInfoResult);
+  rpc HandleChainInfoQuery(ChainInfoQuery) returns (ChainInfoResult);
 }
 
 // A wrapper around ChainInfoResponse which contains a serialized error variant
