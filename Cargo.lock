@@ -1877,9 +1877,14 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "bcs",
+ "ed25519-dalek",
  "futures",
+ "generic-array",
+ "hex",
  "serde",
+ "serde-name",
  "serde_with",
+ "sha2",
  "thiserror",
  "wit-bindgen-guest-rust",
 ]

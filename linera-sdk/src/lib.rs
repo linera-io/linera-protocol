@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(feature = "crypto")]
+pub mod crypto;
 mod exported_future;
 
 use async_trait::async_trait;
