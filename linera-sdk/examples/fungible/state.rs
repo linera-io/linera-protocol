@@ -12,3 +12,7 @@ pub enum AccountOwner {
     /// An account for an application.
     Application(ApplicationId),
 }
+
+/// A single-use number to prevent replay attacks.
+#[derive(Debug, Default, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+pub struct Nonce(u64);
