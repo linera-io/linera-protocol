@@ -99,6 +99,10 @@ impl FungibleToken {
         let (source, payload) = signed_transfer.check_signature()?;
 
         ensure!(
+            payload.source_chain == Self::current_chain_id(),
+            Error::IncorrectSourceChain
+        );
+        ensure!(
             payload.nonce >= self.minimum_nonce(&source).ok_or(Error::ReusedNonce)?,
             Error::ReusedNonce
         );
@@ -132,8 +136,10 @@ pub struct SignedTransfer {
 /// replayed:
 ///
 /// - on the same chain
+/// - on different chains
 #[derive(Debug, Deserialize, Serialize)]
 pub struct SignedTransferPayload {
+    source_chain: ChainId,
     nonce: Nonce,
     transfer: Transfer,
 }
