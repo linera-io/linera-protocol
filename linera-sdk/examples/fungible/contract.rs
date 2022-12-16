@@ -9,7 +9,7 @@ use self::state::{AccountOwner, ApplicationState, FungibleToken, Nonce};
 use async_trait::async_trait;
 use linera_sdk::{
     crypto::{BcsSignable, CryptoError, PublicKey, Signature},
-    ensure, ApplicationCallResult, CalleeContext, ChainId, Contract, EffectContext,
+    ensure, ApplicationCallResult, ApplicationId, CalleeContext, ChainId, Contract, EffectContext,
     ExecutionResult, FromBcsBytes, OperationContext, Session, SessionCallResult, SessionId,
 };
 use serde::{Deserialize, Serialize};
@@ -99,6 +99,10 @@ impl FungibleToken {
         let (source, payload) = signed_transfer.check_signature()?;
 
         ensure!(
+            payload.token_id == Self::current_application_id(),
+            Error::IncorrectTokenId
+        );
+        ensure!(
             payload.source_chain == Self::current_chain_id(),
             Error::IncorrectSourceChain
         );
@@ -137,8 +141,10 @@ pub struct SignedTransfer {
 ///
 /// - on the same chain
 /// - on different chains
+/// - on different tokens
 #[derive(Debug, Deserialize, Serialize)]
 pub struct SignedTransferPayload {
+    token_id: ApplicationId,
     source_chain: ChainId,
     nonce: Nonce,
     transfer: Transfer,
