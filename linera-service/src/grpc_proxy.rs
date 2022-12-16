@@ -16,8 +16,9 @@ use linera_rpc::{
     },
     pool::ConnectionPool,
 };
-use std::{fmt::Debug, net::SocketAddr};
-use std::pin::Pin;
+
+use std::sync::Arc;
+use log::warn;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::{
     codegen::futures_core::Stream,
@@ -30,7 +31,9 @@ use linera_rpc::grpc_network::grpc::notifier_service_server::NotifierService;
 use linera_rpc::notifier::{Notifier, NotifierError};
 
 #[derive(Clone)]
-pub struct GrpcProxy {
+pub struct GrpcProxy(Arc<GrpcProxyInner>);
+
+struct GrpcProxyInner {
     public_config: ValidatorPublicNetworkConfig,
     internal_config: ValidatorInternalNetworkConfig,
     node_connection_pool: ConnectionPool<ValidatorNodeClient<Channel>>,
@@ -43,13 +46,13 @@ impl GrpcProxy {
         public_config: ValidatorPublicNetworkConfig,
         internal_config: ValidatorInternalNetworkConfig,
     ) -> Self {
-        Self {
+        Self(Arc::new(GrpcProxyInner {
             public_config,
             internal_config,
             node_connection_pool: ConnectionPool::new(),
             worker_connection_pool: ConnectionPool::new(),
             notifier: Notifier::default(),
-        }
+        }))
     }
 
     fn as_validator_worker(&self) -> ValidatorWorkerServer<Self> {
@@ -65,12 +68,12 @@ impl GrpcProxy {
     }
 
     fn address(&self) -> SocketAddr {
-        SocketAddr::from(([0, 0, 0, 0], self.public_config.port))
+        SocketAddr::from(([0, 0, 0, 0], self.0.public_config.port))
     }
 
     fn shard_for(&self, proxyable: &impl Proxyable) -> Option<ShardConfig> {
         Some(
-            self.internal_config
+            self.0.internal_config
                 .get_shard_for(proxyable.chain_id()?)
                 .clone(),
         )
@@ -82,6 +85,7 @@ impl GrpcProxy {
     ) -> Result<ValidatorWorkerClient<Channel>> {
         let address = shard.http_address();
         let client = self
+            .0
             .worker_connection_pool
             .cloned_client_for_address(address)
             .await?;
@@ -95,6 +99,7 @@ impl GrpcProxy {
     ) -> Result<ValidatorNodeClient<Channel>> {
         let address = shard.http_address();
         let client = self
+            .0
             .node_connection_pool
             .cloned_client_for_address(address)
             .await?;
@@ -235,7 +240,7 @@ impl NotificationService for GrpcProxy {
 
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
-        self.notifier.create_subscription(subscription_request.chain_ids, tx);
+        self.0.notifier.create_subscription(subscription_request.chain_ids, tx);
 
         Ok(Response::new(
             Box::pin(UnboundedReceiverStream::new(rx)) as Self::SubscribeStream
@@ -254,7 +259,7 @@ impl NotifierService for GrpcProxy {
             .ok_or(Status::invalid_argument("Missing field: chain_id."))?;
 
         // can we get away with a partial borrow here?
-        if let Err(e) = self.notifier.notify(&chain_id, notification) {
+        if let Err(e) = self.0.notifier.notify(&chain_id, notification) {
             match e {
                 NotifierError::ChainDoesNotExist => warn!("Tried to notify for chain {:?} which has no subscribers.", &chain_id)
             }

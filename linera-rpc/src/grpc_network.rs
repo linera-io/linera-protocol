@@ -113,7 +113,7 @@ where
 
         // this somehow feels wrong - using the proxy's public address
         // for routing on an internal network.
-        let proxy_address = format!("http://{}:{}", host, port);
+        let proxy_address = format!("http://{}:{}", public_network.host, public_network.port);
         let notifier_client = NotifierServiceClient::connect(proxy_address).await?;
 
         let server_address = SocketAddr::from_str(&format!("{}:{}", host, port))?;
