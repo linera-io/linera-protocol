@@ -3,6 +3,7 @@
 
 #[cfg(feature = "crypto")]
 pub mod crypto;
+mod ensure;
 mod exported_future;
 mod extensions;
 
