@@ -5,12 +5,12 @@
 
 mod state;
 
-use self::state::{AccountOwner, ApplicationState, FungibleToken};
+use self::state::{AccountOwner, ApplicationState, FungibleToken, Nonce};
 use async_trait::async_trait;
 use linera_sdk::{
     crypto::{BcsSignable, CryptoError, PublicKey, Signature},
-    ApplicationCallResult, CalleeContext, ChainId, Contract, EffectContext, ExecutionResult,
-    FromBcsBytes, OperationContext, Session, SessionCallResult, SessionId,
+    ensure, ApplicationCallResult, CalleeContext, ChainId, Contract, EffectContext,
+    ExecutionResult, FromBcsBytes, OperationContext, Session, SessionCallResult, SessionId,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -35,9 +35,11 @@ impl Contract for FungibleToken {
     ) -> Result<ExecutionResult, Self::Error> {
         let signed_transfer =
             SignedTransfer::from_bcs_bytes(operation).map_err(Error::InvalidOperation)?;
-        let (source, transfer) = self.check_signed_transfer(signed_transfer)?;
+
+        let (source, transfer, nonce) = self.check_signed_transfer(signed_transfer)?;
 
         self.debit(source, transfer.amount)?;
+        self.mark_nonce_as_used(source, nonce);
 
         Ok(self.finish_transfer(transfer))
     }
@@ -88,15 +90,20 @@ impl Contract for FungibleToken {
 impl FungibleToken {
     /// Check if a signed transfer can be executed.
     ///
-    /// If the transfer can be executed, return the source [`AccountOwner`] and the [`Transfer`] to
-    /// be executed.
+    /// If the transfer can be executed, return the source [`AccountOwner`], the [`Transfer`] to be
+    /// executed and the [`Nonce`] used to prevent the transfer from being replayed.
     fn check_signed_transfer(
         &self,
         signed_transfer: SignedTransfer,
-    ) -> Result<(AccountOwner, Transfer), Error> {
+    ) -> Result<(AccountOwner, Transfer, Nonce), Error> {
         let (source, payload) = signed_transfer.check_signature()?;
 
-        Ok((source, payload.transfer))
+        ensure!(
+            payload.nonce >= self.minimum_nonce(&source).ok_or(Error::ReusedNonce)?,
+            Error::ReusedNonce
+        );
+
+        Ok((source, payload.transfer, payload.nonce))
     }
 
     /// Credit an account or forward it to another micro-chain.
@@ -120,8 +127,14 @@ pub struct SignedTransfer {
 }
 
 /// The payload to be signed for a signed transfer.
+///
+/// Contains extra meta-data in to be included in signature to ensure that the transfer can't be
+/// replayed:
+///
+/// - on the same chain
 #[derive(Debug, Deserialize, Serialize)]
 pub struct SignedTransferPayload {
+    nonce: Nonce,
     transfer: Transfer,
 }
 
@@ -188,6 +201,18 @@ pub enum Error {
     /// Invalid serialized [`Transfer`].
     #[error("Cross-application call argument is not a valid serialized transfer")]
     InvalidArgument(#[source] bcs::Error),
+
+    /// Incorrect token ID in operation.
+    #[error("Operation attempts to transfer the incorrect token")]
+    IncorrectTokenId,
+
+    /// Incorrect source chain ID in operation.
+    #[error("Operation is not valid on the current chain")]
+    IncorrectSourceChain,
+
+    /// Attempt to reuse a nonce.
+    #[error("Operation uses a unique transaction number (nonce) that was previously used")]
+    ReusedNonce,
 
     /// Insufficient balance in source account.
     #[error("Source account does not have sufficient balance for transfer")]
