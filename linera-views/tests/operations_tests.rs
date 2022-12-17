@@ -4,9 +4,9 @@
 use linera_views::{
     common::{Batch, KeyValueOperations},
     dynamo_db::DynamoDbContainer,
+    key_value_store_view::KeyValueStoreView,
     memory::MemoryContext,
     rocksdb::DB,
-    key_value_store_view::KeyValueStoreView,
     test_utils::{get_random_key_value_vec_prefix, LocalStackTestContext},
 };
 use rand::SeedableRng;

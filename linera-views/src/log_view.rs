@@ -1,5 +1,5 @@
 use crate::{
-    common::{concatenate_base_flag, Batch, Context, HashOutput},
+    common::{Batch, Context, HashOutput},
     views::{HashView, Hasher, View, ViewError},
 };
 use async_trait::async_trait;
@@ -11,9 +11,11 @@ use std::{fmt::Debug, ops::Range};
 /// 0 : for the storing of the variable stored_count
 /// 1 : for the indices of the log
 /// 2 : for the hash
-const FLAG_STORE: u8 = 0;
-const FLAG_INDEX: u8 = 1;
-const FLAG_HASH: u8 = 2;
+enum KeyTag {
+    Store = 0,
+    Index = 1,
+    Hash = 2,
+}
 
 /// A view that supports logging values of type `T`.
 #[derive(Debug)]
@@ -37,9 +39,9 @@ where
     }
 
     async fn load(context: C) -> Result<Self, ViewError> {
-        let key = concatenate_base_flag(context.base_key(), FLAG_STORE);
+        let key = context.base_tag(KeyTag::Store as u8);
         let stored_count = context.read_key(&key).await?.unwrap_or_default();
-        let key = concatenate_base_flag(context.base_key(), FLAG_HASH);
+        let key = context.base_tag(KeyTag::Hash as u8);
         let hash = context.read_key(&key).await?;
         Ok(Self {
             context,
@@ -68,15 +70,15 @@ where
             for value in &self.new_values {
                 let key = self
                     .context
-                    .derive_flag_key(FLAG_INDEX, &self.stored_count)?;
+                    .derive_tag_key(KeyTag::Index as u8, &self.stored_count)?;
                 batch.put_key_value(key, value)?;
                 self.stored_count += 1;
             }
-            let key = concatenate_base_flag(self.context.base_key(), FLAG_STORE);
+            let key = self.context.base_tag(KeyTag::Store as u8);
             batch.put_key_value(key, &self.stored_count)?;
             self.new_values.clear();
         }
-        let key = concatenate_base_flag(self.context.base_key(), FLAG_HASH);
+        let key = self.context.base_tag(KeyTag::Hash as u8);
         match self.hash {
             None => batch.delete_key(key),
             Some(hash) => batch.put_key_value(key, &hash)?,
@@ -130,7 +132,7 @@ where
         let value = if self.was_cleared {
             self.new_values.get(index).cloned()
         } else if index < self.stored_count {
-            let key = self.context.derive_flag_key(FLAG_INDEX, &index)?;
+            let key = self.context.derive_tag_key(KeyTag::Index as u8, &index)?;
             self.context.read_key(&key).await?
         } else {
             self.new_values.get(index - self.stored_count).cloned()
@@ -141,7 +143,7 @@ where
     async fn read_context(&self, range: Range<usize>) -> Result<Vec<T>, ViewError> {
         let mut values = Vec::with_capacity(range.len());
         for index in range {
-            let key = self.context.derive_flag_key(FLAG_INDEX, &index)?;
+            let key = self.context.derive_tag_key(KeyTag::Index as u8, &index)?;
             match self.context.read_key(&key).await? {
                 None => return Ok(values),
                 Some(value) => values.push(value),

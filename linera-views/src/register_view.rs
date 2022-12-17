@@ -1,5 +1,5 @@
 use crate::{
-    common::{concatenate_base_flag, Batch, Context, HashOutput},
+    common::{Batch, Context, HashOutput},
     views::{HashView, Hasher, View, ViewError},
 };
 use async_trait::async_trait;
@@ -10,8 +10,10 @@ use std::fmt::Debug;
 ///
 /// 0 : for the storing of the value
 /// 1 : for the hash
-const FLAG_VALUE: u8 = 0;
-const FLAG_HASH: u8 = 1;
+enum KeyTag {
+    Value = 0,
+    Hash = 1,
+}
 
 /// A view that supports modifying a single value of type `T`.
 #[derive(Debug)]
@@ -34,9 +36,9 @@ where
     }
 
     async fn load(context: C) -> Result<Self, ViewError> {
-        let key = concatenate_base_flag(context.base_key(), FLAG_VALUE);
+        let key = context.base_tag(KeyTag::Value as u8);
         let stored_value = context.read_key(&key).await?.unwrap_or_default();
-        let key = concatenate_base_flag(context.base_key(), FLAG_HASH);
+        let key = context.base_tag(KeyTag::Hash as u8);
         let hash = context.read_key(&key).await?;
         Ok(Self {
             context,
@@ -53,11 +55,11 @@ where
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
         if let Some(value) = self.update.take() {
-            let key = concatenate_base_flag(self.context.base_key(), FLAG_VALUE);
+            let key = self.context.base_tag(KeyTag::Value as u8);
             batch.put_key_value(key, &value)?;
             self.stored_value = value;
         }
-        let key = concatenate_base_flag(self.context.base_key(), FLAG_HASH);
+        let key = self.context.base_tag(KeyTag::Hash as u8);
         match self.hash {
             None => batch.delete_key(key),
             Some(hash) => batch.put_key_value(key, &hash)?,

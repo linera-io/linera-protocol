@@ -94,7 +94,6 @@ impl StateStore for KeyValueStoreTestStore {
         log::trace!("Acquiring lock on {:?}", id);
         let guard = state.clone().lock_owned().await;
         let base_key = bcs::to_bytes(&id)?;
-        println!("base_key={:?}", base_key);
         let context = KeyValueStoreMemoryContext::new(guard, base_key, id);
         StateView::load(context).await
     }
@@ -183,7 +182,6 @@ impl Default for TestConfig {
         }
     }
 }
-
 
 impl TestConfig {
     fn samples() -> Vec<TestConfig> {
@@ -450,7 +448,13 @@ where
             );
             view.collection.remove_entry("hola".to_string()).unwrap();
         }
-        if config.with_x1 && config.with_x2 && config.with_map && config.with_queue && config.with_log && config.with_collection {
+        if config.with_x1
+            && config.with_x2
+            && config.with_map
+            && config.with_queue
+            && config.with_log
+            && config.with_collection
+        {
             assert_ne!(view.hash().await.unwrap(), stored_hash);
         }
         view.save().await.unwrap();
@@ -874,4 +878,81 @@ async fn compute_hash_view_iter_large() {
     for _ in 0..n_iter {
         compute_hash_view_iter(&mut rng, n, k).await;
     }
+}
+
+#[cfg(test)]
+async fn check_hash_memoization_persistence<S>(
+    rng: &mut impl RngCore,
+    store: &mut S,
+    key_value_vector: Vec<(Vec<u8>, Vec<u8>)>,
+) where
+    S: StateStore,
+    ViewError: From<<<S as StateStore>::Context as Context>::Error>,
+{
+    let mut hash = {
+        let mut view = store.load(1).await.unwrap();
+        view.hash().await.unwrap()
+    };
+    for pair in key_value_vector {
+        let str0 = format!("{:?}", &pair.0);
+        let str1 = format!("{:?}", &pair.1);
+        let pair0_first_u8 = *pair.0.first().unwrap();
+        let pair1_first_u8 = *pair.1.first().unwrap();
+        let thr = rng.gen_range(0..5);
+        if thr == 0 || thr == 1 {
+            let mut view = store.load(1).await.unwrap();
+            view.x1.set(pair0_first_u8 as u64);
+            view.x2.set(pair1_first_u8 as u32);
+            view.log.push(pair0_first_u8 as u32);
+            view.log.push(pair1_first_u8 as u32);
+            view.queue.push_back(pair0_first_u8 as u64);
+            view.queue.push_back(pair1_first_u8 as u64);
+            view.map.insert(&str0, pair1_first_u8 as usize).unwrap();
+            view.map.insert(&str1, pair0_first_u8 as usize).unwrap();
+            view.key_value_store.insert(pair.0.clone(), pair.1.clone());
+            if thr == 0 {
+                view.rollback();
+                let hash_new = view.hash().await.unwrap();
+                assert_eq!(hash, hash_new);
+            } else {
+                let hash_new = view.hash().await.unwrap();
+                assert_ne!(hash, hash_new);
+                view.save().await.unwrap();
+                hash = hash_new;
+            }
+        }
+        if thr == 2 {
+            let mut view = store.load(1).await.unwrap();
+            let hash_new = view.hash().await.unwrap();
+            assert_eq!(hash, hash_new);
+        }
+        if thr == 3 {
+            let mut view = store.load(1).await.unwrap();
+            let subview = view.collection.load_entry(str0).await.unwrap();
+            subview.push(pair1_first_u8 as u32);
+            let hash_new = view.hash().await.unwrap();
+            assert_ne!(hash, hash_new);
+            view.save().await.unwrap();
+            hash = hash_new;
+        }
+        if thr == 4 {
+            let mut view = store.load(1).await.unwrap();
+            if view.queue.count() > 0 {
+                view.queue.delete_front();
+                let hash_new = view.hash().await.unwrap();
+                assert_ne!(hash, hash_new);
+                view.save().await.unwrap();
+                hash = hash_new;
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn check_hash_memoization_persistence_large() {
+    let n = 100;
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2);
+    let key_value_vector = get_random_key_value_vec(&mut rng, n);
+    let mut store = MemoryTestStore::default();
+    check_hash_memoization_persistence(&mut rng, &mut store, key_value_vector).await;
 }
