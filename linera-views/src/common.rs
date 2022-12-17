@@ -13,20 +13,7 @@ use std::{
     },
 };
 
-#[derive(Debug)]
-pub enum WriteOperation {
-    Delete { key: Vec<u8> },
-    DeletePrefix { key_prefix: Vec<u8> },
-    Put { key: Vec<u8>, value: Vec<u8> },
-}
-
 pub type HashOutput = generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Digest>::OutputSize>;
-
-/// A batch of writes inside a transaction;
-#[derive(Default)]
-pub struct Batch {
-    pub(crate) operations: Vec<WriteOperation>,
-}
 
 /// When wanting to find the entries in a BTreeMap with a specific prefix,
 /// one option is to iterate over all keys. Another is to select an interval
@@ -53,6 +40,19 @@ pub fn get_interval(key_prefix: Vec<u8>) -> (Bound<Vec<u8>>, Bound<Vec<u8>>) {
         Some(val) => Excluded(val),
     };
     (Included(key_prefix), upper_bound)
+}
+
+#[derive(Debug)]
+pub enum WriteOperation {
+    Delete { key: Vec<u8> },
+    DeletePrefix { key_prefix: Vec<u8> },
+    Put { key: Vec<u8>, value: Vec<u8> },
+}
+
+/// A batch of writes inside a transaction;
+#[derive(Default)]
+pub struct Batch {
+    pub(crate) operations: Vec<WriteOperation>,
 }
 
 impl Batch {

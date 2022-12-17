@@ -16,7 +16,7 @@ const FLAG_INDEX: u8 = 1;
 const FLAG_HASH: u8 = 2;
 
 /// A view that supports logging values of type `T`.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct LogView<C, T> {
     context: C,
     was_cleared: bool,
@@ -30,7 +30,7 @@ impl<C, T> View<C> for LogView<C, T>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    T: Send + Sync + Clone + Debug + Serialize,
+    T: Send + Sync + Clone + Serialize,
 {
     fn context(&self) -> &C {
         &self.context
@@ -98,7 +98,6 @@ where
 impl<C, T> LogView<C, T>
 where
     C: Context,
-    T: Debug,
 {
     /// Push a value to the end of the log.
     pub fn push(&mut self, value: T) {
@@ -124,7 +123,7 @@ impl<C, T> LogView<C, T>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    T: Send + Sync + Clone + Debug + DeserializeOwned,
+    T: Send + Sync + Clone + DeserializeOwned,
 {
     /// Read the logged values in the given range (including staged ones).
     pub async fn get(&self, index: usize) -> Result<Option<T>, ViewError> {
@@ -191,7 +190,7 @@ impl<C, T> HashView<C> for LogView<C, T>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    T: Send + Sync + Clone + Debug + Serialize + DeserializeOwned,
+    T: Send + Sync + Clone + Serialize + DeserializeOwned,
 {
     type Hasher = sha2::Sha512;
 

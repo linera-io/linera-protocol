@@ -16,7 +16,7 @@ use tokio::sync::{Mutex, OwnedMutexGuard};
 
 /// A view that supports accessing a collection of views of the same kind, indexed by a
 /// key, one subview at a time.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct CollectionView<C, I, W> {
     context: C,
     was_cleared: bool,
@@ -546,7 +546,9 @@ where
                     let hash = view.hash().await?;
                     hasher.write_all(hash.as_ref())?;
                 }
-                Ok(hasher.finalize())
+                let hash = hasher.finalize();
+                self.hash = Some(hash);
+                Ok(hash)
             }
         }
     }

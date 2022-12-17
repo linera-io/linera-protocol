@@ -104,6 +104,7 @@ impl StateStore for KeyValueStoreTestStore {
         log::trace!("Acquiring lock on {:?}", id);
         let guard = state.clone().lock_owned().await;
         let base_key = bcs::to_bytes(&id)?;
+        println!("base_key={:?}", base_key);
         let context = KeyValueStoreMemoryContext::new(guard, base_key, id);
         StateView::load(context).await
     }
@@ -170,55 +171,68 @@ impl StateStore for DynamoDbTestStore {
 
 #[derive(Debug)]
 pub struct TestConfig {
+    with_x1: bool,
+    with_x2: bool,
     with_flush: bool,
     with_map: bool,
     with_queue: bool,
     with_log: bool,
+    with_collection: bool,
 }
 
 impl Default for TestConfig {
     fn default() -> Self {
         Self {
+            with_x1: true,
+            with_x2: true,
             with_flush: true,
             with_map: true,
             with_queue: true,
             with_log: true,
+            with_collection: true,
         }
     }
 }
+
 
 impl TestConfig {
     fn samples() -> Vec<TestConfig> {
         vec![
             TestConfig {
+                with_x1: false,
+                with_x2: false,
                 with_flush: false,
                 with_map: false,
                 with_queue: false,
                 with_log: false,
+                with_collection: false,
             },
             TestConfig {
+                with_x1: true,
+                with_x2: true,
+                with_flush: false,
+                with_map: false,
+                with_queue: false,
+                with_log: false,
+                with_collection: false,
+            },
+            TestConfig {
+                with_x1: false,
+                with_x2: false,
                 with_flush: true,
                 with_map: false,
-                with_queue: false,
-                with_log: false,
+                with_queue: true,
+                with_log: true,
+                with_collection: false,
             },
             TestConfig {
-                with_flush: false,
+                with_x1: false,
+                with_x2: false,
+                with_flush: true,
                 with_map: true,
                 with_queue: false,
                 with_log: false,
-            },
-            TestConfig {
-                with_flush: false,
-                with_map: false,
-                with_queue: true,
-                with_log: false,
-            },
-            TestConfig {
-                with_flush: false,
-                with_map: false,
-                with_queue: false,
-                with_log: true,
+                with_collection: true,
             },
             TestConfig::default(),
         ]
@@ -237,15 +251,23 @@ where
     };
     {
         let mut view = store.load(1).await.unwrap();
-        assert_eq!(view.x1.extra(), &1);
+        if config.with_x1 {
+            assert_eq!(view.x1.extra(), &1);
+        }
         let hash = view.hash().await.unwrap();
         assert_eq!(hash, default_hash);
-        assert_eq!(view.x1.get(), &0);
-        view.x1.set(1);
+        if config.with_x1 {
+            assert_eq!(view.x1.get(), &0);
+            view.x1.set(1);
+        }
         view.rollback();
         assert_eq!(view.hash().await.unwrap(), hash);
-        view.x2.set(2);
-        assert_ne!(view.hash().await.unwrap(), hash);
+        if config.with_x2 {
+            view.x2.set(2);
+        }
+        if config.with_x2 {
+            assert_ne!(view.hash().await.unwrap(), hash);
+        }
         if config.with_log {
             view.log.push(4);
         }
@@ -268,8 +290,12 @@ where
                 .unwrap();
             assert_eq!(count, 1);
         }
-        assert_eq!(view.x1.get(), &0);
-        assert_eq!(view.x2.get(), &2);
+        if config.with_x1 {
+            assert_eq!(view.x1.get(), &0);
+        }
+        if config.with_x2 {
+            assert_eq!(view.x2.get(), &2);
+        }
         if config.with_log {
             assert_eq!(view.log.read(0..10).await.unwrap(), vec![4]);
         }
@@ -279,7 +305,7 @@ where
         if config.with_map {
             assert_eq!(view.map.get(&"Hello".to_string()).await.unwrap(), Some(5));
         }
-        {
+        if config.with_collection {
             let subview = view
                 .collection
                 .load_entry("hola".to_string())
@@ -287,21 +313,19 @@ where
                 .unwrap();
             subview.push(17);
             subview.push(18);
-        }
-        assert_eq!(
-            view.collection.indices().await.unwrap(),
-            vec!["hola".to_string()]
-        );
-        let mut count = 0;
-        view.collection
-            .for_each_raw_index(|_index: Vec<u8>| {
-                count += 1;
-                Ok(())
-            })
-            .await
-            .unwrap();
-        assert_eq!(count, 1);
-        {
+            assert_eq!(
+                view.collection.indices().await.unwrap(),
+                vec!["hola".to_string()]
+            );
+            let mut count = 0;
+            view.collection
+                .for_each_raw_index(|_index: Vec<u8>| {
+                    count += 1;
+                    Ok(())
+                })
+                .await
+                .unwrap();
+            assert_eq!(count, 1);
             let subview = view
                 .collection
                 .load_entry("hola".to_string())
@@ -313,8 +337,12 @@ where
     let staged_hash = {
         let mut view = store.load(1).await.unwrap();
         assert_eq!(view.hash().await.unwrap(), default_hash);
-        assert_eq!(view.x1.get(), &0);
-        assert_eq!(view.x2.get(), &0);
+        if config.with_x1 {
+            assert_eq!(view.x1.get(), &0);
+        }
+        if config.with_x2 {
+            assert_eq!(view.x2.get(), &0);
+        }
         if config.with_log {
             assert_eq!(view.log.read(0..10).await.unwrap(), vec![]);
         }
@@ -324,15 +352,13 @@ where
         if config.with_map {
             assert_eq!(view.map.get(&"Hello".to_string()).await.unwrap(), None);
         }
-        {
+        if config.with_collection {
             let subview = view
                 .collection
                 .load_entry("hola".to_string())
                 .await
                 .unwrap();
             assert_eq!(subview.read(0..10).await.unwrap(), vec![]);
-        }
-        {
             let subview = view
                 .collection2
                 .load_entry("ciao".to_string())
@@ -342,7 +368,9 @@ where
             subsubview.set(3);
             assert_eq!(subsubview.get(), &3);
         }
-        view.x1.set(1);
+        if config.with_x1 {
+            view.x1.set(1);
+        }
         if config.with_log {
             view.log.push(4);
         }
@@ -354,7 +382,7 @@ where
             view.map.insert(&"Hi".to_string(), 2).unwrap();
             view.map.remove(&"Hi".to_string()).unwrap();
         }
-        {
+        if config.with_collection {
             let subview = view
                 .collection
                 .load_entry("hola".to_string())
@@ -366,16 +394,24 @@ where
         if config.with_flush {
             view.save().await.unwrap();
         }
-        let hash = view.hash().await.unwrap();
+        let hash1 = view.hash().await.unwrap();
+        let hash2 = view.hash().await.unwrap();
         view.save().await.unwrap();
-        hash
+        let hash3 = view.hash().await.unwrap();
+        assert_eq!(hash1, hash2);
+        assert_eq!(hash1, hash3);
+        hash1
     };
     {
         let mut view = store.load(1).await.unwrap();
         let stored_hash = view.hash().await.unwrap();
         assert_eq!(staged_hash, stored_hash);
-        assert_eq!(view.x1.get(), &1);
-        assert_eq!(view.x2.get(), &0);
+        if config.with_x1 {
+            assert_eq!(view.x1.get(), &1);
+        }
+        if config.with_x2 {
+            assert_eq!(view.x2.get(), &0);
+        }
         if config.with_log {
             assert_eq!(view.log.read(0..10).await.unwrap(), vec![4]);
         }
@@ -399,7 +435,7 @@ where
             assert_eq!(view.map.get(&"Hello".to_string()).await.unwrap(), Some(5));
             assert_eq!(view.map.get(&"Hi".to_string()).await.unwrap(), None);
         }
-        {
+        if config.with_collection {
             let subview = view
                 .collection
                 .load_entry("hola".to_string())
@@ -410,7 +446,7 @@ where
         if config.with_flush {
             view.save().await.unwrap();
         }
-        {
+        if config.with_collection {
             let subview = view
                 .collection2
                 .load_entry("ciao".to_string())
@@ -418,18 +454,20 @@ where
                 .unwrap();
             let subsubview = subview.load_entry("!".to_string()).await.unwrap();
             assert_eq!(subsubview.get(), &3);
+            assert_eq!(
+                view.collection.indices().await.unwrap(),
+                vec!["hola".to_string()]
+            );
+            view.collection.remove_entry("hola".to_string()).unwrap();
         }
-        assert_eq!(
-            view.collection.indices().await.unwrap(),
-            vec!["hola".to_string()]
-        );
-        view.collection.remove_entry("hola".to_string()).unwrap();
-        assert_ne!(view.hash().await.unwrap(), stored_hash);
+        if config.with_x1 && config.with_x2 && config.with_map && config.with_queue && config.with_log && config.with_collection {
+            assert_ne!(view.hash().await.unwrap(), stored_hash);
+        }
         view.save().await.unwrap();
     }
     {
         let mut view = store.load(1).await.unwrap();
-        {
+        if config.with_collection {
             let mut subview = view
                 .collection4
                 .try_load_entry("hola".to_string())
@@ -452,7 +490,7 @@ where
     }
     {
         let mut view = store.load(1).await.unwrap();
-        {
+        if config.with_collection {
             let subview = view
                 .collection
                 .load_entry("hola".to_string())
