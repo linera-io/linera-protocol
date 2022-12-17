@@ -4,7 +4,9 @@
 use linera_views::{
     common::{Batch, KeyValueOperations},
     dynamo_db::DynamoDbContainer,
+    memory::MemoryContext,
     rocksdb::DB,
+    key_value_store_view::KeyValueStoreView,
     test_utils::{get_random_key_value_vec_prefix, LocalStackTestContext},
 };
 use rand::SeedableRng;
@@ -99,6 +101,15 @@ async fn test_ordering_dynamodb() {
     .await
     .unwrap();
     //
+    test_ordering_keys(key_value_operation).await;
+}
+
+#[tokio::test]
+async fn test_ordering_keyvaluestoreview_memory() {
+    let map = Arc::new(Mutex::new(BTreeMap::new()));
+    let guard = map.clone().lock_owned().await;
+    let context = MemoryContext::new(guard, ());
+    let key_value_operation = KeyValueStoreView::new(context);
     test_ordering_keys(key_value_operation).await;
 }
 

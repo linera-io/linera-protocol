@@ -14,7 +14,7 @@ const FLAG_VALUE: u8 = 0;
 const FLAG_HASH: u8 = 1;
 
 /// A view that supports modifying a single value of type `T`.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct RegisterView<C, T> {
     context: C,
     stored_value: T,
@@ -27,7 +27,7 @@ impl<C, T> View<C> for RegisterView<C, T>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    T: Send + Sync + Default + Serialize + DeserializeOwned,
+    T: Default + Send + Sync + Serialize + DeserializeOwned,
 {
     fn context(&self) -> &C {
         &self.context

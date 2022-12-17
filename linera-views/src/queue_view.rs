@@ -16,7 +16,7 @@ const FLAG_INDEX: u8 = 1;
 const FLAG_HASH: u8 = 2;
 
 /// A view that supports a FIFO queue for values of type `T`.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct QueueView<C, T> {
     context: C,
     stored_indices: Range<usize>,

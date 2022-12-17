@@ -14,7 +14,7 @@ const FLAG_INDEX: u8 = 0;
 const FLAG_HASH: u8 = 1;
 
 /// A view that supports inserting and removing values indexed by a key.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct MapView<C, I, V> {
     context: C,
     was_cleared: bool,
