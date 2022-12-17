@@ -271,19 +271,6 @@ impl<T, E> Iterator for SimpleTypeIterator<T, E> {
     }
 }
 
-#[inline]
-pub fn concatenate_base_flag(mut base: Vec<u8>, flag: u8) -> Vec<u8> {
-    base.extend_from_slice(&[flag]);
-    base
-}
-
-#[inline]
-pub fn concatenate_base_flag_index(mut base: Vec<u8>, flag: u8, index: &[u8]) -> Vec<u8> {
-    base.extend_from_slice(&[flag]);
-    base.extend_from_slice(index);
-    base
-}
-
 /// The context in which a view is operated. Typically, this includes the client to
 /// connect to the database and the address of the current entry.
 #[async_trait]
@@ -301,11 +288,17 @@ pub trait Context {
     /// Getter for the address of the current entry (aka the base_key)
     fn base_key(&self) -> Vec<u8>;
 
+    /// Concatenate the base_key and tag
+    fn base_tag(&self, tag: u8) -> Vec<u8>;
+
+    /// Concatenate the base_key, tag and index
+    fn base_tag_index(&self, tag: u8, index: &[u8]) -> Vec<u8>;
+
     /// Obtain the Vec<u8> key from the key by serialization and using the base_key
     fn derive_key<I: Serialize>(&self, index: &I) -> Result<Vec<u8>, Self::Error>;
 
     /// Obtain the Vec<u8> key from the key by serialization and using the base_key
-    fn derive_flag_key<I: Serialize>(&self, flag: u8, index: &I) -> Result<Vec<u8>, Self::Error>;
+    fn derive_tag_key<I: Serialize>(&self, tag: u8, index: &I) -> Result<Vec<u8>, Self::Error>;
 
     /// Obtain the short Vec<u8> key from the key by serialization
     fn derive_short_key<I: Serialize>(&self, index: &I) -> Result<Vec<u8>, Self::Error>;
@@ -378,6 +371,19 @@ where
         self.base_key.clone()
     }
 
+    fn base_tag(&self, tag: u8) -> Vec<u8> {
+        let mut key = self.base_key.clone();
+        key.extend_from_slice(&[tag]);
+        key
+    }
+
+    fn base_tag_index(&self, tag: u8, index: &[u8]) -> Vec<u8> {
+        let mut key = self.base_key.clone();
+        key.extend_from_slice(&[tag]);
+        key.extend_from_slice(index);
+        key
+    }
+
     fn derive_key<I: Serialize>(&self, index: &I) -> Result<Vec<u8>, Self::Error> {
         let mut key = self.base_key.clone();
         bcs::serialize_into(&mut key, index)?;
@@ -388,9 +394,9 @@ where
         Ok(key)
     }
 
-    fn derive_flag_key<I: Serialize>(&self, flag: u8, index: &I) -> Result<Vec<u8>, Self::Error> {
+    fn derive_tag_key<I: Serialize>(&self, tag: u8, index: &I) -> Result<Vec<u8>, Self::Error> {
         let mut key = self.base_key.clone();
-        key.extend_from_slice(&[flag]);
+        key.extend_from_slice(&[tag]);
         bcs::serialize_into(&mut key, index)?;
         Ok(key)
     }

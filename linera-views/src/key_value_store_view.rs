@@ -1,5 +1,8 @@
 use crate::{
-    common::{Batch, Context, ContextFromDb, HashOutput, KeyValueOperations, SimpleTypeIterator, WriteOperation, concatenate_base_flag, concatenate_base_flag_index},
+    common::{
+        Batch, Context, ContextFromDb, HashOutput, KeyValueOperations, SimpleTypeIterator,
+        WriteOperation,
+    },
     memory::{MemoryContext, MemoryStoreMap},
     views::{HashView, Hasher, View, ViewError},
 };
@@ -11,8 +14,10 @@ use tokio::sync::OwnedMutexGuard;
 ///
 /// 0 : for the indices of the mapview
 /// 1 : for the hash
-const FLAG_INDEX: u8 = 0;
-const FLAG_HASH: u8 = 1;
+enum KeyTag {
+    Index = 0,
+    Hash = 1,
+}
 
 /// A view that represents the KeyValueOperations
 #[derive(Debug, Clone)]
@@ -34,8 +39,8 @@ where
     }
 
     async fn load(context: C) -> Result<Self, ViewError> {
-        let key = concatenate_base_flag(context.base_key(), FLAG_HASH);
-        let hash : Option<HashOutput> = context.read_key(&key).await?;
+        let key = context.base_tag(KeyTag::Hash as u8);
+        let hash = context.read_key(&key).await?;
         Ok(Self {
             context,
             was_cleared: false,
@@ -56,21 +61,20 @@ where
             batch.delete_key_prefix(self.context.base_key());
             for (index, update) in mem::take(&mut self.updates) {
                 if let Some(value) = update {
-                    let key =
-                        concatenate_base_flag_index(self.context.base_key(), FLAG_INDEX, &index);
+                    let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
                     batch.put_key_value_bytes(key, value);
                 }
             }
         } else {
             for (index, update) in mem::take(&mut self.updates) {
-                let key = concatenate_base_flag_index(self.context.base_key(), FLAG_INDEX, &index);
+                let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
                 match update {
                     None => batch.delete_key(key),
-                    Some(value) => batch.put_key_value_bytes(key, value)
+                    Some(value) => batch.put_key_value_bytes(key, value),
                 }
             }
         }
-        let key = concatenate_base_flag(self.context.base_key(), FLAG_HASH);
+        let key = self.context.base_tag(KeyTag::Hash as u8);
         match self.hash {
             None => batch.delete_key(key),
             Some(hash) => batch.put_key_value(key, &hash)?,
@@ -107,7 +111,7 @@ where
     where
         F: FnMut(Vec<u8>) -> Result<(), ViewError> + Send,
     {
-        let key_prefix = concatenate_base_flag(self.context.base_key(), FLAG_INDEX);
+        let key_prefix = self.context.base_tag(KeyTag::Index as u8);
         let mut iter = self.updates.iter();
         let mut pair = iter.next();
         if !self.was_cleared {
@@ -157,7 +161,7 @@ where
     where
         F: FnMut(Vec<u8>, Vec<u8>) -> Result<(), ViewError> + Send,
     {
-        let key_prefix = concatenate_base_flag(self.context.base_key(), FLAG_INDEX);
+        let key_prefix = self.context.base_tag(KeyTag::Index as u8);
         let mut iter = self.updates.iter();
         let mut pair = iter.next();
         if !self.was_cleared {
@@ -220,7 +224,7 @@ where
         if self.was_cleared {
             return Ok(None);
         }
-        let key = concatenate_base_flag_index(self.context.base_key(), FLAG_INDEX, index);
+        let key = self.context.base_tag_index(KeyTag::Index as u8, index);
         let value = self.context.read_key_bytes(&key).await?;
         Ok(value)
     }
@@ -259,7 +263,7 @@ where
         if self.was_cleared {
             return Ok(None);
         }
-        let key = concatenate_base_flag_index(self.context.base_key(), FLAG_INDEX, key);
+        let key = self.context.base_tag_index(KeyTag::Index as u8, key);
         let val = self.context.read_key_bytes(&key).await?;
         Ok(val)
     }
@@ -269,7 +273,7 @@ where
         key_prefix: &[u8],
     ) -> Result<Self::KeyIterator, ViewError> {
         let len = key_prefix.len();
-        let key_prefix_full = concatenate_base_flag_index(self.context.base_key(), FLAG_INDEX, key_prefix);
+        let key_prefix_full = self.context.base_tag_index(KeyTag::Index as u8, key_prefix);
         let mut keys = Vec::new();
         if !self.was_cleared {
             for short_key in self
@@ -298,7 +302,7 @@ where
         key_prefix: &[u8],
     ) -> Result<Self::KeyValueIterator, ViewError> {
         let len = key_prefix.len();
-        let key_prefix_full = concatenate_base_flag_index(self.context.base_key(), FLAG_INDEX, key_prefix);
+        let key_prefix_full = self.context.base_tag_index(KeyTag::Index as u8, key_prefix);
         let mut key_values = Vec::new();
         if !self.was_cleared {
             for (short_key, value) in self
@@ -330,15 +334,17 @@ where
         for op in batch.operations {
             match op {
                 WriteOperation::Delete { key } => {
-                    let key = concatenate_base_flag_index(self.context.base_key(), FLAG_INDEX, &key);
+                    let key = self.context.base_tag_index(KeyTag::Index as u8, &key);
                     batch_new.delete_key(key);
                 }
                 WriteOperation::Put { key, value } => {
-                    let key = concatenate_base_flag_index(self.context.base_key(), FLAG_INDEX, &key);
+                    let key = self.context.base_tag_index(KeyTag::Index as u8, &key);
                     batch_new.put_key_value_bytes(key, value);
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
-                    let key_prefix = concatenate_base_flag_index(self.context.base_key(), FLAG_INDEX, &key_prefix);
+                    let key_prefix = self
+                        .context
+                        .base_tag_index(KeyTag::Index as u8, &key_prefix);
                     batch_new.delete_key_prefix(key_prefix);
                 }
             }

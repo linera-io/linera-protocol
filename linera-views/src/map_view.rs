@@ -1,5 +1,5 @@
 use crate::{
-    common::{concatenate_base_flag, concatenate_base_flag_index, Batch, Context, HashOutput},
+    common::{Batch, Context, HashOutput},
     views::{HashView, Hasher, View, ViewError},
 };
 use async_trait::async_trait;
@@ -10,8 +10,10 @@ use std::{collections::BTreeMap, fmt::Debug, marker::PhantomData, mem};
 ///
 /// 0 : for the indices of the mapview
 /// 1 : for the hash
-const FLAG_INDEX: u8 = 0;
-const FLAG_HASH: u8 = 1;
+enum KeyTag {
+    Index = 0,
+    Hash = 1,
+}
 
 /// A view that supports inserting and removing values indexed by a key.
 #[derive(Debug)]
@@ -36,7 +38,7 @@ where
     }
 
     async fn load(context: C) -> Result<Self, ViewError> {
-        let key = concatenate_base_flag(context.base_key(), FLAG_HASH);
+        let key = context.base_tag(KeyTag::Hash as u8);
         let hash = context.read_key(&key).await?;
         Ok(Self {
             context,
@@ -59,21 +61,20 @@ where
             batch.delete_key_prefix(self.context.base_key());
             for (index, update) in mem::take(&mut self.updates) {
                 if let Some(value) = update {
-                    let key =
-                        concatenate_base_flag_index(self.context.base_key(), FLAG_INDEX, &index);
+                    let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
                     batch.put_key_value(key, &value)?;
                 }
             }
         } else {
             for (index, update) in mem::take(&mut self.updates) {
-                let key = concatenate_base_flag_index(self.context.base_key(), FLAG_INDEX, &index);
+                let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
                 match update {
                     None => batch.delete_key(key),
                     Some(value) => batch.put_key_value(key, &value)?,
                 }
             }
         }
-        let key = concatenate_base_flag(self.context.base_key(), FLAG_HASH);
+        let key = self.context.base_tag(KeyTag::Hash as u8);
         match self.hash {
             None => batch.delete_key(key),
             Some(hash) => batch.put_key_value(key, &hash)?,
@@ -139,7 +140,7 @@ where
         if self.was_cleared {
             return Ok(None);
         }
-        let key = self.context.derive_flag_key(FLAG_INDEX, &index)?;
+        let key = self.context.derive_tag_key(KeyTag::Index as u8, &index)?;
         Ok(self.context.read_key(&key).await?)
     }
 
@@ -164,7 +165,7 @@ where
         let mut iter = self.updates.iter();
         let mut pair = iter.next();
         if !self.was_cleared {
-            let base = concatenate_base_flag(self.context.base_key(), FLAG_INDEX);
+            let base = self.context.base_tag(KeyTag::Index as u8);
             for index in self.context.find_stripped_keys_by_prefix(&base).await? {
                 loop {
                     match pair {
@@ -228,7 +229,7 @@ where
         let mut iter = self.updates.iter();
         let mut pair = iter.next();
         if !self.was_cleared {
-            let base = concatenate_base_flag(self.context.base_key(), FLAG_INDEX);
+            let base = self.context.base_tag(KeyTag::Index as u8);
             for (index, index_val) in self
                 .context
                 .find_stripped_key_values_by_prefix(&base)

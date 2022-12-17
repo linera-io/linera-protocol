@@ -1,5 +1,5 @@
 use crate::{
-    common::{concatenate_base_flag, Batch, Context, HashOutput},
+    common::{Batch, Context, HashOutput},
     views::{HashView, Hasher, View, ViewError},
 };
 use async_trait::async_trait;
@@ -11,9 +11,11 @@ use std::{collections::VecDeque, fmt::Debug, ops::Range};
 /// 0 : for the storing of the variable stored_count
 /// 1 : for the indices of the log
 /// 2 : for the hash
-const FLAG_STORE: u8 = 0;
-const FLAG_INDEX: u8 = 1;
-const FLAG_HASH: u8 = 2;
+enum KeyTag {
+    Store = 0,
+    Index = 1,
+    Hash = 2,
+}
 
 /// A view that supports a FIFO queue for values of type `T`.
 #[derive(Debug)]
@@ -37,9 +39,9 @@ where
     }
 
     async fn load(context: C) -> Result<Self, ViewError> {
-        let key = concatenate_base_flag(context.base_key(), FLAG_STORE);
+        let key = context.base_tag(KeyTag::Store as u8);
         let stored_indices = context.read_key(&key).await?.unwrap_or_default();
-        let key = concatenate_base_flag(context.base_key(), FLAG_HASH);
+        let key = context.base_tag(KeyTag::Hash as u8);
         let hash = context.read_key(&key).await?;
         Ok(Self {
             context,
@@ -60,10 +62,10 @@ where
         if self.front_delete_count > 0 {
             let deletion_range = self.stored_indices.clone().take(self.front_delete_count);
             self.stored_indices.start += self.front_delete_count;
-            let key = concatenate_base_flag(self.context.base_key(), FLAG_STORE);
+            let key = self.context.base_tag(KeyTag::Store as u8);
             batch.put_key_value(key, &self.stored_indices)?;
             for index in deletion_range {
-                let key = self.context.derive_flag_key(FLAG_INDEX, &index)?;
+                let key = self.context.derive_tag_key(KeyTag::Index as u8, &index)?;
                 batch.delete_key(key);
             }
         }
@@ -71,11 +73,11 @@ where
             for value in &self.new_back_values {
                 let key = self
                     .context
-                    .derive_flag_key(FLAG_INDEX, &self.stored_indices.end)?;
+                    .derive_tag_key(KeyTag::Index as u8, &self.stored_indices.end)?;
                 batch.put_key_value(key, value)?;
                 self.stored_indices.end += 1;
             }
-            let key = concatenate_base_flag(self.context.base_key(), FLAG_STORE);
+            let key = self.context.base_tag(KeyTag::Store as u8);
             batch.put_key_value(key, &self.stored_indices)?;
             self.new_back_values.clear();
         }
@@ -101,7 +103,7 @@ where
     T: Send + Sync + Clone + Serialize + DeserializeOwned,
 {
     async fn get(&self, index: usize) -> Result<Option<T>, ViewError> {
-        let key = self.context.derive_flag_key(FLAG_INDEX, &index)?;
+        let key = self.context.derive_tag_key(KeyTag::Index as u8, &index)?;
         Ok(self.context.read_key(&key).await?)
     }
 
@@ -156,7 +158,7 @@ where
     async fn read_context(&self, range: Range<usize>) -> Result<Vec<T>, ViewError> {
         let mut values = Vec::with_capacity(range.len());
         for index in range {
-            let key = self.context.derive_flag_key(FLAG_INDEX, &index)?;
+            let key = self.context.derive_tag_key(KeyTag::Index as u8, &index)?;
             match self.context.read_key(&key).await? {
                 None => return Ok(values),
                 Some(value) => values.push(value),
