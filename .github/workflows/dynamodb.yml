@@ -23,6 +23,8 @@ jobs:
     - uses: Swatinem/rust-cache@v2
     - name: Install Protoc
       uses: arduino/setup-protoc@v1
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Build
       run: cargo build --locked
     - name: Setup local DynamoDB instance

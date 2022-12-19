@@ -26,6 +26,8 @@ jobs:
     - uses: Swatinem/rust-cache@v2
     - name: Install Protoc
       uses: arduino/setup-protoc@v1
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Rustfmt
       run: cargo fmt -- --check --config unstable_features=true --config imports_granularity=Crate
     - name: Clippy
@@ -46,6 +48,8 @@ jobs:
         toolchain: nightly
     - name: Install Protoc
       uses: arduino/setup-protoc@v1
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Install cargo-udeps
       run: cargo install cargo-udeps --locked
     - name: Check for unused dependencies
