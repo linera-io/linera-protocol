@@ -26,6 +26,8 @@ jobs:
     - uses: Swatinem/rust-cache@v2
     - name: Install Protoc
       uses: arduino/setup-protoc@v1
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Build example contract
       run: |
         cargo build --target wasm32-unknown-unknown -p linera-sdk --examples
