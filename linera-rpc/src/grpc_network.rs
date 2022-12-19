@@ -42,7 +42,7 @@ use std::{
 use thiserror::Error;
 use tokio::task::{JoinError, JoinHandle};
 use tonic::transport::{Channel, Server};
-use tonic::{Request, Response};
+use tonic::{Request, Response, Status};
 use crate::grpc_network::grpc::{ChainId, Notification};
 use crate::grpc_network::grpc::notifier_service_client::NotifierServiceClient;
 
@@ -60,7 +60,7 @@ pub struct GrpcServer<S> {
     shard_id: ShardId,
     network: ValidatorInternalNetworkConfig,
     cross_chain_sender: CrossChainSender,
-    notifier_client: NotifierServiceClient<Channel>
+    _notifier_client: NotifierServiceClient<Channel>,
 }
 
 pub struct GrpcServerHandle {
@@ -143,7 +143,7 @@ where
             shard_id,
             network: internal_network,
             cross_chain_sender,
-            notifier_client
+            _notifier_client: notifier_client,
         };
 
         let validator_node = ValidatorNodeServer::new(grpc_server.clone());
@@ -162,13 +162,18 @@ where
         })
     }
 
-    async fn notify(&mut self, chain_id: ChainId) {
+    /// Notify clients subscribed to a given [`ChainId`] that there are updates
+    /// for that chain.
+    async fn _notify(&mut self, chain_id: &ChainId) {
         let notification = Notification {
             chain_id: Some(chain_id.clone()),
         };
 
-        if let Err(e) = self.notifier_client.notify(notification).await {
-            warn!("There was an error while trying to notify for chain {:?}.", chain_id)
+        if let Err(e) = self._notifier_client.notify(notification).await {
+            warn!(
+                "There was an error while trying to notify for chain {:?}: {:?}",
+                chain_id, e
+            )
         }
     }
 

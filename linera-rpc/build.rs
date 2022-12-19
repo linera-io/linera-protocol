@@ -6,4 +6,3 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .type_attribute("rpc.v1.ChainId", "#[derive(Hash, Eq)]")
         .compile(&["proto/rpc.proto"], &["proto"])?)
 }
-

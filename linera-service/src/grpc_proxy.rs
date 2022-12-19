@@ -7,28 +7,30 @@ use linera_base::data_types::ChainId;
 use linera_chain::data_types::{BlockAndRound, Value};
 use linera_rpc::{
     config::{ShardConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig},
-    grpc_network::grpc::{
-        validator_node_client::ValidatorNodeClient,
-        validator_node_server::{ValidatorNode, ValidatorNodeServer},
-        validator_worker_client::ValidatorWorkerClient,
-        validator_worker_server::{ValidatorWorker, ValidatorWorkerServer},
-        BlockProposal, Certificate, ChainInfoQuery, ChainInfoResult, CrossChainRequest,
+    grpc_network::{
+        grpc::{
+            notification_service_server::{NotificationService, NotificationServiceServer},
+            notifier_service_server::NotifierService,
+            validator_node_client::ValidatorNodeClient,
+            validator_node_server::{ValidatorNode, ValidatorNodeServer},
+            validator_worker_client::ValidatorWorkerClient,
+            validator_worker_server::{ValidatorWorker, ValidatorWorkerServer},
+            ChainInfoResult, Notification, SubscriptionRequest,
+        },
+        BlockProposal, Certificate, ChainInfoQuery, CrossChainRequest,
     },
+    notifier::{Notifier, NotifierError},
     pool::ConnectionPool,
 };
-
-use std::sync::Arc;
 use log::warn;
+use std::{net::SocketAddr, pin::Pin, sync::Arc};
+use std::fmt::Debug;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::{
     codegen::futures_core::Stream,
     transport::{Channel, Server},
     Request, Response, Status,
 };
-use linera_rpc::grpc_network::grpc::{Notification, SubscriptionRequest};
-use linera_rpc::grpc_network::grpc::notification_service_server::{NotificationService, NotificationServiceServer};
-use linera_rpc::grpc_network::grpc::notifier_service_server::NotifierService;
-use linera_rpc::notifier::{Notifier, NotifierError};
 
 #[derive(Clone)]
 pub struct GrpcProxy(Arc<GrpcProxyInner>);
@@ -73,7 +75,8 @@ impl GrpcProxy {
 
     fn shard_for(&self, proxyable: &impl Proxyable) -> Option<ShardConfig> {
         Some(
-            self.0.internal_config
+            self.0
+                .internal_config
                 .get_shard_for(proxyable.chain_id()?)
                 .clone(),
         )
@@ -226,7 +229,7 @@ impl ValidatorNode for GrpcProxy {
     }
 }
 
-type NotificationStream = Pin<Box<dyn Stream<Item=Result<Notification, Status>> + Send>>;
+type NotificationStream = Pin<Box<dyn Stream<Item = Result<Notification, Status>> + Send>>;
 
 #[async_trait]
 impl NotificationService for GrpcProxy {
@@ -240,7 +243,9 @@ impl NotificationService for GrpcProxy {
 
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
-        self.0.notifier.create_subscription(subscription_request.chain_ids, tx);
+        self.0
+            .notifier
+            .create_subscription(subscription_request.chain_ids, tx);
 
         Ok(Response::new(
             Box::pin(UnboundedReceiverStream::new(rx)) as Self::SubscribeStream
@@ -256,12 +261,15 @@ impl NotifierService for GrpcProxy {
         let chain_id = notification
             .chain_id
             .clone()
-            .ok_or(Status::invalid_argument("Missing field: chain_id."))?;
+            .ok_or_else(|| Status::invalid_argument("Missing field: chain_id."))?;
 
         // can we get away with a partial borrow here?
         if let Err(e) = self.0.notifier.notify(&chain_id, notification) {
             match e {
-                NotifierError::ChainDoesNotExist => warn!("Tried to notify for chain {:?} which has no subscribers.", &chain_id)
+                NotifierError::ChainDoesNotExist => warn!(
+                    "Tried to notify for chain {:?} which has no subscribers.",
+                    &chain_id
+                ),
             }
         }
 

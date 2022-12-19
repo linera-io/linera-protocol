@@ -1,9 +1,9 @@
 use crate::grpc_network::grpc::ChainId;
 use dashmap::DashMap;
-use std::sync::Arc;
 use log::warn;
-use tokio::sync::mpsc::UnboundedSender;
+use std::sync::Arc;
 use thiserror::Error;
+use tokio::sync::mpsc::UnboundedSender;
 use tonic::Status;
 
 type NotificationResult<N> = Result<N, Status>;
@@ -12,7 +12,7 @@ type NotificationSender<N> = UnboundedSender<NotificationResult<N>>;
 #[derive(Debug, Error)]
 pub enum NotifierError {
     #[error("the requested chain does not exist")]
-    ChainDoesNotExist
+    ChainDoesNotExist,
 }
 
 /// The `Notifier` holds references to clients waiting to receive notifications
@@ -21,7 +21,7 @@ pub enum NotifierError {
 /// policy for stale clients.
 #[derive(Clone, Default)]
 pub struct Notifier<N> {
-    inner: DashMap<ChainId, Vec<Arc<NotificationSender<N>>>>
+    inner: DashMap<ChainId, Vec<Arc<NotificationSender<N>>>>,
 }
 
 impl<N: Clone> Notifier<N> {
@@ -30,9 +30,7 @@ impl<N: Clone> Notifier<N> {
         let sender_arc = Arc::new(sender);
 
         for chain in chains {
-            let mut existing_senders = self.inner
-                .entry(chain)
-                .or_insert(Vec::new());
+            let mut existing_senders = self.inner.entry(chain).or_default();
 
             existing_senders.push(sender_arc.clone());
         }
@@ -40,10 +38,13 @@ impl<N: Clone> Notifier<N> {
 
     /// Notify all the clients waiting for a notification from a given chain.
     pub fn notify(&self, chain: &ChainId, notification: N) -> Result<(), NotifierError> {
-        let senders = self.inner.get(chain).ok_or(NotifierError::ChainDoesNotExist)?;
+        let senders = self
+            .inner
+            .get(chain)
+            .ok_or(NotifierError::ChainDoesNotExist)?;
 
         for sender in senders.value() {
-            if let Err(_) = sender.send(Ok(notification.clone())) {
+            if sender.send(Ok(notification.clone())).is_err() {
                 warn!("Sender {:?} is closed, skipping...", sender);
                 // todo remove closed senders
             }
