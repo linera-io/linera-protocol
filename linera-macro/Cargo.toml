@@ -1,0 +1,8 @@
+[package]
+name = "linera-macro"
+version = "0.1.0"
+authors = ["Linera <contact@linera.io>"]
+edition = "2021"
+
+[lib]
+proc-macro = true

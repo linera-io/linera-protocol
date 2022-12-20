@@ -6,6 +6,7 @@ use async_trait::async_trait;
 use serde::Serialize;
 use std::{fmt::Debug, io::Write};
 use thiserror::Error;
+use linera_base::crypto::HashValue;
 
 #[cfg(test)]
 #[path = "unit_tests/views.rs"]
@@ -105,3 +106,21 @@ impl Hasher for sha2::Sha512 {
         <sha2::Sha512 as sha2::Digest>::finalize(self)
     }
 }
+
+#[async_trait]
+pub trait ContainerView<C> {
+
+    /// Save the container view to a file
+    async fn save(&mut self) -> Result<(), ViewError>;
+
+    /// Delete the container view from the database
+    async fn write_delete(self) -> Result<(), ViewError>;
+}
+
+#[async_trait]
+pub trait HashFunc<C> {
+
+    /// Computing the hash and attributing the type to it.
+    async fn hash_value(&mut self) -> Result<HashValue, ViewError>;
+}
+
