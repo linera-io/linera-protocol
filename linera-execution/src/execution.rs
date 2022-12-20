@@ -11,11 +11,16 @@ use crate::{
 use linera_base::{data_types::ChainId, ensure};
 use linera_views::{
     collection_view::ReentrantCollectionView,
-    impl_view,
     register_view::RegisterView,
-    scoped_view::ScopedView,
     views::{View, ViewError},
 };
+use linera_views::views::{ContainerView, HashView, HashFunc, Hasher};
+use linera_macro::{View, ContainerView, HashView, HashFunc};
+use linera_base::crypto;
+use linera_base::crypto::HashValue;
+use linera_views::common::Batch;
+use linera_views::{views, generic_array, sha2};
+use async_trait::async_trait;
 
 #[cfg(any(test, feature = "test"))]
 use {
@@ -27,16 +32,15 @@ use {
 };
 
 /// A view accessing the execution state of a chain.
-#[derive(Debug)]
+#[derive(Debug, View, ContainerView, HashView, HashFunc)]
 pub struct ExecutionStateView<C> {
     /// System application.
-    pub system: ScopedView<0, SystemExecutionStateView<C>>,
+    pub system: SystemExecutionStateView<C>,
     /// User applications.
-    pub users:
-        ScopedView<1, ReentrantCollectionView<C, UserApplicationId, RegisterView<C, Vec<u8>>>>,
+    pub users: ReentrantCollectionView<C, UserApplicationId, RegisterView<C, Vec<u8>>>,
 }
 
-impl_view!(ExecutionStateView { system, users });
+//impl_view!(ExecutionStateView { system, users });
 
 #[cfg(any(test, feature = "test"))]
 impl ExecutionStateView<MemoryContext<TestExecutionRuntimeContext>>
