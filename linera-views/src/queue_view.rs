@@ -24,6 +24,7 @@ pub struct QueueView<C, T> {
     stored_indices: Range<usize>,
     front_delete_count: usize,
     new_back_values: VecDeque<T>,
+    stored_hash: Option<HashOutput>,
     hash: Option<HashOutput>,
 }
 
@@ -48,6 +49,7 @@ where
             stored_indices,
             front_delete_count: 0,
             new_back_values: VecDeque::new(),
+            stored_hash: hash,
             hash,
         })
     }
@@ -55,7 +57,7 @@ where
     fn rollback(&mut self) {
         self.front_delete_count = 0;
         self.new_back_values.clear();
-        self.hash = None;
+        self.hash = self.stored_hash;
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {

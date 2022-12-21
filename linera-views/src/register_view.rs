@@ -21,6 +21,7 @@ pub struct RegisterView<C, T> {
     context: C,
     stored_value: T,
     update: Option<T>,
+    stored_hash: Option<HashOutput>,
     hash: Option<HashOutput>,
 }
 
@@ -44,13 +45,14 @@ where
             context,
             stored_value,
             update: None,
+            stored_hash: hash,
             hash,
         })
     }
 
     fn rollback(&mut self) {
         self.update = None;
-        self.hash = None;
+        self.hash = self.stored_hash;
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
@@ -59,10 +61,13 @@ where
             batch.put_key_value(key, &value)?;
             self.stored_value = value;
         }
-        let key = self.context.base_tag(KeyTag::Hash as u8);
-        match self.hash {
-            None => batch.delete_key(key),
-            Some(hash) => batch.put_key_value(key, &hash)?,
+        if self.stored_hash != self.hash {
+            let key = self.context.base_tag(KeyTag::Hash as u8);
+            match self.hash {
+                None => batch.delete_key(key),
+                Some(hash) => batch.put_key_value(key, &hash)?,
+            }
+            self.stored_hash = self.hash;
         }
         Ok(())
     }
