@@ -660,7 +660,7 @@ where
                         // the received blocks from this recipient is not recognized
                         // any more by the receiving chain. (Future epochs are ok.)
                         log::warn!(
-                            "[{}] refusing updates from untrusted epoch {epoch:?}",
+                            "[{}] refusing updates to {recipient:?} from untrusted epoch {epoch:?} at {application_id:?}::{origin:?}",
                             self.nickname
                         );
                         return Ok(Vec::new());
