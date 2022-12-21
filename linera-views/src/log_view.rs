@@ -24,6 +24,7 @@ pub struct LogView<C, T> {
     was_cleared: bool,
     stored_count: usize,
     new_values: Vec<T>,
+    stored_hash: Option<HashOutput>,
     hash: Option<HashOutput>,
 }
 
@@ -48,6 +49,7 @@ where
             was_cleared: false,
             stored_count,
             new_values: Vec::new(),
+            stored_hash: hash,
             hash,
         })
     }
@@ -55,7 +57,7 @@ where
     fn rollback(&mut self) {
         self.was_cleared = false;
         self.new_values.clear();
-        self.hash = None;
+        self.hash = self.stored_hash;
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
@@ -78,10 +80,13 @@ where
             batch.put_key_value(key, &self.stored_count)?;
             self.new_values.clear();
         }
-        let key = self.context.base_tag(KeyTag::Hash as u8);
-        match self.hash {
-            None => batch.delete_key(key),
-            Some(hash) => batch.put_key_value(key, &hash)?,
+        if self.stored_hash != self.hash {
+            let key = self.context.base_tag(KeyTag::Hash as u8);
+            match self.hash {
+                None => batch.delete_key(key),
+                Some(hash) => batch.put_key_value(key, &hash)?,
+            }
+            self.stored_hash = self.hash;
         }
         Ok(())
     }

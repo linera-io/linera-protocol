@@ -22,6 +22,7 @@ pub struct CollectionView<C, I, W> {
     was_cleared: bool,
     updates: BTreeMap<Vec<u8>, Option<W>>,
     _phantom: PhantomData<I>,
+    stored_hash: Option<HashOutput>,
     hash: Option<HashOutput>,
 }
 
@@ -33,6 +34,7 @@ pub struct ReentrantCollectionView<C, I, W> {
     was_cleared: bool,
     updates: BTreeMap<Vec<u8>, Option<Arc<Mutex<W>>>>,
     _phantom: PhantomData<I>,
+    stored_hash: Option<HashOutput>,
     hash: Option<HashOutput>,
 }
 
@@ -73,6 +75,7 @@ where
             was_cleared: false,
             updates: BTreeMap::new(),
             _phantom: PhantomData,
+            stored_hash: hash,
             hash,
         })
     }
@@ -80,7 +83,7 @@ where
     fn rollback(&mut self) {
         self.was_cleared = false;
         self.updates.clear();
-        self.hash = None;
+        self.hash = self.stored_hash;
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
@@ -109,10 +112,13 @@ where
                 }
             }
         }
-        let key = self.context.base_tag(KeyTag::Hash as u8);
-        match self.hash {
-            None => batch.delete_key(key),
-            Some(hash) => batch.put_key_value(key, &hash)?,
+        if self.stored_hash != self.hash {
+            let key = self.context.base_tag(KeyTag::Hash as u8);
+            match self.hash {
+                None => batch.delete_key(key),
+                Some(hash) => batch.put_key_value(key, &hash)?,
+            }
+            self.stored_hash = self.hash;
         }
         Ok(())
     }
@@ -312,6 +318,7 @@ where
             was_cleared: false,
             updates: BTreeMap::new(),
             _phantom: PhantomData,
+            stored_hash: hash,
             hash,
         })
     }
@@ -319,7 +326,7 @@ where
     fn rollback(&mut self) {
         self.was_cleared = false;
         self.updates.clear();
-        self.hash = None;
+        self.hash = self.stored_hash;
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
@@ -354,10 +361,13 @@ where
                 }
             }
         }
-        let key = self.context.base_tag(KeyTag::Hash as u8);
-        match self.hash {
-            None => batch.delete_key(key),
-            Some(hash) => batch.put_key_value(key, &hash)?,
+        if self.stored_hash != self.hash {
+            let key = self.context.base_tag(KeyTag::Hash as u8);
+            match self.hash {
+                None => batch.delete_key(key),
+                Some(hash) => batch.put_key_value(key, &hash)?,
+            }
+            self.stored_hash = self.hash;
         }
         Ok(())
     }

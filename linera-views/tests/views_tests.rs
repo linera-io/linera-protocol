@@ -898,8 +898,8 @@ async fn check_hash_memoization_persistence<S>(
         let str1 = format!("{:?}", &pair.1);
         let pair0_first_u8 = *pair.0.first().unwrap();
         let pair1_first_u8 = *pair.1.first().unwrap();
-        let thr = rng.gen_range(0..5);
-        if thr == 0 || thr == 1 {
+        let thr = rng.gen_range(0..7);
+        if thr < 3 {
             let mut view = store.load(1).await.unwrap();
             view.x1.set(pair0_first_u8 as u64);
             view.x2.set(pair1_first_u8 as u32);
@@ -917,28 +917,44 @@ async fn check_hash_memoization_persistence<S>(
             } else {
                 let hash_new = view.hash().await.unwrap();
                 assert_ne!(hash, hash_new);
-                view.save().await.unwrap();
-                hash = hash_new;
+                if thr == 2 {
+                    view.save().await.unwrap();
+                    hash = hash_new;
+                }
             }
         }
-        if thr == 2 {
+        if thr == 3 {
             let mut view = store.load(1).await.unwrap();
             let hash_new = view.hash().await.unwrap();
             assert_eq!(hash, hash_new);
         }
-        if thr == 3 {
+        if thr == 4 {
             let mut view = store.load(1).await.unwrap();
-            let subview = view.collection.load_entry(str0).await.unwrap();
+            let subview = view.collection.load_entry(str0.clone()).await.unwrap();
             subview.push(pair1_first_u8 as u32);
             let hash_new = view.hash().await.unwrap();
             assert_ne!(hash, hash_new);
             view.save().await.unwrap();
             hash = hash_new;
         }
-        if thr == 4 {
+        if thr == 5 {
             let mut view = store.load(1).await.unwrap();
             if view.queue.count() > 0 {
                 view.queue.delete_front();
+                let hash_new = view.hash().await.unwrap();
+                assert_ne!(hash, hash_new);
+                view.save().await.unwrap();
+                hash = hash_new;
+            }
+        }
+        if thr == 6 {
+            let mut view = store.load(1).await.unwrap();
+            let indices = view.collection.indices().await.unwrap();
+            let siz = indices.len();
+            if siz > 0 {
+                let pos = rng.gen_range(0..siz);
+                let x = indices[pos].clone();
+                view.collection.remove_entry(x).unwrap();
                 let hash_new = view.hash().await.unwrap();
                 assert_ne!(hash, hash_new);
                 view.save().await.unwrap();
