@@ -299,16 +299,18 @@ where
         if height < *inbox.next_height_to_receive.get() {
             // We have already received this block.
             log::warn!(
-                "Ignoring repeated messages to {:?} from {:?} at height {}",
+                "Ignoring repeated messages to {:?} from {:?}::{:?} at height {}",
                 chain_id,
+                application_id,
                 origin,
                 height
             );
             return Ok(false);
         }
         log::trace!(
-            "Processing new messages to {:?} from {:?} at height {}",
+            "Processing new messages to {:?} from {:?}::{:?} at height {}",
             chain_id,
+            application_id,
             origin,
             height
         );

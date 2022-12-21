@@ -346,6 +346,7 @@ impl ClientContext {
         ViewError: From<S::ContextError>,
     {
         for chain_id in self.wallet_state.chain_ids() {
+            info!("pushing certificate to {:?}", chain_id);
             let mut client_state = self.make_chain_client(storage.clone(), chain_id);
             client_state
                 .receive_certificate(certificate.clone())
@@ -686,13 +687,13 @@ where
                 }
                 let certificate = admin_state.stage_new_committee(validators).await.unwrap();
                 context.update_wallet_from_client(&mut admin_state).await;
-                info!("{:?}", certificate);
+                info!("Staging committee:\n{:?}", certificate);
                 context.push_to_all_chains(&storage, &certificate).await;
 
                 // Remove the old committee.
                 let certificate = admin_state.finalize_committee().await.unwrap();
                 context.update_wallet_from_client(&mut admin_state).await;
-                info!("{:?}", certificate);
+                info!("Finalizing committee:\n{:?}", certificate);
                 context.push_to_all_chains(&storage, &certificate).await;
 
                 let time_total = time_start.elapsed().as_micros();

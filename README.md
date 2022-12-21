@@ -64,7 +64,7 @@ do
     do
         ./server run --storage rocksdb:server_"$I"_"$J".db --server server_"$I".json --shard "$J" --genesis genesis.json &
     done
- done
+done
 
 LAST_PID="$!"
 
