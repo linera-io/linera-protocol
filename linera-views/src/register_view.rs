@@ -6,12 +6,12 @@ use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::fmt::Debug;
 
-/// prefix used.
-///
-/// 0 : for the storing of the value
-/// 1 : for the hash
+/// Key tags to create the sub-keys of a RegisterView on top of the base key.
+#[repr(u8)]
 enum KeyTag {
+    /// Prefix for the storing of the value
     Value = 0,
+    /// Prefix for the hash
     Hash = 1,
 }
 

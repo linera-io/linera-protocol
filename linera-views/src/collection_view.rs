@@ -45,13 +45,13 @@ pub struct ReentrantCollectionView<C, I, W> {
 /// just concatenating the shared prefix with sub-view keys makes it impossible to distinguish if a
 /// given key belongs to child sub-view or a grandchild sub-view (consider for example if a
 /// collection is stored inside the collection).
-///
-/// Value 0 specify an index and serves to indicate the existence of an entry in the collection
-/// Value 1 specify as the prefix for the sub-view.
-/// Value 2 for the hash value
+#[repr(u8)]
 enum KeyTag {
+    /// Prefix for specifying an index and serves to indicate the existence of an entry in the collection
     Index = 0,
+    /// Prefix for specifying as the prefix for the sub-view.
     Subview = 1,
+    /// Prefix for the hash value
     Hash = 2,
 }
 

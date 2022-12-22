@@ -6,14 +6,14 @@ use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{fmt::Debug, ops::Range};
 
-/// prefix used.
-///
-/// 0 : for the storing of the variable stored_count
-/// 1 : for the indices of the log
-/// 2 : for the hash
+/// Key tags to create the sub-keys of a LogView on top of the base key.
+#[repr(u8)]
 enum KeyTag {
+    /// Prefix for the storing of the variable stored_count
     Store = 0,
+    /// Prefix for the indices of the log
     Index = 1,
+    /// Prefix for the hash
     Hash = 2,
 }
 

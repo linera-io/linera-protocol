@@ -105,7 +105,7 @@ async fn test_ordering_dynamodb() {
 }
 
 #[tokio::test]
-async fn test_ordering_keyvaluestoreview_memory() {
+async fn test_ordering_key_value_store_view_memory() {
     let map = Arc::new(Mutex::new(BTreeMap::new()));
     let guard = map.clone().lock_owned().await;
     let context = MemoryContext::new(guard, ());
