@@ -6,12 +6,12 @@ use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{collections::BTreeMap, fmt::Debug, marker::PhantomData, mem};
 
-/// prefix used.
-///
-/// 0 : for the indices of the mapview
-/// 1 : for the hash
+/// Key tags to create the sub-keys of a MapView on top of the base key.
+#[repr(u8)]
 enum KeyTag {
+    /// Prefix for the indices of the mapview
     Index = 0,
+    /// Prefix for the hash
     Hash = 1,
 }
 

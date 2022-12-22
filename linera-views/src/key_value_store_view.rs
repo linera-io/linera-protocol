@@ -10,12 +10,12 @@ use async_trait::async_trait;
 use std::{collections::BTreeMap, fmt::Debug, mem};
 use tokio::sync::OwnedMutexGuard;
 
-/// prefix used.
-///
-/// 0 : for the indices of the mapview
-/// 1 : for the hash
+/// Key tags to create the sub-keys of a KeyValueStoreView on top of the base key.
+#[repr(u8)]
 enum KeyTag {
+    /// Prefix for the indices of the mapview
     Index = 0,
+    /// Prefix for the hash
     Hash = 1,
 }
 
