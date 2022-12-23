@@ -3,14 +3,12 @@
 
 #![allow(clippy::field_reassign_with_default)]
 
-use linera_base::messages::{
-    ApplicationDescription, BlockHeight, ChainDescription, ChainId, EffectId,
-};
+use linera_base::messages::{BlockHeight, ChainDescription, ChainId, EffectId};
 use linera_execution::{
     system::{Address, Amount, Balance, UserData},
-    ApplicationRegistryView, Effect, EffectContext, ExecutionResult, ExecutionStateView, Operation,
-    OperationContext, Query, QueryContext, RawExecutionResult, Response, SystemEffect,
-    SystemExecutionState, SystemOperation, SystemQuery, SystemResponse,
+    ApplicationDescription, ApplicationRegistryView, Effect, EffectContext, ExecutionResult,
+    ExecutionStateView, Operation, OperationContext, Query, QueryContext, RawExecutionResult,
+    Response, SystemEffect, SystemExecutionState, SystemOperation, SystemQuery, SystemResponse,
     TestExecutionRuntimeContext,
 };
 use linera_views::{memory::MemoryContext, views::View};

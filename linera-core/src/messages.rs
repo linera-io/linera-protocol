@@ -6,16 +6,15 @@ use crate::node::NodeError;
 use linera_base::{
     committee::Committee,
     crypto::{BcsSignable, HashValue, KeyPair, Signature},
-    messages::{
-        ApplicationDescription, ApplicationId, BlockHeight, ChainDescription, ChainId, Epoch,
-        Origin, ValidatorName,
-    },
+    messages::{BlockHeight, ChainDescription, ChainId, Epoch, Origin, ValidatorName},
 };
 use linera_chain::{
     messages::{Certificate, MessageGroup},
     ChainManager, ChainStateView,
 };
-use linera_execution::{system::Balance, ExecutionRuntimeContext};
+use linera_execution::{
+    system::Balance, ApplicationDescription, ApplicationId, ExecutionRuntimeContext,
+};
 use linera_storage::ChainRuntimeContext;
 use linera_views::{common::Context, views::ViewError};
 use serde::{Deserialize, Serialize};

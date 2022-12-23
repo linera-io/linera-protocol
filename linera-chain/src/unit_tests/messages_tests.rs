@@ -3,8 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use linera_base::messages::ApplicationId;
-use linera_execution::system::{Address, Amount, SystemOperation, UserData};
+use linera_execution::{
+    system::{Address, Amount, SystemOperation, UserData},
+    ApplicationId,
+};
 
 #[test]
 fn test_signed_values() {

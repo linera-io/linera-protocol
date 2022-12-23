@@ -8,9 +8,9 @@ pub mod messages;
 pub use chain::{ChainStateView, Event};
 use linera_base::{
     crypto::CryptoError,
-    messages::{ApplicationId, ArithmeticError, BlockHeight, ChainId, Origin, RoundNumber},
+    messages::{ArithmeticError, BlockHeight, ChainId, Origin, RoundNumber},
 };
-use linera_execution::ExecutionError;
+use linera_execution::{ApplicationId, ExecutionError};
 use linera_views::views::ViewError;
 pub use manager::{ChainManager, Outcome as ChainManagerOutcome};
 use thiserror::Error;

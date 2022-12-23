@@ -356,7 +356,7 @@ impl<'storage> WritableSystem for SystemApi<&'storage dyn WritableStorage> {
     ) -> Self::TryCallApplication {
         let storage = self.storage;
         let forwarded_sessions = forwarded_sessions
-            .into_iter()
+            .iter()
             .map(Le::get)
             .map(SessionId::from)
             .collect();
@@ -395,7 +395,7 @@ impl<'storage> WritableSystem for SystemApi<&'storage dyn WritableStorage> {
     ) -> Self::TryCallApplication {
         let storage = self.storage;
         let forwarded_sessions = forwarded_sessions
-            .into_iter()
+            .iter()
             .map(Le::get)
             .map(SessionId::from)
             .collect();

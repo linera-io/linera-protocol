@@ -2,16 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    application_registry::ApplicationRegistryView, execution::ExecutionStateView,
+    application_registry::{ApplicationId, ApplicationRegistryView},
+    execution::ExecutionStateView,
     ApplicationStateNotLocked, CallResult, ExecutionError, ExecutionResult,
     ExecutionRuntimeContext, NewSession, QueryableStorage, ReadableStorage, SessionId,
     UserApplicationCode, WritableStorage,
 };
 use async_trait::async_trait;
-use linera_base::{
-    ensure,
-    messages::{ApplicationId, ChainId},
-};
+use linera_base::{ensure, messages::ChainId};
 use linera_views::{
     common::Context,
     register_view::RegisterView,

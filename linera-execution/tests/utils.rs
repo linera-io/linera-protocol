@@ -1,7 +1,8 @@
 use linera_base::{
     crypto::{BcsSignable, HashValue},
-    messages::{ApplicationDescription, BlockHeight, BytecodeLocation, ChainId, EffectId},
+    messages::{BlockHeight, ChainId, EffectId},
 };
+use linera_execution::{ApplicationDescription, BytecodeLocation};
 use serde::{Deserialize, Serialize};
 
 pub fn create_dummy_user_application_description() -> ApplicationDescription {
