@@ -279,6 +279,29 @@ where
         Ok(())
     }
 
+    pub async fn next_block_height_to_receive(
+        &mut self,
+        application_id: ApplicationId,
+        origin: Origin,
+    ) -> Result<BlockHeight, ChainError> {
+        let communication_state = self.communication_states.load_entry(application_id).await?;
+        let inbox = communication_state.inboxes.load_entry(origin).await?;
+        Ok(*inbox.next_height_to_receive.get())
+    }
+
+    pub async fn last_anticipated_block_height(
+        &mut self,
+        application_id: ApplicationId,
+        origin: Origin,
+    ) -> Result<Option<BlockHeight>, ChainError> {
+        let communication_state = self.communication_states.load_entry(application_id).await?;
+        let inbox = communication_state.inboxes.load_entry(origin).await?;
+        match inbox.expected_events.back().await? {
+            Some(event) => Ok(Some(event.height)),
+            None => Ok(None),
+        }
+    }
+
     /// Schedule operations to be executed as a recipient, unless this block was already
     /// processed. Returns true if the call changed the chain state. Operations must be
     /// received by order of heights and indices.
@@ -298,13 +321,6 @@ where
             .await?;
         if height < *inbox.next_height_to_receive.get() {
             // We have already received this block.
-            log::warn!(
-                "Ignoring repeated messages to {:?} from {:?}::{:?} at height {}",
-                chain_id,
-                application_id,
-                origin,
-                height
-            );
             return Ok(false);
         }
         log::trace!(

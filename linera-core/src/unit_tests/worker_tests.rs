@@ -2863,37 +2863,100 @@ where
         .await
         .unwrap();
 
-    // Try to execute the transfer.
+    // Try to execute the transfer from the user chain to the admin chain.
     worker
         .fully_handle_certificate(certificate0.clone())
         .await
         .unwrap();
 
-    // The transfer was started..
-    let user_chain = worker.storage.load_active_chain(user_id).await.unwrap();
-    assert_eq!(
-        BlockHeight::from(1),
-        user_chain.tip_state.get().next_block_height
-    );
-    assert_eq!(
-        *user_chain.execution_state.system.balance.get(),
-        Balance::from(2)
-    );
-    assert_eq!(
-        *user_chain.execution_state.system.epoch.get(),
-        Some(Epoch::from(0))
-    );
+    {
+        // The transfer was started..
+        let user_chain = worker.storage.load_active_chain(user_id).await.unwrap();
+        assert_eq!(
+            BlockHeight::from(1),
+            user_chain.tip_state.get().next_block_height
+        );
+        assert_eq!(
+            *user_chain.execution_state.system.balance.get(),
+            Balance::from(2)
+        );
+        assert_eq!(
+            *user_chain.execution_state.system.epoch.get(),
+            Some(Epoch::from(0))
+        );
 
-    // .. but the message hasn't gone through.
-    let mut admin_chain = worker.storage.load_active_chain(admin_id).await.unwrap();
-    assert!(admin_chain
-        .communication_states
-        .load_entry(ApplicationId::System)
+        // .. but the message hasn't gone through.
+        let mut admin_chain = worker.storage.load_active_chain(admin_id).await.unwrap();
+        assert!(admin_chain
+            .communication_states
+            .load_entry(ApplicationId::System)
+            .await
+            .unwrap()
+            .inboxes
+            .indices()
+            .await
+            .unwrap()
+            .is_empty());
+    }
+
+    // Force the admin chain to receive the money nonetheless by anticipation.
+    let certificate2 = make_certificate(
+        &committee,
+        &worker,
+        Value::ConfirmedBlock {
+            block: Block {
+                epoch: Epoch::from(1),
+                chain_id: admin_id,
+                incoming_messages: vec![MessageGroup {
+                    application_id: ApplicationId::System,
+                    origin: Origin::chain(user_id),
+                    height: BlockHeight::from(0),
+                    effects: vec![(
+                        0,
+                        Effect::System(SystemEffect::Credit {
+                            recipient: admin_id,
+                            amount: Amount::from(1),
+                        }),
+                    )],
+                }],
+                operations: Vec::new(),
+                previous_block_hash: Some(certificate1.hash),
+                height: BlockHeight::from(1),
+            },
+            effects: Vec::new(),
+            state_hash: make_state_hash(SystemExecutionState {
+                epoch: Some(Epoch::from(1)),
+                description: Some(ChainDescription::Root(0)),
+                admin_id: Some(admin_id),
+                subscriptions: BTreeSet::new(),
+                committees: committees3.clone(),
+                ownership: ChainOwnership::single(key_pair0.public().into()),
+                balance: Balance::from(1),
+            })
+            .await,
+        },
+    );
+    worker
+        .fully_handle_certificate(certificate2.clone())
         .await
-        .unwrap()
-        .inboxes
-        .indices()
+        .unwrap();
+
+    {
+        // The admin chain has an anticipated message.
+        let mut admin_chain = worker.storage.load_active_chain(admin_id).await.unwrap();
+        assert!(admin_chain.validate_incoming_messages().await.is_err());
+    }
+
+    // Try again to execute the transfer from the user chain to the admin chain.
+    // This time, the epoch verification should be overruled.
+    worker
+        .fully_handle_certificate(certificate0.clone())
         .await
-        .unwrap()
-        .is_empty());
+        .unwrap();
+
+    {
+        // The admin chain has no more anticipated messages.
+        let mut admin_chain = worker.storage.load_active_chain(admin_id).await.unwrap();
+        admin_chain.validate_incoming_messages().await.unwrap();
+    }
 }
