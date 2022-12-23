@@ -8,7 +8,9 @@ mod runtime;
 pub mod system;
 mod wasm;
 
-pub use application_registry::ApplicationRegistryView;
+pub use application_registry::{
+    ApplicationDescription, ApplicationId, ApplicationRegistryView, BytecodeId, BytecodeLocation,
+};
 pub use execution::ExecutionStateView;
 pub use ownership::ChainOwnership;
 #[cfg(any(test, feature = "test"))]
@@ -22,9 +24,7 @@ pub use wasm::{WasmApplication, WasmExecutionError};
 
 use async_trait::async_trait;
 use dashmap::DashMap;
-use linera_base::messages::{
-    ApplicationDescription, ApplicationId, BlockHeight, BytecodeId, ChainId, Destination, EffectId,
-};
+use linera_base::messages::{BlockHeight, ChainId, Destination, EffectId};
 use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;

@@ -7,10 +7,13 @@
 //! of the crate.
 
 use super::runtime::{contract, writable_system};
-use crate::{ApplicationCallResult, NewSession, RawExecutionResult, SessionCallResult, SessionId};
+use crate::{
+    ApplicationCallResult, ApplicationId, BytecodeId, NewSession, RawExecutionResult,
+    SessionCallResult, SessionId,
+};
 use linera_base::{
     crypto::HashValue,
-    messages::{ApplicationId, BlockHeight, BytecodeId, ChainId, Destination, EffectId},
+    messages::{BlockHeight, ChainId, Destination, EffectId},
 };
 
 impl From<contract::SessionCallResult> for (SessionCallResult, Vec<u8>) {

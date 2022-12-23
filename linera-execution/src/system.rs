@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    application_registry::{ApplicationId, BytecodeId},
     Bytecode, ChainOwnership, EffectContext, ExecutionResult, NewApplication, OperationContext,
     QueryContext, RawExecutionResult,
 };
@@ -10,8 +11,7 @@ use linera_base::{
     committee::Committee,
     ensure,
     messages::{
-        ApplicationId, ArithmeticError, BytecodeId, ChainDescription, ChainId, ChannelId,
-        Destination, EffectId, Epoch, Owner,
+        ArithmeticError, ChainDescription, ChainId, ChannelId, Destination, EffectId, Epoch, Owner,
     },
 };
 use linera_views::{

@@ -8,14 +8,12 @@ use crate::{
 use linera_base::{
     crypto::HashValue,
     ensure,
-    messages::{
-        ApplicationDescription, ApplicationId, BlockHeight, BytecodeId, BytecodeLocation, ChainId,
-        Destination, EffectId, Medium, Origin,
-    },
+    messages::{BlockHeight, ChainId, Destination, EffectId, Medium, Origin},
 };
 use linera_execution::{
-    system::SystemEffect, ApplicationRegistryView, Effect, EffectContext, ExecutionResult,
-    ExecutionRuntimeContext, ExecutionStateView, OperationContext, RawExecutionResult,
+    system::SystemEffect, ApplicationDescription, ApplicationId, ApplicationRegistryView,
+    BytecodeId, BytecodeLocation, Effect, EffectContext, ExecutionResult, ExecutionRuntimeContext,
+    ExecutionStateView, OperationContext, RawExecutionResult,
 };
 use linera_views::{
     collection_view::CollectionView, common::Context, impl_view, log_view::LogView,

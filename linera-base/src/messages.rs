@@ -11,52 +11,6 @@ use crate::crypto::CryptoError;
 #[cfg(any(test, feature = "test"))]
 use test_strategy::Arbitrary;
 
-/// A unique identifier for an application.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
-pub enum ApplicationId {
-    /// The system application.
-    System,
-    /// A user application.
-    User {
-        /// The bytecode to use for the application.
-        bytecode: BytecodeId,
-        /// The unique ID of the application's creation.
-        creation: EffectId,
-    },
-}
-
-/// Description of the necessary information to run a user application.
-#[allow(clippy::large_enum_variant)]
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum ApplicationDescription {
-    /// A special reference to the system application.
-    System,
-    /// A reference to a user application.
-    User {
-        /// The unique ID of the bytecode to use for the application.
-        bytecode_id: BytecodeId,
-        /// The location of the bytecode to use for the application.
-        bytecode: BytecodeLocation,
-        /// The unique ID of the application's creation.
-        creation: EffectId,
-        /// The argument used during application initialization.
-        initialization_argument: Vec<u8>,
-    },
-}
-
-/// A unique identifier for an application bytecode.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
-pub struct BytecodeId(pub EffectId);
-
-/// A reference to where the application bytecode is stored.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct BytecodeLocation {
-    /// The certificate that published the bytecode.
-    pub certificate_hash: HashValue,
-    /// The index in the certificate of the operation that published the bytecode.
-    pub operation_index: usize,
-}
-
 /// A block height to identify blocks in a chain.
 #[derive(
     Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
@@ -150,22 +104,6 @@ pub enum ArithmeticError {
     SequenceUnderflow,
 }
 
-impl From<&ApplicationDescription> for ApplicationId {
-    fn from(reference: &ApplicationDescription) -> Self {
-        match reference {
-            ApplicationDescription::System => ApplicationId::System,
-            ApplicationDescription::User {
-                bytecode_id,
-                creation,
-                ..
-            } => ApplicationId::User {
-                bytecode: *bytecode_id,
-                creation: *creation,
-            },
-        }
-    }
-}
-
 impl Origin {
     pub fn chain(chain_id: ChainId) -> Self {
         Self {
@@ -179,12 +117,6 @@ impl Origin {
             chain_id,
             medium: Medium::Channel(name),
         }
-    }
-}
-
-impl From<EffectId> for BytecodeId {
-    fn from(effect_id: EffectId) -> Self {
-        BytecodeId(effect_id)
     }
 }
 

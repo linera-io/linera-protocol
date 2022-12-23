@@ -10,12 +10,13 @@ use async_trait::async_trait;
 use futures::lock::Mutex;
 use linera_base::{
     crypto::CryptoError,
-    messages::{ApplicationId, ArithmeticError, BlockHeight, ChainId, Origin, ValidatorName},
+    messages::{ArithmeticError, BlockHeight, ChainId, Origin, ValidatorName},
 };
 use linera_chain::{
     messages::{Block, BlockProposal, Certificate, Value},
     ChainError, ChainManager,
 };
+use linera_execution::ApplicationId;
 use linera_storage::Store;
 use linera_views::views::ViewError;
 use rand::prelude::SliceRandom;

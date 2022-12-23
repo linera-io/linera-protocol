@@ -2,10 +2,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::messages;
+use linera_base::messages::{ChainDescription, Destination, Medium};
 use linera_chain::{messages::Value, ChainManager};
 use linera_core::{messages::CrossChainRequest, node::NodeError};
-use linera_execution::{system, Effect, Operation};
+use linera_execution::{
+    system::{Address, SystemEffect, SystemOperation},
+    ApplicationDescription, ApplicationId, Effect, Operation,
+};
 use linera_rpc::Message;
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use std::{fs::File, io::Write};
@@ -20,17 +23,17 @@ fn get_registry() -> Result<Registry> {
     let samples = Samples::new();
     // 1. Record samples for types with custom deserializers.
     // 2. Trace the main entry point(s) + every enum separately.
-    tracer.trace_type::<system::Address>(&samples)?;
-    tracer.trace_type::<system::SystemOperation>(&samples)?;
-    tracer.trace_type::<system::SystemEffect>(&samples)?;
+    tracer.trace_type::<Address>(&samples)?;
+    tracer.trace_type::<SystemOperation>(&samples)?;
+    tracer.trace_type::<SystemEffect>(&samples)?;
     tracer.trace_type::<Operation>(&samples)?;
     tracer.trace_type::<Effect>(&samples)?;
     tracer.trace_type::<Value>(&samples)?;
-    tracer.trace_type::<messages::Medium>(&samples)?;
-    tracer.trace_type::<messages::Destination>(&samples)?;
-    tracer.trace_type::<messages::ChainDescription>(&samples)?;
-    tracer.trace_type::<messages::ApplicationId>(&samples)?;
-    tracer.trace_type::<messages::ApplicationDescription>(&samples)?;
+    tracer.trace_type::<Medium>(&samples)?;
+    tracer.trace_type::<Destination>(&samples)?;
+    tracer.trace_type::<ChainDescription>(&samples)?;
+    tracer.trace_type::<ApplicationId>(&samples)?;
+    tracer.trace_type::<ApplicationDescription>(&samples)?;
     tracer.trace_type::<ChainManager>(&samples)?;
     tracer.trace_type::<CrossChainRequest>(&samples)?;
     tracer.trace_type::<NodeError>(&samples)?;

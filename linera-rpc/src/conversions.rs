@@ -8,7 +8,7 @@ use tonic::{Code, Status};
 
 use linera_base::{
     crypto::{CryptoError, HashValue, PublicKey, Signature},
-    messages::{ApplicationId, BlockHeight, ChainId, Medium, Origin, ValidatorName},
+    messages::{BlockHeight, ChainId, Medium, Origin, ValidatorName},
 };
 use linera_chain::messages::{BlockProposal, Certificate};
 use linera_core::messages::{
@@ -18,13 +18,12 @@ use linera_core::messages::{
 use crate::grpc_network::grpc::{
     application_description, UserApplicationDescription, UserApplicationId,
 };
-use linera_base::messages::{
-    ApplicationDescription, BytecodeId, BytecodeLocation, EffectId, Owner,
-};
+use linera_base::messages::{EffectId, Owner};
 use linera_core::{
     messages::CrossChainRequest::{ConfirmUpdatedRecipient, UpdateRecipient},
     node::NodeError,
 };
+use linera_execution::{ApplicationDescription, ApplicationId, BytecodeId, BytecodeLocation};
 
 #[derive(Error, Debug)]
 pub enum ProtoConversionError {

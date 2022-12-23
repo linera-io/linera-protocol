@@ -8,13 +8,10 @@
 
 use super::runtime::{contract, queryable_system, service, writable_system};
 use crate::{
-    system::Balance, CallResult, CalleeContext, EffectContext, EffectId, OperationContext,
-    QueryContext, SessionId,
+    system::Balance, ApplicationId, CallResult, CalleeContext, EffectContext, EffectId,
+    OperationContext, QueryContext, SessionId,
 };
-use linera_base::{
-    crypto::HashValue,
-    messages::{ApplicationId, ChainId},
-};
+use linera_base::{crypto::HashValue, messages::ChainId};
 
 impl From<OperationContext> for contract::OperationContext {
     fn from(host: OperationContext) -> Self {
