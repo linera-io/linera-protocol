@@ -56,7 +56,8 @@ impl ServerContext {
             Some(self.server_config.key.copy()),
             storage,
         )
-        .allow_inactive_chains(false);
+        .with_allow_inactive_chains(false)
+        .with_allow_messages_from_deprecated_epochs(false);
         (state, shard_id, shard.clone())
     }
 

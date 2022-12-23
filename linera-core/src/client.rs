@@ -184,7 +184,8 @@ impl<P, S> ChainClientState<P, S> {
             .map(|kp| (Owner(kp.public()), kp))
             .collect();
         let state = WorkerState::new(format!("Client node {:?}", chain_id), None, storage_client)
-            .allow_inactive_chains(true);
+            .with_allow_inactive_chains(true)
+            .with_allow_messages_from_deprecated_epochs(true);
         let node_client = LocalNodeClient::new(state);
         Self {
             chain_id,
