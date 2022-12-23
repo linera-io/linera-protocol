@@ -3,9 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    application_registry::{ApplicationId, BytecodeId, UserApplicationId},
-    Bytecode, ChainOwnership, EffectContext, ExecutionResult, NewApplication, OperationContext,
-    QueryContext, RawExecutionResult,
+    ApplicationId, Bytecode, BytecodeId, ChainOwnership, EffectContext, ExecutionResult,
+    NewApplication, OperationContext, QueryContext, RawExecutionResult, UserApplicationId,
 };
 use linera_base::{
     committee::Committee,

@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    application_registry::{ApplicationId, ApplicationRegistryView},
-    execution::ExecutionStateView,
+    execution::ExecutionStateView, ApplicationId, ApplicationRegistryView,
     ApplicationStateNotLocked, CallResult, ExecutionError, ExecutionResult,
     ExecutionRuntimeContext, NewSession, QueryableStorage, ReadableStorage, SessionId,
     UserApplicationCode, WritableStorage,

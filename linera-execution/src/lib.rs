@@ -1,14 +1,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-mod application_registry;
+mod applications;
 mod execution;
 mod ownership;
 mod runtime;
 pub mod system;
 mod wasm;
 
-pub use application_registry::{
+pub use applications::{
     ApplicationDescription, ApplicationId, ApplicationRegistryView, BytecodeId, BytecodeLocation,
     UserApplicationDescription, UserApplicationId,
 };
