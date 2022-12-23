@@ -1,29 +1,28 @@
 use crate::grpc_network::{
     grpc,
-    grpc::{cross_chain_request::Inner, ChainInfoResult, NameSignaturePair},
+    grpc::{
+        application_description, cross_chain_request::Inner, ChainInfoResult, NameSignaturePair,
+    },
 };
 use ed25519::signature::Signature as edSignature;
-use thiserror::Error;
-use tonic::{Code, Status};
-
 use linera_base::{
     crypto::{CryptoError, HashValue, PublicKey, Signature},
-    messages::{BlockHeight, ChainId, Medium, Origin, ValidatorName},
+    messages::{BlockHeight, ChainId, EffectId, Medium, Origin, Owner, ValidatorName},
 };
 use linera_chain::messages::{BlockProposal, Certificate};
-use linera_core::messages::{
-    BlockHeightRange, ChainInfoQuery, ChainInfoResponse, CrossChainRequest,
-};
-
-use crate::grpc_network::grpc::{
-    application_description, UserApplicationDescription, UserApplicationId,
-};
-use linera_base::messages::{EffectId, Owner};
 use linera_core::{
-    messages::CrossChainRequest::{ConfirmUpdatedRecipient, UpdateRecipient},
+    messages::{
+        BlockHeightRange, ChainInfoQuery, ChainInfoResponse, CrossChainRequest,
+        CrossChainRequest::{ConfirmUpdatedRecipient, UpdateRecipient},
+    },
     node::NodeError,
 };
-use linera_execution::{ApplicationDescription, ApplicationId, BytecodeId, BytecodeLocation};
+use linera_execution::{
+    ApplicationDescription, ApplicationId, BytecodeId, BytecodeLocation,
+    UserApplicationDescription, UserApplicationId,
+};
+use thiserror::Error;
+use tonic::{Code, Status};
 
 #[derive(Error, Debug)]
 pub enum ProtoConversionError {
@@ -428,8 +427,8 @@ impl From<ApplicationId> for grpc::ApplicationId {
             ApplicationId::System => grpc::ApplicationId {
                 inner: Some(grpc::application_id::Inner::System(())),
             },
-            ApplicationId::User { bytecode, creation } => grpc::ApplicationId {
-                inner: Some(grpc::application_id::Inner::User(UserApplicationId {
+            ApplicationId::User(UserApplicationId { bytecode, creation }) => grpc::ApplicationId {
+                inner: Some(grpc::application_id::Inner::User(grpc::UserApplicationId {
                     bytecode: Some(bytecode.into()),
                     creation: Some(creation.into()),
                 })),
@@ -448,10 +447,12 @@ impl TryFrom<grpc::ApplicationId> for ApplicationId {
                 .ok_or(ProtoConversionError::MissingField)?
             {
                 grpc::application_id::Inner::System(_) => ApplicationId::System,
-                grpc::application_id::Inner::User(user_application_id) => ApplicationId::User {
-                    bytecode: try_proto_convert!(user_application_id.bytecode),
-                    creation: try_proto_convert!(user_application_id.creation),
-                },
+                grpc::application_id::Inner::User(user_application_id) => {
+                    ApplicationId::User(UserApplicationId {
+                        bytecode: try_proto_convert!(user_application_id.bytecode),
+                        creation: try_proto_convert!(user_application_id.creation),
+                    })
+                }
             },
         )
     }
@@ -463,14 +464,14 @@ impl From<ApplicationDescription> for grpc::ApplicationDescription {
             ApplicationDescription::System => grpc::ApplicationDescription {
                 inner: Some(application_description::Inner::System(())),
             },
-            ApplicationDescription::User {
+            ApplicationDescription::User(UserApplicationDescription {
                 bytecode_id,
                 bytecode,
                 creation,
                 initialization_argument,
-            } => grpc::ApplicationDescription {
+            }) => grpc::ApplicationDescription {
                 inner: Some(application_description::Inner::User(
-                    UserApplicationDescription {
+                    grpc::UserApplicationDescription {
                         bytecode_id: Some(bytecode_id.into()),
                         bytecode: Some(bytecode.into()),
                         creation: Some(creation.into()),
@@ -495,13 +496,13 @@ impl TryFrom<grpc::ApplicationDescription> for ApplicationDescription {
             {
                 application_description::Inner::System(_) => ApplicationDescription::System,
                 application_description::Inner::User(user_application_description) => {
-                    ApplicationDescription::User {
+                    ApplicationDescription::User(UserApplicationDescription {
                         bytecode_id: try_proto_convert!(user_application_description.bytecode_id),
                         bytecode: try_proto_convert!(user_application_description.bytecode),
                         creation: try_proto_convert!(user_application_description.creation),
                         initialization_argument: user_application_description
                             .initialisation_argument,
-                    }
+                    })
                 }
             },
         )
@@ -801,10 +802,10 @@ pub mod tests {
             index: 20,
         };
 
-        let application_id_user = ApplicationId::User {
+        let application_id_user = ApplicationId::User(UserApplicationId {
             bytecode: BytecodeId(effect_id),
             creation: effect_id,
-        };
+        });
 
         round_trip_check::<_, grpc::ApplicationId>(application_id_user);
     }
@@ -824,12 +825,13 @@ pub mod tests {
             operation_index: 30,
         };
 
-        let application_description_user = ApplicationDescription::User {
-            bytecode_id: BytecodeId(effect_id),
-            bytecode: bytecode_location,
-            creation: effect_id,
-            initialization_argument: vec![0, 1],
-        };
+        let application_description_user =
+            ApplicationDescription::User(UserApplicationDescription {
+                bytecode_id: BytecodeId(effect_id),
+                bytecode: bytecode_location,
+                creation: effect_id,
+                initialization_argument: vec![0, 1],
+            });
 
         round_trip_check::<_, grpc::ApplicationDescription>(application_description_user);
     }

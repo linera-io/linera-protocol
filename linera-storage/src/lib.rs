@@ -22,7 +22,7 @@ use linera_base::{
 use linera_chain::{messages::Certificate, ChainError, ChainStateView};
 use linera_execution::{
     system::Balance, ApplicationDescription, ApplicationId, ChainOwnership, ExecutionError,
-    ExecutionRuntimeContext, UserApplicationCode,
+    ExecutionRuntimeContext, UserApplicationCode, UserApplicationDescription,
 };
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 use linera_execution::{Operation, SystemOperation, WasmApplication};
@@ -132,7 +132,7 @@ pub trait Store: Sized {
         &self,
         application_description: &ApplicationDescription,
     ) -> Result<UserApplicationCode, ExecutionError> {
-        let ApplicationDescription::User { bytecode, bytecode_id, .. } = application_description
+        let ApplicationDescription::User(UserApplicationDescription { bytecode, bytecode_id, .. }) = application_description
             else { panic!("Attempt to load system application from storage"); };
         let invalid_bytecode_id_error = || ExecutionError::InvalidBytecodeId(*bytecode_id);
 

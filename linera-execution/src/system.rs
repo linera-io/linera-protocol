@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    application_registry::{ApplicationId, BytecodeId},
+    application_registry::{ApplicationId, BytecodeId, UserApplicationId},
     Bytecode, ChainOwnership, EffectContext, ExecutionResult, NewApplication, OperationContext,
     QueryContext, RawExecutionResult,
 };
@@ -478,10 +478,10 @@ where
             }
             CreateNewApplication { bytecode, argument } => {
                 new_application = Some(NewApplication {
-                    id: ApplicationId::User {
+                    id: ApplicationId::User(UserApplicationId {
                         bytecode: *bytecode,
                         creation: (*context).into(),
-                    },
+                    }),
                     initialization_argument: argument.clone(),
                 });
             }

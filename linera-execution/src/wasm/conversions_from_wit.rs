@@ -9,7 +9,7 @@
 use super::runtime::{contract, writable_system};
 use crate::{
     ApplicationCallResult, ApplicationId, BytecodeId, NewSession, RawExecutionResult,
-    SessionCallResult, SessionId,
+    SessionCallResult, SessionId, UserApplicationId,
 };
 use linera_base::{
     crypto::HashValue,
@@ -126,10 +126,10 @@ impl From<writable_system::SessionId> for SessionId {
 
 impl From<writable_system::ApplicationId> for ApplicationId {
     fn from(guest: writable_system::ApplicationId) -> Self {
-        ApplicationId::User {
+        ApplicationId::User(UserApplicationId {
             bytecode: guest.bytecode.into(),
             creation: guest.creation.into(),
-        }
+        })
     }
 }
 
