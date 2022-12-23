@@ -9,7 +9,7 @@
 use super::runtime::{contract, queryable_system, service, writable_system};
 use crate::{
     system::Balance, ApplicationId, CallResult, CalleeContext, EffectContext, EffectId,
-    OperationContext, QueryContext, SessionId,
+    OperationContext, QueryContext, SessionId, UserApplicationId,
 };
 use linera_base::{crypto::HashValue, messages::ChainId};
 
@@ -120,10 +120,12 @@ impl From<ApplicationId> for contract::ApplicationId {
             ApplicationId::System => {
                 unreachable!("Attempt to allow system application access to user application")
             }
-            ApplicationId::User { bytecode, creation } => contract::ApplicationId {
-                bytecode: bytecode.0.into(),
-                creation: creation.into(),
-            },
+            ApplicationId::User(UserApplicationId { bytecode, creation }) => {
+                contract::ApplicationId {
+                    bytecode: bytecode.0.into(),
+                    creation: creation.into(),
+                }
+            }
         }
     }
 }
@@ -134,10 +136,12 @@ impl From<ApplicationId> for queryable_system::ApplicationId {
             ApplicationId::System => {
                 unreachable!("Attempt to allow system application access to user application")
             }
-            ApplicationId::User { bytecode, creation } => queryable_system::ApplicationId {
-                bytecode: bytecode.0.into(),
-                creation: creation.into(),
-            },
+            ApplicationId::User(UserApplicationId { bytecode, creation }) => {
+                queryable_system::ApplicationId {
+                    bytecode: bytecode.0.into(),
+                    creation: creation.into(),
+                }
+            }
         }
     }
 }
@@ -148,10 +152,12 @@ impl From<ApplicationId> for writable_system::ApplicationId {
             ApplicationId::System => {
                 unreachable!("Attempt to allow system application access to user application")
             }
-            ApplicationId::User { bytecode, creation } => writable_system::ApplicationId {
-                bytecode: bytecode.0.into(),
-                creation: creation.into(),
-            },
+            ApplicationId::User(UserApplicationId { bytecode, creation }) => {
+                writable_system::ApplicationId {
+                    bytecode: bytecode.0.into(),
+                    creation: creation.into(),
+                }
+            }
         }
     }
 }

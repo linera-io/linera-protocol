@@ -10,6 +10,7 @@ mod wasm;
 
 pub use application_registry::{
     ApplicationDescription, ApplicationId, ApplicationRegistryView, BytecodeId, BytecodeLocation,
+    UserApplicationDescription, UserApplicationId,
 };
 pub use execution::ExecutionStateView;
 pub use ownership::ChainOwnership;

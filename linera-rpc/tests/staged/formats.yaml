@@ -15,26 +15,16 @@ ApplicationDescription:
       System: UNIT
     1:
       User:
-        STRUCT:
-          - bytecode_id:
-              TYPENAME: BytecodeId
-          - bytecode:
-              TYPENAME: BytecodeLocation
-          - creation:
-              TYPENAME: EffectId
-          - initialization_argument:
-              SEQ: U8
+        NEWTYPE:
+          TYPENAME: UserApplicationDescription
 ApplicationId:
   ENUM:
     0:
       System: UNIT
     1:
       User:
-        STRUCT:
-          - bytecode:
-              TYPENAME: BytecodeId
-          - creation:
-              TYPENAME: EffectId
+        NEWTYPE:
+          TYPENAME: UserApplicationId
 Balance:
   NEWTYPESTRUCT: U128
 Block:
@@ -583,6 +573,22 @@ SystemOperation:
               TYPENAME: BytecodeId
           - argument:
               SEQ: U8
+UserApplicationDescription:
+  STRUCT:
+    - bytecode_id:
+        TYPENAME: BytecodeId
+    - bytecode:
+        TYPENAME: BytecodeLocation
+    - creation:
+        TYPENAME: EffectId
+    - initialization_argument:
+        SEQ: U8
+UserApplicationId:
+  STRUCT:
+    - bytecode:
+        TYPENAME: BytecodeId
+    - creation:
+        TYPENAME: EffectId
 UserData:
   NEWTYPESTRUCT:
     OPTION:

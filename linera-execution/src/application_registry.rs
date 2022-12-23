@@ -11,12 +11,16 @@ pub enum ApplicationId {
     /// The system application.
     System,
     /// A user application.
-    User {
-        /// The bytecode to use for the application.
-        bytecode: BytecodeId,
-        /// The unique ID of the application's creation.
-        creation: EffectId,
-    },
+    User(UserApplicationId),
+}
+
+/// A unique identifier for a user application.
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
+pub struct UserApplicationId {
+    /// The bytecode to use for the application.
+    pub bytecode: BytecodeId,
+    /// The unique ID of the application's creation.
+    pub creation: EffectId,
 }
 
 /// Description of the necessary information to run a user application.
@@ -26,16 +30,21 @@ pub enum ApplicationDescription {
     /// A special reference to the system application.
     System,
     /// A reference to a user application.
-    User {
-        /// The unique ID of the bytecode to use for the application.
-        bytecode_id: BytecodeId,
-        /// The location of the bytecode to use for the application.
-        bytecode: BytecodeLocation,
-        /// The unique ID of the application's creation.
-        creation: EffectId,
-        /// The argument used during application initialization.
-        initialization_argument: Vec<u8>,
-    },
+    User(UserApplicationDescription),
+}
+
+/// Description of the necessary information to run a user application.
+#[allow(clippy::large_enum_variant)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct UserApplicationDescription {
+    /// The unique ID of the bytecode to use for the application.
+    pub bytecode_id: BytecodeId,
+    /// The location of the bytecode to use for the application.
+    pub bytecode: BytecodeLocation,
+    /// The unique ID of the application's creation.
+    pub creation: EffectId,
+    /// The argument used during application initialization.
+    pub initialization_argument: Vec<u8>,
 }
 
 impl From<EffectId> for BytecodeId {
@@ -48,14 +57,14 @@ impl From<&ApplicationDescription> for ApplicationId {
     fn from(reference: &ApplicationDescription) -> Self {
         match reference {
             ApplicationDescription::System => ApplicationId::System,
-            ApplicationDescription::User {
+            ApplicationDescription::User(UserApplicationDescription {
                 bytecode_id,
                 creation,
                 ..
-            } => ApplicationId::User {
+            }) => ApplicationId::User(UserApplicationId {
                 bytecode: *bytecode_id,
                 creation: *creation,
-            },
+            }),
         }
     }
 }
@@ -119,10 +128,10 @@ where
         &mut self,
         new_application: NewApplication,
     ) -> Result<ApplicationDescription, ExecutionError> {
-        let ApplicationId::User {
+        let ApplicationId::User(UserApplicationId {
                 bytecode: bytecode_id,
                 creation,
-            } = new_application.id
+            }) = new_application.id
                 else { panic!("Attempt to create system application"); };
 
         let bytecode_location = self
@@ -131,12 +140,12 @@ where
             .await?
             .ok_or(ExecutionError::UnknownBytecode(bytecode_id))?;
 
-        let application_description = ApplicationDescription::User {
+        let application_description = ApplicationDescription::User(UserApplicationDescription {
             bytecode: bytecode_location,
             bytecode_id,
             creation,
             initialization_argument: new_application.initialization_argument,
-        };
+        });
 
         self.known_applications
             .insert(&new_application.id, application_description.clone())
