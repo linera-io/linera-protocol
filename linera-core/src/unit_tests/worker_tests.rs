@@ -33,7 +33,7 @@ async fn make_state_hash(state: SystemExecutionState) -> HashValue {
 
 /// Instantiate the protocol with a single validator. Returns the corresponding committee
 /// and the (non-sharded, in-memory) "worker" that we can interact with.
-fn init_worker<S>(client: S, allow_inactive_chains: bool) -> (Committee, WorkerState<S>)
+fn init_worker<S>(client: S, is_client: bool) -> (Committee, WorkerState<S>)
 where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
@@ -41,7 +41,8 @@ where
     let key_pair = KeyPair::generate();
     let committee = Committee::make_simple(vec![ValidatorName(key_pair.public())]);
     let worker = WorkerState::new("Single validator node".to_string(), Some(key_pair), client)
-        .allow_inactive_chains(allow_inactive_chains);
+        .with_allow_inactive_chains(is_client)
+        .with_allow_messages_from_deprecated_epochs(is_client);
     (committee, worker)
 }
 
@@ -52,7 +53,7 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
-    let (committee, worker) = init_worker(client, /* allow_inactive_chains */ false);
+    let (committee, worker) = init_worker(client, /* is_client */ false);
     for (description, pubk, balance) in balances {
         worker
             .storage
@@ -1699,7 +1700,7 @@ where
     ViewError: From<S::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
-    let (committee, mut worker) = init_worker(client, /* allow_inactive_chains */ false);
+    let (committee, mut worker) = init_worker(client, /* is_client */ false);
     let certificate = make_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
@@ -1733,41 +1734,37 @@ where
 }
 
 #[test(tokio::test)]
-async fn test_memory_handle_cross_chain_request_no_recipient_chain_with_inactive_chains_allowed() {
+async fn test_memory_handle_cross_chain_request_no_recipient_chain_on_client() {
     let client = MemoryStoreClient::default();
-    run_test_handle_cross_chain_request_no_recipient_chain_with_inactive_chains_allowed(client)
-        .await;
+    run_test_handle_cross_chain_request_no_recipient_chain_on_client(client).await;
 }
 
 #[test(tokio::test)]
-async fn test_rocksdb_handle_cross_chain_request_no_recipient_chain_with_inactive_chains_allowed() {
+async fn test_rocksdb_handle_cross_chain_request_no_recipient_chain_on_client() {
     let dir = tempfile::TempDir::new().unwrap();
     let client = RocksdbStoreClient::new(dir.path().to_path_buf());
-    run_test_handle_cross_chain_request_no_recipient_chain_with_inactive_chains_allowed(client)
-        .await;
+    run_test_handle_cross_chain_request_no_recipient_chain_on_client(client).await;
 }
 
 #[test(tokio::test)]
 #[ignore]
-async fn test_dynamo_db_handle_cross_chain_request_no_recipient_chain_with_inactive_chains_allowed(
+async fn test_dynamo_db_handle_cross_chain_request_no_recipient_chain_on_client(
 ) -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
     let (client, _) =
         DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table).await?;
-    run_test_handle_cross_chain_request_no_recipient_chain_with_inactive_chains_allowed(client)
-        .await;
+    run_test_handle_cross_chain_request_no_recipient_chain_on_client(client).await;
     Ok(())
 }
 
-async fn run_test_handle_cross_chain_request_no_recipient_chain_with_inactive_chains_allowed<S>(
-    client: S,
-) where
+async fn run_test_handle_cross_chain_request_no_recipient_chain_on_client<S>(client: S)
+where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
-    let (committee, mut worker) = init_worker(client, /* allow_inactive_chains */ true);
+    let (committee, mut worker) = init_worker(client, /* is_client */ true);
     let certificate = make_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,

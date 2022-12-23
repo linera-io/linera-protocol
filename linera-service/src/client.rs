@@ -304,7 +304,8 @@ impl ClientContext {
     {
         // First instantiate a local node on top of storage.
         let worker = WorkerState::new("Temporary client node".to_string(), None, storage)
-            .allow_inactive_chains(true);
+            .with_allow_inactive_chains(true)
+            .with_allow_messages_from_deprecated_epochs(true);
         let mut node = LocalNodeClient::new(worker);
         // Second replay the certificates locally.
         for certificate in certificates {

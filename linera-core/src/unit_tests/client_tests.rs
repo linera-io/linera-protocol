@@ -203,7 +203,8 @@ where
             let name = ValidatorName(key_pair.public());
             let store = store_builder.build().await?;
             let state = WorkerState::new(format!("Node {}", i), Some(key_pair), store.clone())
-                .allow_inactive_chains(false);
+                .with_allow_inactive_chains(false)
+                .with_allow_messages_from_deprecated_epochs(false);
             let validator = if i < with_faulty_validators {
                 faulty_validators.insert(name);
                 LocalValidatorClient::new(true, state)

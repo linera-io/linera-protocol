@@ -118,6 +118,8 @@ pub struct WorkerState<StorageClient> {
     storage: StorageClient,
     /// Whether inactive chains are allowed in storage.
     allow_inactive_chains: bool,
+    /// Whether new messages from deprecated epochs are allowed.
+    allow_messages_from_deprecated_epochs: bool,
 }
 
 impl<Client> WorkerState<Client> {
@@ -127,11 +129,17 @@ impl<Client> WorkerState<Client> {
             key_pair: key_pair.map(Arc::new),
             storage,
             allow_inactive_chains: false,
+            allow_messages_from_deprecated_epochs: false,
         }
     }
 
-    pub fn allow_inactive_chains(mut self, value: bool) -> Self {
+    pub fn with_allow_inactive_chains(mut self, value: bool) -> Self {
         self.allow_inactive_chains = value;
+        self
+    }
+
+    pub fn with_allow_messages_from_deprecated_epochs(mut self, value: bool) -> Self {
+        self.allow_messages_from_deprecated_epochs = value;
         self
     }
 
@@ -647,6 +655,8 @@ where
                         );
                         return Ok(Vec::new());
                     }
+                }
+                if !self.allow_messages_from_deprecated_epochs {
                     let epoch = last_epoch.expect("need_update implies epoch.is_some()");
                     if Some(epoch) < *chain.execution_state.system.epoch.get()
                         && !chain
