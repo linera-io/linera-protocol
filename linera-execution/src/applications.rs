@@ -54,17 +54,19 @@ impl From<EffectId> for BytecodeId {
 }
 
 impl From<&ApplicationDescription> for ApplicationId {
-    fn from(reference: &ApplicationDescription) -> Self {
-        match reference {
+    fn from(description: &ApplicationDescription) -> Self {
+        match description {
             ApplicationDescription::System => ApplicationId::System,
-            ApplicationDescription::User(UserApplicationDescription {
-                bytecode_id,
-                creation,
-                ..
-            }) => ApplicationId::User(UserApplicationId {
-                bytecode: *bytecode_id,
-                creation: *creation,
-            }),
+            ApplicationDescription::User(application) => ApplicationId::User(application.into()),
+        }
+    }
+}
+
+impl From<&UserApplicationDescription> for UserApplicationId {
+    fn from(description: &UserApplicationDescription) -> Self {
+        UserApplicationId {
+            bytecode: description.bytecode_id,
+            creation: description.creation,
         }
     }
 }
@@ -87,7 +89,8 @@ pub struct ApplicationRegistryView<C> {
     /// The application bytecodes that have been published.
     pub published_bytecodes: ScopedView<0, MapView<C, BytecodeId, BytecodeLocation>>,
     /// The applications that are known by the chain.
-    pub known_applications: ScopedView<1, MapView<C, ApplicationId, ApplicationDescription>>,
+    pub known_applications:
+        ScopedView<1, MapView<C, UserApplicationId, UserApplicationDescription>>,
 }
 
 impl_view!(ApplicationRegistryView {
@@ -114,9 +117,9 @@ where
     /// Keeps track of an existing application that the current chain is seeing for the first time.
     pub fn register_existing_application(
         &mut self,
-        application: ApplicationDescription,
-    ) -> ApplicationId {
-        let id = ApplicationId::from(&application);
+        application: UserApplicationDescription,
+    ) -> UserApplicationId {
+        let id = UserApplicationId::from(&application);
         self.known_applications
             .insert(&id, application)
             .expect("serialization error for id");
@@ -127,12 +130,11 @@ where
     pub async fn register_new_application(
         &mut self,
         new_application: NewApplication,
-    ) -> Result<ApplicationDescription, ExecutionError> {
-        let ApplicationId::User(UserApplicationId {
-                bytecode: bytecode_id,
-                creation,
-            }) = new_application.id
-                else { panic!("Attempt to create system application"); };
+    ) -> Result<UserApplicationDescription, ExecutionError> {
+        let UserApplicationId {
+            bytecode: bytecode_id,
+            creation,
+        } = new_application.id;
 
         let bytecode_location = self
             .published_bytecodes
@@ -140,32 +142,28 @@ where
             .await?
             .ok_or(ExecutionError::UnknownBytecode(bytecode_id))?;
 
-        let application_description = ApplicationDescription::User(UserApplicationDescription {
+        let description = UserApplicationDescription {
             bytecode: bytecode_location,
             bytecode_id,
             creation,
             initialization_argument: new_application.initialization_argument,
-        });
+        };
 
         self.known_applications
-            .insert(&new_application.id, application_description.clone())
+            .insert(&new_application.id, description.clone())
             .expect("serialization error for id");
 
-        Ok(application_description)
+        Ok(description)
     }
 
     /// Retrieve an application's description.
     pub async fn describe_application(
         &mut self,
-        id: ApplicationId,
-    ) -> Result<ApplicationDescription, ExecutionError> {
-        match id {
-            ApplicationId::System => Ok(ApplicationDescription::System),
-            ApplicationId::User { .. } => self
-                .known_applications
-                .get(&id)
-                .await?
-                .ok_or_else(|| ExecutionError::UnknownApplication(Box::new(id))),
-        }
+        id: UserApplicationId,
+    ) -> Result<UserApplicationDescription, ExecutionError> {
+        self.known_applications
+            .get(&id)
+            .await?
+            .ok_or_else(|| ExecutionError::UnknownApplication(Box::new(id)))
     }
 }

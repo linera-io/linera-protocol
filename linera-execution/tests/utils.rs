@@ -2,13 +2,13 @@ use linera_base::{
     crypto::{BcsSignable, HashValue},
     messages::{BlockHeight, ChainId, EffectId},
 };
-use linera_execution::{ApplicationDescription, BytecodeLocation, UserApplicationDescription};
+use linera_execution::{BytecodeLocation, UserApplicationDescription};
 use serde::{Deserialize, Serialize};
 
-pub fn create_dummy_user_application_description() -> ApplicationDescription {
+pub fn create_dummy_user_application_description() -> UserApplicationDescription {
     let chain_id = ChainId::root(1);
     let certificate_hash = HashValue::new(&FakeCertificate);
-    ApplicationDescription::User(UserApplicationDescription {
+    UserApplicationDescription {
         bytecode_id: EffectId {
             chain_id,
             height: BlockHeight(1),
@@ -25,7 +25,7 @@ pub fn create_dummy_user_application_description() -> ApplicationDescription {
             index: 1,
         },
         initialization_argument: vec![],
-    })
+    }
 }
 
 #[derive(Deserialize, Serialize)]

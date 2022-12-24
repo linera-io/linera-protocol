@@ -8,8 +8,8 @@
 
 use super::runtime::{contract, queryable_system, service, writable_system};
 use crate::{
-    system::Balance, ApplicationId, CallResult, CalleeContext, EffectContext, EffectId,
-    OperationContext, QueryContext, SessionId, UserApplicationId,
+    system::Balance, CallResult, CalleeContext, EffectContext, EffectId, OperationContext,
+    QueryContext, SessionId, UserApplicationId,
 };
 use linera_base::{crypto::HashValue, messages::ChainId};
 
@@ -114,50 +114,29 @@ impl From<SessionId> for writable_system::SessionId {
     }
 }
 
-impl From<ApplicationId> for contract::ApplicationId {
-    fn from(host: ApplicationId) -> Self {
-        match host {
-            ApplicationId::System => {
-                unreachable!("Attempt to allow system application access to user application")
-            }
-            ApplicationId::User(UserApplicationId { bytecode, creation }) => {
-                contract::ApplicationId {
-                    bytecode: bytecode.0.into(),
-                    creation: creation.into(),
-                }
-            }
+impl From<UserApplicationId> for contract::ApplicationId {
+    fn from(host: UserApplicationId) -> Self {
+        contract::ApplicationId {
+            bytecode: host.bytecode.0.into(),
+            creation: host.creation.into(),
         }
     }
 }
 
-impl From<ApplicationId> for queryable_system::ApplicationId {
-    fn from(host: ApplicationId) -> Self {
-        match host {
-            ApplicationId::System => {
-                unreachable!("Attempt to allow system application access to user application")
-            }
-            ApplicationId::User(UserApplicationId { bytecode, creation }) => {
-                queryable_system::ApplicationId {
-                    bytecode: bytecode.0.into(),
-                    creation: creation.into(),
-                }
-            }
+impl From<UserApplicationId> for queryable_system::ApplicationId {
+    fn from(host: UserApplicationId) -> Self {
+        queryable_system::ApplicationId {
+            bytecode: host.bytecode.0.into(),
+            creation: host.creation.into(),
         }
     }
 }
 
-impl From<ApplicationId> for writable_system::ApplicationId {
-    fn from(host: ApplicationId) -> Self {
-        match host {
-            ApplicationId::System => {
-                unreachable!("Attempt to allow system application access to user application")
-            }
-            ApplicationId::User(UserApplicationId { bytecode, creation }) => {
-                writable_system::ApplicationId {
-                    bytecode: bytecode.0.into(),
-                    creation: creation.into(),
-                }
-            }
+impl From<UserApplicationId> for writable_system::ApplicationId {
+    fn from(host: UserApplicationId) -> Self {
+        writable_system::ApplicationId {
+            bytecode: host.bytecode.0.into(),
+            creation: host.creation.into(),
         }
     }
 }

@@ -579,7 +579,6 @@ where
                 };
 
                 let application = self
-                    .known_applications
                     .describe_application(message_group.application_id)
                     .await?;
                 let results = self
@@ -608,10 +607,7 @@ where
         }
         // Second, execute the operations in the block and remember the recipients to notify.
         for (index, (application_id, operation)) in block.operations.iter().enumerate() {
-            let application = self
-                .known_applications
-                .describe_application(*application_id)
-                .await?;
+            let application = self.describe_application(*application_id).await?;
             let context = OperationContext {
                 chain_id,
                 height: block.height,
@@ -654,8 +650,13 @@ where
     ///
     /// Allows executing operations and effects for that application later.
     pub fn register_application(&mut self, application: ApplicationDescription) -> ApplicationId {
-        self.known_applications
-            .register_existing_application(application)
+        match application {
+            ApplicationDescription::System => ApplicationId::System,
+            ApplicationDescription::User(application) => ApplicationId::User(
+                self.known_applications
+                    .register_existing_application(application),
+            ),
+        }
     }
 
     /// Retrieve an application description.
@@ -666,14 +667,12 @@ where
         &mut self,
         application_id: ApplicationId,
     ) -> Result<ApplicationDescription, ChainError> {
-        if let ApplicationId::System = application_id {
-            Ok(ApplicationDescription::System)
-        } else {
-            let description = self
-                .known_applications
-                .describe_application(application_id)
-                .await?;
-            Ok(description)
+        match application_id {
+            ApplicationId::System => Ok(ApplicationDescription::System),
+            ApplicationId::User(id) => {
+                let description = self.known_applications.describe_application(id).await?;
+                Ok(ApplicationDescription::User(description))
+            }
         }
     }
 
@@ -699,7 +698,7 @@ where
                 }
                 ExecutionResult::User(application_id, raw) => {
                     Self::process_raw_execution_result(
-                        application_id,
+                        ApplicationId::User(application_id),
                         outboxes,
                         channels,
                         effects,

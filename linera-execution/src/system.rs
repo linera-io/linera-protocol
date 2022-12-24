@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    ApplicationId, Bytecode, BytecodeId, ChainOwnership, EffectContext, ExecutionResult,
-    NewApplication, OperationContext, QueryContext, RawExecutionResult, UserApplicationId,
+    Bytecode, BytecodeId, ChainOwnership, EffectContext, ExecutionResult, NewApplication,
+    OperationContext, QueryContext, RawExecutionResult, UserApplicationId,
 };
 use linera_base::{
     committee::Committee,
@@ -477,10 +477,10 @@ where
             }
             CreateNewApplication { bytecode, argument } => {
                 new_application = Some(NewApplication {
-                    id: ApplicationId::User(UserApplicationId {
+                    id: UserApplicationId {
                         bytecode: *bytecode,
                         creation: (*context).into(),
-                    }),
+                    },
                     initialization_argument: argument.clone(),
                 });
             }

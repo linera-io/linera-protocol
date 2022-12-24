@@ -34,7 +34,7 @@ async fn test_missing_user_application() -> anyhow::Result<()> {
 
     let result = view
         .execute_operation(
-            &app_desc,
+            &ApplicationDescription::User(app_desc),
             &context,
             &Operation::User(vec![]),
             &mut applications,
@@ -181,7 +181,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     };
     let result = view
         .execute_operation(
-            &app_desc,
+            &ApplicationDescription::User(app_desc.clone()),
             &context,
             &Operation::User(vec![1]),
             &mut applications,
@@ -201,9 +201,14 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         chain_id: ChainId::root(0),
     };
     assert_eq!(
-        view.query_application(&app_desc, &context, &Query::User(vec![]), &mut applications)
-            .await
-            .unwrap(),
+        view.query_application(
+            &ApplicationDescription::User(app_desc),
+            &context,
+            &Query::User(vec![]),
+            &mut applications
+        )
+        .await
+        .unwrap(),
         Response::User(vec![1])
     );
     Ok(())
@@ -232,7 +237,7 @@ async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()>
 
     let result = view
         .execute_operation(
-            &app_desc,
+            &ApplicationDescription::User(app_desc),
             &context,
             &Operation::User(vec![]),
             &mut applications,
