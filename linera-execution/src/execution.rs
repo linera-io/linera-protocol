@@ -4,9 +4,9 @@
 use crate::{
     runtime::{ExecutionRuntime, SessionManager},
     system::SystemExecutionStateView,
-    ApplicationDescription, ApplicationId, ApplicationRegistryView, Effect, EffectContext,
-    ExecutionError, ExecutionResult, ExecutionRuntimeContext, Operation, OperationContext, Query,
-    QueryContext, Response,
+    ApplicationDescription, ApplicationRegistryView, Effect, EffectContext, ExecutionError,
+    ExecutionResult, ExecutionRuntimeContext, Operation, OperationContext, Query, QueryContext,
+    Response, UserApplicationDescription, UserApplicationId,
 };
 use linera_base::{ensure, messages::ChainId};
 use linera_views::{
@@ -32,7 +32,8 @@ pub struct ExecutionStateView<C> {
     /// System application.
     pub system: ScopedView<0, SystemExecutionStateView<C>>,
     /// User applications.
-    pub users: ScopedView<1, ReentrantCollectionView<C, ApplicationId, RegisterView<C, Vec<u8>>>>,
+    pub users:
+        ScopedView<1, ReentrantCollectionView<C, UserApplicationId, RegisterView<C, Vec<u8>>>>,
 }
 
 impl_view!(ExecutionStateView { system, users });
@@ -88,13 +89,13 @@ where
 {
     async fn run_user_action(
         &mut self,
-        application: &ApplicationDescription,
+        application: &UserApplicationDescription,
         chain_id: ChainId,
         action: UserAction<'_>,
         applications: &mut ApplicationRegistryView<C>,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
         // Load the application.
-        let application_id = ApplicationId::from(application);
+        let application_id = UserApplicationId::from(application);
         let application = self
             .context()
             .extra()
@@ -147,32 +148,26 @@ where
         applications: &mut ApplicationRegistryView<C>,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
-        if let ApplicationDescription::System = application {
-            match operation {
-                Operation::System(op) => {
-                    let result = self.system.execute_operation(context, op).await?;
-                    let mut results = vec![result];
-                    results.extend(
-                        self.try_initialize_new_application(context, &results[0], applications)
-                            .await?,
-                    );
-                    Ok(results)
-                }
-                _ => Err(ExecutionError::InvalidOperation),
+        match (application, operation) {
+            (ApplicationDescription::System, Operation::System(op)) => {
+                let result = self.system.execute_operation(context, op).await?;
+                let mut results = vec![result];
+                results.extend(
+                    self.try_initialize_new_application(context, &results[0], applications)
+                        .await?,
+                );
+                Ok(results)
             }
-        } else {
-            match operation {
-                Operation::System(_) => Err(ExecutionError::InvalidOperation),
-                Operation::User(operation) => {
-                    self.run_user_action(
-                        application,
-                        context.chain_id,
-                        UserAction::Operation(context, operation),
-                        applications,
-                    )
-                    .await
-                }
+            (ApplicationDescription::User(application), Operation::User(operation)) => {
+                self.run_user_action(
+                    application,
+                    context.chain_id,
+                    UserAction::Operation(context, operation),
+                    applications,
+                )
+                .await
             }
+            _ => Err(ExecutionError::InvalidOperation),
         }
     }
 
@@ -211,30 +206,24 @@ where
         applications: &mut ApplicationRegistryView<C>,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
-        if let ApplicationDescription::System = application {
-            match effect {
-                Effect::System(effect) => {
-                    let result = self.system.execute_effect(context, effect)?;
-                    Ok(vec![ExecutionResult::System {
-                        result,
-                        new_application: None,
-                    }])
-                }
-                _ => Err(ExecutionError::InvalidEffect),
+        match (application, effect) {
+            (ApplicationDescription::System, Effect::System(effect)) => {
+                let result = self.system.execute_effect(context, effect)?;
+                Ok(vec![ExecutionResult::System {
+                    result,
+                    new_application: None,
+                }])
             }
-        } else {
-            match effect {
-                Effect::System(_) => Err(ExecutionError::InvalidEffect),
-                Effect::User(effect) => {
-                    self.run_user_action(
-                        application,
-                        context.chain_id,
-                        UserAction::Effect(context, effect),
-                        applications,
-                    )
-                    .await
-                }
+            (ApplicationDescription::User(application), Effect::User(effect)) => {
+                self.run_user_action(
+                    application,
+                    context.chain_id,
+                    UserAction::Effect(context, effect),
+                    applications,
+                )
+                .await
             }
+            _ => Err(ExecutionError::InvalidEffect),
         }
     }
 
@@ -246,45 +235,39 @@ where
         applications: &mut ApplicationRegistryView<C>,
     ) -> Result<Response, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
-        if let ApplicationDescription::System = application {
-            match query {
-                Query::System(query) => {
-                    let response = self.system.query_application(context, query).await?;
-                    Ok(Response::System(response))
-                }
-                _ => Err(ExecutionError::InvalidQuery),
+        match (application, query) {
+            (ApplicationDescription::System, Query::System(query)) => {
+                let response = self.system.query_application(context, query).await?;
+                Ok(Response::System(response))
             }
-        } else {
-            match query {
-                Query::System(_) => Err(ExecutionError::InvalidQuery),
-                Query::User(query) => {
-                    // Load the application.
-                    let application_id = ApplicationId::from(application);
-                    let application = self
-                        .context()
-                        .extra()
-                        .get_user_application(application)
-                        .await?;
-                    // Create the execution runtime for this transaction.
-                    let mut session_manager = SessionManager::default();
-                    let mut results = Vec::new();
-                    let mut application_ids = vec![application_id];
-                    let runtime = ExecutionRuntime::new(
-                        context.chain_id,
-                        applications,
-                        &mut application_ids,
-                        self,
-                        &mut session_manager,
-                        &mut results,
-                    );
-                    // Run the query.
-                    let response = application
-                        .query_application(context, &runtime, query)
-                        .await?;
-                    assert_eq!(application_ids, vec![application_id]);
-                    Ok(Response::User(response))
-                }
+            (ApplicationDescription::User(application), Query::User(query)) => {
+                // Load the application.
+                let application_id = UserApplicationId::from(application);
+                let application = self
+                    .context()
+                    .extra()
+                    .get_user_application(application)
+                    .await?;
+                // Create the execution runtime for this transaction.
+                let mut session_manager = SessionManager::default();
+                let mut results = Vec::new();
+                let mut application_ids = vec![application_id];
+                let runtime = ExecutionRuntime::new(
+                    context.chain_id,
+                    applications,
+                    &mut application_ids,
+                    self,
+                    &mut session_manager,
+                    &mut results,
+                );
+                // Run the query.
+                let response = application
+                    .query_application(context, &runtime, query)
+                    .await?;
+                assert_eq!(application_ids, vec![application_id]);
+                Ok(Response::User(response))
             }
+            _ => Err(ExecutionError::InvalidQuery),
         }
     }
 }

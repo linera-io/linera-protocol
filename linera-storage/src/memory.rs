@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use dashmap::DashMap;
 use linera_base::{crypto::HashValue, messages::ChainId};
 use linera_chain::messages::Certificate;
-use linera_execution::{ApplicationId, UserApplicationCode};
+use linera_execution::{UserApplicationCode, UserApplicationId};
 use linera_views::{
     memory::{MemoryContext, MemoryContextError, MemoryStoreMap},
     views::{View, ViewError},
@@ -18,7 +18,7 @@ use tokio::sync::Mutex;
 struct MemoryStore {
     chains: DashMap<ChainId, Arc<Mutex<MemoryStoreMap>>>,
     certificates: DashMap<HashValue, Certificate>,
-    user_applications: Arc<DashMap<ApplicationId, UserApplicationCode>>,
+    user_applications: Arc<DashMap<UserApplicationId, UserApplicationCode>>,
 }
 
 #[derive(Clone, Default)]

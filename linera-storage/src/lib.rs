@@ -21,8 +21,8 @@ use linera_base::{
 };
 use linera_chain::{messages::Certificate, ChainError, ChainStateView};
 use linera_execution::{
-    system::Balance, ApplicationDescription, ApplicationId, ChainOwnership, ExecutionError,
-    ExecutionRuntimeContext, UserApplicationCode, UserApplicationDescription,
+    system::Balance, ApplicationId, ChainOwnership, ExecutionError, ExecutionRuntimeContext,
+    UserApplicationCode, UserApplicationDescription, UserApplicationId,
 };
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 use linera_execution::{Operation, SystemOperation, WasmApplication};
@@ -130,10 +130,13 @@ pub trait Store: Sized {
     #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
     async fn load_application(
         &self,
-        application_description: &ApplicationDescription,
+        application_description: &UserApplicationDescription,
     ) -> Result<UserApplicationCode, ExecutionError> {
-        let ApplicationDescription::User(UserApplicationDescription { bytecode, bytecode_id, .. }) = application_description
-            else { panic!("Attempt to load system application from storage"); };
+        let UserApplicationDescription {
+            bytecode,
+            bytecode_id,
+            ..
+        } = application_description;
         let invalid_bytecode_id_error = || ExecutionError::InvalidBytecodeId(*bytecode_id);
 
         let certificate = self.read_certificate(bytecode.certificate_hash).await?;
@@ -156,7 +159,7 @@ pub trait Store: Sized {
     #[cfg(not(any(feature = "wasmer", feature = "wasmtime")))]
     async fn load_application(
         &self,
-        _application_description: &ApplicationDescription,
+        _application_description: &UserApplicationDescription,
     ) -> Result<UserApplicationCode, ExecutionError> {
         panic!(
             "A WASM runtime is required to load user applications. \
@@ -170,7 +173,7 @@ pub trait Store: Sized {
 pub struct ChainRuntimeContext<StoreClient> {
     store: StoreClient,
     pub chain_id: ChainId,
-    pub user_applications: Arc<DashMap<ApplicationId, UserApplicationCode>>,
+    pub user_applications: Arc<DashMap<UserApplicationId, UserApplicationCode>>,
     pub chain_guard: Option<Arc<ChainGuard>>,
 }
 
@@ -183,18 +186,18 @@ where
         self.chain_id
     }
 
-    fn user_applications(&self) -> &Arc<DashMap<ApplicationId, UserApplicationCode>> {
+    fn user_applications(&self) -> &Arc<DashMap<UserApplicationId, UserApplicationCode>> {
         &self.user_applications
     }
 
     async fn get_user_application(
         &self,
-        application_description: &ApplicationDescription,
+        description: &UserApplicationDescription,
     ) -> Result<UserApplicationCode, ExecutionError> {
-        match self.user_applications.entry(application_description.into()) {
+        match self.user_applications.entry(description.into()) {
             Entry::Occupied(entry) => Ok(entry.get().clone()),
             Entry::Vacant(entry) => {
-                let application = self.store.load_application(application_description).await?;
+                let application = self.store.load_application(description).await?;
                 entry.insert(application.clone());
                 Ok(application)
             }

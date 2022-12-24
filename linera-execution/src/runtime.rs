@@ -2,10 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    execution::ExecutionStateView, ApplicationId, ApplicationRegistryView,
-    ApplicationStateNotLocked, CallResult, ExecutionError, ExecutionResult,
-    ExecutionRuntimeContext, NewSession, QueryableStorage, ReadableStorage, SessionId,
-    UserApplicationCode, WritableStorage,
+    execution::ExecutionStateView, ApplicationRegistryView, ApplicationStateNotLocked, CallResult,
+    ExecutionError, ExecutionResult, ExecutionRuntimeContext, NewSession, QueryableStorage,
+    ReadableStorage, SessionId, UserApplicationCode, UserApplicationId, WritableStorage,
 };
 use async_trait::async_trait;
 use linera_base::{ensure, messages::ChainId};
@@ -29,7 +28,7 @@ pub(crate) struct ExecutionRuntime<'a, C, const WRITABLE: bool> {
     /// The registry of applications known by the current chain.
     application_registry: Arc<Mutex<&'a mut ApplicationRegistryView<C>>>,
     /// The current stack of application IDs.
-    application_ids: Arc<Mutex<&'a mut Vec<ApplicationId>>>,
+    application_ids: Arc<Mutex<&'a mut Vec<UserApplicationId>>>,
     /// The storage view on the execution state.
     execution_state: Arc<Mutex<&'a mut ExecutionStateView<C>>>,
     /// All the sessions and their IDs.
@@ -42,14 +41,14 @@ pub(crate) struct ExecutionRuntime<'a, C, const WRITABLE: bool> {
     execution_results: Arc<Mutex<&'a mut Vec<ExecutionResult>>>,
 }
 
-type ActiveUserStates<C> = BTreeMap<ApplicationId, OwnedMutexGuard<RegisterView<C, Vec<u8>>>>;
+type ActiveUserStates<C> = BTreeMap<UserApplicationId, OwnedMutexGuard<RegisterView<C, Vec<u8>>>>;
 
 type ActiveSessions = BTreeMap<SessionId, OwnedMutexGuard<SessionState>>;
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct SessionManager {
     /// Track the next session index to be used for each application.
-    pub(crate) counters: BTreeMap<ApplicationId, u64>,
+    pub(crate) counters: BTreeMap<UserApplicationId, u64>,
     /// Track the current state (owner and data) of each session.
     pub(crate) states: BTreeMap<SessionId, Arc<Mutex<SessionState>>>,
 }
@@ -57,7 +56,7 @@ pub(crate) struct SessionManager {
 #[derive(Debug, Clone)]
 pub(crate) struct SessionState {
     /// Track which application can call into the session.
-    owner: ApplicationId,
+    owner: UserApplicationId,
     /// The internal state of the session.
     data: Vec<u8>,
 }
@@ -71,7 +70,7 @@ where
     pub(crate) fn new(
         chain_id: ChainId,
         application_registry: &'a mut ApplicationRegistryView<C>,
-        application_ids: &'a mut Vec<ApplicationId>,
+        application_ids: &'a mut Vec<UserApplicationId>,
         execution_state: &'a mut ExecutionStateView<C>,
         session_manager: &'a mut SessionManager,
         execution_results: &'a mut Vec<ExecutionResult>,
@@ -89,7 +88,7 @@ where
         }
     }
 
-    fn application_ids_mut(&self) -> MutexGuard<'_, &'a mut Vec<ApplicationId>> {
+    fn application_ids_mut(&self) -> MutexGuard<'_, &'a mut Vec<UserApplicationId>> {
         self.application_ids
             .try_lock()
             .expect("single-threaded execution should not lock `application_ids`")
@@ -127,7 +126,7 @@ where
 
     async fn load_application(
         &self,
-        id: ApplicationId,
+        id: UserApplicationId,
     ) -> Result<UserApplicationCode, ExecutionError> {
         let mut registry = self
             .application_registry
@@ -144,8 +143,8 @@ where
     fn forward_sessions(
         &self,
         session_ids: &[SessionId],
-        from_id: ApplicationId,
-        to_id: ApplicationId,
+        from_id: UserApplicationId,
+        to_id: UserApplicationId,
     ) -> Result<(), ExecutionError> {
         let states = &self.session_manager_mut().states;
         for id in session_ids {
@@ -166,8 +165,8 @@ where
     fn make_sessions(
         &self,
         new_sessions: Vec<NewSession>,
-        creator_id: ApplicationId,
-        receiver_id: ApplicationId,
+        creator_id: UserApplicationId,
+        receiver_id: UserApplicationId,
     ) -> Vec<SessionId> {
         let mut manager = self.session_manager_mut();
         let manager = manager.deref_mut();
@@ -194,7 +193,7 @@ where
     fn try_load_session(
         &self,
         session_id: SessionId,
-        application_id: ApplicationId,
+        application_id: UserApplicationId,
     ) -> Result<Vec<u8>, ExecutionError> {
         let guard = self
             .session_manager_mut()
@@ -218,7 +217,7 @@ where
     fn try_save_session(
         &self,
         session_id: SessionId,
-        application_id: ApplicationId,
+        application_id: UserApplicationId,
         state: Vec<u8>,
     ) -> Result<(), ExecutionError> {
         // Remove the guard.
@@ -240,7 +239,7 @@ where
     fn try_close_session(
         &self,
         session_id: SessionId,
-        application_id: ApplicationId,
+        application_id: UserApplicationId,
     ) -> Result<(), ExecutionError> {
         if let btree_map::Entry::Occupied(guard) = self.active_sessions_mut().entry(session_id) {
             // Verify ownership.
@@ -271,7 +270,7 @@ where
         self.chain_id
     }
 
-    fn application_id(&self) -> ApplicationId {
+    fn application_id(&self) -> UserApplicationId {
         *self
             .application_ids_mut()
             .last()
@@ -304,7 +303,7 @@ where
     /// Note that queries are not available from writable contexts.
     async fn try_query_application(
         &self,
-        queried_id: ApplicationId,
+        queried_id: UserApplicationId,
         argument: &[u8],
     ) -> Result<Vec<u8>, ExecutionError> {
         // Load the application.
@@ -361,7 +360,7 @@ where
     async fn try_call_application(
         &self,
         authenticated: bool,
-        callee_id: ApplicationId,
+        callee_id: UserApplicationId,
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<CallResult, ExecutionError> {

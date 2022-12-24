@@ -7,7 +7,7 @@ use dashmap::DashMap;
 use futures::Future;
 use linera_base::{crypto::HashValue, messages::ChainId};
 use linera_chain::messages::Certificate;
-use linera_execution::{ApplicationId, UserApplicationCode};
+use linera_execution::{UserApplicationCode, UserApplicationId};
 use linera_views::{
     common::{Batch, Context},
     dynamo_db::{
@@ -27,7 +27,7 @@ mod tests;
 struct DynamoDbStore {
     context: DynamoDbContext<()>,
     guards: ChainGuards,
-    user_applications: Arc<DashMap<ApplicationId, UserApplicationCode>>,
+    user_applications: Arc<DashMap<UserApplicationId, UserApplicationCode>>,
 }
 
 #[derive(Clone)]

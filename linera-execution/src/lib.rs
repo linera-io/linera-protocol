@@ -70,7 +70,7 @@ pub enum ExecutionError {
     #[error("Attempt to create an application using unknown bytecode {0:?}")]
     UnknownBytecode(BytecodeId),
     #[error("Application {0:?} is not known by the chain")]
-    UnknownApplication(Box<ApplicationId>),
+    UnknownApplication(Box<UserApplicationId>),
 }
 
 impl From<ViewError> for ExecutionError {
@@ -176,11 +176,11 @@ pub struct NewSession {
 pub trait ExecutionRuntimeContext {
     fn chain_id(&self) -> ChainId;
 
-    fn user_applications(&self) -> &Arc<DashMap<ApplicationId, UserApplicationCode>>;
+    fn user_applications(&self) -> &Arc<DashMap<UserApplicationId, UserApplicationCode>>;
 
     async fn get_user_application(
         &self,
-        application_description: &ApplicationDescription,
+        description: &UserApplicationDescription,
     ) -> Result<UserApplicationCode, ExecutionError>;
 }
 
@@ -211,7 +211,7 @@ pub struct CalleeContext {
     pub chain_id: ChainId,
     /// `None` if the caller doesn't want this particular call to be authenticated (e.g.
     /// for safety reasons).
-    pub authenticated_caller_id: Option<ApplicationId>,
+    pub authenticated_caller_id: Option<UserApplicationId>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -226,7 +226,7 @@ pub trait ReadableStorage: Send + Sync {
     fn chain_id(&self) -> ChainId;
 
     /// The current application id.
-    fn application_id(&self) -> ApplicationId;
+    fn application_id(&self) -> UserApplicationId;
 
     /// Read the system balance.
     fn read_system_balance(&self) -> crate::system::Balance;
@@ -240,7 +240,7 @@ pub trait QueryableStorage: ReadableStorage {
     /// Query another application.
     async fn try_query_application(
         &self,
-        queried_id: ApplicationId,
+        queried_id: UserApplicationId,
         argument: &[u8],
     ) -> Result<Vec<u8>, ExecutionError>;
 }
@@ -249,7 +249,7 @@ pub trait QueryableStorage: ReadableStorage {
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
 pub struct SessionId {
     /// The application that runs the session.
-    pub application_id: ApplicationId,
+    pub application_id: UserApplicationId,
     /// User-defined tag.
     pub kind: u64,
     /// Unique index set by the runtime.
@@ -281,7 +281,7 @@ pub trait WritableStorage: ReadableStorage {
     async fn try_call_application(
         &self,
         authenticated: bool,
-        callee_id: ApplicationId,
+        callee_id: UserApplicationId,
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<CallResult, ExecutionError>;
@@ -355,14 +355,14 @@ pub enum ExecutionResult {
         new_application: Option<NewApplication>,
     },
 
-    User(ApplicationId, RawExecutionResult<Vec<u8>>),
+    User(UserApplicationId, RawExecutionResult<Vec<u8>>),
 }
 
 /// A request to create a new application.
 #[derive(Clone, Debug)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct NewApplication {
-    id: ApplicationId,
+    id: UserApplicationId,
     initialization_argument: Vec<u8>,
 }
 
@@ -390,7 +390,7 @@ impl From<OperationContext> for EffectId {
 #[derive(Clone)]
 pub struct TestExecutionRuntimeContext {
     chain_id: ChainId,
-    user_applications: Arc<DashMap<ApplicationId, UserApplicationCode>>,
+    user_applications: Arc<DashMap<UserApplicationId, UserApplicationCode>>,
 }
 
 #[cfg(any(test, feature = "test"))]
@@ -410,15 +410,15 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
         self.chain_id
     }
 
-    fn user_applications(&self) -> &Arc<DashMap<ApplicationId, UserApplicationCode>> {
+    fn user_applications(&self) -> &Arc<DashMap<UserApplicationId, UserApplicationCode>> {
         &self.user_applications
     }
 
     async fn get_user_application(
         &self,
-        application_description: &ApplicationDescription,
+        description: &UserApplicationDescription,
     ) -> Result<UserApplicationCode, ExecutionError> {
-        let application_id = application_description.into();
+        let application_id = description.into();
         Ok(self
             .user_applications()
             .get(&application_id)
