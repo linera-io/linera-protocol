@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::messages::{ChainDescription, Destination};
+use linera_base::messages::ChainDescription;
 use linera_chain::{
     messages::{Medium, Value},
     ChainManager,
@@ -10,7 +10,7 @@ use linera_chain::{
 use linera_core::{messages::CrossChainRequest, node::NodeError};
 use linera_execution::{
     system::{Address, SystemEffect, SystemOperation},
-    ApplicationDescription, ApplicationId, Effect, Operation,
+    ApplicationDescription, ApplicationId, Destination, Effect, Operation,
 };
 use linera_rpc::Message;
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};

@@ -3,15 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    Bytecode, BytecodeId, ChainOwnership, EffectContext, ExecutionResult, NewApplication,
-    OperationContext, QueryContext, RawExecutionResult, UserApplicationId,
+    Bytecode, BytecodeId, ChainOwnership, ChannelId, Destination, EffectContext, ExecutionResult,
+    NewApplication, OperationContext, QueryContext, RawExecutionResult, UserApplicationId,
 };
 use linera_base::{
     committee::Committee,
     ensure,
-    messages::{
-        ArithmeticError, ChainDescription, ChainId, ChannelId, Destination, EffectId, Epoch, Owner,
-    },
+    messages::{ArithmeticError, ChainDescription, ChainId, EffectId, Epoch, Owner},
 };
 use linera_views::{
     common::Context,

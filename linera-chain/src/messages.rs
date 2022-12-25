@@ -7,9 +7,9 @@ use linera_base::{
     committee::Committee,
     crypto::{BcsSignable, HashValue, KeyPair, Signature},
     ensure,
-    messages::{BlockHeight, ChainId, Destination, Epoch, Owner, RoundNumber, ValidatorName},
+    messages::{BlockHeight, ChainId, Epoch, Owner, RoundNumber, ValidatorName},
 };
-use linera_execution::{ApplicationId, Effect, Operation};
+use linera_execution::{ApplicationId, Destination, Effect, Operation};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 

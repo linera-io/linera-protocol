@@ -8,9 +8,9 @@ use crate::{
 use linera_base::{
     crypto::{HashValue, KeyPair},
     ensure,
-    messages::{BlockHeight, Destination, Owner, RoundNumber},
+    messages::{BlockHeight, Owner, RoundNumber},
 };
-use linera_execution::{ApplicationId, ChainOwnership, Effect};
+use linera_execution::{ApplicationId, ChainOwnership, Destination, Effect};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
