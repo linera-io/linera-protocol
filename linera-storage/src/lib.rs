@@ -21,11 +21,11 @@ use linera_base::{
 };
 use linera_chain::{messages::Certificate, ChainError, ChainStateView};
 use linera_execution::{
-    system::Balance, ApplicationId, ChainOwnership, ExecutionError, ExecutionRuntimeContext,
-    UserApplicationCode, UserApplicationDescription, UserApplicationId,
+    system::Balance, ChainOwnership, ExecutionError, ExecutionRuntimeContext, UserApplicationCode,
+    UserApplicationDescription, UserApplicationId,
 };
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
-use linera_execution::{Operation, SystemOperation, WasmApplication};
+use linera_execution::{ApplicationId, Operation, SystemOperation, WasmApplication};
 use linera_views::{common::Context, views::ViewError};
 use std::{fmt::Debug, sync::Arc};
 

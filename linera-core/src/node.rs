@@ -10,10 +10,10 @@ use async_trait::async_trait;
 use futures::lock::Mutex;
 use linera_base::{
     crypto::CryptoError,
-    messages::{ArithmeticError, BlockHeight, ChainId, Origin, ValidatorName},
+    messages::{ArithmeticError, BlockHeight, ChainId, ValidatorName},
 };
 use linera_chain::{
-    messages::{Block, BlockProposal, Certificate, Value},
+    messages::{Block, BlockProposal, Certificate, Origin, Value},
     ChainError, ChainManager,
 };
 use linera_execution::ApplicationId;

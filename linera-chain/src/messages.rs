@@ -7,9 +7,7 @@ use linera_base::{
     committee::Committee,
     crypto::{BcsSignable, HashValue, KeyPair, Signature},
     ensure,
-    messages::{
-        BlockHeight, ChainId, Destination, Epoch, Origin, Owner, RoundNumber, ValidatorName,
-    },
+    messages::{BlockHeight, ChainId, Destination, Epoch, Owner, RoundNumber, ValidatorName},
 };
 use linera_execution::{ApplicationId, Effect, Operation};
 use serde::{Deserialize, Serialize};
@@ -60,6 +58,24 @@ pub struct MessageGroup {
     pub effects: Vec<(usize, Effect)>,
 }
 
+/// The origin of a message, relative to a particular application. Used to identify each inbox.
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Serialize, Deserialize)]
+pub struct Origin {
+    /// The chain ID of the sender.
+    pub chain_id: ChainId,
+    /// The medium.
+    pub medium: Medium,
+}
+
+/// The origin of a message coming from a particular chain. Used to identify each inbox.
+#[derive(Debug, PartialEq, Eq, Ord, PartialOrd, Hash, Clone, Serialize, Deserialize)]
+pub enum Medium {
+    /// The message is a direct message.
+    Direct,
+    /// The message is a channel broadcast.
+    Channel(String),
+}
+
 /// An authenticated proposal for a new block.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
@@ -107,6 +123,22 @@ pub struct Certificate {
     pub hash: HashValue,
     /// Signatures on the value.
     pub signatures: Vec<(ValidatorName, Signature)>,
+}
+
+impl Origin {
+    pub fn chain(chain_id: ChainId) -> Self {
+        Self {
+            chain_id,
+            medium: Medium::Direct,
+        }
+    }
+
+    pub fn channel(chain_id: ChainId, name: String) -> Self {
+        Self {
+            chain_id,
+            medium: Medium::Channel(name),
+        }
+    }
 }
 
 impl Value {

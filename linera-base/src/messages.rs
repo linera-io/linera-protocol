@@ -68,24 +68,6 @@ pub struct ChannelId {
     pub name: String,
 }
 
-/// The origin of a message, relative to a particular application. Used to identify each inbox.
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Serialize, Deserialize)]
-pub struct Origin {
-    /// The chain ID of the sender.
-    pub chain_id: ChainId,
-    /// The medium.
-    pub medium: Medium,
-}
-
-/// The origin of a message coming from a particular chain. Used to identify each inbox.
-#[derive(Debug, PartialEq, Eq, Ord, PartialOrd, Hash, Clone, Serialize, Deserialize)]
-pub enum Medium {
-    /// The message is a direct message.
-    Direct,
-    /// The message is a channel broadcast.
-    Channel(String),
-}
-
 /// The destination of a message, relative to a particular application.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Destination {
@@ -102,22 +84,6 @@ pub enum ArithmeticError {
     SequenceOverflow,
     #[error("Sequence number underflow")]
     SequenceUnderflow,
-}
-
-impl Origin {
-    pub fn chain(chain_id: ChainId) -> Self {
-        Self {
-            chain_id,
-            medium: Medium::Direct,
-        }
-    }
-
-    pub fn channel(chain_id: ChainId, name: String) -> Self {
-        Self {
-            chain_id,
-            medium: Medium::Channel(name),
-        }
-    }
 }
 
 impl std::fmt::Display for BlockHeight {
