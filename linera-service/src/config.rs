@@ -5,7 +5,7 @@
 use linera_base::{
     committee::{Committee, ValidatorState},
     crypto::{HashValue, KeyPair},
-    messages::{BlockHeight, ChainDescription, ChainId, Owner, ValidatorName},
+    data_types::{BlockHeight, ChainDescription, ChainId, Owner, ValidatorName},
 };
 use linera_core::client::{ChainClientState, ValidatorNodeProvider};
 use linera_execution::system::Balance;

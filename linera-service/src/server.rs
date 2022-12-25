@@ -7,7 +7,7 @@
 use anyhow::{anyhow, ensure};
 use async_trait::async_trait;
 use futures::future::join_all;
-use linera_base::{crypto::KeyPair, messages::ValidatorName};
+use linera_base::{crypto::KeyPair, data_types::ValidatorName};
 use linera_core::worker::WorkerState;
 use linera_rpc::{
     config::{

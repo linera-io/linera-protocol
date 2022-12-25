@@ -8,7 +8,7 @@ use crate::{
     ExecutionResult, ExecutionRuntimeContext, Operation, OperationContext, Query, QueryContext,
     Response, UserApplicationDescription, UserApplicationId,
 };
-use linera_base::{ensure, messages::ChainId};
+use linera_base::{data_types::ChainId, ensure};
 use linera_views::{
     collection_view::ReentrantCollectionView,
     impl_view,

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use linera_base::messages::ChainId;
-use linera_chain::messages::{BlockAndRound, Value};
+use linera_base::data_types::ChainId;
+use linera_chain::data_types::{BlockAndRound, Value};
 use linera_rpc::{
     config::{ShardConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig},
     grpc_network::{
@@ -239,7 +239,7 @@ impl Proxyable for ChainInfoQuery {
 
 impl Proxyable for CrossChainRequest {
     fn chain_id(&self) -> Option<ChainId> {
-        match linera_core::messages::CrossChainRequest::try_from(self.clone()) {
+        match linera_core::data_types::CrossChainRequest::try_from(self.clone()) {
             Ok(cross_chain_request) => Some(cross_chain_request.target_chain_id()),
             Err(_) => None,
         }

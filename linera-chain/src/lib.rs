@@ -2,18 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod chain;
+pub mod data_types;
 mod manager;
-pub mod messages;
 
 pub use chain::{ChainStateView, Event};
+use data_types::Origin;
 use linera_base::{
     crypto::CryptoError,
-    messages::{ArithmeticError, BlockHeight, ChainId, RoundNumber},
+    data_types::{ArithmeticError, BlockHeight, ChainId, RoundNumber},
 };
 use linera_execution::{ApplicationId, ExecutionError};
 use linera_views::views::ViewError;
 pub use manager::{ChainManager, Outcome as ChainManagerOutcome};
-use messages::Origin;
 use thiserror::Error;
 
 #[derive(Error, Debug)]

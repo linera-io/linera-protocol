@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    messages::{Block, BlockAndRound, BlockProposal, Certificate, Value, Vote},
+    data_types::{Block, BlockAndRound, BlockProposal, Certificate, Value, Vote},
     ChainError,
 };
 use linera_base::{
     crypto::{HashValue, KeyPair},
+    data_types::{BlockHeight, Owner, RoundNumber},
     ensure,
-    messages::{BlockHeight, Owner, RoundNumber},
 };
 use linera_execution::{ApplicationId, ChainOwnership, Destination, Effect};
 use serde::{Deserialize, Serialize};

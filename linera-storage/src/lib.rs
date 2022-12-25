@@ -17,9 +17,9 @@ use futures::future;
 use linera_base::{
     committee::Committee,
     crypto::HashValue,
-    messages::{ChainDescription, ChainId, Epoch, Owner},
+    data_types::{ChainDescription, ChainId, Epoch, Owner},
 };
-use linera_chain::{messages::Certificate, ChainError, ChainStateView};
+use linera_chain::{data_types::Certificate, ChainError, ChainStateView};
 use linera_execution::{
     system::Balance, ChainOwnership, ExecutionError, ExecutionRuntimeContext, UserApplicationCode,
     UserApplicationDescription, UserApplicationId,

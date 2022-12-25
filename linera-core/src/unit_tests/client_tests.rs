@@ -3,14 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     client::{ChainClient, ChainClientState, CommunicateAction, ValidatorNodeProvider},
-    messages::*,
+    data_types::*,
     node::{NodeError, ValidatorNode},
     worker::{ValidatorWorker, WorkerState},
 };
 use async_trait::async_trait;
 use futures::lock::Mutex;
-use linera_base::{committee::Committee, crypto::*, messages::*};
-use linera_chain::messages::{Block, BlockProposal, Certificate, Value};
+use linera_base::{committee::Committee, crypto::*, data_types::*};
+use linera_chain::data_types::{Block, BlockProposal, Certificate, Value};
 use linera_execution::{
     system::{Amount, Balance, SystemOperation, UserData},
     Operation,

@@ -1,5 +1,5 @@
 use crate::{ExecutionError, NewApplication};
-use linera_base::{crypto::HashValue, messages::EffectId};
+use linera_base::{crypto::HashValue, data_types::EffectId};
 use linera_views::{
     common::Context, impl_view, map_view::MapView, scoped_view::ScopedView, views::ViewError,
 };

@@ -5,8 +5,8 @@ use crate::{chain_guards::ChainGuards, ChainRuntimeContext, ChainStateView, Stor
 use async_trait::async_trait;
 use dashmap::DashMap;
 use futures::Future;
-use linera_base::{crypto::HashValue, messages::ChainId};
-use linera_chain::messages::Certificate;
+use linera_base::{crypto::HashValue, data_types::ChainId};
+use linera_chain::data_types::Certificate;
 use linera_execution::{UserApplicationCode, UserApplicationId};
 use linera_views::{
     common::{Batch, Context},

@@ -4,5 +4,5 @@
 
 pub mod committee;
 pub mod crypto;
+pub mod data_types;
 pub mod ensure;
-pub mod messages;

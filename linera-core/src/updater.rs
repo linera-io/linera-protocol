@@ -3,15 +3,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    messages::{ChainInfo, ChainInfoQuery},
+    data_types::{ChainInfo, ChainInfoQuery},
     node::{NodeError, ValidatorNode},
 };
 use futures::{future, StreamExt};
 use linera_base::{
     committee::Committee,
-    messages::{BlockHeight, ChainDescription, ChainId, EffectId, ValidatorName},
+    data_types::{BlockHeight, ChainDescription, ChainId, EffectId, ValidatorName},
 };
-use linera_chain::messages::{BlockProposal, Certificate, Vote};
+use linera_chain::data_types::{BlockProposal, Certificate, Vote};
 use linera_storage::Store;
 use linera_views::views::ViewError;
 use std::{

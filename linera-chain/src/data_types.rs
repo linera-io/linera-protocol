@@ -6,16 +6,16 @@ use crate::ChainError;
 use linera_base::{
     committee::Committee,
     crypto::{BcsSignable, HashValue, KeyPair, Signature},
+    data_types::{BlockHeight, ChainId, Epoch, Owner, RoundNumber, ValidatorName},
     ensure,
-    messages::{BlockHeight, ChainId, Epoch, Owner, RoundNumber, ValidatorName},
 };
 use linera_execution::{ApplicationId, Destination, Effect, Operation};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
 #[cfg(test)]
-#[path = "unit_tests/messages_tests.rs"]
-mod messages_tests;
+#[path = "unit_tests/data_types_tests.rs"]
+mod data_types_tests;
 
 /// A block containing operations to apply on a given chain, as well as the
 /// acknowledgment of a number of incoming messages from other chains.

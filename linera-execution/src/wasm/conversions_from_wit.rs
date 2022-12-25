@@ -13,7 +13,7 @@ use crate::{
 };
 use linera_base::{
     crypto::HashValue,
-    messages::{BlockHeight, ChainId, EffectId},
+    data_types::{BlockHeight, ChainId, EffectId},
 };
 
 impl From<contract::SessionCallResult> for (SessionCallResult, Vec<u8>) {

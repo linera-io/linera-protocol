@@ -15,9 +15,9 @@ use crate::{
 use async_trait::async_trait;
 use futures::{channel::mpsc, sink::SinkExt, stream::StreamExt};
 
-use linera_chain::messages::{BlockProposal, Certificate};
+use linera_chain::data_types::{BlockProposal, Certificate};
 use linera_core::{
-    messages::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
+    data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     node::{NodeError, ValidatorNode},
     worker::{ValidatorWorker, WorkerState},
 };

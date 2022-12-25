@@ -100,7 +100,7 @@ pub enum Error {
 mod tests {
     use super::{Codec, Message, PREFIX_SIZE};
     use bytes::{BufMut, BytesMut};
-    use linera_core::messages::ChainInfoQuery;
+    use linera_core::data_types::ChainInfoQuery;
     use test_strategy::proptest;
     use tokio_util::codec::{Decoder, Encoder};
 
