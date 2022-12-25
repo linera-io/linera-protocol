@@ -23,7 +23,10 @@ use linera_execution::{
     ExecutionStateView, Operation, SystemExecutionState,
 };
 use linera_storage::{DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient, Store};
-use linera_views::{test_utils::LocalStackTestContext, views::ViewError};
+use linera_views::{
+    test_utils::LocalStackTestContext,
+    views::{HashFunc, ViewError},
+};
 use std::collections::{BTreeMap, BTreeSet};
 use test_log::test;
 

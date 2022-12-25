@@ -3,10 +3,10 @@
 
 use crate::common::Batch;
 use async_trait::async_trait;
+use linera_base::crypto::HashValue;
 use serde::Serialize;
 use std::{fmt::Debug, io::Write};
 use thiserror::Error;
-use linera_base::crypto::HashValue;
 
 #[cfg(test)]
 #[path = "unit_tests/views.rs"]
@@ -109,7 +109,6 @@ impl Hasher for sha2::Sha512 {
 
 #[async_trait]
 pub trait ContainerView<C> {
-
     /// Save the container view to a file
     async fn save(&mut self) -> Result<(), ViewError>;
 
@@ -119,8 +118,6 @@ pub trait ContainerView<C> {
 
 #[async_trait]
 pub trait HashFunc<C> {
-
     /// Computing the hash and attributing the type to it.
     async fn hash_value(&mut self) -> Result<HashValue, ViewError>;
 }
-

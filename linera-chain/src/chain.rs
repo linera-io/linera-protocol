@@ -24,8 +24,9 @@ use linera_views::{
     log_view::LogView,
     map_view::MapView,
     register_view::RegisterView,
-    scoped_view::ScopedView,
-    views::{View, ViewError},
+    views::{View, HashableContainerView, ViewError},
+    queue_view::QueueView,
+    register_view::RegisterView,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
