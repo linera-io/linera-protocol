@@ -8,11 +8,12 @@ pub mod messages;
 pub use chain::{ChainStateView, Event};
 use linera_base::{
     crypto::CryptoError,
-    messages::{ArithmeticError, BlockHeight, ChainId, Origin, RoundNumber},
+    messages::{ArithmeticError, BlockHeight, ChainId, RoundNumber},
 };
 use linera_execution::{ApplicationId, ExecutionError};
 use linera_views::views::ViewError;
 pub use manager::{ChainManager, Outcome as ChainManagerOutcome};
+use messages::Origin;
 use thiserror::Error;
 
 #[derive(Error, Debug)]

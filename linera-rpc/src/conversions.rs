@@ -7,9 +7,9 @@ use crate::grpc_network::{
 use ed25519::signature::Signature as edSignature;
 use linera_base::{
     crypto::{CryptoError, HashValue, PublicKey, Signature},
-    messages::{BlockHeight, ChainId, EffectId, Medium, Origin, Owner, ValidatorName},
+    messages::{BlockHeight, ChainId, EffectId, Owner, ValidatorName},
 };
-use linera_chain::messages::{BlockProposal, Certificate};
+use linera_chain::messages::{BlockProposal, Certificate, Medium, Origin};
 use linera_core::{
     messages::{
         BlockHeightRange, ChainInfoQuery, ChainInfoResponse, CrossChainRequest,

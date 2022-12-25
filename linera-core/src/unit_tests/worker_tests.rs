@@ -9,8 +9,8 @@ use crate::{
 use linera_base::{committee::Committee, crypto::*, messages::*};
 use linera_chain::{
     messages::{
-        Block, BlockAndRound, BlockProposal, Certificate, MessageGroup, SignatureAggregator, Value,
-        Vote,
+        Block, BlockAndRound, BlockProposal, Certificate, MessageGroup, Origin,
+        SignatureAggregator, Value, Vote,
     },
     ChainError, Event,
 };
