@@ -10,7 +10,7 @@ use linera_base::{
     ensure,
 };
 use linera_chain::{
-    data_types::{Block, BlockProposal, Certificate, Medium, MessageGroup, Origin, Value},
+    data_types::{Block, BlockProposal, Certificate, Medium, Message, Origin, Value},
     ChainManagerOutcome, ChainStateView,
 };
 use linera_execution::ApplicationDescription;
@@ -512,7 +512,7 @@ where
             );
         }
         if query.request_pending_messages {
-            let mut message_groups = Vec::new();
+            let mut messages = Vec::new();
             for application_id in chain.communication_states.indices().await? {
                 let state = chain
                     .communication_states
@@ -520,43 +520,19 @@ where
                     .await?;
                 for origin in state.inboxes.indices().await? {
                     let inbox = state.inboxes.load_entry(origin.clone()).await?;
-                    let mut effects = Vec::new();
-                    let mut current_height = None;
                     let count = inbox.received_events.count();
                     for event in inbox.received_events.read_front(count).await? {
-                        match current_height {
-                            None => {
-                                current_height = Some(event.height);
-                            }
-                            Some(height) if height != event.height => {
-                                // If the height changed, flush the accumulated effects
-                                // into a new group.
-                                message_groups.push(MessageGroup {
-                                    application_id,
-                                    origin: origin.clone(),
-                                    height,
-                                    effects,
-                                });
-                                effects = Vec::new();
-                                current_height = Some(event.height);
-                            }
-                            _ => {
-                                // Otherwise, continue adding effects to the same group.
-                            }
-                        }
-                        effects.push((event.index, event.effect.clone()));
-                    }
-                    if let Some(height) = current_height {
-                        message_groups.push(MessageGroup {
+                        messages.push(Message {
                             application_id,
                             origin: origin.clone(),
-                            height,
-                            effects,
+                            height: event.height,
+                            index: event.index,
+                            effect: event.effect.clone(),
                         });
                     }
                 }
             }
-            info.requested_pending_messages = message_groups;
+            info.requested_pending_messages = messages;
         }
         if let Some(range) = query.request_sent_certificates_in_range {
             let start = range.start.into();

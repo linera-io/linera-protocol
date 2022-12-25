@@ -35,7 +35,7 @@ Block:
         TYPENAME: Epoch
     - incoming_messages:
         SEQ:
-          TYPENAME: MessageGroup
+          TYPENAME: Message
     - operations:
         SEQ:
           TUPLE:
@@ -131,7 +131,7 @@ ChainInfo:
               TYPENAME: Committee
     - requested_pending_messages:
         SEQ:
-          TYPENAME: MessageGroup
+          TYPENAME: Message
     - requested_sent_certificates:
         SEQ:
           TYPENAME: Certificate
@@ -253,7 +253,7 @@ Medium:
     1:
       Channel:
         NEWTYPE: STR
-MessageGroup:
+Message:
   STRUCT:
     - application_id:
         TYPENAME: ApplicationId
@@ -261,11 +261,9 @@ MessageGroup:
         TYPENAME: Origin
     - height:
         TYPENAME: BlockHeight
-    - effects:
-        SEQ:
-          TUPLE:
-            - U64
-            - TYPENAME: Effect
+    - index: U64
+    - effect:
+        TYPENAME: Effect
 MultiOwnerManager:
   STRUCT:
     - owners:

@@ -32,7 +32,7 @@ pub struct Block {
     pub epoch: Epoch,
     /// A selection of incoming messages to be executed first. Successive messages of same
     /// sender and height are grouped together for conciseness.
-    pub incoming_messages: Vec<MessageGroup>,
+    pub incoming_messages: Vec<Message>,
     /// The operations to execute.
     pub operations: Vec<(ApplicationId, Operation)>,
     /// The block height.
@@ -49,13 +49,14 @@ pub struct BlockAndRound {
     pub round: RoundNumber,
 }
 
-/// A selection of messages received from a block of another chain.
+/// A message received from a block of another chain.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct MessageGroup {
+pub struct Message {
     pub application_id: ApplicationId,
     pub origin: Origin,
     pub height: BlockHeight,
-    pub effects: Vec<(usize, Effect)>,
+    pub index: usize,
+    pub effect: Effect,
 }
 
 /// The origin of a message, relative to a particular application. Used to identify each inbox.
