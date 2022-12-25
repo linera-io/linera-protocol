@@ -9,8 +9,8 @@ use crate::{
 use linera_base::{committee::Committee, crypto::*, data_types::*};
 use linera_chain::{
     data_types::{
-        Block, BlockAndRound, BlockProposal, Certificate, MessageGroup, Origin,
-        SignatureAggregator, Value, Vote,
+        Block, BlockAndRound, BlockProposal, Certificate, Message, Origin, SignatureAggregator,
+        Value, Vote,
     },
     ChainError, Event,
 };
@@ -89,7 +89,7 @@ fn make_block(
     epoch: Epoch,
     chain_id: ChainId,
     operations: Vec<Operation>,
-    incoming_messages: Vec<MessageGroup>,
+    incoming_messages: Vec<Message>,
     previous_confirmed_block: Option<&Certificate>,
 ) -> Block {
     let previous_block_hash = previous_confirmed_block.as_ref().map(|cert| cert.hash);
@@ -121,7 +121,7 @@ fn make_transfer_block_proposal(
     key_pair: &KeyPair,
     recipient: Address,
     amount: Amount,
-    incoming_messages: Vec<MessageGroup>,
+    incoming_messages: Vec<Message>,
     previous_confirmed_block: Option<&Certificate>,
 ) -> BlockProposal {
     let block = make_block(
@@ -163,7 +163,7 @@ async fn make_transfer_certificate<S>(
     key_pair: &KeyPair,
     recipient: Address,
     amount: Amount,
-    incoming_messages: Vec<MessageGroup>,
+    incoming_messages: Vec<Message>,
     committee: &Committee,
     balance: Balance,
     worker: &WorkerState<S>,
@@ -715,38 +715,35 @@ where
             Address::Account(ChainId::root(3)),
             Amount::from(5),
             vec![
-                MessageGroup {
+                Message {
                     application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     height: BlockHeight::from(0),
-                    effects: vec![
-                        (
-                            0,
-                            Effect::System(SystemEffect::Credit {
-                                recipient: ChainId::root(2),
-                                amount: Amount::from(1),
-                            }),
-                        ),
-                        (
-                            1,
-                            Effect::System(SystemEffect::Credit {
-                                recipient: ChainId::root(2),
-                                amount: Amount::from(2),
-                            }),
-                        ),
-                    ],
+                    index: 0,
+                    effect: Effect::System(SystemEffect::Credit {
+                        recipient: ChainId::root(2),
+                        amount: Amount::from(1),
+                    }),
                 },
-                MessageGroup {
+                Message {
+                    application_id: ApplicationId::System,
+                    origin: Origin::chain(ChainId::root(1)),
+                    height: BlockHeight::from(0),
+                    index: 1,
+                    effect: Effect::System(SystemEffect::Credit {
+                        recipient: ChainId::root(2),
+                        amount: Amount::from(2),
+                    }),
+                },
+                Message {
                     application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     height: BlockHeight::from(1),
-                    effects: vec![(
-                        0,
-                        Effect::System(SystemEffect::Credit {
-                            recipient: ChainId::root(2),
-                            amount: Amount::from(2), // wrong
-                        }),
-                    )],
+                    index: 0,
+                    effect: Effect::System(SystemEffect::Credit {
+                        recipient: ChainId::root(2),
+                        amount: Amount::from(2), // wrong
+                    }),
                 },
             ],
             None,
@@ -765,38 +762,35 @@ where
             Address::Account(ChainId::root(3)),
             Amount::from(6),
             vec![
-                MessageGroup {
+                Message {
                     application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     height: BlockHeight::from(0),
-                    effects: vec![
-                        (
-                            1,
-                            Effect::System(SystemEffect::Credit {
-                                recipient: ChainId::root(2),
-                                amount: Amount::from(2),
-                            }),
-                        ),
-                        (
-                            0,
-                            Effect::System(SystemEffect::Credit {
-                                recipient: ChainId::root(2),
-                                amount: Amount::from(1),
-                            }),
-                        ),
-                    ],
+                    index: 1,
+                    effect: Effect::System(SystemEffect::Credit {
+                        recipient: ChainId::root(2),
+                        amount: Amount::from(2),
+                    }),
                 },
-                MessageGroup {
+                Message {
+                    application_id: ApplicationId::System,
+                    origin: Origin::chain(ChainId::root(1)),
+                    height: BlockHeight::from(0),
+                    index: 0,
+                    effect: Effect::System(SystemEffect::Credit {
+                        recipient: ChainId::root(2),
+                        amount: Amount::from(1),
+                    }),
+                },
+                Message {
                     application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     height: BlockHeight::from(1),
-                    effects: vec![(
-                        0,
-                        Effect::System(SystemEffect::Credit {
-                            recipient: ChainId::root(2),
-                            amount: Amount::from(3),
-                        }),
-                    )],
+                    index: 0,
+                    effect: Effect::System(SystemEffect::Credit {
+                        recipient: ChainId::root(2),
+                        amount: Amount::from(3),
+                    }),
                 },
             ],
             None,
@@ -815,38 +809,35 @@ where
             Address::Account(ChainId::root(3)),
             Amount::from(6),
             vec![
-                MessageGroup {
+                Message {
                     application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     height: BlockHeight::from(1),
-                    effects: vec![(
-                        0,
-                        Effect::System(SystemEffect::Credit {
-                            recipient: ChainId::root(2),
-                            amount: Amount::from(3),
-                        }),
-                    )],
+                    index: 0,
+                    effect: Effect::System(SystemEffect::Credit {
+                        recipient: ChainId::root(2),
+                        amount: Amount::from(3),
+                    }),
                 },
-                MessageGroup {
+                Message {
                     application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     height: BlockHeight::from(0),
-                    effects: vec![
-                        (
-                            0,
-                            Effect::System(SystemEffect::Credit {
-                                recipient: ChainId::root(2),
-                                amount: Amount::from(1),
-                            }),
-                        ),
-                        (
-                            1,
-                            Effect::System(SystemEffect::Credit {
-                                recipient: ChainId::root(2),
-                                amount: Amount::from(2),
-                            }),
-                        ),
-                    ],
+                    index: 0,
+                    effect: Effect::System(SystemEffect::Credit {
+                        recipient: ChainId::root(2),
+                        amount: Amount::from(1),
+                    }),
+                },
+                Message {
+                    application_id: ApplicationId::System,
+                    origin: Origin::chain(ChainId::root(1)),
+                    height: BlockHeight::from(0),
+                    index: 1,
+                    effect: Effect::System(SystemEffect::Credit {
+                        recipient: ChainId::root(2),
+                        amount: Amount::from(2),
+                    }),
                 },
             ],
             None,
@@ -864,17 +855,15 @@ where
             &recipient_key_pair,
             Address::Account(ChainId::root(3)),
             Amount::from(1),
-            vec![MessageGroup {
+            vec![Message {
                 application_id: ApplicationId::System,
                 origin: Origin::chain(ChainId::root(1)),
                 height: BlockHeight::from(0),
-                effects: vec![(
-                    0,
-                    Effect::System(SystemEffect::Credit {
-                        recipient: ChainId::root(2),
-                        amount: Amount::from(1),
-                    }),
-                )],
+                index: 0,
+                effect: Effect::System(SystemEffect::Credit {
+                    recipient: ChainId::root(2),
+                    amount: Amount::from(1),
+                }),
             }],
             None,
         );
@@ -918,17 +907,15 @@ where
             &recipient_key_pair,
             Address::Account(ChainId::root(3)),
             Amount::from(3),
-            vec![MessageGroup {
+            vec![Message {
                 application_id: ApplicationId::System,
                 origin: Origin::chain(ChainId::root(1)),
                 height: BlockHeight::from(1),
-                effects: vec![(
-                    0,
-                    Effect::System(SystemEffect::Credit {
-                        recipient: ChainId::root(2),
-                        amount: Amount::from(3),
-                    }),
-                )],
+                index: 0,
+                effect: Effect::System(SystemEffect::Credit {
+                    recipient: ChainId::root(2),
+                    amount: Amount::from(3),
+                }),
             }],
             Some(&certificate),
         );
@@ -1320,17 +1307,15 @@ where
         &key_pair,
         Address::Account(ChainId::root(2)),
         Amount::from(1000),
-        vec![MessageGroup {
+        vec![Message {
             application_id: ApplicationId::System,
             origin: Origin::chain(ChainId::root(3)),
             height: BlockHeight::from(0),
-            effects: vec![(
-                0,
-                Effect::System(SystemEffect::Credit {
-                    recipient: ChainId::root(1),
-                    amount: Amount::from(995),
-                }),
-            )],
+            index: 0,
+            effect: Effect::System(SystemEffect::Credit {
+                recipient: ChainId::root(1),
+                amount: Amount::from(995),
+            }),
         }],
         &committee,
         Balance::from(0),
@@ -1882,17 +1867,15 @@ where
         &recipient_key_pair,
         Address::Account(ChainId::root(3)),
         Amount::from(1),
-        vec![MessageGroup {
+        vec![Message {
             application_id: ApplicationId::System,
             origin: Origin::chain(ChainId::root(1)),
             height: BlockHeight::from(0),
-            effects: vec![(
-                0,
-                Effect::System(SystemEffect::Credit {
-                    recipient: ChainId::root(2),
-                    amount: Amount::from(5),
-                }),
-            )],
+            index: 0,
+            effect: Effect::System(SystemEffect::Credit {
+                recipient: ChainId::root(2),
+                amount: Amount::from(5),
+            }),
         }],
         &committee,
         Balance::from(4),
@@ -2232,17 +2215,15 @@ where
             block: Block {
                 epoch: Epoch::from(1),
                 chain_id: admin_id,
-                incoming_messages: vec![MessageGroup {
+                incoming_messages: vec![Message {
                     application_id: ApplicationId::System,
                     origin: Origin::chain(admin_id),
                     height: BlockHeight::from(0),
-                    effects: vec![(
-                        1,
-                        Effect::System(SystemEffect::Subscribe {
-                            id: user_id,
-                            channel: admin_channel.clone(),
-                        }),
-                    )],
+                    index: 1,
+                    effect: Effect::System(SystemEffect::Subscribe {
+                        id: user_id,
+                        channel: admin_channel.clone(),
+                    }),
                 }],
                 operations: Vec::new(),
                 previous_block_hash: Some(certificate1.hash),
@@ -2388,36 +2369,33 @@ where
                 epoch: Epoch::from(0),
                 chain_id: user_id,
                 incoming_messages: vec![
-                    MessageGroup {
+                    Message {
                         application_id: ApplicationId::System,
                         origin: admin_channel_origin.clone(),
                         height: BlockHeight::from(1),
-                        effects: vec![(
-                            0,
-                            Effect::System(SystemEffect::SetCommittees {
-                                admin_id,
-                                epoch: Epoch::from(1),
-                                committees: committees2.clone(),
-                            }),
-                        )],
+                        index: 0,
+                        effect: Effect::System(SystemEffect::SetCommittees {
+                            admin_id,
+                            epoch: Epoch::from(1),
+                            committees: committees2.clone(),
+                        }),
                     },
-                    MessageGroup {
+                    Message {
                         application_id: ApplicationId::System,
                         origin: Origin::chain(admin_id),
                         height: BlockHeight::from(1),
-                        effects: vec![(
-                            1,
-                            Effect::System(SystemEffect::Credit {
-                                recipient: user_id,
-                                amount: Amount::from(2),
-                            }),
-                        )],
+                        index: 1,
+                        effect: Effect::System(SystemEffect::Credit {
+                            recipient: user_id,
+                            amount: Amount::from(2),
+                        }),
                     },
-                    MessageGroup {
+                    Message {
                         application_id: ApplicationId::System,
                         origin: Origin::chain(admin_id),
                         height: BlockHeight::from(2),
-                        effects: vec![(0, Effect::System(SystemEffect::Notify { id: user_id }))],
+                        index: 0,
+                        effect: Effect::System(SystemEffect::Notify { id: user_id }),
                     },
                 ],
                 operations: Vec::new(),
@@ -2908,17 +2886,15 @@ where
             block: Block {
                 epoch: Epoch::from(1),
                 chain_id: admin_id,
-                incoming_messages: vec![MessageGroup {
+                incoming_messages: vec![Message {
                     application_id: ApplicationId::System,
                     origin: Origin::chain(user_id),
                     height: BlockHeight::from(0),
-                    effects: vec![(
-                        0,
-                        Effect::System(SystemEffect::Credit {
-                            recipient: admin_id,
-                            amount: Amount::from(1),
-                        }),
-                    )],
+                    index: 0,
+                    effect: Effect::System(SystemEffect::Credit {
+                        recipient: admin_id,
+                        amount: Amount::from(1),
+                    }),
                 }],
                 operations: Vec::new(),
                 previous_block_hash: Some(certificate1.hash),

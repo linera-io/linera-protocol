@@ -16,7 +16,7 @@ use linera_base::{
     data_types::{BlockHeight, ChainId, EffectId, Epoch, Owner, RoundNumber, ValidatorName},
 };
 use linera_chain::{
-    data_types::{Block, BlockAndRound, BlockProposal, Certificate, MessageGroup, Value, Vote},
+    data_types::{Block, BlockAndRound, BlockProposal, Certificate, Message, Value, Vote},
     ChainManager,
 };
 use linera_execution::{
@@ -233,7 +233,7 @@ where
     }
 
     /// Obtain the pending messages for the local chain.
-    async fn pending_messages(&mut self) -> Result<Vec<MessageGroup>, NodeError> {
+    async fn pending_messages(&mut self) -> Result<Vec<Message>, NodeError> {
         let query = ChainInfoQuery::new(self.chain_id).with_pending_messages();
         let response = self.node_client.handle_chain_info_query(query).await?;
         let mut pending_messages = response.info.requested_pending_messages;

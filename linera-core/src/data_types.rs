@@ -9,7 +9,7 @@ use linera_base::{
     data_types::{BlockHeight, ChainDescription, ChainId, Epoch, ValidatorName},
 };
 use linera_chain::{
-    data_types::{Certificate, MessageGroup, Origin},
+    data_types::{Certificate, Message, Origin},
     ChainManager, ChainStateView,
 };
 use linera_execution::{
@@ -111,7 +111,7 @@ pub struct ChainInfo {
     /// The current committees.
     pub requested_committees: Option<BTreeMap<Epoch, Committee>>,
     /// The received messages that are waiting be picked in the next block (if requested).
-    pub requested_pending_messages: Vec<MessageGroup>,
+    pub requested_pending_messages: Vec<Message>,
     /// The response to `request_sent_certificates_in_range`
     pub requested_sent_certificates: Vec<Certificate>,
     /// The current number of received certificates (useful for `request_received_certificates_excluding_first_nth`)

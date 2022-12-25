@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    data_types::{Block, Medium, MessageGroup, Origin},
+    data_types::{Block, Medium, Message, Origin},
     ChainError, ChainManager,
 };
 use linera_base::{
@@ -452,26 +452,24 @@ where
     /// Verify that the incoming_messages are in the right order. This matters for inbox
     /// invariants, notably the fact that inbox.expected_events is sorted.
     #[allow(clippy::result_large_err)]
-    fn check_incoming_messages(&self, messages: &[MessageGroup]) -> Result<(), ChainError> {
+    fn check_incoming_messages(&self, messages: &[Message]) -> Result<(), ChainError> {
         let mut next_messages: HashMap<(ApplicationId, Origin), (BlockHeight, usize)> =
             HashMap::new();
-        for message_group in messages {
+        for message in messages {
             let next_message = next_messages
-                .entry((message_group.application_id, message_group.origin.clone()))
+                .entry((message.application_id, message.origin.clone()))
                 .or_default();
-            for (message_index, _) in &message_group.effects {
-                ensure!(
-                    (message_group.height, *message_index) >= *next_message,
-                    ChainError::InvalidMessageOrder {
-                        chain_id: self.chain_id(),
-                        application_id: message_group.application_id,
-                        origin: message_group.origin.clone(),
-                        height: message_group.height,
-                        index: *message_index,
-                    }
-                );
-                *next_message = (message_group.height, *message_index + 1);
-            }
+            ensure!(
+                (message.height, message.index) >= *next_message,
+                ChainError::InvalidMessageOrder {
+                    chain_id: self.chain_id(),
+                    application_id: message.application_id,
+                    origin: message.origin.clone(),
+                    height: message.height,
+                    index: message.index,
+                }
+            );
+            *next_message = (message.height, message.index + 1);
         }
         Ok(())
     }
@@ -490,120 +488,113 @@ where
         // First, process incoming messages.
         self.check_incoming_messages(&block.incoming_messages)?;
 
-        for message_group in &block.incoming_messages {
+        for message in &block.incoming_messages {
             log::trace!(
                 "Updating inbox {:?}::{:?} in chain {:?}",
-                message_group.application_id,
-                message_group.origin,
+                message.application_id,
+                message.origin,
                 chain_id
             );
-            for (message_index, message_effect) in &message_group.effects {
-                let communication_state = self
-                    .communication_states
-                    .load_entry(message_group.application_id)
-                    .await?;
-                let inbox = communication_state
-                    .inboxes
-                    .load_entry(message_group.origin.clone())
-                    .await?;
-                // Receivers are allowed to skip events from the received queue.
-                while let Some(
-                    event @ Event {
+            let communication_state = self
+                .communication_states
+                .load_entry(message.application_id)
+                .await?;
+            let inbox = communication_state
+                .inboxes
+                .load_entry(message.origin.clone())
+                .await?;
+            // Receivers are allowed to skip events from the received queue.
+            while let Some(
+                event @ Event {
+                    height,
+                    index,
+                    effect: _,
+                },
+            ) = inbox.received_events.front().await?
+            {
+                if height > message.height || (height == message.height && index >= message.index) {
+                    break;
+                }
+                assert!((height, index) < (message.height, message.index));
+                inbox.received_events.delete_front();
+                log::trace!("Skipping received event {:?}", event);
+            }
+            // Reconcile the event with the received queue, or mark it as "expected".
+            match inbox.received_events.front().await? {
+                Some(event) => {
+                    let Event {
                         height,
                         index,
-                        effect: _,
-                    },
-                ) = inbox.received_events.front().await?
-                {
-                    if height > message_group.height
-                        || (height == message_group.height && index >= *message_index)
-                    {
-                        break;
-                    }
-                    assert!((height, index) < (message_group.height, *message_index));
+                        ref effect,
+                    } = event;
+                    ensure!(
+                        message.height == height && message.index == index,
+                        ChainError::InvalidMessage {
+                            chain_id: self.chain_id(),
+                            application_id: message.application_id,
+                            origin: message.origin.clone(),
+                            height: message.height,
+                            index: message.index,
+                            expected_height: height,
+                            expected_index: index,
+                        }
+                    );
+                    ensure!(
+                        &message.effect == effect,
+                        ChainError::InvalidMessageContent {
+                            chain_id: self.chain_id(),
+                            application_id: message.application_id,
+                            origin: message.origin.clone(),
+                            height: message.height,
+                            index: message.index,
+                        }
+                    );
                     inbox.received_events.delete_front();
-                    log::trace!("Skipping received event {:?}", event);
+                    log::trace!("Consuming event {:?}", event);
                 }
-                // Reconcile the event with the received queue, or mark it as "expected".
-                match inbox.received_events.front().await? {
-                    Some(event) => {
-                        let Event {
-                            height,
-                            index,
-                            ref effect,
-                        } = event;
-                        ensure!(
-                            message_group.height == height && message_index == &index,
-                            ChainError::InvalidMessage {
-                                chain_id: self.chain_id(),
-                                application_id: message_group.application_id,
-                                origin: message_group.origin.clone(),
-                                height: message_group.height,
-                                index: *message_index,
-                                expected_height: height,
-                                expected_index: index,
-                            }
-                        );
-                        ensure!(
-                            message_effect == effect,
-                            ChainError::InvalidMessageContent {
-                                chain_id: self.chain_id(),
-                                application_id: message_group.application_id,
-                                origin: message_group.origin.clone(),
-                                height: message_group.height,
-                                index: *message_index,
-                            }
-                        );
-                        inbox.received_events.delete_front();
-                        log::trace!("Consuming event {:?}", event);
-                    }
-                    None => {
-                        let event = Event {
-                            height: message_group.height,
-                            index: *message_index,
-                            effect: message_effect.clone(),
-                        };
-                        log::trace!("Marking event as expected: {:?}", event);
-                        inbox.expected_events.push_back(event);
-                    }
+                None => {
+                    let event = Event {
+                        height: message.height,
+                        index: message.index,
+                        effect: message.effect.clone(),
+                    };
+                    log::trace!("Marking event as expected: {:?}", event);
+                    inbox.expected_events.push_back(event);
                 }
-                // Execute the received effect.
-                let context = EffectContext {
-                    chain_id,
-                    height: block.height,
-                    effect_id: EffectId {
-                        chain_id: message_group.origin.chain_id,
-                        height: message_group.height,
-                        index: *message_index,
-                    },
-                };
-
-                let application = self
-                    .describe_application(message_group.application_id)
-                    .await?;
-                let results = self
-                    .execution_state
-                    .execute_effect(
-                        &application,
-                        &context,
-                        message_effect,
-                        &mut self.known_applications,
-                    )
-                    .await?;
-
-                let communication_state = self
-                    .communication_states
-                    .load_entry(message_group.application_id)
-                    .await?;
-                Self::process_execution_results(
-                    &mut communication_state.outboxes,
-                    &mut communication_state.channels,
-                    &mut effects,
-                    context.height,
-                    results,
+            }
+            // Execute the received effect.
+            let context = EffectContext {
+                chain_id,
+                height: block.height,
+                effect_id: EffectId {
+                    chain_id: message.origin.chain_id,
+                    height: message.height,
+                    index: message.index,
+                },
+            };
+            let application = self.describe_application(message.application_id).await?;
+            let results = self
+                .execution_state
+                .execute_effect(
+                    &application,
+                    &context,
+                    &message.effect,
+                    &mut self.known_applications,
                 )
                 .await?;
-            }
+
+            let communication_state = self
+                .communication_states
+                .load_entry(message.application_id)
+                .await?;
+            Self::process_execution_results(
+                &mut communication_state.outboxes,
+                &mut communication_state.channels,
+                &mut effects,
+                context.height,
+                results,
+            )
+            .await?;
         }
         // Second, execute the operations in the block and remember the recipients to notify.
         for (index, (application_id, operation)) in block.operations.iter().enumerate() {
