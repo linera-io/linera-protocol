@@ -10,7 +10,7 @@ use crate::{
     },
     mass::{MassClient, MassClientError},
     transport::{MessageHandler, ServerHandle, TransportProtocol},
-    Message,
+    RpcMessage,
 };
 use async_trait::async_trait;
 use futures::{channel::mpsc, sink::SinkExt, stream::StreamExt};
@@ -82,7 +82,7 @@ where
         cross_chain_max_retries: usize,
         cross_chain_retry_delay: Duration,
         this_shard: ShardId,
-        mut receiver: mpsc::Receiver<(Message, ShardId)>,
+        mut receiver: mpsc::Receiver<(RpcMessage, ShardId)>,
     ) {
         let mut pool = network
             .protocol
@@ -163,7 +163,7 @@ where
 #[derive(Clone)]
 struct RunningServerState<S> {
     server: Server<S>,
-    cross_chain_sender: mpsc::Sender<(Message, ShardId)>,
+    cross_chain_sender: mpsc::Sender<(RpcMessage, ShardId)>,
 }
 
 impl<S> MessageHandler for RunningServerState<S>
@@ -171,16 +171,19 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
-    fn handle_message(&mut self, message: Message) -> futures::future::BoxFuture<Option<Message>> {
+    fn handle_message(
+        &mut self,
+        message: RpcMessage,
+    ) -> futures::future::BoxFuture<Option<RpcMessage>> {
         Box::pin(async move {
             let reply = match message {
-                Message::BlockProposal(message) => {
+                RpcMessage::BlockProposal(message) => {
                     match self.server.state.handle_block_proposal(*message).await {
                         Ok(info) => Ok(Some(info.into())),
                         Err(error) => Err(error.into()),
                     }
                 }
-                Message::Certificate(message) => {
+                RpcMessage::Certificate(message) => {
                     match self.server.state.handle_certificate(*message).await {
                         Ok((info, continuation)) => {
                             // Cross-shard requests
@@ -191,13 +194,13 @@ where
                         Err(error) => Err(error.into()),
                     }
                 }
-                Message::ChainInfoQuery(message) => {
+                RpcMessage::ChainInfoQuery(message) => {
                     match self.server.state.handle_chain_info_query(*message).await {
                         Ok(info) => Ok(Some(info.into())),
                         Err(error) => Err(error.into()),
                     }
                 }
-                Message::CrossChainRequest(request) => {
+                RpcMessage::CrossChainRequest(request) => {
                     match self.server.state.handle_cross_chain_request(*request).await {
                         Ok(continuation) => {
                             self.handle_continuation(continuation).await;
@@ -213,7 +216,7 @@ where
                     // No user to respond to.
                     Ok(None)
                 }
-                Message::Vote(_) | Message::Error(_) | Message::ChainInfoResponse(_) => {
+                RpcMessage::Vote(_) | RpcMessage::Error(_) | RpcMessage::ChainInfoResponse(_) => {
                     Err(NodeError::UnexpectedMessage)
                 }
             };
@@ -292,7 +295,10 @@ impl SimpleClient {
         }
     }
 
-    async fn send_recv_internal(&mut self, message: Message) -> Result<Message, codec::Error> {
+    async fn send_recv_internal(
+        &mut self,
+        message: RpcMessage,
+    ) -> Result<RpcMessage, codec::Error> {
         let address = format!("{}:{}", self.network.host, self.network.port);
         let mut stream = self.network.protocol.connect(address).await?;
         // Send message
@@ -307,10 +313,13 @@ impl SimpleClient {
             .ok_or_else(|| codec::Error::Io(std::io::ErrorKind::UnexpectedEof.into()))
     }
 
-    async fn send_recv_info(&mut self, message: Message) -> Result<ChainInfoResponse, NodeError> {
+    async fn send_recv_info(
+        &mut self,
+        message: RpcMessage,
+    ) -> Result<ChainInfoResponse, NodeError> {
         match self.send_recv_internal(message).await {
-            Ok(Message::ChainInfoResponse(response)) => Ok(*response),
-            Ok(Message::Error(error)) => Err(*error),
+            Ok(RpcMessage::ChainInfoResponse(response)) => Ok(*response),
+            Ok(RpcMessage::Error(error)) => Err(*error),
             Ok(_) => Err(NodeError::UnexpectedMessage),
             Err(error) => match error {
                 codec::Error::Io(io_error) => Err(NodeError::ClientIoError {
@@ -375,7 +384,7 @@ impl SimpleMassClient {
 
 #[async_trait]
 impl MassClient for SimpleMassClient {
-    async fn send(&self, requests: Vec<Message>) -> Result<Vec<Message>, MassClientError> {
+    async fn send(&self, requests: Vec<RpcMessage>) -> Result<Vec<RpcMessage>, MassClientError> {
         let address = format!("{}:{}", self.network.host, self.network.port);
         let mut stream = self.network.protocol.connect(address).await?;
         let mut requests = requests.into_iter();

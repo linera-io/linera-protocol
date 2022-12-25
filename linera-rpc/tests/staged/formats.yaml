@@ -253,36 +253,6 @@ Medium:
     1:
       Channel:
         NEWTYPE: STR
-Message:
-  ENUM:
-    0:
-      BlockProposal:
-        NEWTYPE:
-          TYPENAME: BlockProposal
-    1:
-      Certificate:
-        NEWTYPE:
-          TYPENAME: Certificate
-    2:
-      ChainInfoQuery:
-        NEWTYPE:
-          TYPENAME: ChainInfoQuery
-    3:
-      Vote:
-        NEWTYPE:
-          TYPENAME: Vote
-    4:
-      ChainInfoResponse:
-        NEWTYPE:
-          TYPENAME: ChainInfoResponse
-    5:
-      Error:
-        NEWTYPE:
-          TYPENAME: NodeError
-    6:
-      CrossChainRequest:
-        NEWTYPE:
-          TYPENAME: CrossChainRequest
 MessageGroup:
   STRUCT:
     - application_id:
@@ -420,6 +390,36 @@ PublicKey:
       SIZE: 32
 RoundNumber:
   NEWTYPESTRUCT: U64
+RpcMessage:
+  ENUM:
+    0:
+      BlockProposal:
+        NEWTYPE:
+          TYPENAME: BlockProposal
+    1:
+      Certificate:
+        NEWTYPE:
+          TYPENAME: Certificate
+    2:
+      ChainInfoQuery:
+        NEWTYPE:
+          TYPENAME: ChainInfoQuery
+    3:
+      Vote:
+        NEWTYPE:
+          TYPENAME: Vote
+    4:
+      ChainInfoResponse:
+        NEWTYPE:
+          TYPENAME: ChainInfoResponse
+    5:
+      Error:
+        NEWTYPE:
+          TYPENAME: NodeError
+    6:
+      CrossChainRequest:
+        NEWTYPE:
+          TYPENAME: CrossChainRequest
 Signature:
   NEWTYPESTRUCT:
     TUPLEARRAY:

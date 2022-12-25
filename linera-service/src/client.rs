@@ -30,7 +30,7 @@ use linera_rpc::{
     grpc_network::GrpcMassClient,
     mass::MassClient,
     node_provider::{GrpcNodeProvider, NodeProvider, SimpleNodeProvider},
-    simple_network, Message,
+    simple_network, RpcMessage,
 };
 use linera_service::{
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain, WalletState},
@@ -151,7 +151,7 @@ impl ClientContext {
     }
 
     /// Make one block proposal per chain, up to `max_proposals` blocks.
-    fn make_benchmark_block_proposals(&mut self, max_proposals: usize) -> Vec<Message> {
+    fn make_benchmark_block_proposals(&mut self, max_proposals: usize) -> Vec<RpcMessage> {
         let mut proposals = Vec::new();
         let mut next_recipient = self.wallet_state.last_chain().unwrap().chain_id;
         for chain in self.wallet_state.chains_mut() {
@@ -233,8 +233,8 @@ impl ClientContext {
         &self,
         phase: &'static str,
         max_in_flight: u64,
-        proposals: Vec<Message>,
-    ) -> Vec<Message> {
+        proposals: Vec<RpcMessage>,
+    ) -> Vec<RpcMessage> {
         let time_start = Instant::now();
         info!("Broadcasting {} {}", proposals.len(), phase);
         let mut handles = Vec::new();
@@ -252,7 +252,7 @@ impl ClientContext {
             .into_iter()
             .flatten()
             .flatten()
-            .collect::<Vec<Message>>();
+            .collect::<Vec<RpcMessage>>();
         let time_elapsed = time_start.elapsed();
         warn!(
             "Received {} responses in {} ms.",
@@ -360,10 +360,10 @@ impl ClientContext {
     }
 }
 
-fn deserialize_response(response: Message) -> Option<ChainInfoResponse> {
+fn deserialize_response(response: RpcMessage) -> Option<ChainInfoResponse> {
     match response {
-        Message::ChainInfoResponse(info) => Some(*info),
-        Message::Error(error) => {
+        RpcMessage::ChainInfoResponse(info) => Some(*info),
+        RpcMessage::Error(error) => {
             error!("Received error value: {}", error);
             None
         }

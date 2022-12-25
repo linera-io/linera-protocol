@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub enum Message {
+pub enum RpcMessage {
     // Inbound
     BlockProposal(Box<BlockProposal>),
     Certificate(Box<Certificate>),
@@ -26,17 +26,17 @@ pub enum Message {
     CrossChainRequest(Box<CrossChainRequest>),
 }
 
-impl Message {
+impl RpcMessage {
     /// Obtain the [`ChainId`] of the chain targeted by this message, if there is one.
     ///
     /// Only inbound messages have target chains.
     pub fn target_chain_id(&self) -> Option<ChainId> {
         let chain_id = match self {
-            Message::BlockProposal(proposal) => proposal.content.block.chain_id,
-            Message::Certificate(certificate) => certificate.value.chain_id(),
-            Message::ChainInfoQuery(query) => query.chain_id,
-            Message::CrossChainRequest(request) => request.target_chain_id(),
-            Message::Vote(_) | Message::Error(_) | Message::ChainInfoResponse(_) => {
+            RpcMessage::BlockProposal(proposal) => proposal.content.block.chain_id,
+            RpcMessage::Certificate(certificate) => certificate.value.chain_id(),
+            RpcMessage::ChainInfoQuery(query) => query.chain_id,
+            RpcMessage::CrossChainRequest(request) => request.target_chain_id(),
+            RpcMessage::Vote(_) | RpcMessage::Error(_) | RpcMessage::ChainInfoResponse(_) => {
                 return None;
             }
         };
@@ -44,44 +44,44 @@ impl Message {
     }
 }
 
-impl From<BlockProposal> for Message {
+impl From<BlockProposal> for RpcMessage {
     fn from(block_proposal: BlockProposal) -> Self {
-        Message::BlockProposal(Box::new(block_proposal))
+        RpcMessage::BlockProposal(Box::new(block_proposal))
     }
 }
 
-impl From<Certificate> for Message {
+impl From<Certificate> for RpcMessage {
     fn from(certificate: Certificate) -> Self {
-        Message::Certificate(Box::new(certificate))
+        RpcMessage::Certificate(Box::new(certificate))
     }
 }
 
-impl From<ChainInfoQuery> for Message {
+impl From<ChainInfoQuery> for RpcMessage {
     fn from(chain_info_query: ChainInfoQuery) -> Self {
-        Message::ChainInfoQuery(Box::new(chain_info_query))
+        RpcMessage::ChainInfoQuery(Box::new(chain_info_query))
     }
 }
 
-impl From<Vote> for Message {
+impl From<Vote> for RpcMessage {
     fn from(vote: Vote) -> Self {
-        Message::Vote(Box::new(vote))
+        RpcMessage::Vote(Box::new(vote))
     }
 }
 
-impl From<ChainInfoResponse> for Message {
+impl From<ChainInfoResponse> for RpcMessage {
     fn from(chain_info_response: ChainInfoResponse) -> Self {
-        Message::ChainInfoResponse(Box::new(chain_info_response))
+        RpcMessage::ChainInfoResponse(Box::new(chain_info_response))
     }
 }
 
-impl From<NodeError> for Message {
+impl From<NodeError> for RpcMessage {
     fn from(error: NodeError) -> Self {
-        Message::Error(Box::new(error))
+        RpcMessage::Error(Box::new(error))
     }
 }
 
-impl From<CrossChainRequest> for Message {
+impl From<CrossChainRequest> for RpcMessage {
     fn from(cross_chain_request: CrossChainRequest) -> Self {
-        Message::CrossChainRequest(Box::new(cross_chain_request))
+        RpcMessage::CrossChainRequest(Box::new(cross_chain_request))
     }
 }

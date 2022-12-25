@@ -14,4 +14,4 @@ mod codec;
 mod conversions;
 mod rpc;
 
-pub use rpc::Message;
+pub use rpc::RpcMessage;
