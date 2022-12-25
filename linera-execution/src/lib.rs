@@ -25,7 +25,7 @@ pub use wasm::{WasmApplication, WasmExecutionError};
 
 use async_trait::async_trait;
 use dashmap::DashMap;
-use linera_base::messages::{BlockHeight, ChainId, Destination, EffectId};
+use linera_base::messages::{BlockHeight, ChainId, EffectId};
 use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -344,6 +344,22 @@ pub struct RawExecutionResult<Effect> {
     pub subscribe: Vec<(String, ChainId)>,
     /// Unsubscribe chains to channels.
     pub unsubscribe: Vec<(String, ChainId)>,
+}
+
+/// The identifier of a channel, relative to a particular application.
+#[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Hash, Serialize, Deserialize)]
+pub struct ChannelId {
+    pub chain_id: ChainId,
+    pub name: String,
+}
+
+/// The destination of a message, relative to a particular application.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub enum Destination {
+    /// Direct message to a chain.
+    Recipient(ChainId),
+    /// Broadcast to the current subscribers of our channel.
+    Subscribers(String),
 }
 
 /// Externally visible results of an execution, tagged by their application.

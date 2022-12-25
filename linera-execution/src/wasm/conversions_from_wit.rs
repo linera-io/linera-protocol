@@ -8,12 +8,12 @@
 
 use super::runtime::{contract, writable_system};
 use crate::{
-    ApplicationCallResult, BytecodeId, NewSession, RawExecutionResult, SessionCallResult,
-    SessionId, UserApplicationId,
+    ApplicationCallResult, BytecodeId, Destination, NewSession, RawExecutionResult,
+    SessionCallResult, SessionId, UserApplicationId,
 };
 use linera_base::{
     crypto::HashValue,
-    messages::{BlockHeight, ChainId, Destination, EffectId},
+    messages::{BlockHeight, ChainId, EffectId},
 };
 
 impl From<contract::SessionCallResult> for (SessionCallResult, Vec<u8>) {
