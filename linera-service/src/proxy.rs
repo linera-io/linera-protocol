@@ -6,7 +6,7 @@ use linera_rpc::{
         ValidatorPublicNetworkPreConfig,
     },
     transport::{MessageHandler, TransportProtocol},
-    Message,
+    RpcMessage,
 };
 use linera_service::{
     config::{Import, ValidatorServerConfig},
@@ -86,7 +86,7 @@ pub struct SimpleProxy {
 }
 
 impl MessageHandler for SimpleProxy {
-    fn handle_message(&mut self, message: Message) -> BoxFuture<Option<Message>> {
+    fn handle_message(&mut self, message: RpcMessage) -> BoxFuture<Option<RpcMessage>> {
         let shard = self.select_shard_for(&message);
         let protocol = self.internal_config.protocol;
 
@@ -120,16 +120,16 @@ impl SimpleProxy {
         Ok(())
     }
 
-    fn select_shard_for(&self, request: &Message) -> Option<ShardConfig> {
+    fn select_shard_for(&self, request: &RpcMessage) -> Option<ShardConfig> {
         let chain_id = match request {
-            Message::BlockProposal(proposal) => proposal.content.block.chain_id,
-            Message::Certificate(certificate) => certificate.value.chain_id(),
-            Message::ChainInfoQuery(query) => query.chain_id,
-            Message::Vote(_) | Message::ChainInfoResponse(_) | Message::Error(_) => {
+            RpcMessage::BlockProposal(proposal) => proposal.content.block.chain_id,
+            RpcMessage::Certificate(certificate) => certificate.value.chain_id(),
+            RpcMessage::ChainInfoQuery(query) => query.chain_id,
+            RpcMessage::Vote(_) | RpcMessage::ChainInfoResponse(_) | RpcMessage::Error(_) => {
                 log::debug!("Can't proxy an incoming response message");
                 return None;
             }
-            Message::CrossChainRequest(cross_chain_request) => {
+            RpcMessage::CrossChainRequest(cross_chain_request) => {
                 cross_chain_request.target_chain_id()
             }
         };
@@ -138,10 +138,10 @@ impl SimpleProxy {
     }
 
     async fn try_proxy_message(
-        message: Message,
+        message: RpcMessage,
         shard: ShardConfig,
         protocol: TransportProtocol,
-    ) -> Result<Option<Message>> {
+    ) -> Result<Option<RpcMessage>> {
         let shard_address = format!("{}:{}", shard.host, shard.port);
 
         let mut connection = protocol.connect(shard_address).await?;

@@ -3,22 +3,22 @@ use std::{io, mem, ops::DerefMut};
 use thiserror::Error;
 use tokio_util::codec::{Decoder, Encoder};
 
-use crate::Message;
+use crate::RpcMessage;
 
 /// The size of the frame prefix that contains the payload size.
 const PREFIX_SIZE: u8 = mem::size_of::<u32>() as u8;
 
-/// An encoder/decoder of [`Message`]s for the RPC protocol.
+/// An encoder/decoder of [`RpcMessage`]s for the RPC protocol.
 ///
 /// The frames are length-delimited by a [`u32`] prefix, and the payload is deserialized by
 /// [`bincode`].
 #[derive(Clone, Copy, Debug)]
 pub struct Codec;
 
-impl Encoder<Message> for Codec {
+impl Encoder<RpcMessage> for Codec {
     type Error = Error;
 
-    fn encode(&mut self, message: Message, buffer: &mut BytesMut) -> Result<(), Self::Error> {
+    fn encode(&mut self, message: RpcMessage, buffer: &mut BytesMut) -> Result<(), Self::Error> {
         let mut frame_buffer = buffer.split_off(buffer.len());
 
         frame_buffer.put_u32_le(0);
@@ -47,7 +47,7 @@ impl Encoder<Message> for Codec {
 }
 
 impl Decoder for Codec {
-    type Item = Message;
+    type Item = RpcMessage;
     type Error = Error;
 
     fn decode(&mut self, buffer: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
@@ -78,7 +78,7 @@ impl Decoder for Codec {
     }
 }
 
-/// Errors that can arise during transmission or reception of [`Message`]s.
+/// Errors that can arise during transmission or reception of [`RpcMessage`]s.
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("IO error in the underlying transport")]
@@ -90,7 +90,7 @@ pub enum Error {
     #[error("Failed to serialize outgoing message")]
     Serialization(#[source] bincode::ErrorKind),
 
-    #[error("Message is too big to fit in a protocol frame: \
+    #[error("RpcMessage is too big to fit in a protocol frame: \
         message is {size} bytes but can't be larger than {max} bytes.",
         max = u32::MAX)]
     MessageTooBig { size: usize },
@@ -98,7 +98,7 @@ pub enum Error {
 
 #[cfg(test)]
 mod tests {
-    use super::{Codec, Message, PREFIX_SIZE};
+    use super::{Codec, RpcMessage, PREFIX_SIZE};
     use bytes::{BufMut, BytesMut};
     use linera_core::data_types::ChainInfoQuery;
     use test_strategy::proptest;
@@ -107,7 +107,7 @@ mod tests {
     /// Test decoding of a frame from a buffer.
     ///
     /// The buffer may contain leading or trailing bytes around the frame. The frame contains the
-    /// size of the payload, and the payload is a serialized dummy [`Message`].
+    /// size of the payload, and the payload is a serialized dummy [`RpcMessage`].
     ///
     /// The decoder should produce the exact same message as used as the test input, and it should
     /// ignore the leading and trailing bytes.
@@ -117,8 +117,8 @@ mod tests {
         message_contents: ChainInfoQuery,
         trailing_bytes: Vec<u8>,
     ) {
-        let message = Message::from(message_contents);
-        let payload = bincode::serialize(&message).expect("Message is serializable");
+        let message = RpcMessage::from(message_contents);
+        let payload = bincode::serialize(&message).expect("RpcMessage is serializable");
 
         let mut buffer = BytesMut::with_capacity(
             leading_bytes.len() + PREFIX_SIZE as usize + payload.len() + trailing_bytes.len(),
@@ -154,7 +154,7 @@ mod tests {
         leading_bytes: Vec<u8>,
         message_contents: ChainInfoQuery,
     ) {
-        let message = Message::from(message_contents);
+        let message = RpcMessage::from(message_contents);
         let serialized_message =
             bincode::serialize(&message).expect("Serialization should succeed");
 

@@ -4,7 +4,7 @@ pub use crate::{
         BlockProposal, Certificate, ChainInfoQuery, ChainInfoResponse, CrossChainRequest,
     },
     transport::MessageHandler,
-    Message,
+    RpcMessage,
 };
 use async_trait::async_trait;
 use linera_core::{
@@ -426,16 +426,16 @@ impl GrpcMassClient {
 
 #[async_trait]
 impl MassClient for GrpcMassClient {
-    async fn send(&self, requests: Vec<Message>) -> Result<Vec<Message>, MassClientError> {
+    async fn send(&self, requests: Vec<RpcMessage>) -> Result<Vec<RpcMessage>, MassClientError> {
         let mut client = ValidatorNodeClient::connect(self.0.http_address()).await?;
         let mut responses = Vec::new();
 
         for request in requests {
             match request {
-                Message::BlockProposal(proposal) => {
+                RpcMessage::BlockProposal(proposal) => {
                     mass_client_delegate!(client, handle_block_proposal, proposal, responses)
                 }
-                Message::Certificate(certificate) => {
+                RpcMessage::Certificate(certificate) => {
                     mass_client_delegate!(client, handle_certificate, certificate, responses)
                 }
                 msg => panic!("attempted to send msg: {:?}", msg),

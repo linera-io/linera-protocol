@@ -160,7 +160,7 @@ macro_rules! mass_client_delegate {
             .ok_or(ProtoConversionError::MissingField)?
         {
             Inner::ChainInfoResponse(chain_info_response) => {
-                $responses.push(Message::ChainInfoResponse(Box::new(
+                $responses.push(RpcMessage::ChainInfoResponse(Box::new(
                     chain_info_response.try_into()?,
                 )));
             }

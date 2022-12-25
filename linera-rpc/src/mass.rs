@@ -1,4 +1,4 @@
-use crate::Message;
+use crate::RpcMessage;
 use async_trait::async_trait;
 use thiserror::Error;
 
@@ -16,5 +16,5 @@ pub enum MassClientError {
 
 #[async_trait]
 pub trait MassClient: Send + Sync {
-    async fn send(&self, requests: Vec<Message>) -> Result<Vec<Message>, MassClientError>;
+    async fn send(&self, requests: Vec<RpcMessage>) -> Result<Vec<RpcMessage>, MassClientError>;
 }

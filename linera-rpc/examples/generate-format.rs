@@ -12,7 +12,7 @@ use linera_execution::{
     system::{Address, SystemEffect, SystemOperation},
     ApplicationDescription, ApplicationId, Destination, Effect, Operation,
 };
-use linera_rpc::Message;
+use linera_rpc::RpcMessage;
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use std::{fs::File, io::Write};
 use structopt::{clap::arg_enum, StructOpt};
@@ -40,7 +40,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<ChainManager>(&samples)?;
     tracer.trace_type::<CrossChainRequest>(&samples)?;
     tracer.trace_type::<NodeError>(&samples)?;
-    tracer.trace_type::<Message>(&samples)?;
+    tracer.trace_type::<RpcMessage>(&samples)?;
     tracer.registry()
 }
 
