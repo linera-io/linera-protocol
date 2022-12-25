@@ -290,3 +290,9 @@ impl ChainId {
 }
 
 impl BcsSignable for ChainDescription {}
+
+#[test]
+fn test_max_block_height() {
+    let max = BlockHeight::max();
+    assert_eq!(max.0 * 2 + 1, std::u64::MAX);
+}

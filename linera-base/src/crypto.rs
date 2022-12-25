@@ -20,10 +20,6 @@ use {
     std::ops::RangeInclusive,
 };
 
-#[cfg(test)]
-#[path = "unit_tests/crypto_tests.rs"]
-mod crypto_tests;
-
 /// A signature key-pair.
 pub struct KeyPair(dalek::Keypair);
 
@@ -434,4 +430,33 @@ impl Arbitrary for HashValue {
             HashValue(generic_array::GenericArray::clone_from_slice(&bytes))
         })
     }
+}
+
+#[test]
+#[allow(clippy::disallowed_names)]
+fn test_signatures() {
+    #[derive(Debug, Serialize, Deserialize)]
+    struct Foo(String);
+
+    impl BcsSignable for Foo {}
+
+    #[derive(Debug, Serialize, Deserialize)]
+    struct Bar(String);
+
+    impl BcsSignable for Bar {}
+
+    let key1 = KeyPair::generate();
+    let addr1 = key1.public();
+    let key2 = KeyPair::generate();
+    let addr2 = key2.public();
+
+    let foo = Foo("hello".into());
+    let foox = Foo("hellox".into());
+    let bar = Bar("hello".into());
+
+    let s = Signature::new(&foo, &key1);
+    assert!(s.check(&foo, addr1).is_ok());
+    assert!(s.check(&foo, addr2).is_err());
+    assert!(s.check(&foox, addr1).is_err());
+    assert!(s.check(&bar, addr1).is_err());
 }
