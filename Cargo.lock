@@ -1833,6 +1833,12 @@ dependencies = [
 [[package]]
 name = "linera-macro"
 version = "0.1.0"
+dependencies = [
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "linera-rpc"

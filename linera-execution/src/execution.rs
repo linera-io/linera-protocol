@@ -9,18 +9,21 @@ use crate::{
     Response, UserApplicationDescription, UserApplicationId,
 };
 use linera_base::{data_types::ChainId, ensure};
+use async_trait::async_trait;
+use linera_base::{
+    crypto,
+    crypto::HashValue,
+    messages::{ApplicationDescription, ApplicationId, ChainId},
+};
+use linera_macro::{ContainerView, HashableContainerView, HashableView, View};
 use linera_views::{
     collection_view::ReentrantCollectionView,
+    common::Batch,
+    generic_array,
     register_view::RegisterView,
-    views::{View, ViewError},
+    sha2, views,
+    views::{ContainerView, HashFunc, HashView, Hasher, View, ViewError},
 };
-use linera_views::views::{ContainerView, HashView, HashFunc, Hasher};
-use linera_macro::{View, ContainerView, HashView, HashFunc};
-use linera_base::crypto;
-use linera_base::crypto::HashValue;
-use linera_views::common::Batch;
-use linera_views::{views, generic_array, sha2};
-use async_trait::async_trait;
 
 #[cfg(any(test, feature = "test"))]
 use {
@@ -39,8 +42,6 @@ pub struct ExecutionStateView<C> {
     /// User applications.
     pub users: ReentrantCollectionView<C, UserApplicationId, RegisterView<C, Vec<u8>>>,
 }
-
-//impl_view!(ExecutionStateView { system, users });
 
 #[cfg(any(test, feature = "test"))]
 impl ExecutionStateView<MemoryContext<TestExecutionRuntimeContext>>
