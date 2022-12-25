@@ -11,7 +11,7 @@ use crate::{
     system::Balance, CallResult, CalleeContext, EffectContext, EffectId, OperationContext,
     QueryContext, SessionId, UserApplicationId,
 };
-use linera_base::{crypto::HashValue, messages::ChainId};
+use linera_base::{crypto::HashValue, data_types::ChainId};
 
 impl From<OperationContext> for contract::OperationContext {
     fn from(host: OperationContext) -> Self {

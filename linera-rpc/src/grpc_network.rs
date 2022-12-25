@@ -51,7 +51,7 @@ use crate::{
     pool::Connect,
 };
 
-use linera_chain::messages;
+use linera_chain::data_types;
 use linera_core::node::ValidatorNode;
 use tokio::task::{JoinError, JoinHandle};
 use tonic::transport::Channel;
@@ -62,7 +62,7 @@ pub mod grpc {
     tonic::include_proto!("rpc.v1");
 }
 
-type CrossChainSender = mpsc::Sender<(linera_core::messages::CrossChainRequest, ShardId)>;
+type CrossChainSender = mpsc::Sender<(linera_core::data_types::CrossChainRequest, ShardId)>;
 
 #[derive(Clone)]
 pub struct GrpcServer<S> {
@@ -164,7 +164,7 @@ where
         })
     }
 
-    async fn handle_continuation(&self, requests: Vec<linera_core::messages::CrossChainRequest>) {
+    async fn handle_continuation(&self, requests: Vec<linera_core::data_types::CrossChainRequest>) {
         let mut sender = self.cross_chain_sender.clone();
         for request in requests {
             let shard_id = self.network.get_shard_id(request.target_chain_id());
@@ -188,7 +188,7 @@ where
         nickname: String,
         network: ValidatorInternalNetworkConfig,
         this_shard: ShardId,
-        mut receiver: mpsc::Receiver<(linera_core::messages::CrossChainRequest, ShardId)>,
+        mut receiver: mpsc::Receiver<(linera_core::data_types::CrossChainRequest, ShardId)>,
     ) {
         let mut queries_sent = 0u64;
         let mut failed = 0u64;
@@ -396,22 +396,22 @@ impl GrpcClient {
 impl ValidatorNode for GrpcClient {
     async fn handle_block_proposal(
         &mut self,
-        proposal: messages::BlockProposal,
-    ) -> Result<linera_core::messages::ChainInfoResponse, NodeError> {
+        proposal: data_types::BlockProposal,
+    ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
         client_delegate!(self, handle_block_proposal, proposal)
     }
 
     async fn handle_certificate(
         &mut self,
-        certificate: messages::Certificate,
-    ) -> Result<linera_core::messages::ChainInfoResponse, NodeError> {
+        certificate: data_types::Certificate,
+    ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
         client_delegate!(self, handle_certificate, certificate)
     }
 
     async fn handle_chain_info_query(
         &mut self,
-        query: linera_core::messages::ChainInfoQuery,
-    ) -> Result<linera_core::messages::ChainInfoResponse, NodeError> {
+        query: linera_core::data_types::ChainInfoQuery,
+    ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
         client_delegate!(self, handle_chain_info_query, query)
     }
 }

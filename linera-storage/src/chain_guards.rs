@@ -8,7 +8,7 @@
 //! instance is dropped.
 
 use dashmap::DashMap;
-use linera_base::messages::ChainId;
+use linera_base::data_types::ChainId;
 use std::{
     fmt::{self, Debug, Formatter},
     sync::{Arc, Weak},

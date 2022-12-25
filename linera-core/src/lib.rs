@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod client;
-pub mod messages;
+pub mod data_types;
 pub mod node;
 pub mod worker;
 

@@ -2,10 +2,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::messages::ChainId;
-use linera_chain::messages::{BlockProposal, Certificate, Vote};
+use linera_base::data_types::ChainId;
+use linera_chain::data_types::{BlockProposal, Certificate, Vote};
 use linera_core::{
-    messages::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
+    data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     node::NodeError,
 };
 

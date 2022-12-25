@@ -1,6 +1,6 @@
 use super::RocksdbStoreClient;
 use crate::Store;
-use linera_base::messages::ChainId;
+use linera_base::data_types::ChainId;
 use std::mem;
 use tempfile::TempDir;
 

@@ -8,8 +8,8 @@ use crate::{
 };
 use linera_base::{
     committee::Committee,
+    data_types::{ArithmeticError, ChainDescription, ChainId, EffectId, Epoch, Owner},
     ensure,
-    messages::{ArithmeticError, ChainDescription, ChainId, EffectId, Epoch, Owner},
 };
 use linera_views::{
     common::Context,

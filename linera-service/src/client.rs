@@ -8,14 +8,16 @@ use async_trait::async_trait;
 use linera_base::{
     committee::ValidatorState,
     crypto::KeyPair,
-    messages::{BlockHeight, ChainDescription, ChainId, Epoch, Owner, RoundNumber, ValidatorName},
+    data_types::{
+        BlockHeight, ChainDescription, ChainId, Epoch, Owner, RoundNumber, ValidatorName,
+    },
 };
-use linera_chain::messages::{
+use linera_chain::data_types::{
     Block, BlockAndRound, BlockProposal, Certificate, SignatureAggregator, Vote,
 };
 use linera_core::{
     client::{ChainClient, ChainClientState, ValidatorNodeProvider},
-    messages::{ChainInfoQuery, ChainInfoResponse},
+    data_types::{ChainInfoQuery, ChainInfoResponse},
     node::{LocalNodeClient, ValidatorNode},
     worker::WorkerState,
 };

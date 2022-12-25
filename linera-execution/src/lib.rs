@@ -25,7 +25,7 @@ pub use wasm::{WasmApplication, WasmExecutionError};
 
 use async_trait::async_trait;
 use dashmap::DashMap;
-use linera_base::messages::{BlockHeight, ChainId, EffectId};
+use linera_base::data_types::{BlockHeight, ChainId, EffectId};
 use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;

@@ -6,10 +6,10 @@ use crate::node::NodeError;
 use linera_base::{
     committee::Committee,
     crypto::{BcsSignable, HashValue, KeyPair, Signature},
-    messages::{BlockHeight, ChainDescription, ChainId, Epoch, ValidatorName},
+    data_types::{BlockHeight, ChainDescription, ChainId, Epoch, ValidatorName},
 };
 use linera_chain::{
-    messages::{Certificate, MessageGroup, Origin},
+    data_types::{Certificate, MessageGroup, Origin},
     ChainManager, ChainStateView,
 };
 use linera_execution::{

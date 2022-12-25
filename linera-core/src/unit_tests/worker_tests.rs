@@ -3,12 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    messages::*,
+    data_types::*,
     worker::{ValidatorWorker, WorkerError, WorkerState},
 };
-use linera_base::{committee::Committee, crypto::*, messages::*};
+use linera_base::{committee::Committee, crypto::*, data_types::*};
 use linera_chain::{
-    messages::{
+    data_types::{
         Block, BlockAndRound, BlockProposal, Certificate, MessageGroup, Origin,
         SignatureAggregator, Value, Vote,
     },

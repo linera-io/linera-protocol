@@ -3,7 +3,7 @@
 
 #![allow(clippy::field_reassign_with_default)]
 
-use linera_base::messages::{BlockHeight, ChainDescription, ChainId, EffectId};
+use linera_base::data_types::{BlockHeight, ChainDescription, ChainId, EffectId};
 use linera_execution::{
     system::{Address, Amount, Balance, UserData},
     ApplicationDescription, ApplicationRegistryView, Effect, EffectContext, ExecutionResult,

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    messages::{ChainInfo, ChainInfoQuery},
+    data_types::{ChainInfo, ChainInfoQuery},
     node::{LocalNodeClient, NodeError, ValidatorNode},
     updater::{communicate_with_quorum, CommunicateAction, CommunicationError, ValidatorUpdater},
     worker::WorkerState,
@@ -13,10 +13,10 @@ use async_trait::async_trait;
 use linera_base::{
     committee::{Committee, ValidatorState},
     crypto::{HashValue, KeyPair},
-    messages::{BlockHeight, ChainId, EffectId, Epoch, Owner, RoundNumber, ValidatorName},
+    data_types::{BlockHeight, ChainId, EffectId, Epoch, Owner, RoundNumber, ValidatorName},
 };
 use linera_chain::{
-    messages::{Block, BlockAndRound, BlockProposal, Certificate, MessageGroup, Value, Vote},
+    data_types::{Block, BlockAndRound, BlockProposal, Certificate, MessageGroup, Value, Vote},
     ChainManager,
 };
 use linera_execution::{

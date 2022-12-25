@@ -9,7 +9,7 @@ mod utils;
 
 use self::utils::create_dummy_user_application_description;
 use async_trait::async_trait;
-use linera_base::messages::{BlockHeight, ChainDescription, ChainId};
+use linera_base::data_types::{BlockHeight, ChainDescription, ChainId};
 use linera_execution::*;
 use linera_views::{common::Context, memory::MemoryContext, views::View};
 use std::sync::Arc;

@@ -2,15 +2,15 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::messages::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest};
+use crate::data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest};
 use async_trait::async_trait;
 use linera_base::{
     crypto::{HashValue, KeyPair},
+    data_types::{ArithmeticError, BlockHeight, ChainId, Epoch},
     ensure,
-    messages::{ArithmeticError, BlockHeight, ChainId, Epoch},
 };
 use linera_chain::{
-    messages::{Block, BlockProposal, Certificate, Medium, MessageGroup, Origin, Value},
+    data_types::{Block, BlockProposal, Certificate, Medium, MessageGroup, Origin, Value},
     ChainManagerOutcome, ChainStateView,
 };
 use linera_execution::ApplicationDescription;

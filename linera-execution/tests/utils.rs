@@ -1,6 +1,6 @@
 use linera_base::{
     crypto::{BcsSignable, HashValue},
-    messages::{BlockHeight, ChainId, EffectId},
+    data_types::{BlockHeight, ChainId, EffectId},
 };
 use linera_execution::{BytecodeLocation, UserApplicationDescription};
 use serde::{Deserialize, Serialize};

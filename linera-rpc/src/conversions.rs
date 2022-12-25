@@ -7,11 +7,11 @@ use crate::grpc_network::{
 use ed25519::signature::Signature as edSignature;
 use linera_base::{
     crypto::{CryptoError, HashValue, PublicKey, Signature},
-    messages::{BlockHeight, ChainId, EffectId, Owner, ValidatorName},
+    data_types::{BlockHeight, ChainId, EffectId, Owner, ValidatorName},
 };
-use linera_chain::messages::{BlockProposal, Certificate, Medium, Origin};
+use linera_chain::data_types::{BlockProposal, Certificate, Medium, Origin};
 use linera_core::{
-    messages::{
+    data_types::{
         BlockHeightRange, ChainInfoQuery, ChainInfoResponse, CrossChainRequest,
         CrossChainRequest::{ConfirmUpdatedRecipient, UpdateRecipient},
     },
@@ -709,8 +709,8 @@ impl TryFrom<grpc::Owner> for Owner {
 pub mod tests {
     use super::*;
     use linera_base::crypto::{BcsSignable, HashValue, KeyPair};
-    use linera_chain::messages::{Block, BlockAndRound, Value};
-    use linera_core::messages::ChainInfo;
+    use linera_chain::data_types::{Block, BlockAndRound, Value};
+    use linera_core::data_types::ChainInfo;
     use serde::{Deserialize, Serialize};
     use std::fmt::Debug;
 

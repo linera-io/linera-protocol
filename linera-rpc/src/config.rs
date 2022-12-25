@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::transport::TransportProtocol;
-use linera_base::messages::ChainId;
+use linera_base::data_types::ChainId;
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 

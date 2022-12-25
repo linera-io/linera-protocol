@@ -7,7 +7,7 @@ use crate::{
     ReadableStorage, SessionId, UserApplicationCode, UserApplicationId, WritableStorage,
 };
 use async_trait::async_trait;
-use linera_base::{ensure, messages::ChainId};
+use linera_base::{data_types::ChainId, ensure};
 use linera_views::{
     common::Context,
     register_view::RegisterView,

@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    messages::{Block, Medium, MessageGroup, Origin},
+    data_types::{Block, Medium, MessageGroup, Origin},
     ChainError, ChainManager,
 };
 use linera_base::{
     crypto::HashValue,
+    data_types::{BlockHeight, ChainId, EffectId},
     ensure,
-    messages::{BlockHeight, ChainId, EffectId},
 };
 use linera_execution::{
     system::SystemEffect, ApplicationDescription, ApplicationId, ApplicationRegistryView,
