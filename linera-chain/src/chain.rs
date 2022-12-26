@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    data_types::{Block, Medium, Message, Origin},
+    data_types::{Block, Event, Medium, Origin},
+    inbox::{InboxError, InboxStateView},
+    outbox::OutboxStateView,
     ChainError, ChainManager,
 };
 use linera_base::{
@@ -16,12 +18,17 @@ use linera_execution::{
     ExecutionRuntimeContext, ExecutionStateView, OperationContext, RawExecutionResult,
 };
 use linera_views::{
-    collection_view::CollectionView, common::Context, impl_view, log_view::LogView,
-    map_view::MapView, queue_view::QueueView, register_view::RegisterView, scoped_view::ScopedView,
-    views::ViewError,
+    collection_view::CollectionView,
+    common::Context,
+    impl_view,
+    log_view::LogView,
+    map_view::MapView,
+    register_view::RegisterView,
+    scoped_view::ScopedView,
+    views::{View, ViewError},
 };
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 /// A view accessing the state of a chain.
 #[derive(Debug)]
@@ -88,49 +95,6 @@ impl_view!(CommunicationStateView {
     channels
 });
 
-/// An outbox used to send messages to another chain. NOTE: Messages are implied by the
-/// execution of blocks, so currently we just send the certified blocks over and let the
-/// receivers figure out what was the message for them.
-#[derive(Debug)]
-pub struct OutboxStateView<C> {
-    /// Keep sending these certified blocks of ours until they are acknowledged by
-    /// receivers.
-    pub queue: ScopedView<0, QueueView<C, BlockHeight>>,
-}
-
-impl_view!(OutboxStateView { queue });
-
-impl<C> OutboxStateView<C>
-where
-    C: Context + Clone + Send + Sync + 'static,
-    ViewError: From<C::Error>,
-{
-    pub async fn block_heights(&mut self) -> Result<Vec<BlockHeight>, ChainError> {
-        let count = self.queue.count();
-        let heights = self.queue.read_front(count).await?;
-        Ok(heights)
-    }
-}
-
-/// An inbox used to receive and execute messages from another chain.
-#[derive(Debug)]
-pub struct InboxStateView<C> {
-    /// We have already received the cross-chain requests and enqueued all the messages
-    /// below this height.
-    pub next_height_to_receive: ScopedView<0, RegisterView<C, BlockHeight>>,
-    /// These events have been received but not yet picked by a block to be executed.
-    pub received_events: ScopedView<1, QueueView<C, Event>>,
-    /// These events have been executed but the cross-chain requests have not been
-    /// received yet.
-    pub expected_events: ScopedView<2, QueueView<C, Event>>,
-}
-
-impl_view!(InboxStateView {
-    next_height_to_receive,
-    received_events,
-    expected_events
-});
-
 /// The state of a channel followed by subscribers.
 #[derive(Debug)]
 pub struct ChannelStateView<C> {
@@ -148,17 +112,6 @@ impl_view!(ChannelStateView {
     block_height
 });
 
-/// A message sent by some (unspecified) chain at a particular height and index.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Event {
-    /// The height of the block that created the event.
-    pub height: BlockHeight,
-    /// The index of the effect.
-    pub index: usize,
-    /// The effect of the event.
-    pub effect: Effect,
-}
-
 impl<C> ChainStateView<C>
 where
     C: Context + Clone + Send + Sync + 'static,
@@ -166,7 +119,7 @@ where
     C::Extra: ExecutionRuntimeContext,
 {
     pub fn chain_id(&self) -> ChainId {
-        self.execution_state.system.description.extra().chain_id()
+        self.context().extra().chain_id()
     }
 
     async fn mark_messages_as_received(
@@ -246,7 +199,6 @@ where
     }
 
     /// Invariant for the states of active chains.
-    #[allow(clippy::result_large_err)]
     pub fn ensure_is_active(&self) -> Result<(), ChainError> {
         if self.is_active() {
             Ok(())
@@ -262,14 +214,14 @@ where
             let state = self.communication_states.load_entry(id).await?;
             for origin in state.inboxes.indices().await? {
                 let inbox = state.inboxes.load_entry(origin.clone()).await?;
-                let expected_event = inbox.expected_events.front().await?;
+                let event = inbox.removed_events.front().await?;
                 ensure!(
-                    expected_event.is_none(),
+                    event.is_none(),
                     ChainError::MissingCrossChainUpdate {
                         chain_id: self.chain_id(),
                         application_id: id,
                         origin,
-                        height: expected_event.unwrap().height,
+                        height: event.unwrap().height,
                     }
                 );
             }
@@ -284,7 +236,7 @@ where
     ) -> Result<BlockHeight, ChainError> {
         let communication_state = self.communication_states.load_entry(application_id).await?;
         let inbox = communication_state.inboxes.load_entry(origin).await?;
-        Ok(*inbox.next_height_to_receive.get())
+        inbox.next_block_height_to_receive()
     }
 
     pub async fn last_anticipated_block_height(
@@ -294,7 +246,7 @@ where
     ) -> Result<Option<BlockHeight>, ChainError> {
         let communication_state = self.communication_states.load_entry(application_id).await?;
         let inbox = communication_state.inboxes.load_entry(origin).await?;
-        match inbox.expected_events.back().await? {
+        match inbox.removed_events.back().await? {
             Some(event) => Ok(Some(event.height)),
             None => Ok(None),
         }
@@ -312,12 +264,12 @@ where
         certificate_hash: HashValue,
     ) -> Result<bool, ChainError> {
         let chain_id = self.chain_id();
-        let communication_state = self.communication_states.load_entry(application_id).await?;
-        let inbox = communication_state
-            .inboxes
-            .load_entry(origin.clone())
-            .await?;
-        if height < *inbox.next_height_to_receive.get() {
+        // Check that the block was never seen and mark it as received in the inbox.
+        if height
+            < self
+                .next_block_height_to_receive(application_id, origin.clone())
+                .await?
+        {
             // We have already received this block.
             return Ok(false);
         }
@@ -328,12 +280,8 @@ where
             origin,
             height
         );
-        // Mark the block as received.
-        inbox.next_height_to_receive.set(height.try_add_one()?);
-
-        self.received_log.push(certificate_hash);
-
-        let mut was_a_recipient = false;
+        // Process immediate effets and create inbox events.
+        let mut events = Vec::new();
         for (index, (app_id, destination, effect)) in effects.into_iter().enumerate() {
             // Skip events that do not belong to this application.
             if app_id != application_id {
@@ -353,7 +301,6 @@ where
                     }
                 }
             }
-            was_a_recipient = true;
             if let ApplicationId::System = app_id {
                 // Handle special effects to be executed immediately.
                 let effect_id = EffectId {
@@ -364,42 +311,36 @@ where
                 self.execute_immediate_effect(effect_id, &effect, chain_id, certificate_hash)
                     .await?;
             }
-            let communication_state = self.communication_states.load_entry(application_id).await?;
-            let inbox = communication_state
-                .inboxes
-                .load_entry(origin.clone())
-                .await?;
-            // Find if the message was executed ahead of time.
-            match inbox.expected_events.front().await? {
-                Some(event) => {
-                    if height == event.height && index == event.index {
-                        // We already executed this message by anticipation. Remove it from the queue.
-                        assert_eq!(effect, event.effect, "Unexpected effect in certified block");
-                        inbox.expected_events.delete_front();
-                    } else {
-                        // The receiver has already executed a later event from the same
-                        // sender ahead of time so we should skip this one.
-                        assert!(
-                            (height, index) < (event.height, event.index),
-                            "Unexpected event order in certified block"
-                        );
-                    }
-                }
-                None => {
-                    // Otherwise, schedule the message for execution.
-                    inbox.received_events.push_back(Event {
-                        height,
-                        index,
-                        effect,
-                    });
-                }
-            }
+            // Record the inbox event to process it below.
+            events.push(Event {
+                height,
+                index,
+                effect,
+            });
         }
+        // There should be inbox events. Otherwise, this means the cross-chain request was
+        // not routed correctly.
         debug_assert!(
-            was_a_recipient,
+            !events.is_empty(),
             "The block received by {:?} from {:?} at height {:?} was entirely ignored. This should not happen",
             chain_id, origin, height
         );
+        // Process the inbox events and update the inbox state.
+        let communication_state = self.communication_states.load_entry(application_id).await?;
+        let inbox = communication_state
+            .inboxes
+            .load_entry(origin.clone())
+            .await?;
+        for event in events {
+            inbox.add_event(event).await.map_err(|error| match error {
+                InboxError::ViewError(error) => ChainError::ViewError(error),
+                error => ChainError::InternalError(format!(
+                    "while processing effects in certified block: {error}"
+                )),
+            })?;
+        }
+        // Remember the certificate for future validator/client synchronizations.
+        self.received_log.push(certificate_hash);
         Ok(true)
     }
 
@@ -418,6 +359,7 @@ where
                 committees,
                 admin_id,
             }) if id == &chain_id => {
+                // Initialize ourself.
                 self.execution_state.system.open_chain(
                     effect_id,
                     *id,
@@ -449,31 +391,6 @@ where
         Ok(())
     }
 
-    /// Verify that the incoming_messages are in the right order. This matters for inbox
-    /// invariants, notably the fact that inbox.expected_events is sorted.
-    #[allow(clippy::result_large_err)]
-    fn check_incoming_messages(&self, messages: &[Message]) -> Result<(), ChainError> {
-        let mut next_messages: HashMap<(ApplicationId, Origin), (BlockHeight, usize)> =
-            HashMap::new();
-        for message in messages {
-            let next_message = next_messages
-                .entry((message.application_id, message.origin.clone()))
-                .or_default();
-            ensure!(
-                (message.height, message.index) >= *next_message,
-                ChainError::InvalidMessageOrder {
-                    chain_id: self.chain_id(),
-                    application_id: message.application_id,
-                    origin: message.origin.clone(),
-                    height: message.height,
-                    index: message.index,
-                }
-            );
-            *next_message = (message.height, message.index + 1);
-        }
-        Ok(())
-    }
-
     /// Execute a new block: first the incoming messages, then the main operation.
     /// * Modifies the state of inboxes, outboxes, and channels, if needed.
     /// * As usual, in case of errors, `self` may not be consistent any more and should be thrown away.
@@ -485,9 +402,6 @@ where
         assert_eq!(block.chain_id, self.chain_id());
         let chain_id = self.chain_id();
         let mut effects = Vec::new();
-        // First, process incoming messages.
-        self.check_incoming_messages(&block.incoming_messages)?;
-
         for message in &block.incoming_messages {
             log::trace!(
                 "Updating inbox {:?}::{:?} in chain {:?}",
@@ -495,6 +409,7 @@ where
                 message.origin,
                 chain_id
             );
+            // Mark the message as processed in the inbox.
             let communication_state = self
                 .communication_states
                 .load_entry(message.application_id)
@@ -503,73 +418,22 @@ where
                 .inboxes
                 .load_entry(message.origin.clone())
                 .await?;
-            // Receivers are allowed to skip events from the received queue.
-            while let Some(
-                event @ Event {
-                    height,
-                    index,
-                    effect: _,
-                },
-            ) = inbox.received_events.front().await?
-            {
-                if height > message.height || (height == message.height && index >= message.index) {
-                    break;
-                }
-                assert!((height, index) < (message.height, message.index));
-                inbox.received_events.delete_front();
-                log::trace!("Skipping received event {:?}", event);
-            }
-            // Reconcile the event with the received queue, or mark it as "expected".
-            match inbox.received_events.front().await? {
-                Some(event) => {
-                    let Event {
-                        height,
-                        index,
-                        ref effect,
-                    } = event;
-                    ensure!(
-                        message.height == height && message.index == index,
-                        ChainError::InvalidMessage {
-                            chain_id: self.chain_id(),
-                            application_id: message.application_id,
-                            origin: message.origin.clone(),
-                            height: message.height,
-                            index: message.index,
-                            expected_height: height,
-                            expected_index: index,
-                        }
-                    );
-                    ensure!(
-                        &message.effect == effect,
-                        ChainError::InvalidMessageContent {
-                            chain_id: self.chain_id(),
-                            application_id: message.application_id,
-                            origin: message.origin.clone(),
-                            height: message.height,
-                            index: message.index,
-                        }
-                    );
-                    inbox.received_events.delete_front();
-                    log::trace!("Consuming event {:?}", event);
-                }
-                None => {
-                    let event = Event {
-                        height: message.height,
-                        index: message.index,
-                        effect: message.effect.clone(),
-                    };
-                    log::trace!("Marking event as expected: {:?}", event);
-                    inbox.expected_events.push_back(event);
-                }
-            }
+            inbox.remove_event(&message.event).await.map_err(|error| {
+                ChainError::from((
+                    chain_id,
+                    message.application_id,
+                    message.origin.clone(),
+                    error,
+                ))
+            })?;
             // Execute the received effect.
             let context = EffectContext {
                 chain_id,
                 height: block.height,
                 effect_id: EffectId {
                     chain_id: message.origin.chain_id,
-                    height: message.height,
-                    index: message.index,
+                    height: message.event.height,
+                    index: message.event.index,
                 },
             };
             let application = self.describe_application(message.application_id).await?;
@@ -578,11 +442,10 @@ where
                 .execute_effect(
                     &application,
                     &context,
-                    &message.effect,
+                    &message.event.effect,
                     &mut self.known_applications,
                 )
                 .await?;
-
             let communication_state = self
                 .communication_states
                 .load_entry(message.application_id)
@@ -730,7 +593,7 @@ where
         // Update the (regular) outboxes.
         for recipient in recipients {
             let outbox = outboxes.load_entry(recipient).await?;
-            outbox.schedule_message(height).await?;
+            outbox.schedule_message(height)?;
         }
 
         // Update the channels.
@@ -743,7 +606,7 @@ where
             let channel = channels.load_entry(name.to_string()).await?;
             for recipient in channel.subscribers.indices().await? {
                 let outbox = channel.outboxes.load_entry(recipient).await?;
-                outbox.schedule_message(height).await?;
+                outbox.schedule_message(height)?;
             }
             channel.block_height.set(Some(height));
         }
@@ -754,48 +617,11 @@ where
                 // Send the latest message if any.
                 if let Some(latest_height) = channel.block_height.get() {
                     let outbox = channel.outboxes.load_entry(id).await?;
-                    outbox.schedule_message(*latest_height).await?;
+                    outbox.schedule_message(*latest_height)?;
                 }
             }
             channel.subscribers.insert(&id, ())?;
         }
         Ok(())
-    }
-}
-
-impl<C> OutboxStateView<C>
-where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
-{
-    /// Schedule a message at the given height if we haven't already.
-    pub async fn schedule_message(&mut self, height: BlockHeight) -> Result<(), ChainError> {
-        let last_value = self.queue.back().await?;
-        if last_value != Some(height) {
-            assert!(
-                last_value < Some(height),
-                "Trying to schedule height {} after a message at height {}",
-                height,
-                last_value.unwrap()
-            );
-            self.queue.push_back(height);
-        }
-        Ok(())
-    }
-
-    /// Mark all messages as received up to the given height.
-    pub async fn mark_messages_as_received(
-        &mut self,
-        height: BlockHeight,
-    ) -> Result<bool, ViewError> {
-        let mut updated = false;
-        while let Some(h) = self.queue.front().await? {
-            if h > height {
-                break;
-            }
-            self.queue.delete_front();
-            updated = true;
-        }
-        Ok(updated)
     }
 }

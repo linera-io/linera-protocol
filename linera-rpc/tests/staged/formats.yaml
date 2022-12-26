@@ -241,6 +241,13 @@ EffectId:
     - index: U64
 Epoch:
   NEWTYPESTRUCT: U64
+Event:
+  STRUCT:
+    - height:
+        TYPENAME: BlockHeight
+    - index: U64
+    - effect:
+        TYPENAME: Effect
 HashValue:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -259,11 +266,8 @@ Message:
         TYPENAME: ApplicationId
     - origin:
         TYPENAME: Origin
-    - height:
-        TYPENAME: BlockHeight
-    - index: U64
-    - effect:
-        TYPENAME: Effect
+    - event:
+        TYPENAME: Event
 MultiOwnerManager:
   STRUCT:
     - owners:
