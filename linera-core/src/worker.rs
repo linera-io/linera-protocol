@@ -520,14 +520,12 @@ where
                     .await?;
                 for origin in state.inboxes.indices().await? {
                     let inbox = state.inboxes.load_entry(origin.clone()).await?;
-                    let count = inbox.received_events.count();
-                    for event in inbox.received_events.read_front(count).await? {
+                    let count = inbox.added_events.count();
+                    for event in inbox.added_events.read_front(count).await? {
                         messages.push(Message {
                             application_id,
                             origin: origin.clone(),
-                            height: event.height,
-                            index: event.index,
-                            effect: event.effect.clone(),
+                            event: event.clone(),
                         });
                     }
                 }

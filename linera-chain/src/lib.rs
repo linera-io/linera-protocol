@@ -3,10 +3,11 @@
 
 mod chain;
 pub mod data_types;
+mod inbox;
 mod manager;
 
-pub use chain::{ChainStateView, Event};
-use data_types::Origin;
+pub use chain::ChainStateView;
+use data_types::{Event, Origin};
 use linera_base::{
     crypto::CryptoError,
     data_types::{ArithmeticError, BlockHeight, ChainId, RoundNumber},
@@ -31,8 +32,7 @@ pub enum ChainError {
     InactiveChain(ChainId),
     #[error(
         "Cannot vote for block proposal of chain {chain_id:?} because a message \
-         from chain {origin:?} at height {height:?} (application {application_id:?}) \
-         has not been received yet"
+         from application {application_id:?} and origin {origin:?} at height {height:?} has not been received yet"
     )]
     MissingCrossChainUpdate {
         chain_id: ChainId,
@@ -41,40 +41,27 @@ pub enum ChainError {
         height: BlockHeight,
     },
     #[error(
-        "The given incoming message from {origin:?} at height {height:?} and \
-         index {index:?} (application {application_id:?}) is out of order"
+        "Message in block proposed to {chain_id:?} does not match the previously received messages from \
+        application {application_id:?} and origin {origin:?}: was {event:?} instead of {previous_event:?}"
     )]
-    InvalidMessageOrder {
+    UnexpectedMessage {
         chain_id: ChainId,
         application_id: ApplicationId,
         origin: Origin,
-        height: BlockHeight,
-        index: usize,
+        event: Event,
+        previous_event: Event,
     },
     #[error(
-        "Message in block proposal for {chain_id:?} does not match the order of received messages from \
-        chain {origin:?}: was height {height:?} and index {index:?} \
-        instead of {expected_height:?} and {expected_index:?} (application {application_id:?})"
+        "Message in block proposed to {chain_id:?} is out of order compared to previous messages from \
+         application {application_id:?} and origin {origin:?}: {event:?}. Block and height should be at least: {next_height}, {next_index}"
     )]
-    InvalidMessage {
+    IncorrectMessageOrder {
         chain_id: ChainId,
         application_id: ApplicationId,
         origin: Origin,
-        height: BlockHeight,
-        index: usize,
-        expected_height: BlockHeight,
-        expected_index: usize,
-    },
-    #[error(
-        "Message in block proposal for {chain_id:?} does not match received message from {origin:?} \
-        at height {height:?} and index {index:?} (application {application_id:?})"
-    )]
-    InvalidMessageContent {
-        chain_id: ChainId,
-        application_id: ApplicationId,
-        origin: Origin,
-        height: BlockHeight,
-        index: usize,
+        event: Event,
+        next_height: BlockHeight,
+        next_index: usize,
     },
     #[error("The signature was not created by a valid entity")]
     InvalidSigner,
@@ -105,4 +92,6 @@ pub enum ChainError {
     CertificateRequiresQuorum,
     #[error("Certificate signature verification failed: {error}")]
     CertificateSignatureVerificationFailed { error: String },
+    #[error("Internal error {0}")]
+    InternalError(String),
 }

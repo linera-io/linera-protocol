@@ -52,10 +52,24 @@ pub struct BlockAndRound {
 /// A message received from a block of another chain.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct Message {
+    /// The application on both ends of the message.
     pub application_id: ApplicationId,
+    /// The origin of the message (chain and channel if any).
     pub origin: Origin,
+    /// The content of the message to be delivered to the inbox identified by
+    /// `(application_id, origin)`.
+    pub event: Event,
+}
+
+/// An effect together with non replayable information to ensure uniqueness in a
+/// particular inbox.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct Event {
+    /// The height of the block that created the event.
     pub height: BlockHeight,
+    /// The index of the effect.
     pub index: usize,
+    /// The effect of the event (i.e. the actual payload of a message).
     pub effect: Effect,
 }
 
