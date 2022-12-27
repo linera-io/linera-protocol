@@ -124,7 +124,6 @@ pub trait ChainClient {
 pub trait ValidatorNodeProvider {
     type Node: ValidatorNode + Clone + Send + Sync + 'static;
 
-    #[allow(clippy::result_large_err)]
     async fn make_node(&self, address: &str) -> Result<Self::Node, NodeError>;
 }
 
@@ -363,7 +362,6 @@ where
             .expect("key should be known at this point"))
     }
 
-    #[allow(clippy::result_large_err)]
     async fn make_validator_nodes(
         &self,
         committee: &Committee,

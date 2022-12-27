@@ -131,7 +131,6 @@ pub struct ChainInfoResponse {
 /// An internal message between chains within a validator.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-#[allow(clippy::large_enum_variant)]
 pub enum CrossChainRequest {
     /// Communicate a number of confirmed blocks from the sender to the recipient.
     /// Blocks must be given by increasing heights.
