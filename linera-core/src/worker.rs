@@ -13,7 +13,7 @@ use linera_chain::{
     data_types::{Block, BlockProposal, Certificate, Medium, Message, Origin, Value},
     ChainManagerOutcome, ChainStateView,
 };
-use linera_execution::ApplicationDescription;
+use linera_execution::{ApplicationDescription, ApplicationId};
 use linera_storage::Store;
 use linera_views::{
     log_view::LogView,
@@ -44,7 +44,7 @@ pub trait ValidatorWorker {
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-    ) -> Result<(ChainInfoResponse, Vec<CrossChainRequest>), WorkerError>;
+    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError>;
 
     /// Handle information queries on chains.
     async fn handle_chain_info_query(
@@ -56,7 +56,14 @@ pub trait ValidatorWorker {
     async fn handle_cross_chain_request(
         &mut self,
         request: CrossChainRequest,
-    ) -> Result<Vec<CrossChainRequest>, WorkerError>;
+    ) -> Result<NetworkActions, WorkerError>;
+}
+
+/// Instruct the networking layer to send cross-chain requests and/or push notifications.
+#[derive(Default, Debug)]
+pub struct NetworkActions {
+    /// The cross-chain requests
+    pub cross_chain_requests: Vec<CrossChainRequest>,
 }
 
 /// Error type for [`ValidatorWorker`].
@@ -161,10 +168,11 @@ where
         &mut self,
         certificate: Certificate,
     ) -> Result<ChainInfoResponse, WorkerError> {
-        let (response, requests) = self.handle_certificate(certificate).await?;
-        let mut requests = VecDeque::from(requests);
+        let (response, actions) = self.handle_certificate(certificate).await?;
+        let mut requests = VecDeque::from(actions.cross_chain_requests);
         while let Some(request) = requests.pop_front() {
-            requests.extend(self.handle_cross_chain_request(request).await?);
+            let actions = self.handle_cross_chain_request(request).await?;
+            requests.extend(actions.cross_chain_requests);
         }
         Ok(response)
     }
@@ -210,11 +218,11 @@ where
     }
 
     /// Load pending cross-chain requests.
-    async fn make_continuation(
+    async fn make_network_actions(
         &mut self,
         chain: &mut ChainStateView<Client::Context>,
-    ) -> Result<Vec<CrossChainRequest>, WorkerError> {
-        let mut continuation = Vec::new();
+    ) -> Result<NetworkActions, WorkerError> {
+        let mut actions = NetworkActions::default();
         let chain_id = chain.chain_id();
         for application_id in chain.communication_states.indices().await? {
             let application = chain.describe_application(application_id).await?;
@@ -238,7 +246,7 @@ where
                         &heights,
                     )
                     .await?;
-                continuation.push(request);
+                actions.cross_chain_requests.push(request);
             }
             for name in state.channels.indices().await? {
                 let channel = state.channels.load_entry(name.clone()).await?;
@@ -258,18 +266,18 @@ where
                             &heights,
                         )
                         .await?;
-                    continuation.push(request);
+                    actions.cross_chain_requests.push(request);
                 }
             }
         }
-        Ok(continuation)
+        Ok(actions)
     }
 
     /// Process a confirmed block (aka a commit).
     async fn process_confirmed_block(
         &mut self,
         certificate: Certificate,
-    ) -> Result<(ChainInfoResponse, Vec<CrossChainRequest>), WorkerError> {
+    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let (block, effects, state_hash) = match &certificate.value {
             Value::ConfirmedBlock {
                 block,
@@ -289,8 +297,8 @@ where
         if tip.next_block_height > block.height {
             // Block was already confirmed.
             let info = ChainInfoResponse::new(&chain, self.key_pair());
-            let continuation = self.make_continuation(&mut chain).await?;
-            return Ok((info, continuation));
+            let actions = self.make_network_actions(&mut chain).await?;
+            return Ok((info, actions));
         }
         // Verify the certificate. Returns a catch-all error to make client code more robust.
         let epoch = chain
@@ -335,10 +343,10 @@ where
             WorkerError::IncorrectStateHash
         );
         let info = ChainInfoResponse::new(&chain, self.key_pair());
-        let continuation = self.make_continuation(&mut chain).await?;
+        let actions = self.make_network_actions(&mut chain).await?;
         // Persist chain.
         chain.save().await?;
-        Ok((info, continuation))
+        Ok((info, actions))
     }
 
     /// Process a validated block issued from a multi-owner chain.
@@ -471,13 +479,13 @@ where
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-    ) -> Result<(ChainInfoResponse, Vec<CrossChainRequest>), WorkerError> {
+    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         log::trace!("{} <-- {:?}", self.nickname, certificate);
         match &certificate.value {
             Value::ValidatedBlock { .. } => {
                 // Confirm the validated block.
                 let info = self.process_validated_block(certificate).await?;
-                Ok((info, Vec::new()))
+                Ok((info, NetworkActions::default()))
             }
             Value::ConfirmedBlock { .. } => {
                 // Execute the confirmed block.
@@ -550,7 +558,7 @@ where
     async fn handle_cross_chain_request(
         &mut self,
         request: CrossChainRequest,
-    ) -> Result<Vec<CrossChainRequest>, WorkerError> {
+    ) -> Result<NetworkActions, WorkerError> {
         log::trace!("{} <-- {:?}", self.nickname, request);
         match request {
             CrossChainRequest::UpdateRecipient {
@@ -635,7 +643,7 @@ where
                                             height
                                         );
                                     }
-                                    return Ok(Vec::new());
+                                    return Ok(NetworkActions::default());
                                 }
                                 Some(last_anticipated_block_height) => {
                                     // Can only process block up to this value.
@@ -709,7 +717,7 @@ where
                 match last_updated_height {
                     None => {
                         // Nothing happened.
-                        return Ok(Vec::new());
+                        return Ok(NetworkActions::default());
                     }
                     Some(height) => {
                         if !self.allow_inactive_chains {
@@ -723,17 +731,22 @@ where
                                     "[{}] Refusing to deliver messages to an inactive chain {recipient:?}",
                                     self.nickname
                                 );
-                                return Ok(Vec::new());
+                                return Ok(NetworkActions::default());
                             }
                         }
                         chain.save().await?;
                         // Acknowledge the highest processed block height.
-                        Ok(vec![CrossChainRequest::ConfirmUpdatedRecipient {
-                            application_id,
-                            origin,
-                            recipient,
-                            height,
-                        }])
+                        let actions = NetworkActions {
+                            cross_chain_requests: vec![
+                                CrossChainRequest::ConfirmUpdatedRecipient {
+                                    application_id,
+                                    origin: origin.clone(),
+                                    recipient,
+                                    height,
+                                },
+                            ],
+                        };
+                        Ok(actions)
                     }
                 }
             }
@@ -754,7 +767,7 @@ where
                 {
                     chain.save().await?;
                 }
-                Ok(Vec::new())
+                Ok(NetworkActions::default())
             }
             CrossChainRequest::ConfirmUpdatedRecipient {
                 application_id,
@@ -773,7 +786,7 @@ where
                 {
                     chain.save().await?;
                 }
-                Ok(Vec::new())
+                Ok(NetworkActions::default())
             }
         }
     }

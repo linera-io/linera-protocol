@@ -1732,6 +1732,7 @@ where
         })
         .await
         .unwrap()
+        .cross_chain_requests
         .is_empty());
     let chain = worker.storage.load_chain(ChainId::root(2)).await.unwrap();
     // The target chain did not receive the message
@@ -1798,6 +1799,7 @@ where
             })
             .await
             .unwrap()
+            .cross_chain_requests
             .as_slice(),
         &[CrossChainRequest::ConfirmUpdatedRecipient { .. }]
     ));

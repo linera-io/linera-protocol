@@ -14,10 +14,11 @@ use crate::{
 };
 use async_trait::async_trait;
 use futures::{channel::mpsc, sink::SinkExt, stream::StreamExt};
+use linera_core::worker::NetworkActions;
 
 use linera_chain::data_types::{BlockProposal, Certificate};
 use linera_core::{
-    data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
+    data_types::{ChainInfoQuery, ChainInfoResponse},
     node::{NodeError, ValidatorNode},
     worker::{ValidatorWorker, WorkerState},
 };
@@ -185,9 +186,9 @@ where
                 }
                 RpcMessage::Certificate(message) => {
                     match self.server.state.handle_certificate(*message).await {
-                        Ok((info, continuation)) => {
+                        Ok((info, actions)) => {
                             // Cross-shard requests
-                            self.handle_continuation(continuation).await;
+                            self.handle_network_actions(actions).await;
                             // Response
                             Ok(Some(info.into()))
                         }
@@ -202,8 +203,8 @@ where
                 }
                 RpcMessage::CrossChainRequest(request) => {
                     match self.server.state.handle_cross_chain_request(*request).await {
-                        Ok(continuation) => {
-                            self.handle_continuation(continuation).await;
+                        Ok(actions) => {
+                            self.handle_network_actions(actions).await;
                         }
                         Err(error) => {
                             error!(
@@ -253,12 +254,12 @@ impl<S> RunningServerState<S>
 where
     S: Send,
 {
-    fn handle_continuation(
+    fn handle_network_actions(
         &mut self,
-        requests: Vec<CrossChainRequest>,
+        actions: NetworkActions,
     ) -> futures::future::BoxFuture<()> {
         Box::pin(async move {
-            for request in requests {
+            for request in actions.cross_chain_requests {
                 let shard_id = self.server.network.get_shard_id(request.target_chain_id());
                 debug!(
                     "[{}] Scheduling cross-chain query: {} -> {}",

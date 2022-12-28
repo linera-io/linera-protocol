@@ -29,7 +29,7 @@ use futures::{
 use linera_chain::data_types;
 use linera_core::{
     node::{NodeError, ValidatorNode},
-    worker::{ValidatorWorker, WorkerState},
+    worker::{NetworkActions, ValidatorWorker, WorkerState},
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -154,9 +154,9 @@ where
         })
     }
 
-    async fn handle_continuation(&self, requests: Vec<linera_core::data_types::CrossChainRequest>) {
+    async fn handle_network_actions(&self, actions: NetworkActions) {
         let mut sender = self.cross_chain_sender.clone();
-        for request in requests {
+        for request in actions.cross_chain_requests {
             let shard_id = self.network.get_shard_id(request.target_chain_id());
             debug!(
                 "[{}] Scheduling cross-chain query: {} -> {}",
@@ -272,8 +272,8 @@ where
             .handle_certificate(request.into_inner().try_into()?)
             .await
         {
-            Ok((info, continuation)) => {
-                self.handle_continuation(continuation).await;
+            Ok((info, actions)) => {
+                self.handle_network_actions(actions).await;
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
@@ -322,8 +322,8 @@ where
             .handle_certificate(request.into_inner().try_into()?)
             .await
         {
-            Ok((info, continuation)) => {
-                self.handle_continuation(continuation).await;
+            Ok((info, actions)) => {
+                self.handle_network_actions(actions).await;
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
@@ -358,7 +358,7 @@ where
             .handle_cross_chain_request(request.into_inner().try_into()?)
             .await
         {
-            Ok(continuation) => self.handle_continuation(continuation).await,
+            Ok(actions) => self.handle_network_actions(actions).await,
             Err(error) => {
                 error!(
                     "[{}] Failed to handle cross-chain request: {}",
