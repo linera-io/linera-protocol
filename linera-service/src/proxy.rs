@@ -146,10 +146,8 @@ impl SimpleProxy {
         protocol: TransportProtocol,
     ) -> Result<Option<RpcMessage>> {
         let shard_address = format!("{}:{}", shard.host, shard.port);
-
         let mut connection = protocol.connect(shard_address).await?;
         connection.send(message).await?;
-
         Ok(connection.next().await.transpose()?)
     }
 }
@@ -163,10 +161,5 @@ async fn main() -> Result<()> {
     log::info!("Initialising proxy...");
 
     let proxy = Proxy::from_options(ProxyOptions::from_args())?;
-
-    if let Err(error) = proxy.run().await {
-        log::error!("Failed to run proxy: {error}");
-    }
-
-    Ok(())
+    proxy.run().await
 }
