@@ -1,3 +1,6 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! This module contains some helper types to prevent concurrent access to the same chain data.
 //!
 //! The [`ChainGuards`] type controls the active guards. It can be cheaply cloned and shared

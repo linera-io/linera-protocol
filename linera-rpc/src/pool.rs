@@ -1,3 +1,6 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::grpc_network::{
     grpc::{
         validator_node_client::ValidatorNodeClient, validator_worker_client::ValidatorWorkerClient,

@@ -1,3 +1,6 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use bytes::{Buf, BufMut, BytesMut};
 use std::{io, mem, ops::DerefMut};
 use thiserror::Error;

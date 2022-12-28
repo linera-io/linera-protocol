@@ -1,3 +1,6 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use aws_smithy_http::endpoint::Endpoint;
 use http::uri::InvalidUri;
 use std::env;

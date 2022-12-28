@@ -270,7 +270,6 @@ pub trait WritableStorage: ReadableStorage {
     async fn try_read_and_lock_my_state(&self) -> Result<Vec<u8>, ExecutionError>;
 
     /// Save the application state and allow reading/loading the state again.
-    // TODO what is happening here with the error?
     fn save_and_unlock_my_state(&self, state: Vec<u8>) -> Result<(), ApplicationStateNotLocked>;
 
     /// Allow reading/loading the state again (without saving anything).
@@ -491,13 +490,10 @@ impl From<Vec<u8>> for Response {
     }
 }
 
-// todo - take care of this
 #[derive(Clone, Copy, Debug, Error)]
 #[error("The application state can not be saved because it was not locked for writing")]
 pub struct ApplicationStateNotLocked;
 
-// TODO: Move into `wasm` module if/when a WASM runtime is chosen or having a runtime becomes
-// mandatory.
 /// A WebAssembly module's bytecode.
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct Bytecode(Vec<u8>);

@@ -1,3 +1,6 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use super::DynamoDbStoreClient;
 use crate::Store;
 use linera_base::data_types::ChainId;

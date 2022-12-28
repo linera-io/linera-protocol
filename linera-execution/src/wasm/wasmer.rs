@@ -1,3 +1,6 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 // SPDX-License-Identifier: Apache-2.0
 
 //! Code specific to the usage of the [Wasmer](https://wasmer.io/) runtime.

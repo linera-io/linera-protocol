@@ -1,3 +1,6 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use linera_base::{
     crypto::{BcsSignable, HashValue},
     data_types::{BlockHeight, ChainId, EffectId},
