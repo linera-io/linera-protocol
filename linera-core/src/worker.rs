@@ -64,6 +64,29 @@ pub trait ValidatorWorker {
 pub struct NetworkActions {
     /// The cross-chain requests
     pub cross_chain_requests: Vec<CrossChainRequest>,
+    /// The push notifications.
+    pub notifications: Vec<Notification>,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+/// Notify that a chain has a new certified block or a new message.
+pub struct Notification {
+    pub chain_id: ChainId,
+    pub reason: Reason,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+#[allow(clippy::large_enum_variant)]
+/// Reason for the notification.
+pub enum Reason {
+    NewBlock {
+        height: BlockHeight,
+    },
+    NewMessage {
+        application_id: ApplicationId,
+        origin: Origin,
+        height: BlockHeight,
+    },
 }
 
 /// Error type for [`ValidatorWorker`].
@@ -168,11 +191,24 @@ where
         &mut self,
         certificate: Certificate,
     ) -> Result<ChainInfoResponse, WorkerError> {
+        self.fully_handle_certificate_with_notifications(certificate, None)
+            .await
+    }
+
+    #[inline]
+    pub(crate) async fn fully_handle_certificate_with_notifications(
+        &mut self,
+        certificate: Certificate,
+        mut notifications: Option<&mut Vec<Notification>>,
+    ) -> Result<ChainInfoResponse, WorkerError> {
         let (response, actions) = self.handle_certificate(certificate).await?;
         let mut requests = VecDeque::from(actions.cross_chain_requests);
         while let Some(request) = requests.pop_front() {
             let actions = self.handle_cross_chain_request(request).await?;
             requests.extend(actions.cross_chain_requests);
+            if let Some(notifications) = notifications.as_mut() {
+                notifications.extend(actions.notifications);
+            }
         }
         Ok(response)
     }
@@ -343,7 +379,13 @@ where
             WorkerError::IncorrectStateHash
         );
         let info = ChainInfoResponse::new(&chain, self.key_pair());
-        let actions = self.make_network_actions(&mut chain).await?;
+        let mut actions = self.make_network_actions(&mut chain).await?;
+        actions.notifications.push(Notification {
+            chain_id: block.chain_id,
+            reason: Reason::NewBlock {
+                height: block.height,
+            },
+        });
         // Persist chain.
         chain.save().await?;
         Ok((info, actions))
@@ -745,6 +787,14 @@ where
                                     height,
                                 },
                             ],
+                            notifications: vec![Notification {
+                                chain_id: recipient,
+                                reason: Reason::NewMessage {
+                                    application_id,
+                                    origin,
+                                    height,
+                                },
+                            }],
                         };
                         Ok(actions)
                     }

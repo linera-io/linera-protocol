@@ -4,7 +4,10 @@
 
 use crate::{
     data_types::*,
-    worker::{ValidatorWorker, WorkerError, WorkerState},
+    worker::{
+        ApplicationId::System, Notification, Reason, Reason::NewMessage, ValidatorWorker,
+        WorkerError, WorkerState,
+    },
 };
 use linera_base::{committee::Committee, crypto::*, data_types::*};
 use linera_chain::{
@@ -694,8 +697,37 @@ where
         .await
         .is_err());
 
-    worker.fully_handle_certificate(certificate0).await.unwrap();
-    worker.fully_handle_certificate(certificate1).await.unwrap();
+    // Run transfers
+    let mut notifications = Vec::new();
+    worker
+        .fully_handle_certificate_with_notifications(certificate0, Some(&mut notifications))
+        .await
+        .unwrap();
+    worker
+        .fully_handle_certificate_with_notifications(certificate1, Some(&mut notifications))
+        .await
+        .unwrap();
+    assert_eq!(
+        notifications,
+        vec![
+            Notification {
+                chain_id: ChainId::root(2),
+                reason: NewMessage {
+                    application_id: System,
+                    origin: Origin::chain(ChainId::root(1)),
+                    height: BlockHeight(0)
+                }
+            },
+            Notification {
+                chain_id: ChainId::root(2),
+                reason: NewMessage {
+                    application_id: System,
+                    origin: Origin::chain(ChainId::root(1)),
+                    height: BlockHeight(1)
+                }
+            }
+        ]
+    );
     {
         let block_proposal = make_transfer_block_proposal(
             ChainId::root(2),
@@ -1789,20 +1821,30 @@ where
     )
     .await;
     // An inactive target chain is created and it acknowledges the message.
+    let actions = worker
+        .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
+            application: ApplicationDescription::System,
+            origin: Origin::chain(ChainId::root(1)),
+            recipient: ChainId::root(2),
+            certificates: vec![certificate],
+        })
+        .await
+        .unwrap();
     assert!(matches!(
-        worker
-            .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
-                application: ApplicationDescription::System,
-                origin: Origin::chain(ChainId::root(1)),
-                recipient: ChainId::root(2),
-                certificates: vec![certificate],
-            })
-            .await
-            .unwrap()
-            .cross_chain_requests
-            .as_slice(),
+        actions.cross_chain_requests.as_slice(),
         &[CrossChainRequest::ConfirmUpdatedRecipient { .. }]
     ));
+    assert_eq!(
+        actions.notifications,
+        vec![Notification {
+            chain_id: ChainId::root(2),
+            reason: Reason::NewMessage {
+                application_id: ApplicationId::System,
+                origin: Origin::chain(ChainId::root(1)),
+                height: BlockHeight::from(0),
+            }
+        }]
+    );
     let mut chain = worker.storage.load_chain(ChainId::root(2)).await.unwrap();
     assert!(!chain
         .communication_states
