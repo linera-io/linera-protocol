@@ -329,7 +329,7 @@ where
                 }
             }
             CommunicateAction::FinalizeBlock(certificate) => {
-                // The only cause for a retry is that the first certificate of a newly opened chain.
+                // The only cause for a retry here is the first certificate of a newly opened chain.
                 let retryable = target_block_height == BlockHeight::from(0);
                 let info = self.send_certificate(certificate, retryable).await?;
                 match info.manager.pending() {
