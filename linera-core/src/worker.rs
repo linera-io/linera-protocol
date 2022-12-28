@@ -278,10 +278,8 @@ where
             } => (block, effects.clone(), *state_hash),
             _ => panic!("Expecting a confirmation certificate"),
         };
-        // Obtain the sender's chain.
-        let sender = block.chain_id;
         // Check that the chain is active and ready for this confirmation.
-        let mut chain = self.storage.load_active_chain(sender).await?;
+        let mut chain = self.storage.load_active_chain(block.chain_id).await?;
         let tip = chain.tip_state.get();
         if tip.next_block_height < block.height {
             return Err(WorkerError::MissingEarlierBlocks {
@@ -304,7 +302,7 @@ where
         ensure!(
             block.epoch == epoch,
             WorkerError::InvalidEpoch {
-                chain_id: sender,
+                chain_id: block.chain_id,
                 epoch: block.epoch,
             }
         );
@@ -415,9 +413,8 @@ where
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, WorkerError> {
         log::trace!("{} <-- {:?}", self.nickname, proposal);
-        // Obtain the sender's chain.
-        let sender = proposal.content.block.chain_id;
-        let mut chain = self.storage.load_active_chain(sender).await?;
+        let chain_id = proposal.content.block.chain_id;
+        let mut chain = self.storage.load_active_chain(chain_id).await?;
         // Check the epoch.
         let epoch = chain
             .execution_state
@@ -427,10 +424,7 @@ where
             .expect("chain is active");
         ensure!(
             proposal.content.block.epoch == epoch,
-            WorkerError::InvalidEpoch {
-                chain_id: sender,
-                epoch,
-            }
+            WorkerError::InvalidEpoch { chain_id, epoch }
         );
         // Check authentication of the block.
         ensure!(
