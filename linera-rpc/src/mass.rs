@@ -1,3 +1,6 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::RpcMessage;
 use async_trait::async_trait;
 use thiserror::Error;

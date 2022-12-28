@@ -1,3 +1,6 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{DynamoDbContext, TableName, TableStatus};
 use crate::test_utils::{list_tables, LocalStackTestContext};
 use anyhow::Error;

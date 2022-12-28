@@ -388,7 +388,7 @@ impl MassClient for SimpleMassClient {
         let address = format!("{}:{}", self.network.host, self.network.port);
         let mut stream = self.network.protocol.connect(address).await?;
         let mut requests = requests.into_iter();
-        let mut in_flight: u64 = 0;
+        let mut in_flight = 0u64;
         let mut responses = Vec::new();
 
         loop {

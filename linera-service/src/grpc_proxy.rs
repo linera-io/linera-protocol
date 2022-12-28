@@ -1,18 +1,18 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use anyhow::Result;
 use async_trait::async_trait;
 use linera_base::data_types::ChainId;
 use linera_chain::data_types::{BlockAndRound, Value};
 use linera_rpc::{
     config::{ShardConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig},
-    grpc_network::{
-        grpc::{
-            validator_node_client::ValidatorNodeClient,
-            validator_node_server::{ValidatorNode, ValidatorNodeServer},
-            validator_worker_client::ValidatorWorkerClient,
-            validator_worker_server::{ValidatorWorker, ValidatorWorkerServer},
-            ChainInfoResult,
-        },
-        BlockProposal, Certificate, ChainInfoQuery, CrossChainRequest,
+    grpc_network::grpc::{
+        validator_node_client::ValidatorNodeClient,
+        validator_node_server::{ValidatorNode, ValidatorNodeServer},
+        validator_worker_client::ValidatorWorkerClient,
+        validator_worker_server::{ValidatorWorker, ValidatorWorkerServer},
+        BlockProposal, Certificate, ChainInfoQuery, ChainInfoResult, CrossChainRequest,
     },
     pool::ConnectionPool,
 };

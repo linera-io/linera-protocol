@@ -1,3 +1,6 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use anyhow::{bail, Result};
 use futures::{future::BoxFuture, FutureExt, SinkExt, StreamExt};
 use linera_rpc::{

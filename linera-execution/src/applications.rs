@@ -1,3 +1,6 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::{ExecutionError, NewApplication};
 use linera_base::{crypto::HashValue, data_types::EffectId};
 use linera_views::{
