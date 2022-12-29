@@ -20,6 +20,7 @@ futures = "0.3.17"
 generic-array = { version = "0.14.4", features = ["serde"] }
 http = "0.2.7"
 linera-base = { path = "../linera-base" }
+linera-macro = { path = "../linera-macro" }
 log = "0.4.14"
 paste = "1.0.8"
 rocksdb = "0.19.0"

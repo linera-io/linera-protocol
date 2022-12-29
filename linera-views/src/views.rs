@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+extern crate linera_macro;
+pub use linera_macro::{ContainerView, HashFunc, View, HashView};
 use crate::common::Batch;
 use async_trait::async_trait;
 use linera_base::crypto::HashValue;

@@ -16,13 +16,14 @@ use linera_base::{
     messages::{ApplicationDescription, ApplicationId, ChainId},
 };
 use linera_macro::{ContainerView, HashableContainerView, HashableView, View};
+use linera_base::{
+    ensure,
+    messages::{ApplicationDescription, ApplicationId, ChainId},
+};
 use linera_views::{
     collection_view::ReentrantCollectionView,
-    common::Batch,
-    generic_array,
     register_view::RegisterView,
-    sha2, views,
-    views::{ContainerView, HashFunc, HashView, Hasher, View, ViewError},
+    views::{ContainerView, HashFunc, HashView, View, ViewError},
 };
 
 #[cfg(any(test, feature = "test"))]
