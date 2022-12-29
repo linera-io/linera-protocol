@@ -9,7 +9,6 @@ use linera_views::{
         WriteOperation::{Delete, DeletePrefix, Put},
     },
     dynamo_db::DynamoDbContext,
-    impl_view,
     key_value_store_view::{KeyValueStoreMemoryContext, KeyValueStoreView},
     log_view::LogView,
     map_view::MapView,
@@ -17,12 +16,11 @@ use linera_views::{
     queue_view::QueueView,
     register_view::RegisterView,
     rocksdb::{RocksdbContext, DB},
-    scoped_view::ScopedView,
     test_utils::{
         get_random_key_value_operations, get_random_key_value_vec, random_shuffle,
         span_random_reordering_put_delete, LocalStackTestContext,
     },
-    views::{HashView, Hasher, View, ViewError},
+    views::{HashContainerView, SaveDeleteView, HashView, Hasher, View, ViewError},
 };
 use rand::{Rng, RngCore, SeedableRng};
 use std::{
@@ -32,33 +30,19 @@ use std::{
 use tokio::sync::Mutex;
 
 #[allow(clippy::type_complexity)]
+#[derive(HashContainerView)]
 pub struct StateView<C> {
-    pub x1: ScopedView<0, RegisterView<C, u64>>,
-    pub x2: ScopedView<1, RegisterView<C, u32>>,
-    pub log: ScopedView<2, LogView<C, u32>>,
-    pub map: ScopedView<3, MapView<C, String, usize>>,
-    pub queue: ScopedView<4, QueueView<C, u64>>,
-    pub collection: ScopedView<5, CollectionView<C, String, LogView<C, u32>>>,
-    pub collection2:
-        ScopedView<6, CollectionView<C, String, CollectionView<C, String, RegisterView<C, u32>>>>,
-    pub collection3: ScopedView<7, CollectionView<C, String, QueueView<C, u64>>>,
-    pub collection4: ScopedView<8, ReentrantCollectionView<C, String, QueueView<C, u64>>>,
-    pub key_value_store: ScopedView<9, KeyValueStoreView<C>>,
+    pub x1: RegisterView<C, u64>,
+    pub x2: RegisterView<C, u32>,
+    pub log: LogView<C, u32>,
+    pub map: MapView<C, String, usize>,
+    pub queue: QueueView<C, u64>,
+    pub collection: CollectionView<C, String, LogView<C, u32>>,
+    pub collection2: CollectionView<C, String, CollectionView<C, String, RegisterView<C, u32>>>,
+    pub collection3: CollectionView<C, String, QueueView<C, u64>>,
+    pub collection4: ReentrantCollectionView<C, String, QueueView<C, u64>>,
+    pub key_value_store: KeyValueStoreView<C>,
 }
-
-// This also generates `trait StateViewContext: Context ... {}`
-impl_view!(StateView {
-    x1,
-    x2,
-    log,
-    map,
-    queue,
-    collection,
-    collection2,
-    collection3,
-    collection4,
-    key_value_store
-});
 
 #[async_trait]
 pub trait StateStore {

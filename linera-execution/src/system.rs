@@ -13,11 +13,9 @@ use linera_base::{
 };
 use linera_views::{
     common::Context,
-    impl_view,
     map_view::MapView,
     register_view::RegisterView,
-    scoped_view::ScopedView,
-    views::{View, ViewError},
+    views::{HashContainerView, View, ViewError},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -27,25 +25,25 @@ use thiserror::Error;
 use std::collections::BTreeSet;
 
 /// A view accessing the execution state of the system of a chain.
-#[derive(Debug)]
+#[derive(Debug, HashContainerView)]
 pub struct SystemExecutionStateView<C> {
     /// How the chain was created. May be unknown for inactive chains.
-    pub description: ScopedView<0, RegisterView<C, Option<ChainDescription>>>,
+    pub description: RegisterView<C, Option<ChainDescription>>,
     /// The number identifying the current configuration.
-    pub epoch: ScopedView<1, RegisterView<C, Option<Epoch>>>,
+    pub epoch: RegisterView<C, Option<Epoch>>,
     /// The admin of the chain.
-    pub admin_id: ScopedView<2, RegisterView<C, Option<ChainId>>>,
+    pub admin_id: RegisterView<C, Option<ChainId>>,
     /// Track the channels that we have subscribed to.
-    pub subscriptions: ScopedView<3, MapView<C, ChannelId, ()>>,
+    pub subscriptions: MapView<C, ChannelId, ()>,
     /// The committees that we trust, indexed by epoch number.
     /// Not using a `MapView` because the set active of committees is supposed to be
     /// small. Plus, currently, we would create the `BTreeMap` anyway in various places
     /// (e.g. the `OpenChain` operation).
-    pub committees: ScopedView<4, RegisterView<C, BTreeMap<Epoch, Committee>>>,
+    pub committees: RegisterView<C, BTreeMap<Epoch, Committee>>,
     /// Ownership of the chain.
-    pub ownership: ScopedView<5, RegisterView<C, ChainOwnership>>,
+    pub ownership: RegisterView<C, ChainOwnership>,
     /// Balance of the chain.
-    pub balance: ScopedView<6, RegisterView<C, Balance>>,
+    pub balance: RegisterView<C, Balance>,
 }
 
 /// For testing only.
@@ -185,16 +183,6 @@ pub struct Balance(u128);
 /// Optional user message attached to a transfer.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]
 pub struct UserData(pub Option<[u8; 32]>);
-
-impl_view!(SystemExecutionStateView {
-    description,
-    epoch,
-    admin_id,
-    subscriptions,
-    committees,
-    ownership,
-    balance,
-});
 
 #[derive(Error, Debug)]
 pub enum SystemExecutionError {

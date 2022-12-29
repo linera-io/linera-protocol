@@ -23,7 +23,7 @@ use linera_base::{
 use linera_views::{
     collection_view::ReentrantCollectionView,
     register_view::RegisterView,
-    views::{ContainerView, HashFunc, HashView, View, ViewError},
+    views::{HashContainerView, View, ViewError},
 };
 
 #[cfg(any(test, feature = "test"))]
@@ -36,7 +36,7 @@ use {
 };
 
 /// A view accessing the execution state of a chain.
-#[derive(Debug, View, ContainerView, HashView, HashFunc)]
+#[derive(Debug, HashContainerView)]
 pub struct ExecutionStateView<C> {
     /// System application.
     pub system: SystemExecutionStateView<C>,

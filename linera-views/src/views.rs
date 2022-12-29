@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 extern crate linera_macro;
-pub use linera_macro::{ContainerView, HashFunc, View, HashView};
+pub use linera_macro::{ContainerView, HashContainerView, SaveDeleteView, HashFunc, View, HashView};
 use crate::common::Batch;
 use async_trait::async_trait;
 use linera_base::crypto::HashValue;
@@ -110,7 +110,7 @@ impl Hasher for sha2::Sha512 {
 }
 
 #[async_trait]
-pub trait ContainerView<C> {
+pub trait SaveDeleteView<C> {
     /// Save the container view to a file
     async fn save(&mut self) -> Result<(), ViewError>;
 
@@ -123,3 +123,6 @@ pub trait HashFunc<C> {
     /// Computing the hash and attributing the type to it.
     async fn hash_value(&mut self) -> Result<HashValue, ViewError>;
 }
+
+pub trait ContainerView<C>: View<C> + SaveDeleteView<C> {}
+pub trait HashContainerView<C>: View<C> + SaveDeleteView<C> + HashView<C> + HashFunc<C> {}

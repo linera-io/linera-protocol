@@ -20,55 +20,44 @@ use linera_execution::{
 use linera_views::{
     collection_view::CollectionView,
     common::Context,
-    impl_view,
     log_view::LogView,
     map_view::MapView,
     register_view::RegisterView,
     views::{View, HashableContainerView, ViewError},
     queue_view::QueueView,
     register_view::RegisterView,
+    views::{HashContainerView, View, HashFunc, ViewError},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
 /// A view accessing the state of a chain.
-#[derive(Debug)]
+#[derive(Debug, HashContainerView)]
 pub struct ChainStateView<C> {
     /// Execution state, including system and user applications.
-    pub execution_state: ScopedView<0, ExecutionStateView<C>>,
+    pub execution_state: ExecutionStateView<C>,
     /// Hash of the execution state.
-    pub execution_state_hash: ScopedView<1, RegisterView<C, Option<HashValue>>>,
+    pub execution_state_hash: RegisterView<C, Option<HashValue>>,
 
     /// Block-chaining state.
-    pub tip_state: ScopedView<2, RegisterView<C, ChainTipState>>,
+    pub tip_state: RegisterView<C, ChainTipState>,
 
     /// Consensus state.
-    pub manager: ScopedView<3, RegisterView<C, ChainManager>>,
+    pub manager: RegisterView<C, ChainManager>,
 
     /// Hashes of all certified blocks for this sender.
     /// This ends with `block_hash` and has length `usize::from(next_block_height)`.
-    pub confirmed_log: ScopedView<4, LogView<C, HashValue>>,
+    pub confirmed_log: LogView<C, HashValue>,
     /// Hashes of all certified blocks known as a receiver (local ordering).
-    pub received_log: ScopedView<5, LogView<C, HashValue>>,
+    pub received_log: LogView<C, HashValue>,
 
     /// Communication state of applications.
     pub communication_states:
-        ScopedView<6, CollectionView<C, ApplicationId, CommunicationStateView<C>>>,
+        CollectionView<C, ApplicationId, CommunicationStateView<C>>,
 
     /// The application bytecodes that have been published.
-    pub known_applications: ScopedView<7, ApplicationRegistryView<C>>,
+    pub known_applications: ApplicationRegistryView<C>,
 }
-
-impl_view!(ChainStateView {
-    execution_state,
-    execution_state_hash,
-    tip_state,
-    manager,
-    confirmed_log,
-    received_log,
-    communication_states,
-    known_applications,
-});
 
 /// Block-chaining state.
 #[derive(Debug, Default, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -80,38 +69,26 @@ pub struct ChainTipState {
 }
 
 /// A view accessing the communication state of an application.
-#[derive(Debug)]
+#[derive(Debug, HashContainerView)]
 pub struct CommunicationStateView<C> {
     /// Mailboxes used to receive messages indexed by their origin.
-    pub inboxes: ScopedView<0, CollectionView<C, Origin, InboxStateView<C>>>,
+    pub inboxes: CollectionView<C, Origin, InboxStateView<C>>,
     /// Mailboxes used to send messages, indexed by recipient.
-    pub outboxes: ScopedView<1, CollectionView<C, ChainId, OutboxStateView<C>>>,
+    pub outboxes: CollectionView<C, ChainId, OutboxStateView<C>>,
     /// Channels able to multicast messages to subscribers.
-    pub channels: ScopedView<2, CollectionView<C, String, ChannelStateView<C>>>,
+    pub channels: CollectionView<C, String, ChannelStateView<C>>,
 }
-
-impl_view!(CommunicationStateView {
-    inboxes,
-    outboxes,
-    channels
-});
 
 /// The state of a channel followed by subscribers.
-#[derive(Debug)]
+#[derive(Debug, HashContainerView)]
 pub struct ChannelStateView<C> {
     /// The current subscribers.
-    pub subscribers: ScopedView<0, MapView<C, ChainId, ()>>,
+    pub subscribers: MapView<C, ChainId, ()>,
     /// The messages waiting to be delivered to present and past subscribers.
-    pub outboxes: ScopedView<1, CollectionView<C, ChainId, OutboxStateView<C>>>,
+    pub outboxes: CollectionView<C, ChainId, OutboxStateView<C>>,
     /// The latest block height, if any, to be sent to future subscribers.
-    pub block_height: ScopedView<2, RegisterView<C, Option<BlockHeight>>>,
+    pub block_height: RegisterView<C, Option<BlockHeight>>,
 }
-
-impl_view!(ChannelStateView {
-    subscribers,
-    outboxes,
-    block_height
-});
 
 impl<C> ChainStateView<C>
 where
