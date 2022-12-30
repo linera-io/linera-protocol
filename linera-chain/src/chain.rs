@@ -26,7 +26,7 @@ use linera_views::{
     views::{View, HashableContainerView, ViewError},
     queue_view::QueueView,
     register_view::RegisterView,
-    views::{HashContainerView, View, HashFunc, ViewError},
+    views::{HashContainerView, View, ViewError},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -52,8 +52,7 @@ pub struct ChainStateView<C> {
     pub received_log: LogView<C, HashValue>,
 
     /// Communication state of applications.
-    pub communication_states:
-        CollectionView<C, ApplicationId, CommunicationStateView<C>>,
+    pub communication_states: CollectionView<C, ApplicationId, CommunicationStateView<C>>,
 
     /// The application bytecodes that have been published.
     pub known_applications: ApplicationRegistryView<C>,

@@ -4,12 +4,12 @@ members = [
         "linera-chain",
         "linera-core",
         "linera-execution",
-        "linera-macro",
         "linera-rpc",
         "linera-sdk",
         "linera-service",
         "linera-storage",
         "linera-views",
+        "linera-views-macro",
 ]
 
 [profile.release]
