@@ -1,11 +1,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-extern crate linera_macro;
-pub use linera_macro::{ContainerView, HashContainerView, SaveDeleteView, HashFunc, View, HashView};
+extern crate linera_views_macro;
 use crate::common::Batch;
 use async_trait::async_trait;
 use linera_base::crypto::HashValue;
+pub use linera_views_macro::{
+    ContainerView, HashContainerView, HashView, View,
+};
 use serde::Serialize;
 use std::{fmt::Debug, io::Write};
 use thiserror::Error;
@@ -110,7 +112,7 @@ impl Hasher for sha2::Sha512 {
 }
 
 #[async_trait]
-pub trait SaveDeleteView<C> {
+pub trait ContainerView<C>: View<C> {
     /// Save the container view to a file
     async fn save(&mut self) -> Result<(), ViewError>;
 
@@ -119,10 +121,7 @@ pub trait SaveDeleteView<C> {
 }
 
 #[async_trait]
-pub trait HashFunc<C> {
+pub trait HashContainerView<C>: ContainerView<C> + HashView<C> {
     /// Computing the hash and attributing the type to it.
     async fn hash_value(&mut self) -> Result<HashValue, ViewError>;
 }
-
-pub trait ContainerView<C>: View<C> + SaveDeleteView<C> {}
-pub trait HashContainerView<C>: View<C> + SaveDeleteView<C> + HashView<C> + HashFunc<C> {}

@@ -171,7 +171,7 @@ impl<'de> Deserialize<'de> for KeyPair {
         // This is only used for JSON configuration.
         assert!(deserializer.is_human_readable());
         let s = String::deserialize(deserializer)?;
-        let value = hex::decode(&s).map_err(|err| serde::de::Error::custom(err.to_string()))?;
+        let value = hex::decode(s).map_err(|err| serde::de::Error::custom(err.to_string()))?;
         let key = dalek::Keypair::from_bytes(&value)
             .map_err(|err| serde::de::Error::custom(err.to_string()))?;
         Ok(KeyPair(key))
@@ -198,7 +198,7 @@ impl<'de> Deserialize<'de> for Signature {
     {
         if deserializer.is_human_readable() {
             let s = String::deserialize(deserializer)?;
-            let value = hex::decode(&s).map_err(|err| serde::de::Error::custom(err.to_string()))?;
+            let value = hex::decode(s).map_err(|err| serde::de::Error::custom(err.to_string()))?;
             let sig = dalek::Signature::from_bytes(&value)
                 .map_err(|err| serde::de::Error::custom(err.to_string()))?;
             Ok(Signature(sig))

@@ -60,7 +60,7 @@ fn generate_view_code(input: TokenStream) -> TokenStream {
     }
     let first_name = names.get(0).expect("list of names should be non-empty");
 
-    let quote_o = quote! {
+    TokenStream::from(quote! {
         #[async_trait::async_trait]
         impl #generics linera_views::views::View<#first_generic> for #struct_name #generics
         where
@@ -93,9 +93,7 @@ fn generate_view_code(input: TokenStream) -> TokenStream {
                 #(#cleares)*
             }
         }
-    };
-    println!("quote_o={}", quote_o);
-    TokenStream::from(quote_o)
+    })
 }
 
 fn generate_save_delete_view_code(input: TokenStream) -> TokenStream {
@@ -108,7 +106,6 @@ fn generate_save_delete_view_code(input: TokenStream) -> TokenStream {
         .get(0)
         .expect("failed to find the first generic parameter");
 
-
     let mut flushes = Vec::new();
     let mut deletes = Vec::new();
     for e in input.fields {
@@ -117,9 +114,9 @@ fn generate_save_delete_view_code(input: TokenStream) -> TokenStream {
         deletes.push(quote! { self.#name.delete(batch); });
     }
 
-    let quote_o = quote! {
+    TokenStream::from(quote! {
         #[async_trait::async_trait]
-        impl #generics linera_views::views::SaveDeleteView<#first_generic> for #struct_name #generics
+        impl #generics linera_views::views::ContainerView<#first_generic> for #struct_name #generics
         where
             #first_generic: Context + Send + Sync + Clone + 'static,
             linera_views::views::ViewError: From<#first_generic::Error>,
@@ -145,9 +142,7 @@ fn generate_save_delete_view_code(input: TokenStream) -> TokenStream {
                 Ok(())
             }
         }
-    };
-    println!("quote_o={}", quote_o);
-    TokenStream::from(quote_o)
+    })
 }
 
 fn generate_hash_view_code(input: TokenStream) -> TokenStream {
@@ -169,7 +164,7 @@ fn generate_hash_view_code(input: TokenStream) -> TokenStream {
         })
         .collect::<Vec<_>>();
 
-    let quote_o = quote! {
+    TokenStream::from(quote! {
         #[async_trait::async_trait]
         impl #generics linera_views::views::HashView<#first_generic> for #struct_name #generics
         where
@@ -186,12 +181,10 @@ fn generate_hash_view_code(input: TokenStream) -> TokenStream {
                 Ok(hasher.finalize())
             }
         }
-    };
-    println!("quote_o={}", quote_o);
-    TokenStream::from(quote_o)
+    })
 }
 
-fn generate_hash_func_code(input: TokenStream) -> TokenStream {
+fn generate_hash_value_code(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
 
     let struct_name = input.ident;
@@ -202,9 +195,9 @@ fn generate_hash_func_code(input: TokenStream) -> TokenStream {
         .expect("failed to find the first generic parameter");
 
     let hash_type = syn::Ident::new(&format!("{}Hash", struct_name), Span::call_site());
-    let quote_o = quote! {
+    TokenStream::from(quote! {
         #[async_trait::async_trait]
-        impl #generics linera_views::views::HashFunc<#first_generic> for #struct_name #generics
+        impl #generics linera_views::views::HashContainerView<#first_generic> for #struct_name #generics
         where
             #first_generic: Context + Send + Sync + Clone + 'static,
             linera_views::views::ViewError: From<#first_generic::Error>,
@@ -223,9 +216,7 @@ fn generate_hash_func_code(input: TokenStream) -> TokenStream {
                 Ok(HashValue::new(&#hash_type(hash)))
             }
         }
-    };
-    println!("quote_o={}", quote_o);
-    TokenStream::from(quote_o)
+    })
 }
 
 #[proc_macro_derive(View)]
@@ -233,19 +224,9 @@ pub fn derive_view(input: TokenStream) -> TokenStream {
     generate_view_code(input)
 }
 
-#[proc_macro_derive(SaveDeleteView)]
-pub fn derive_save_delete_view(input: TokenStream) -> TokenStream {
-    generate_save_delete_view_code(input)
-}
-
 #[proc_macro_derive(HashView)]
 pub fn derive_hash_view(input: TokenStream) -> TokenStream {
     generate_hash_view_code(input)
-}
-
-#[proc_macro_derive(HashFunc)]
-pub fn derive_hash_func(input: TokenStream) -> TokenStream {
-    generate_hash_func_code(input)
 }
 
 #[proc_macro_derive(ContainerView)]
@@ -260,6 +241,6 @@ pub fn derive_hash_container_view(input: TokenStream) -> TokenStream {
     let mut stream = generate_view_code(input.clone());
     stream.extend(generate_save_delete_view_code(input.clone()));
     stream.extend(generate_hash_view_code(input.clone()));
-    stream.extend(generate_hash_func_code(input));
+    stream.extend(generate_hash_value_code(input));
     stream
 }

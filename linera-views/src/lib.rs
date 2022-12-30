@@ -11,9 +11,6 @@ pub mod common;
 /// The main definitions.
 pub mod views;
 
-/// The scoped_view
-pub mod scoped_view;
-
 /// The register_view
 pub mod register_view;
 
@@ -40,9 +37,6 @@ pub mod rocksdb;
 
 /// Helper definitions for DynamoDB storage.
 pub mod dynamo_db;
-
-/// Macro definitions.
-mod macros;
 
 /// Helper types for interfacing with a LocalStack instance.
 pub mod localstack;

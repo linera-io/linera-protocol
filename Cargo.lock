@@ -1817,8 +1817,8 @@ dependencies = [
  "futures",
  "linera-base",
  "linera-execution",
- "linera-macro",
  "linera-views",
+ "linera-views-macro",
  "log",
  "once_cell",
  "serde",
@@ -1828,16 +1828,6 @@ dependencies = [
  "wasmtime",
  "wit-bindgen-host-wasmer-rust",
  "wit-bindgen-host-wasmtime-rust",
-]
-
-[[package]]
-name = "linera-macro"
-version = "0.1.0"
-dependencies = [
- "proc-macro-error",
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]
@@ -1969,8 +1959,8 @@ dependencies = [
  "generic-array",
  "http",
  "linera-base",
- "linera-macro",
  "linera-views",
+ "linera-views-macro",
  "log",
  "paste",
  "rand 0.8.5",
@@ -1980,6 +1970,15 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+]
+
+[[package]]
+name = "linera-views-macro"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
