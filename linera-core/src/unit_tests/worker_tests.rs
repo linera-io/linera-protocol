@@ -9,7 +9,11 @@ use crate::{
         WorkerError, WorkerState,
     },
 };
-use linera_base::{committee::Committee, crypto::*, data_types::*};
+use linera_base::{
+    committee::Committee,
+    crypto::{BcsSignable, HashValue, *},
+    data_types::*,
+};
 use linera_chain::{
     data_types::{
         Block, BlockAndRound, BlockProposal, Certificate, Event, Message, Origin,
@@ -27,8 +31,14 @@ use linera_views::{
     test_utils::LocalStackTestContext,
     views::{HashableContainerView, ViewError},
 };
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use test_log::test;
+
+#[derive(Serialize, Deserialize)]
+struct Dummy;
+
+impl BcsSignable for Dummy {}
 
 async fn make_state_hash(state: SystemExecutionState) -> HashValue {
     ExecutionStateView::from_system_state(state)
@@ -703,11 +713,11 @@ where
     // Run transfers
     let mut notifications = Vec::new();
     worker
-        .fully_handle_certificate_with_notifications(certificate0, Some(&mut notifications))
+        .fully_handle_certificate_with_notifications(certificate0.clone(), Some(&mut notifications))
         .await
         .unwrap();
     worker
-        .fully_handle_certificate_with_notifications(certificate1, Some(&mut notifications))
+        .fully_handle_certificate_with_notifications(certificate1.clone(), Some(&mut notifications))
         .await
         .unwrap();
     assert_eq!(
@@ -754,6 +764,7 @@ where
                     application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
+                        certificate_hash: certificate0.hash,
                         height: BlockHeight::from(0),
                         index: 0,
                         effect: Effect::System(SystemEffect::Credit {
@@ -766,6 +777,7 @@ where
                     application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
+                        certificate_hash: certificate0.hash,
                         height: BlockHeight::from(0),
                         index: 1,
                         effect: Effect::System(SystemEffect::Credit {
@@ -778,6 +790,7 @@ where
                     application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
+                        certificate_hash: certificate1.hash,
                         height: BlockHeight::from(1),
                         index: 0,
                         effect: Effect::System(SystemEffect::Credit {
@@ -807,6 +820,7 @@ where
                     application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
+                        certificate_hash: certificate0.hash,
                         height: BlockHeight::from(0),
                         index: 1,
                         effect: Effect::System(SystemEffect::Credit {
@@ -819,6 +833,7 @@ where
                     application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
+                        certificate_hash: certificate0.hash,
                         height: BlockHeight::from(0),
                         index: 0,
                         effect: Effect::System(SystemEffect::Credit {
@@ -831,6 +846,7 @@ where
                     application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
+                        certificate_hash: certificate0.hash,
                         height: BlockHeight::from(1),
                         index: 0,
                         effect: Effect::System(SystemEffect::Credit {
@@ -860,6 +876,7 @@ where
                     application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
+                        certificate_hash: certificate1.hash,
                         height: BlockHeight::from(1),
                         index: 0,
                         effect: Effect::System(SystemEffect::Credit {
@@ -872,6 +889,7 @@ where
                     application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
+                        certificate_hash: certificate0.hash,
                         height: BlockHeight::from(0),
                         index: 0,
                         effect: Effect::System(SystemEffect::Credit {
@@ -884,6 +902,7 @@ where
                     application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
+                        certificate_hash: certificate0.hash,
                         height: BlockHeight::from(0),
                         index: 1,
                         effect: Effect::System(SystemEffect::Credit {
@@ -912,6 +931,7 @@ where
                 application_id: ApplicationId::System,
                 origin: Origin::chain(ChainId::root(1)),
                 event: Event {
+                    certificate_hash: certificate0.hash,
                     height: BlockHeight::from(0),
                     index: 0,
                     effect: Effect::System(SystemEffect::Credit {
@@ -966,6 +986,7 @@ where
                 application_id: ApplicationId::System,
                 origin: Origin::chain(ChainId::root(1)),
                 event: Event {
+                    certificate_hash: certificate1.hash,
                     height: BlockHeight::from(1),
                     index: 0,
                     effect: Effect::System(SystemEffect::Credit {
@@ -1368,6 +1389,7 @@ where
             application_id: ApplicationId::System,
             origin: Origin::chain(ChainId::root(3)),
             event: Event {
+                certificate_hash: HashValue::new(&Dummy),
                 height: BlockHeight::from(0),
                 index: 0,
                 effect: Effect::System(SystemEffect::Credit {
@@ -1429,7 +1451,7 @@ where
     );
     assert!(matches!(
         chain.communication_states.load_entry(ApplicationId::System).await.unwrap().inboxes.load_entry(Origin::chain(ChainId::root(3))).await.unwrap().removed_events.front().await.unwrap().unwrap(),
-        Event { height, index: 0, effect: Effect::System(SystemEffect::Credit { amount, .. })} if height == BlockHeight::from(0) && amount == Amount::from(995),
+        Event { certificate_hash, height, index: 0, effect: Effect::System(SystemEffect::Credit { amount, .. })} if certificate_hash == HashValue::new(&Dummy) && height == BlockHeight::from(0) && amount == Amount::from(995),
     ));
     assert_eq!(chain.confirmed_log.count(), 1);
     assert_eq!(Some(certificate.hash), chain.tip_state.get().block_hash);
@@ -1608,7 +1630,7 @@ where
     );
     assert!(matches!(
         chain.communication_states.load_entry(ApplicationId::System).await.unwrap().inboxes.load_entry(Origin::chain(ChainId::root(1))).await.unwrap().added_events.front().await.unwrap().unwrap(),
-        Event { height, index: 0, effect: Effect::System(SystemEffect::Credit { amount, .. })} if height == BlockHeight::from(0) && amount == Amount::from(1),
+        Event { certificate_hash, height, index: 0, effect: Effect::System(SystemEffect::Credit { amount, .. })} if certificate_hash == certificate.hash && height == BlockHeight::from(0) && amount == Amount::from(1),
     ));
     assert_eq!(
         BlockHeight::from(1),
@@ -1674,7 +1696,7 @@ where
             application: ApplicationDescription::System,
             origin: Origin::chain(ChainId::root(1)),
             recipient: ChainId::root(2),
-            certificates: vec![certificate],
+            certificates: vec![certificate.clone()],
         })
         .await
         .unwrap();
@@ -1707,7 +1729,7 @@ where
     );
     assert!(matches!(
         chain.communication_states.load_entry(ApplicationId::System).await.unwrap().inboxes.load_entry(Origin::chain(ChainId::root(1))).await.unwrap().added_events.front().await.unwrap().unwrap(),
-        Event { height, index: 0, effect: Effect::System(SystemEffect::Credit { amount, .. })} if height == BlockHeight::from(0) && amount == Amount::from(10),
+        Event { certificate_hash, height, index: 0, effect: Effect::System(SystemEffect::Credit { amount, .. })} if certificate_hash == certificate.hash && height == BlockHeight::from(0) && amount == Amount::from(10),
     ));
     assert_eq!(chain.confirmed_log.count(), 0);
     assert_eq!(None, chain.tip_state.get().block_hash);
@@ -1942,6 +1964,7 @@ where
             application_id: ApplicationId::System,
             origin: Origin::chain(ChainId::root(1)),
             event: Event {
+                certificate_hash: certificate.hash,
                 height: BlockHeight::from(0),
                 index: 0,
                 effect: Effect::System(SystemEffect::Credit {
@@ -2292,6 +2315,7 @@ where
                     application_id: ApplicationId::System,
                     origin: Origin::chain(admin_id),
                     event: Event {
+                        certificate_hash: certificate0.hash,
                         height: BlockHeight::from(0),
                         index: 1,
                         effect: Effect::System(SystemEffect::Subscribe {
@@ -2448,6 +2472,7 @@ where
                         application_id: ApplicationId::System,
                         origin: admin_channel_origin.clone(),
                         event: Event {
+                            certificate_hash: certificate1.hash,
                             height: BlockHeight::from(1),
                             index: 0,
                             effect: Effect::System(SystemEffect::SetCommittees {
@@ -2461,6 +2486,7 @@ where
                         application_id: ApplicationId::System,
                         origin: Origin::chain(admin_id),
                         event: Event {
+                            certificate_hash: certificate1.hash,
                             height: BlockHeight::from(1),
                             index: 1,
                             effect: Effect::System(SystemEffect::Credit {
@@ -2473,6 +2499,7 @@ where
                         application_id: ApplicationId::System,
                         origin: Origin::chain(admin_id),
                         event: Event {
+                            certificate_hash: certificate2.hash,
                             height: BlockHeight::from(2),
                             index: 0,
                             effect: Effect::System(SystemEffect::Notify { id: user_id }),
@@ -2977,6 +3004,7 @@ where
                     application_id: ApplicationId::System,
                     origin: Origin::chain(user_id),
                     event: Event {
+                        certificate_hash: certificate0.hash,
                         height: BlockHeight::from(0),
                         index: 0,
                         effect: Effect::System(SystemEffect::Credit {

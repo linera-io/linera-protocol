@@ -248,6 +248,8 @@ Epoch:
   NEWTYPESTRUCT: U64
 Event:
   STRUCT:
+    - certificate_hash:
+        TYPENAME: HashValue
     - height:
         TYPENAME: BlockHeight
     - index: U64
