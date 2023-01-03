@@ -33,25 +33,29 @@ impl<N: Clone> Notifier<N> {
 
     /// Notify all the clients waiting for a notification from a given chain.
     pub fn notify(&self, chain: &ChainId, notification: N) -> Result<(), NotifierError> {
-        let mut senders_entry = self
-            .inner
-            .get_mut(chain)
-            .ok_or(NotifierError::ChainDoesNotExist)?;
-        let mut dead_senders = vec![];
-        let senders = senders_entry.value_mut();
+        let senders_is_empty = {
+            let mut senders_entry = self
+                .inner
+                .get_mut(chain)
+                .ok_or(NotifierError::ChainDoesNotExist)?;
+            let mut dead_senders = vec![];
+            let senders = senders_entry.value_mut();
 
-        for (index, sender) in senders.iter_mut().enumerate() {
-            if sender.send(Ok(notification.clone())).is_err() {
-                dead_senders.push(index);
+            for (index, sender) in senders.iter_mut().enumerate() {
+                if sender.send(Ok(notification.clone())).is_err() {
+                    dead_senders.push(index);
+                }
             }
-        }
 
-        for index in dead_senders.into_iter().rev() {
-            info!("Removed dead sender for chain {:?}...", chain);
-            senders.remove(index);
-        }
+            for index in dead_senders.into_iter().rev() {
+                info!("Removed dead sender for chain {:?}...", chain);
+                senders.remove(index);
+            }
 
-        if senders.is_empty() {
+            senders.is_empty()
+        };
+
+        if senders_is_empty {
             info!(
                 "No subscribers for chain {:?}. Removing entry in notifier...",
                 chain
@@ -76,7 +80,6 @@ pub mod tests {
         let notifier = Notifier::default();
 
         let chain_a = ChainId::root(0);
-
         let chain_b = ChainId::root(1);
 
         let (tx_a, mut rx_a) = tokio::sync::mpsc::unbounded_channel();
@@ -146,5 +149,51 @@ pub mod tests {
             a_b_rec.load(Ordering::Relaxed),
             NOTIFICATIONS_A + NOTIFICATIONS_B
         );
+    }
+
+    #[test]
+    fn test_eviction() {
+        let notifier = Notifier::default();
+
+        let chain_a = ChainId::root(0);
+        let chain_b = ChainId::root(1);
+        let chain_c = ChainId::root(2);
+        let chain_d = ChainId::root(3);
+
+        let (tx_a, mut rx_a) = tokio::sync::mpsc::unbounded_channel();
+        let (tx_b, mut rx_b) = tokio::sync::mpsc::unbounded_channel();
+        let (tx_c, mut rx_c) = tokio::sync::mpsc::unbounded_channel();
+        let (tx_d, mut rx_d) = tokio::sync::mpsc::unbounded_channel();
+
+        // Chain A -> Notify A, Notify B
+        // Chain B -> Notify A, Notify B
+        // Chain C -> Notify C
+        // Chain D -> Notify A, Notify B, Notify C, Notify D
+
+        notifier.create_subscription(vec![chain_a, chain_b, chain_d], tx_a);
+        notifier.create_subscription(vec![chain_a, chain_b, chain_d], tx_b);
+        notifier.create_subscription(vec![chain_c, chain_d], tx_c);
+        notifier.create_subscription(vec![chain_d], tx_d);
+
+        assert_eq!(notifier.inner.len(), 4);
+
+        rx_c.close();
+        notifier.notify(&chain_c, ()).unwrap();
+        assert_eq!(notifier.inner.len(), 3);
+
+        rx_a.close();
+        notifier.notify(&chain_a, ()).unwrap();
+        assert_eq!(notifier.inner.len(), 3);
+
+        rx_b.close();
+        notifier.notify(&chain_b, ()).unwrap();
+        assert_eq!(notifier.inner.len(), 2);
+
+        notifier.notify(&chain_a, ()).unwrap();
+        assert_eq!(notifier.inner.len(), 1);
+
+        rx_d.close();
+        notifier.notify(&chain_d, ()).unwrap();
+        assert_eq!(notifier.inner.len(), 0);
     }
 }
