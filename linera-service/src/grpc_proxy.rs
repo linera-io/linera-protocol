@@ -243,9 +243,13 @@ impl NotificationService for GrpcProxy {
 
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
-        self.0
-            .notifier
-            .create_subscription(subscription_request.chain_ids, tx);
+        let chain_ids = subscription_request
+            .chain_ids
+            .into_iter()
+            .map(ChainId::try_from)
+            .collect::<Result<Vec<ChainId>, _>>()?;
+
+        self.0.notifier.create_subscription(chain_ids, tx);
 
         Ok(Response::new(
             Box::pin(UnboundedReceiverStream::new(rx)) as Self::SubscribeStream
@@ -258,12 +262,12 @@ impl NotifierService for GrpcProxy {
     async fn notify(&self, request: Request<Notification>) -> Result<Response<()>, Status> {
         let notification = request.into_inner();
 
-        let chain_id = notification
+        let chain_id: ChainId = notification
             .chain_id
             .clone()
-            .ok_or_else(|| Status::invalid_argument("Missing field: chain_id."))?;
+            .ok_or_else(|| Status::invalid_argument("Missing field: chain_id."))?
+            .try_into()?;
 
-        // can we get away with a partial borrow here?
         if let Err(e) = self.0.notifier.notify(&chain_id, notification) {
             match e {
                 NotifierError::ChainDoesNotExist => warn!(

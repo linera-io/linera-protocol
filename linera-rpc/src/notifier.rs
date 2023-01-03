@@ -1,5 +1,5 @@
-use crate::grpc_network::grpc::ChainId;
 use dashmap::DashMap;
+use linera_base::messages::ChainId;
 use log::info;
 use thiserror::Error;
 use tokio::sync::mpsc::UnboundedSender;
@@ -37,9 +37,7 @@ impl<N: Clone> Notifier<N> {
             .inner
             .get_mut(chain)
             .ok_or(NotifierError::ChainDoesNotExist)?;
-
         let mut dead_senders = vec![];
-
         let senders = senders_entry.value_mut();
 
         for (index, sender) in senders.iter_mut().enumerate() {
@@ -77,9 +75,9 @@ pub mod tests {
     fn test_concurrent() {
         let notifier = Notifier::default();
 
-        let chain_a = ChainId { bytes: vec![0] };
+        let chain_a = ChainId::root(0);
 
-        let chain_b = ChainId { bytes: vec![1] };
+        let chain_b = ChainId::root(1);
 
         let (tx_a, mut rx_a) = tokio::sync::mpsc::unbounded_channel();
         let (tx_b, mut rx_b) = tokio::sync::mpsc::unbounded_channel();
@@ -89,9 +87,9 @@ pub mod tests {
         let b_rec = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let a_b_rec = Arc::new(std::sync::atomic::AtomicUsize::new(0));
 
-        notifier.create_subscription(vec![chain_a.clone()], tx_a);
-        notifier.create_subscription(vec![chain_b.clone()], tx_b);
-        notifier.create_subscription(vec![chain_a.clone(), chain_b.clone()], tx_a_b);
+        notifier.create_subscription(vec![chain_a], tx_a);
+        notifier.create_subscription(vec![chain_b], tx_b);
+        notifier.create_subscription(vec![chain_a, chain_b], tx_a_b);
 
         let a_rec_clone = a_rec.clone();
         let b_rec_clone = b_rec.clone();
@@ -122,14 +120,14 @@ pub mod tests {
 
         let a_notifier = notifier.clone();
         let handle_a = std::thread::spawn(move || {
-            let chain_a = chain_a.clone();
+            let chain_a = chain_a;
             for _ in 0..NOTIFICATIONS_A {
                 a_notifier.notify(&chain_a, ()).unwrap();
             }
         });
 
         let handle_b = std::thread::spawn(move || {
-            let chain_b = chain_b.clone();
+            let chain_b = chain_b;
             for _ in 0..NOTIFICATIONS_B {
                 notifier.notify(&chain_b, ()).unwrap();
             }
