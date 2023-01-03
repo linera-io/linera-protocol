@@ -188,7 +188,7 @@ where
                     // We already executed this message by anticipation. Remove it from
                     // the queue.
                     ensure!(
-                        event.effect == previous_event.effect,
+                        event == previous_event,
                         InboxError::UnexpectedEvent {
                             previous_event,
                             event,

@@ -278,6 +278,7 @@ where
             }
             // Record the inbox event to process it below.
             events.push(Event {
+                certificate_hash,
                 height,
                 index,
                 effect,

@@ -65,6 +65,8 @@ pub struct Message {
 /// particular inbox.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct Event {
+    /// The hash of the certificate that created the event
+    pub certificate_hash: HashValue,
     /// The height of the block that created the event.
     pub height: BlockHeight,
     /// The index of the effect.
