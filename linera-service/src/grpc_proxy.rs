@@ -16,34 +16,11 @@ use linera_rpc::{
     },
     pool::ConnectionPool,
 };
-use std::net::SocketAddr;
+use std::{fmt::Debug, net::SocketAddr};
 use tonic::{
     transport::{Channel, Server},
     Request, Response, Status,
 };
-
-/// Boilerplate to extract the underlying chain id, use it to get the corresponding shard
-/// and forward the message.
-macro_rules! proxy {
-    ($self:ident, $handler:ident, $req:ident, $client:ident) => {{
-        log::debug!(
-            "handler [{}:{}] proxying request [{:?}] from {:?}",
-            stringify!($client),
-            stringify!($handler),
-            $req,
-            $req.remote_addr()
-        );
-        let inner = $req.into_inner();
-        let shard = $self
-            .shard_for(&inner)
-            .ok_or(Status::not_found("could not find shard for message"))?;
-        let mut client = $self
-            .$client(&shard)
-            .await
-            .map_err(|_| Status::internal("could not connect to shard"))?;
-        client.$handler(inner).await
-    }};
-}
 
 #[derive(Clone)]
 pub struct GrpcProxy {
@@ -120,6 +97,30 @@ impl GrpcProxy {
             .serve(self.address())
             .await?)
     }
+
+    async fn client_for_proxy_worker<R>(
+        &self,
+        request: Request<R>,
+    ) -> Result<(ValidatorWorkerClient<Channel>, R), Status>
+    where
+        R: Debug + Proxyable,
+    {
+        log::debug!(
+            "handler [{}] proxying request [{:?}] from {:?}",
+            "ValidatorWorker",
+            request,
+            request.remote_addr()
+        );
+        let inner = request.into_inner();
+        let shard = self
+            .shard_for(&inner)
+            .ok_or(Status::not_found("could not find shard for message"))?;
+        let client = self
+            .worker_client_for_shard(&shard)
+            .await
+            .map_err(|_| Status::internal("could not connect to shard"))?;
+        Ok((client, inner))
+    }
 }
 
 #[async_trait]
@@ -128,43 +129,32 @@ impl ValidatorWorker for GrpcProxy {
         &self,
         request: Request<BlockProposal>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        proxy!(
-            self,
-            handle_block_proposal,
-            request,
-            worker_client_for_shard
-        )
+        let (mut client, inner) = self.client_for_proxy_worker(request).await?;
+        client.handle_block_proposal(inner).await
     }
 
     async fn handle_certificate(
         &self,
         request: Request<Certificate>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        proxy!(self, handle_certificate, request, worker_client_for_shard)
+        let (mut client, inner) = self.client_for_proxy_worker(request).await?;
+        client.handle_certificate(inner).await
     }
 
     async fn handle_chain_info_query(
         &self,
         request: Request<ChainInfoQuery>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        proxy!(
-            self,
-            handle_chain_info_query,
-            request,
-            worker_client_for_shard
-        )
+        let (mut client, inner) = self.client_for_proxy_worker(request).await?;
+        client.handle_chain_info_query(inner).await
     }
 
     async fn handle_cross_chain_request(
         &self,
         request: Request<CrossChainRequest>,
     ) -> Result<Response<()>, Status> {
-        proxy!(
-            self,
-            handle_cross_chain_request,
-            request,
-            worker_client_for_shard
-        )
+        let (mut client, inner) = self.client_for_proxy_worker(request).await?;
+        client.handle_cross_chain_request(inner).await
     }
 }
 
@@ -174,26 +164,66 @@ impl ValidatorNode for GrpcProxy {
         &self,
         request: Request<BlockProposal>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        proxy!(self, handle_block_proposal, request, node_client_for_shard)
+        log::debug!(
+            "handler [{}:{}] proxying request [{:?}] from {:?}",
+            "node_client_for_shard",
+            "handle_block_proposal",
+            request,
+            request.remote_addr()
+        );
+        let inner = request.into_inner();
+        let shard = self
+            .shard_for(&inner)
+            .ok_or(Status::not_found("could not find shard for message"))?;
+        let mut client = self
+            .node_client_for_shard(&shard)
+            .await
+            .map_err(|_| Status::internal("could not connect to shard"))?;
+        client.handle_block_proposal(inner).await
     }
 
     async fn handle_certificate(
         &self,
         request: Request<Certificate>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        proxy!(self, handle_certificate, request, node_client_for_shard)
+        log::debug!(
+            "handler [{}:{}] proxying request [{:?}] from {:?}",
+            "node_client_for_shard",
+            "handle_certificate",
+            request,
+            request.remote_addr()
+        );
+        let inner = request.into_inner();
+        let shard = self
+            .shard_for(&inner)
+            .ok_or(Status::not_found("could not find shard for message"))?;
+        let mut client = self
+            .node_client_for_shard(&shard)
+            .await
+            .map_err(|_| Status::internal("could not connect to shard"))?;
+        client.handle_certificate(inner).await
     }
 
     async fn handle_chain_info_query(
         &self,
         request: Request<ChainInfoQuery>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        proxy!(
-            self,
-            handle_chain_info_query,
+        log::debug!(
+            "handler [{}:{}] proxying request [{:?}] from {:?}",
+            "node_client_for_shard",
+            "handle_chain_info_query",
             request,
-            node_client_for_shard
-        )
+            request.remote_addr()
+        );
+        let inner = request.into_inner();
+        let shard = self
+            .shard_for(&inner)
+            .ok_or(Status::not_found("could not find shard for message"))?;
+        let mut client = self
+            .node_client_for_shard(&shard)
+            .await
+            .map_err(|_| Status::internal("could not connect to shard"))?;
+        client.handle_chain_info_query(inner).await
     }
 }
 
