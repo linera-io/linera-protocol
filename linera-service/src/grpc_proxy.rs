@@ -31,6 +31,7 @@ use tonic::{
     transport::{Channel, Server},
     Request, Response, Status,
 };
+use linera_rpc::grpc_network::grpc::notifier_service_server::NotifierServiceServer;
 
 #[derive(Clone)]
 pub struct GrpcProxy(Arc<GrpcProxyInner>);
@@ -67,6 +68,10 @@ impl GrpcProxy {
 
     fn as_notification_service(&self) -> NotificationServiceServer<Self> {
         NotificationServiceServer::new(self.clone())
+    }
+
+    fn as_notifier_service(&self) -> NotifierServiceServer<Self> {
+        NotifierServiceServer::new(self.clone())
     }
 
     fn address(&self) -> SocketAddr {
@@ -116,6 +121,7 @@ impl GrpcProxy {
             .add_service(self.as_validator_node())
             .add_service(self.as_validator_worker())
             .add_service(self.as_notification_service())
+            .add_service(self.as_notifier_service())
             .serve(self.address())
             .await?)
     }
