@@ -106,17 +106,39 @@ impl GrpcProxy {
         R: Debug + Proxyable,
     {
         log::debug!(
-            "handler [{}] proxying request [{:?}] from {:?}",
-            "ValidatorWorker",
+            "handler [ValidatorWorker] proxying request [{:?}] from {:?}",
             request,
             request.remote_addr()
         );
         let inner = request.into_inner();
         let shard = self
             .shard_for(&inner)
-            .ok_or(Status::not_found("could not find shard for message"))?;
+            .ok_or_else(|| Status::not_found("could not find shard for message"))?;
         let client = self
             .worker_client_for_shard(&shard)
+            .await
+            .map_err(|_| Status::internal("could not connect to shard"))?;
+        Ok((client, inner))
+    }
+
+    async fn client_for_proxy_node<R>(
+        &self,
+        request: Request<R>,
+    ) -> Result<(ValidatorNodeClient<Channel>, R), Status>
+    where
+        R: Debug + Proxyable,
+    {
+        log::debug!(
+            "handler [ValidatorNode] proxying request [{:?}] from {:?}",
+            request,
+            request.remote_addr()
+        );
+        let inner = request.into_inner();
+        let shard = self
+            .shard_for(&inner)
+            .ok_or_else(|| Status::not_found("could not find shard for message"))?;
+        let client = self
+            .node_client_for_shard(&shard)
             .await
             .map_err(|_| Status::internal("could not connect to shard"))?;
         Ok((client, inner))
@@ -164,21 +186,7 @@ impl ValidatorNode for GrpcProxy {
         &self,
         request: Request<BlockProposal>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        log::debug!(
-            "handler [{}:{}] proxying request [{:?}] from {:?}",
-            "node_client_for_shard",
-            "handle_block_proposal",
-            request,
-            request.remote_addr()
-        );
-        let inner = request.into_inner();
-        let shard = self
-            .shard_for(&inner)
-            .ok_or(Status::not_found("could not find shard for message"))?;
-        let mut client = self
-            .node_client_for_shard(&shard)
-            .await
-            .map_err(|_| Status::internal("could not connect to shard"))?;
+        let (mut client, inner) = self.client_for_proxy_node(request).await?;
         client.handle_block_proposal(inner).await
     }
 
@@ -186,21 +194,7 @@ impl ValidatorNode for GrpcProxy {
         &self,
         request: Request<Certificate>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        log::debug!(
-            "handler [{}:{}] proxying request [{:?}] from {:?}",
-            "node_client_for_shard",
-            "handle_certificate",
-            request,
-            request.remote_addr()
-        );
-        let inner = request.into_inner();
-        let shard = self
-            .shard_for(&inner)
-            .ok_or(Status::not_found("could not find shard for message"))?;
-        let mut client = self
-            .node_client_for_shard(&shard)
-            .await
-            .map_err(|_| Status::internal("could not connect to shard"))?;
+        let (mut client, inner) = self.client_for_proxy_node(request).await?;
         client.handle_certificate(inner).await
     }
 
@@ -208,21 +202,7 @@ impl ValidatorNode for GrpcProxy {
         &self,
         request: Request<ChainInfoQuery>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        log::debug!(
-            "handler [{}:{}] proxying request [{:?}] from {:?}",
-            "node_client_for_shard",
-            "handle_chain_info_query",
-            request,
-            request.remote_addr()
-        );
-        let inner = request.into_inner();
-        let shard = self
-            .shard_for(&inner)
-            .ok_or(Status::not_found("could not find shard for message"))?;
-        let mut client = self
-            .node_client_for_shard(&shard)
-            .await
-            .map_err(|_| Status::internal("could not connect to shard"))?;
+        let (mut client, inner) = self.client_for_proxy_node(request).await?;
         client.handle_chain_info_query(inner).await
     }
 }
