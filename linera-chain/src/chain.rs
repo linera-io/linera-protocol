@@ -152,10 +152,7 @@ where
         recipient: ChainId,
         height: BlockHeight,
     ) -> Result<bool, ChainError> {
-        let origin = Origin {
-            chain_id: self.chain_id(),
-            medium: Medium::Direct,
-        };
+        let origin = Origin::chain(self.chain_id());
         let communication_state = self.communication_states.load_entry(application_id).await?;
         Self::mark_messages_as_received(
             &mut communication_state.outboxes,
@@ -174,10 +171,7 @@ where
         recipient: ChainId,
         height: BlockHeight,
     ) -> Result<bool, ChainError> {
-        let origin = Origin {
-            chain_id: self.chain_id(),
-            medium: Medium::Channel(name.to_string()),
-        };
+        let origin = Origin::channel(self.chain_id(), name.to_string());
         let communication_state = self.communication_states.load_entry(application_id).await?;
         let channel = communication_state
             .channels
