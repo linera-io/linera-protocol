@@ -230,7 +230,7 @@ where
         self.key_pair.as_ref().map(Arc::as_ref)
     }
 
-    async fn make_cross_chain_request(
+    async fn create_cross_chain_request(
         &mut self,
         confirmed_log: &mut LogView<Client::Context, HashValue>,
         application: ApplicationDescription,
@@ -254,7 +254,7 @@ where
     }
 
     /// Load pending cross-chain requests.
-    async fn make_network_actions(
+    async fn create_network_actions(
         &mut self,
         chain: &mut ChainStateView<Client::Context>,
     ) -> Result<NetworkActions, WorkerError> {
@@ -271,7 +271,7 @@ where
                 let heights = outbox.block_heights().await?;
                 let origin = Origin::chain(chain_id);
                 let request = self
-                    .make_cross_chain_request(
+                    .create_cross_chain_request(
                         &mut chain.confirmed_log,
                         application.clone(),
                         origin,
@@ -288,7 +288,7 @@ where
                     let heights = outbox.block_heights().await?;
                     let origin = Origin::channel(chain_id, name.clone());
                     let request = self
-                        .make_cross_chain_request(
+                        .create_cross_chain_request(
                             &mut chain.confirmed_log,
                             application.clone(),
                             origin,
@@ -327,7 +327,7 @@ where
         if tip.next_block_height > block.height {
             // Block was already confirmed.
             let info = ChainInfoResponse::new(&chain, self.key_pair());
-            let actions = self.make_network_actions(&mut chain).await?;
+            let actions = self.create_network_actions(&mut chain).await?;
             return Ok((info, actions));
         }
         // Verify the certificate. Returns a catch-all error to make client code more robust.
@@ -373,7 +373,7 @@ where
             WorkerError::IncorrectStateHash
         );
         let info = ChainInfoResponse::new(&chain, self.key_pair());
-        let mut actions = self.make_network_actions(&mut chain).await?;
+        let mut actions = self.create_network_actions(&mut chain).await?;
         actions.notifications.push(Notification {
             chain_id: block.chain_id,
             reason: Reason::NewBlock {
