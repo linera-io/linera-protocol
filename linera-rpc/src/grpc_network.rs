@@ -59,8 +59,8 @@ pub struct GrpcServer<S> {
     state: WorkerState<S>,
     shard_id: ShardId,
     network: ValidatorInternalNetworkConfig,
+    proxy_address: String,
     cross_chain_sender: CrossChainSender,
-    _notifier_client: NotifierServiceClient<Channel>,
 }
 
 pub struct GrpcServerHandle {
@@ -102,17 +102,14 @@ where
         port: u16,
         state: WorkerState<S>,
         shard_id: ShardId,
+        proxy_address: String,
         internal_network: ValidatorInternalNetworkConfig,
-        public_network: ValidatorPublicNetworkConfig,
         cross_chain_config: CrossChainConfig,
     ) -> Result<GrpcServerHandle, GrpcError> {
         info!(
             "spawning gRPC server  on {}:{} for shard {}",
             host, port, shard_id
         );
-
-        let proxy_address = format!("http://{}:{}", public_network.host, public_network.port);
-        let notifier_client = NotifierServiceClient::connect(proxy_address).await?;
 
         let server_address = SocketAddr::from_str(&format!("{}:{}", host, port))?;
 
@@ -140,8 +137,8 @@ where
             state,
             shard_id,
             network: internal_network,
+            proxy_address,
             cross_chain_sender,
-            _notifier_client: notifier_client,
         };
 
         let worker_node = ValidatorWorkerServer::new(grpc_server);
@@ -160,17 +157,21 @@ where
 
     /// Notify clients subscribed to a given [`ChainId`] that there are updates
     /// for that chain.
-    pub async fn _notify(&mut self, chain_id: &ChainId) {
+    pub async fn _notify(&mut self, chain_id: &ChainId) -> Result<(), GrpcError> {
         let notification = Notification {
             chain_id: Some(chain_id.clone()),
         };
+        let mut notifier_client =
+            NotifierServiceClient::connect(self.proxy_address.clone()).await?;
 
-        if let Err(e) = self._notifier_client.notify(notification).await {
+        if let Err(e) = notifier_client.notify(notification).await {
             warn!(
                 "There was an error while trying to notify for chain {:?}: {:?}",
                 chain_id, e
             )
         }
+
+        Ok(())
     }
 
     async fn handle_network_actions(&self, actions: NetworkActions) {

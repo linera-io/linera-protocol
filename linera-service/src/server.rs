@@ -124,8 +124,8 @@ impl ServerContext {
                     shard.port,
                     state,
                     shard_id,
+                    self.server_config.validator.network.http_address(),
                     self.server_config.internal_network.clone(),
-                    self.server_config.validator.network.clone(),
                     cross_chain_config,
                 )
                 .await
