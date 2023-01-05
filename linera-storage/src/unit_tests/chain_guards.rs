@@ -33,7 +33,7 @@ async fn guard_can_be_obtained_later_again() {
     let chain_id = ChainId::root(0);
     let guards = ChainGuards::default();
     // Obtain the guard the first time and drop it immediately
-    let _ = guards.guard(chain_id).await;
+    guards.guard(chain_id).await;
     // It should be available immediately on the second time
     assert!(guards.guard(chain_id).now_or_never().is_some());
 }
