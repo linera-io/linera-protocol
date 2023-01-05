@@ -11,10 +11,7 @@ use linera_rpc::{
         grpc::{
             notification_service_server::{NotificationService, NotificationServiceServer},
             notifier_service_server::NotifierService,
-            validator_node_client::ValidatorNodeClient,
             validator_node_server::{ValidatorNode, ValidatorNodeServer},
-            validator_worker_client::ValidatorWorkerClient,
-            validator_worker_server::{ValidatorWorker, ValidatorWorkerServer},
             ChainInfoResult, Notification, SubscriptionRequest,
         },
         BlockProposal, Certificate, ChainInfoQuery, CrossChainRequest,
@@ -32,6 +29,7 @@ use tonic::{
     Request, Response, Status,
 };
 use linera_rpc::grpc_network::grpc::notifier_service_server::NotifierServiceServer;
+use linera_rpc::grpc_network::grpc::validator_worker_client::ValidatorWorkerClient;
 
 #[derive(Clone)]
 pub struct GrpcProxy(Arc<GrpcProxyInner>);
@@ -39,7 +37,6 @@ pub struct GrpcProxy(Arc<GrpcProxyInner>);
 struct GrpcProxyInner {
     public_config: ValidatorPublicNetworkConfig,
     internal_config: ValidatorInternalNetworkConfig,
-    node_connection_pool: ConnectionPool<ValidatorNodeClient<Channel>>,
     worker_connection_pool: ConnectionPool<ValidatorWorkerClient<Channel>>,
     notifier: Notifier<Notification>,
 }
@@ -52,14 +49,9 @@ impl GrpcProxy {
         Self(Arc::new(GrpcProxyInner {
             public_config,
             internal_config,
-            node_connection_pool: ConnectionPool::new(),
             worker_connection_pool: ConnectionPool::new(),
             notifier: Notifier::default(),
         }))
-    }
-
-    fn as_validator_worker(&self) -> ValidatorWorkerServer<Self> {
-        ValidatorWorkerServer::new(self.clone())
     }
 
     fn as_validator_node(&self) -> ValidatorNodeServer<Self> {
@@ -101,25 +93,10 @@ impl GrpcProxy {
         Ok(client)
     }
 
-    async fn node_client_for_shard(
-        &self,
-        shard: &ShardConfig,
-    ) -> Result<ValidatorNodeClient<Channel>> {
-        let address = shard.http_address();
-        let client = self
-            .0
-            .node_connection_pool
-            .cloned_client_for_address(address)
-            .await?;
-
-        Ok(client)
-    }
-
     pub async fn run(self) -> Result<()> {
         log::info!("Starting gRPC proxy on {}...", self.address());
         Ok(Server::builder()
             .add_service(self.as_validator_node())
-            .add_service(self.as_validator_worker())
             .add_service(self.as_notification_service())
             .add_service(self.as_notifier_service())
             .serve(self.address())
@@ -174,47 +151,12 @@ impl GrpcProxy {
 }
 
 #[async_trait]
-impl ValidatorWorker for GrpcProxy {
-    async fn handle_block_proposal(
-        &self,
-        request: Request<BlockProposal>,
-    ) -> Result<Response<ChainInfoResult>, Status> {
-        let (mut client, inner) = self.client_for_proxy_worker(request).await?;
-        client.handle_block_proposal(inner).await
-    }
-
-    async fn handle_certificate(
-        &self,
-        request: Request<Certificate>,
-    ) -> Result<Response<ChainInfoResult>, Status> {
-        let (mut client, inner) = self.client_for_proxy_worker(request).await?;
-        client.handle_certificate(inner).await
-    }
-
-    async fn handle_chain_info_query(
-        &self,
-        request: Request<ChainInfoQuery>,
-    ) -> Result<Response<ChainInfoResult>, Status> {
-        let (mut client, inner) = self.client_for_proxy_worker(request).await?;
-        client.handle_chain_info_query(inner).await
-    }
-
-    async fn handle_cross_chain_request(
-        &self,
-        request: Request<CrossChainRequest>,
-    ) -> Result<Response<()>, Status> {
-        let (mut client, inner) = self.client_for_proxy_worker(request).await?;
-        client.handle_cross_chain_request(inner).await
-    }
-}
-
-#[async_trait]
 impl ValidatorNode for GrpcProxy {
     async fn handle_block_proposal(
         &self,
         request: Request<BlockProposal>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        let (mut client, inner) = self.client_for_proxy_node(request).await?;
+        let (mut client, inner) = self.client_for_proxy_worker(request).await?;
         client.handle_block_proposal(inner).await
     }
 
@@ -222,7 +164,7 @@ impl ValidatorNode for GrpcProxy {
         &self,
         request: Request<Certificate>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        let (mut client, inner) = self.client_for_proxy_node(request).await?;
+        let (mut client, inner) = self.client_for_proxy_worker(request).await?;
         client.handle_certificate(inner).await
     }
 
@@ -230,7 +172,7 @@ impl ValidatorNode for GrpcProxy {
         &self,
         request: Request<ChainInfoQuery>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        let (mut client, inner) = self.client_for_proxy_node(request).await?;
+        let (mut client, inner) = self.client_for_proxy_worker(request).await?;
         client.handle_chain_info_query(inner).await
     }
 }

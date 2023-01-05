@@ -144,12 +144,10 @@ where
             _notifier_client: notifier_client,
         };
 
-        let validator_node = ValidatorNodeServer::new(grpc_server.clone());
         let worker_node = ValidatorWorkerServer::new(grpc_server);
 
         let handle = tokio::spawn(
             Server::builder()
-                .add_service(validator_node)
                 .add_service(worker_node)
                 .serve_with_shutdown(server_address, receiver.map(|_| ())),
         );
@@ -263,56 +261,6 @@ where
                 );
             }
         }
-    }
-}
-
-#[tonic::async_trait]
-impl<S> ValidatorNodeRpc for GrpcServer<S>
-where
-    S: Store + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
-{
-    async fn handle_block_proposal(
-        &self,
-        request: Request<BlockProposal>,
-    ) -> Result<Response<ChainInfoResult>, Status> {
-        convert_and_delegate!(self, handle_block_proposal, request)
-    }
-
-    async fn handle_certificate(
-        &self,
-        request: Request<Certificate>,
-    ) -> Result<Response<ChainInfoResult>, Status> {
-        debug!(
-            "server handler [handle_certificate] received delegating request [{:?}] ",
-            request
-        );
-        match self
-            .state
-            .clone()
-            .handle_certificate(request.into_inner().try_into()?)
-            .await
-        {
-            Ok((info, actions)) => {
-                self.handle_network_actions(actions).await;
-                Ok(Response::new(info.try_into()?))
-            }
-            Err(error) => {
-                error!(
-                    "[{}] Failed to handle cross-chain request: {}",
-                    self.state.nickname(),
-                    error
-                );
-                Ok(Response::new(NodeError::from(error).try_into()?))
-            }
-        }
-    }
-
-    async fn handle_chain_info_query(
-        &self,
-        request: Request<ChainInfoQuery>,
-    ) -> Result<Response<ChainInfoResult>, Status> {
-        convert_and_delegate!(self, handle_chain_info_query, request)
     }
 }
 
