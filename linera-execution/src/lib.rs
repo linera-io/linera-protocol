@@ -345,6 +345,10 @@ pub struct RawExecutionResult<Effect> {
     pub unsubscribe: Vec<(String, ChainId)>,
 }
 
+/// The name of a subscription channel.
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct ChannelName(Vec<u8>);
+
 /// The identifier of a channel, relative to a particular application.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Hash, Serialize, Deserialize)]
 pub struct ChannelId {
