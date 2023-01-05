@@ -269,10 +269,7 @@ where
             for recipient in state.outboxes.indices().await? {
                 let outbox = state.outboxes.load_entry(recipient).await?;
                 let heights = outbox.block_heights().await?;
-                let origin = Origin {
-                    chain_id,
-                    medium: Medium::Direct,
-                };
+                let origin = Origin::chain(chain_id);
                 let request = self
                     .make_cross_chain_request(
                         &mut chain.confirmed_log,
@@ -289,10 +286,7 @@ where
                 for recipient in channel.outboxes.indices().await? {
                     let outbox = channel.outboxes.load_entry(recipient).await?;
                     let heights = outbox.block_heights().await?;
-                    let origin = Origin {
-                        chain_id,
-                        medium: Medium::Channel(name.clone()),
-                    };
+                    let origin = Origin::channel(chain_id, name.clone());
                     let request = self
                         .make_cross_chain_request(
                             &mut chain.confirmed_log,
