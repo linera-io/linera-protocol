@@ -32,12 +32,14 @@ impl<N: Clone> Notifier<N> {
     }
 
     /// Notify all the clients waiting for a notification from a given chain.
-    pub fn notify(&self, chain: &ChainId, notification: N) -> Result<(), NotifierError> {
+    pub fn notify(&self, chain: &ChainId, notification: N) {
         let senders_is_empty = {
-            let mut senders_entry = self
+            let Some(mut senders_entry) = self
                 .inner
-                .get_mut(chain)
-                .ok_or(NotifierError::ChainDoesNotExist)?;
+                .get_mut(chain) else {
+                info!("Chain {:?} does not exist. Skipping notifying...", chain);
+                return;
+            };
             let mut dead_senders = vec![];
             let senders = senders_entry.value_mut();
 
@@ -62,8 +64,6 @@ impl<N: Clone> Notifier<N> {
             );
             self.inner.remove(chain);
         }
-
-        Ok(())
     }
 }
 
@@ -125,14 +125,14 @@ pub mod tests {
         let handle_a = std::thread::spawn(move || {
             let chain_a = chain_a;
             for _ in 0..NOTIFICATIONS_A {
-                a_notifier.notify(&chain_a, ()).unwrap();
+                a_notifier.notify(&chain_a, ());
             }
         });
 
         let handle_b = std::thread::spawn(move || {
             let chain_b = chain_b;
             for _ in 0..NOTIFICATIONS_B {
-                notifier.notify(&chain_b, ()).unwrap();
+                notifier.notify(&chain_b, ());
             }
         });
 
@@ -178,22 +178,22 @@ pub mod tests {
         assert_eq!(notifier.inner.len(), 4);
 
         rx_c.close();
-        notifier.notify(&chain_c, ()).unwrap();
+        notifier.notify(&chain_c, ());
         assert_eq!(notifier.inner.len(), 3);
 
         rx_a.close();
-        notifier.notify(&chain_a, ()).unwrap();
+        notifier.notify(&chain_a, ());
         assert_eq!(notifier.inner.len(), 3);
 
         rx_b.close();
-        notifier.notify(&chain_b, ()).unwrap();
+        notifier.notify(&chain_b, ());
         assert_eq!(notifier.inner.len(), 2);
 
-        notifier.notify(&chain_a, ()).unwrap();
+        notifier.notify(&chain_a, ());
         assert_eq!(notifier.inner.len(), 1);
 
         rx_d.close();
-        notifier.notify(&chain_d, ()).unwrap();
+        notifier.notify(&chain_d, ());
         assert_eq!(notifier.inner.len(), 0);
     }
 }

@@ -10,16 +10,16 @@ use linera_rpc::{
     grpc_network::{
         grpc::{
             notification_service_server::{NotificationService, NotificationServiceServer},
-            notifier_service_server::NotifierService,
+            notifier_service_server::{NotifierService, NotifierServiceServer},
             validator_node_server::{ValidatorNode, ValidatorNodeServer},
+            validator_worker_client::ValidatorWorkerClient,
             ChainInfoResult, Notification, SubscriptionRequest,
         },
         BlockProposal, Certificate, ChainInfoQuery, CrossChainRequest,
     },
-    notifier::{Notifier, NotifierError},
+    notifier::Notifier,
     pool::ConnectionPool,
 };
-use log::warn;
 use std::{net::SocketAddr, pin::Pin, sync::Arc};
 use std::fmt::Debug;
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -28,8 +28,7 @@ use tonic::{
     transport::{Channel, Server},
     Request, Response, Status,
 };
-use linera_rpc::grpc_network::grpc::notifier_service_server::NotifierServiceServer;
-use linera_rpc::grpc_network::grpc::validator_worker_client::ValidatorWorkerClient;
+use linera_rpc::grpc_network::grpc::validator_node_client::ValidatorNodeClient;
 
 #[derive(Clone)]
 pub struct GrpcProxy(Arc<GrpcProxyInner>);
@@ -188,17 +187,13 @@ impl NotificationService for GrpcProxy {
         request: Request<SubscriptionRequest>,
     ) -> Result<Response<Self::SubscribeStream>, Status> {
         let subscription_request = request.into_inner();
-
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-
         let chain_ids = subscription_request
             .chain_ids
             .into_iter()
             .map(ChainId::try_from)
             .collect::<Result<Vec<ChainId>, _>>()?;
-
         self.0.notifier.create_subscription(chain_ids, tx);
-
         Ok(Response::new(
             Box::pin(UnboundedReceiverStream::new(rx)) as Self::SubscribeStream
         ))
@@ -209,22 +204,12 @@ impl NotificationService for GrpcProxy {
 impl NotifierService for GrpcProxy {
     async fn notify(&self, request: Request<Notification>) -> Result<Response<()>, Status> {
         let notification = request.into_inner();
-
-        let chain_id: ChainId = notification
+        let chain_id = notification
             .chain_id
             .clone()
             .ok_or_else(|| Status::invalid_argument("Missing field: chain_id."))?
             .try_into()?;
-
-        if let Err(e) = self.0.notifier.notify(&chain_id, notification) {
-            match e {
-                NotifierError::ChainDoesNotExist => warn!(
-                    "Tried to notify for chain {:?} which has no subscribers.",
-                    &chain_id
-                ),
-            }
-        }
-
+        self.0.notifier.notify(&chain_id, notification);
         Ok(Response::new(()))
     }
 }
