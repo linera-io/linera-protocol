@@ -5,6 +5,7 @@ use crate::grpc_network::{
     grpc,
     grpc::{
         application_description, cross_chain_request::Inner, ChainInfoResult, NameSignaturePair,
+        NewBlock, NewMessage,
     },
 };
 use ed25519::signature::Signature as edSignature;
@@ -19,6 +20,7 @@ use linera_core::{
         CrossChainRequest::{ConfirmUpdatedRecipient, UpdateRecipient},
     },
     node::NodeError,
+    worker::{Notification, Reason},
 };
 use linera_execution::{
     ApplicationDescription, ApplicationId, BytecodeId, BytecodeLocation,
@@ -181,6 +183,66 @@ macro_rules! mass_client_delegate {
 impl From<ProtoConversionError> for Status {
     fn from(error: ProtoConversionError) -> Self {
         Status::new(Code::InvalidArgument, error.to_string())
+    }
+}
+
+impl From<Notification> for grpc::Notification {
+    fn from(notification: Notification) -> Self {
+        Self {
+            chain_id: Some(notification.chain_id.into()),
+            reason: Some(notification.reason.into()),
+        }
+    }
+}
+
+impl TryFrom<grpc::Notification> for Notification {
+    type Error = ProtoConversionError;
+
+    fn try_from(notification: grpc::Notification) -> Result<Self, Self::Error> {
+        Ok(Self {
+            chain_id: try_proto_convert!(notification.chain_id),
+            reason: try_proto_convert!(notification.reason),
+        })
+    }
+}
+
+impl From<Reason> for grpc::Reason {
+    fn from(reason: Reason) -> Self {
+        Self {
+            inner: Some(match reason {
+                Reason::NewBlock { height } => grpc::reason::Inner::NewBlock(NewBlock {
+                    height: Some(height.into()),
+                }),
+                Reason::NewMessage {
+                    application_id,
+                    origin,
+                    height,
+                } => grpc::reason::Inner::NewMessage(NewMessage {
+                    application_id: Some(application_id.into()),
+                    origin: Some(origin.into()),
+                    height: Some(height.into()),
+                }),
+            }),
+        }
+    }
+}
+
+impl TryFrom<grpc::Reason> for Reason {
+    type Error = ProtoConversionError;
+
+    fn try_from(reason: grpc::Reason) -> Result<Self, Self::Error> {
+        Ok(
+            match reason.inner.ok_or(ProtoConversionError::MissingField)? {
+                grpc::reason::Inner::NewBlock(new_block) => Reason::NewBlock {
+                    height: proto_convert!(new_block.height),
+                },
+                grpc::reason::Inner::NewMessage(new_message) => Reason::NewMessage {
+                    application_id: try_proto_convert!(new_message.application_id),
+                    origin: try_proto_convert!(new_message.origin),
+                    height: proto_convert!(new_message.height),
+                },
+            },
+        )
     }
 }
 
@@ -958,5 +1020,31 @@ pub mod tests {
         };
 
         round_trip_check::<_, grpc::BlockProposal>(block_proposal);
+    }
+
+    #[test]
+    pub fn test_notification() {
+        let notification = Notification {
+            chain_id: ChainId::root(0),
+            reason: Reason::NewBlock {
+                height: BlockHeight(0),
+            },
+        };
+        round_trip_check::<_, grpc::Notification>(notification);
+    }
+
+    #[test]
+    pub fn test_reason() {
+        let reason_new_block = Reason::NewBlock {
+            height: BlockHeight(0),
+        };
+        round_trip_check::<_, grpc::Reason>(reason_new_block);
+
+        let reason_new_message = Reason::NewMessage {
+            application_id: ApplicationId::System,
+            origin: Origin::chain(ChainId::root(0)),
+            height: BlockHeight(0),
+        };
+        round_trip_check::<_, grpc::Reason>(reason_new_message);
     }
 }

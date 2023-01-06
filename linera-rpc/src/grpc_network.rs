@@ -1,9 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::grpc_network::grpc::{
-    notifier_service_client::NotifierServiceClient, ChainId, Notification,
-};
 pub use crate::{
     client_delegate,
     config::{
@@ -23,15 +20,18 @@ pub use crate::{
     pool::Connect,
     RpcMessage,
 };
+use crate::{
+    config::NotificationConfig, grpc_network::grpc::notifier_service_client::NotifierServiceClient,
+};
 use async_trait::async_trait;
 use futures::{
-    channel::{mpsc, oneshot::Sender},
+    channel::{mpsc, mpsc::Receiver, oneshot::Sender},
     FutureExt, SinkExt, StreamExt,
 };
 use linera_chain::data_types;
 use linera_core::{
     node::{NodeError, ValidatorNode},
-    worker::{NetworkActions, ValidatorWorker, WorkerState},
+    worker::{NetworkActions, Notification, ValidatorWorker, WorkerState},
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -55,14 +55,15 @@ pub mod grpc {
 }
 
 type CrossChainSender = mpsc::Sender<(linera_core::data_types::CrossChainRequest, ShardId)>;
+type NotificationSender = mpsc::Sender<Notification>;
 
 #[derive(Clone)]
 pub struct GrpcServer<S> {
     state: WorkerState<S>,
     shard_id: ShardId,
     network: ValidatorInternalNetworkConfig,
-    proxy_address: String,
     cross_chain_sender: CrossChainSender,
+    notification_sender: NotificationSender,
 }
 
 pub struct GrpcServerHandle {
@@ -99,6 +100,7 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
+    #[allow(clippy::too_many_arguments)]
     pub async fn spawn(
         host: String,
         port: u16,
@@ -107,6 +109,7 @@ where
         proxy_address: String,
         internal_network: ValidatorInternalNetworkConfig,
         cross_chain_config: CrossChainConfig,
+        notification_config: NotificationConfig,
     ) -> Result<GrpcServerHandle, GrpcError> {
         info!(
             "spawning gRPC server  on {}:{} for shard {}",
@@ -117,6 +120,9 @@ where
 
         let (cross_chain_sender, cross_chain_receiver) =
             mpsc::channel(cross_chain_config.queue_size);
+
+        let (notification_sender, notification_receiver) =
+            mpsc::channel(notification_config.notification_queue_size);
 
         tokio::spawn({
             info!(
@@ -133,14 +139,28 @@ where
             )
         });
 
+        tokio::spawn({
+            info!(
+                "[{}] spawning notifications thread on {} for shard {}",
+                state.nickname(),
+                host,
+                shard_id
+            );
+            Self::forward_notifications(
+                state.nickname().to_string(),
+                proxy_address,
+                notification_receiver,
+            )
+        });
+
         let (complete, receiver) = futures::channel::oneshot::channel();
 
         let grpc_server = GrpcServer {
             state,
             shard_id,
             network: internal_network,
-            proxy_address,
             cross_chain_sender,
+            notification_sender,
         };
 
         let worker_node = ValidatorWorkerServer::new(grpc_server);
@@ -157,27 +177,42 @@ where
         })
     }
 
-    /// Notify clients subscribed to a given [`ChainId`] that there are updates
-    /// for that chain.
-    pub async fn notify(&mut self, chain_id: &ChainId) -> Result<(), GrpcError> {
-        let notification = Notification {
-            chain_id: Some(chain_id.clone()),
-        };
-        let mut notifier_client =
-            NotifierServiceClient::connect(self.proxy_address.clone()).await?;
-
-        if let Err(e) = notifier_client.notify(notification).await {
-            warn!(
-                "There was an error while trying to notify for chain {:?}: {:?}",
-                chain_id, e
-            )
+    /// Continuously waits for receiver to receive a notification which is then sent to
+    /// the proxy.
+    async fn forward_notifications(
+        nickname: String,
+        proxy_address: String,
+        mut receiver: Receiver<Notification>,
+    ) {
+        // The `ConnectionPool` here acts as a 'lazy' client even though we only have
+        // one connection. This is so that the connection is instantiated on-demand
+        // and not when the server is started to avoid race conditions.
+        let pool = NotifierServiceClient::<Channel>::pool();
+        while let Some(notification) = receiver.next().await {
+            let mut client = match pool.client_for_address_mut(proxy_address.clone()).await {
+                Ok(client) => client,
+                Err(error) => {
+                    error!(
+                        "[{}] could not create client for the proxy at {} with error: {}",
+                        nickname, proxy_address, error
+                    );
+                    continue;
+                }
+            };
+            let request = Request::new(notification.clone().into());
+            if let Err(e) = client.notify(request).await {
+                warn!(
+                    "[{}] could not send notification: {:?} with error: {:?}",
+                    nickname, notification, e
+                )
+            }
         }
-
-        Ok(())
     }
 
     async fn handle_network_actions(&self, actions: NetworkActions) {
-        let mut sender = self.cross_chain_sender.clone();
+        let mut cross_chain_sender = self.cross_chain_sender.clone();
+        let mut notification_sender = self.notification_sender.clone();
+
         for request in actions.cross_chain_requests {
             let shard_id = self.network.get_shard_id(request.target_chain_id());
             debug!(
@@ -187,13 +222,21 @@ where
                 shard_id
             );
 
-            sender
+            cross_chain_sender
                 .feed((request, shard_id))
                 .await
                 .expect("sinks are never closed so `feed` should not fail.")
         }
 
-        let _ = sender.flush();
+        for notification in actions.notifications {
+            notification_sender
+                .feed(notification)
+                .await
+                .expect("sinks are never closed so call to `feed` should not fail");
+        }
+
+        let _ = cross_chain_sender.flush();
+        let _ = notification_sender.flush();
     }
 
     async fn forward_cross_chain_queries(

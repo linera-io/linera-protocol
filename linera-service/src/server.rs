@@ -11,8 +11,8 @@ use linera_base::{crypto::KeyPair, data_types::ValidatorName};
 use linera_core::worker::WorkerState;
 use linera_rpc::{
     config::{
-        CrossChainConfig, NetworkProtocol, ShardConfig, ShardId, ValidatorInternalNetworkConfig,
-        ValidatorPublicNetworkConfig,
+        CrossChainConfig, NetworkProtocol, NotificationConfig, ShardConfig, ShardId,
+        ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
     },
     grpc_network::GrpcServer,
     simple_network,
@@ -36,6 +36,7 @@ use structopt::StructOpt;
 struct ServerContext {
     server_config: ValidatorServerConfig,
     cross_chain_config: CrossChainConfig,
+    notification_config: NotificationConfig,
     shard: Option<usize>,
 }
 
@@ -118,6 +119,7 @@ impl ServerContext {
         let mut handles = Vec::new();
         for (state, shard_id, shard) in states {
             let cross_chain_config = self.cross_chain_config.clone();
+            let notification_config = self.notification_config.clone();
             handles.push(async move {
                 let spawned_server = match GrpcServer::spawn(
                     listen_address.to_string(),
@@ -127,6 +129,7 @@ impl ServerContext {
                     self.server_config.validator.network.http_address(),
                     self.server_config.internal_network.clone(),
                     cross_chain_config,
+                    notification_config,
                 )
                 .await
                 {
@@ -291,6 +294,10 @@ enum ServerCommand {
         #[structopt(flatten)]
         cross_chain_config: CrossChainConfig,
 
+        /// Configuration for notifications
+        #[structopt(flatten)]
+        notification_config: NotificationConfig,
+
         /// Path to the file describing the initial user chains (aka genesis state)
         #[structopt(long = "genesis")]
         genesis_config_path: PathBuf,
@@ -325,6 +332,7 @@ async fn main() {
             server_config_path,
             storage_config,
             cross_chain_config,
+            notification_config,
             genesis_config_path,
             shard,
         } => {
@@ -335,6 +343,7 @@ async fn main() {
             let job = ServerContext {
                 server_config,
                 cross_chain_config,
+                notification_config,
                 shard,
             };
             storage_config
