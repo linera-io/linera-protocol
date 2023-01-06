@@ -442,6 +442,12 @@ SingleOwnerManager:
     - pending:
         OPTION:
           TYPENAME: Vote
+SystemChannel:
+  ENUM:
+    0:
+      Admin: UNIT
+    1:
+      PublishedBytecodes: UNIT
 SystemEffect:
   ENUM:
     0:
@@ -553,15 +559,19 @@ SystemOperation:
           - committee:
               TYPENAME: Committee
     6:
-      SubscribeToNewCommittees:
+      Subscribe:
         STRUCT:
-          - admin_id:
+          - chain_id:
               TYPENAME: ChainId
+          - channel:
+              TYPENAME: SystemChannel
     7:
-      UnsubscribeToNewCommittees:
+      Unsubscribe:
         STRUCT:
-          - admin_id:
+          - chain_id:
               TYPENAME: ChainId
+          - channel:
+              TYPENAME: SystemChannel
     8:
       RemoveCommittee:
         STRUCT:
