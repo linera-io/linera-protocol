@@ -92,12 +92,16 @@ pub enum SystemOperation {
         epoch: Epoch,
         committee: Committee,
     },
-    /// Subscribe to future committees created by `admin_id`. Same as OpenChain but useful
-    /// for root chains (other than admin_id) created in the genesis config.
-    SubscribeToNewCommittees { admin_id: ChainId },
-    /// Unsubscribe to future committees created by `admin_id`. (This is not really useful
-    /// and only meant for testing.)
-    UnsubscribeToNewCommittees { admin_id: ChainId },
+    /// Subscribe to a system channel.
+    Subscribe {
+        chain_id: ChainId,
+        channel: SystemChannel,
+    },
+    /// Unsubscribe to a system channel.
+    Unsubscribe {
+        chain_id: ChainId,
+        channel: SystemChannel,
+    },
     /// (admin chain only) Remove a committee. Once this message is accepted by a chain,
     /// blocks from the retired epoch will not be accepted until they are followed (hence
     /// re-certified) by a block certified by a recent committee.
@@ -155,7 +159,7 @@ pub struct SystemResponse {
 }
 
 /// The channels available in the system application.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub enum SystemChannel {
     /// Channel used to broadcast reconfigurations.
     Admin,
@@ -417,19 +421,19 @@ where
                     },
                 )];
             }
-            SubscribeToNewCommittees { admin_id } => {
+            Subscribe { chain_id, channel } => {
                 // We should not subscribe to ourself in this case.
                 ensure!(
-                    context.chain_id != *admin_id,
+                    context.chain_id != *chain_id,
                     SystemExecutionError::InvalidSubscriptionToNewCommittees(context.chain_id)
                 );
                 ensure!(
-                    self.admin_id.get().as_ref() == Some(admin_id),
+                    self.admin_id.get().as_ref() == Some(chain_id),
                     SystemExecutionError::InvalidSubscriptionToNewCommittees(context.chain_id)
                 );
                 let channel_id = ChannelId {
-                    chain_id: *admin_id,
-                    name: SystemChannel::Admin.name(),
+                    chain_id: *chain_id,
+                    name: channel.name(),
                 };
                 ensure!(
                     self.subscriptions.get(&channel_id).await?.is_none(),
@@ -437,20 +441,20 @@ where
                 );
                 self.subscriptions.insert(&channel_id)?;
                 result.effects = vec![(
-                    Destination::Recipient(*admin_id),
+                    Destination::Recipient(*chain_id),
                     SystemEffect::Subscribe {
                         id: context.chain_id,
                         channel: ChannelId {
-                            chain_id: *admin_id,
-                            name: SystemChannel::Admin.name(),
+                            chain_id: *chain_id,
+                            name: channel.name(),
                         },
                     },
                 )];
             }
-            UnsubscribeToNewCommittees { admin_id } => {
+            Unsubscribe { chain_id, channel } => {
                 let channel_id = ChannelId {
-                    chain_id: *admin_id,
-                    name: SystemChannel::Admin.name(),
+                    chain_id: *chain_id,
+                    name: channel.name(),
                 };
                 ensure!(
                     self.subscriptions.get(&channel_id).await?.is_some(),
@@ -458,12 +462,12 @@ where
                 );
                 self.subscriptions.remove(&channel_id)?;
                 result.effects = vec![(
-                    Destination::Recipient(*admin_id),
+                    Destination::Recipient(*chain_id),
                     SystemEffect::Unsubscribe {
                         id: context.chain_id,
                         channel: ChannelId {
-                            chain_id: *admin_id,
-                            name: SystemChannel::Admin.name(),
+                            chain_id: *chain_id,
+                            name: channel.name(),
                         },
                     },
                 )];

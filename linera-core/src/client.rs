@@ -20,7 +20,7 @@ use linera_chain::{
     ChainManager,
 };
 use linera_execution::{
-    system::{Address, Amount, Balance, SystemOperation, UserData},
+    system::{Address, Amount, Balance, SystemChannel, SystemOperation, UserData},
     ApplicationId, Operation,
 };
 use linera_storage::Store;
@@ -1116,8 +1116,9 @@ where
             incoming_messages: self.pending_messages().await?,
             operations: vec![(
                 ApplicationId::System,
-                Operation::System(SystemOperation::SubscribeToNewCommittees {
-                    admin_id: self.admin_id,
+                Operation::System(SystemOperation::Subscribe {
+                    chain_id: self.admin_id,
+                    channel: SystemChannel::Admin,
                 }),
             )],
             previous_block_hash: self.block_hash,
@@ -1137,8 +1138,9 @@ where
             incoming_messages: self.pending_messages().await?,
             operations: vec![(
                 ApplicationId::System,
-                Operation::System(SystemOperation::UnsubscribeToNewCommittees {
-                    admin_id: self.admin_id,
+                Operation::System(SystemOperation::Unsubscribe {
+                    chain_id: self.admin_id,
+                    channel: SystemChannel::Admin,
                 }),
             )],
             previous_block_hash: self.block_hash,
