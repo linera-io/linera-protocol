@@ -20,7 +20,7 @@ use linera_views::{
         get_random_key_value_operations, get_random_key_value_vec, random_shuffle,
         span_random_reordering_put_delete, LocalStackTestContext,
     },
-    views::{HashableContainerView, HashableView, Hasher, ContainerView, View, ViewError},
+    views::{ContainerView, HashableContainerView, HashableView, Hasher, View, ViewError},
 };
 use rand::{Rng, RngCore, SeedableRng};
 use std::{

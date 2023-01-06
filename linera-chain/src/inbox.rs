@@ -8,8 +8,10 @@ use linera_base::{
 };
 use linera_execution::ApplicationId;
 use linera_views::{
-    common::Context, queue_view::QueueView, register_view::RegisterView,
-    views::ViewError, views::HashableContainerView,
+    common::Context,
+    queue_view::QueueView,
+    register_view::RegisterView,
+    views::{HashableContainerView, ViewError},
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

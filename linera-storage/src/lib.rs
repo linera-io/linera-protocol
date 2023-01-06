@@ -26,7 +26,10 @@ use linera_execution::{
 };
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 use linera_execution::{ApplicationId, Operation, SystemOperation, WasmApplication};
-use linera_views::{common::Context, views::{HashableContainerView, ContainerView, ViewError}};
+use linera_views::{
+    common::Context,
+    views::{ContainerView, HashableContainerView, ViewError},
+};
 use std::{fmt::Debug, sync::Arc};
 
 /// Communicate with a persistent storage using the "views" abstraction.
