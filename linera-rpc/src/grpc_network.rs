@@ -1,7 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
+use crate::grpc_network::grpc::{
+    notifier_service_client::NotifierServiceClient, ChainId, Notification,
+};
+pub use crate::{
     client_delegate,
     config::{
         CrossChainConfig, ShardId, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
@@ -11,7 +14,6 @@ use crate::{
     grpc_network::grpc::{
         chain_info_result::Inner,
         validator_node_client::ValidatorNodeClient,
-        validator_node_server::{ValidatorNode as ValidatorNodeRpc, ValidatorNodeServer},
         validator_worker_client::ValidatorWorkerClient,
         validator_worker_server::{ValidatorWorker as ValidatorWorkerRpc, ValidatorWorkerServer},
         BlockProposal, Certificate, ChainInfoQuery, ChainInfoResult, CrossChainRequest,
@@ -41,10 +43,10 @@ use std::{
 };
 use thiserror::Error;
 use tokio::task::{JoinError, JoinHandle};
-use tonic::transport::{Channel, Server};
-use tonic::{Request, Response, Status};
-use crate::grpc_network::grpc::{ChainId, Notification};
-use crate::grpc_network::grpc::notifier_service_client::NotifierServiceClient;
+use tonic::{
+    transport::{Channel, Server},
+    Request, Response, Status,
+};
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 // https://github.com/hyperium/tonic/issues/1056

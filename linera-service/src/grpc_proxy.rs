@@ -20,15 +20,13 @@ use linera_rpc::{
     notifier::Notifier,
     pool::ConnectionPool,
 };
-use std::{net::SocketAddr, pin::Pin, sync::Arc};
-use std::fmt::Debug;
+use std::{fmt::Debug, net::SocketAddr, pin::Pin, sync::Arc};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::{
     codegen::futures_core::Stream,
     transport::{Channel, Server},
     Request, Response, Status,
 };
-use linera_rpc::grpc_network::grpc::validator_node_client::ValidatorNodeClient;
 
 #[derive(Clone)]
 pub struct GrpcProxy(Arc<GrpcProxyInner>);
@@ -120,29 +118,6 @@ impl GrpcProxy {
             .ok_or_else(|| Status::not_found("could not find shard for message"))?;
         let client = self
             .worker_client_for_shard(&shard)
-            .await
-            .map_err(|_| Status::internal("could not connect to shard"))?;
-        Ok((client, inner))
-    }
-
-    async fn client_for_proxy_node<R>(
-        &self,
-        request: Request<R>,
-    ) -> Result<(ValidatorNodeClient<Channel>, R), Status>
-    where
-        R: Debug + Proxyable,
-    {
-        log::debug!(
-            "handler [ValidatorNode] proxying request [{:?}] from {:?}",
-            request,
-            request.remote_addr()
-        );
-        let inner = request.into_inner();
-        let shard = self
-            .shard_for(&inner)
-            .ok_or_else(|| Status::not_found("could not find shard for message"))?;
-        let client = self
-            .node_client_for_shard(&shard)
             .await
             .map_err(|_| Status::internal("could not connect to shard"))?;
         Ok((client, inner))
