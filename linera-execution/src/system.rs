@@ -3,8 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    Bytecode, BytecodeId, ChainOwnership, ChannelId, Destination, EffectContext, ExecutionResult,
-    NewApplication, OperationContext, QueryContext, RawExecutionResult, UserApplicationId,
+    Bytecode, BytecodeId, ChainOwnership, ChannelId, ChannelName, Destination, EffectContext,
+    ExecutionResult, NewApplication, OperationContext, QueryContext, RawExecutionResult,
+    UserApplicationId,
 };
 use linera_base::{
     committee::Committee,
@@ -151,6 +152,24 @@ pub struct SystemQuery;
 pub struct SystemResponse {
     pub chain_id: ChainId,
     pub balance: Balance,
+}
+
+/// The channels available in the system application.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum SystemChannel {
+    /// Channel used to broadcast reconfigurations.
+    Admin,
+    /// Channel used to broadcast new published bytecodes.
+    PublishedBytecodes,
+}
+
+impl SystemChannel {
+    /// The [`ChannelName`] of this [`SystemChannel`].
+    pub fn name(&self) -> ChannelName {
+        bcs::to_bytes(self)
+            .expect("`SystemChannel` can be serialized")
+            .into()
+    }
 }
 
 /// The name of the channel for the admin chain to broadcast reconfigurations.
