@@ -340,9 +340,9 @@ pub struct RawExecutionResult<Effect> {
     /// Send messages to the given destinations.
     pub effects: Vec<(Destination, Effect)>,
     /// Subscribe chains to channels.
-    pub subscribe: Vec<(String, ChainId)>,
+    pub subscribe: Vec<(ChannelName, ChainId)>,
     /// Unsubscribe chains to channels.
-    pub unsubscribe: Vec<(String, ChainId)>,
+    pub unsubscribe: Vec<(ChannelName, ChainId)>,
 }
 
 /// The name of a subscription channel.
@@ -365,7 +365,7 @@ impl AsRef<[u8]> for ChannelName {
 #[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Hash, Serialize, Deserialize)]
 pub struct ChannelId {
     pub chain_id: ChainId,
-    pub name: String,
+    pub name: ChannelName,
 }
 
 /// The destination of a message, relative to a particular application.
@@ -374,7 +374,7 @@ pub enum Destination {
     /// Direct message to a chain.
     Recipient(ChainId),
     /// Broadcast to the current subscribers of our channel.
-    Subscribers(String),
+    Subscribers(ChannelName),
 }
 
 /// Externally visible results of an execution, tagged by their application.

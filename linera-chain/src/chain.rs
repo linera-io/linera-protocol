@@ -14,7 +14,7 @@ use linera_base::{
 };
 use linera_execution::{
     system::SystemEffect, ApplicationDescription, ApplicationId, ApplicationRegistryView,
-    BytecodeId, BytecodeLocation, Destination, Effect, EffectContext, ExecutionResult,
+    BytecodeId, BytecodeLocation, ChannelName, Destination, Effect, EffectContext, ExecutionResult,
     ExecutionRuntimeContext, ExecutionStateView, OperationContext, RawExecutionResult,
 };
 use linera_views::{
@@ -72,7 +72,7 @@ pub struct CommunicationStateView<C> {
     /// Mailboxes used to send messages, indexed by recipient.
     pub outboxes: CollectionView<C, ChainId, OutboxStateView<C>>,
     /// Channels able to multicast messages to subscribers.
-    pub channels: CollectionView<C, String, ChannelStateView<C>>,
+    pub channels: CollectionView<C, ChannelName, ChannelStateView<C>>,
 }
 
 /// The state of a channel followed by subscribers.
@@ -140,17 +140,14 @@ where
 
     pub async fn mark_channel_messages_as_received(
         &mut self,
-        name: &str,
+        name: ChannelName,
         application_id: ApplicationId,
         recipient: ChainId,
         height: BlockHeight,
     ) -> Result<bool, ChainError> {
-        let origin = Origin::channel(self.chain_id(), name.to_string());
+        let origin = Origin::channel(self.chain_id(), name.clone());
         let communication_state = self.communication_states.load_entry(application_id).await?;
-        let channel = communication_state
-            .channels
-            .load_entry(name.to_string())
-            .await?;
+        let channel = communication_state.channels.load_entry(name).await?;
         Self::mark_messages_as_received(
             &mut channel.outboxes,
             application_id,
@@ -500,7 +497,7 @@ where
 
     async fn process_execution_results(
         outboxes: &mut CollectionView<C, ChainId, OutboxStateView<C>>,
-        channels: &mut CollectionView<C, String, ChannelStateView<C>>,
+        channels: &mut CollectionView<C, ChannelName, ChannelStateView<C>>,
         effects: &mut Vec<(ApplicationId, Destination, Effect)>,
         height: BlockHeight,
         results: Vec<ExecutionResult>,
@@ -537,7 +534,7 @@ where
     async fn process_raw_execution_result<E: Into<Effect>>(
         application_id: ApplicationId,
         outboxes: &mut CollectionView<C, ChainId, OutboxStateView<C>>,
-        channels: &mut CollectionView<C, String, ChannelStateView<C>>,
+        channels: &mut CollectionView<C, ChannelName, ChannelStateView<C>>,
         effects: &mut Vec<(ApplicationId, Destination, Effect)>,
         height: BlockHeight,
         application: RawExecutionResult<E>,
@@ -552,7 +549,7 @@ where
                     recipients.insert(*id);
                 }
                 Destination::Subscribers(name) => {
-                    channel_broadcasts.insert(name.to_string());
+                    channel_broadcasts.insert(name.clone());
                 }
             }
             effects.push((application_id, destination, effect.into()));
@@ -566,12 +563,12 @@ where
 
         // Update the channels.
         for (name, id) in application.unsubscribe {
-            let channel = channels.load_entry(name.to_string()).await?;
+            let channel = channels.load_entry(name).await?;
             // Remove subscriber. Do not remove the channel outbox yet.
             channel.subscribers.remove(&id)?;
         }
         for name in channel_broadcasts {
-            let channel = channels.load_entry(name.to_string()).await?;
+            let channel = channels.load_entry(name).await?;
             for recipient in channel.subscribers.indices().await? {
                 let outbox = channel.outboxes.load_entry(recipient).await?;
                 outbox.schedule_message(height)?;
@@ -579,7 +576,7 @@ where
             channel.block_height.set(Some(height));
         }
         for (name, id) in application.subscribe {
-            let channel = channels.load_entry(name.to_string()).await?;
+            let channel = channels.load_entry(name).await?;
             // Add subscriber.
             if channel.subscribers.get(&id).await?.is_none() {
                 // Send the latest message if any.

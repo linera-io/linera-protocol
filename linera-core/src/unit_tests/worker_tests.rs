@@ -2101,9 +2101,9 @@ where
     let admin_id = ChainId::root(0);
     let admin_channel = ChannelId {
         chain_id: admin_id,
-        name: ADMIN_CHANNEL.into(),
+        name: ADMIN_CHANNEL.clone(),
     };
-    let admin_channel_origin = Origin::channel(admin_id, ADMIN_CHANNEL.into());
+    let admin_channel_origin = Origin::channel(admin_id, ADMIN_CHANNEL.clone());
     // Have the admin chain create a user chain.
     let user_id = ChainId::child(EffectId {
         chain_id: admin_id,
@@ -2204,7 +2204,7 @@ where
             .indices()
             .await
             .unwrap()
-            .contains(&ADMIN_CHANNEL.to_string()));
+            .contains(&*ADMIN_CHANNEL));
     }
 
     // Create a new committee and transfer money before accepting the subscription.
@@ -2246,7 +2246,7 @@ where
             effects: vec![
                 (
                     ApplicationId::System,
-                    Destination::Subscribers(ADMIN_CHANNEL.to_string()),
+                    Destination::Subscribers(ADMIN_CHANNEL.clone()),
                     Effect::System(SystemEffect::SetCommittees {
                         admin_id,
                         epoch: Epoch::from(1),
@@ -2337,7 +2337,7 @@ where
                 .await
                 .unwrap()
                 .channels
-                .load_entry(ADMIN_CHANNEL.to_string())
+                .load_entry(ADMIN_CHANNEL.clone())
                 .await
                 .unwrap()
                 .subscribers
@@ -2490,7 +2490,7 @@ where
                 admin_id: Some(admin_id),
                 subscriptions: [ChannelId {
                     chain_id: admin_id,
-                    name: ADMIN_CHANNEL.into(),
+                    name: ADMIN_CHANNEL.clone(),
                 }]
                 .into_iter()
                 .collect(),
@@ -2683,7 +2683,7 @@ where
             },
             effects: vec![(
                 ApplicationId::System,
-                Destination::Subscribers(ADMIN_CHANNEL.to_string()),
+                Destination::Subscribers(ADMIN_CHANNEL.clone()),
                 Effect::System(SystemEffect::SetCommittees {
                     admin_id,
                     epoch: Epoch::from(1),
@@ -2895,7 +2895,7 @@ where
             effects: vec![
                 (
                     ApplicationId::System,
-                    Destination::Subscribers(ADMIN_CHANNEL.to_string()),
+                    Destination::Subscribers(ADMIN_CHANNEL.clone()),
                     Effect::System(SystemEffect::SetCommittees {
                         admin_id,
                         epoch: Epoch::from(1),
@@ -2904,7 +2904,7 @@ where
                 ),
                 (
                     ApplicationId::System,
-                    Destination::Subscribers(ADMIN_CHANNEL.to_string()),
+                    Destination::Subscribers(ADMIN_CHANNEL.clone()),
                     Effect::System(SystemEffect::SetCommittees {
                         admin_id,
                         epoch: Epoch::from(1),

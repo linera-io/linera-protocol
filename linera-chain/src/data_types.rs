@@ -9,7 +9,7 @@ use linera_base::{
     data_types::{BlockHeight, ChainId, Epoch, Owner, RoundNumber, ValidatorName},
     ensure,
 };
-use linera_execution::{ApplicationId, Destination, Effect, Operation};
+use linera_execution::{ApplicationId, ChannelName, Destination, Effect, Operation};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
@@ -88,7 +88,7 @@ pub enum Medium {
     /// The message is a direct message.
     Direct,
     /// The message is a channel broadcast.
-    Channel(String),
+    Channel(ChannelName),
 }
 
 /// An authenticated proposal for a new block.
@@ -148,7 +148,7 @@ impl Origin {
         }
     }
 
-    pub fn channel(chain_id: ChainId, name: String) -> Self {
+    pub fn channel(chain_id: ChainId, name: ChannelName) -> Self {
         Self {
             chain_id,
             medium: Medium::Channel(name),

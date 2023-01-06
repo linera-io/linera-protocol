@@ -56,13 +56,13 @@ impl From<contract::ExecutionResult> for RawExecutionResult<Vec<u8>> {
         let subscribe = result
             .subscribe
             .into_iter()
-            .map(|(channel_id, chain_id)| (channel_id, chain_id.into()))
+            .map(|(channel_id, chain_id)| (Vec::from(channel_id).into(), chain_id.into()))
             .collect();
 
         let unsubscribe = result
             .unsubscribe
             .into_iter()
-            .map(|(channel_id, chain_id)| (channel_id, chain_id.into()))
+            .map(|(channel_id, chain_id)| (Vec::from(channel_id).into(), chain_id.into()))
             .collect();
 
         RawExecutionResult {
@@ -77,7 +77,9 @@ impl From<contract::Destination> for Destination {
     fn from(guest: contract::Destination) -> Self {
         match guest {
             contract::Destination::Recipient(chain_id) => Destination::Recipient(chain_id.into()),
-            contract::Destination::Subscribers(channel_id) => Destination::Subscribers(channel_id),
+            contract::Destination::Subscribers(channel_id) => {
+                Destination::Subscribers(Vec::from(channel_id).into())
+            }
         }
     }
 }

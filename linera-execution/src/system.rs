@@ -18,6 +18,7 @@ use linera_views::{
     set_view::SetView,
     views::{HashableContainerView, View, ViewError},
 };
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use thiserror::Error;
@@ -173,10 +174,11 @@ impl SystemChannel {
 }
 
 /// The name of the channel for the admin chain to broadcast reconfigurations.
-pub const ADMIN_CHANNEL: &str = "ADMIN";
+pub static ADMIN_CHANNEL: Lazy<ChannelName> = Lazy::new(|| SystemChannel::Admin.name());
 
 /// The name of the channel used to broadcast new published bytecodes.
-pub const PUBLISHED_BYTECODES_CHANNEL: &str = "PUBLISHED_BYTECODES";
+pub static PUBLISHED_BYTECODES_CHANNEL: Lazy<ChannelName> =
+    Lazy::new(|| SystemChannel::PublishedBytecodes.name());
 
 /// A recipient's address.
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Serialize, Deserialize)]
@@ -315,7 +317,7 @@ where
                         id: *id,
                         channel: ChannelId {
                             chain_id: *admin_id,
-                            name: ADMIN_CHANNEL.into(),
+                            name: ADMIN_CHANNEL.clone(),
                         },
                     },
                 );
@@ -392,7 +394,7 @@ where
                 self.committees.get_mut().insert(*epoch, committee.clone());
                 self.epoch.set(Some(*epoch));
                 result.effects = vec![(
-                    Destination::Subscribers(ADMIN_CHANNEL.into()),
+                    Destination::Subscribers(ADMIN_CHANNEL.clone()),
                     SystemEffect::SetCommittees {
                         admin_id: *admin_id,
                         epoch: self.epoch.get().expect("chain is active"),
@@ -415,7 +417,7 @@ where
                     SystemExecutionError::InvalidCommitteeRemoval
                 );
                 result.effects = vec![(
-                    Destination::Subscribers(ADMIN_CHANNEL.into()),
+                    Destination::Subscribers(ADMIN_CHANNEL.clone()),
                     SystemEffect::SetCommittees {
                         admin_id: *admin_id,
                         epoch: self.epoch.get().expect("chain is active"),
@@ -435,7 +437,7 @@ where
                 );
                 let channel_id = ChannelId {
                     chain_id: *admin_id,
-                    name: ADMIN_CHANNEL.into(),
+                    name: ADMIN_CHANNEL.clone(),
                 };
                 ensure!(
                     self.subscriptions.get(&channel_id).await?.is_none(),
@@ -448,7 +450,7 @@ where
                         id: context.chain_id,
                         channel: ChannelId {
                             chain_id: *admin_id,
-                            name: ADMIN_CHANNEL.into(),
+                            name: ADMIN_CHANNEL.clone(),
                         },
                     },
                 )];
@@ -456,7 +458,7 @@ where
             UnsubscribeToNewCommittees { admin_id } => {
                 let channel_id = ChannelId {
                     chain_id: *admin_id,
-                    name: ADMIN_CHANNEL.into(),
+                    name: ADMIN_CHANNEL.clone(),
                 };
                 ensure!(
                     self.subscriptions.get(&channel_id).await?.is_some(),
@@ -469,14 +471,14 @@ where
                         id: context.chain_id,
                         channel: ChannelId {
                             chain_id: *admin_id,
-                            name: ADMIN_CHANNEL.into(),
+                            name: ADMIN_CHANNEL.clone(),
                         },
                     },
                 )];
             }
             PublishBytecode { .. } => {
                 result.effects = vec![(
-                    Destination::Subscribers(PUBLISHED_BYTECODES_CHANNEL.into()),
+                    Destination::Subscribers(PUBLISHED_BYTECODES_CHANNEL.clone()),
                     SystemEffect::BytecodePublished,
                 )];
             }
@@ -591,7 +593,7 @@ where
         self.subscriptions
             .insert(&ChannelId {
                 chain_id: admin_id,
-                name: ADMIN_CHANNEL.into(),
+                name: ADMIN_CHANNEL.clone(),
             })
             .expect("serialization failed");
         self.ownership.set(ChainOwnership::single(owner));

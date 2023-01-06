@@ -143,7 +143,7 @@ message Origin {
 
 // The origin of a message coming from a particular chain. Used to identify each inbox.
 message Medium {
-  optional string channel = 1;
+  optional bytes channel = 1;
 }
 
 // An authenticated proposal for a new block.

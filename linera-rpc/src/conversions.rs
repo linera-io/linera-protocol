@@ -451,7 +451,7 @@ impl From<Medium> for grpc::Medium {
         match medium {
             Medium::Direct => grpc::Medium { channel: None },
             Medium::Channel(channel) => grpc::Medium {
-                channel: Some(channel),
+                channel: Some(channel.as_ref().to_owned()),
             },
         }
     }
@@ -461,7 +461,7 @@ impl From<grpc::Medium> for Medium {
     fn from(medium: grpc::Medium) -> Self {
         match medium.channel {
             None => Medium::Direct,
-            Some(medium) => Medium::Channel(medium),
+            Some(medium) => Medium::Channel(medium.into()),
         }
     }
 }
@@ -819,7 +819,7 @@ pub mod tests {
         let origin_direct = Origin::chain(ChainId::root(0));
         round_trip_check::<_, grpc::Origin>(origin_direct);
 
-        let origin_medium = Origin::channel(ChainId::root(0), "some channel".to_string());
+        let origin_medium = Origin::channel(ChainId::root(0), vec![].into());
         round_trip_check::<_, grpc::Origin>(origin_medium);
     }
 

@@ -825,7 +825,7 @@ where
             } => {
                 let mut chain = self.storage.load_chain(chain_id).await?;
                 if chain
-                    .mark_channel_messages_as_received(&name, application_id, recipient, height)
+                    .mark_channel_messages_as_received(name, application_id, recipient, height)
                     .await?
                 {
                     chain.save().await?;
