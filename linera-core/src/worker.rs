@@ -5,6 +5,7 @@
 use crate::data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest};
 use async_trait::async_trait;
 use linera_base::{
+    committee::Committee,
     crypto::{HashValue, KeyPair},
     data_types::{ArithmeticError, BlockHeight, ChainId, Epoch},
     ensure,
@@ -19,7 +20,10 @@ use linera_views::{
     log_view::LogView,
     views::{ContainerView, View, ViewError},
 };
-use std::{collections::VecDeque, sync::Arc};
+use std::{
+    collections::{BTreeMap, VecDeque},
+    sync::Arc,
+};
 use thiserror::Error;
 
 #[cfg(test)]
@@ -454,186 +458,90 @@ where
     ) -> Result<NetworkActions, WorkerError> {
         let mut chain = self.storage.load_chain(recipient).await?;
         let application_id = chain.register_application(application);
-        let last_authorized_block_height_for_epoch = {
-            // Start by checking a few invariants and deal with untrusted epochs.
-            // * Note that we still crucially trust the worker of the sending
-            // chain to have verified and executed the blocks correctly.
-            // * If the last epoch is not trusted (validators only), we can only
-            // accept certificates that contain effect that were already executed
-            // by anticipation.
-            let mut last_epoch = None;
-            let mut last_height = None;
-            for certificate in &certificates {
-                match &certificate.value {
-                    Value::ConfirmedBlock { block, .. } => {
-                        ensure!(
-                            origin.chain_id == block.chain_id,
-                            WorkerError::InvalidCrossChainRequest
-                        );
-                        ensure!(
-                            last_height < Some(block.height),
-                            WorkerError::InvalidCrossChainRequest
-                        );
-                        ensure!(
-                            last_epoch <= Some(block.epoch),
-                            WorkerError::InvalidCrossChainRequest
-                        );
-                        last_epoch = Some(block.epoch);
-                        last_height = Some(block.height);
-                    }
-                    _ => {
-                        return Err(WorkerError::InvalidCrossChainRequest);
-                    }
-                }
-            }
-            match (last_epoch, last_height) {
-                (Some(epoch), Some(height))
-                    if !self.allow_messages_from_deprecated_epochs
-                        && Some(epoch) < *chain.execution_state.system.epoch.get()
-                        && !chain
-                            .execution_state
-                            .system
-                            .committees
-                            .get()
-                            .contains_key(&epoch) =>
-                {
-                    // Refuse to persist the chain state if the latest epoch in
-                    // the received blocks from this recipient is not recognized
-                    // any more by the receiving chain. (Future epochs are ok.)
-                    match chain
-                        .last_anticipated_block_height(application_id, origin.clone())
-                        .await?
-                    {
-                        None => {
-                            // Early return because the entire batch of certificates is untrusted.
-                            // Make sure to display the appropriate warning.
-                            let next_height_to_receive = chain
-                                .next_block_height_to_receive(application_id, origin.clone())
-                                .await?;
-                            if height >= next_height_to_receive {
-                                log::warn!(
-                                            "[{}] Refusing updates to {recipient:?} from untrusted epoch {epoch:?} at {application_id:?}::{origin:?}",
-                                            self.nickname,
-                                        );
-                            } else {
-                                log::warn!(
-                                            "[{}] Ignoring repeated messages to {:?} from {:?}::{:?} at height {}",
-                                            self.nickname,
-                                            recipient,
-                                            application_id,
-                                            origin,
-                                            height
-                                        );
-                            }
-                            return Ok(NetworkActions::default());
-                        }
-                        Some(last_anticipated_block_height) => {
-                            // Can only process block up to this value.
-                            Some((last_anticipated_block_height, epoch))
-                        }
-                    }
-                }
-                _ => {
-                    // No restriction
-                    None
-                }
-            }
+        // Only process certificates with relevant heights and epochs.
+        let next_height_to_receive = chain
+            .next_block_height_to_receive(application_id, origin.clone())
+            .await?;
+        let last_anticipated_block_height = chain
+            .last_anticipated_block_height(application_id, origin.clone())
+            .await?;
+        let helper = CrossChainUpdateHelper {
+            nickname: &self.nickname,
+            allow_messages_from_deprecated_epochs: self.allow_messages_from_deprecated_epochs,
+            current_epoch: *chain.execution_state.system.epoch.get(),
+            committees: chain.execution_state.system.committees.get(),
         };
+        let certificates = helper.select_certificates(
+            application_id,
+            &origin,
+            recipient,
+            next_height_to_receive,
+            last_anticipated_block_height,
+            certificates,
+        )?;
+        // Process the received messages in certificates.
         let mut last_updated_height = None;
         for certificate in certificates {
-            let (block, effects) = match &certificate.value {
-                Value::ConfirmedBlock { block, effects, .. } => (block.clone(), effects.clone()),
-                _ => unreachable!("already checked"),
+            let Value::ConfirmedBlock { block, effects, .. } = &certificate.value else {
+                unreachable!("already checked");
             };
-            if let Some((height, epoch)) = last_authorized_block_height_for_epoch {
-                if block.height > height {
-                    // Stop processing certificates from untrusted epochs.
-                    // Make sure to display the appropriate warning.
-                    let next_height_to_receive = chain
-                        .next_block_height_to_receive(application_id, origin.clone())
-                        .await?;
-                    if block.height >= next_height_to_receive {
-                        log::warn!(
-                                    "[{}] Refusing some updates to {recipient:?} from untrusted epoch {epoch:?} at {application_id:?}::{origin:?}",
-                                    self.nickname,
-                                );
-                    } else {
-                        log::warn!(
-                            "[{}] Ignoring repeated messages to {:?} from {:?}::{:?} at height {}",
-                            self.nickname,
-                            recipient,
-                            application_id,
-                            origin,
-                            block.height
-                        );
-                    }
-                    break;
-                }
-            }
             // Update the staged chain state with the received block.
-            if chain
+            chain
                 .receive_block(
                     application_id,
                     &origin,
                     block.height,
-                    effects,
+                    effects.clone(),
                     certificate.hash,
                 )
-                .await?
-            {
-                self.storage.write_certificate(certificate).await?;
-                last_updated_height = Some(block.height);
-            } else {
-                log::warn!(
-                    "[{}] Ignoring repeated messages to {:?} from {:?}::{:?} at height {}",
-                    self.nickname,
-                    recipient,
-                    application_id,
-                    origin,
-                    block.height
-                );
-            }
+                .await?;
+            last_updated_height = Some(block.height);
+            self.storage.write_certificate(certificate).await?;
         }
-        match last_updated_height {
-            None => {
-                // Nothing happened.
-                Ok(NetworkActions::default())
+        // Be ready to confirm the highest processed block so far. It could be from a previous update.
+        let cross_chain_requests =
+            match last_updated_height.or_else(|| next_height_to_receive.try_sub_one().ok()) {
+                Some(height) => vec![CrossChainRequest::ConfirmUpdatedRecipient {
+                    application_id,
+                    origin: origin.clone(),
+                    recipient,
+                    height,
+                }],
+                None => vec![],
+            };
+        // If needed, save the state and return network actions.
+        if let Some(height) = last_updated_height {
+            if !self.allow_inactive_chains && !chain.is_active() {
+                // Refuse to create a chain state if the chain is still inactive by
+                // now. Accordingly, do not send a confirmation, so that the
+                // cross-chain update is retried later.
+                log::warn!(
+                    "[{}] Refusing to deliver messages to {recipient:?} from {application_id:?}::{origin:?} \
+                     at height {height} because the recipient is still inactive",
+                    self.nickname
+                );
+                return Ok(NetworkActions::default());
             }
-            Some(height) => {
-                if !self.allow_inactive_chains {
-                    // Validator nodes are more strict than clients when it comes to
-                    // processing cross-chain messages.
-                    if !chain.is_active() {
-                        // Refuse to create the chain state if it is still inactive by
-                        // now. Accordingly, do not send a confirmation, so that the
-                        // message is retried later.
-                        log::warn!(
-                            "[{}] Refusing to deliver messages to an inactive chain {recipient:?}",
-                            self.nickname
-                        );
-                        return Ok(NetworkActions::default());
-                    }
-                }
-                chain.save().await?;
-                // Acknowledge the highest processed block height.
-                let actions = NetworkActions {
-                    cross_chain_requests: vec![CrossChainRequest::ConfirmUpdatedRecipient {
+            // Save the chain.
+            chain.save().await?;
+            // Notify subscribers and send a confirmation.
+            Ok(NetworkActions {
+                cross_chain_requests,
+                notifications: vec![Notification {
+                    chain_id: recipient,
+                    reason: Reason::NewMessage {
                         application_id,
-                        origin: origin.clone(),
-                        recipient,
+                        origin,
                         height,
-                    }],
-                    notifications: vec![Notification {
-                        chain_id: recipient,
-                        reason: Reason::NewMessage {
-                            application_id,
-                            origin,
-                            height,
-                        },
-                    }],
-                };
-                Ok(actions)
-            }
+                    },
+                }],
+            })
+        } else {
+            // Send a confirmation but do not notify subscribers.
+            Ok(NetworkActions {
+                cross_chain_requests,
+                notifications: vec![],
+            })
         }
     }
 }
@@ -837,5 +745,90 @@ where
                 Ok(NetworkActions::default())
             }
         }
+    }
+}
+
+struct CrossChainUpdateHelper<'a> {
+    nickname: &'a str,
+    allow_messages_from_deprecated_epochs: bool,
+    current_epoch: Option<Epoch>,
+    committees: &'a BTreeMap<Epoch, Committee>,
+}
+
+impl<'a> CrossChainUpdateHelper<'a> {
+    /// Check basic invariants and deal with repeated heights and deprecated epochs.
+    /// * Return a range of certificates that are both new to us and not relying on an
+    /// untrusted set of validators.
+    /// * In the case of validators, if the epoch(s) of the highest certificates are not
+    /// trusted, we only accept certificates that contain effects that were already
+    /// executed by anticipation (i.e. received in certified blocks).
+    /// * Basic invariants are checked for good measure. We still crucially trust
+    /// the worker of the sending chain to have verified and executed the blocks
+    /// correctly.
+    fn select_certificates(
+        &self,
+        application_id: ApplicationId,
+        origin: &'a Origin,
+        recipient: ChainId,
+        next_height_to_receive: BlockHeight,
+        last_anticipated_block_height: Option<BlockHeight>,
+        mut certificates: Vec<Certificate>,
+    ) -> Result<Vec<Certificate>, WorkerError> {
+        let mut latest_height = None;
+        let mut skipped_len = 0;
+        let mut trusted_len = 0;
+        for (i, certificate) in certificates.iter().enumerate() {
+            // Certificates are confirming blocks.
+            let Value::ConfirmedBlock { block, .. } = &certificate.value else {
+                return Err(WorkerError::InvalidCrossChainRequest);
+            };
+            // Make sure that the chain_id is correct.
+            ensure!(
+                origin.chain_id == block.chain_id,
+                WorkerError::InvalidCrossChainRequest
+            );
+            // Make sure that heights are increasing.
+            ensure!(
+                latest_height < Some(block.height),
+                WorkerError::InvalidCrossChainRequest
+            );
+            latest_height = Some(block.height);
+            // Check if the block has been received already.
+            if block.height < next_height_to_receive {
+                skipped_len = i + 1;
+            }
+            // Check if the height is trusted or the epoch is trusted.
+            if self.allow_messages_from_deprecated_epochs
+                || Some(block.height) <= last_anticipated_block_height
+                || Some(block.epoch) >= self.current_epoch
+                || self.committees.contains_key(&block.epoch)
+            {
+                trusted_len = i + 1;
+            }
+        }
+        if skipped_len > 0 {
+            let sample_block = certificates[skipped_len - 1].value.block();
+            log::warn!(
+                "[{}] Ignoring repeated messages to {recipient:?} from {application_id:?}::{origin:?} at height {}",
+                self.nickname,
+                sample_block.height,
+            );
+        }
+        if skipped_len < certificates.len() && trusted_len < certificates.len() {
+            let sample_block = certificates[trusted_len].value.block();
+            log::warn!(
+                "[{}] Refusing messages to {recipient:?} from {application_id:?}::{origin:?} at height {} \
+                 because the epoch {:?} is not trusted any more",
+                self.nickname,
+                sample_block.height,
+                sample_block.epoch,
+            );
+        }
+        let certificates = if skipped_len < trusted_len {
+            certificates.drain(skipped_len..trusted_len).collect()
+        } else {
+            vec![]
+        };
+        Ok(certificates)
     }
 }
