@@ -1,18 +1,11 @@
 use dashmap::DashMap;
 use linera_base::data_types::ChainId;
 use log::info;
-use thiserror::Error;
 use tokio::sync::mpsc::UnboundedSender;
 use tonic::Status;
 
 type NotificationResult<N> = Result<N, Status>;
 type NotificationSender<N> = UnboundedSender<NotificationResult<N>>;
-
-#[derive(Debug, Error)]
-pub enum NotifierError {
-    #[error("the requested chain does not exist")]
-    ChainDoesNotExist,
-}
 
 /// The `Notifier` holds references to clients waiting to receive notifications
 /// from the validator.
@@ -24,7 +17,7 @@ pub struct Notifier<N> {
 
 impl<N: Clone> Notifier<N> {
     /// Create a subscription given a collection of ChainIds and a sender to the client.
-    pub fn create_subscription(&self, chains: Vec<ChainId>, sender: NotificationSender<N>) {
+    pub fn subscribe(&self, chains: Vec<ChainId>, sender: NotificationSender<N>) {
         for chain in chains {
             let mut existing_senders = self.inner.entry(chain).or_default();
             existing_senders.push(sender.clone());
@@ -90,9 +83,9 @@ pub mod tests {
         let b_rec = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let a_b_rec = Arc::new(std::sync::atomic::AtomicUsize::new(0));
 
-        notifier.create_subscription(vec![chain_a], tx_a);
-        notifier.create_subscription(vec![chain_b], tx_b);
-        notifier.create_subscription(vec![chain_a, chain_b], tx_a_b);
+        notifier.subscribe(vec![chain_a], tx_a);
+        notifier.subscribe(vec![chain_b], tx_b);
+        notifier.subscribe(vec![chain_a, chain_b], tx_a_b);
 
         let a_rec_clone = a_rec.clone();
         let b_rec_clone = b_rec.clone();
@@ -170,10 +163,10 @@ pub mod tests {
         // Chain C -> Notify C
         // Chain D -> Notify A, Notify B, Notify C, Notify D
 
-        notifier.create_subscription(vec![chain_a, chain_b, chain_d], tx_a);
-        notifier.create_subscription(vec![chain_a, chain_b, chain_d], tx_b);
-        notifier.create_subscription(vec![chain_c, chain_d], tx_c);
-        notifier.create_subscription(vec![chain_d], tx_d);
+        notifier.subscribe(vec![chain_a, chain_b, chain_d], tx_a);
+        notifier.subscribe(vec![chain_a, chain_b, chain_d], tx_b);
+        notifier.subscribe(vec![chain_c, chain_d], tx_c);
+        notifier.subscribe(vec![chain_d], tx_d);
 
         assert_eq!(notifier.inner.len(), 4);
 

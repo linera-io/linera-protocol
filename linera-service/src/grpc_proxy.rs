@@ -20,10 +20,9 @@ use linera_rpc::{
     notifier::Notifier,
     pool::ConnectionPool,
 };
-use std::{fmt::Debug, net::SocketAddr, pin::Pin, sync::Arc};
+use std::{fmt::Debug, net::SocketAddr, sync::Arc};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::{
-    codegen::futures_core::Stream,
     transport::{Channel, Server},
     Request, Response, Status,
 };
@@ -151,11 +150,9 @@ impl ValidatorNode for GrpcProxy {
     }
 }
 
-type NotificationStream = Pin<Box<dyn Stream<Item = Result<Notification, Status>> + Send>>;
-
 #[async_trait]
 impl NotificationService for GrpcProxy {
-    type SubscribeStream = NotificationStream;
+    type SubscribeStream = UnboundedReceiverStream<Result<Notification, Status>>;
 
     async fn subscribe(
         &self,
@@ -168,10 +165,8 @@ impl NotificationService for GrpcProxy {
             .into_iter()
             .map(ChainId::try_from)
             .collect::<Result<Vec<ChainId>, _>>()?;
-        self.0.notifier.create_subscription(chain_ids, tx);
-        Ok(Response::new(
-            Box::pin(UnboundedReceiverStream::new(rx)) as Self::SubscribeStream
-        ))
+        self.0.notifier.subscribe(chain_ids, tx);
+        Ok(Response::new(UnboundedReceiverStream::new(rx)))
     }
 }
 

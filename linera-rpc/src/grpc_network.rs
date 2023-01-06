@@ -159,7 +159,7 @@ where
 
     /// Notify clients subscribed to a given [`ChainId`] that there are updates
     /// for that chain.
-    pub async fn _notify(&mut self, chain_id: &ChainId) -> Result<(), GrpcError> {
+    pub async fn notify(&mut self, chain_id: &ChainId) -> Result<(), GrpcError> {
         let notification = Notification {
             chain_id: Some(chain_id.clone()),
         };
