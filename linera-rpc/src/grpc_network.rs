@@ -1,7 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
+use crate::grpc_network::grpc::{
+    notifier_service_client::NotifierServiceClient, ChainId, Notification,
+};
+pub use crate::{
     client_delegate,
     config::{
         CrossChainConfig, ShardId, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
@@ -11,7 +14,6 @@ use crate::{
     grpc_network::grpc::{
         chain_info_result::Inner,
         validator_node_client::ValidatorNodeClient,
-        validator_node_server::{ValidatorNode as ValidatorNodeRpc, ValidatorNodeServer},
         validator_worker_client::ValidatorWorkerClient,
         validator_worker_server::{ValidatorWorker as ValidatorWorkerRpc, ValidatorWorkerServer},
         BlockProposal, Certificate, ChainInfoQuery, ChainInfoResult, CrossChainRequest,
@@ -33,7 +35,7 @@ use linera_core::{
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use std::{
     net::{AddrParseError, SocketAddr},
     str::FromStr,
@@ -59,6 +61,7 @@ pub struct GrpcServer<S> {
     state: WorkerState<S>,
     shard_id: ShardId,
     network: ValidatorInternalNetworkConfig,
+    proxy_address: String,
     cross_chain_sender: CrossChainSender,
 }
 
@@ -101,7 +104,8 @@ where
         port: u16,
         state: WorkerState<S>,
         shard_id: ShardId,
-        network: ValidatorInternalNetworkConfig,
+        proxy_address: String,
+        internal_network: ValidatorInternalNetworkConfig,
         cross_chain_config: CrossChainConfig,
     ) -> Result<GrpcServerHandle, GrpcError> {
         info!(
@@ -109,7 +113,7 @@ where
             host, port, shard_id
         );
 
-        let address = SocketAddr::from_str(&format!("{}:{}", host, port))?;
+        let server_address = SocketAddr::from_str(&format!("{}:{}", host, port))?;
 
         let (cross_chain_sender, cross_chain_receiver) =
             mpsc::channel(cross_chain_config.queue_size);
@@ -123,7 +127,7 @@ where
             );
             Self::forward_cross_chain_queries(
                 state.nickname().to_string(),
-                network.clone(),
+                internal_network.clone(),
                 cross_chain_config.max_retries,
                 cross_chain_receiver,
             )
@@ -134,24 +138,42 @@ where
         let grpc_server = GrpcServer {
             state,
             shard_id,
-            network,
+            network: internal_network,
+            proxy_address,
             cross_chain_sender,
         };
 
-        let validator_node = ValidatorNodeServer::new(grpc_server.clone());
         let worker_node = ValidatorWorkerServer::new(grpc_server);
 
         let handle = tokio::spawn(
             Server::builder()
-                .add_service(validator_node)
                 .add_service(worker_node)
-                .serve_with_shutdown(address, receiver.map(|_| ())),
+                .serve_with_shutdown(server_address, receiver.map(|_| ())),
         );
 
         Ok(GrpcServerHandle {
             _complete: complete,
             handle,
         })
+    }
+
+    /// Notify clients subscribed to a given [`ChainId`] that there are updates
+    /// for that chain.
+    pub async fn notify(&mut self, chain_id: &ChainId) -> Result<(), GrpcError> {
+        let notification = Notification {
+            chain_id: Some(chain_id.clone()),
+        };
+        let mut notifier_client =
+            NotifierServiceClient::connect(self.proxy_address.clone()).await?;
+
+        if let Err(e) = notifier_client.notify(notification).await {
+            warn!(
+                "There was an error while trying to notify for chain {:?}: {:?}",
+                chain_id, e
+            )
+        }
+
+        Ok(())
     }
 
     async fn handle_network_actions(&self, actions: NetworkActions) {
@@ -242,56 +264,6 @@ where
                 );
             }
         }
-    }
-}
-
-#[tonic::async_trait]
-impl<S> ValidatorNodeRpc for GrpcServer<S>
-where
-    S: Store + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
-{
-    async fn handle_block_proposal(
-        &self,
-        request: Request<BlockProposal>,
-    ) -> Result<Response<ChainInfoResult>, Status> {
-        convert_and_delegate!(self, handle_block_proposal, request)
-    }
-
-    async fn handle_certificate(
-        &self,
-        request: Request<Certificate>,
-    ) -> Result<Response<ChainInfoResult>, Status> {
-        debug!(
-            "server handler [handle_certificate] received delegating request [{:?}] ",
-            request
-        );
-        match self
-            .state
-            .clone()
-            .handle_certificate(request.into_inner().try_into()?)
-            .await
-        {
-            Ok((info, actions)) => {
-                self.handle_network_actions(actions).await;
-                Ok(Response::new(info.try_into()?))
-            }
-            Err(error) => {
-                error!(
-                    "[{}] Failed to handle cross-chain request: {}",
-                    self.state.nickname(),
-                    error
-                );
-                Ok(Response::new(NodeError::from(error).try_into()?))
-            }
-        }
-    }
-
-    async fn handle_chain_info_query(
-        &self,
-        request: Request<ChainInfoQuery>,
-    ) -> Result<Response<ChainInfoResult>, Status> {
-        convert_and_delegate!(self, handle_chain_info_query, request)
     }
 }
 

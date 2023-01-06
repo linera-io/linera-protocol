@@ -7,27 +7,34 @@ use linera_base::data_types::ChainId;
 use linera_chain::data_types::{BlockAndRound, Value};
 use linera_rpc::{
     config::{ShardConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig},
-    grpc_network::grpc::{
-        validator_node_client::ValidatorNodeClient,
-        validator_node_server::{ValidatorNode, ValidatorNodeServer},
-        validator_worker_client::ValidatorWorkerClient,
-        validator_worker_server::{ValidatorWorker, ValidatorWorkerServer},
-        BlockProposal, Certificate, ChainInfoQuery, ChainInfoResult, CrossChainRequest,
+    grpc_network::{
+        grpc::{
+            notification_service_server::{NotificationService, NotificationServiceServer},
+            notifier_service_server::{NotifierService, NotifierServiceServer},
+            validator_node_server::{ValidatorNode, ValidatorNodeServer},
+            validator_worker_client::ValidatorWorkerClient,
+            ChainInfoResult, Notification, SubscriptionRequest,
+        },
+        BlockProposal, Certificate, ChainInfoQuery, CrossChainRequest,
     },
+    notifier::Notifier,
     pool::ConnectionPool,
 };
-use std::{fmt::Debug, net::SocketAddr};
+use std::{fmt::Debug, net::SocketAddr, sync::Arc};
+use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::{
     transport::{Channel, Server},
     Request, Response, Status,
 };
 
 #[derive(Clone)]
-pub struct GrpcProxy {
+pub struct GrpcProxy(Arc<GrpcProxyInner>);
+
+struct GrpcProxyInner {
     public_config: ValidatorPublicNetworkConfig,
     internal_config: ValidatorInternalNetworkConfig,
-    node_connection_pool: ConnectionPool<ValidatorNodeClient<Channel>>,
     worker_connection_pool: ConnectionPool<ValidatorWorkerClient<Channel>>,
+    notifier: Notifier<Notification>,
 }
 
 impl GrpcProxy {
@@ -35,29 +42,34 @@ impl GrpcProxy {
         public_config: ValidatorPublicNetworkConfig,
         internal_config: ValidatorInternalNetworkConfig,
     ) -> Self {
-        Self {
+        Self(Arc::new(GrpcProxyInner {
             public_config,
             internal_config,
-            node_connection_pool: ConnectionPool::new(),
             worker_connection_pool: ConnectionPool::new(),
-        }
-    }
-
-    fn as_validator_worker(&self) -> ValidatorWorkerServer<Self> {
-        ValidatorWorkerServer::new(self.clone())
+            notifier: Notifier::default(),
+        }))
     }
 
     fn as_validator_node(&self) -> ValidatorNodeServer<Self> {
         ValidatorNodeServer::new(self.clone())
     }
 
+    fn as_notification_service(&self) -> NotificationServiceServer<Self> {
+        NotificationServiceServer::new(self.clone())
+    }
+
+    fn as_notifier_service(&self) -> NotifierServiceServer<Self> {
+        NotifierServiceServer::new(self.clone())
+    }
+
     fn address(&self) -> SocketAddr {
-        SocketAddr::from(([0, 0, 0, 0], self.public_config.port))
+        SocketAddr::from(([0, 0, 0, 0], self.0.public_config.port))
     }
 
     fn shard_for(&self, proxyable: &impl Proxyable) -> Option<ShardConfig> {
         Some(
-            self.internal_config
+            self.0
+                .internal_config
                 .get_shard_for(proxyable.chain_id()?)
                 .clone(),
         )
@@ -69,20 +81,8 @@ impl GrpcProxy {
     ) -> Result<ValidatorWorkerClient<Channel>> {
         let address = shard.http_address();
         let client = self
+            .0
             .worker_connection_pool
-            .cloned_client_for_address(address)
-            .await?;
-
-        Ok(client)
-    }
-
-    async fn node_client_for_shard(
-        &self,
-        shard: &ShardConfig,
-    ) -> Result<ValidatorNodeClient<Channel>> {
-        let address = shard.http_address();
-        let client = self
-            .node_connection_pool
             .cloned_client_for_address(address)
             .await?;
 
@@ -93,7 +93,8 @@ impl GrpcProxy {
         log::info!("Starting gRPC proxy on {}...", self.address());
         Ok(Server::builder()
             .add_service(self.as_validator_node())
-            .add_service(self.as_validator_worker())
+            .add_service(self.as_notification_service())
+            .add_service(self.as_notifier_service())
             .serve(self.address())
             .await?)
     }
@@ -120,64 +121,6 @@ impl GrpcProxy {
             .map_err(|_| Status::internal("could not connect to shard"))?;
         Ok((client, inner))
     }
-
-    async fn client_for_proxy_node<R>(
-        &self,
-        request: Request<R>,
-    ) -> Result<(ValidatorNodeClient<Channel>, R), Status>
-    where
-        R: Debug + Proxyable,
-    {
-        log::debug!(
-            "handler [ValidatorNode] proxying request [{:?}] from {:?}",
-            request,
-            request.remote_addr()
-        );
-        let inner = request.into_inner();
-        let shard = self
-            .shard_for(&inner)
-            .ok_or_else(|| Status::not_found("could not find shard for message"))?;
-        let client = self
-            .node_client_for_shard(&shard)
-            .await
-            .map_err(|_| Status::internal("could not connect to shard"))?;
-        Ok((client, inner))
-    }
-}
-
-#[async_trait]
-impl ValidatorWorker for GrpcProxy {
-    async fn handle_block_proposal(
-        &self,
-        request: Request<BlockProposal>,
-    ) -> Result<Response<ChainInfoResult>, Status> {
-        let (mut client, inner) = self.client_for_proxy_worker(request).await?;
-        client.handle_block_proposal(inner).await
-    }
-
-    async fn handle_certificate(
-        &self,
-        request: Request<Certificate>,
-    ) -> Result<Response<ChainInfoResult>, Status> {
-        let (mut client, inner) = self.client_for_proxy_worker(request).await?;
-        client.handle_certificate(inner).await
-    }
-
-    async fn handle_chain_info_query(
-        &self,
-        request: Request<ChainInfoQuery>,
-    ) -> Result<Response<ChainInfoResult>, Status> {
-        let (mut client, inner) = self.client_for_proxy_worker(request).await?;
-        client.handle_chain_info_query(inner).await
-    }
-
-    async fn handle_cross_chain_request(
-        &self,
-        request: Request<CrossChainRequest>,
-    ) -> Result<Response<()>, Status> {
-        let (mut client, inner) = self.client_for_proxy_worker(request).await?;
-        client.handle_cross_chain_request(inner).await
-    }
 }
 
 #[async_trait]
@@ -186,7 +129,7 @@ impl ValidatorNode for GrpcProxy {
         &self,
         request: Request<BlockProposal>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        let (mut client, inner) = self.client_for_proxy_node(request).await?;
+        let (mut client, inner) = self.client_for_proxy_worker(request).await?;
         client.handle_block_proposal(inner).await
     }
 
@@ -194,7 +137,7 @@ impl ValidatorNode for GrpcProxy {
         &self,
         request: Request<Certificate>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        let (mut client, inner) = self.client_for_proxy_node(request).await?;
+        let (mut client, inner) = self.client_for_proxy_worker(request).await?;
         client.handle_certificate(inner).await
     }
 
@@ -202,8 +145,42 @@ impl ValidatorNode for GrpcProxy {
         &self,
         request: Request<ChainInfoQuery>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        let (mut client, inner) = self.client_for_proxy_node(request).await?;
+        let (mut client, inner) = self.client_for_proxy_worker(request).await?;
         client.handle_chain_info_query(inner).await
+    }
+}
+
+#[async_trait]
+impl NotificationService for GrpcProxy {
+    type SubscribeStream = UnboundedReceiverStream<Result<Notification, Status>>;
+
+    async fn subscribe(
+        &self,
+        request: Request<SubscriptionRequest>,
+    ) -> Result<Response<Self::SubscribeStream>, Status> {
+        let subscription_request = request.into_inner();
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let chain_ids = subscription_request
+            .chain_ids
+            .into_iter()
+            .map(ChainId::try_from)
+            .collect::<Result<Vec<ChainId>, _>>()?;
+        self.0.notifier.subscribe(chain_ids, tx);
+        Ok(Response::new(UnboundedReceiverStream::new(rx)))
+    }
+}
+
+#[async_trait]
+impl NotifierService for GrpcProxy {
+    async fn notify(&self, request: Request<Notification>) -> Result<Response<()>, Status> {
+        let notification = request.into_inner();
+        let chain_id = notification
+            .chain_id
+            .clone()
+            .ok_or_else(|| Status::invalid_argument("Missing field: chain_id."))?
+            .try_into()?;
+        self.0.notifier.notify(&chain_id, notification);
+        Ok(Response::new(()))
     }
 }
 
