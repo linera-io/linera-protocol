@@ -4,10 +4,11 @@
 use crate::{ExecutionError, NewApplication};
 use linera_base::{crypto::HashValue, data_types::EffectId};
 use linera_views::{
-    common::Context, map_view::MapView, views::ViewError, views::HashableContainerView,
+    common::Context,
+    map_view::MapView,
+    views::{HashableContainerView, View, ViewError},
 };
 use serde::{Deserialize, Serialize};
-use linera_views::views::View;
 
 /// A unique identifier for an application.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]

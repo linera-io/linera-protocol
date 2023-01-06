@@ -5,9 +5,7 @@ extern crate linera_views_macro;
 use crate::common::Batch;
 use async_trait::async_trait;
 use linera_base::crypto::HashValue;
-pub use linera_views_macro::{
-    ContainerView, HashableContainerView, HashableView, View,
-};
+pub use linera_views_macro::{ContainerView, HashableContainerView, HashableView, View};
 use serde::Serialize;
 use std::{fmt::Debug, io::Write};
 use thiserror::Error;

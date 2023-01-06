@@ -9,12 +9,12 @@ use crate::{
     Response, UserApplicationDescription, UserApplicationId,
 };
 use linera_base::{data_types::ChainId, ensure};
-use linera_views_macro::HashableContainerView;
 use linera_views::{
     collection_view::ReentrantCollectionView,
     register_view::RegisterView,
     views::{View, ViewError},
 };
+use linera_views_macro::HashableContainerView;
 
 #[cfg(any(test, feature = "test"))]
 use {

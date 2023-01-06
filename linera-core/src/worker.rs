@@ -17,7 +17,7 @@ use linera_execution::{ApplicationDescription, ApplicationId};
 use linera_storage::Store;
 use linera_views::{
     log_view::LogView,
-    views::{View, ContainerView, ViewError},
+    views::{ContainerView, View, ViewError},
 };
 use std::{collections::VecDeque, sync::Arc};
 use thiserror::Error;
