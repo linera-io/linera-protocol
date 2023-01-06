@@ -7,7 +7,7 @@ use crate::{
         WriteOperation,
     },
     memory::{MemoryContext, MemoryStoreMap},
-    views::{HashView, Hasher, View, ViewError},
+    views::{HashableView, Hasher, View, ViewError},
 };
 use async_trait::async_trait;
 use std::{collections::BTreeMap, fmt::Debug, mem};
@@ -364,7 +364,7 @@ where
 }
 
 #[async_trait]
-impl<C> HashView<C> for KeyValueStoreView<C>
+impl<C> HashableView<C> for KeyValueStoreView<C>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,

@@ -166,7 +166,7 @@ fn generate_hash_view_code(input: TokenStream) -> TokenStream {
 
     TokenStream::from(quote! {
         #[async_trait::async_trait]
-        impl #generics linera_views::views::HashView<#first_generic> for #struct_name #generics
+        impl #generics linera_views::views::HashableView<#first_generic> for #struct_name #generics
         where
             #first_generic: Context + Send + Sync + Clone + 'static,
             linera_views::views::ViewError: From<#first_generic::Error>,
@@ -174,7 +174,7 @@ fn generate_hash_view_code(input: TokenStream) -> TokenStream {
             type Hasher = linera_views::sha2::Sha512;
 
             async fn hash(&mut self) -> Result<<Self::Hasher as linera_views::views::Hasher>::Output, linera_views::views::ViewError> {
-                use linera_views::views::{Hasher, HashView};
+                use linera_views::views::{Hasher, HashableView};
                 use std::io::Write;
                 let mut hasher = Self::Hasher::default();
                 #(#field_hash)*
@@ -197,7 +197,7 @@ fn generate_hash_value_code(input: TokenStream) -> TokenStream {
     let hash_type = syn::Ident::new(&format!("{}Hash", struct_name), Span::call_site());
     TokenStream::from(quote! {
         #[async_trait::async_trait]
-        impl #generics linera_views::views::HashContainerView<#first_generic> for #struct_name #generics
+        impl #generics linera_views::views::HashableContainerView<#first_generic> for #struct_name #generics
         where
             #first_generic: Context + Send + Sync + Clone + 'static,
             linera_views::views::ViewError: From<#first_generic::Error>,
@@ -206,7 +206,7 @@ fn generate_hash_value_code(input: TokenStream) -> TokenStream {
                 use linera_views::generic_array::GenericArray;
                 use linera_views::common::Batch;
                 use linera_base::crypto::{BcsSignable, HashValue};
-                use linera_views::views::HashView;
+                use linera_views::views::HashableView;
                 use serde::{Serialize, Deserialize};
                 use linera_views::sha2::{Sha512, Digest};
                 #[derive(Serialize, Deserialize)]
@@ -224,7 +224,7 @@ pub fn derive_view(input: TokenStream) -> TokenStream {
     generate_view_code(input)
 }
 
-#[proc_macro_derive(HashView)]
+#[proc_macro_derive(HashableView)]
 pub fn derive_hash_view(input: TokenStream) -> TokenStream {
     generate_hash_view_code(input)
 }
@@ -236,7 +236,7 @@ pub fn derive_container_view(input: TokenStream) -> TokenStream {
     stream
 }
 
-#[proc_macro_derive(HashContainerView)]
+#[proc_macro_derive(HashableContainerView)]
 pub fn derive_hash_container_view(input: TokenStream) -> TokenStream {
     let mut stream = generate_view_code(input.clone());
     stream.extend(generate_save_delete_view_code(input.clone()));

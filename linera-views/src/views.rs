@@ -6,7 +6,7 @@ use crate::common::Batch;
 use async_trait::async_trait;
 use linera_base::crypto::HashValue;
 pub use linera_views_macro::{
-    ContainerView, HashContainerView, HashView, View,
+    ContainerView, HashableContainerView, HashableView, View,
 };
 use serde::Serialize;
 use std::{fmt::Debug, io::Write};
@@ -79,7 +79,7 @@ pub enum ViewError {
 }
 
 #[async_trait]
-pub trait HashView<C>: View<C> {
+pub trait HashableView<C>: View<C> {
     /// How to compute hashes.
     type Hasher: Hasher;
 
@@ -121,7 +121,7 @@ pub trait ContainerView<C>: View<C> {
 }
 
 #[async_trait]
-pub trait HashContainerView<C>: ContainerView<C> + HashView<C> {
+pub trait HashableContainerView<C>: ContainerView<C> + HashableView<C> {
     /// Computing the hash and attributing the type to it.
     async fn hash_value(&mut self) -> Result<HashValue, ViewError>;
 }

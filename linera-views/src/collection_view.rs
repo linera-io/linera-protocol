@@ -3,7 +3,7 @@
 
 use crate::{
     common::{Batch, Context, HashOutput},
-    views::{HashView, Hasher, View, ViewError},
+    views::{HashableView, Hasher, View, ViewError},
 };
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
@@ -546,12 +546,12 @@ where
 }
 
 #[async_trait]
-impl<C, I, W> HashView<C> for CollectionView<C, I, W>
+impl<C, I, W> HashableView<C> for CollectionView<C, I, W>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
     I: Clone + Debug + Send + Sync + Serialize + DeserializeOwned + 'static,
-    W: HashView<C> + Send + Sync + 'static,
+    W: HashableView<C> + Send + Sync + 'static,
 {
     type Hasher = sha2::Sha512;
 
@@ -577,12 +577,12 @@ where
 }
 
 #[async_trait]
-impl<C, I, W> HashView<C> for ReentrantCollectionView<C, I, W>
+impl<C, I, W> HashableView<C> for ReentrantCollectionView<C, I, W>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
     I: Clone + Debug + Send + Sync + Serialize + DeserializeOwned + 'static,
-    W: HashView<C> + Send + Sync + 'static,
+    W: HashableView<C> + Send + Sync + 'static,
 {
     type Hasher = sha2::Sha512;
 
