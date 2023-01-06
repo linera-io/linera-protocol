@@ -4,9 +4,10 @@
 use crate::{ExecutionError, NewApplication};
 use linera_base::{crypto::HashValue, data_types::EffectId};
 use linera_views::{
-    common::Context, impl_view, map_view::MapView, scoped_view::ScopedView, views::ViewError,
+    common::Context, map_view::MapView, views::ViewError, views::HashableContainerView,
 };
 use serde::{Deserialize, Serialize};
+use linera_views::views::View;
 
 /// A unique identifier for an application.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
@@ -87,19 +88,13 @@ pub struct BytecodeLocation {
     pub operation_index: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, HashableContainerView)]
 pub struct ApplicationRegistryView<C> {
     /// The application bytecodes that have been published.
-    pub published_bytecodes: ScopedView<0, MapView<C, BytecodeId, BytecodeLocation>>,
+    pub published_bytecodes: MapView<C, BytecodeId, BytecodeLocation>,
     /// The applications that are known by the chain.
-    pub known_applications:
-        ScopedView<1, MapView<C, UserApplicationId, UserApplicationDescription>>,
+    pub known_applications: MapView<C, UserApplicationId, UserApplicationDescription>,
 }
-
-impl_view!(ApplicationRegistryView {
-    published_bytecodes,
-    known_applications,
-});
 
 impl<C> ApplicationRegistryView<C>
 where

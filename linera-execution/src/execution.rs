@@ -9,21 +9,11 @@ use crate::{
     Response, UserApplicationDescription, UserApplicationId,
 };
 use linera_base::{data_types::ChainId, ensure};
-use async_trait::async_trait;
-use linera_base::{
-    crypto,
-    crypto::HashValue,
-    messages::{ApplicationDescription, ApplicationId, ChainId},
-};
-use linera_macro::{ContainerView, HashableContainerView, HashableView, View};
-use linera_base::{
-    ensure,
-    messages::{ApplicationDescription, ApplicationId, ChainId},
-};
+use linera_views_macro::HashableContainerView;
 use linera_views::{
     collection_view::ReentrantCollectionView,
     register_view::RegisterView,
-    views::{HashableContainerView, View, ViewError},
+    views::{View, ViewError},
 };
 
 #[cfg(any(test, feature = "test"))]

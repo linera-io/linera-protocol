@@ -8,8 +8,8 @@ use linera_base::{
 };
 use linera_execution::ApplicationId;
 use linera_views::{
-    common::Context, impl_view, queue_view::QueueView, register_view::RegisterView,
-    scoped_view::ScopedView, views::ViewError,
+    common::Context, queue_view::QueueView, register_view::RegisterView,
+    views::ViewError, views::HashableContainerView,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -29,25 +29,18 @@ mod inbox_tests;
 /// * The cursors of added events (resp. removed events) must be increasing over time.
 /// * Reconciliation of added and removed events is allowed to skip some added events.
 /// However, the opposite is not true: every removed event must be eventually added.
-#[derive(Debug)]
+#[derive(Debug, HashableContainerView)]
 pub struct InboxStateView<C> {
     /// We have already added all the messages below this height and index.
-    pub next_cursor_to_add: ScopedView<0, RegisterView<C, Cursor>>,
+    pub next_cursor_to_add: RegisterView<C, Cursor>,
     /// We have already removed all the messages below this height and index.
-    pub next_cursor_to_remove: ScopedView<1, RegisterView<C, Cursor>>,
+    pub next_cursor_to_remove: RegisterView<C, Cursor>,
     /// These events have been added and are waiting to be removed.
-    pub added_events: ScopedView<2, QueueView<C, Event>>,
+    pub added_events: QueueView<C, Event>,
     /// These events have been removed by anticipation and are waiting to be added.
     /// At least one of `added_events` and `removed_events` should be empty.
-    pub removed_events: ScopedView<3, QueueView<C, Event>>,
+    pub removed_events: QueueView<C, Event>,
 }
-
-impl_view!(InboxStateView {
-    next_cursor_to_add,
-    next_cursor_to_remove,
-    added_events,
-    removed_events
-});
 
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct Cursor {
