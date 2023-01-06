@@ -226,10 +226,10 @@ pub enum SystemExecutionError {
     InvalidCommitteeCreation,
     #[error("Failed to remove committee")]
     InvalidCommitteeRemoval,
-    #[error("Invalid subscription to new committees: {0}")]
-    InvalidSubscriptionToNewCommittees(ChainId),
-    #[error("Invalid unsubscription to new committees: {0}")]
-    InvalidUnsubscriptionToNewCommittees(ChainId),
+    #[error("Invalid subscription request: {0}")]
+    InvalidSubscription(ChainId),
+    #[error("Invalid unsubscription request: {0}")]
+    InvalidUnsubscription(ChainId),
     #[error("Amount overflow")]
     AmountOverflow,
     #[error("Amount underflow")]
@@ -425,11 +425,11 @@ where
                 // We should not subscribe to ourself in this case.
                 ensure!(
                     context.chain_id != *chain_id,
-                    SystemExecutionError::InvalidSubscriptionToNewCommittees(context.chain_id)
+                    SystemExecutionError::InvalidSubscription(context.chain_id)
                 );
                 ensure!(
                     self.admin_id.get().as_ref() == Some(chain_id),
-                    SystemExecutionError::InvalidSubscriptionToNewCommittees(context.chain_id)
+                    SystemExecutionError::InvalidSubscription(context.chain_id)
                 );
                 let channel_id = ChannelId {
                     chain_id: *chain_id,
@@ -437,7 +437,7 @@ where
                 };
                 ensure!(
                     self.subscriptions.get(&channel_id).await?.is_none(),
-                    SystemExecutionError::InvalidSubscriptionToNewCommittees(context.chain_id)
+                    SystemExecutionError::InvalidSubscription(context.chain_id)
                 );
                 self.subscriptions.insert(&channel_id)?;
                 result.effects = vec![(
@@ -458,7 +458,7 @@ where
                 };
                 ensure!(
                     self.subscriptions.get(&channel_id).await?.is_some(),
-                    SystemExecutionError::InvalidUnsubscriptionToNewCommittees(context.chain_id)
+                    SystemExecutionError::InvalidUnsubscription(context.chain_id)
                 );
                 self.subscriptions.remove(&channel_id)?;
                 result.effects = vec![(
