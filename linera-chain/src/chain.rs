@@ -98,21 +98,10 @@ where
 
     async fn mark_messages_as_received(
         outboxes: &mut CollectionView<C, ChainId, OutboxStateView<C>>,
-        application_id: ApplicationId,
-        origin: &Origin,
         recipient: ChainId,
         height: BlockHeight,
     ) -> Result<bool, ChainError> {
         let outbox = outboxes.load_entry(recipient).await?;
-        if outbox.queue.count() == 0 {
-            log::warn!(
-                "All messages were already marked as received in the outbox {:?}::{:?} to {:?}",
-                application_id,
-                origin,
-                recipient
-            );
-            return Ok(false);
-        }
         let updated = outbox.mark_messages_as_received(height).await?;
         if updated && outbox.queue.count() == 0 {
             outboxes.remove_entry(recipient)?;
@@ -126,16 +115,8 @@ where
         recipient: ChainId,
         height: BlockHeight,
     ) -> Result<bool, ChainError> {
-        let origin = Origin::chain(self.chain_id());
         let communication_state = self.communication_states.load_entry(application_id).await?;
-        Self::mark_messages_as_received(
-            &mut communication_state.outboxes,
-            application_id,
-            &origin,
-            recipient,
-            height,
-        )
-        .await
+        Self::mark_messages_as_received(&mut communication_state.outboxes, recipient, height).await
     }
 
     pub async fn mark_channel_messages_as_received(
@@ -145,17 +126,12 @@ where
         recipient: ChainId,
         height: BlockHeight,
     ) -> Result<bool, ChainError> {
-        let origin = Origin::channel(self.chain_id(), name.clone());
         let communication_state = self.communication_states.load_entry(application_id).await?;
-        let channel = communication_state.channels.load_entry(name).await?;
-        Self::mark_messages_as_received(
-            &mut channel.outboxes,
-            application_id,
-            &origin,
-            recipient,
-            height,
-        )
-        .await
+        let channel = communication_state
+            .channels
+            .load_entry(name.clone())
+            .await?;
+        Self::mark_messages_as_received(&mut channel.outboxes, recipient, height).await
     }
 
     /// Invariant for the states of active chains.
@@ -227,17 +203,15 @@ where
         height: BlockHeight,
         effects: Vec<(ApplicationId, Destination, Effect)>,
         certificate_hash: HashValue,
-    ) -> Result<bool, ChainError> {
+    ) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
-        // Check that the block was never seen and mark it as received in the inbox.
-        if height
-            < self
-                .next_block_height_to_receive(application_id, origin.clone())
-                .await?
-        {
-            // We have already received this block.
-            return Ok(false);
-        }
+        ensure!(
+            height
+                >= self
+                    .next_block_height_to_receive(application_id, origin.clone())
+                    .await?,
+            ChainError::InternalError("Trying to receive blocks in the wrong order".to_string())
+        );
         log::trace!(
             "Processing new messages to {:?} from {:?}::{:?} at height {}",
             chain_id,
@@ -286,10 +260,11 @@ where
         }
         // There should be inbox events. Otherwise, this means the cross-chain request was
         // not routed correctly.
-        debug_assert!(
+        ensure!(
             !events.is_empty(),
-            "The block received by {:?} from {:?} at height {:?} was entirely ignored. This should not happen",
-            chain_id, origin, height
+            ChainError::InternalError(format!(
+                "The block received by {:?} from {:?} at height {:?} was entirely ignored. This should not happen",
+                chain_id, origin, height))
         );
         // Process the inbox events and update the inbox state.
         let communication_state = self.communication_states.load_entry(application_id).await?;
@@ -307,7 +282,7 @@ where
         }
         // Remember the certificate for future validator/client synchronizations.
         self.received_log.push(certificate_hash);
-        Ok(true)
+        Ok(())
     }
 
     async fn execute_immediate_effect(

@@ -5,8 +5,8 @@
 use crate::{
     data_types::*,
     worker::{
-        ApplicationId::System, Notification, Reason, Reason::NewMessage, ValidatorWorker,
-        WorkerError, WorkerState,
+        ApplicationId::System, CrossChainUpdateHelper, Notification, Reason, Reason::NewMessage,
+        ValidatorWorker, WorkerError, WorkerState,
     },
 };
 use linera_base::{
@@ -185,18 +185,46 @@ async fn make_transfer_certificate<S>(
     worker: &WorkerState<S>,
     previous_confirmed_block: Option<&Certificate>,
 ) -> Certificate {
+    make_transfer_certificate_for_epoch(
+        chain_description,
+        key_pair,
+        recipient,
+        amount,
+        incoming_messages,
+        Epoch::from(0),
+        committee,
+        balance,
+        worker,
+        previous_confirmed_block,
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn make_transfer_certificate_for_epoch<S>(
+    chain_description: ChainDescription,
+    key_pair: &KeyPair,
+    recipient: Address,
+    amount: Amount,
+    incoming_messages: Vec<Message>,
+    epoch: Epoch,
+    committee: &Committee,
+    balance: Balance,
+    worker: &WorkerState<S>,
+    previous_confirmed_block: Option<&Certificate>,
+) -> Certificate {
     let chain_id = chain_description.into();
     let system_state = SystemExecutionState {
-        epoch: Some(Epoch::from(0)),
+        epoch: Some(epoch),
         description: Some(chain_description),
         admin_id: Some(ChainId::root(0)),
         subscriptions: BTreeSet::new(),
-        committees: [(Epoch::from(0), committee.clone())].into_iter().collect(),
+        committees: [(epoch, committee.clone())].into_iter().collect(),
         ownership: ChainOwnership::single(key_pair.public().into()),
         balance,
     };
     let block = make_block(
-        Epoch::from(0),
+        epoch,
         chain_id,
         vec![Operation::System(SystemOperation::Transfer {
             recipient,
@@ -2231,12 +2259,10 @@ where
     }
 
     // Create a new committee and transfer money before accepting the subscription.
-    let committees2: BTreeMap<_, _> = [
+    let committees2 = BTreeMap::from_iter([
         (Epoch::from(0), committee.clone()),
         (Epoch::from(1), committee.clone()),
-    ]
-    .into_iter()
-    .collect();
+    ]);
     let certificate1 = make_certificate(
         &committee,
         &worker,
@@ -2683,12 +2709,10 @@ where
         },
     );
     // Have the admin chain create a new epoch without retiring the old one.
-    let committees2: BTreeMap<_, _> = [
+    let committees2 = BTreeMap::from_iter([
         (Epoch::from(0), committee.clone()),
         (Epoch::from(1), committee.clone()),
-    ]
-    .into_iter()
-    .collect();
+    ]);
     let certificate1 = make_certificate(
         &committee,
         &worker,
@@ -2884,13 +2908,11 @@ where
         },
     );
     // Have the admin chain create a new epoch and retire the old one immediately.
-    let committees2: BTreeMap<_, _> = [
+    let committees2 = BTreeMap::from_iter([
         (Epoch::from(0), committee.clone()),
         (Epoch::from(1), committee.clone()),
-    ]
-    .into_iter()
-    .collect();
-    let committees3: BTreeMap<_, _> = [(Epoch::from(1), committee.clone())].into_iter().collect();
+    ]);
+    let committees3 = BTreeMap::from_iter([(Epoch::from(1), committee.clone())]);
     let certificate1 = make_certificate(
         &committee,
         &worker,
@@ -3053,4 +3075,228 @@ where
         let mut admin_chain = worker.storage.load_active_chain(admin_id).await.unwrap();
         admin_chain.validate_incoming_messages().await.unwrap();
     }
+}
+
+#[test(tokio::test)]
+async fn test_cross_chain_helper() {
+    // Make a committee and worker (only used for signing certificates)
+    let (committee, worker) = init_worker(MemoryStoreClient::default(), true);
+    let committees = BTreeMap::from_iter([(Epoch::from(1), committee.clone())]);
+
+    let key_pair0 = KeyPair::generate();
+    let id0 = ChainId::root(0);
+    let id1 = ChainId::root(1);
+
+    let certificate0 = make_transfer_certificate_for_epoch(
+        ChainDescription::Root(0),
+        &key_pair0,
+        Address::Account(id1),
+        Amount::from(1),
+        Vec::new(),
+        Epoch::from(0),
+        &committee,
+        Balance::from(1),
+        &worker,
+        None,
+    )
+    .await;
+    let certificate1 = make_transfer_certificate_for_epoch(
+        ChainDescription::Root(0),
+        &key_pair0,
+        Address::Account(id1),
+        Amount::from(1),
+        Vec::new(),
+        Epoch::from(0),
+        &committee,
+        Balance::from(1),
+        &worker,
+        Some(&certificate0),
+    )
+    .await;
+    let certificate2 = make_transfer_certificate_for_epoch(
+        ChainDescription::Root(0),
+        &key_pair0,
+        Address::Account(id1),
+        Amount::from(1),
+        Vec::new(),
+        Epoch::from(1),
+        &committee,
+        Balance::from(1),
+        &worker,
+        Some(&certificate1),
+    )
+    .await;
+    // Weird case: epoch going backward.
+    let certificate3 = make_transfer_certificate_for_epoch(
+        ChainDescription::Root(0),
+        &key_pair0,
+        Address::Account(id1),
+        Amount::from(1),
+        Vec::new(),
+        Epoch::from(0),
+        &committee,
+        Balance::from(1),
+        &worker,
+        Some(&certificate2),
+    )
+    .await;
+
+    let helper = CrossChainUpdateHelper {
+        nickname: "test",
+        allow_messages_from_deprecated_epochs: true,
+        current_epoch: Some(Epoch::from(1)),
+        committees: &committees,
+    };
+    // Epoch is not tested when `allow_messages_from_deprecated_epochs` is true.
+    assert_eq!(
+        helper
+            .select_certificates(
+                ApplicationId::System,
+                &Origin::chain(id0),
+                id1,
+                BlockHeight::from(0),
+                None,
+                vec![certificate0.clone(), certificate1.clone()]
+            )
+            .unwrap(),
+        vec![certificate0.clone(), certificate1.clone()]
+    );
+    // Received heights is removing prefixes.
+    assert_eq!(
+        helper
+            .select_certificates(
+                ApplicationId::System,
+                &Origin::chain(id0),
+                id1,
+                BlockHeight::from(1),
+                None,
+                vec![certificate0.clone(), certificate1.clone()]
+            )
+            .unwrap(),
+        vec![certificate1.clone()]
+    );
+    assert_eq!(
+        helper
+            .select_certificates(
+                ApplicationId::System,
+                &Origin::chain(id0),
+                id1,
+                BlockHeight::from(2),
+                None,
+                vec![certificate0.clone(), certificate1.clone()]
+            )
+            .unwrap(),
+        vec![]
+    );
+    // Order of certificates is checked.
+    assert!(helper
+        .select_certificates(
+            ApplicationId::System,
+            &Origin::chain(id0),
+            id1,
+            BlockHeight::from(0),
+            None,
+            vec![certificate1.clone(), certificate0.clone()]
+        )
+        .is_err());
+    // Sender is checked.
+    assert!(helper
+        .select_certificates(
+            ApplicationId::System,
+            &Origin::chain(id1),
+            id0,
+            BlockHeight::from(0),
+            None,
+            vec![certificate0.clone()]
+        )
+        .is_err());
+
+    let helper = CrossChainUpdateHelper {
+        nickname: "test",
+        allow_messages_from_deprecated_epochs: false,
+        current_epoch: Some(Epoch::from(1)),
+        committees: &committees,
+    };
+    // Epoch is tested when `allow_messages_from_deprecated_epochs` is false.
+    assert_eq!(
+        helper
+            .select_certificates(
+                ApplicationId::System,
+                &Origin::chain(id0),
+                id1,
+                BlockHeight::from(0),
+                None,
+                vec![certificate0.clone(), certificate1.clone()]
+            )
+            .unwrap(),
+        vec![]
+    );
+    // A certificate with a recent epoch certifies all the previous blocks.
+    assert_eq!(
+        helper
+            .select_certificates(
+                ApplicationId::System,
+                &Origin::chain(id0),
+                id1,
+                BlockHeight::from(0),
+                None,
+                vec![
+                    certificate0.clone(),
+                    certificate1.clone(),
+                    certificate2.clone(),
+                    certificate3
+                ]
+            )
+            .unwrap(),
+        vec![
+            certificate0.clone(),
+            certificate1.clone(),
+            certificate2.clone()
+        ]
+    );
+    // Received heights is still removing prefixes.
+    assert_eq!(
+        helper
+            .select_certificates(
+                ApplicationId::System,
+                &Origin::chain(id0),
+                id1,
+                BlockHeight::from(1),
+                None,
+                vec![
+                    certificate0.clone(),
+                    certificate1.clone(),
+                    certificate2.clone()
+                ]
+            )
+            .unwrap(),
+        vec![certificate1.clone(), certificate2.clone()]
+    );
+    // Anticipated messages re-certify blocks up to the given height.
+    assert_eq!(
+        helper
+            .select_certificates(
+                ApplicationId::System,
+                &Origin::chain(id0),
+                id1,
+                BlockHeight::from(1),
+                Some(BlockHeight::from(1)),
+                vec![certificate0.clone(), certificate1.clone()]
+            )
+            .unwrap(),
+        vec![certificate1.clone()]
+    );
+    assert_eq!(
+        helper
+            .select_certificates(
+                ApplicationId::System,
+                &Origin::chain(id0),
+                id1,
+                BlockHeight::from(0),
+                Some(BlockHeight::from(1)),
+                vec![certificate0.clone(), certificate1.clone()]
+            )
+            .unwrap(),
+        vec![certificate0.clone(), certificate1.clone()]
+    );
 }
