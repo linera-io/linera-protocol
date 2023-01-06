@@ -3,7 +3,7 @@
 
 use crate::{
     common::{Batch, Context, HashOutput},
-    views::{HashView, Hasher, View, ViewError},
+    views::{HashableView, Hasher, View, ViewError},
 };
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
@@ -127,7 +127,7 @@ where
 }
 
 #[async_trait]
-impl<C, T> HashView<C> for RegisterView<C, T>
+impl<C, T> HashableView<C> for RegisterView<C, T>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,

@@ -20,7 +20,7 @@ use linera_views::{
         get_random_key_value_operations, get_random_key_value_vec, random_shuffle,
         span_random_reordering_put_delete, LocalStackTestContext,
     },
-    views::{HashContainerView, HashView, Hasher, ContainerView, View, ViewError},
+    views::{HashableContainerView, HashableView, Hasher, ContainerView, View, ViewError},
 };
 use rand::{Rng, RngCore, SeedableRng};
 use std::{
@@ -30,7 +30,7 @@ use std::{
 use tokio::sync::Mutex;
 
 #[allow(clippy::type_complexity)]
-#[derive(HashContainerView)]
+#[derive(HashableContainerView)]
 pub struct StateView<C> {
     pub x1: RegisterView<C, u64>,
     pub x2: RegisterView<C, u32>,

@@ -26,13 +26,13 @@ use linera_views::{
     views::{View, HashableContainerView, ViewError},
     queue_view::QueueView,
     register_view::RegisterView,
-    views::{HashContainerView, View, ViewError},
+    views::{HashableContainerView, View, ViewError},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
 /// A view accessing the state of a chain.
-#[derive(Debug, HashContainerView)]
+#[derive(Debug, HashableContainerView)]
 pub struct ChainStateView<C> {
     /// Execution state, including system and user applications.
     pub execution_state: ExecutionStateView<C>,
@@ -68,7 +68,7 @@ pub struct ChainTipState {
 }
 
 /// A view accessing the communication state of an application.
-#[derive(Debug, HashContainerView)]
+#[derive(Debug, HashableContainerView)]
 pub struct CommunicationStateView<C> {
     /// Mailboxes used to receive messages indexed by their origin.
     pub inboxes: CollectionView<C, Origin, InboxStateView<C>>,
@@ -79,7 +79,7 @@ pub struct CommunicationStateView<C> {
 }
 
 /// The state of a channel followed by subscribers.
-#[derive(Debug, HashContainerView)]
+#[derive(Debug, HashableContainerView)]
 pub struct ChannelStateView<C> {
     /// The current subscribers.
     pub subscribers: MapView<C, ChainId, ()>,
