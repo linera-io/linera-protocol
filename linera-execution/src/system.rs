@@ -427,10 +427,13 @@ where
                     context.chain_id != *chain_id,
                     SystemExecutionError::InvalidSubscription(context.chain_id)
                 );
-                ensure!(
-                    self.admin_id.get().as_ref() == Some(chain_id),
-                    SystemExecutionError::InvalidSubscription(context.chain_id)
-                );
+                if *channel == SystemChannel::Admin {
+                    // Can only subscribe to the admin channel of this chain's admin chain.
+                    ensure!(
+                        self.admin_id.get().as_ref() == Some(chain_id),
+                        SystemExecutionError::InvalidSubscription(context.chain_id)
+                    );
+                }
                 let channel_id = ChannelId {
                     chain_id: *chain_id,
                     name: channel.name(),
