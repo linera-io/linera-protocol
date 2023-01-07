@@ -19,7 +19,10 @@ use linera_views::{
     views::{HashableContainerView, View, ViewError},
 };
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::{
+    collections::BTreeMap,
+    fmt::{self, Display, Formatter},
+};
 use thiserror::Error;
 
 #[cfg(any(test, feature = "test"))]
@@ -176,6 +179,17 @@ impl SystemChannel {
     }
 }
 
+impl Display for SystemChannel {
+    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
+        let display_name = match self {
+            SystemChannel::Admin => "Admin",
+            SystemChannel::PublishedBytecodes => "PublishedBytecodes",
+        };
+
+        write!(formatter, "{display_name}")
+    }
+}
+
 /// A recipient's address.
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Serialize, Deserialize)]
 pub enum Address {
@@ -226,10 +240,10 @@ pub enum SystemExecutionError {
     InvalidCommitteeCreation,
     #[error("Failed to remove committee")]
     InvalidCommitteeRemoval,
-    #[error("Invalid subscription request: {0}")]
-    InvalidSubscription(ChainId),
-    #[error("Invalid unsubscription request: {0}")]
-    InvalidUnsubscription(ChainId),
+    #[error("Invalid subscription request to channel {1} on chain {0}")]
+    InvalidSubscription(ChainId, SystemChannel),
+    #[error("Invalid unsubscription request to channel {1} on chain {0}")]
+    InvalidUnsubscription(ChainId, SystemChannel),
     #[error("Amount overflow")]
     AmountOverflow,
     #[error("Amount underflow")]
@@ -425,13 +439,13 @@ where
                 // We should not subscribe to ourself in this case.
                 ensure!(
                     context.chain_id != *chain_id,
-                    SystemExecutionError::InvalidSubscription(context.chain_id)
+                    SystemExecutionError::InvalidSubscription(context.chain_id, *channel)
                 );
                 if *channel == SystemChannel::Admin {
                     // Can only subscribe to the admin channel of this chain's admin chain.
                     ensure!(
                         self.admin_id.get().as_ref() == Some(chain_id),
-                        SystemExecutionError::InvalidSubscription(context.chain_id)
+                        SystemExecutionError::InvalidSubscription(context.chain_id, *channel)
                     );
                 }
                 let channel_id = ChannelId {
@@ -440,7 +454,7 @@ where
                 };
                 ensure!(
                     self.subscriptions.get(&channel_id).await?.is_none(),
-                    SystemExecutionError::InvalidSubscription(context.chain_id)
+                    SystemExecutionError::InvalidSubscription(context.chain_id, *channel)
                 );
                 self.subscriptions.insert(&channel_id)?;
                 result.effects = vec![(
@@ -461,7 +475,7 @@ where
                 };
                 ensure!(
                     self.subscriptions.get(&channel_id).await?.is_some(),
-                    SystemExecutionError::InvalidUnsubscription(context.chain_id)
+                    SystemExecutionError::InvalidUnsubscription(context.chain_id, *channel)
                 );
                 self.subscriptions.remove(&channel_id)?;
                 result.effects = vec![(
