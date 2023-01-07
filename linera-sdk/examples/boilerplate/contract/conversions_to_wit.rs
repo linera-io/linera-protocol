@@ -71,13 +71,13 @@ impl From<ExecutionResult> for contract::ExecutionResult {
         let subscribe = result
             .subscribe
             .into_iter()
-            .map(|(channel_id, chain_id)| (channel_id, chain_id.0.into()))
+            .map(|(channel_id, chain_id)| (channel_id.0, chain_id.0.into()))
             .collect();
 
         let unsubscribe = result
             .unsubscribe
             .into_iter()
-            .map(|(channel_id, chain_id)| (channel_id, chain_id.0.into()))
+            .map(|(channel_id, chain_id)| (channel_id.0, chain_id.0.into()))
             .collect();
 
         contract::ExecutionResult {
@@ -92,7 +92,9 @@ impl From<Destination> for contract::Destination {
     fn from(destination: Destination) -> Self {
         match destination {
             Destination::Recipient(chain_id) => contract::Destination::Recipient(chain_id.0.into()),
-            Destination::Subscribers(channel_id) => contract::Destination::Subscribers(channel_id),
+            Destination::Subscribers(channel_id) => {
+                contract::Destination::Subscribers(channel_id.0)
+            }
         }
     }
 }

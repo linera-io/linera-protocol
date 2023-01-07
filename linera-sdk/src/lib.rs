@@ -130,9 +130,9 @@ pub struct ExecutionResult {
     /// Send messages to the given destinations.
     pub effects: Vec<(Destination, Vec<u8>)>,
     /// Subscribe chains to channels.
-    pub subscribe: Vec<(String, ChainId)>,
+    pub subscribe: Vec<(ChannelName, ChainId)>,
     /// Unsubscribe chains to channels.
-    pub unsubscribe: Vec<(String, ChainId)>,
+    pub unsubscribe: Vec<(ChannelName, ChainId)>,
 }
 
 impl ExecutionResult {
@@ -162,6 +162,11 @@ pub struct EffectId {
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash)]
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 pub struct ChainId(pub HashValue);
+
+/// The name of a subscription channel.
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+pub struct ChannelName(pub String);
 
 /// A block height to identify blocks in a chain.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug)]
@@ -221,7 +226,7 @@ pub enum Destination {
     /// Direct message to a chain.
     Recipient(ChainId),
     /// Broadcast to the current subscribers of our channel.
-    Subscribers(String),
+    Subscribers(ChannelName),
 }
 
 impl From<ChainId> for Destination {
