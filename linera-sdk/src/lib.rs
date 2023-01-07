@@ -166,7 +166,7 @@ pub struct ChainId(pub HashValue);
 /// The name of a subscription channel.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
-pub struct ChannelName(pub String);
+pub struct ChannelName(pub Vec<u8>);
 
 /// A block height to identify blocks in a chain.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug)]

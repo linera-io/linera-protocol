@@ -127,7 +127,7 @@ variant destination {
 }
 
 record channel-name {
-    name: string,
+    name: list<u8>,
 }
 
 type effect = list<u8>

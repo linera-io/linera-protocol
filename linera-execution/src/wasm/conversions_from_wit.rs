@@ -95,7 +95,7 @@ impl From<contract::SessionResult> for NewSession {
 
 impl From<contract::ChannelName> for ChannelName {
     fn from(guest: contract::ChannelName) -> Self {
-        Vec::from(guest.name).into()
+        guest.name.into()
     }
 }
 
