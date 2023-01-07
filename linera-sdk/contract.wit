@@ -117,13 +117,17 @@ record session-call-result {
 
 record execution-result {
     effects: list<tuple<destination, effect>>,
-    subscribe: list<tuple<string, chain-id>>,
-    unsubscribe: list<tuple<string, chain-id>>,
+    subscribe: list<tuple<channel-name, chain-id>>,
+    unsubscribe: list<tuple<channel-name, chain-id>>,
 }
 
 variant destination {
     recipient(chain-id),
-    subscribers(string),
+    subscribers(channel-name),
+}
+
+record channel-name {
+    name: string,
 }
 
 type effect = list<u8>

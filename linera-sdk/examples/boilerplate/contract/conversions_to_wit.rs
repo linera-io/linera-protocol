@@ -5,7 +5,8 @@
 
 use super::contract;
 use linera_sdk::{
-    ApplicationCallResult, Destination, ExecutionResult, HashValue, Session, SessionCallResult,
+    ApplicationCallResult, ChannelName, Destination, ExecutionResult, HashValue, Session,
+    SessionCallResult,
 };
 use std::task::Poll;
 
@@ -71,13 +72,13 @@ impl From<ExecutionResult> for contract::ExecutionResult {
         let subscribe = result
             .subscribe
             .into_iter()
-            .map(|(channel_id, chain_id)| (channel_id.0, chain_id.0.into()))
+            .map(|(channel_id, chain_id)| (channel_id.into(), chain_id.0.into()))
             .collect();
 
         let unsubscribe = result
             .unsubscribe
             .into_iter()
-            .map(|(channel_id, chain_id)| (channel_id.0, chain_id.0.into()))
+            .map(|(channel_id, chain_id)| (channel_id.into(), chain_id.0.into()))
             .collect();
 
         contract::ExecutionResult {
@@ -93,9 +94,15 @@ impl From<Destination> for contract::Destination {
         match destination {
             Destination::Recipient(chain_id) => contract::Destination::Recipient(chain_id.0.into()),
             Destination::Subscribers(channel_id) => {
-                contract::Destination::Subscribers(channel_id.0)
+                contract::Destination::Subscribers(channel_id.into())
             }
         }
+    }
+}
+
+impl From<ChannelName> for contract::ChannelName {
+    fn from(name: ChannelName) -> Self {
+        contract::ChannelName { name: name.0 }
     }
 }
 
