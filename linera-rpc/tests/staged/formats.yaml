@@ -176,7 +176,11 @@ ChannelId:
   STRUCT:
     - chain_id:
         TYPENAME: ChainId
-    - name: STR
+    - name:
+        TYPENAME: ChannelName
+ChannelName:
+  NEWTYPESTRUCT:
+    SEQ: U8
 Committee:
   STRUCT:
     - validators:
@@ -221,7 +225,8 @@ Destination:
           TYPENAME: ChainId
     1:
       Subscribers:
-        NEWTYPE: STR
+        NEWTYPE:
+          TYPENAME: ChannelName
 Effect:
   ENUM:
     0:
@@ -259,7 +264,8 @@ Medium:
       Direct: UNIT
     1:
       Channel:
-        NEWTYPE: STR
+        NEWTYPE:
+          TYPENAME: ChannelName
 Message:
   STRUCT:
     - application_id:
