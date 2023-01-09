@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    data_types::{Block, Event, Medium, Origin},
+    data_types::{Block, Event, Medium, Origin, Target},
     inbox::{InboxError, InboxStateView},
     outbox::OutboxStateView,
     ChainError, ChainManager,
@@ -69,8 +69,8 @@ pub struct ChainTipState {
 pub struct CommunicationStateView<C> {
     /// Mailboxes used to receive messages indexed by their origin.
     pub inboxes: CollectionView<C, Origin, InboxStateView<C>>,
-    /// Mailboxes used to send messages, indexed by recipient.
-    pub outboxes: CollectionView<C, ChainId, OutboxStateView<C>>,
+    /// Mailboxes used to send messages, indexed by their target.
+    pub outboxes: CollectionView<C, Target, OutboxStateView<C>>,
     /// Channels able to multicast messages to subscribers.
     pub channels: CollectionView<C, ChannelName, ChannelStateView<C>>,
 }
@@ -80,8 +80,6 @@ pub struct CommunicationStateView<C> {
 pub struct ChannelStateView<C> {
     /// The current subscribers.
     pub subscribers: SetView<C, ChainId>,
-    /// The messages waiting to be delivered to present and past subscribers.
-    pub outboxes: CollectionView<C, ChainId, OutboxStateView<C>>,
     /// The latest block height, if any, to be sent to future subscribers.
     pub block_height: RegisterView<C, Option<BlockHeight>>,
 }
@@ -96,42 +94,22 @@ where
         self.context().extra().chain_id()
     }
 
-    async fn mark_messages_as_received(
-        outboxes: &mut CollectionView<C, ChainId, OutboxStateView<C>>,
-        recipient: ChainId,
+    pub async fn mark_messages_as_received(
+        &mut self,
+        application_id: ApplicationId,
+        target: Target,
         height: BlockHeight,
     ) -> Result<bool, ChainError> {
-        let outbox = outboxes.load_entry(recipient).await?;
+        let communication_state = self.communication_states.load_entry(application_id).await?;
+        let outbox = communication_state
+            .outboxes
+            .load_entry(target.clone())
+            .await?;
         let updated = outbox.mark_messages_as_received(height).await?;
         if updated && outbox.queue.count() == 0 {
-            outboxes.remove_entry(recipient)?;
+            communication_state.outboxes.remove_entry(target)?;
         }
         Ok(updated)
-    }
-
-    pub async fn mark_outbox_messages_as_received(
-        &mut self,
-        application_id: ApplicationId,
-        recipient: ChainId,
-        height: BlockHeight,
-    ) -> Result<bool, ChainError> {
-        let communication_state = self.communication_states.load_entry(application_id).await?;
-        Self::mark_messages_as_received(&mut communication_state.outboxes, recipient, height).await
-    }
-
-    pub async fn mark_channel_messages_as_received(
-        &mut self,
-        name: ChannelName,
-        application_id: ApplicationId,
-        recipient: ChainId,
-        height: BlockHeight,
-    ) -> Result<bool, ChainError> {
-        let communication_state = self.communication_states.load_entry(application_id).await?;
-        let channel = communication_state
-            .channels
-            .load_entry(name.clone())
-            .await?;
-        Self::mark_messages_as_received(&mut channel.outboxes, recipient, height).await
     }
 
     /// Invariant for the states of active chains.
@@ -472,7 +450,7 @@ where
     }
 
     async fn process_execution_results(
-        outboxes: &mut CollectionView<C, ChainId, OutboxStateView<C>>,
+        outboxes: &mut CollectionView<C, Target, OutboxStateView<C>>,
         channels: &mut CollectionView<C, ChannelName, ChannelStateView<C>>,
         effects: &mut Vec<(ApplicationId, Destination, Effect)>,
         height: BlockHeight,
@@ -509,7 +487,7 @@ where
 
     async fn process_raw_execution_result<E: Into<Effect>>(
         application_id: ApplicationId,
-        outboxes: &mut CollectionView<C, ChainId, OutboxStateView<C>>,
+        outboxes: &mut CollectionView<C, Target, OutboxStateView<C>>,
         channels: &mut CollectionView<C, ChannelName, ChannelStateView<C>>,
         effects: &mut Vec<(ApplicationId, Destination, Effect)>,
         height: BlockHeight,
@@ -533,7 +511,7 @@ where
 
         // Update the (regular) outboxes.
         for recipient in recipients {
-            let outbox = outboxes.load_entry(recipient).await?;
+            let outbox = outboxes.load_entry(Target::chain(recipient)).await?;
             outbox.schedule_message(height)?;
         }
 
@@ -544,20 +522,22 @@ where
             channel.subscribers.remove(&id)?;
         }
         for name in channel_broadcasts {
-            let channel = channels.load_entry(name).await?;
+            let channel = channels.load_entry(name.clone()).await?;
             for recipient in channel.subscribers.indices().await? {
-                let outbox = channel.outboxes.load_entry(recipient).await?;
+                let outbox = outboxes
+                    .load_entry(Target::channel(recipient, name.clone()))
+                    .await?;
                 outbox.schedule_message(height)?;
             }
             channel.block_height.set(Some(height));
         }
         for (name, id) in application.subscribe {
-            let channel = channels.load_entry(name).await?;
+            let channel = channels.load_entry(name.clone()).await?;
             // Add subscriber.
             if channel.subscribers.get(&id).await?.is_none() {
                 // Send the latest message if any.
                 if let Some(latest_height) = channel.block_height.get() {
-                    let outbox = channel.outboxes.load_entry(id).await?;
+                    let outbox = outboxes.load_entry(Target::channel(id, name)).await?;
                     outbox.schedule_message(*latest_height)?;
                 }
             }

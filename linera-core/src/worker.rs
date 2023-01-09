@@ -11,7 +11,7 @@ use linera_base::{
     ensure,
 };
 use linera_chain::{
-    data_types::{Block, BlockProposal, Certificate, Medium, Message, Origin, Value},
+    data_types::{Block, BlockProposal, Certificate, Message, Origin, Target, Value},
     ChainManagerOutcome, ChainStateView,
 };
 use linera_execution::{ApplicationDescription, ApplicationId};
@@ -270,38 +270,23 @@ where
                 .communication_states
                 .load_entry(application_id)
                 .await?;
-            for recipient in state.outboxes.indices().await? {
-                let outbox = state.outboxes.load_entry(recipient).await?;
+            for target in state.outboxes.indices().await? {
+                let outbox = state.outboxes.load_entry(target.clone()).await?;
                 let heights = outbox.block_heights().await?;
-                let origin = Origin::chain(chain_id);
+                let origin = Origin {
+                    sender: chain_id,
+                    medium: target.medium,
+                };
                 let request = self
                     .create_cross_chain_request(
                         &mut chain.confirmed_log,
                         application.clone(),
                         origin,
-                        recipient,
+                        target.recipient,
                         &heights,
                     )
                     .await?;
                 actions.cross_chain_requests.push(request);
-            }
-            for name in state.channels.indices().await? {
-                let channel = state.channels.load_entry(name.clone()).await?;
-                for recipient in channel.outboxes.indices().await? {
-                    let outbox = channel.outboxes.load_entry(recipient).await?;
-                    let heights = outbox.block_heights().await?;
-                    let origin = Origin::channel(chain_id, name.clone());
-                    let request = self
-                        .create_cross_chain_request(
-                            &mut chain.confirmed_log,
-                            application.clone(),
-                            origin,
-                            recipient,
-                            &heights,
-                        )
-                        .await?;
-                    actions.cross_chain_requests.push(request);
-                }
             }
         }
         Ok(actions)
@@ -708,36 +693,14 @@ where
             }
             CrossChainRequest::ConfirmUpdatedRecipient {
                 application_id,
-                origin:
-                    Origin {
-                        sender,
-                        medium: Medium::Direct,
-                    },
+                origin: Origin { sender, medium },
                 recipient,
                 height,
             } => {
                 let mut chain = self.storage.load_chain(sender).await?;
+                let target = Target { recipient, medium };
                 if chain
-                    .mark_outbox_messages_as_received(application_id, recipient, height)
-                    .await?
-                {
-                    chain.save().await?;
-                }
-                Ok(NetworkActions::default())
-            }
-            CrossChainRequest::ConfirmUpdatedRecipient {
-                application_id,
-                origin:
-                    Origin {
-                        sender,
-                        medium: Medium::Channel(name),
-                    },
-                recipient,
-                height,
-            } => {
-                let mut chain = self.storage.load_chain(sender).await?;
-                if chain
-                    .mark_channel_messages_as_received(name, application_id, recipient, height)
+                    .mark_messages_as_received(application_id, target, height)
                     .await?
                 {
                     chain.save().await?;
