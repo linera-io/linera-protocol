@@ -148,7 +148,7 @@ impl ValidatorNode for GrpcProxy {
     async fn subscribe(
         &self,
         request: Request<SubscriptionRequest>,
-    ) -> std::result::Result<Response<Self::SubscribeStream>, Status> {
+    ) -> Result<Response<Self::SubscribeStream>, Status> {
         let subscription_request = request.into_inner();
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let chain_ids = subscription_request
