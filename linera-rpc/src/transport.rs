@@ -29,7 +29,7 @@ impl TransportProtocol {
     pub fn scheme(&self) -> &'static str {
         match self {
             TransportProtocol::Udp => "udp",
-            TransportProtocol::Tcp => "tcp"
+            TransportProtocol::Tcp => "tcp",
         }
     }
 }

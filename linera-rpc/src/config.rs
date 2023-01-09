@@ -58,7 +58,7 @@ impl NetworkProtocol {
     fn scheme(&self) -> &'static str {
         match self {
             NetworkProtocol::Simple(transport) => transport.scheme(),
-            NetworkProtocol::Grpc => "http"
+            NetworkProtocol::Grpc => "http",
         }
     }
 }

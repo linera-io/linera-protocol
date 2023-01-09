@@ -266,7 +266,7 @@ fn make_server_config(options: ValidatorOptions) -> ValidatorServerConfig {
         protocol: options.internal_protocol,
         shards: options.shards,
         host: options.host,
-        port: options.port
+        port: options.port,
     };
     let key = KeyPair::generate();
     let name = ValidatorName(key.public());
