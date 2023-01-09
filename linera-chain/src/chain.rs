@@ -21,7 +21,7 @@ use linera_views::{
     collection_view::CollectionView,
     common::Context,
     log_view::LogView,
-    map_view::MapView,
+    set_view::SetView,
     register_view::RegisterView,
     views::{HashableContainerView, View, ViewError},
 };
@@ -79,7 +79,7 @@ pub struct CommunicationStateView<C> {
 #[derive(Debug, HashableContainerView)]
 pub struct ChannelStateView<C> {
     /// The current subscribers.
-    pub subscribers: MapView<C, ChainId, ()>,
+    pub subscribers: SetView<C, ChainId>,
     /// The messages waiting to be delivered to present and past subscribers.
     pub outboxes: CollectionView<C, ChainId, OutboxStateView<C>>,
     /// The latest block height, if any, to be sent to future subscribers.
@@ -588,7 +588,7 @@ where
                     outbox.schedule_message(*latest_height)?;
                 }
             }
-            channel.subscribers.insert(&id, ())?;
+            channel.subscribers.insert(&id)?;
         }
         Ok(())
     }
