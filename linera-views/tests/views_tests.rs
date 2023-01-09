@@ -12,6 +12,7 @@ use linera_views::{
     key_value_store_view::{KeyValueStoreMemoryContext, KeyValueStoreView},
     log_view::LogView,
     map_view::MapView,
+    set_view::SetView,
     memory::{MemoryContext, MemoryStoreMap},
     queue_view::QueueView,
     register_view::RegisterView,
@@ -36,6 +37,7 @@ pub struct StateView<C> {
     pub x2: RegisterView<C, u32>,
     pub log: LogView<C, u32>,
     pub map: MapView<C, String, usize>,
+    pub set: SetView<C, usize>,
     pub queue: QueueView<C, u64>,
     pub collection: CollectionView<C, String, LogView<C, u32>>,
     pub collection2: CollectionView<C, String, CollectionView<C, String, RegisterView<C, u32>>>,
@@ -158,6 +160,7 @@ pub struct TestConfig {
     with_x2: bool,
     with_flush: bool,
     with_map: bool,
+    with_set: bool,
     with_queue: bool,
     with_log: bool,
     with_collection: bool,
@@ -170,6 +173,7 @@ impl Default for TestConfig {
             with_x2: true,
             with_flush: true,
             with_map: true,
+            with_set: true,
             with_queue: true,
             with_log: true,
             with_collection: true,
@@ -185,6 +189,7 @@ impl TestConfig {
                 with_x2: false,
                 with_flush: false,
                 with_map: false,
+                with_set: false,
                 with_queue: false,
                 with_log: false,
                 with_collection: false,
@@ -194,6 +199,7 @@ impl TestConfig {
                 with_x2: true,
                 with_flush: false,
                 with_map: false,
+                with_set: false,
                 with_queue: false,
                 with_log: false,
                 with_collection: false,
@@ -203,6 +209,7 @@ impl TestConfig {
                 with_x2: false,
                 with_flush: true,
                 with_map: false,
+                with_set: false,
                 with_queue: true,
                 with_log: true,
                 with_collection: false,
@@ -212,6 +219,7 @@ impl TestConfig {
                 with_x2: false,
                 with_flush: true,
                 with_map: true,
+                with_set: true,
                 with_queue: false,
                 with_log: false,
                 with_collection: true,
@@ -272,6 +280,19 @@ where
                 .unwrap();
             assert_eq!(count, 1);
         }
+        if config.with_set {
+            view.set.insert(&42).unwrap();
+            assert_eq!(view.set.indices().await.unwrap(), vec![42]);
+            let mut count = 0;
+            view.set
+                .for_each_raw_index(|_index: Vec<u8>| {
+                    count += 1;
+                    Ok(())
+                })
+                .await
+                .unwrap();
+            assert_eq!(count, 1);
+        }
         if config.with_x1 {
             assert_eq!(view.x1.get(), &0);
         }
@@ -286,6 +307,9 @@ where
         }
         if config.with_map {
             assert_eq!(view.map.get(&"Hello".to_string()).await.unwrap(), Some(5));
+        }
+        if config.with_set {
+            assert_eq!(view.set.get(&42).await.unwrap(), Some(()));
         }
         if config.with_collection {
             let subview = view
@@ -334,6 +358,9 @@ where
         if config.with_map {
             assert_eq!(view.map.get(&"Hello".to_string()).await.unwrap(), None);
         }
+        if config.with_set {
+            assert_eq!(view.set.get(&42).await.unwrap(), None);
+        }
         if config.with_collection {
             let subview = view
                 .collection
@@ -363,6 +390,11 @@ where
             view.map.insert(&"Hello".to_string(), 5).unwrap();
             view.map.insert(&"Hi".to_string(), 2).unwrap();
             view.map.remove(&"Hi".to_string()).unwrap();
+        }
+        if config.with_set {
+            view.set.insert(&42).unwrap();
+            view.set.insert(&59).unwrap();
+            view.set.remove(&59).unwrap();
         }
         if config.with_collection {
             let subview = view
@@ -417,6 +449,10 @@ where
             assert_eq!(view.map.get(&"Hello".to_string()).await.unwrap(), Some(5));
             assert_eq!(view.map.get(&"Hi".to_string()).await.unwrap(), None);
         }
+        if config.with_set {
+            assert_eq!(view.set.get(&42).await.unwrap(), Some(()));
+            assert_eq!(view.set.get(&59).await.unwrap(), None);
+        }
         if config.with_collection {
             let subview = view
                 .collection
@@ -445,6 +481,7 @@ where
         if config.with_x1
             && config.with_x2
             && config.with_map
+            && config.with_set
             && config.with_queue
             && config.with_log
             && config.with_collection
