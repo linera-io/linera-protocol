@@ -20,6 +20,7 @@ use linera_rpc::{
     pool::ConnectionPool,
 };
 use std::{fmt::Debug, net::SocketAddr, sync::Arc};
+use tokio::select;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::{
     transport::{Channel, Server},
@@ -57,8 +58,12 @@ impl GrpcProxy {
         NotifierServiceServer::new(self.clone())
     }
 
-    fn address(&self) -> SocketAddr {
+    fn public_address(&self) -> SocketAddr {
         SocketAddr::from(([0, 0, 0, 0], self.0.public_config.port))
+    }
+
+    fn internal_address(&self) -> SocketAddr {
+        SocketAddr::from(([0, 0, 0, 0], self.0.internal_config.port))
     }
 
     fn shard_for(&self, proxyable: &impl Proxyable) -> Option<ShardConfig> {
@@ -84,13 +89,25 @@ impl GrpcProxy {
         Ok(client)
     }
 
+    /// Runs the proxy. If either the public server or private server dies for whatever
+    /// reason we'll kill the proxy.
     pub async fn run(self) -> Result<()> {
-        log::info!("Starting gRPC proxy on {}...", self.address());
-        Ok(Server::builder()
-            .add_service(self.as_validator_node())
+        log::info!(
+            "Starting gRPC proxy on public address {} and internal address {}...",
+            self.public_address(),
+            self.internal_address()
+        );
+        let internal_server = Server::builder()
             .add_service(self.as_notifier_service())
-            .serve(self.address())
-            .await?)
+            .serve(self.internal_address());
+        let public_server = Server::builder()
+            .add_service(self.as_validator_node())
+            .serve(self.public_address());
+        select! {
+            internal_res = internal_server => internal_res?,
+            public_res = public_server => public_res?,
+        }
+        Ok(())
     }
 
     async fn client_for_proxy_worker<R>(
