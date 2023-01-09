@@ -53,9 +53,28 @@ message SubscriptionRequest {
   repeated ChainId chain_ids = 1;
 }
 
-// A notification message that a client should poll a chain.
+// Notify that a chain has a new certified block or a new message.
 message Notification {
   ChainId chain_id = 1;
+  Reason reason = 2;
+}
+
+// Reason for the notification.
+message Reason {
+  oneof inner {
+    NewBlock new_block = 1;
+    NewMessage new_message = 2;
+  }
+}
+
+message NewBlock {
+  BlockHeight height = 1;
+}
+
+message NewMessage {
+  ApplicationId application_id = 1;
+  Origin origin = 2;
+  BlockHeight height = 3;
 }
 
 // A wrapper around ChainInfoResponse which contains a serialized error variant

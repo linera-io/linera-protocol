@@ -19,6 +19,13 @@ pub struct CrossChainConfig {
     pub(crate) retry_delay_ms: u64,
 }
 
+#[derive(Clone, Debug, StructOpt)]
+pub struct NotificationConfig {
+    /// Number of notifications allowed before blocking the main server loop
+    #[structopt(long = "notification_queue_size", default_value = "1000")]
+    pub(crate) notification_queue_size: usize,
+}
+
 pub type ShardId = usize;
 
 /// The network configuration of a shard.

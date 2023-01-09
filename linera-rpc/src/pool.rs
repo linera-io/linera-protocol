@@ -3,7 +3,8 @@
 
 use crate::grpc_network::{
     grpc::{
-        validator_node_client::ValidatorNodeClient, validator_worker_client::ValidatorWorkerClient,
+        notifier_service_client::NotifierServiceClient, validator_node_client::ValidatorNodeClient,
+        validator_worker_client::ValidatorWorkerClient,
     },
     GrpcError,
 };
@@ -41,6 +42,15 @@ impl Connect for ValidatorNodeClient<Channel> {
 
     async fn connect(address: Self::Address) -> Result<Self, GrpcError> {
         Ok(ValidatorNodeClient::connect(address).await?)
+    }
+}
+
+#[async_trait]
+impl Connect for NotifierServiceClient<Channel> {
+    type Address = String;
+
+    async fn connect(address: Self::Address) -> Result<Self, GrpcError> {
+        Ok(NotifierServiceClient::connect(address).await?)
     }
 }
 
