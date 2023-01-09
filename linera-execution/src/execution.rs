@@ -61,7 +61,7 @@ where
         for channel_id in state.subscriptions {
             view.system
                 .subscriptions
-                .insert(&channel_id, ())
+                .insert(&channel_id)
                 .expect("serialization of channel_id should not fail");
         }
         view.system.committees.set(state.committees);

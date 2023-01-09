@@ -13,7 +13,7 @@ use linera_base::{
 };
 use linera_views::{
     common::Context,
-    map_view::MapView,
+    set_view::SetView,
     register_view::RegisterView,
     views::{HashableContainerView, View, ViewError},
 };
@@ -34,7 +34,7 @@ pub struct SystemExecutionStateView<C> {
     /// The admin of the chain.
     pub admin_id: RegisterView<C, Option<ChainId>>,
     /// Track the channels that we have subscribed to.
-    pub subscriptions: MapView<C, ChannelId, ()>,
+    pub subscriptions: SetView<C, ChannelId>,
     /// The committees that we trust, indexed by epoch number.
     /// Not using a `MapView` because the set active of committees is supposed to be
     /// small. Plus, currently, we would create the `BTreeMap` anyway in various places
@@ -422,7 +422,7 @@ where
                     self.subscriptions.get(&channel_id).await?.is_none(),
                     SystemExecutionError::InvalidSubscriptionToNewCommittees(context.chain_id)
                 );
-                self.subscriptions.insert(&channel_id, ())?;
+                self.subscriptions.insert(&channel_id)?;
                 result.effects = vec![(
                     Destination::Recipient(*admin_id),
                     SystemEffect::Subscribe {
@@ -575,7 +575,6 @@ where
                     chain_id: admin_id,
                     name: ADMIN_CHANNEL.into(),
                 },
-                (),
             )
             .expect("serialization failed");
         self.ownership.set(ChainOwnership::single(owner));

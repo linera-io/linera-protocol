@@ -23,6 +23,9 @@ pub mod queue_view;
 /// The map_view
 pub mod map_view;
 
+/// The map_view
+pub mod set_view;
+
 /// The collection_view
 pub mod collection_view;
 
