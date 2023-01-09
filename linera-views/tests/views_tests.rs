@@ -12,11 +12,11 @@ use linera_views::{
     key_value_store_view::{KeyValueStoreMemoryContext, KeyValueStoreView},
     log_view::LogView,
     map_view::MapView,
-    set_view::SetView,
     memory::{MemoryContext, MemoryStoreMap},
     queue_view::QueueView,
     register_view::RegisterView,
     rocksdb::{RocksdbContext, DB},
+    set_view::SetView,
     test_utils::{
         get_random_key_value_operations, get_random_key_value_vec, random_shuffle,
         span_random_reordering_put_delete, LocalStackTestContext,

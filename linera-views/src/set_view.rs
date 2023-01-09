@@ -64,7 +64,7 @@ where
             self.was_cleared = false;
             batch.delete_key_prefix(self.context.base_key());
             for (index, update) in mem::take(&mut self.updates) {
-                if let Some(_) = update {
+                if update.is_some() {
                     let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
                     batch.put_key_value_bytes(key, Vec::new());
                 }

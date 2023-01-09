@@ -13,8 +13,8 @@ use linera_base::{
 };
 use linera_views::{
     common::Context,
-    set_view::SetView,
     register_view::RegisterView,
+    set_view::SetView,
     views::{HashableContainerView, View, ViewError},
 };
 use serde::{Deserialize, Serialize};
@@ -570,12 +570,10 @@ where
         self.committees.set(committees);
         self.admin_id.set(Some(admin_id));
         self.subscriptions
-            .insert(
-                &ChannelId {
-                    chain_id: admin_id,
-                    name: ADMIN_CHANNEL.into(),
-                },
-            )
+            .insert(&ChannelId {
+                chain_id: admin_id,
+                name: ADMIN_CHANNEL.into(),
+            })
             .expect("serialization failed");
         self.ownership.set(ChainOwnership::single(owner));
     }
