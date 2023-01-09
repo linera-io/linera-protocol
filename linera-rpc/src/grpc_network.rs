@@ -106,7 +106,6 @@ where
         port: u16,
         state: WorkerState<S>,
         shard_id: ShardId,
-        proxy_address: String,
         internal_network: ValidatorInternalNetworkConfig,
         cross_chain_config: CrossChainConfig,
         notification_config: NotificationConfig,
@@ -148,7 +147,7 @@ where
             );
             Self::forward_notifications(
                 state.nickname().to_string(),
-                proxy_address,
+                internal_network.proxy_address(),
                 notification_receiver,
             )
         });

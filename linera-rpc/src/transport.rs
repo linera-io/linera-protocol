@@ -25,6 +25,15 @@ arg_enum! {
     }
 }
 
+impl TransportProtocol {
+    pub fn scheme(&self) -> &'static str {
+        match self {
+            TransportProtocol::Udp => "udp",
+            TransportProtocol::Tcp => "tcp"
+        }
+    }
+}
+
 /// A pool of (outgoing) data streams.
 pub trait ConnectionPool: Send {
     fn send_message_to<'a>(

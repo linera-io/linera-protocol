@@ -126,7 +126,6 @@ impl ServerContext {
                     shard.port,
                     state,
                     shard_id,
-                    self.server_config.validator.network.http_address(),
                     self.server_config.internal_network.clone(),
                     cross_chain_config,
                     notification_config,
@@ -260,12 +259,14 @@ impl FromStr for ValidatorOptions {
 fn make_server_config(options: ValidatorOptions) -> ValidatorServerConfig {
     let network = ValidatorPublicNetworkConfig {
         protocol: options.external_protocol,
-        host: options.host,
+        host: options.host.clone(),
         port: options.port,
     };
     let internal_network = ValidatorInternalNetworkConfig {
         protocol: options.internal_protocol,
         shards: options.shards,
+        host: options.host,
+        port: options.port
     };
     let key = KeyPair::generate();
     let name = ValidatorName(key.public());
