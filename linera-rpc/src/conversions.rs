@@ -667,7 +667,7 @@ impl TryFrom<grpc::PublicKey> for PublicKey {
 impl From<Origin> for grpc::Origin {
     fn from(origin: Origin) -> Self {
         Self {
-            chain_id: Some(origin.chain_id.into()),
+            sender: Some(origin.sender.into()),
             medium: Some(origin.medium.into()),
         }
     }
@@ -678,7 +678,7 @@ impl TryFrom<grpc::Origin> for Origin {
 
     fn try_from(origin: grpc::Origin) -> Result<Self, Self::Error> {
         Ok(Self {
-            chain_id: try_proto_convert!(origin.chain_id),
+            sender: try_proto_convert!(origin.sender),
             medium: proto_convert!(origin.medium),
         })
     }

@@ -79,7 +79,7 @@ pub struct Event {
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Serialize, Deserialize)]
 pub struct Origin {
     /// The chain ID of the sender.
-    pub chain_id: ChainId,
+    pub sender: ChainId,
     /// The medium.
     pub medium: Medium,
 }
@@ -143,16 +143,16 @@ pub struct Certificate {
 }
 
 impl Origin {
-    pub fn chain(chain_id: ChainId) -> Self {
+    pub fn chain(sender: ChainId) -> Self {
         Self {
-            chain_id,
+            sender,
             medium: Medium::Direct,
         }
     }
 
-    pub fn channel(chain_id: ChainId, name: ChannelName) -> Self {
+    pub fn channel(sender: ChainId, name: ChannelName) -> Self {
         Self {
-            chain_id,
+            sender,
             medium: Medium::Channel(name),
         }
     }

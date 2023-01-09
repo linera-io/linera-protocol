@@ -281,7 +281,7 @@ where
                 let state = chain.communication_states.load_entry(id).await?;
                 for origin in state.inboxes.indices().await? {
                     let inbox = state.inboxes.load_entry(origin.clone()).await?;
-                    let next_height = info.entry(origin.chain_id).or_default();
+                    let next_height = info.entry(origin.sender).or_default();
                     let inbox_next_height = inbox.next_block_height_to_receive()?;
                     if inbox_next_height > *next_height {
                         *next_height = inbox_next_height;

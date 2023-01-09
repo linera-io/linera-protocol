@@ -386,7 +386,7 @@ Operation:
           SEQ: U8
 Origin:
   STRUCT:
-    - chain_id:
+    - sender:
         TYPENAME: ChainId
     - medium:
         TYPENAME: Medium
