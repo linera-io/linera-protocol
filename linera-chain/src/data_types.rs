@@ -84,6 +84,15 @@ pub struct Origin {
     pub medium: Medium,
 }
 
+/// The target of a message, relative to a particular application. Used to identify each outbox.
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Serialize, Deserialize)]
+pub struct Target {
+    /// The chain ID of the recipient.
+    pub recipient: ChainId,
+    /// The medium.
+    pub medium: Medium,
+}
+
 /// The origin of a message coming from a particular chain. Used to identify each inbox.
 #[derive(Debug, PartialEq, Eq, Ord, PartialOrd, Hash, Clone, Serialize, Deserialize)]
 pub enum Medium {
@@ -153,6 +162,22 @@ impl Origin {
     pub fn channel(sender: ChainId, name: ChannelName) -> Self {
         Self {
             sender,
+            medium: Medium::Channel(name),
+        }
+    }
+}
+
+impl Target {
+    pub fn chain(recipient: ChainId) -> Self {
+        Self {
+            recipient,
+            medium: Medium::Direct,
+        }
+    }
+
+    pub fn channel(recipient: ChainId, name: ChannelName) -> Self {
+        Self {
+            recipient,
             medium: Medium::Channel(name),
         }
     }
