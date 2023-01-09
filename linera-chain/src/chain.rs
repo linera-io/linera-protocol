@@ -21,8 +21,8 @@ use linera_views::{
     collection_view::CollectionView,
     common::Context,
     log_view::LogView,
-    set_view::SetView,
     register_view::RegisterView,
+    set_view::SetView,
     views::{HashableContainerView, View, ViewError},
 };
 use serde::{Deserialize, Serialize};
