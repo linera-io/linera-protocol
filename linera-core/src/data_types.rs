@@ -155,7 +155,7 @@ impl CrossChainRequest {
         use CrossChainRequest::*;
         match self {
             UpdateRecipient { recipient, .. } => *recipient,
-            ConfirmUpdatedRecipient { origin, .. } => origin.chain_id,
+            ConfirmUpdatedRecipient { origin, .. } => origin.sender,
         }
     }
 }

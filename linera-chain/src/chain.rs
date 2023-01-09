@@ -243,7 +243,7 @@ where
             if let ApplicationId::System = app_id {
                 // Handle special effects to be executed immediately.
                 let effect_id = EffectId {
-                    chain_id: origin.chain_id,
+                    chain_id: origin.sender,
                     height,
                     index,
                 };
@@ -372,7 +372,7 @@ where
                 chain_id,
                 height: block.height,
                 effect_id: EffectId {
-                    chain_id: message.origin.chain_id,
+                    chain_id: message.origin.sender,
                     height: message.event.height,
                     index: message.event.index,
                 },

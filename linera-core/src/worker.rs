@@ -710,13 +710,13 @@ where
                 application_id,
                 origin:
                     Origin {
-                        chain_id,
+                        sender,
                         medium: Medium::Direct,
                     },
                 recipient,
                 height,
             } => {
-                let mut chain = self.storage.load_chain(chain_id).await?;
+                let mut chain = self.storage.load_chain(sender).await?;
                 if chain
                     .mark_outbox_messages_as_received(application_id, recipient, height)
                     .await?
@@ -729,13 +729,13 @@ where
                 application_id,
                 origin:
                     Origin {
-                        chain_id,
+                        sender,
                         medium: Medium::Channel(name),
                     },
                 recipient,
                 height,
             } => {
-                let mut chain = self.storage.load_chain(chain_id).await?;
+                let mut chain = self.storage.load_chain(sender).await?;
                 if chain
                     .mark_channel_messages_as_received(name, application_id, recipient, height)
                     .await?
@@ -784,7 +784,7 @@ impl<'a> CrossChainUpdateHelper<'a> {
             };
             // Make sure that the chain_id is correct.
             ensure!(
-                origin.chain_id == block.chain_id,
+                origin.sender == block.chain_id,
                 WorkerError::InvalidCrossChainRequest
             );
             // Make sure that heights are increasing.

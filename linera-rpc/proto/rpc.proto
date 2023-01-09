@@ -131,7 +131,7 @@ message ChainInfoQuery {
 // The origin of a message, relative to a particular application. Used to identify each inbox.
 message Origin {
   // The chain ID of the sender.
-  ChainId chain_id = 1;
+  ChainId sender = 1;
 
   // The medium
   Medium medium = 2;
