@@ -19,7 +19,9 @@ pub struct NodeProvider {
 }
 
 impl NodeProvider {
-    pub fn new(grpc: GrpcNodeProvider, simple: SimpleNodeProvider) -> Self {
+    pub fn new(send_timeout: Duration, recv_timeout: Duration) -> Self {
+        let grpc = GrpcNodeProvider;
+        let simple = SimpleNodeProvider::new(send_timeout, recv_timeout);
         Self { grpc, simple }
     }
 }
