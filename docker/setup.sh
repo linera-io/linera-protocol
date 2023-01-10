@@ -11,11 +11,11 @@ fi
 # Clean up data files
 rm -rf config/*
 
-# Creare validator configuration directories and generate the command line options
+# Create validator configuration directories and generate the command line options
 validator_options() {
     for server in $(seq 1 "${NUM_VALIDATORS}"); do
         shards="$(seq -s':' 0 "$(expr "${NUM_SHARDS}" - 1)" | sed -e "s/[0-9]\\+/server-${server}-shard-&.server-${server}:9100/g")"
-        echo "server_${server}.json:tcp:validator-${server}:9100:tcp:${shards}"
+        echo "server_${server}.json:tcp:validator-${server}:9100:tcp:validator-${server}:10100:${shards}"
     done
 }
 
