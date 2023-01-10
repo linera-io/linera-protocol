@@ -167,13 +167,12 @@ impl ValidatorNode for GrpcProxy {
         request: Request<SubscriptionRequest>,
     ) -> Result<Response<Self::SubscribeStream>, Status> {
         let subscription_request = request.into_inner();
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let chain_ids = subscription_request
             .chain_ids
             .into_iter()
             .map(ChainId::try_from)
             .collect::<Result<Vec<ChainId>, _>>()?;
-        self.0.notifier.subscribe(chain_ids, tx);
+        let rx = self.0.notifier.subscribe(chain_ids);
         Ok(Response::new(UnboundedReceiverStream::new(rx)))
     }
 }
