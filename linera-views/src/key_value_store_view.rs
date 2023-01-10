@@ -3,14 +3,14 @@
 
 use crate::{
     common::{
-        Batch, Context, ContextFromDb, HashOutput, KeyValueOperations, SimpleTypeIterator,
+        get_upper_bound, Batch, Context, ContextFromDb, HashOutput, KeyValueOperations, SimpleTypeIterator,
         WriteOperation,
     },
     memory::{MemoryContext, MemoryStoreMap},
     views::{HashableView, Hasher, View, ViewError},
 };
 use async_trait::async_trait;
-use std::{collections::BTreeMap, fmt::Debug, mem};
+use std::{collections::BTreeMap, fmt::Debug, mem, ops::Bound::Included};
 use tokio::sync::OwnedMutexGuard;
 
 /// Key tags to create the sub-keys of a KeyValueStoreView on top of the base key.
@@ -313,28 +313,50 @@ where
         let len = key_prefix.len();
         let key_prefix_full = self.context.base_tag_index(KeyTag::Index as u8, key_prefix);
         let mut key_values = Vec::new();
+        let key_prefix_upper = get_upper_bound(key_prefix);
+        let mut iter = self.updates.range((Included(key_prefix.to_vec()), key_prefix_upper));
+        let mut pair = iter.next();
         if !self.was_cleared {
             for (short_key, value) in self
                 .context
                 .find_stripped_key_values_by_prefix(&key_prefix_full)
                 .await?
             {
-                let mut key = key_prefix.to_vec();
-                key.extend_from_slice(&short_key);
-                if !self.updates.contains_key(&key) {
-                    key_values.push((short_key.to_vec(), value));
+                loop {
+                    match pair {
+                        Some((key_update,value_update)) => {
+                            let short_key_update = key_update[len..].to_vec();
+                            if short_key_update < short_key {
+                                if let Some(value_update) = value_update {
+                                    let key_value = (short_key_update, value_update.to_vec());
+                                    key_values.push(key_value);
+                                }
+                                pair = iter.next();
+                            } else {
+                                if short_key != short_key_update {
+                                    key_values.push((short_key.to_vec(), value.clone()));
+                                } else if let Some(value_update) = value_update {
+                                    key_values.push((short_key.to_vec(), value_update.to_vec()));
+                                    pair = iter.next();
+                                }
+                                break;
+                            }
+                        }
+                        None => {
+                            key_values.push((short_key.to_vec(), value.clone()));
+                            break;
+                        }
+                    }
                 }
             }
         }
-        for (key, value) in &self.updates {
-            if key.starts_with(key_prefix) {
-                if let Some(value) = value {
-                    let key_value = (key[len..].to_vec(), value.to_vec());
-                    key_values.push(key_value);
-                }
+        while let Some((key_update,value_update)) = pair {
+            if let Some(value_update) = value_update {
+                let key_value = (key_update[len..].to_vec(), value_update.to_vec());
+                key_values.push(key_value);
             }
+            pair = iter.next();
         }
-        key_values.sort();
         Ok(Self::KeyValueIterator::new(key_values))
     }
 
