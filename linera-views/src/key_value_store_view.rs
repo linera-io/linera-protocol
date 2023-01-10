@@ -3,8 +3,8 @@
 
 use crate::{
     common::{
-        get_upper_bound, Batch, Context, ContextFromDb, HashOutput, KeyValueOperations, SimpleTypeIterator,
-        WriteOperation,
+        get_upper_bound, Batch, Context, ContextFromDb, HashOutput, KeyValueOperations,
+        SimpleTypeIterator, WriteOperation,
     },
     memory::{MemoryContext, MemoryStoreMap},
     views::{HashableView, Hasher, View, ViewError},
@@ -284,25 +284,51 @@ where
         let len = key_prefix.len();
         let key_prefix_full = self.context.base_tag_index(KeyTag::Index as u8, key_prefix);
         let mut keys = Vec::new();
+        let key_prefix_upper = get_upper_bound(key_prefix);
+        let mut iter = self
+            .updates
+            .range((Included(key_prefix.to_vec()), key_prefix_upper));
+        let mut pair = iter.next();
         if !self.was_cleared {
-            for short_key in self
+            for stripped_key in self
                 .context
                 .find_stripped_keys_by_prefix(&key_prefix_full)
                 .await?
             {
-                let mut key = key_prefix.to_vec();
-                key.extend_from_slice(&short_key);
-                if !self.updates.contains_key(&key) {
-                    keys.push(short_key)
+                loop {
+                    match pair {
+                        Some((key_update, value_update)) => {
+                            let stripped_key_update = key_update[len..].to_vec();
+                            if stripped_key_update < stripped_key {
+                                if value_update.is_some() {
+                                    keys.push(stripped_key_update);
+                                }
+                                pair = iter.next();
+                            } else {
+                                if stripped_key != stripped_key_update {
+                                    keys.push(stripped_key.to_vec());
+                                } else if value_update.is_some() {
+                                    keys.push(stripped_key.to_vec());
+                                    pair = iter.next();
+                                }
+                                break;
+                            }
+                        }
+                        None => {
+                            keys.push(stripped_key.to_vec());
+                            break;
+                        }
+                    }
                 }
             }
         }
-        for (key, value) in &self.updates {
-            if value.is_some() && key.starts_with(key_prefix) {
-                keys.push(key[len..].to_vec())
+        while let Some((key_update, value_update)) = pair {
+            if value_update.is_some() {
+                let stripped_key_update = key_update[len..].to_vec();
+                keys.push(stripped_key_update);
             }
+            pair = iter.next();
         }
-        keys.sort();
         Ok(Self::KeyIterator::new(keys))
     }
 
@@ -314,43 +340,45 @@ where
         let key_prefix_full = self.context.base_tag_index(KeyTag::Index as u8, key_prefix);
         let mut key_values = Vec::new();
         let key_prefix_upper = get_upper_bound(key_prefix);
-        let mut iter = self.updates.range((Included(key_prefix.to_vec()), key_prefix_upper));
+        let mut iter = self
+            .updates
+            .range((Included(key_prefix.to_vec()), key_prefix_upper));
         let mut pair = iter.next();
         if !self.was_cleared {
-            for (short_key, value) in self
+            for (stripped_key, value) in self
                 .context
                 .find_stripped_key_values_by_prefix(&key_prefix_full)
                 .await?
             {
                 loop {
                     match pair {
-                        Some((key_update,value_update)) => {
-                            let short_key_update = key_update[len..].to_vec();
-                            if short_key_update < short_key {
+                        Some((key_update, value_update)) => {
+                            let stripped_key_update = key_update[len..].to_vec();
+                            if stripped_key_update < stripped_key {
                                 if let Some(value_update) = value_update {
-                                    let key_value = (short_key_update, value_update.to_vec());
+                                    let key_value = (stripped_key_update, value_update.to_vec());
                                     key_values.push(key_value);
                                 }
                                 pair = iter.next();
                             } else {
-                                if short_key != short_key_update {
-                                    key_values.push((short_key.to_vec(), value.clone()));
+                                if stripped_key != stripped_key_update {
+                                    key_values.push((stripped_key.to_vec(), value.clone()));
                                 } else if let Some(value_update) = value_update {
-                                    key_values.push((short_key.to_vec(), value_update.to_vec()));
+                                    key_values.push((stripped_key.to_vec(), value_update.to_vec()));
                                     pair = iter.next();
                                 }
                                 break;
                             }
                         }
                         None => {
-                            key_values.push((short_key.to_vec(), value.clone()));
+                            key_values.push((stripped_key.to_vec(), value.clone()));
                             break;
                         }
                     }
                 }
             }
         }
-        while let Some((key_update,value_update)) = pair {
+        while let Some((key_update, value_update)) = pair {
             if let Some(value_update) = value_update {
                 let key_value = (key_update[len..].to_vec(), value_update.to_vec());
                 key_values.push(key_value);
