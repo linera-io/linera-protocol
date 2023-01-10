@@ -26,11 +26,8 @@ use linera_execution::{
     ApplicationId, Operation,
 };
 use linera_rpc::{
-    config::NetworkProtocol,
-    grpc_network::GrpcMassClient,
-    mass::MassClient,
-    node_provider::{GrpcNodeProvider, NodeProvider, SimpleNodeProvider},
-    simple_network, RpcMessage,
+    config::NetworkProtocol, grpc_network::GrpcMassClient, mass::MassClient,
+    node_provider::NodeProvider, simple_network, RpcMessage,
 };
 use linera_service::{
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain, WalletState},
@@ -112,12 +109,7 @@ impl ClientContext {
         chain_id: ChainId,
     ) -> ChainClientState<impl ValidatorNodeProvider, S> {
         let chain = self.wallet_state.get(chain_id).expect("Unknown chain");
-
-        let node_provider = NodeProvider::new(
-            GrpcNodeProvider {},
-            SimpleNodeProvider::new(self.send_timeout, self.recv_timeout),
-        );
-
+        let node_provider = NodeProvider::new(self.send_timeout, self.recv_timeout);
         ChainClientState::new(
             chain_id,
             chain
