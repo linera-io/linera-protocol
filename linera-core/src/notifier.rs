@@ -1,25 +1,30 @@
 use dashmap::DashMap;
-use futures::channel::mpsc::UnboundedReceiver;
 use linera_base::data_types::ChainId;
+use log::info;
 use log::trace;
-use tokio::sync::mpsc::UnboundedSender;
-use tonic::Status;
-
-type NotificationResult<N> = Result<N, Status>;
-type NotificationSender<N> = UnboundedSender<NotificationResult<N>>;
-type NotificationReceiver<N> = UnboundedReceiver<NotificationResult<N>>;
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 /// The `Notifier` holds references to clients waiting to receive notifications
 /// from the validator.
 /// Clients will be evicted if their connections are terminated.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct Notifier<N> {
-    inner: DashMap<ChainId, Vec<NotificationSender<N>>>,
+    inner: DashMap<ChainId, Vec<UnboundedSender<N>>>,
+}
+
+// This is here because #[derive(Default)] does not seem to work
+// Is this a compiler bug?
+impl<N> Default for Notifier<N> {
+    fn default() -> Self {
+        Self {
+            inner: Default::default()
+        }
+    }
 }
 
 impl<N: Clone> Notifier<N> {
     /// Create a subscription given a collection of ChainIds and a sender to the client.
-    pub fn subscribe(&self, chain_ids: Vec<ChainId>) -> NotificationReceiver<N> {
+    pub fn subscribe(&self, chain_ids: Vec<ChainId>) -> UnboundedReceiver<N> {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         for id in chain_ids {
             let mut senders = self.inner.entry(id).or_default();
@@ -41,7 +46,7 @@ impl<N: Clone> Notifier<N> {
             let senders = senders.value_mut();
 
             for (index, sender) in senders.iter_mut().enumerate() {
-                if sender.send(Ok(notification.clone())).is_err() {
+                if sender.send(notification.clone()).is_err() {
                     dead_senders.push(index);
                 }
             }

@@ -27,6 +27,8 @@ use linera_views::views::ViewError;
 use log::{debug, error, info, warn};
 use std::{io, time::Duration};
 use tokio::time;
+use linera_base::data_types::ChainId;
+use linera_core::node::NotificationStream;
 
 #[derive(Clone)]
 pub struct Server<S> {
@@ -356,6 +358,12 @@ impl ValidatorNode for SimpleClient {
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.send_recv_info(query.into()).await
+    }
+
+    async fn subscribe(&mut self, _chains: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
+        Err(NodeError::SubscriptionError {
+            transport: self.network.protocol.to_string()
+        })
     }
 }
 

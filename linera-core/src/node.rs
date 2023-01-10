@@ -4,7 +4,7 @@
 
 use crate::{
     data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse},
-    worker::{ValidatorWorker, WorkerError, WorkerState},
+    worker::{Notification, ValidatorWorker, WorkerError, WorkerState},
 };
 use async_trait::async_trait;
 use futures::lock::Mutex;
@@ -23,6 +23,10 @@ use rand::prelude::SliceRandom;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use thiserror::Error;
+use tokio_stream::wrappers::UnboundedReceiverStream;
+use crate::notifier::Notifier;
+
+pub type NotificationStream = UnboundedReceiverStream<Notification>;
 
 /// How to communicate with a validator or a local node.
 #[async_trait]
@@ -44,6 +48,9 @@ pub trait ValidatorNode {
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, NodeError>;
+
+    /// Subscribe to receiving notifications for a collection of chains.
+    async fn subscribe(&mut self, chains: Vec<ChainId>) -> Result<NotificationStream, NodeError>;
 }
 
 /// Error type for node queries.
@@ -134,6 +141,8 @@ pub enum NodeError {
     ClientIoError { error: String },
     #[error("Failed to resolve validator address: {address}")]
     CannotResolveValidatorAddress { address: String },
+    #[error("Subscription error due to incorrect transport. Was expecting gRPC, instead found: {transport}")]
+    SubscriptionError { transport: String }
 }
 
 impl From<ViewError> for NodeError {
@@ -199,7 +208,10 @@ pub struct LocalNode<S> {
 }
 
 #[derive(Clone)]
-pub struct LocalNodeClient<S>(Arc<Mutex<LocalNode<S>>>);
+pub struct LocalNodeClient<S> {
+    node: Arc<Mutex<LocalNode<S>>>,
+    notifier: Notifier<Notification>
+}
 
 #[async_trait]
 impl<S> ValidatorNode for LocalNodeClient<S>
@@ -211,7 +223,7 @@ where
         &mut self,
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, NodeError> {
-        let node = self.0.clone();
+        let node = self.node.clone();
         let mut node = node.lock().await;
         let response = node.state.handle_block_proposal(proposal).await?;
         Ok(response)
@@ -221,9 +233,13 @@ where
         &mut self,
         certificate: Certificate,
     ) -> Result<ChainInfoResponse, NodeError> {
-        let node = self.0.clone();
+        let node = self.node.clone();
         let mut node = node.lock().await;
-        let response = node.state.fully_handle_certificate(certificate).await?;
+        let mut notifications = Vec::new();
+        let response = node.state.fully_handle_certificate_with_notifications(certificate, Some(&mut notifications)).await?;
+        for notification in notifications {
+            self.notifier.notify(&notification.chain_id.clone(), notification);
+        }
         Ok(response)
     }
 
@@ -232,7 +248,7 @@ where
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, NodeError> {
         let response = self
-            .0
+            .node
             .clone()
             .lock()
             .await
@@ -241,12 +257,20 @@ where
             .await?;
         Ok(response)
     }
+
+    async fn subscribe(&mut self, chains: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
+        let rx = self.notifier.subscribe(chains);
+        Ok(NotificationStream::new(rx))
+    }
 }
 
 impl<S> LocalNodeClient<S> {
     pub fn new(state: WorkerState<S>) -> Self {
         let node = LocalNode { state };
-        Self(Arc::new(Mutex::new(node)))
+        Self{
+            node: Arc::new(Mutex::new(node)),
+            notifier: Default::default()
+        }
     }
 }
 
@@ -255,7 +279,7 @@ where
     S: Clone,
 {
     pub(crate) async fn storage_client(&self) -> S {
-        let node = self.0.clone();
+        let node = self.node.clone();
         let node = node.lock().await;
         node.state.storage_client().clone()
     }
@@ -271,7 +295,7 @@ where
         block: &Block,
     ) -> Result<ChainInfoResponse, NodeError> {
         let info = self
-            .0
+            .node
             .clone()
             .lock()
             .await

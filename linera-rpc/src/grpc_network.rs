@@ -47,6 +47,8 @@ use tonic::{
     transport::{Channel, Server},
     Request, Response, Status,
 };
+use linera_base::data_types::ChainId;
+use linera_core::node::NotificationStream;
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 // https://github.com/hyperium/tonic/issues/1056
@@ -417,6 +419,10 @@ impl ValidatorNode for GrpcClient {
         query: linera_core::data_types::ChainInfoQuery,
     ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
         client_delegate!(self, handle_chain_info_query, query)
+    }
+
+    async fn subscribe(&mut self, chains: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
+        unimplemented!()
     }
 }
 

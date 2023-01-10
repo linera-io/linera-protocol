@@ -3,12 +3,14 @@
 
 use crate::{grpc_network::GrpcClient, simple_network::SimpleClient};
 use async_trait::async_trait;
+use linera_base::data_types::ChainId;
 
 use linera_chain::data_types::{BlockProposal, Certificate};
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
     node::{NodeError, ValidatorNode},
 };
+use linera_core::node::NotificationStream;
 
 #[derive(Clone)]
 pub enum Client {
@@ -57,6 +59,13 @@ impl ValidatorNode for Client {
         match self {
             Client::Grpc(grpc_client) => grpc_client.handle_chain_info_query(query).await,
             Client::Simple(simple_client) => simple_client.handle_chain_info_query(query).await,
+        }
+    }
+
+    async fn subscribe(&mut self, chains: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
+        match self {
+            Client::Grpc(grpc_client) => grpc_client.subscribe(chains).await,
+            Client::Simple(simple_client) => simple_client.subscribe(chains).await
         }
     }
 }

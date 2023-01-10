@@ -8,24 +8,24 @@ use linera_chain::data_types::{BlockAndRound, Value};
 use linera_rpc::{
     config::{ShardConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig},
     grpc_network::{
-        grpc::{
+        BlockProposal,
+        Certificate, ChainInfoQuery, CrossChainRequest, grpc::{
+            ChainInfoResult,
+            Notification,
             notifier_service_server::{NotifierService, NotifierServiceServer},
-            validator_node_server::{ValidatorNode, ValidatorNodeServer},
-            validator_worker_client::ValidatorWorkerClient,
-            ChainInfoResult, Notification, SubscriptionRequest,
+            SubscriptionRequest, validator_node_server::{ValidatorNode, ValidatorNodeServer}, validator_worker_client::ValidatorWorkerClient,
         },
-        BlockProposal, Certificate, ChainInfoQuery, CrossChainRequest,
     },
-    notifier::Notifier,
     pool::ConnectionPool,
 };
 use std::{fmt::Debug, net::SocketAddr, sync::Arc};
 use tokio::select;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::{
-    transport::{Channel, Server},
-    Request, Response, Status,
+    Request,
+    Response, Status, transport::{Channel, Server},
 };
+use linera_core::notifier::Notifier;
 
 #[derive(Clone)]
 pub struct GrpcProxy(Arc<GrpcProxyInner>);
@@ -34,7 +34,7 @@ struct GrpcProxyInner {
     public_config: ValidatorPublicNetworkConfig,
     internal_config: ValidatorInternalNetworkConfig,
     worker_connection_pool: ConnectionPool<ValidatorWorkerClient<Channel>>,
-    notifier: Notifier<Notification>,
+    notifier: Notifier<Result<Notification, Status>>,
 }
 
 impl GrpcProxy {
@@ -186,7 +186,7 @@ impl NotifierService for GrpcProxy {
             .clone()
             .ok_or_else(|| Status::invalid_argument("Missing field: chain_id."))?
             .try_into()?;
-        self.0.notifier.notify(&chain_id, notification);
+        self.0.notifier.notify(&chain_id, Ok(notification));
         Ok(Response::new(()))
     }
 }
