@@ -9,7 +9,6 @@ use linera_rpc::{
     config::{ShardConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig},
     grpc_network::{
         grpc::{
-            notification_service_server::{NotificationService, NotificationServiceServer},
             notifier_service_server::{NotifierService, NotifierServiceServer},
             validator_node_server::{ValidatorNode, ValidatorNodeServer},
             validator_worker_client::ValidatorWorkerClient,
@@ -21,6 +20,7 @@ use linera_rpc::{
     pool::ConnectionPool,
 };
 use std::{fmt::Debug, net::SocketAddr, sync::Arc};
+use tokio::select;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::{
     transport::{Channel, Server},
@@ -54,16 +54,16 @@ impl GrpcProxy {
         ValidatorNodeServer::new(self.clone())
     }
 
-    fn as_notification_service(&self) -> NotificationServiceServer<Self> {
-        NotificationServiceServer::new(self.clone())
-    }
-
     fn as_notifier_service(&self) -> NotifierServiceServer<Self> {
         NotifierServiceServer::new(self.clone())
     }
 
-    fn address(&self) -> SocketAddr {
+    fn public_address(&self) -> SocketAddr {
         SocketAddr::from(([0, 0, 0, 0], self.0.public_config.port))
+    }
+
+    fn internal_address(&self) -> SocketAddr {
+        SocketAddr::from(([0, 0, 0, 0], self.0.internal_config.port))
     }
 
     fn shard_for(&self, proxyable: &impl Proxyable) -> Option<ShardConfig> {
@@ -89,14 +89,25 @@ impl GrpcProxy {
         Ok(client)
     }
 
+    /// Runs the proxy. If either the public server or private server dies for whatever
+    /// reason we'll kill the proxy.
     pub async fn run(self) -> Result<()> {
-        log::info!("Starting gRPC proxy on {}...", self.address());
-        Ok(Server::builder()
-            .add_service(self.as_validator_node())
-            .add_service(self.as_notification_service())
+        log::info!(
+            "Starting gRPC proxy on public address {} and internal address {}...",
+            self.public_address(),
+            self.internal_address()
+        );
+        let internal_server = Server::builder()
             .add_service(self.as_notifier_service())
-            .serve(self.address())
-            .await?)
+            .serve(self.internal_address());
+        let public_server = Server::builder()
+            .add_service(self.as_validator_node())
+            .serve(self.public_address());
+        select! {
+            internal_res = internal_server => internal_res?,
+            public_res = public_server => public_res?,
+        }
+        Ok(())
     }
 
     async fn client_for_proxy_worker<R>(
@@ -125,6 +136,8 @@ impl GrpcProxy {
 
 #[async_trait]
 impl ValidatorNode for GrpcProxy {
+    type SubscribeStream = UnboundedReceiverStream<Result<Notification, Status>>;
+
     async fn handle_block_proposal(
         &self,
         request: Request<BlockProposal>,
@@ -148,11 +161,6 @@ impl ValidatorNode for GrpcProxy {
         let (mut client, inner) = self.client_for_proxy_worker(request).await?;
         client.handle_chain_info_query(inner).await
     }
-}
-
-#[async_trait]
-impl NotificationService for GrpcProxy {
-    type SubscribeStream = UnboundedReceiverStream<Result<Notification, Status>>;
 
     async fn subscribe(
         &self,

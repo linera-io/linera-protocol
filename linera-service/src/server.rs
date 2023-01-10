@@ -126,7 +126,6 @@ impl ServerContext {
                     shard.port,
                     state,
                     shard_id,
-                    self.server_config.validator.network.http_address(),
                     self.server_config.internal_network.clone(),
                     cross_chain_config,
                     notification_config,
@@ -210,6 +209,12 @@ struct ValidatorOptions {
     /// The port of the validator
     port: u16,
 
+    /// The host of the proxy in the internal network.
+    internal_host: String,
+
+    /// The port of the proxy on the internal network.
+    internal_port: u16,
+
     /// The network protocol for the frontend.
     external_protocol: NetworkProtocol,
 
@@ -226,8 +231,8 @@ impl FromStr for ValidatorOptions {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let parts: Vec<&str> = s.split(':').collect();
         ensure!(
-            parts.len() >= 5 && parts.len() % 2 == 1,
-            "Expecting format `file.json:(udp|tcp):host:port:(udp|tcp):host1:port1:...:hostN:portN`"
+            parts.len() >= 7 && parts.len() % 2 == 1,
+            "Expecting format `file.json:(udp|tcp):host:port:(udp|tcp):internal_host:internal_port:host1:port1:...:hostN:portN`"
         );
 
         let server_config_path = Path::new(parts[0]).to_path_buf();
@@ -235,8 +240,10 @@ impl FromStr for ValidatorOptions {
         let host = parts[2].to_owned();
         let port = parts[3].parse()?;
         let internal_protocol = parts[4].parse().map_err(|s| anyhow!("{}", s))?;
+        let internal_host = parts[5].to_owned();
+        let internal_port = parts[6].parse()?;
 
-        let shards = parts[5..]
+        let shards = parts[7..]
             .chunks_exact(2)
             .map(|shard_address| {
                 let host = shard_address[0].to_owned();
@@ -252,6 +259,8 @@ impl FromStr for ValidatorOptions {
             internal_protocol,
             host,
             port,
+            internal_host,
+            internal_port,
             shards,
         })
     }
@@ -266,6 +275,8 @@ fn make_server_config(options: ValidatorOptions) -> ValidatorServerConfig {
     let internal_network = ValidatorInternalNetworkConfig {
         protocol: options.internal_protocol,
         shards: options.shards,
+        host: options.internal_host,
+        port: options.internal_port,
     };
     let key = KeyPair::generate();
     let name = ValidatorName(key.public());
@@ -387,9 +398,10 @@ mod test {
 
     #[test]
     fn test_validator_options() {
-        let options =
-            ValidatorOptions::from_str("server.json:tcp:host:9000:udp:host1:9001:host2:9002")
-                .unwrap();
+        let options = ValidatorOptions::from_str(
+            "server.json:tcp:host:9000:udp:internal_host:10000:host1:9001:host2:9002",
+        )
+        .unwrap();
         assert_eq!(
             options,
             ValidatorOptions {
@@ -398,6 +410,8 @@ mod test {
                 internal_protocol: NetworkProtocol::Simple(TransportProtocol::Udp),
                 host: "host".into(),
                 port: 9000,
+                internal_host: "internal_host".into(),
+                internal_port: 10000,
                 shards: vec![
                     ShardConfig {
                         host: "host1".into(),

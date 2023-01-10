@@ -54,6 +54,15 @@ pub enum NetworkProtocol {
     Grpc,
 }
 
+impl NetworkProtocol {
+    fn scheme(&self) -> &'static str {
+        match self {
+            NetworkProtocol::Simple(transport) => transport.scheme(),
+            NetworkProtocol::Grpc => "http",
+        }
+    }
+}
+
 /// The network configuration for all shards.
 pub type ValidatorInternalNetworkConfig = ValidatorInternalNetworkPreConfig<NetworkProtocol>;
 
@@ -68,6 +77,10 @@ pub struct ValidatorInternalNetworkPreConfig<P> {
     /// The available shards. Each chain UID is mapped to a unique shard in the vector in
     /// a static way.
     pub shards: Vec<ShardConfig>,
+    /// The host name of the proxy on the internal network (IP or hostname).
+    pub host: String,
+    /// The port the proxy listens on on the internal network.
+    pub port: u16,
 }
 
 impl<P> ValidatorInternalNetworkPreConfig<P> {
@@ -75,7 +88,15 @@ impl<P> ValidatorInternalNetworkPreConfig<P> {
         ValidatorInternalNetworkPreConfig {
             protocol,
             shards: self.shards.clone(),
+            host: self.host.clone(),
+            port: self.port,
         }
+    }
+}
+
+impl ValidatorInternalNetworkConfig {
+    pub fn proxy_address(&self) -> String {
+        format!("{}://{}:{}", self.protocol.scheme(), self.host, self.port)
     }
 }
 
