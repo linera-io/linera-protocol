@@ -9,7 +9,7 @@ use linera_base::{
     crypto::KeyPair,
     data_types::{BlockHeight, ChainDescription, ChainId, Epoch},
 };
-use linera_chain::data_types::Value;
+use linera_chain::data_types::{Event, Message, Origin, Value};
 use linera_execution::{
     system::{Balance, SystemChannel, SystemEffect, SystemOperation},
     ApplicationId, Bytecode, ChainOwnership, ChannelId, Destination, Effect, ExecutionStateView,
@@ -175,6 +175,48 @@ where
     assert_eq!(Balance::from(0), info.system_balance);
     assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert_eq!(Some(subscribe_certificate.hash), info.block_hash);
+    assert!(info.manager.pending().is_none());
+
+    // Accept subscription
+    let accept_message = Message {
+        application_id: ApplicationId::System,
+        origin: Origin::chain(creator_chain.into()),
+        event: Event {
+            certificate_hash: subscribe_certificate.hash,
+            height: subscribe_block_height,
+            index: 0,
+            effect: subscribe_effect.into(),
+        },
+    };
+    let accept_block = make_block(
+        Epoch::from(0),
+        publisher_chain.into(),
+        Vec::<SystemOperation>::new(),
+        vec![accept_message],
+        Some(&publish_certificate),
+    );
+    let accept_block_proposal = Value::ConfirmedBlock {
+        block: accept_block,
+        effects: vec![(
+            ApplicationId::System,
+            Destination::Recipient(creator_chain.into()),
+            Effect::System(SystemEffect::Notify {
+                id: creator_chain.into(),
+            }),
+        )],
+        state_hash: publisher_state_hash,
+    };
+    let accept_certificate = make_certificate(&committee, &worker, accept_block_proposal);
+
+    let info = worker
+        .fully_handle_certificate(accept_certificate.clone())
+        .await
+        .unwrap()
+        .info;
+    assert_eq!(ChainId::from(publisher_chain), info.chain_id);
+    assert_eq!(Balance::from(0), info.system_balance);
+    assert_eq!(BlockHeight::from(2), info.next_block_height);
+    assert_eq!(Some(accept_certificate.hash), info.block_hash);
     assert!(info.manager.pending().is_none());
 
     todo!();
