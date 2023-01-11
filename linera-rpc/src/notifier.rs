@@ -1,6 +1,6 @@
 use dashmap::DashMap;
 use linera_base::data_types::ChainId;
-use log::info;
+use log::trace;
 use tokio::sync::mpsc::UnboundedSender;
 use tonic::Status;
 
@@ -17,24 +17,24 @@ pub struct Notifier<N> {
 
 impl<N: Clone> Notifier<N> {
     /// Create a subscription given a collection of ChainIds and a sender to the client.
-    pub fn subscribe(&self, chains: Vec<ChainId>, sender: NotificationSender<N>) {
-        for chain in chains {
-            let mut existing_senders = self.inner.entry(chain).or_default();
-            existing_senders.push(sender.clone());
+    pub fn subscribe(&self, chain_ids: Vec<ChainId>, sender: NotificationSender<N>) {
+        for id in chain_ids {
+            let mut senders = self.inner.entry(id).or_default();
+            senders.push(sender.clone());
         }
     }
 
     /// Notify all the clients waiting for a notification from a given chain.
-    pub fn notify(&self, chain: &ChainId, notification: N) {
+    pub fn notify(&self, chain_id: &ChainId, notification: N) {
         let senders_is_empty = {
-            let Some(mut senders_entry) = self
+            let Some(mut senders) = self
                 .inner
-                .get_mut(chain) else {
-                info!("Chain {:?} does not exist. Skipping notifying...", chain);
+                .get_mut(chain_id) else {
+                trace!("Chain {chain_id:?} has no subscribers.");
                 return;
             };
             let mut dead_senders = vec![];
-            let senders = senders_entry.value_mut();
+            let senders = senders.value_mut();
 
             for (index, sender) in senders.iter_mut().enumerate() {
                 if sender.send(Ok(notification.clone())).is_err() {
@@ -43,7 +43,7 @@ impl<N: Clone> Notifier<N> {
             }
 
             for index in dead_senders.into_iter().rev() {
-                info!("Removed dead sender for chain {:?}...", chain);
+                trace!("Removed dead subscriber for chain {chain_id:?}.");
                 senders.remove(index);
             }
 
@@ -51,11 +51,8 @@ impl<N: Clone> Notifier<N> {
         };
 
         if senders_is_empty {
-            info!(
-                "No subscribers for chain {:?}. Removing entry in notifier...",
-                chain
-            );
-            self.inner.remove(chain);
+            trace!("No more subscribers for chain {chain_id:?}. Removing entry.");
+            self.inner.remove(chain_id);
         }
     }
 }
