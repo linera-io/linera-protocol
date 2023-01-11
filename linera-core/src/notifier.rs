@@ -17,7 +17,7 @@ pub struct Notifier<N> {
 impl<N> Default for Notifier<N> {
     fn default() -> Self {
         Self {
-            inner: Default::default()
+            inner: Default::default(),
         }
     }
 }

@@ -16,10 +16,11 @@ use async_trait::async_trait;
 use futures::{channel::mpsc, sink::SinkExt, stream::StreamExt};
 use linera_core::worker::NetworkActions;
 
+use linera_base::data_types::ChainId;
 use linera_chain::data_types::{BlockProposal, Certificate};
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
-    node::{NodeError, ValidatorNode},
+    node::{NodeError, NotificationStream, ValidatorNode},
     worker::{ValidatorWorker, WorkerState},
 };
 use linera_storage::Store;
@@ -27,8 +28,6 @@ use linera_views::views::ViewError;
 use log::{debug, error, info, warn};
 use std::{io, time::Duration};
 use tokio::time;
-use linera_base::data_types::ChainId;
-use linera_core::node::NotificationStream;
 
 #[derive(Clone)]
 pub struct Server<S> {
@@ -362,7 +361,7 @@ impl ValidatorNode for SimpleClient {
 
     async fn subscribe(&mut self, _chains: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
         Err(NodeError::SubscriptionError {
-            transport: self.network.protocol.to_string()
+            transport: self.network.protocol.to_string(),
         })
     }
 }

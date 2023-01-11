@@ -8,9 +8,8 @@ use linera_base::data_types::ChainId;
 use linera_chain::data_types::{BlockProposal, Certificate};
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
-    node::{NodeError, ValidatorNode},
+    node::{NodeError, NotificationStream, ValidatorNode},
 };
-use linera_core::node::NotificationStream;
 
 #[derive(Clone)]
 pub enum Client {
@@ -65,7 +64,7 @@ impl ValidatorNode for Client {
     async fn subscribe(&mut self, chains: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
         match self {
             Client::Grpc(grpc_client) => grpc_client.subscribe(chains).await,
-            Client::Simple(simple_client) => simple_client.subscribe(chains).await
+            Client::Simple(simple_client) => simple_client.subscribe(chains).await,
         }
     }
 }

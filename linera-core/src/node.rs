@@ -4,6 +4,7 @@
 
 use crate::{
     data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse},
+    notifier::Notifier,
     worker::{Notification, ValidatorWorker, WorkerError, WorkerState},
 };
 use async_trait::async_trait;
@@ -24,7 +25,6 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use thiserror::Error;
 use tokio_stream::wrappers::UnboundedReceiverStream;
-use crate::notifier::Notifier;
 
 pub type NotificationStream = UnboundedReceiverStream<Notification>;
 
@@ -142,7 +142,7 @@ pub enum NodeError {
     #[error("Failed to resolve validator address: {address}")]
     CannotResolveValidatorAddress { address: String },
     #[error("Subscription error due to incorrect transport. Was expecting gRPC, instead found: {transport}")]
-    SubscriptionError { transport: String }
+    SubscriptionError { transport: String },
 }
 
 impl From<ViewError> for NodeError {
@@ -210,7 +210,7 @@ pub struct LocalNode<S> {
 #[derive(Clone)]
 pub struct LocalNodeClient<S> {
     node: Arc<Mutex<LocalNode<S>>>,
-    notifier: Notifier<Notification>
+    notifier: Notifier<Notification>,
 }
 
 #[async_trait]
@@ -236,9 +236,13 @@ where
         let node = self.node.clone();
         let mut node = node.lock().await;
         let mut notifications = Vec::new();
-        let response = node.state.fully_handle_certificate_with_notifications(certificate, Some(&mut notifications)).await?;
+        let response = node
+            .state
+            .fully_handle_certificate_with_notifications(certificate, Some(&mut notifications))
+            .await?;
         for notification in notifications {
-            self.notifier.notify(&notification.chain_id.clone(), notification);
+            self.notifier
+                .notify(&notification.chain_id.clone(), notification);
         }
         Ok(response)
     }
@@ -267,9 +271,9 @@ where
 impl<S> LocalNodeClient<S> {
     pub fn new(state: WorkerState<S>) -> Self {
         let node = LocalNode { state };
-        Self{
+        Self {
             node: Arc::new(Mutex::new(node)),
-            notifier: Default::default()
+            notifier: Default::default(),
         }
     }
 }

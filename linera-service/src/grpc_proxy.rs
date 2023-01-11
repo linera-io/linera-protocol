@@ -5,16 +5,17 @@ use anyhow::Result;
 use async_trait::async_trait;
 use linera_base::data_types::ChainId;
 use linera_chain::data_types::{BlockAndRound, Value};
+use linera_core::notifier::Notifier;
 use linera_rpc::{
     config::{ShardConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig},
     grpc_network::{
-        BlockProposal,
-        Certificate, ChainInfoQuery, CrossChainRequest, grpc::{
-            ChainInfoResult,
-            Notification,
+        grpc::{
             notifier_service_server::{NotifierService, NotifierServiceServer},
-            SubscriptionRequest, validator_node_server::{ValidatorNode, ValidatorNodeServer}, validator_worker_client::ValidatorWorkerClient,
+            validator_node_server::{ValidatorNode, ValidatorNodeServer},
+            validator_worker_client::ValidatorWorkerClient,
+            ChainInfoResult, Notification, SubscriptionRequest,
         },
+        BlockProposal, Certificate, ChainInfoQuery, CrossChainRequest,
     },
     pool::ConnectionPool,
 };
@@ -22,10 +23,9 @@ use std::{fmt::Debug, net::SocketAddr, sync::Arc};
 use tokio::select;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::{
-    Request,
-    Response, Status, transport::{Channel, Server},
+    transport::{Channel, Server},
+    Request, Response, Status,
 };
-use linera_core::notifier::Notifier;
 
 #[derive(Clone)]
 pub struct GrpcProxy(Arc<GrpcProxyInner>);

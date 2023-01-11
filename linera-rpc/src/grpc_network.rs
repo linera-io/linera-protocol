@@ -21,16 +21,18 @@ pub use crate::{
     RpcMessage,
 };
 use crate::{
-    config::NotificationConfig, grpc_network::grpc::notifier_service_client::NotifierServiceClient,
+    config::NotificationConfig,
+    grpc_network::grpc::{notifier_service_client::NotifierServiceClient, SubscriptionRequest},
 };
 use async_trait::async_trait;
 use futures::{
     channel::{mpsc, mpsc::Receiver, oneshot::Sender},
     FutureExt, SinkExt, StreamExt,
 };
+use linera_base::data_types::ChainId;
 use linera_chain::data_types;
 use linera_core::{
-    node::{NodeError, ValidatorNode},
+    node::{NodeError, NotificationStream, ValidatorNode},
     worker::{NetworkActions, Notification, ValidatorWorker, WorkerState},
 };
 use linera_storage::Store;
@@ -42,13 +44,14 @@ use std::{
     time::Duration,
 };
 use thiserror::Error;
-use tokio::task::{JoinError, JoinHandle};
+use tokio::{
+    sync::mpsc::unbounded_channel,
+    task::{JoinError, JoinHandle},
+};
 use tonic::{
     transport::{Channel, Server},
     Request, Response, Status,
 };
-use linera_base::data_types::ChainId;
-use linera_core::node::NotificationStream;
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 // https://github.com/hyperium/tonic/issues/1056
@@ -422,7 +425,32 @@ impl ValidatorNode for GrpcClient {
     }
 
     async fn subscribe(&mut self, chains: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
-        unimplemented!()
+        let subscription_request = SubscriptionRequest {
+            chain_ids: chains.into_iter().map(|chain| chain.into()).collect(),
+        };
+        let mut notification_stream = self
+            .0
+            .subscribe(Request::new(subscription_request))
+            .await
+            .map_err(|e| NodeError::GrpcError {
+                error: format!("remote request [subscribe] failed with status: {:?}", e),
+            })?
+            .into_inner();
+        let (tx, rx) = unbounded_channel();
+        tokio::spawn(async move {
+            while let Some(notification) = notification_stream.next().await {
+                if let Ok(notification) = notification {
+                    if let Ok(notification) = notification.try_into() {
+                        if tx.send(notification).is_err() {
+                            // if the sender errors the receiver has been closed and
+                            // the thread can die.
+                            break;
+                        }
+                    }
+                }
+            }
+        });
+        Ok(NotificationStream::new(rx))
     }
 }
 
