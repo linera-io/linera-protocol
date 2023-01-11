@@ -286,5 +286,39 @@ where
     assert_eq!(Some(create_certificate.hash), info.block_hash);
     assert!(info.manager.pending().is_none());
 
-    todo!();
+    // Execute an application operation
+    let increment = 5_u128;
+    let user_operation = bcs::to_bytes(&increment)?;
+    let run_block = make_block(
+        Epoch::from(0),
+        creator_chain.into(),
+        vec![(application_id, user_operation)],
+        vec![],
+        Some(&create_certificate),
+    );
+    let expected_value = initial_value + increment;
+    let expected_state_bytes = bcs::to_bytes(&expected_value)?;
+    creator_state
+        .users
+        .try_load_entry(application_id)
+        .await?
+        .set(expected_state_bytes);
+    let run_block_proposal = Value::ConfirmedBlock {
+        block: run_block,
+        effects: vec![],
+        state_hash: creator_state.hash_value().await?,
+    };
+    let run_certificate = make_certificate(&committee, &worker, run_block_proposal);
+
+    let info = worker
+        .fully_handle_certificate(run_certificate.clone())
+        .await
+        .unwrap()
+        .info;
+    assert_eq!(ChainId::root(2), info.chain_id);
+    assert_eq!(Balance::from(0), info.system_balance);
+    assert_eq!(BlockHeight::from(3), info.next_block_height);
+    assert_eq!(Some(run_certificate.hash), info.block_hash);
+    assert!(info.manager.pending().is_none());
+    Ok(())
 }
