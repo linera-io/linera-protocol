@@ -3,6 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! WASM specific worker tests.
+//!
+//! These tests only run if a WASM runtime has been configured by enabling either the `wasmer` or
+//! the `wasmtime` feature flags.
+
+#![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 
 use super::{init_worker_with_chains, make_block, make_certificate, make_state_hash};
 use linera_base::{

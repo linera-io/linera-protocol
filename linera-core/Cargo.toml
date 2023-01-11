@@ -5,6 +5,8 @@ authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 
 [features]
+wasmer = ["linera-execution/wasmer"]
+wasmtime = ["linera-execution/wasmtime"]
 test = ["test-strategy", "proptest"]
 
 [dependencies]
