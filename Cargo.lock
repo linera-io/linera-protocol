@@ -1787,6 +1787,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "bcs",
  "env_logger",
  "futures",
  "linera-base",

@@ -28,6 +28,7 @@ thiserror = "1.0.31"
 tokio = "1.12.0"
 
 [dev-dependencies]
+bcs = "0.1.3"
 env_logger = "0.9.0"
 linera-base = { path = "../linera-base", features = ["test"] }
 linera-chain = { path = "../linera-chain", features = ["test"] }
