@@ -12,10 +12,14 @@ use linera_base::{
 use linera_chain::data_types::Value;
 use linera_execution::{
     system::{Balance, SystemChannel, SystemEffect, SystemOperation},
-    ApplicationId, Bytecode, ChainOwnership, Destination, Effect, SystemExecutionState,
+    ApplicationId, Bytecode, ChainOwnership, ChannelId, Destination, Effect, ExecutionStateView,
+    SystemExecutionState,
 };
 use linera_storage::{DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient, Store};
-use linera_views::{test_utils::LocalStackTestContext, views::ViewError};
+use linera_views::{
+    test_utils::LocalStackTestContext,
+    views::{HashableContainerView, ViewError},
+};
 use std::collections::BTreeSet;
 use test_log::test;
 
@@ -118,6 +122,59 @@ where
     assert_eq!(Balance::from(0), info.system_balance);
     assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert_eq!(Some(publish_certificate.hash), info.block_hash);
+    assert!(info.manager.pending().is_none());
+
+    // Subscribe to get the bytecode ID.
+    let subscribe_operation = SystemOperation::Subscribe {
+        chain_id: publisher_chain.into(),
+        channel: SystemChannel::PublishedBytecodes,
+    };
+    let publisher_channel = ChannelId {
+        chain_id: publisher_chain.into(),
+        name: SystemChannel::PublishedBytecodes.name(),
+    };
+    let subscribe_effect = SystemEffect::Subscribe {
+        id: creator_chain.into(),
+        channel: publisher_channel.clone(),
+    };
+    let subscribe_block = make_block(
+        Epoch::from(0),
+        creator_chain.into(),
+        vec![subscribe_operation],
+        vec![],
+        None,
+    );
+    let subscribe_block_height = subscribe_block.height;
+    let creator_system_state = SystemExecutionState {
+        epoch: Some(Epoch::from(0)),
+        description: Some(creator_chain),
+        admin_id: Some(admin_id.into()),
+        subscriptions: [publisher_channel].into_iter().collect(),
+        committees: [(Epoch::from(0), committee.clone())].into_iter().collect(),
+        ownership: ChainOwnership::single(creator_key_pair.public().into()),
+        balance: Balance::from(0),
+    };
+    let mut creator_state = ExecutionStateView::from_system_state(creator_system_state).await;
+    let subscribe_block_proposal = Value::ConfirmedBlock {
+        block: subscribe_block,
+        effects: vec![(
+            ApplicationId::System,
+            Destination::Recipient(publisher_chain.into()),
+            Effect::System(subscribe_effect.clone()),
+        )],
+        state_hash: creator_state.hash_value().await?,
+    };
+    let subscribe_certificate = make_certificate(&committee, &worker, subscribe_block_proposal);
+
+    let info = worker
+        .fully_handle_certificate(subscribe_certificate.clone())
+        .await
+        .unwrap()
+        .info;
+    assert_eq!(ChainId::from(creator_chain), info.chain_id);
+    assert_eq!(Balance::from(0), info.system_balance);
+    assert_eq!(BlockHeight::from(1), info.next_block_height);
+    assert_eq!(Some(subscribe_certificate.hash), info.block_hash);
     assert!(info.manager.pending().is_none());
 
     todo!();
