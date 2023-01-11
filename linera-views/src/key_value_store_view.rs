@@ -121,8 +121,8 @@ where
         F: FnMut(Vec<u8>) -> Result<(), ViewError> + Send,
     {
         let key_prefix = self.context.base_tag(KeyTag::Index as u8);
-        let mut iter = self.updates.iter();
-        let mut pair = iter.next();
+        let mut updates = self.updates.iter();
+        let mut update = updates.next();
         if !self.was_cleared {
             for index in self
                 .context
@@ -130,25 +130,17 @@ where
                 .await?
             {
                 loop {
-                    match pair {
-                        Some((key, value)) => {
-                            let key = key.clone();
-                            if key < index {
-                                if value.is_some() {
-                                    f(key)?;
-                                }
-                                pair = iter.next();
-                            } else {
-                                if key != index {
-                                    f(index)?;
-                                } else if value.is_some() {
-                                    f(key)?;
-                                    pair = iter.next();
-                                }
+                    match update {
+                        Some((key, value)) if key <= &index => {
+                            if value.is_some() {
+                                f(key.clone())?;
+                            }
+                            update = updates.next();
+                            if key == &index {
                                 break;
                             }
                         }
-                        None => {
+                        _ => {
                             f(index)?;
                             break;
                         }
@@ -156,12 +148,12 @@ where
                 }
             }
         }
-        while let Some((key, value)) = pair {
+        while let Some((key, value)) = update {
             let key = key.clone();
             if value.is_some() {
                 f(key)?;
             }
-            pair = iter.next();
+            update = updates.next();
         }
         Ok(())
     }
@@ -171,8 +163,8 @@ where
         F: FnMut(Vec<u8>, Vec<u8>) -> Result<(), ViewError> + Send,
     {
         let key_prefix = self.context.base_tag(KeyTag::Index as u8);
-        let mut iter = self.updates.iter();
-        let mut pair = iter.next();
+        let mut updates = self.updates.iter();
+        let mut update = updates.next();
         if !self.was_cleared {
             for (index, index_val) in self
                 .context
@@ -180,25 +172,17 @@ where
                 .await?
             {
                 loop {
-                    match pair {
-                        Some((key, value)) => {
-                            let key = key.clone();
-                            if key < index {
-                                if let Some(value) = value {
-                                    f(key, value.to_vec())?;
-                                }
-                                pair = iter.next();
-                            } else {
-                                if key != index {
-                                    f(index, index_val)?;
-                                } else if let Some(value) = value {
-                                    f(key, value.to_vec())?;
-                                    pair = iter.next();
-                                }
-                                break;
+                    match update {
+                        Some((key, value)) if key <= &index => {
+                            if let Some(value) = value {
+                                f(key.clone(), value.to_vec())?;
+                            }
+                            update = updates.next();
+                            if key == &index {
+                                break
                             }
                         }
-                        None => {
+                        _ => {
                             f(index, index_val)?;
                             break;
                         }
@@ -206,12 +190,12 @@ where
                 }
             }
         }
-        while let Some((key, value)) = pair {
+        while let Some((key, value)) = update {
             let key = key.clone();
             if let Some(value) = value {
                 f(key, value.to_vec())?;
             }
-            pair = iter.next();
+            update = updates.next();
         }
         Ok(())
     }
@@ -285,10 +269,10 @@ where
         let key_prefix_full = self.context.base_tag_index(KeyTag::Index as u8, key_prefix);
         let mut keys = Vec::new();
         let key_prefix_upper = get_upper_bound(key_prefix);
-        let mut iter = self
+        let mut updates = self
             .updates
             .range((Included(key_prefix.to_vec()), key_prefix_upper));
-        let mut pair = iter.next();
+        let mut update = updates.next();
         if !self.was_cleared {
             for stripped_key in self
                 .context
@@ -296,25 +280,17 @@ where
                 .await?
             {
                 loop {
-                    match pair {
-                        Some((key_update, value_update)) => {
-                            let stripped_key_update = key_update[len..].to_vec();
-                            if stripped_key_update < stripped_key {
-                                if value_update.is_some() {
-                                    keys.push(stripped_key_update);
-                                }
-                                pair = iter.next();
-                            } else {
-                                if stripped_key != stripped_key_update {
-                                    keys.push(stripped_key.to_vec());
-                                } else if value_update.is_some() {
-                                    keys.push(stripped_key.to_vec());
-                                    pair = iter.next();
-                                }
-                                break;
+                    match update {
+                        Some((key_update, value_update)) if key_update[len..].to_vec() <= stripped_key => {
+                            if value_update.is_some() {
+                                keys.push(key_update[len..].to_vec());
+                            }
+                            update = updates.next();
+                            if key_update[len..].to_vec() == stripped_key {
+                                break
                             }
                         }
-                        None => {
+                        _ => {
                             keys.push(stripped_key.to_vec());
                             break;
                         }
@@ -322,12 +298,12 @@ where
                 }
             }
         }
-        while let Some((key_update, value_update)) = pair {
+        while let Some((key_update, value_update)) = update {
             if value_update.is_some() {
                 let stripped_key_update = key_update[len..].to_vec();
                 keys.push(stripped_key_update);
             }
-            pair = iter.next();
+            update = updates.next();
         }
         Ok(Self::KeyIterator::new(keys))
     }
@@ -340,10 +316,10 @@ where
         let key_prefix_full = self.context.base_tag_index(KeyTag::Index as u8, key_prefix);
         let mut key_values = Vec::new();
         let key_prefix_upper = get_upper_bound(key_prefix);
-        let mut iter = self
+        let mut updates = self
             .updates
             .range((Included(key_prefix.to_vec()), key_prefix_upper));
-        let mut pair = iter.next();
+        let mut update = updates.next();
         if !self.was_cleared {
             for (stripped_key, value) in self
                 .context
@@ -351,26 +327,18 @@ where
                 .await?
             {
                 loop {
-                    match pair {
-                        Some((key_update, value_update)) => {
-                            let stripped_key_update = key_update[len..].to_vec();
-                            if stripped_key_update < stripped_key {
-                                if let Some(value_update) = value_update {
-                                    let key_value = (stripped_key_update, value_update.to_vec());
-                                    key_values.push(key_value);
-                                }
-                                pair = iter.next();
-                            } else {
-                                if stripped_key != stripped_key_update {
-                                    key_values.push((stripped_key.to_vec(), value.clone()));
-                                } else if let Some(value_update) = value_update {
-                                    key_values.push((stripped_key.to_vec(), value_update.to_vec()));
-                                    pair = iter.next();
-                                }
-                                break;
+                    match update {
+                        Some((key_update, value_update)) if key_update[len..].to_vec() <= stripped_key => {
+                            if let Some(value_update) = value_update {
+                                let key_value = (key_update[len..].to_vec(), value_update.to_vec());
+                                key_values.push(key_value);
+                            }
+                            update = updates.next();
+                            if key_update[len..].to_vec() == stripped_key {
+                                break
                             }
                         }
-                        None => {
+                        _ => {
                             key_values.push((stripped_key.to_vec(), value.clone()));
                             break;
                         }
@@ -378,12 +346,12 @@ where
                 }
             }
         }
-        while let Some((key_update, value_update)) = pair {
+        while let Some((key_update, value_update)) = update {
             if let Some(value_update) = value_update {
                 let key_value = (key_update[len..].to_vec(), value_update.to_vec());
                 key_values.push(key_value);
             }
-            pair = iter.next();
+            update = updates.next();
         }
         Ok(Self::KeyValueIterator::new(key_values))
     }
