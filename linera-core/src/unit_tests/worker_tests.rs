@@ -2,6 +2,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[path = "./wasm_worker_tests.rs"]
+mod wasm;
+
 use crate::{
     data_types::*,
     worker::{
