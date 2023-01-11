@@ -104,7 +104,7 @@ where
 fn make_block(
     epoch: Epoch,
     chain_id: ChainId,
-    operations: Vec<Operation>,
+    operations: Vec<impl IntoApplicationIdAndOperation>,
     incoming_messages: Vec<Message>,
     previous_confirmed_block: Option<&Certificate>,
 ) -> Block {
@@ -125,7 +125,7 @@ fn make_block(
         incoming_messages,
         operations: operations
             .into_iter()
-            .map(|op| (ApplicationId::System, op))
+            .map(IntoApplicationIdAndOperation::into_application_id_and_operation)
             .collect(),
         previous_block_hash,
         height,
@@ -143,11 +143,11 @@ fn make_transfer_block_proposal(
     let block = make_block(
         Epoch::from(0),
         chain_id,
-        vec![Operation::System(SystemOperation::Transfer {
+        vec![SystemOperation::Transfer {
             recipient,
             amount,
             user_data: UserData::default(),
-        })],
+        }],
         incoming_messages,
         previous_confirmed_block,
     );
@@ -226,11 +226,11 @@ async fn make_transfer_certificate_for_epoch<S>(
     let block = make_block(
         epoch,
         chain_id,
-        vec![Operation::System(SystemOperation::Transfer {
+        vec![SystemOperation::Transfer {
             recipient,
             amount,
             user_data: UserData::default(),
-        })],
+        }],
         incoming_messages,
         previous_confirmed_block,
     );
