@@ -24,7 +24,7 @@ use linera_chain::{
 use linera_execution::{
     system::{Address, Amount, Balance, SystemChannel, SystemEffect, SystemOperation, UserData},
     ApplicationDescription, ApplicationId, ChainOwnership, ChannelId, Destination, Effect,
-    ExecutionStateView, Operation, SystemExecutionState,
+    ExecutionStateView, Operation, SystemExecutionState, UserApplicationId,
 };
 use linera_storage::{DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient, Store};
 use linera_views::{
@@ -252,6 +252,22 @@ async fn make_transfer_certificate_for_epoch<S>(
         state_hash,
     };
     make_certificate(committee, worker, value)
+}
+
+trait IntoApplicationIdAndOperation {
+    fn into_application_id_and_operation(self) -> (ApplicationId, Operation);
+}
+
+impl IntoApplicationIdAndOperation for SystemOperation {
+    fn into_application_id_and_operation(self) -> (ApplicationId, Operation) {
+        (ApplicationId::System, Operation::System(self))
+    }
+}
+
+impl IntoApplicationIdAndOperation for (UserApplicationId, Vec<u8>) {
+    fn into_application_id_and_operation(self) -> (ApplicationId, Operation) {
+        (ApplicationId::User(self.0), Operation::User(self.1))
+    }
 }
 
 #[test(tokio::test)]
