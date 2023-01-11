@@ -19,7 +19,59 @@ use std::{
     sync::Arc,
     task::{Context, Poll},
 };
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, Notify};
+
+/// A queue of host futures called by a WASM guest module that finish in the same order they were
+/// created.
+///
+/// Ensures that the WASM guest module's asynchronous calls to the host are deterministic, by
+/// ensuring that the guest sees the futures as completed in the same order as they were added to
+/// the queue. This is achieved using something similar to a linked-list of notifications, where
+/// every future only completes after the previous future has notified it. When a future completes,
+/// it also notifies the next future in the queue, allowing it complete.
+pub struct HostFutureQueue {
+    last_entry: Arc<Notify>,
+}
+
+impl HostFutureQueue {
+    /// Create a new [`HostFutureQueue`]
+    ///
+    /// Creates the initial notifier for the first future to be added. This is the only notifier
+    /// that is created and immediately notified, allowing the first future of the queue to
+    /// complete as soon as it is ready.
+    pub fn new() -> Self {
+        let last_entry = Arc::new(Notify::new());
+
+        last_entry.notify_one();
+
+        HostFutureQueue { last_entry }
+    }
+
+    /// Add a `future` to the [`HostFutureQueue`].
+    ///
+    /// Returns a [`HostFuture`] that can be passed to the guest WASM module, and that will only be
+    /// ready when the inner `future` is ready and all previous futures added to the queue are
+    /// ready.
+    pub fn add<'future, Output>(
+        &mut self,
+        future: impl Future<Output = Output> + Send + 'future,
+    ) -> HostFuture<'future, Output>
+    where
+        Output: Send,
+    {
+        let next_future = Arc::new(Notify::new());
+        let previous_future = mem::replace(&mut self.last_entry, next_future.clone());
+
+        HostFuture::new(async move {
+            let result = future.await;
+
+            previous_future.notified().await;
+            next_future.notify_one();
+
+            result
+        })
+    }
+}
 
 /// A host future that can be called by a WASM guest module.
 pub struct HostFuture<'future, Output> {
