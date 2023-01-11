@@ -132,7 +132,7 @@ impl<'storage> ContractState<'storage> {
     pub fn new(storage: &'storage dyn WritableStorage, context: ContextForwarder) -> Self {
         Self {
             data: ContractData::default(),
-            system_api: SystemApi { storage, context },
+            system_api: SystemApi::new(storage, context),
             system_tables: WritableSystemTables::default(),
         }
     }
@@ -161,7 +161,7 @@ impl<'storage> ServiceState<'storage> {
     pub fn new(storage: &'storage dyn QueryableStorage, context: ContextForwarder) -> Self {
         Self {
             data: ServiceData::default(),
-            system_api: SystemApi { storage, context },
+            system_api: SystemApi::new(storage, context),
             system_tables: QueryableSystemTables::default(),
         }
     }
@@ -295,6 +295,14 @@ impl<'storage> common::Service<ServiceWasmtime<'storage>> for Service<ServiceSta
 pub struct SystemApi<S> {
     context: ContextForwarder,
     storage: S,
+}
+
+impl<S> SystemApi<S> {
+    /// Create a new [`SystemApi`] instance using the provided asynchronous `context` and exporting
+    /// the API from `storage`.
+    pub fn new(context: ContextForwarder, storage: S) -> Self {
+        SystemApi { context, storage }
+    }
 }
 
 impl<'storage> WritableSystem for SystemApi<&'storage dyn WritableStorage> {
