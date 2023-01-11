@@ -28,7 +28,7 @@ use dashmap::DashMap;
 use linera_base::data_types::{BlockHeight, ChainId, EffectId};
 use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::{io, path::Path, sync::Arc};
 use thiserror::Error;
 
 /// An implementation of [`UserApplication`]
@@ -513,6 +513,14 @@ pub struct ApplicationStateNotLocked;
 /// A WebAssembly module's bytecode.
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct Bytecode(Vec<u8>);
+
+impl Bytecode {
+    /// Load bytecode from a WASM module file.
+    pub async fn load_from_file(path: impl AsRef<Path>) -> Result<Self, io::Error> {
+        let bytes = tokio::fs::read(path).await?;
+        Ok(Bytecode(bytes))
+    }
+}
 
 impl AsRef<[u8]> for Bytecode {
     fn as_ref(&self) -> &[u8] {
