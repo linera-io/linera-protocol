@@ -184,7 +184,7 @@ where
                             }
                             update = updates.next();
                             if key == &index {
-                                break
+                                break;
                             }
                         }
                         _ => {

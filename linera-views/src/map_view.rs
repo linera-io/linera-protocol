@@ -183,7 +183,7 @@ where
                             }
                             update = updates.next();
                             if key == &index {
-                                break
+                                break;
                             }
                         }
                         _ => {
@@ -244,7 +244,7 @@ where
                             }
                             update = updates.next();
                             if key == &index {
-                                break
+                                break;
                             }
                         }
                         _ => {

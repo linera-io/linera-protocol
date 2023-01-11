@@ -179,7 +179,7 @@ where
                             }
                             update = updates.next();
                             if key == &index {
-                                break
+                                break;
                             }
                         }
                         _ => {
@@ -281,13 +281,15 @@ where
             {
                 loop {
                     match update {
-                        Some((key_update, value_update)) if key_update[len..].to_vec() <= stripped_key => {
+                        Some((key_update, value_update))
+                            if key_update[len..].to_vec() <= stripped_key =>
+                        {
                             if value_update.is_some() {
                                 keys.push(key_update[len..].to_vec());
                             }
                             update = updates.next();
                             if key_update[len..].to_vec() == stripped_key {
-                                break
+                                break;
                             }
                         }
                         _ => {
@@ -328,14 +330,16 @@ where
             {
                 loop {
                     match update {
-                        Some((key_update, value_update)) if key_update[len..].to_vec() <= stripped_key => {
+                        Some((key_update, value_update))
+                            if key_update[len..].to_vec() <= stripped_key =>
+                        {
                             if let Some(value_update) = value_update {
                                 let key_value = (key_update[len..].to_vec(), value_update.to_vec());
                                 key_values.push(key_value);
                             }
                             update = updates.next();
                             if key_update[len..].to_vec() == stripped_key {
-                                break
+                                break;
                             }
                         }
                         _ => {
