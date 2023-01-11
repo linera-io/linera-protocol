@@ -21,7 +21,7 @@ use linera_chain::{
 };
 use linera_execution::{
     system::{Address, Amount, Balance, SystemChannel, SystemOperation, UserData},
-    ApplicationId, Operation,
+    ApplicationId, Operation, Query, Response,
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -69,6 +69,12 @@ pub trait ChainClient {
 
     /// Close the chain (and lose everything in it!!).
     async fn close_chain(&mut self) -> Result<Certificate>;
+
+    async fn query_application(
+        &mut self,
+        application_id: ApplicationId,
+        query: &Query,
+    ) -> Result<Response>;
 
     /// Create a new committee and start using it (admin chains only).
     async fn stage_new_committee(
@@ -1054,6 +1060,18 @@ where
             .propose_block(block, /* with_confirmation */ true)
             .await?;
         Ok(certificate)
+    }
+
+    async fn query_application(
+        &mut self,
+        application_id: ApplicationId,
+        query: &Query,
+    ) -> Result<Response> {
+        let response = self
+            .node_client
+            .query_application(self.chain_id, application_id, query)
+            .await?;
+        Ok(response)
     }
 
     async fn stage_new_committee(

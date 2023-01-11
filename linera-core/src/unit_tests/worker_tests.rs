@@ -27,7 +27,8 @@ use linera_chain::{
 use linera_execution::{
     system::{Address, Amount, Balance, SystemChannel, SystemEffect, SystemOperation, UserData},
     ApplicationDescription, ApplicationId, ChainOwnership, ChannelId, Destination, Effect,
-    ExecutionStateView, Operation, SystemExecutionState, UserApplicationId,
+    ExecutionStateView, Operation, Query, Response, SystemExecutionState, SystemQuery,
+    SystemResponse, UserApplicationId,
 };
 use linera_storage::{DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient, Store};
 use linera_views::{
@@ -1977,6 +1978,35 @@ where
         ],
     )
     .await;
+    assert_eq!(
+        worker
+            .query_application(
+                ChainId::root(1),
+                ApplicationId::System,
+                &Query::System(SystemQuery)
+            )
+            .await
+            .unwrap(),
+        Response::System(SystemResponse {
+            chain_id: ChainId::root(1),
+            balance: Balance::from(5),
+        })
+    );
+    assert_eq!(
+        worker
+            .query_application(
+                ChainId::root(2),
+                ApplicationId::System,
+                &Query::System(SystemQuery)
+            )
+            .await
+            .unwrap(),
+        Response::System(SystemResponse {
+            chain_id: ChainId::root(2),
+            balance: Balance::from(0),
+        })
+    );
+
     let certificate = make_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
@@ -2000,6 +2030,20 @@ where
     assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert_eq!(Some(certificate.hash), info.block_hash);
     assert!(info.manager.pending().is_none());
+    assert_eq!(
+        worker
+            .query_application(
+                ChainId::root(1),
+                ApplicationId::System,
+                &Query::System(SystemQuery)
+            )
+            .await
+            .unwrap(),
+        Response::System(SystemResponse {
+            chain_id: ChainId::root(1),
+            balance: Balance::from(0),
+        })
+    );
 
     // Try to use the money. This requires selecting the incoming message in a next block.
     let certificate = make_transfer_certificate(
@@ -2030,6 +2074,21 @@ where
         .fully_handle_certificate(certificate.clone())
         .await
         .unwrap();
+
+    assert_eq!(
+        worker
+            .query_application(
+                ChainId::root(2),
+                ApplicationId::System,
+                &Query::System(SystemQuery)
+            )
+            .await
+            .unwrap(),
+        Response::System(SystemResponse {
+            chain_id: ChainId::root(2),
+            balance: Balance::from(4),
+        })
+    );
 
     {
         let recipient_chain = worker

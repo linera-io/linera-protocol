@@ -16,7 +16,7 @@ use linera_chain::{
     data_types::{Block, BlockProposal, Certificate, Origin, Value},
     ChainError, ChainManager,
 };
-use linera_execution::ApplicationId;
+use linera_execution::{ApplicationId, Query, Response};
 use linera_storage::Store;
 use linera_views::views::ViewError;
 use rand::prelude::SliceRandom;
@@ -319,6 +319,21 @@ where
     async fn local_chain_info(&mut self, chain_id: ChainId) -> Result<ChainInfo, NodeError> {
         let query = ChainInfoQuery::new(chain_id);
         Ok(self.handle_chain_info_query(query).await?.info)
+    }
+
+    pub async fn query_application(
+        &mut self,
+        chain_id: ChainId,
+        application_id: ApplicationId,
+        query: &Query,
+    ) -> Result<Response, NodeError> {
+        let node = self.0.clone();
+        let mut node = node.lock().await;
+        let response = node
+            .state
+            .query_application(chain_id, application_id, query)
+            .await?;
+        Ok(response)
     }
 
     pub async fn download_certificates<A>(
