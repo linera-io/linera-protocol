@@ -15,7 +15,8 @@ use linera_base::{
 use linera_execution::{
     system::SystemEffect, ApplicationDescription, ApplicationId, ApplicationRegistryView,
     BytecodeId, BytecodeLocation, ChannelName, Destination, Effect, EffectContext, ExecutionResult,
-    ExecutionRuntimeContext, ExecutionStateView, OperationContext, RawExecutionResult,
+    ExecutionRuntimeContext, ExecutionStateView, OperationContext, Query, QueryContext,
+    RawExecutionResult, Response,
 };
 use linera_views::{
     collection_view::CollectionView,
@@ -92,6 +93,22 @@ where
 {
     pub fn chain_id(&self) -> ChainId {
         self.context().extra().chain_id()
+    }
+
+    pub async fn query_application(
+        &mut self,
+        application_id: ApplicationId,
+        query: &Query,
+    ) -> Result<Response, ChainError> {
+        let context = QueryContext {
+            chain_id: self.chain_id(),
+        };
+        let application = self.describe_application(application_id).await?;
+        let response = self
+            .execution_state
+            .query_application(&application, &context, query, &mut self.known_applications)
+            .await?;
+        Ok(response)
     }
 
     pub async fn mark_messages_as_received(

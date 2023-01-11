@@ -14,7 +14,7 @@ use linera_chain::{
     data_types::{Block, BlockProposal, Certificate, Message, Origin, Target, Value},
     ChainManagerOutcome, ChainStateView,
 };
-use linera_execution::{ApplicationDescription, ApplicationId};
+use linera_execution::{ApplicationDescription, ApplicationId, Query, Response};
 use linera_storage::Store;
 use linera_views::{
     log_view::LogView,
@@ -227,6 +227,17 @@ where
         let info = ChainInfoResponse::new(&chain, None);
         // Do not save the new state.
         Ok(info)
+    }
+
+    pub(crate) async fn query_application(
+        &mut self,
+        chain_id: ChainId,
+        application_id: ApplicationId,
+        query: &Query,
+    ) -> Result<Response, WorkerError> {
+        let mut chain = self.storage.load_active_chain(chain_id).await?;
+        let response = chain.query_application(application_id, query).await?;
+        Ok(response)
     }
 
     /// Get a reference to the [`KeyPair`], if available.
