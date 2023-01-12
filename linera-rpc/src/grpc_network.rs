@@ -6,7 +6,6 @@ use std::{
     net::{AddrParseError, SocketAddr},
     pin::Pin,
     str::FromStr,
-    task::{Context, Poll},
     time::Duration,
 };
 
@@ -20,7 +19,7 @@ use thiserror::Error;
 use tokio::task::{JoinError, JoinHandle};
 use tonic::{
     transport::{Channel, Server},
-    Request, Response, Status, Streaming,
+    Request, Response, Status,
 };
 
 use linera_base::data_types::ChainId;
@@ -406,7 +405,7 @@ impl GrpcClient {
 
 #[async_trait]
 impl ValidatorNode for GrpcClient {
-    type NotificationStream = LossyNotificationStream;
+    type NotificationStream = Pin<Box<dyn Stream<Item = Notification>>>;
 
     async fn handle_block_proposal(
         &mut self,
@@ -444,66 +443,14 @@ impl ValidatorNode for GrpcClient {
                 error: format!("remote request [subscribe] failed with status: {:?}", e),
             })?
             .into_inner();
-        Ok(LossyNotificationStream {
-            inner: notification_stream,
-        })
+
+        Ok(Box::pin(
+            notification_stream
+                .filter_map(|n| async { n.ok() })
+                .filter_map(|n| async { Notification::try_from(n).ok() }),
+        ))
     }
 }
-
-/// Implements a 'Lossy' notification stream.
-pub struct LossyNotificationStream {
-    inner: Streaming<grpc::Notification>,
-}
-
-impl Stream for LossyNotificationStream {
-    type Item = Notification;
-
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        match Pin::new(&mut self.inner).poll_next(cx) {
-            Poll::Ready(opt_notification) => match opt_notification {
-                None => Poll::Ready(None),
-                Some(notification) => match notification {
-                    Ok(notification) => match Notification::try_from(notification) {
-                        Ok(notification) => Poll::Ready(Some(notification)),
-                        Err(_) => Poll::Pending,
-                    },
-                    Err(_) => Poll::Pending,
-                },
-            },
-            Poll::Pending => Poll::Pending,
-        }
-    }
-}
-
-// struct LossyStream<F, T, E> {
-//     inner: Box<dyn Stream<Item=Result<F, E>>>,
-//     _phantom_data: PhantomData<T>
-// }
-//
-// impl<F, T, E> Stream for LossyStream<F, T, E> where T: TryFrom<F> {
-//     type Item = T;
-//
-//     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-//         match Pin::new(&mut self.inner).poll_next(cx) {
-//             Poll::Ready(opt_notification) => {
-//                 match opt_notification {
-//                     None => Poll::Ready(None),
-//                     Some(notification) => {
-//                         match notification {
-//                             Ok(notification) => {
-//                                 Poll::Ready(Some(T::try_from(notification).unwrap()))
-//                             }
-//                             Err(_) => {
-//                                 Poll::Pending
-//                             }
-//                         }
-//                     }
-//                 }
-//             }
-//             Poll::Pending => Poll::Pending
-//         }
-//     }
-// }
 
 pub struct GrpcMassClient(ValidatorPublicNetworkConfig);
 

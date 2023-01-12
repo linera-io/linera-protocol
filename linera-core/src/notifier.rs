@@ -1,6 +1,5 @@
 use dashmap::DashMap;
 use linera_base::data_types::ChainId;
-use log::info;
 use log::trace;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 

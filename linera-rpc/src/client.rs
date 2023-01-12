@@ -1,8 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::pin::Pin;
+
 use async_trait::async_trait;
-use futures::future::Either;
+use futures::Stream;
 
 use linera_base::data_types::ChainId;
 use linera_chain::data_types::{BlockProposal, Certificate};
@@ -12,10 +14,7 @@ use linera_core::{
     worker::Notification,
 };
 
-use crate::{
-    grpc_network::{GrpcClient, LossyNotificationStream},
-    simple_network::SimpleClient,
-};
+use crate::{grpc_network::GrpcClient, simple_network::SimpleClient};
 
 #[derive(Clone)]
 pub enum Client {
@@ -37,7 +36,7 @@ impl From<SimpleClient> for Client {
 
 #[async_trait]
 impl ValidatorNode for Client {
-    type NotificationStream = Either<LossyNotificationStream, futures::stream::Empty<Notification>>;
+    type NotificationStream = Pin<Box<dyn Stream<Item = Notification>>>;
 
     async fn handle_block_proposal(
         &mut self,
@@ -74,8 +73,8 @@ impl ValidatorNode for Client {
         chains: Vec<ChainId>,
     ) -> Result<Self::NotificationStream, NodeError> {
         Ok(match self {
-            Client::Grpc(grpc_client) => Either::Left(grpc_client.subscribe(chains).await?),
-            Client::Simple(simple_client) => Either::Right(simple_client.subscribe(chains).await?),
+            Client::Grpc(grpc_client) => Box::pin(grpc_client.subscribe(chains).await?),
+            Client::Simple(simple_client) => Box::pin(simple_client.subscribe(chains).await?),
         })
     }
 }
