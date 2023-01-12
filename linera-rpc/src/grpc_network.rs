@@ -1,6 +1,35 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{
+    fmt::Debug,
+    net::{AddrParseError, SocketAddr},
+    str::FromStr,
+    time::Duration,
+};
+
+use async_trait::async_trait;
+use futures::{
+    channel::{mpsc, mpsc::Receiver, oneshot::Sender},
+    FutureExt, SinkExt, StreamExt,
+};
+use log::{debug, error, info, warn};
+use thiserror::Error;
+use tokio::task::{JoinError, JoinHandle};
+use tonic::{
+    transport::{Channel, Server},
+    Request, Response, Status,
+};
+
+use linera_base::data_types::ChainId;
+use linera_chain::data_types;
+use linera_core::{
+    node::{NodeError, NotificationStream, ValidatorNode},
+    worker::{NetworkActions, Notification, ValidatorWorker, WorkerState},
+};
+use linera_storage::Store;
+use linera_views::views::ViewError;
+
 pub use crate::{
     client_delegate,
     config::{
@@ -21,31 +50,8 @@ pub use crate::{
     RpcMessage,
 };
 use crate::{
-    config::NotificationConfig, grpc_network::grpc::notifier_service_client::NotifierServiceClient,
-};
-use async_trait::async_trait;
-use futures::{
-    channel::{mpsc, mpsc::Receiver, oneshot::Sender},
-    FutureExt, SinkExt, StreamExt,
-};
-use linera_chain::data_types;
-use linera_core::{
-    node::{NodeError, ValidatorNode},
-    worker::{NetworkActions, Notification, ValidatorWorker, WorkerState},
-};
-use linera_storage::Store;
-use linera_views::views::ViewError;
-use log::{debug, error, info, warn};
-use std::{
-    net::{AddrParseError, SocketAddr},
-    str::FromStr,
-    time::Duration,
-};
-use thiserror::Error;
-use tokio::task::{JoinError, JoinHandle};
-use tonic::{
-    transport::{Channel, Server},
-    Request, Response, Status,
+    config::NotificationConfig,
+    grpc_network::grpc::{notifier_service_client::NotifierServiceClient, SubscriptionRequest},
 };
 
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -417,6 +423,26 @@ impl ValidatorNode for GrpcClient {
         query: linera_core::data_types::ChainInfoQuery,
     ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
         client_delegate!(self, handle_chain_info_query, query)
+    }
+
+    async fn subscribe(&mut self, chains: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
+        let subscription_request = SubscriptionRequest {
+            chain_ids: chains.into_iter().map(|chain| chain.into()).collect(),
+        };
+        let notification_stream = self
+            .0
+            .subscribe(Request::new(subscription_request))
+            .await
+            .map_err(|e| NodeError::GrpcError {
+                error: format!("remote request [subscribe] failed with status: {:?}", e),
+            })?
+            .into_inner();
+
+        Ok(Box::pin(
+            notification_stream
+                .filter_map(|n| async { n.ok() })
+                .filter_map(|n| async { Notification::try_from(n).ok() }),
+        ))
     }
 }
 

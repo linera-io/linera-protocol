@@ -12,6 +12,7 @@ test = ["test-strategy", "proptest"]
 [dependencies]
 anyhow = "1.0.57"
 async-trait = "0.1.52"
+dashmap = "5.4.0"
 futures = "0.3.17"
 linera-base = { path = "../linera-base" }
 linera-chain = { path = "../linera-chain" }
@@ -26,6 +27,7 @@ serde = { version = "1.0.130", features = ["derive"] }
 test-strategy = { version = "0.2.0", optional = true }
 thiserror = "1.0.31"
 tokio = "1.12.0"
+tokio-stream = "0.1.11"
 
 [dev-dependencies]
 bcs = "0.1.3"

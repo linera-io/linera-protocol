@@ -2,6 +2,23 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{io, time::Duration};
+
+use async_trait::async_trait;
+use futures::{channel::mpsc, sink::SinkExt, stream::StreamExt};
+use log::{debug, error, info, warn};
+use tokio::time;
+
+use linera_base::data_types::ChainId;
+use linera_chain::data_types::{BlockProposal, Certificate};
+use linera_core::{
+    data_types::{ChainInfoQuery, ChainInfoResponse},
+    node::{NodeError, NotificationStream, ValidatorNode},
+    worker::{NetworkActions, ValidatorWorker, WorkerState},
+};
+use linera_storage::Store;
+use linera_views::views::ViewError;
+
 use crate::{
     codec,
     config::{
@@ -12,21 +29,6 @@ use crate::{
     transport::{MessageHandler, ServerHandle, TransportProtocol},
     RpcMessage,
 };
-use async_trait::async_trait;
-use futures::{channel::mpsc, sink::SinkExt, stream::StreamExt};
-use linera_core::worker::NetworkActions;
-
-use linera_chain::data_types::{BlockProposal, Certificate};
-use linera_core::{
-    data_types::{ChainInfoQuery, ChainInfoResponse},
-    node::{NodeError, ValidatorNode},
-    worker::{ValidatorWorker, WorkerState},
-};
-use linera_storage::Store;
-use linera_views::views::ViewError;
-use log::{debug, error, info, warn};
-use std::{io, time::Duration};
-use tokio::time;
 
 #[derive(Clone)]
 pub struct Server<S> {
@@ -356,6 +358,12 @@ impl ValidatorNode for SimpleClient {
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.send_recv_info(query.into()).await
+    }
+
+    async fn subscribe(&mut self, _chains: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
+        Err(NodeError::SubscriptionError {
+            transport: self.network.protocol.to_string(),
+        })
     }
 }
 

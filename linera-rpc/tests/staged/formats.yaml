@@ -374,6 +374,10 @@ NodeError:
       CannotResolveValidatorAddress:
         STRUCT:
           - address: STR
+    19:
+      SubscriptionError:
+        STRUCT:
+          - transport: STR
 Operation:
   ENUM:
     0:

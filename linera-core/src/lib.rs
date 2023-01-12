@@ -5,6 +5,7 @@
 pub mod client;
 pub mod data_types;
 pub mod node;
+pub mod notifier;
 pub mod worker;
 
 pub(crate) mod updater;

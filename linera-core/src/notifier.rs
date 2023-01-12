@@ -1,27 +1,35 @@
 use dashmap::DashMap;
 use linera_base::data_types::ChainId;
 use log::trace;
-use tokio::sync::mpsc::UnboundedSender;
-use tonic::Status;
-
-type NotificationResult<N> = Result<N, Status>;
-type NotificationSender<N> = UnboundedSender<NotificationResult<N>>;
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 /// The `Notifier` holds references to clients waiting to receive notifications
 /// from the validator.
 /// Clients will be evicted if their connections are terminated.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct Notifier<N> {
-    inner: DashMap<ChainId, Vec<NotificationSender<N>>>,
+    inner: DashMap<ChainId, Vec<UnboundedSender<N>>>,
+}
+
+// This is here because #[derive(Default)] does not seem to work
+// Is this a compiler bug?
+impl<N> Default for Notifier<N> {
+    fn default() -> Self {
+        Self {
+            inner: Default::default(),
+        }
+    }
 }
 
 impl<N: Clone> Notifier<N> {
     /// Create a subscription given a collection of ChainIds and a sender to the client.
-    pub fn subscribe(&self, chain_ids: Vec<ChainId>, sender: NotificationSender<N>) {
+    pub fn subscribe(&self, chain_ids: Vec<ChainId>) -> UnboundedReceiver<N> {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         for id in chain_ids {
             let mut senders = self.inner.entry(id).or_default();
-            senders.push(sender.clone());
+            senders.push(tx.clone());
         }
+        rx
     }
 
     /// Notify all the clients waiting for a notification from a given chain.
@@ -37,7 +45,7 @@ impl<N: Clone> Notifier<N> {
             let senders = senders.value_mut();
 
             for (index, sender) in senders.iter_mut().enumerate() {
-                if sender.send(Ok(notification.clone())).is_err() {
+                if sender.send(notification.clone()).is_err() {
                     dead_senders.push(index);
                 }
             }
@@ -72,17 +80,13 @@ pub mod tests {
         let chain_a = ChainId::root(0);
         let chain_b = ChainId::root(1);
 
-        let (tx_a, mut rx_a) = tokio::sync::mpsc::unbounded_channel();
-        let (tx_b, mut rx_b) = tokio::sync::mpsc::unbounded_channel();
-        let (tx_a_b, mut rx_a_b) = tokio::sync::mpsc::unbounded_channel();
-
         let a_rec = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let b_rec = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let a_b_rec = Arc::new(std::sync::atomic::AtomicUsize::new(0));
 
-        notifier.subscribe(vec![chain_a], tx_a);
-        notifier.subscribe(vec![chain_b], tx_b);
-        notifier.subscribe(vec![chain_a, chain_b], tx_a_b);
+        let mut rx_a = notifier.subscribe(vec![chain_a]);
+        let mut rx_b = notifier.subscribe(vec![chain_b]);
+        let mut rx_a_b = notifier.subscribe(vec![chain_a, chain_b]);
 
         let a_rec_clone = a_rec.clone();
         let b_rec_clone = b_rec.clone();
@@ -150,20 +154,15 @@ pub mod tests {
         let chain_c = ChainId::root(2);
         let chain_d = ChainId::root(3);
 
-        let (tx_a, mut rx_a) = tokio::sync::mpsc::unbounded_channel();
-        let (tx_b, mut rx_b) = tokio::sync::mpsc::unbounded_channel();
-        let (tx_c, mut rx_c) = tokio::sync::mpsc::unbounded_channel();
-        let (tx_d, mut rx_d) = tokio::sync::mpsc::unbounded_channel();
-
         // Chain A -> Notify A, Notify B
         // Chain B -> Notify A, Notify B
         // Chain C -> Notify C
         // Chain D -> Notify A, Notify B, Notify C, Notify D
 
-        notifier.subscribe(vec![chain_a, chain_b, chain_d], tx_a);
-        notifier.subscribe(vec![chain_a, chain_b, chain_d], tx_b);
-        notifier.subscribe(vec![chain_c, chain_d], tx_c);
-        notifier.subscribe(vec![chain_d], tx_d);
+        let mut rx_a = notifier.subscribe(vec![chain_a, chain_b, chain_d]);
+        let mut rx_b = notifier.subscribe(vec![chain_a, chain_b, chain_d]);
+        let mut rx_c = notifier.subscribe(vec![chain_c, chain_d]);
+        let mut rx_d = notifier.subscribe(vec![chain_d]);
 
         assert_eq!(notifier.inner.len(), 4);
 

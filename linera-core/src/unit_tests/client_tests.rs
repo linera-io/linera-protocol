@@ -4,7 +4,7 @@
 use crate::{
     client::{ChainClient, ChainClientState, CommunicateAction, ValidatorNodeProvider},
     data_types::*,
-    node::{NodeError, ValidatorNode},
+    node::{NodeError, NotificationStream, ValidatorNode},
     worker::{ValidatorWorker, WorkerState},
 };
 use async_trait::async_trait;
@@ -80,6 +80,12 @@ where
             .handle_chain_info_query(query)
             .await?;
         Ok(response)
+    }
+
+    async fn subscribe(&mut self, _chains: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
+        Err(NodeError::SubscriptionError {
+            transport: "local".to_string(),
+        })
     }
 }
 
