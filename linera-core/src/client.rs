@@ -135,6 +135,11 @@ impl<P, S> ChainClientState<P, S> {
     }
 }
 
+enum ReceiveCertificateMode {
+    NeedsCheck,
+    AlreadyChecked,
+}
+
 impl<P, S> ChainClientState<P, S>
 where
     P: ValidatorNodeProvider,
@@ -448,7 +453,7 @@ where
     async fn receive_certificate_internal(
         &mut self,
         certificate: Certificate,
-        already_checked: bool,
+        mode: ReceiveCertificateMode,
     ) -> Result<()> {
         let block = certificate
             .value
@@ -468,7 +473,7 @@ where
                  Try a newer certificate from the same origin"
             )
         })?;
-        if !already_checked {
+        if let ReceiveCertificateMode::NeedsCheck = mode {
             certificate.check(remote_committee)?;
         }
         // Recover history from the network. We assume that the committee that signed the
@@ -598,7 +603,7 @@ where
                 if let Err(e) = self
                     .receive_certificate_internal(
                         certificate.clone(),
-                        /* already checked */ true,
+                        ReceiveCertificateMode::AlreadyChecked,
                     )
                     .await
                 {
@@ -658,11 +663,7 @@ where
 
     /// Execute (or retry) a regular block proposal. Update local balance.
     /// If `with_confirmation` is false, we stop short of executing the finalized block.
-    async fn propose_block(
-        &mut self,
-        block: Block,
-        with_confirmation: bool,
-    ) -> Result<Certificate> {
+    async fn propose_block(&mut self, block: Block) -> Result<Certificate> {
         let next_round = self.next_round;
         ensure!(
             matches!(&self.pending_block, None)
@@ -736,25 +737,23 @@ where
         );
         self.process_certificate(final_certificate.clone()).await?;
         self.pending_block = None;
-        // Communicate the new certificate now if needed.
-        if with_confirmation {
-            self.communicate_chain_updates(
-                &committee,
-                self.chain_id,
-                CommunicateAction::AdvanceToNextBlockHeight(self.next_block_height),
-            )
-            .await?;
-            if let Ok(new_committee) = self.local_committee().await {
-                if new_committee != committee {
-                    // If the configuration just changed, communicate to the new committee as well.
-                    // (This is actually more important that updating the previous committee.)
-                    self.communicate_chain_updates(
-                        &new_committee,
-                        self.chain_id,
-                        CommunicateAction::AdvanceToNextBlockHeight(self.next_block_height),
-                    )
-                    .await?;
-                }
+        // Communicate the new certificate now.
+        self.communicate_chain_updates(
+            &committee,
+            self.chain_id,
+            CommunicateAction::AdvanceToNextBlockHeight(self.next_block_height),
+        )
+        .await?;
+        if let Ok(new_committee) = self.local_committee().await {
+            if new_committee != committee {
+                // If the configuration just changed, communicate to the new committee as well.
+                // (This is actually more important that updating the previous committee.)
+                self.communicate_chain_updates(
+                    &new_committee,
+                    self.chain_id,
+                    CommunicateAction::AdvanceToNextBlockHeight(self.next_block_height),
+                )
+                .await?;
             }
         }
         Ok(final_certificate)
@@ -786,9 +785,7 @@ where
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
         };
-        let certificate = self
-            .propose_block(block, /* with_confirmation */ true)
-            .await?;
+        let certificate = self.propose_block(block).await?;
         Ok(certificate)
     }
 
@@ -870,9 +867,7 @@ where
             Some(block) => {
                 // Finish executing the previous block.
                 let block = block.clone();
-                let certificate = self
-                    .propose_block(block, /* with_confirmation */ true)
-                    .await?;
+                let certificate = self.propose_block(block).await?;
                 Ok(Some(certificate))
             }
             None => Ok(None),
@@ -886,7 +881,7 @@ where
 
     /// Process confirmed operation for which this chain is a recipient.
     pub async fn receive_certificate(&mut self, certificate: Certificate) -> Result<()> {
-        self.receive_certificate_internal(certificate, /* already checked */ false)
+        self.receive_certificate_internal(certificate, ReceiveCertificateMode::NeedsCheck)
             .await
     }
 
