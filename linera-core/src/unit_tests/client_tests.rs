@@ -11,6 +11,8 @@ use async_trait::async_trait;
 use futures::lock::Mutex;
 use linera_base::{committee::Committee, crypto::*, data_types::*};
 use linera_chain::data_types::{Block, BlockProposal, Certificate, Value};
+#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
+use linera_execution::Bytecode;
 use linera_execution::{
     system::{Amount, Balance, SystemOperation, UserData},
     ApplicationId, Operation, Query, Response, SystemQuery, SystemResponse,
@@ -1289,5 +1291,90 @@ where
     admin.receive_certificate(cert).await.unwrap();
     // Transfer goes through and the previous one as well thanks to block chaining.
     assert_eq!(admin.synchronize_balance().await.unwrap(), Balance::from(3));
+    Ok(())
+}
+
+#[test(tokio::test)]
+#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
+async fn test_memory_create_application() -> Result<(), anyhow::Error> {
+    run_test_create_application(MakeMemoryStoreClient).await
+}
+
+#[test(tokio::test)]
+#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
+async fn test_rocksdb_create_application() -> Result<(), anyhow::Error> {
+    let _lock = GUARD.lock().await;
+    run_test_create_application(MakeRocksdbStoreClient::default()).await
+}
+
+#[test(tokio::test)]
+#[ignore]
+#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
+async fn test_dynamo_db_create_application() -> Result<(), anyhow::Error> {
+    run_test_create_application(MakeDynamoDbStoreClient::default()).await
+}
+
+#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
+async fn run_test_create_application<B>(store_builder: B) -> Result<(), anyhow::Error>
+where
+    B: StoreBuilder,
+    ViewError: From<<B::Store as Store>::ContextError>,
+{
+    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
+    let mut publisher = builder
+        .add_initial_chain(ChainDescription::Root(0), Balance::from(3))
+        .await?;
+    let mut creator = builder
+        .add_initial_chain(ChainDescription::Root(1), Balance::from(0))
+        .await?;
+
+    let cert = creator
+        .subscribe_to_published_bytecodes(publisher.chain_id)
+        .await
+        .unwrap();
+    publisher.receive_certificate(cert).await.unwrap();
+    publisher.process_inbox().await.unwrap();
+
+    let (bytecode_id, _) = publisher
+        .publish_bytecode(
+            Bytecode::load_from_file(
+                "../target/wasm32-unknown-unknown/debug/examples/counter_contract.wasm",
+            )
+            .await?,
+            Bytecode::load_from_file(
+                "../target/wasm32-unknown-unknown/debug/examples/counter_service.wasm",
+            )
+            .await?,
+        )
+        .await
+        .unwrap();
+
+    creator.synchronize_balance().await.unwrap();
+    creator.process_inbox().await.unwrap();
+
+    let initial_value = 10_u128;
+    let initial_value_bytes = bcs::to_bytes(&initial_value)?;
+    let (application_id, _) = creator
+        .create_application(bytecode_id, initial_value_bytes)
+        .await
+        .unwrap();
+
+    let increment = 5_u128;
+    let user_operation = bcs::to_bytes(&increment)?;
+    creator
+        .execute_operation(
+            ApplicationId::User(application_id),
+            Operation::User(user_operation),
+        )
+        .await
+        .unwrap();
+    let response = creator
+        .query_application(ApplicationId::User(application_id), &Query::User(vec![]))
+        .await
+        .unwrap();
+
+    let expected = 15_u128;
+    let expected_bytes = bcs::to_bytes(&expected)?;
+    assert!(matches!(response, Response::User(bytes) if bytes == expected_bytes));
     Ok(())
 }
