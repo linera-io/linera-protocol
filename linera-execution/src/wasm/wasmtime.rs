@@ -22,7 +22,7 @@ use self::{
     writable_system::{WritableSystem, WritableSystemTables},
 };
 use super::{
-    async_boundary::{ContextForwarder, HostFuture},
+    async_boundary::{ContextForwarder, HostFuture, HostFutureQueue},
     common::{self, Runtime, WasmRuntimeContext},
     WasmApplication, WasmExecutionError,
 };
@@ -132,7 +132,7 @@ impl<'storage> ContractState<'storage> {
     pub fn new(storage: &'storage dyn WritableStorage, context: ContextForwarder) -> Self {
         Self {
             data: ContractData::default(),
-            system_api: SystemApi::new(storage, context),
+            system_api: SystemApi::new(context, storage),
             system_tables: WritableSystemTables::default(),
         }
     }
@@ -161,7 +161,7 @@ impl<'storage> ServiceState<'storage> {
     pub fn new(storage: &'storage dyn QueryableStorage, context: ContextForwarder) -> Self {
         Self {
             data: ServiceData::default(),
-            system_api: SystemApi::new(storage, context),
+            system_api: SystemApi::new(context, storage),
             system_tables: QueryableSystemTables::default(),
         }
     }
@@ -295,13 +295,18 @@ impl<'storage> common::Service<ServiceWasmtime<'storage>> for Service<ServiceSta
 pub struct SystemApi<S> {
     context: ContextForwarder,
     storage: S,
+    future_queue: HostFutureQueue,
 }
 
 impl<S> SystemApi<S> {
     /// Create a new [`SystemApi`] instance using the provided asynchronous `context` and exporting
     /// the API from `storage`.
     pub fn new(context: ContextForwarder, storage: S) -> Self {
-        SystemApi { context, storage }
+        SystemApi {
+            context,
+            storage,
+            future_queue: HostFutureQueue::new(),
+        }
     }
 }
 
@@ -324,7 +329,7 @@ impl<'storage> WritableSystem for SystemApi<&'storage dyn WritableStorage> {
     }
 
     fn load_new(&mut self) -> Self::Load {
-        HostFuture::new(self.storage.try_read_my_state())
+        self.future_queue.add(self.storage.try_read_my_state())
     }
 
     fn load_poll(&mut self, future: &Self::Load) -> writable_system::PollLoad {
@@ -337,7 +342,8 @@ impl<'storage> WritableSystem for SystemApi<&'storage dyn WritableStorage> {
     }
 
     fn load_and_lock_new(&mut self) -> Self::LoadAndLock {
-        HostFuture::new(self.storage.try_read_and_lock_my_state())
+        self.future_queue
+            .add(self.storage.try_read_and_lock_my_state())
     }
 
     fn load_and_lock_poll(&mut self, future: &Self::LoadAndLock) -> writable_system::PollLoad {
@@ -370,7 +376,7 @@ impl<'storage> WritableSystem for SystemApi<&'storage dyn WritableStorage> {
             .collect();
         let argument = Vec::from(argument);
 
-        HostFuture::new(async move {
+        self.future_queue.add(async move {
             storage
                 .try_call_application(
                     authenticated,
@@ -409,7 +415,7 @@ impl<'storage> WritableSystem for SystemApi<&'storage dyn WritableStorage> {
             .collect();
         let argument = Vec::from(argument);
 
-        HostFuture::new(async move {
+        self.future_queue.add(async move {
             storage
                 .try_call_session(authenticated, session.into(), &argument, forwarded_sessions)
                 .await
@@ -445,7 +451,7 @@ impl<'storage> QueryableSystem for SystemApi<&'storage dyn QueryableStorage> {
     }
 
     fn load_new(&mut self) -> Self::Load {
-        HostFuture::new(self.storage.try_read_my_state())
+        self.future_queue.add(self.storage.try_read_my_state())
     }
 
     fn load_poll(&mut self, future: &Self::Load) -> queryable_system::PollLoad {

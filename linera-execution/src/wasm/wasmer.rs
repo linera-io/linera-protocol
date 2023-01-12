@@ -19,7 +19,7 @@ wit_bindgen_host_wasmer_rust::import!("../linera-sdk/service.wit");
 
 use self::{contract::Contract, service::Service};
 use super::{
-    async_boundary::{ContextForwarder, HostFuture},
+    async_boundary::{ContextForwarder, HostFuture, HostFutureQueue},
     common::{self, Runtime, WasmRuntimeContext},
     WasmApplication, WasmExecutionError,
 };
@@ -223,6 +223,7 @@ impl<'storage> common::Service<ServiceWasmer<'storage>> for Service {
 pub struct SystemApi<S> {
     context: ContextForwarder,
     storage: Arc<Mutex<Option<S>>>,
+    future_queue: HostFutureQueue,
 }
 
 impl SystemApi<&'static dyn WritableStorage> {
@@ -250,7 +251,14 @@ impl SystemApi<&'static dyn WritableStorage> {
             _lifetime: PhantomData,
         };
 
-        (SystemApi { context, storage }, guard)
+        (
+            SystemApi {
+                context,
+                storage,
+                future_queue: HostFutureQueue::new(),
+            },
+            guard,
+        )
     }
 }
 
@@ -268,7 +276,14 @@ impl SystemApi<&'static dyn QueryableStorage> {
             _lifetime: PhantomData,
         };
 
-        (SystemApi { context, storage }, guard)
+        (
+            SystemApi {
+                context,
+                storage,
+                future_queue: HostFutureQueue::new(),
+            },
+            guard,
+        )
     }
 }
 
@@ -310,7 +325,7 @@ impl writable_system::WritableSystem for SystemApi<&'static dyn WritableStorage>
     }
 
     fn load_new(&mut self) -> Self::Load {
-        HostFuture::new(self.storage().try_read_my_state())
+        self.future_queue.add(self.storage().try_read_my_state())
     }
 
     fn load_poll(&mut self, future: &Self::Load) -> writable_system::PollLoad {
@@ -323,7 +338,8 @@ impl writable_system::WritableSystem for SystemApi<&'static dyn WritableStorage>
     }
 
     fn load_and_lock_new(&mut self) -> Self::LoadAndLock {
-        HostFuture::new(self.storage().try_read_and_lock_my_state())
+        self.future_queue
+            .add(self.storage().try_read_and_lock_my_state())
     }
 
     fn load_and_lock_poll(&mut self, future: &Self::LoadAndLock) -> writable_system::PollLoad {
@@ -356,7 +372,7 @@ impl writable_system::WritableSystem for SystemApi<&'static dyn WritableStorage>
             .collect();
         let argument = Vec::from(argument);
 
-        HostFuture::new(async move {
+        self.future_queue.add(async move {
             storage
                 .try_call_application(
                     authenticated,
@@ -395,7 +411,7 @@ impl writable_system::WritableSystem for SystemApi<&'static dyn WritableStorage>
             .collect();
         let argument = Vec::from(argument);
 
-        HostFuture::new(async move {
+        self.future_queue.add(async move {
             storage
                 .try_call_session(authenticated, session.into(), &argument, forwarded_sessions)
                 .await
@@ -431,7 +447,7 @@ impl queryable_system::QueryableSystem for SystemApi<&'static dyn QueryableStora
     }
 
     fn load_new(&mut self) -> Self::Load {
-        HostFuture::new(self.storage().try_read_my_state())
+        self.future_queue.add(self.storage().try_read_my_state())
     }
 
     fn load_poll(&mut self, future: &Self::Load) -> queryable_system::PollLoad {
