@@ -34,108 +34,11 @@ use std::{
 #[path = "unit_tests/client_tests.rs"]
 mod client_tests;
 
-/// How to communicate with a chain across all the validators. As a rule, operations are
-/// considered successful (and communication may stop) when they succeeded in gathering a
-/// quorum of responses.
-///
-/// The chain being operated is called the "local chain" or just the "chain".
-#[async_trait]
-pub trait ChainClient {
-    /// Send money to a chain.
-    async fn transfer_to_chain(
-        &mut self,
-        amount: Amount,
-        recipient: ChainId,
-        user_data: UserData,
-    ) -> Result<Certificate>;
-
-    /// Burn money.
-    async fn burn(&mut self, amount: Amount, user_data: UserData) -> Result<Certificate>;
-
-    /// Process confirmed operation for which this chain is a recipient.
-    async fn receive_certificate(&mut self, certificate: Certificate) -> Result<()>;
-
-    /// Rotate the key of the chain.
-    async fn rotate_key_pair(&mut self, key_pair: KeyPair) -> Result<Certificate>;
-
-    /// Transfer ownership of the chain.
-    async fn transfer_ownership(&mut self, new_owner: Owner) -> Result<Certificate>;
-
-    /// Add another owner to the chain.
-    async fn share_ownership(&mut self, new_owner: Owner) -> Result<Certificate>;
-
-    /// Open a new chain with a derived UID.
-    async fn open_chain(&mut self, owner: Owner) -> Result<(ChainId, Certificate)>;
-
-    /// Close the chain (and lose everything in it!!).
-    async fn close_chain(&mut self) -> Result<Certificate>;
-
-    async fn query_application(
-        &mut self,
-        application_id: ApplicationId,
-        query: &Query,
-    ) -> Result<Response>;
-
-    /// Create a new committee and start using it (admin chains only).
-    async fn stage_new_committee(
-        &mut self,
-        validators: BTreeMap<ValidatorName, ValidatorState>,
-    ) -> Result<Certificate>;
-
-    /// Create an empty block to process all incoming messages. This may require several blocks.
-    async fn process_inbox(&mut self) -> Result<Vec<Certificate>>;
-
-    /// Start listening to the admin chain for new committees. (This is only useful for
-    /// other genesis chains or for testing.)
-    async fn subscribe_to_new_committees(&mut self) -> Result<Certificate>;
-
-    /// Stop listening to the admin chain for new committees. (This is only useful for
-    /// testing.)
-    async fn unsubscribe_to_new_committees(&mut self) -> Result<Certificate>;
-
-    /// Deprecate all the configurations of voting rights but the last one (admin chains
-    /// only). Currently, each individual chain is still entitled to wait before accepting
-    /// this command. However, it is expected that deprecated validators stop functioning
-    /// shortly after such command is issued.
-    async fn finalize_committee(&mut self) -> Result<Certificate>;
-
-    /// Send money to a chain.
-    /// Do not check balance. (This may block the client)
-    /// Do not confirm the transaction.
-    async fn transfer_to_chain_unsafe_unconfirmed(
-        &mut self,
-        amount: Amount,
-        recipient: ChainId,
-        user_data: UserData,
-    ) -> Result<Certificate>;
-
-    /// Attempt to synchronize with validators and re-compute our balance.
-    async fn synchronize_balance(&mut self) -> Result<Balance>;
-
-    /// Retry the last pending block
-    async fn retry_pending_block(&mut self) -> Result<Option<Certificate>>;
-
-    /// Clear the information on any operation that previously failed.
-    async fn clear_pending_block(&mut self);
-
-    /// Return the current local balance.
-    async fn local_balance(&mut self) -> Result<Balance>;
-
-    /// Attempt to update all validators about the local chain.
-    async fn force_validator_update(&mut self) -> Result<()>;
-}
-
-/// Turn an address into a validator node (local node or client to a remote node).
-#[async_trait]
-pub trait ValidatorNodeProvider {
-    type Node: ValidatorNode + Clone + Send + Sync + 'static;
-
-    async fn make_node(&self, address: &str) -> Result<Self::Node, NodeError>;
-}
-
-/// Reference implementation of the `ChainClient` trait using many instances of some
-/// `ValidatorNode` implementation for communication, and a client to some (local)
-/// storage.
+/// Client to operate a chain by interacting with validators and the given local storage
+/// implementation.
+/// * The chain being operated is called the "local chain" or just the "chain".
+/// * As a rule, operations are considered successful (and communication may stop) when
+/// they succeeded in gathering a quorum of responses.
 pub struct ChainClientState<ValidatorNodeProvider, StorageClient> {
     /// The off-chain chain id.
     chain_id: ChainId,
@@ -166,6 +69,14 @@ pub struct ChainClientState<ValidatorNodeProvider, StorageClient> {
     /// Local node to manage the execution state and the local storage of the chains that we are
     /// tracking.
     node_client: LocalNodeClient<StorageClient>,
+}
+
+/// Turn an address into a validator node (local node or client to a remote node).
+#[async_trait]
+pub trait ValidatorNodeProvider {
+    type Node: ValidatorNode + Clone + Send + Sync + 'static;
+
+    async fn make_node(&self, address: &str) -> Result<Self::Node, NodeError>;
 }
 
 impl<P, S> ChainClientState<P, S> {
@@ -382,14 +293,7 @@ where
         }
         Ok(nodes)
     }
-}
 
-impl<P, S> ChainClientState<P, S>
-where
-    P: ValidatorNodeProvider + Send + 'static + Sync,
-    S: Store + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
-{
     /// Prepare the chain for the next operation.
     async fn prepare_chain(&mut self) -> Result<(), NodeError> {
         // Verify that our local storage contains enough history compared to the
@@ -861,16 +765,8 @@ where
         }
         Ok(final_certificate)
     }
-}
 
-#[async_trait]
-impl<P, S> ChainClient for ChainClientState<P, S>
-where
-    P: ValidatorNodeProvider + Send + 'static + Sync,
-    S: Store + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
-{
-    async fn local_balance(&mut self) -> Result<Balance> {
+    pub async fn local_balance(&mut self) -> Result<Balance> {
         ensure!(
             self.chain_info().await?.next_block_height == self.next_block_height,
             "The local node is behind the trusted state in wallet and needs synchronization with validators"
@@ -892,7 +788,7 @@ where
     }
 
     /// Attempt to update all validators about the local chain.
-    async fn force_validator_update(&mut self) -> Result<()> {
+    pub async fn force_validator_update(&mut self) -> Result<()> {
         let mut committee = self.local_committee().await?;
         committee.quorum_threshold = committee.total_votes;
         self.communicate_chain_updates(
@@ -904,7 +800,8 @@ where
         Ok(())
     }
 
-    async fn transfer_to_chain(
+    /// Send tokens to a chain.
+    pub async fn transfer_to_chain(
         &mut self,
         amount: Amount,
         recipient: ChainId,
@@ -914,17 +811,20 @@ where
             .await
     }
 
-    async fn burn(&mut self, amount: Amount, user_data: UserData) -> Result<Certificate> {
+    /// Burn tokens.
+    pub async fn burn(&mut self, amount: Amount, user_data: UserData) -> Result<Certificate> {
         self.transfer(amount, Address::Burn, user_data).await
     }
 
-    async fn synchronize_balance(&mut self) -> Result<Balance> {
+    /// Attempt to synchronize with validators and re-compute our balance.
+    pub async fn synchronize_balance(&mut self) -> Result<Balance> {
         self.find_received_certificates().await?;
         self.prepare_chain().await?;
         self.local_balance().await
     }
 
-    async fn retry_pending_block(&mut self) -> Result<Option<Certificate>> {
+    /// Retry the last pending block
+    pub async fn retry_pending_block(&mut self) -> Result<Option<Certificate>> {
         self.find_received_certificates().await?;
         self.prepare_chain().await?;
         match &self.pending_block {
@@ -940,16 +840,19 @@ where
         }
     }
 
-    async fn clear_pending_block(&mut self) {
+    /// Clear the information on any operation that previously failed.
+    pub async fn clear_pending_block(&mut self) {
         self.pending_block = None;
     }
 
-    async fn receive_certificate(&mut self, certificate: Certificate) -> Result<()> {
+    /// Process confirmed operation for which this chain is a recipient.
+    pub async fn receive_certificate(&mut self, certificate: Certificate) -> Result<()> {
         self.receive_certificate_internal(certificate, /* already checked */ false)
             .await
     }
 
-    async fn rotate_key_pair(&mut self, key_pair: KeyPair) -> Result<Certificate> {
+    /// Rotate the key of the chain.
+    pub async fn rotate_key_pair(&mut self, key_pair: KeyPair) -> Result<Certificate> {
         self.prepare_chain().await?;
         let new_owner = Owner(key_pair.public());
         let block = Block {
@@ -970,7 +873,8 @@ where
         Ok(certificate)
     }
 
-    async fn transfer_ownership(&mut self, new_owner: Owner) -> Result<Certificate> {
+    /// Transfer ownership of the chain.
+    pub async fn transfer_ownership(&mut self, new_owner: Owner) -> Result<Certificate> {
         self.prepare_chain().await?;
         let block = Block {
             epoch: self.epoch().await?,
@@ -989,7 +893,8 @@ where
         Ok(certificate)
     }
 
-    async fn share_ownership(&mut self, new_owner: Owner) -> Result<Certificate> {
+    /// Add another owner to the chain.
+    pub async fn share_ownership(&mut self, new_owner: Owner) -> Result<Certificate> {
         self.prepare_chain().await?;
         let owner = self.identity().await?;
         let block = Block {
@@ -1011,7 +916,8 @@ where
         Ok(certificate)
     }
 
-    async fn open_chain(&mut self, owner: Owner) -> Result<(ChainId, Certificate)> {
+    /// Open a new chain with a derived UID.
+    pub async fn open_chain(&mut self, owner: Owner) -> Result<(ChainId, Certificate)> {
         self.prepare_chain().await?;
         let id = ChainId::child(EffectId {
             chain_id: self.chain_id,
@@ -1043,7 +949,8 @@ where
         Ok((id, certificate))
     }
 
-    async fn close_chain(&mut self) -> Result<Certificate> {
+    /// Close the chain (and lose everything in it!!).
+    pub async fn close_chain(&mut self) -> Result<Certificate> {
         self.prepare_chain().await?;
         let block = Block {
             epoch: self.epoch().await?,
@@ -1062,7 +969,8 @@ where
         Ok(certificate)
     }
 
-    async fn query_application(
+    /// Query an application.
+    pub async fn query_application(
         &mut self,
         application_id: ApplicationId,
         query: &Query,
@@ -1074,7 +982,8 @@ where
         Ok(response)
     }
 
-    async fn stage_new_committee(
+    /// Create a new committee and start using it (admin chains only).
+    pub async fn stage_new_committee(
         &mut self,
         validators: BTreeMap<ValidatorName, ValidatorState>,
     ) -> Result<Certificate> {
@@ -1102,7 +1011,8 @@ where
         Ok(certificate)
     }
 
-    async fn process_inbox(&mut self) -> Result<Vec<Certificate>> {
+    /// Create an empty block to process all incoming messages. This may require several blocks.
+    pub async fn process_inbox(&mut self) -> Result<Vec<Certificate>> {
         self.prepare_chain().await?;
         let mut certificates = Vec::new();
         loop {
@@ -1126,7 +1036,9 @@ where
         Ok(certificates)
     }
 
-    async fn subscribe_to_new_committees(&mut self) -> Result<Certificate> {
+    /// Start listening to the admin chain for new committees. (This is only useful for
+    /// other genesis chains or for testing.)
+    pub async fn subscribe_to_new_committees(&mut self) -> Result<Certificate> {
         self.prepare_chain().await?;
         let block = Block {
             epoch: self.epoch().await?,
@@ -1148,7 +1060,9 @@ where
         Ok(certificate)
     }
 
-    async fn unsubscribe_to_new_committees(&mut self) -> Result<Certificate> {
+    /// Stop listening to the admin chain for new committees. (This is only useful for
+    /// testing.)
+    pub async fn unsubscribe_to_new_committees(&mut self) -> Result<Certificate> {
         self.prepare_chain().await?;
         let block = Block {
             epoch: self.epoch().await?,
@@ -1170,7 +1084,11 @@ where
         Ok(certificate)
     }
 
-    async fn finalize_committee(&mut self) -> Result<Certificate> {
+    /// Deprecate all the configurations of voting rights but the last one (admin chains
+    /// only). Currently, each individual chain is still entitled to wait before accepting
+    /// this command. However, it is expected that deprecated validators stop functioning
+    /// shortly after such command is issued.
+    pub async fn finalize_committee(&mut self) -> Result<Certificate> {
         self.prepare_chain().await?;
         let (current_epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
         let current_epoch = current_epoch.ok_or(NodeError::InactiveLocalChain(self.chain_id))?;
@@ -1204,7 +1122,10 @@ where
         Ok(certificate)
     }
 
-    async fn transfer_to_chain_unsafe_unconfirmed(
+    /// Send money to a chain.
+    /// Do not check balance. (This may block the client)
+    /// Do not confirm the transaction.
+    pub async fn transfer_to_chain_unsafe_unconfirmed(
         &mut self,
         amount: Amount,
         recipient: ChainId,

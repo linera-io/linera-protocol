@@ -16,7 +16,7 @@ use linera_chain::data_types::{
     Block, BlockAndRound, BlockProposal, Certificate, SignatureAggregator, Vote,
 };
 use linera_core::{
-    client::{ChainClient, ChainClientState, ValidatorNodeProvider},
+    client::{ChainClientState, ValidatorNodeProvider},
     data_types::{ChainInfoQuery, ChainInfoResponse},
     node::{LocalNodeClient, ValidatorNode},
     worker::WorkerState,
