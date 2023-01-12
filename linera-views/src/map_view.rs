@@ -170,31 +170,23 @@ where
     where
         F: FnMut(Vec<u8>) -> Result<(), ViewError> + Send,
     {
-        let mut iter = self.updates.iter();
-        let mut pair = iter.next();
+        let mut updates = self.updates.iter();
+        let mut update = updates.next();
         if !self.was_cleared {
             let base = self.context.base_tag(KeyTag::Index as u8);
             for index in self.context.find_stripped_keys_by_prefix(&base).await? {
                 loop {
-                    match pair {
-                        Some((key, value)) => {
-                            let key = key.clone();
-                            if key < index {
-                                if value.is_some() {
-                                    f(key)?;
-                                }
-                                pair = iter.next();
-                            } else {
-                                if key != index {
-                                    f(index)?;
-                                } else if value.is_some() {
-                                    f(key)?;
-                                    pair = iter.next();
-                                }
+                    match update {
+                        Some((key, value)) if key <= &index => {
+                            if value.is_some() {
+                                f(key.to_vec())?;
+                            }
+                            update = updates.next();
+                            if key == &index {
                                 break;
                             }
                         }
-                        None => {
+                        _ => {
                             f(index)?;
                             break;
                         }
@@ -202,11 +194,11 @@ where
                 }
             }
         }
-        while let Some((key, value)) = pair {
+        while let Some((key, value)) = update {
             if value.is_some() {
                 f(key.to_vec())?;
             }
-            pair = iter.next();
+            update = updates.next();
         }
         Ok(())
     }
@@ -234,8 +226,8 @@ where
     where
         F: FnMut(Vec<u8>, V) -> Result<(), ViewError> + Send,
     {
-        let mut iter = self.updates.iter();
-        let mut pair = iter.next();
+        let mut updates = self.updates.iter();
+        let mut update = updates.next();
         if !self.was_cleared {
             let base = self.context.base_tag(KeyTag::Index as u8);
             for (index, index_val) in self
@@ -245,25 +237,17 @@ where
             {
                 let index_val = C::deserialize_value(&index_val)?;
                 loop {
-                    match pair {
-                        Some((key, value)) => {
-                            let key = key.clone();
-                            if key < index {
-                                if let Some(value) = value {
-                                    f(key, value.clone())?;
-                                }
-                                pair = iter.next();
-                            } else {
-                                if key != index {
-                                    f(index, index_val)?;
-                                } else if let Some(value) = value {
-                                    f(key, value.clone())?;
-                                    pair = iter.next();
-                                }
+                    match update {
+                        Some((key, value)) if key <= &index => {
+                            if let Some(value) = value {
+                                f(key.to_vec(), value.clone())?;
+                            }
+                            update = updates.next();
+                            if key == &index {
                                 break;
                             }
                         }
-                        None => {
+                        _ => {
                             f(index, index_val)?;
                             break;
                         }
@@ -271,11 +255,11 @@ where
                 }
             }
         }
-        while let Some((key, value)) = pair {
+        while let Some((key, value)) = update {
             if let Some(value) = value {
                 f(key.clone(), value.clone())?;
             }
-            pair = iter.next();
+            update = updates.next();
         }
         Ok(())
     }

@@ -5,7 +5,10 @@ use crate::common::{
     get_upper_bound, Batch, ContextFromDb, KeyValueOperations, SimpleTypeIterator, WriteOperation,
 };
 use async_trait::async_trait;
-use std::sync::Arc;
+use std::{
+    ops::{Bound, Bound::Excluded},
+    sync::Arc,
+};
 use thiserror::Error;
 
 pub type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
@@ -91,7 +94,7 @@ impl KeyValueOperations for RocksdbContainer {
         for i in 0..len {
             let op = batch.operations.get(i).unwrap();
             if let WriteOperation::DeletePrefix { key_prefix } = op {
-                if get_upper_bound(key_prefix).is_none() {
+                if get_upper_bound(key_prefix) == Bound::Unbounded {
                     for short_key in self.find_stripped_keys_by_prefix(key_prefix).await? {
                         let mut key = key_prefix.clone();
                         key.extend_from_slice(&short_key?);
@@ -110,11 +113,8 @@ impl KeyValueOperations for RocksdbContainer {
                     WriteOperation::Delete { key } => inner_batch.delete(&key),
                     WriteOperation::Put { key, value } => inner_batch.put(&key, value),
                     WriteOperation::DeletePrefix { key_prefix } => {
-                        match get_upper_bound(&key_prefix) {
-                            None => {}
-                            Some(upper_bound) => {
-                                inner_batch.delete_range(key_prefix, upper_bound);
-                            }
+                        if let Excluded(upper_bound) = get_upper_bound(&key_prefix) {
+                            inner_batch.delete_range(key_prefix, upper_bound);
                         }
                     }
                 }

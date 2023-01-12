@@ -21,24 +21,21 @@ pub type HashOutput = generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Dig
 /// is possible with the way the comparison operators for vectors is built.
 ///
 /// The statement is that p is a prefix of v if and only if p <= v < upper_bound(p).
-pub fn get_upper_bound(key_prefix: &[u8]) -> Option<Vec<u8>> {
+pub fn get_upper_bound(key_prefix: &[u8]) -> Bound<Vec<u8>> {
     let len = key_prefix.len();
     for i in (0..len).rev() {
         let val = key_prefix[i];
         if val < u8::MAX {
             let mut upper_bound = key_prefix[0..i + 1].to_vec();
             upper_bound[i] += 1;
-            return Some(upper_bound);
+            return Excluded(upper_bound);
         }
     }
-    None
+    Unbounded
 }
 
 pub fn get_interval(key_prefix: Vec<u8>) -> (Bound<Vec<u8>>, Bound<Vec<u8>>) {
-    let upper_bound = match get_upper_bound(&key_prefix) {
-        None => Unbounded,
-        Some(val) => Excluded(val),
-    };
+    let upper_bound = get_upper_bound(&key_prefix);
     (Included(key_prefix), upper_bound)
 }
 
