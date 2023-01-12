@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    client::{ChainClient, ChainClientState, CommunicateAction, ValidatorNodeProvider},
+    client::{ChainClientState, CommunicateAction, ValidatorNodeProvider},
     data_types::*,
     node::{NodeError, NotificationStream, ValidatorNode},
     worker::{ValidatorWorker, WorkerState},
