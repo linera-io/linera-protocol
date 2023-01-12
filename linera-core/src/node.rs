@@ -8,7 +8,7 @@ use crate::{
     worker::{Notification, ValidatorWorker, WorkerError, WorkerState},
 };
 use async_trait::async_trait;
-use futures::lock::Mutex;
+use futures::{lock::Mutex, Stream};
 use linera_base::{
     crypto::CryptoError,
     data_types::{ArithmeticError, BlockHeight, ChainId, ValidatorName},
@@ -26,11 +26,11 @@ use std::sync::Arc;
 use thiserror::Error;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
-pub type NotificationStream = UnboundedReceiverStream<Notification>;
-
 /// How to communicate with a validator or a local node.
 #[async_trait]
 pub trait ValidatorNode {
+    type NotificationStream: Stream<Item = Notification>;
+
     /// Propose a new block.
     async fn handle_block_proposal(
         &mut self,
@@ -50,7 +50,10 @@ pub trait ValidatorNode {
     ) -> Result<ChainInfoResponse, NodeError>;
 
     /// Subscribe to receiving notifications for a collection of chains.
-    async fn subscribe(&mut self, chains: Vec<ChainId>) -> Result<NotificationStream, NodeError>;
+    async fn subscribe(
+        &mut self,
+        chains: Vec<ChainId>,
+    ) -> Result<Self::NotificationStream, NodeError>;
 }
 
 /// Error type for node queries.
@@ -219,6 +222,8 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
+    type NotificationStream = UnboundedReceiverStream<Notification>;
+
     async fn handle_block_proposal(
         &mut self,
         proposal: BlockProposal,
@@ -262,9 +267,12 @@ where
         Ok(response)
     }
 
-    async fn subscribe(&mut self, chains: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
+    async fn subscribe(
+        &mut self,
+        chains: Vec<ChainId>,
+    ) -> Result<Self::NotificationStream, NodeError> {
         let rx = self.notifier.subscribe(chains);
-        Ok(NotificationStream::new(rx))
+        Ok(UnboundedReceiverStream::new(rx))
     }
 }
 

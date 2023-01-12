@@ -1,6 +1,37 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{
+    fmt::Debug,
+    net::{AddrParseError, SocketAddr},
+    pin::Pin,
+    str::FromStr,
+    task::{Context, Poll},
+    time::Duration,
+};
+
+use async_trait::async_trait;
+use futures::{
+    channel::{mpsc, mpsc::Receiver, oneshot::Sender},
+    FutureExt, SinkExt, Stream, StreamExt,
+};
+use log::{debug, error, info, warn};
+use thiserror::Error;
+use tokio::task::{JoinError, JoinHandle};
+use tonic::{
+    transport::{Channel, Server},
+    Request, Response, Status, Streaming,
+};
+
+use linera_base::data_types::ChainId;
+use linera_chain::data_types;
+use linera_core::{
+    node::{NodeError, ValidatorNode},
+    worker::{NetworkActions, Notification, ValidatorWorker, WorkerState},
+};
+use linera_storage::Store;
+use linera_views::views::ViewError;
+
 pub use crate::{
     client_delegate,
     config::{
@@ -23,34 +54,6 @@ pub use crate::{
 use crate::{
     config::NotificationConfig,
     grpc_network::grpc::{notifier_service_client::NotifierServiceClient, SubscriptionRequest},
-};
-use async_trait::async_trait;
-use futures::{
-    channel::{mpsc, mpsc::Receiver, oneshot::Sender},
-    FutureExt, SinkExt, StreamExt,
-};
-use linera_base::data_types::ChainId;
-use linera_chain::data_types;
-use linera_core::{
-    node::{NodeError, NotificationStream, ValidatorNode},
-    worker::{NetworkActions, Notification, ValidatorWorker, WorkerState},
-};
-use linera_storage::Store;
-use linera_views::views::ViewError;
-use log::{debug, error, info, warn};
-use std::{
-    net::{AddrParseError, SocketAddr},
-    str::FromStr,
-    time::Duration,
-};
-use thiserror::Error;
-use tokio::{
-    sync::mpsc::unbounded_channel,
-    task::{JoinError, JoinHandle},
-};
-use tonic::{
-    transport::{Channel, Server},
-    Request, Response, Status,
 };
 
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -403,6 +406,8 @@ impl GrpcClient {
 
 #[async_trait]
 impl ValidatorNode for GrpcClient {
+    type NotificationStream = LossyNotificationStream;
+
     async fn handle_block_proposal(
         &mut self,
         proposal: data_types::BlockProposal,
@@ -424,11 +429,14 @@ impl ValidatorNode for GrpcClient {
         client_delegate!(self, handle_chain_info_query, query)
     }
 
-    async fn subscribe(&mut self, chains: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
+    async fn subscribe(
+        &mut self,
+        chains: Vec<ChainId>,
+    ) -> Result<Self::NotificationStream, NodeError> {
         let subscription_request = SubscriptionRequest {
             chain_ids: chains.into_iter().map(|chain| chain.into()).collect(),
         };
-        let mut notification_stream = self
+        let notification_stream = self
             .0
             .subscribe(Request::new(subscription_request))
             .await
@@ -436,23 +444,66 @@ impl ValidatorNode for GrpcClient {
                 error: format!("remote request [subscribe] failed with status: {:?}", e),
             })?
             .into_inner();
-        let (tx, rx) = unbounded_channel();
-        tokio::spawn(async move {
-            while let Some(notification) = notification_stream.next().await {
-                if let Ok(notification) = notification {
-                    if let Ok(notification) = notification.try_into() {
-                        if tx.send(notification).is_err() {
-                            // if the sender errors the receiver has been closed and
-                            // the thread can die.
-                            break;
-                        }
-                    }
-                }
-            }
-        });
-        Ok(NotificationStream::new(rx))
+        Ok(LossyNotificationStream {
+            inner: notification_stream,
+        })
     }
 }
+
+/// Implements a 'Lossy' notification stream.
+pub struct LossyNotificationStream {
+    inner: Streaming<grpc::Notification>,
+}
+
+impl Stream for LossyNotificationStream {
+    type Item = Notification;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        match Pin::new(&mut self.inner).poll_next(cx) {
+            Poll::Ready(opt_notification) => match opt_notification {
+                None => Poll::Ready(None),
+                Some(notification) => match notification {
+                    Ok(notification) => match Notification::try_from(notification) {
+                        Ok(notification) => Poll::Ready(Some(notification)),
+                        Err(_) => Poll::Pending,
+                    },
+                    Err(_) => Poll::Pending,
+                },
+            },
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
+
+// struct LossyStream<F, T, E> {
+//     inner: Box<dyn Stream<Item=Result<F, E>>>,
+//     _phantom_data: PhantomData<T>
+// }
+//
+// impl<F, T, E> Stream for LossyStream<F, T, E> where T: TryFrom<F> {
+//     type Item = T;
+//
+//     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+//         match Pin::new(&mut self.inner).poll_next(cx) {
+//             Poll::Ready(opt_notification) => {
+//                 match opt_notification {
+//                     None => Poll::Ready(None),
+//                     Some(notification) => {
+//                         match notification {
+//                             Ok(notification) => {
+//                                 Poll::Ready(Some(T::try_from(notification).unwrap()))
+//                             }
+//                             Err(_) => {
+//                                 Poll::Pending
+//                             }
+//                         }
+//                     }
+//                 }
+//             }
+//             Poll::Pending => Poll::Pending
+//         }
+//     }
+// }
 
 pub struct GrpcMassClient(ValidatorPublicNetworkConfig);
 

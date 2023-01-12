@@ -1,14 +1,20 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{grpc_network::GrpcClient, simple_network::SimpleClient};
 use async_trait::async_trait;
-use linera_base::data_types::ChainId;
+use futures::future::Either;
 
+use linera_base::data_types::ChainId;
 use linera_chain::data_types::{BlockProposal, Certificate};
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
-    node::{NodeError, NotificationStream, ValidatorNode},
+    node::{NodeError, ValidatorNode},
+    worker::Notification,
+};
+
+use crate::{
+    grpc_network::{GrpcClient, LossyNotificationStream},
+    simple_network::SimpleClient,
 };
 
 #[derive(Clone)]
@@ -31,6 +37,8 @@ impl From<SimpleClient> for Client {
 
 #[async_trait]
 impl ValidatorNode for Client {
+    type NotificationStream = Either<LossyNotificationStream, futures::stream::Empty<Notification>>;
+
     async fn handle_block_proposal(
         &mut self,
         proposal: BlockProposal,
@@ -61,10 +69,13 @@ impl ValidatorNode for Client {
         }
     }
 
-    async fn subscribe(&mut self, chains: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
-        match self {
-            Client::Grpc(grpc_client) => grpc_client.subscribe(chains).await,
-            Client::Simple(simple_client) => simple_client.subscribe(chains).await,
-        }
+    async fn subscribe(
+        &mut self,
+        chains: Vec<ChainId>,
+    ) -> Result<Self::NotificationStream, NodeError> {
+        Ok(match self {
+            Client::Grpc(grpc_client) => Either::Left(grpc_client.subscribe(chains).await?),
+            Client::Simple(simple_client) => Either::Right(simple_client.subscribe(chains).await?),
+        })
     }
 }
