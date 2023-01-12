@@ -148,7 +148,7 @@ where
         Ok(response.info)
     }
 
-    /// Obtain the pending messages for the local chain.
+    /// Obtain up to `self.max_pending_messages` pending messages for the local chain.
     async fn pending_messages(&mut self) -> Result<Vec<Message>, NodeError> {
         let query = ChainInfoQuery::new(self.chain_id).with_pending_messages();
         let response = self.node_client.handle_chain_info_query(query).await?;
@@ -628,11 +628,10 @@ where
             amount,
             balance
         );
-        let block = Block {
-            epoch: self.epoch().await?,
-            chain_id: self.chain_id,
-            incoming_messages: self.pending_messages().await?,
-            operations: vec![(
+        let messages = self.pending_messages().await?;
+        self.execute_block(
+            messages,
+            vec![(
                 ApplicationId::System,
                 Operation::System(SystemOperation::Transfer {
                     recipient,
@@ -640,13 +639,8 @@ where
                     user_data,
                 }),
             )],
-            height: self.next_block_height,
-            previous_block_hash: self.block_hash,
-        };
-        let certificate = self
-            .propose_block(block, /* with_confirmation */ true)
-            .await?;
-        Ok(certificate)
+        )
+        .await
     }
 
     async fn process_certificate(&mut self, certificate: Certificate) -> Result<(), NodeError> {
@@ -766,6 +760,51 @@ where
         Ok(final_certificate)
     }
 
+    /// Execute an operation.
+    pub async fn execute_operation(
+        &mut self,
+        application_id: ApplicationId,
+        operation: Operation,
+    ) -> Result<Certificate> {
+        self.prepare_chain().await?;
+        let messages = self.pending_messages().await?;
+        self.execute_block(messages, vec![(application_id, operation)])
+            .await
+    }
+
+    /// Execute a new block
+    async fn execute_block(
+        &mut self,
+        incoming_messages: Vec<Message>,
+        operations: Vec<(ApplicationId, Operation)>,
+    ) -> Result<Certificate> {
+        let block = Block {
+            epoch: self.epoch().await?,
+            chain_id: self.chain_id,
+            incoming_messages,
+            operations,
+            previous_block_hash: self.block_hash,
+            height: self.next_block_height,
+        };
+        let certificate = self
+            .propose_block(block, /* with_confirmation */ true)
+            .await?;
+        Ok(certificate)
+    }
+
+    /// Query an application.
+    pub async fn query_application(
+        &mut self,
+        application_id: ApplicationId,
+        query: &Query,
+    ) -> Result<Response> {
+        let response = self
+            .node_client
+            .query_application(self.chain_id, application_id, query)
+            .await?;
+        Ok(response)
+    }
+
     pub async fn local_balance(&mut self) -> Result<Balance> {
         ensure!(
             self.chain_info().await?.next_block_height == self.next_block_height,
@@ -853,67 +892,35 @@ where
 
     /// Rotate the key of the chain.
     pub async fn rotate_key_pair(&mut self, key_pair: KeyPair) -> Result<Certificate> {
-        self.prepare_chain().await?;
         let new_owner = Owner(key_pair.public());
-        let block = Block {
-            epoch: self.epoch().await?,
-            chain_id: self.chain_id,
-            incoming_messages: self.pending_messages().await?,
-            operations: vec![(
-                ApplicationId::System,
-                Operation::System(SystemOperation::ChangeOwner { new_owner }),
-            )],
-            previous_block_hash: self.block_hash,
-            height: self.next_block_height,
-        };
         self.known_key_pairs.insert(new_owner, key_pair);
-        let certificate = self
-            .propose_block(block, /* with_confirmation */ true)
-            .await?;
-        Ok(certificate)
+        self.transfer_ownership(new_owner).await
     }
 
     /// Transfer ownership of the chain.
     pub async fn transfer_ownership(&mut self, new_owner: Owner) -> Result<Certificate> {
-        self.prepare_chain().await?;
-        let block = Block {
-            epoch: self.epoch().await?,
-            chain_id: self.chain_id,
-            incoming_messages: self.pending_messages().await?,
-            operations: vec![(
-                ApplicationId::System,
-                Operation::System(SystemOperation::ChangeOwner { new_owner }),
-            )],
-            previous_block_hash: self.block_hash,
-            height: self.next_block_height,
-        };
-        let certificate = self
-            .propose_block(block, /* with_confirmation */ true)
-            .await?;
-        Ok(certificate)
+        self.execute_operation(
+            ApplicationId::System,
+            Operation::System(SystemOperation::ChangeOwner { new_owner }),
+        )
+        .await
     }
 
     /// Add another owner to the chain.
     pub async fn share_ownership(&mut self, new_owner: Owner) -> Result<Certificate> {
         self.prepare_chain().await?;
         let owner = self.identity().await?;
-        let block = Block {
-            epoch: self.epoch().await?,
-            chain_id: self.chain_id,
-            incoming_messages: self.pending_messages().await?,
-            operations: vec![(
+        let messages = self.pending_messages().await?;
+        self.execute_block(
+            messages,
+            vec![(
                 ApplicationId::System,
                 Operation::System(SystemOperation::ChangeMultipleOwners {
                     new_owners: vec![owner, new_owner],
                 }),
             )],
-            previous_block_hash: self.block_hash,
-            height: self.next_block_height,
-        };
-        let certificate = self
-            .propose_block(block, /* with_confirmation */ true)
-            .await?;
-        Ok(certificate)
+        )
+        .await
     }
 
     /// Open a new chain with a derived UID.
@@ -926,60 +933,32 @@ where
         });
         let (epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
         let epoch = epoch.ok_or(NodeError::InactiveLocalChain(self.chain_id))?;
-        let block = Block {
-            epoch,
-            chain_id: self.chain_id,
-            incoming_messages: self.pending_messages().await?,
-            operations: vec![(
-                ApplicationId::System,
-                Operation::System(SystemOperation::OpenChain {
-                    id,
-                    owner,
-                    committees,
-                    admin_id: self.admin_id,
-                    epoch,
-                }),
-            )],
-            previous_block_hash: self.block_hash,
-            height: self.next_block_height,
-        };
         let certificate = self
-            .propose_block(block, /* with_confirmation */ true)
+            .execute_block(
+                // Cannot add incoming messages to preserve the chain id.
+                vec![],
+                vec![(
+                    ApplicationId::System,
+                    Operation::System(SystemOperation::OpenChain {
+                        id,
+                        owner,
+                        committees,
+                        admin_id: self.admin_id,
+                        epoch,
+                    }),
+                )],
+            )
             .await?;
         Ok((id, certificate))
     }
 
     /// Close the chain (and lose everything in it!!).
     pub async fn close_chain(&mut self) -> Result<Certificate> {
-        self.prepare_chain().await?;
-        let block = Block {
-            epoch: self.epoch().await?,
-            chain_id: self.chain_id,
-            incoming_messages: self.pending_messages().await?,
-            operations: vec![(
-                ApplicationId::System,
-                Operation::System(SystemOperation::CloseChain),
-            )],
-            previous_block_hash: self.block_hash,
-            height: self.next_block_height,
-        };
-        let certificate = self
-            .propose_block(block, /* with_confirmation */ true)
-            .await?;
-        Ok(certificate)
-    }
-
-    /// Query an application.
-    pub async fn query_application(
-        &mut self,
-        application_id: ApplicationId,
-        query: &Query,
-    ) -> Result<Response> {
-        let response = self
-            .node_client
-            .query_application(self.chain_id, application_id, query)
-            .await?;
-        Ok(response)
+        self.execute_operation(
+            ApplicationId::System,
+            Operation::System(SystemOperation::CloseChain),
+        )
+        .await
     }
 
     /// Create a new committee and start using it (admin chains only).
@@ -990,11 +969,10 @@ where
         self.prepare_chain().await?;
         let committee = Committee::new(validators);
         let epoch = self.epoch().await?;
-        let block = Block {
-            epoch,
-            chain_id: self.chain_id,
-            incoming_messages: self.pending_messages().await?,
-            operations: vec![(
+        let messages = self.pending_messages().await?;
+        self.execute_block(
+            messages,
+            vec![(
                 ApplicationId::System,
                 Operation::System(SystemOperation::CreateCommittee {
                     admin_id: self.chain_id,
@@ -1002,13 +980,8 @@ where
                     committee,
                 }),
             )],
-            previous_block_hash: self.block_hash,
-            height: self.next_block_height,
-        };
-        let certificate = self
-            .propose_block(block, /* with_confirmation */ true)
-            .await?;
-        Ok(certificate)
+        )
+        .await
     }
 
     /// Create an empty block to process all incoming messages. This may require several blocks.
@@ -1020,17 +993,7 @@ where
             if incoming_messages.is_empty() {
                 break;
             }
-            let block = Block {
-                epoch: self.epoch().await?,
-                chain_id: self.chain_id,
-                incoming_messages,
-                operations: Vec::new(),
-                previous_block_hash: self.block_hash,
-                height: self.next_block_height,
-            };
-            let certificate = self
-                .propose_block(block, /* with_confirmation */ true)
-                .await?;
+            let certificate = self.execute_block(incoming_messages, vec![]).await?;
             certificates.push(certificate);
         }
         Ok(certificates)
@@ -1039,49 +1002,27 @@ where
     /// Start listening to the admin chain for new committees. (This is only useful for
     /// other genesis chains or for testing.)
     pub async fn subscribe_to_new_committees(&mut self) -> Result<Certificate> {
-        self.prepare_chain().await?;
-        let block = Block {
-            epoch: self.epoch().await?,
-            chain_id: self.chain_id,
-            incoming_messages: self.pending_messages().await?,
-            operations: vec![(
-                ApplicationId::System,
-                Operation::System(SystemOperation::Subscribe {
-                    chain_id: self.admin_id,
-                    channel: SystemChannel::Admin,
-                }),
-            )],
-            previous_block_hash: self.block_hash,
-            height: self.next_block_height,
-        };
-        let certificate = self
-            .propose_block(block, /* with_confirmation */ true)
-            .await?;
-        Ok(certificate)
+        self.execute_operation(
+            ApplicationId::System,
+            Operation::System(SystemOperation::Subscribe {
+                chain_id: self.admin_id,
+                channel: SystemChannel::Admin,
+            }),
+        )
+        .await
     }
 
     /// Stop listening to the admin chain for new committees. (This is only useful for
     /// testing.)
     pub async fn unsubscribe_to_new_committees(&mut self) -> Result<Certificate> {
-        self.prepare_chain().await?;
-        let block = Block {
-            epoch: self.epoch().await?,
-            chain_id: self.chain_id,
-            incoming_messages: self.pending_messages().await?,
-            operations: vec![(
-                ApplicationId::System,
-                Operation::System(SystemOperation::Unsubscribe {
-                    chain_id: self.admin_id,
-                    channel: SystemChannel::Admin,
-                }),
-            )],
-            previous_block_hash: self.block_hash,
-            height: self.next_block_height,
-        };
-        let certificate = self
-            .propose_block(block, /* with_confirmation */ true)
-            .await?;
-        Ok(certificate)
+        self.execute_operation(
+            ApplicationId::System,
+            Operation::System(SystemOperation::Unsubscribe {
+                chain_id: self.admin_id,
+                channel: SystemChannel::Admin,
+            }),
+        )
+        .await
     }
 
     /// Deprecate all the configurations of voting rights but the last one (admin chains
@@ -1108,18 +1049,8 @@ where
                 }
             })
             .collect();
-        let block = Block {
-            epoch: current_epoch,
-            chain_id: self.chain_id,
-            incoming_messages: self.pending_messages().await?,
-            operations,
-            previous_block_hash: self.block_hash,
-            height: self.next_block_height,
-        };
-        let certificate = self
-            .propose_block(block, /* with_confirmation */ true)
-            .await?;
-        Ok(certificate)
+        let messages = self.pending_messages().await?;
+        self.execute_block(messages, operations).await
     }
 
     /// Send money to a chain.
@@ -1131,25 +1062,14 @@ where
         recipient: ChainId,
         user_data: UserData,
     ) -> Result<Certificate> {
-        self.prepare_chain().await?;
-        let block = Block {
-            epoch: self.epoch().await?,
-            chain_id: self.chain_id,
-            incoming_messages: self.pending_messages().await?,
-            operations: vec![(
-                ApplicationId::System,
-                Operation::System(SystemOperation::Transfer {
-                    recipient: Address::Account(recipient),
-                    amount,
-                    user_data,
-                }),
-            )],
-            previous_block_hash: self.block_hash,
-            height: self.next_block_height,
-        };
-        let new_certificate = self
-            .propose_block(block, /* with_confirmation */ false)
-            .await?;
-        Ok(new_certificate)
+        self.execute_operation(
+            ApplicationId::System,
+            Operation::System(SystemOperation::Transfer {
+                recipient: Address::Account(recipient),
+                amount,
+                user_data,
+            }),
+        )
+        .await
     }
 }
