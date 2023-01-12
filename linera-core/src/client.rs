@@ -165,13 +165,13 @@ where
     }
 
     /// Obtain the set of committees trusted by the local chain.
-    pub async fn committees(&mut self) -> Result<BTreeMap<Epoch, Committee>, NodeError> {
+    async fn committees(&mut self) -> Result<BTreeMap<Epoch, Committee>, NodeError> {
         let (_epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
         Ok(committees)
     }
 
     /// Obtain the current epoch of the given chain as well as its set of trusted committees.
-    pub async fn epoch_and_committees(
+    async fn epoch_and_committees(
         &mut self,
         chain_id: ChainId,
     ) -> Result<(Option<Epoch>, BTreeMap<Epoch, Committee>), NodeError> {
