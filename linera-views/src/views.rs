@@ -65,11 +65,13 @@ pub enum ViewError {
     /// An error happened while trying to lock
     #[cfg(not(target_arch = "wasm32"))]
     #[error("Failed to lock collection entry: {0}")]
+    #[cfg(not(target_arch = "wasm32"))]
     TryLockError(#[from] tokio::sync::TryLockError),
 
     /// Tokio errors can happen while joining
     #[cfg(not(target_arch = "wasm32"))]
     #[error("Panic in sub-task: {0}")]
+    #[cfg(not(target_arch = "wasm32"))]
     TokioJoinError(#[from] tokio::task::JoinError),
 
     /// Errors within the context can occur and are presented as ViewError
