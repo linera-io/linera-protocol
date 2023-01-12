@@ -355,7 +355,7 @@ where
         application_id: ApplicationId,
         query: &Query,
     ) -> Result<Response, NodeError> {
-        let node = self.0.clone();
+        let node = self.node.clone();
         let mut node = node.lock().await;
         let response = node
             .state
