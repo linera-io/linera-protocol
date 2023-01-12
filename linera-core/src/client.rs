@@ -22,7 +22,7 @@ use linera_chain::{
 };
 use linera_execution::{
     system::{Address, Amount, Balance, SystemChannel, SystemOperation, UserData},
-    ApplicationId, Operation, Query, Response,
+    ApplicationId, Bytecode, BytecodeId, Operation, Query, Response, UserApplicationId,
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -952,7 +952,7 @@ where
         let epoch = epoch.ok_or(NodeError::InactiveLocalChain(self.chain_id))?;
         let certificate = self
             .execute_block(
-                // Cannot add incoming messages to preserve the chain id.
+                // Cannot add incoming messages to preserve the effect id.
                 vec![],
                 vec![(
                     ApplicationId::System,
@@ -976,6 +976,62 @@ where
             Operation::System(SystemOperation::CloseChain),
         )
         .await
+    }
+
+    /// Publish some bytecode.
+    pub async fn publish_bytecode(
+        &mut self,
+        contract: Bytecode,
+        service: Bytecode,
+    ) -> Result<(BytecodeId, Certificate)> {
+        self.prepare_chain().await?;
+        let id = BytecodeId(EffectId {
+            chain_id: self.chain_id,
+            height: self.next_block_height,
+            index: 0,
+        });
+        let certificate = self
+            .execute_block(
+                // Cannot add incoming messages to preserve the effect id.
+                vec![],
+                vec![(
+                    ApplicationId::System,
+                    Operation::System(SystemOperation::PublishBytecode { contract, service }),
+                )],
+            )
+            .await?;
+        Ok((id, certificate))
+    }
+
+    /// Create an application by instantiating some bytecode.
+    pub async fn create_application(
+        &mut self,
+        bytecode_id: BytecodeId,
+        argument: Vec<u8>,
+    ) -> Result<(UserApplicationId, Certificate)> {
+        self.prepare_chain().await?;
+        let id = UserApplicationId {
+            bytecode_id,
+            creation: EffectId {
+                chain_id: self.chain_id,
+                height: self.next_block_height,
+                index: 0,
+            },
+        };
+        let certificate = self
+            .execute_block(
+                // Cannot add incoming messages to preserve the effect id.
+                vec![],
+                vec![(
+                    ApplicationId::System,
+                    Operation::System(SystemOperation::CreateNewApplication {
+                        bytecode_id,
+                        argument,
+                    }),
+                )],
+            )
+            .await?;
+        Ok((id, certificate))
     }
 
     /// Create a new committee and start using it (admin chains only).
@@ -1037,6 +1093,36 @@ where
             Operation::System(SystemOperation::Unsubscribe {
                 chain_id: self.admin_id,
                 channel: SystemChannel::Admin,
+            }),
+        )
+        .await
+    }
+
+    /// Start listening to the given chain for published bytecodes.
+    pub async fn subscribe_to_published_bytecodes(
+        &mut self,
+        chain_id: ChainId,
+    ) -> Result<Certificate> {
+        self.execute_operation(
+            ApplicationId::System,
+            Operation::System(SystemOperation::Subscribe {
+                chain_id,
+                channel: SystemChannel::PublishedBytecodes,
+            }),
+        )
+        .await
+    }
+
+    /// Stop listening to the given chain for published bytecodes.
+    pub async fn unsubscribe_to_published_bytecodes(
+        &mut self,
+        chain_id: ChainId,
+    ) -> Result<Certificate> {
+        self.execute_operation(
+            ApplicationId::System,
+            Operation::System(SystemOperation::Unsubscribe {
+                chain_id,
+                channel: SystemChannel::PublishedBytecodes,
             }),
         )
         .await
