@@ -4,7 +4,6 @@
 use std::{
     fmt::Debug,
     net::{AddrParseError, SocketAddr},
-    pin::Pin,
     str::FromStr,
     time::Duration,
 };
@@ -12,7 +11,7 @@ use std::{
 use async_trait::async_trait;
 use futures::{
     channel::{mpsc, mpsc::Receiver, oneshot::Sender},
-    FutureExt, SinkExt, Stream, StreamExt,
+    FutureExt, SinkExt, StreamExt,
 };
 use log::{debug, error, info, warn};
 use thiserror::Error;
@@ -25,7 +24,7 @@ use tonic::{
 use linera_base::data_types::ChainId;
 use linera_chain::data_types;
 use linera_core::{
-    node::{NodeError, ValidatorNode},
+    node::{NodeError, NotificationStream, ValidatorNode},
     worker::{NetworkActions, Notification, ValidatorWorker, WorkerState},
 };
 use linera_storage::Store;
@@ -405,8 +404,6 @@ impl GrpcClient {
 
 #[async_trait]
 impl ValidatorNode for GrpcClient {
-    type NotificationStream = Pin<Box<dyn Stream<Item = Notification>>>;
-
     async fn handle_block_proposal(
         &mut self,
         proposal: data_types::BlockProposal,
@@ -428,10 +425,7 @@ impl ValidatorNode for GrpcClient {
         client_delegate!(self, handle_chain_info_query, query)
     }
 
-    async fn subscribe(
-        &mut self,
-        chains: Vec<ChainId>,
-    ) -> Result<Self::NotificationStream, NodeError> {
+    async fn subscribe(&mut self, chains: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
         let subscription_request = SubscriptionRequest {
             chain_ids: chains.into_iter().map(|chain| chain.into()).collect(),
         };

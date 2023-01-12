@@ -13,7 +13,7 @@ use linera_base::data_types::ChainId;
 use linera_chain::data_types::{BlockProposal, Certificate};
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
-    node::{NodeError, ValidatorNode},
+    node::{NodeError, NotificationStream, ValidatorNode},
     worker::{NetworkActions, ValidatorWorker, WorkerState},
 };
 use linera_storage::Store;
@@ -336,8 +336,6 @@ impl SimpleClient {
 
 #[async_trait]
 impl ValidatorNode for SimpleClient {
-    type NotificationStream = futures::stream::Empty<linera_core::worker::Notification>;
-
     /// Initiate a new block.
     async fn handle_block_proposal(
         &mut self,
@@ -362,10 +360,7 @@ impl ValidatorNode for SimpleClient {
         self.send_recv_info(query.into()).await
     }
 
-    async fn subscribe(
-        &mut self,
-        _chains: Vec<ChainId>,
-    ) -> Result<Self::NotificationStream, NodeError> {
+    async fn subscribe(&mut self, _chains: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
         Err(NodeError::SubscriptionError {
             transport: self.network.protocol.to_string(),
         })

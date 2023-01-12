@@ -22,15 +22,15 @@ use linera_storage::Store;
 use linera_views::views::ViewError;
 use rand::prelude::SliceRandom;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::{pin::Pin, sync::Arc};
 use thiserror::Error;
 use tokio_stream::wrappers::UnboundedReceiverStream;
+
+pub type NotificationStream = Pin<Box<dyn Stream<Item = Notification>>>;
 
 /// How to communicate with a validator or a local node.
 #[async_trait]
 pub trait ValidatorNode {
-    type NotificationStream: Stream<Item = Notification>;
-
     /// Propose a new block.
     async fn handle_block_proposal(
         &mut self,
@@ -50,10 +50,7 @@ pub trait ValidatorNode {
     ) -> Result<ChainInfoResponse, NodeError>;
 
     /// Subscribe to receiving notifications for a collection of chains.
-    async fn subscribe(
-        &mut self,
-        chains: Vec<ChainId>,
-    ) -> Result<Self::NotificationStream, NodeError>;
+    async fn subscribe(&mut self, chains: Vec<ChainId>) -> Result<NotificationStream, NodeError>;
 }
 
 /// Error type for node queries.
@@ -222,8 +219,6 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
-    type NotificationStream = UnboundedReceiverStream<Notification>;
-
     async fn handle_block_proposal(
         &mut self,
         proposal: BlockProposal,
@@ -267,12 +262,9 @@ where
         Ok(response)
     }
 
-    async fn subscribe(
-        &mut self,
-        chains: Vec<ChainId>,
-    ) -> Result<Self::NotificationStream, NodeError> {
+    async fn subscribe(&mut self, chains: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
         let rx = self.notifier.subscribe(chains);
-        Ok(UnboundedReceiverStream::new(rx))
+        Ok(Box::pin(UnboundedReceiverStream::new(rx)))
     }
 }
 

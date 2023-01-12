@@ -4,11 +4,11 @@
 use crate::{
     client::{ChainClient, ChainClientState, CommunicateAction, ValidatorNodeProvider},
     data_types::*,
-    node::{NodeError, ValidatorNode},
-    worker::{Notification, ValidatorWorker, WorkerState},
+    node::{NodeError, NotificationStream, ValidatorNode},
+    worker::{ValidatorWorker, WorkerState},
 };
 use async_trait::async_trait;
-use futures::{lock::Mutex, stream::Empty};
+use futures::lock::Mutex;
 use linera_base::{committee::Committee, crypto::*, data_types::*};
 use linera_chain::data_types::{Block, BlockProposal, Certificate, Value};
 use linera_execution::{
@@ -40,8 +40,6 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
-    type NotificationStream = Empty<Notification>;
-
     async fn handle_block_proposal(
         &mut self,
         proposal: BlockProposal,
@@ -84,10 +82,7 @@ where
         Ok(response)
     }
 
-    async fn subscribe(
-        &mut self,
-        _chains: Vec<ChainId>,
-    ) -> Result<Self::NotificationStream, NodeError> {
+    async fn subscribe(&mut self, _chains: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
         Err(NodeError::SubscriptionError {
             transport: "local".to_string(),
         })
