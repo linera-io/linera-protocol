@@ -26,6 +26,7 @@ use std::{pin::Pin, sync::Arc};
 use thiserror::Error;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
+/// A pinned [`Stream`] of Notifications.
 pub type NotificationStream = Pin<Box<dyn Stream<Item = Notification>>>;
 
 /// How to communicate with a validator or a local node.

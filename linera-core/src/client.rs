@@ -4,12 +4,13 @@
 
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery},
-    node::{LocalNodeClient, NodeError, ValidatorNode},
+    node::{LocalNodeClient, NodeError, NotificationStream, ValidatorNode},
     updater::{communicate_with_quorum, CommunicateAction, CommunicationError, ValidatorUpdater},
     worker::WorkerState,
 };
 use anyhow::{anyhow, bail, ensure, Result};
 use async_trait::async_trait;
+use futures::stream::select_all;
 use linera_base::{
     committee::{Committee, ValidatorState},
     crypto::{HashValue, KeyPair},
@@ -25,6 +26,7 @@ use linera_execution::{
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
+use log::info;
 use std::{
     collections::{BTreeMap, HashMap},
     time::Duration,
@@ -297,6 +299,26 @@ where
             nodes.push((*name, node));
         }
         Ok(nodes)
+    }
+
+    /// Subscribe to notifications for all validators.
+    pub async fn subscribe_all(&mut self, chain_ids: Vec<ChainId>) -> Result<NotificationStream> {
+        let committee = self.local_committee().await?;
+        let mut streams = Vec::new();
+        for (name, mut node) in self.make_validator_nodes(&committee).await? {
+            match node.subscribe(chain_ids.clone()).await {
+                Ok(notification_stream) => {
+                    streams.push(notification_stream);
+                }
+                Err(e) => {
+                    info!(
+                        "Could not connect to validator {} with error: {:?}",
+                        name, e
+                    );
+                }
+            }
+        }
+        Ok(Box::pin(select_all(streams)))
     }
 
     /// Prepare the chain for the next operation.
