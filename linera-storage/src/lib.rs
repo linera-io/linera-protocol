@@ -140,25 +140,20 @@ pub trait Store: Sized {
             bytecode_location,
             ..
         } = application_description;
-        let invalid_bytecode_id_error = || ExecutionError::InvalidBytecodeId(*bytecode_id);
-
         let certificate = self
             .read_certificate(bytecode_location.certificate_hash)
             .await?;
-        let (operation_application_id, bytecode_operation) = certificate
-            .value
-            .block()
-            .operations
-            .get(bytecode_location.operation_index)
-            .ok_or_else(invalid_bytecode_id_error)?;
-
-        let ApplicationId::System = operation_application_id
-            else { return Err(invalid_bytecode_id_error()); };
-        let Operation::System(SystemOperation::PublishBytecode { contract, service }) =
-            bytecode_operation.clone()
-            else { return Err(invalid_bytecode_id_error()); };
-
-        Ok(Arc::new(WasmApplication::new(contract, service)))
+        let operations = &certificate.value.block().operations;
+        match operations.get(bytecode_location.operation_index) {
+            Some((
+                ApplicationId::System,
+                Operation::System(SystemOperation::PublishBytecode { contract, service }),
+            )) => Ok(Arc::new(WasmApplication::new(
+                contract.clone(),
+                service.clone(),
+            ))),
+            _ => Err(ExecutionError::InvalidBytecodeId(*bytecode_id)),
+        }
     }
 
     #[cfg(not(any(feature = "wasmer", feature = "wasmtime")))]
