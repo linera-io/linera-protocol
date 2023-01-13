@@ -301,11 +301,6 @@ where
         Ok(nodes)
     }
 
-    /// Subscribes to notifications
-    pub async fn subscribe(&mut self, chain_ids: Vec<ChainId>) -> Result<NotificationStream> {
-        Ok(self.node_client.subscribe(chain_ids).await?)
-    }
-
     /// Subscribe to notifications for all validators.
     pub async fn subscribe_all(&mut self, chain_ids: Vec<ChainId>) -> Result<NotificationStream> {
         let committee = self.local_committee().await?;
