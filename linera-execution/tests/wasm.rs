@@ -28,7 +28,7 @@ async fn test_counter_wasm_application() -> anyhow::Result<()> {
             .await;
     let mut applications = ApplicationRegistryView::load(view.context().clone()).await?;
     let app_desc = create_dummy_user_application_description();
-    let app_id = applications.register_existing_application(app_desc.clone());
+    let app_id = applications.register_existing_application(app_desc.clone())?;
     view.context().extra.user_applications().insert(
         app_id,
         Arc::new(

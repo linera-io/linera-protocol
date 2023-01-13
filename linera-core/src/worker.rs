@@ -454,7 +454,7 @@ where
         certificates: Vec<Certificate>,
     ) -> Result<NetworkActions, WorkerError> {
         let mut chain = self.storage.load_chain(recipient).await?;
-        let application_id = chain.register_application(application);
+        let application_id = chain.register_application(application)?;
         // Only process certificates with relevant heights and epochs.
         let next_height_to_receive = chain
             .next_block_height_to_receive(application_id, origin.clone())

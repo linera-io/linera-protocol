@@ -117,12 +117,10 @@ where
     pub fn register_existing_application(
         &mut self,
         application: UserApplicationDescription,
-    ) -> UserApplicationId {
+    ) -> Result<UserApplicationId, ExecutionError> {
         let id = UserApplicationId::from(&application);
-        self.known_applications
-            .insert(&id, application)
-            .expect("serialization error for id");
-        id
+        self.known_applications.insert(&id, application)?;
+        Ok(id)
     }
 
     /// Register a newly created application.
