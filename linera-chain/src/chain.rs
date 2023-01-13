@@ -14,9 +14,8 @@ use linera_base::{
 };
 use linera_execution::{
     system::SystemEffect, ApplicationDescription, ApplicationId, ApplicationRegistryView,
-    BytecodeId, BytecodeLocation, ChannelName, Destination, Effect, EffectContext, ExecutionResult,
-    ExecutionRuntimeContext, ExecutionStateView, OperationContext, Query, QueryContext,
-    RawExecutionResult, Response,
+    ChannelName, Destination, Effect, EffectContext, ExecutionResult, ExecutionRuntimeContext,
+    ExecutionStateView, OperationContext, Query, QueryContext, RawExecutionResult, Response,
 };
 use linera_views::{
     collection_view::CollectionView,
@@ -247,7 +246,7 @@ where
                     height,
                     index,
                 };
-                self.execute_immediate_effect(effect_id, &effect, chain_id, certificate_hash)
+                self.execute_immediate_effect(effect_id, &effect, chain_id)
                     .await?;
             }
             // Record the inbox event to process it below.
@@ -290,7 +289,6 @@ where
         effect_id: EffectId,
         effect: &Effect,
         chain_id: ChainId,
-        certificate_hash: HashValue,
     ) -> Result<(), ChainError> {
         match &effect {
             Effect::System(SystemEffect::OpenChain {
@@ -316,15 +314,6 @@ where
                 self.manager
                     .get_mut()
                     .reset(self.execution_state.system.ownership.get());
-            }
-            Effect::System(SystemEffect::BytecodePublished) => {
-                let bytecode_id = BytecodeId::from(effect_id);
-                let bytecode_location = BytecodeLocation {
-                    certificate_hash,
-                    operation_index: effect_id.index,
-                };
-                self.application_registry
-                    .register_published_bytecode(bytecode_id, bytecode_location);
             }
             _ => {}
         }
