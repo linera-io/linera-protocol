@@ -43,7 +43,7 @@ async fn test_missing_user_application() -> anyhow::Result<()> {
 
     assert!(matches!(
         result,
-        Err(ExecutionError::UnknownApplication(id)) if *id == app_id
+        Err(ExecutionError::UnknownApplicationId(id)) if *id == app_id
     ));
     Ok(())
 }

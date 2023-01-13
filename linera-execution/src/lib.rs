@@ -67,10 +67,10 @@ pub enum ExecutionError {
 
     #[error("Bytecode ID {0:?} is invalid")]
     InvalidBytecodeId(BytecodeId),
-    #[error("Attempt to create an application using unknown bytecode {0:?}")]
-    UnknownBytecode(BytecodeId),
-    #[error("Application {0:?} is not known by the chain")]
-    UnknownApplication(Box<UserApplicationId>),
+    #[error("Attempt to create an application using unregistered bytecode identifier {0:?}")]
+    UnknownBytecodeId(BytecodeId),
+    #[error("Application {0:?} is not registered on the chain")]
+    UnknownApplicationId(Box<UserApplicationId>),
 }
 
 impl From<ViewError> for ExecutionError {
@@ -453,7 +453,7 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
         Ok(self
             .user_applications()
             .get(&application_id)
-            .ok_or_else(|| ExecutionError::UnknownApplication(Box::new(application_id)))?
+            .ok_or_else(|| ExecutionError::UnknownApplicationId(Box::new(application_id)))?
             .clone())
     }
 }
