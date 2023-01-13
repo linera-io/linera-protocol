@@ -87,7 +87,7 @@ where
         )
         .await?,
     };
-    let publish_effect = SystemEffect::BytecodePublished.into();
+    let publish_effect = SystemEffect::BytecodePublished;
     let publish_block = make_block(
         Epoch::from(0),
         publisher_chain.into(),
