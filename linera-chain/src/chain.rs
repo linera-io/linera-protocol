@@ -53,7 +53,7 @@ pub struct ChainStateView<C> {
     pub communication_states: CollectionView<C, ApplicationId, CommunicationStateView<C>>,
 
     /// The application bytecodes that have been published.
-    pub known_applications: ApplicationRegistryView<C>,
+    pub application_registry: ApplicationRegistryView<C>,
 }
 
 /// Block-chaining state.
@@ -106,7 +106,12 @@ where
         let application = self.describe_application(application_id).await?;
         let response = self
             .execution_state
-            .query_application(&application, &context, query, &mut self.known_applications)
+            .query_application(
+                &application,
+                &context,
+                query,
+                &mut self.application_registry,
+            )
             .await?;
         Ok(response)
     }
@@ -318,7 +323,7 @@ where
                     certificate_hash,
                     operation_index: effect_id.index,
                 };
-                self.known_applications
+                self.application_registry
                     .register_published_bytecode(bytecode_id, bytecode_location);
             }
             _ => {}
@@ -379,7 +384,7 @@ where
                     &application,
                     &context,
                     &message.event.effect,
-                    &mut self.known_applications,
+                    &mut self.application_registry,
                 )
                 .await?;
             let communication_state = self
@@ -413,7 +418,7 @@ where
                     &application,
                     &context,
                     operation,
-                    &mut self.known_applications,
+                    &mut self.application_registry,
                 )
                 .await?;
 
@@ -443,7 +448,7 @@ where
         match application {
             ApplicationDescription::System => ApplicationId::System,
             ApplicationDescription::User(application) => ApplicationId::User(
-                self.known_applications
+                self.application_registry
                     .register_existing_application(application),
             ),
         }
@@ -460,7 +465,7 @@ where
         match application_id {
             ApplicationId::System => Ok(ApplicationDescription::System),
             ApplicationId::User(id) => {
-                let description = self.known_applications.describe_application(id).await?;
+                let description = self.application_registry.describe_application(id).await?;
                 Ok(ApplicationDescription::User(description))
             }
         }
