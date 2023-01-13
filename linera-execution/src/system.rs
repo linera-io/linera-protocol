@@ -116,7 +116,7 @@ pub enum SystemOperation {
     },
     /// Create a new application.
     CreateNewApplication {
-        bytecode: BytecodeId,
+        bytecode_id: BytecodeId,
         argument: Vec<u8>,
     },
 }
@@ -495,10 +495,13 @@ where
                     SystemEffect::BytecodePublished,
                 )];
             }
-            CreateNewApplication { bytecode, argument } => {
+            CreateNewApplication {
+                bytecode_id,
+                argument,
+            } => {
                 new_application = Some(NewApplication {
                     id: UserApplicationId {
-                        bytecode: *bytecode,
+                        bytecode_id: *bytecode_id,
                         creation: (*context).into(),
                     },
                     initialization_argument: argument.clone(),

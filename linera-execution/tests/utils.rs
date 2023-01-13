@@ -18,7 +18,7 @@ pub fn create_dummy_user_application_description() -> UserApplicationDescription
             index: 0,
         }
         .into(),
-        bytecode: BytecodeLocation {
+        bytecode_location: BytecodeLocation {
             certificate_hash,
             operation_index: 0,
         },

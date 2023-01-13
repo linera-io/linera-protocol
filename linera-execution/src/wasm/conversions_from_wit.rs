@@ -135,7 +135,7 @@ impl From<writable_system::SessionId> for SessionId {
 impl From<writable_system::ApplicationId> for UserApplicationId {
     fn from(guest: writable_system::ApplicationId) -> Self {
         UserApplicationId {
-            bytecode: guest.bytecode.into(),
+            bytecode_id: guest.bytecode_id.into(),
             creation: guest.creation.into(),
         }
     }

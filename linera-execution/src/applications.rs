@@ -23,7 +23,7 @@ pub enum ApplicationId {
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
 pub struct UserApplicationId {
     /// The bytecode to use for the application.
-    pub bytecode: BytecodeId,
+    pub bytecode_id: BytecodeId,
     /// The unique ID of the application's creation.
     pub creation: EffectId,
 }
@@ -45,7 +45,7 @@ pub struct UserApplicationDescription {
     /// The unique ID of the bytecode to use for the application.
     pub bytecode_id: BytecodeId,
     /// The location of the bytecode to use for the application.
-    pub bytecode: BytecodeLocation,
+    pub bytecode_location: BytecodeLocation,
     /// The unique ID of the application's creation.
     pub creation: EffectId,
     /// The argument used during application initialization.
@@ -70,7 +70,7 @@ impl From<&ApplicationDescription> for ApplicationId {
 impl From<&UserApplicationDescription> for UserApplicationId {
     fn from(description: &UserApplicationDescription) -> Self {
         UserApplicationId {
-            bytecode: description.bytecode_id,
+            bytecode_id: description.bytecode_id,
             creation: description.creation,
         }
     }
@@ -129,7 +129,7 @@ where
         new_application: NewApplication,
     ) -> Result<UserApplicationDescription, ExecutionError> {
         let UserApplicationId {
-            bytecode: bytecode_id,
+            bytecode_id,
             creation,
         } = new_application.id;
 
@@ -140,7 +140,7 @@ where
             .ok_or(ExecutionError::UnknownBytecode(bytecode_id))?;
 
         let description = UserApplicationDescription {
-            bytecode: bytecode_location,
+            bytecode_location,
             bytecode_id,
             creation,
             initialization_argument: new_application.initialization_argument,

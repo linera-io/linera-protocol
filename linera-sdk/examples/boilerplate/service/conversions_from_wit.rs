@@ -54,7 +54,7 @@ impl From<queryable_system::HashValue> for HashValue {
 impl From<queryable_system::ApplicationId> for ApplicationId {
     fn from(application_id: queryable_system::ApplicationId) -> Self {
         ApplicationId {
-            bytecode: BytecodeId(application_id.bytecode.into()),
+            bytecode: BytecodeId(application_id.bytecode_id.into()),
             creation: application_id.creation.into(),
         }
     }

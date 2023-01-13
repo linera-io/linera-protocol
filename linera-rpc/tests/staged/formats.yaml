@@ -593,7 +593,7 @@ SystemOperation:
     10:
       CreateNewApplication:
         STRUCT:
-          - bytecode:
+          - bytecode_id:
               TYPENAME: BytecodeId
           - argument:
               SEQ: U8
@@ -601,7 +601,7 @@ UserApplicationDescription:
   STRUCT:
     - bytecode_id:
         TYPENAME: BytecodeId
-    - bytecode:
+    - bytecode_location:
         TYPENAME: BytecodeLocation
     - creation:
         TYPENAME: EffectId
@@ -609,7 +609,7 @@ UserApplicationDescription:
         SEQ: U8
 UserApplicationId:
   STRUCT:
-    - bytecode:
+    - bytecode_id:
         TYPENAME: BytecodeId
     - creation:
         TYPENAME: EffectId

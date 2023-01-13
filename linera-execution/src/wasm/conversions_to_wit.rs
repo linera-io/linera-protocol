@@ -117,7 +117,7 @@ impl From<SessionId> for writable_system::SessionId {
 impl From<UserApplicationId> for contract::ApplicationId {
     fn from(host: UserApplicationId) -> Self {
         contract::ApplicationId {
-            bytecode: host.bytecode.0.into(),
+            bytecode_id: host.bytecode_id.0.into(),
             creation: host.creation.into(),
         }
     }
@@ -126,7 +126,7 @@ impl From<UserApplicationId> for contract::ApplicationId {
 impl From<UserApplicationId> for queryable_system::ApplicationId {
     fn from(host: UserApplicationId) -> Self {
         queryable_system::ApplicationId {
-            bytecode: host.bytecode.0.into(),
+            bytecode_id: host.bytecode_id.0.into(),
             creation: host.creation.into(),
         }
     }
@@ -135,7 +135,7 @@ impl From<UserApplicationId> for queryable_system::ApplicationId {
 impl From<UserApplicationId> for writable_system::ApplicationId {
     fn from(host: UserApplicationId) -> Self {
         writable_system::ApplicationId {
-            bytecode: host.bytecode.0.into(),
+            bytecode_id: host.bytecode_id.0.into(),
             creation: host.creation.into(),
         }
     }

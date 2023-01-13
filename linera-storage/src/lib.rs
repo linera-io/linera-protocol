@@ -136,18 +136,20 @@ pub trait Store: Sized {
         application_description: &UserApplicationDescription,
     ) -> Result<UserApplicationCode, ExecutionError> {
         let UserApplicationDescription {
-            bytecode,
             bytecode_id,
+            bytecode_location,
             ..
         } = application_description;
         let invalid_bytecode_id_error = || ExecutionError::InvalidBytecodeId(*bytecode_id);
 
-        let certificate = self.read_certificate(bytecode.certificate_hash).await?;
+        let certificate = self
+            .read_certificate(bytecode_location.certificate_hash)
+            .await?;
         let (operation_application_id, bytecode_operation) = certificate
             .value
             .block()
             .operations
-            .get(bytecode.operation_index)
+            .get(bytecode_location.operation_index)
             .ok_or_else(invalid_bytecode_id_error)?;
 
         let ApplicationId::System = operation_application_id

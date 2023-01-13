@@ -70,13 +70,13 @@ record callee-context {
 }
 
 record application-id {
-    bytecode: bytecode,
+    bytecode-id: bytecode-id,
     creation: effect-id,
 }
 
 type chain-id = hash-value
 type block-height = u64
-type bytecode = effect-id
+type bytecode-id = effect-id
 
 variant poll-execution-result {
     pending,

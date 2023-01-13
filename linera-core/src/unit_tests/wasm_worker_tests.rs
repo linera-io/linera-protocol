@@ -225,7 +225,7 @@ where
     assert!(info.manager.pending().is_none());
 
     // Create an application.
-    let bytecode = BytecodeId(EffectId {
+    let bytecode_id = BytecodeId(EffectId {
         chain_id: publisher_chain.into(),
         height: publish_block_height,
         index: 0,
@@ -233,11 +233,11 @@ where
     let initial_value = 10_u128;
     let initial_value_bytes = bcs::to_bytes(&initial_value)?;
     let create_operation = SystemOperation::CreateNewApplication {
-        bytecode,
+        bytecode_id,
         argument: initial_value_bytes.clone(),
     };
     let application_id = UserApplicationId {
-        bytecode,
+        bytecode_id,
         creation: EffectId {
             chain_id: creator_chain.into(),
             height: BlockHeight::from(1),
