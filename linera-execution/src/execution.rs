@@ -90,7 +90,8 @@ where
         action: UserAction<'_>,
         applications: &mut ApplicationRegistryView<C>,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
-        // Load the application.
+        // Try to load the application. This may fail if the corresponding
+        // bytecode-publishing certificate doesn't exist yet on this validator.
         let application_id = UserApplicationId::from(application);
         let application = self
             .context()
@@ -204,7 +205,7 @@ where
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match (application, effect) {
             (ApplicationDescription::System, Effect::System(effect)) => {
-                let result = self.system.execute_effect(context, effect)?;
+                let result = self.system.execute_effect(applications, context, effect)?;
                 Ok(vec![ExecutionResult::System {
                     result,
                     new_application: None,

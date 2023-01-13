@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    Bytecode, BytecodeId, ChainOwnership, ChannelId, ChannelName, Destination, EffectContext,
-    ExecutionResult, NewApplication, OperationContext, QueryContext, RawExecutionResult,
-    UserApplicationId,
+    ApplicationRegistryView, Bytecode, BytecodeId, BytecodeLocation, ChainOwnership, ChannelId,
+    ChannelName, Destination, EffectContext, ExecutionResult, NewApplication, OperationContext,
+    QueryContext, RawExecutionResult, UserApplicationId,
 };
 use linera_base::{
     committee::Committee,
@@ -519,6 +519,7 @@ where
     /// Effects must be executed by order of heights in the sender's chain.
     pub fn execute_effect(
         &mut self,
+        applications: &mut ApplicationRegistryView<C>,
         context: &EffectContext,
         effect: &SystemEffect,
     ) -> Result<RawExecutionResult<SystemEffect>, SystemExecutionError> {
@@ -571,7 +572,12 @@ where
                 Ok(application)
             }
             BytecodePublished => {
-                // This special effect is executed immediately when cross-chain requests are received.
+                let bytecode_id = BytecodeId(context.effect_id);
+                let bytecode_location = BytecodeLocation {
+                    certificate_hash: context.certificate_hash,
+                    operation_index: context.effect_id.index,
+                };
+                applications.register_published_bytecode(bytecode_id, bytecode_location)?;
                 Ok(RawExecutionResult::default())
             }
             Notify { .. } => Ok(RawExecutionResult::default()),

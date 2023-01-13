@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{ExecutionError, NewApplication};
+use crate::{ExecutionError, NewApplication, SystemExecutionError};
 use linera_base::{crypto::HashValue, data_types::EffectId};
 use linera_views::{
     common::Context,
@@ -105,10 +105,13 @@ where
     /// Register a published bytecode so that it can be used by applications.
     ///
     /// Keeps track of the bytecode's location so that it can be loaded when needed.
-    pub fn register_published_bytecode(&mut self, id: BytecodeId, location: BytecodeLocation) {
-        self.published_bytecodes
-            .insert(&id, location)
-            .expect("serialization error for id");
+    pub fn register_published_bytecode(
+        &mut self,
+        id: BytecodeId,
+        location: BytecodeLocation,
+    ) -> Result<(), SystemExecutionError> {
+        self.published_bytecodes.insert(&id, location)?;
+        Ok(())
     }
 
     /// Register an existing application.
@@ -147,8 +150,7 @@ where
         };
 
         self.known_applications
-            .insert(&new_application.id, description.clone())
-            .expect("serialization error for id");
+            .insert(&new_application.id, description.clone())?;
 
         Ok(description)
     }
