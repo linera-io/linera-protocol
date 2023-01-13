@@ -444,13 +444,16 @@ where
     /// Register a new application in the chain state.
     ///
     /// Allows executing operations and effects for that application later.
-    pub fn register_application(&mut self, application: ApplicationDescription) -> ApplicationId {
+    pub fn register_application(
+        &mut self,
+        application: ApplicationDescription,
+    ) -> Result<ApplicationId, ChainError> {
         match application {
-            ApplicationDescription::System => ApplicationId::System,
-            ApplicationDescription::User(application) => ApplicationId::User(
+            ApplicationDescription::System => Ok(ApplicationId::System),
+            ApplicationDescription::User(application) => Ok(ApplicationId::User(
                 self.application_registry
-                    .register_existing_application(application),
-            ),
+                    .register_existing_application(application)?,
+            )),
         }
     }
 
