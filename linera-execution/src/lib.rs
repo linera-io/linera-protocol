@@ -25,7 +25,10 @@ pub use wasm::{WasmApplication, WasmExecutionError};
 
 use async_trait::async_trait;
 use dashmap::DashMap;
-use linera_base::data_types::{BlockHeight, ChainId, EffectId};
+use linera_base::{
+    crypto::HashValue,
+    data_types::{BlockHeight, ChainId, EffectId},
+};
 use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
 use std::{io, path::Path, sync::Arc};
@@ -200,8 +203,10 @@ pub struct EffectContext {
     pub chain_id: ChainId,
     /// The current block height.
     pub height: BlockHeight,
+    /// The hash of the remote certificate that created the effect.
+    pub certificate_hash: HashValue,
     /// The id of the effect (based on the operation height and index in the remote
-    /// chain that created the effect).
+    /// certificate).
     pub effect_id: EffectId,
 }
 
