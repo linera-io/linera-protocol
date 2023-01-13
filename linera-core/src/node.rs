@@ -142,6 +142,12 @@ pub enum NodeError {
     )]
     ProposedBlockWithLaggingMessages { chain_id: ChainId, retries: usize },
 
+    #[error(
+        "Failed to submit block proposal: chain {chain_id:?} was still missing application bytecodes \
+         after validator synchronization and {retries} retries"
+    )]
+    ProposedBlockWithLaggingBytecode { chain_id: ChainId, retries: usize },
+
     // Networking and sharding. TODO: those probably belong to linera-service
     #[error("Cannot deserialize")]
     InvalidDecoding,

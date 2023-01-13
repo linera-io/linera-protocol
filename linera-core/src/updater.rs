@@ -130,7 +130,10 @@ where
                     // Succeed
                     return Ok(response.info);
                 }
-                Err(NodeError::InactiveChain(_)) if retryable && count < self.retries => {
+                Err(NodeError::InactiveChain(_))
+                | Err(NodeError::ApplicationBytecodeNotFound { .. })
+                    if retryable && count < self.retries =>
+                {
                     // Retry
                     tokio::time::sleep(self.delay).await;
                     count += 1;
@@ -158,8 +161,9 @@ where
                     // Succeed
                     return Ok(response.info);
                 }
-                Err(NodeError::MissingCrossChainUpdate { chain_id: id, .. })
-                    if id == chain_id && !has_send_chain_information_for_senders =>
+                Err(NodeError::MissingCrossChainUpdate { .. })
+                | Err(NodeError::ApplicationBytecodeNotFound { .. })
+                    if !has_send_chain_information_for_senders =>
                 {
                     // Some received certificates may be missing for this validator
                     // (e.g. to make the balance sufficient) so we are going to
@@ -167,7 +171,7 @@ where
                     self.send_chain_information_for_senders(chain_id).await?;
                     has_send_chain_information_for_senders = true;
                 }
-                Err(NodeError::InactiveChain(id)) if id == chain_id => {
+                Err(NodeError::InactiveChain(_)) => {
                     if count < self.retries {
                         // `send_chain_information` is always called before
                         // `send_block_proposal` but in the case of new chains, it may
@@ -182,7 +186,7 @@ where
                         });
                     }
                 }
-                Err(NodeError::MissingCrossChainUpdate { chain_id: id, .. }) if id == chain_id => {
+                Err(NodeError::MissingCrossChainUpdate { .. }) => {
                     if count < self.retries {
                         // We just called `send_chain_information_for_senders` but it may
                         // take time to receive the missing messages: let's retry.
@@ -190,6 +194,17 @@ where
                         count += 1;
                     } else {
                         return Err(NodeError::ProposedBlockWithLaggingMessages {
+                            chain_id,
+                            retries: self.retries,
+                        });
+                    }
+                }
+                Err(NodeError::ApplicationBytecodeNotFound { .. }) => {
+                    if count < self.retries {
+                        tokio::time::sleep(self.delay).await;
+                        count += 1;
+                    } else {
+                        return Err(NodeError::ProposedBlockWithLaggingBytecode {
                             chain_id,
                             retries: self.retries,
                         });

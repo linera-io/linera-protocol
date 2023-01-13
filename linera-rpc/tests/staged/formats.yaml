@@ -368,18 +368,24 @@ NodeError:
               TYPENAME: ChainId
           - retries: U64
     16:
-      InvalidDecoding: UNIT
+      ProposedBlockWithLaggingBytecode:
+        STRUCT:
+          - chain_id:
+              TYPENAME: ChainId
+          - retries: U64
     17:
-      UnexpectedMessage: UNIT
+      InvalidDecoding: UNIT
     18:
+      UnexpectedMessage: UNIT
+    19:
       ClientIoError:
         STRUCT:
           - error: STR
-    19:
+    20:
       CannotResolveValidatorAddress:
         STRUCT:
           - address: STR
-    20:
+    21:
       SubscriptionError:
         STRUCT:
           - transport: STR
