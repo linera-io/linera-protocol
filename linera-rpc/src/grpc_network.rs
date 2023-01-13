@@ -36,7 +36,6 @@ pub use crate::{
         CrossChainConfig, ShardId, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
     },
     conversions::ProtoConversionError,
-    convert_and_delegate,
     grpc_network::grpc::{
         chain_info_result::Inner,
         validator_node_client::ValidatorNodeClient,
@@ -325,7 +324,21 @@ where
         &self,
         request: Request<BlockProposal>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        convert_and_delegate!(self, handle_block_proposal, request)
+        debug!(
+            "server handler [handle_block_proposal] received delegating request [{:?}]",
+            request
+        );
+        Ok(Response::new(
+            match self
+                .state
+                .clone()
+                .handle_block_proposal(request.into_inner().try_into()?)
+                .await
+            {
+                Ok(chain_info_response) => chain_info_response.try_into()?,
+                Err(error) => NodeError::from(error).try_into()?,
+            },
+        ))
     }
 
     async fn handle_certificate(
@@ -361,7 +374,21 @@ where
         &self,
         request: Request<ChainInfoQuery>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        convert_and_delegate!(self, handle_chain_info_query, request)
+        debug!(
+            "server handler [handle_chain_info_query] received delegating request [{:?}]",
+            request
+        );
+        Ok(Response::new(
+            match self
+                .state
+                .clone()
+                .handle_chain_info_query(request.into_inner().try_into()?)
+                .await
+            {
+                Ok(chain_info_response) => chain_info_response.try_into()?,
+                Err(error) => NodeError::from(error).try_into()?,
+            },
+        ))
     }
 
     async fn handle_cross_chain_request(

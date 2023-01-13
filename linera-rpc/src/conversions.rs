@@ -90,29 +90,6 @@ macro_rules! map_invert {
     };
 }
 
-/// Delegates the call to an underlying handler and converts types to and from proto
-#[macro_export]
-macro_rules! convert_and_delegate {
-    ($self:ident, $handler:ident, $req:ident) => {{
-        log::debug!(
-            "server handler [{}] received delegating request [{:?}] ",
-            stringify!($handler),
-            $req
-        );
-        Ok(Response::new(
-            match $self
-                .state
-                .clone()
-                .$handler($req.into_inner().try_into()?)
-                .await
-            {
-                Ok(chain_info_response) => chain_info_response.try_into()?,
-                Err(error) => NodeError::from(error).try_into()?,
-            },
-        ))
-    }};
-}
-
 #[macro_export]
 macro_rules! client_delegate {
     ($self:ident, $handler:ident, $req:ident) => {{
