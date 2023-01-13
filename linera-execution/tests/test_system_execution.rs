@@ -3,7 +3,10 @@
 
 #![allow(clippy::field_reassign_with_default)]
 
-use linera_base::data_types::{BlockHeight, ChainDescription, ChainId, EffectId};
+use linera_base::{
+    crypto::{BcsSignable, HashValue},
+    data_types::{BlockHeight, ChainDescription, ChainId, EffectId},
+};
 use linera_execution::{
     system::{Address, Amount, Balance, UserData},
     ApplicationDescription, ApplicationRegistryView, Effect, EffectContext, ExecutionResult,
@@ -12,6 +15,7 @@ use linera_execution::{
     TestExecutionRuntimeContext,
 };
 use linera_views::{memory::MemoryContext, views::View};
+use serde::{Deserialize, Serialize};
 
 #[tokio::test]
 async fn test_simple_system_operation() -> anyhow::Result<()> {
@@ -52,6 +56,11 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[derive(Serialize, Deserialize)]
+struct Dummy;
+
+impl BcsSignable for Dummy {}
+
 #[tokio::test]
 async fn test_simple_system_effect() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
@@ -67,6 +76,7 @@ async fn test_simple_system_effect() -> anyhow::Result<()> {
     let context = EffectContext {
         chain_id: ChainId::root(0),
         height: BlockHeight(0),
+        certificate_hash: HashValue::new(&Dummy),
         effect_id: EffectId {
             chain_id: ChainId::root(1),
             height: BlockHeight(0),

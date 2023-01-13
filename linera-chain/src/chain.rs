@@ -371,6 +371,7 @@ where
             let context = EffectContext {
                 chain_id,
                 height: block.height,
+                certificate_hash: message.event.certificate_hash,
                 effect_id: EffectId {
                     chain_id: message.origin.sender,
                     height: message.event.height,
