@@ -81,7 +81,7 @@ impl From<&UserApplicationDescription> for UserApplicationId {
 pub struct BytecodeId(pub EffectId);
 
 /// A reference to where the application bytecode is stored.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct BytecodeLocation {
     /// The certificate that published the bytecode.
     pub certificate_hash: HashValue,
@@ -137,7 +137,7 @@ where
             .published_bytecodes
             .get(&bytecode_id)
             .await?
-            .ok_or(ExecutionError::UnknownBytecode(bytecode_id))?;
+            .ok_or(ExecutionError::UnknownBytecodeId(bytecode_id))?;
 
         let description = UserApplicationDescription {
             bytecode_location,
@@ -161,6 +161,6 @@ where
         self.known_applications
             .get(&id)
             .await?
-            .ok_or_else(|| ExecutionError::UnknownApplication(Box::new(id)))
+            .ok_or_else(|| ExecutionError::UnknownApplicationId(Box::new(id)))
     }
 }
