@@ -190,7 +190,7 @@ message ApplicationId {
 // A user application Id.
 message UserApplicationId {
   // The bytecode to use for the application.
-  BytecodeId bytecode = 1;
+  BytecodeId bytecode_id = 1;
 
   // The unique ID of the application's creation.
   EffectId creation = 2;
@@ -211,7 +211,7 @@ message UserApplicationDescription {
   BytecodeId bytecode_id = 1;
 
   // The location of the bytecode to use for the application
-  BytecodeLocation bytecode = 2;
+  BytecodeLocation bytecode_location = 2;
 
   // The unique ID of the application's creation.
   EffectId creation = 3;

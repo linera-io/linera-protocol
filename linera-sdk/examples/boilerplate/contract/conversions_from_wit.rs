@@ -67,7 +67,7 @@ impl From<contract::CalleeContext> for CalleeContext {
 impl From<contract::ApplicationId> for ApplicationId {
     fn from(application_id: contract::ApplicationId) -> Self {
         ApplicationId {
-            bytecode: BytecodeId(application_id.bytecode.into()),
+            bytecode: BytecodeId(application_id.bytecode_id.into()),
             creation: application_id.creation.into(),
         }
     }
@@ -76,7 +76,7 @@ impl From<contract::ApplicationId> for ApplicationId {
 impl From<writable_system::ApplicationId> for ApplicationId {
     fn from(application_id: writable_system::ApplicationId) -> Self {
         ApplicationId {
-            bytecode: BytecodeId(application_id.bytecode.into()),
+            bytecode: BytecodeId(application_id.bytecode_id.into()),
             creation: application_id.creation.into(),
         }
     }

@@ -13,11 +13,11 @@ variant poll-load {
 }
 
 record application-id {
-    bytecode: bytecode,
+    bytecode-id: bytecode-id,
     creation: effect-id,
 }
 
-type bytecode = effect-id
+type bytecode-id = effect-id
 
 record effect-id {
     chain-id: chain-id,

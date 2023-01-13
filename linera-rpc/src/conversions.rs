@@ -492,9 +492,12 @@ impl From<ApplicationId> for grpc::ApplicationId {
             ApplicationId::System => grpc::ApplicationId {
                 inner: Some(grpc::application_id::Inner::System(())),
             },
-            ApplicationId::User(UserApplicationId { bytecode, creation }) => grpc::ApplicationId {
+            ApplicationId::User(UserApplicationId {
+                bytecode_id,
+                creation,
+            }) => grpc::ApplicationId {
                 inner: Some(grpc::application_id::Inner::User(grpc::UserApplicationId {
-                    bytecode: Some(bytecode.into()),
+                    bytecode_id: Some(bytecode_id.into()),
                     creation: Some(creation.into()),
                 })),
             },
@@ -514,7 +517,7 @@ impl TryFrom<grpc::ApplicationId> for ApplicationId {
                 grpc::application_id::Inner::System(_) => ApplicationId::System,
                 grpc::application_id::Inner::User(user_application_id) => {
                     ApplicationId::User(UserApplicationId {
-                        bytecode: try_proto_convert!(user_application_id.bytecode),
+                        bytecode_id: try_proto_convert!(user_application_id.bytecode_id),
                         creation: try_proto_convert!(user_application_id.creation),
                     })
                 }
@@ -531,14 +534,14 @@ impl From<ApplicationDescription> for grpc::ApplicationDescription {
             },
             ApplicationDescription::User(UserApplicationDescription {
                 bytecode_id,
-                bytecode,
+                bytecode_location,
                 creation,
                 initialization_argument,
             }) => grpc::ApplicationDescription {
                 inner: Some(application_description::Inner::User(
                     grpc::UserApplicationDescription {
                         bytecode_id: Some(bytecode_id.into()),
-                        bytecode: Some(bytecode.into()),
+                        bytecode_location: Some(bytecode_location.into()),
                         creation: Some(creation.into()),
                         initialisation_argument: initialization_argument,
                     },
@@ -563,7 +566,9 @@ impl TryFrom<grpc::ApplicationDescription> for ApplicationDescription {
                 application_description::Inner::User(user_application_description) => {
                     ApplicationDescription::User(UserApplicationDescription {
                         bytecode_id: try_proto_convert!(user_application_description.bytecode_id),
-                        bytecode: try_proto_convert!(user_application_description.bytecode),
+                        bytecode_location: try_proto_convert!(
+                            user_application_description.bytecode_location
+                        ),
                         creation: try_proto_convert!(user_application_description.creation),
                         initialization_argument: user_application_description
                             .initialisation_argument,
@@ -868,7 +873,7 @@ pub mod tests {
         };
 
         let application_id_user = ApplicationId::User(UserApplicationId {
-            bytecode: BytecodeId(effect_id),
+            bytecode_id: BytecodeId(effect_id),
             creation: effect_id,
         });
 
@@ -893,7 +898,7 @@ pub mod tests {
         let application_description_user =
             ApplicationDescription::User(UserApplicationDescription {
                 bytecode_id: BytecodeId(effect_id),
-                bytecode: bytecode_location,
+                bytecode_location,
                 creation: effect_id,
                 initialization_argument: vec![0, 1],
             });
