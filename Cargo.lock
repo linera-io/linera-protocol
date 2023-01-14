@@ -1879,6 +1879,7 @@ dependencies = [
 name = "linera-sdk"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "bcs",
  "ed25519-dalek",
@@ -1890,6 +1891,7 @@ dependencies = [
  "serde_with",
  "sha2",
  "thiserror",
+ "wasmtime",
  "wit-bindgen-guest-rust",
 ]
 
