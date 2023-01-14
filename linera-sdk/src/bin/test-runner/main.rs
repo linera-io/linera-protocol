@@ -33,23 +33,19 @@ fn main() -> Result<()> {
     let tests: Vec<_> = test_module.exports().filter_map(Test::new).collect();
 
     eprintln!("\nrunning {} tests", tests.len());
+    let mut report = TestReport::default();
     let mut store = Store::new(&engine, ());
     let mut instance = Instance::new(&mut store, &test_module, &[])?;
-    let mut passed = 0;
-    let mut failed = 0;
-    let mut ignored = 0;
     for test in tests {
         eprint!("test {} ...", test.name);
         if test.ignore {
-            ignored += 1;
-            eprintln!(" ignored")
+            report.ignore();
         } else {
             let f = instance.get_typed_func::<(), (), _>(&mut store, test.function)?;
 
             let pass = f.call(&mut store, ()).is_ok();
             if pass {
-                passed += 1;
-                eprintln!(" ok")
+                report.pass();
             } else {
                 // Reset instance on test failure. WASM uses `panic=abort`, so
                 // `Drop`s are not called after test failures, and a failed test
@@ -57,18 +53,11 @@ fn main() -> Result<()> {
                 store = Store::new(&engine, ());
                 instance = Instance::new(&mut store, &test_module, &[])?;
 
-                failed += 1;
-                eprintln!(" FAILED")
+                report.fail();
             }
         }
     }
-    eprintln!(
-        "\ntest result: {}. {} passed; {} failed; {} ignored;",
-        if failed > 0 { "FAILED" } else { "ok" },
-        passed,
-        failed,
-        ignored,
-    );
+    report.print();
     Ok(())
 }
 
@@ -108,5 +97,46 @@ impl<'a> Test<'a> {
             name: ignored_test_name.unwrap_or(test_name),
             ignore: ignored_test_name.is_some(),
         })
+    }
+}
+
+/// Summarizer of test results.
+#[derive(Clone, Copy, Debug, Default)]
+struct TestReport {
+    passed: usize,
+    failed: usize,
+    ignored: usize,
+}
+
+impl TestReport {
+    /// Report that a test passed.
+    pub fn pass(&mut self) {
+        self.passed += 1;
+        eprintln!(" ok")
+    }
+
+    /// Report that a test failed.
+    pub fn fail(&mut self) {
+        self.failed += 1;
+        eprintln!(" FAILED")
+    }
+
+    /// Report that a test was ignored.
+    pub fn ignore(&mut self) {
+        self.ignored += 1;
+        eprintln!(" ignored")
+    }
+
+    /// Print the report of executed tests.
+    pub fn print(self) {
+        let TestReport {
+            passed,
+            failed,
+            ignored,
+        } = self;
+
+        let status = if failed > 0 { "FAILED" } else { "ok" };
+
+        eprintln!("\ntest result: {status}. {passed} passed; {failed} failed; {ignored} ignored;");
     }
 }
