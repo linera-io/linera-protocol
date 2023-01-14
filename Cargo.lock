@@ -1825,6 +1825,7 @@ dependencies = [
  "log",
  "once_cell",
  "serde",
+ "serde_bytes",
  "thiserror",
  "tokio",
  "wasmer",
@@ -2963,9 +2964,9 @@ dependencies = [
 
 [[package]]
 name = "serde_bytes"
-version = "0.11.7"
+version = "0.11.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfc50e8183eeeb6178dcb167ae34a8051d63535023ae38b5d8d12beae193d37b"
+checksum = "718dc5fff5b36f99093fc49b280cfc96ce6fc824317783bff5a1fed0c7a64819"
 dependencies = [
  "serde",
 ]

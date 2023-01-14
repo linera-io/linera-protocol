@@ -516,19 +516,28 @@ impl From<Vec<u8>> for Response {
 pub struct ApplicationStateNotLocked;
 
 /// A WebAssembly module's bytecode.
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
-pub struct Bytecode(Vec<u8>);
+#[derive(Clone, Deserialize, Eq, Hash, PartialEq, Serialize)]
+pub struct Bytecode {
+    #[serde(with = "serde_bytes")]
+    bytes: Vec<u8>,
+}
 
 impl Bytecode {
     /// Load bytecode from a WASM module file.
     pub async fn load_from_file(path: impl AsRef<Path>) -> Result<Self, io::Error> {
         let bytes = tokio::fs::read(path).await?;
-        Ok(Bytecode(bytes))
+        Ok(Bytecode { bytes })
     }
 }
 
 impl AsRef<[u8]> for Bytecode {
     fn as_ref(&self) -> &[u8] {
-        self.0.as_ref()
+        self.bytes.as_ref()
+    }
+}
+
+impl std::fmt::Debug for Bytecode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        f.debug_tuple("Bytecode").finish()
     }
 }
