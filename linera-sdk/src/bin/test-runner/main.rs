@@ -28,10 +28,8 @@ use wasmtime::*;
 ///
 /// Prints out a summary of executed tests and their results.
 fn main() -> Result<()> {
-    let test_module_path = parse_args()?;
-    // Modules can be compiled through either the text or binary format
     let engine = Engine::default();
-    let test_module = Module::from_file(&engine, &test_module_path)?;
+    let test_module = load_test_module(&engine)?;
     let mut tests = Vec::new();
     for export in test_module.exports() {
         if let Some(name) = export.name().strip_prefix("$webassembly-test$") {
@@ -83,6 +81,13 @@ fn main() -> Result<()> {
         ignored,
     );
     Ok(())
+}
+
+/// Load the input test WASM module specified as a command line argument.
+fn load_test_module(engine: &Engine) -> Result<Module> {
+    let module_path = parse_args()?;
+    let module = Module::from_file(engine, module_path)?;
+    Ok(module)
 }
 
 /// Parse command line arguments to extract the path of the input test module.
