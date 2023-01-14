@@ -1704,10 +1704,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c05aeb6a22b8f62540c194aac980f2115af067bfe15a0734d7277a768d396b31"
 dependencies = [
  "cfg-if",
- "js-sys",
  "libc",
  "wasi 0.11.0+wasi-snapshot-preview1",
- "wasm-bindgen",
 ]
 
 [[package]]
@@ -2270,6 +2268,7 @@ name = "linera-sdk"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-lock",
  "async-trait",
  "bcs",
  "custom_debug_derive",
@@ -2358,7 +2357,6 @@ dependencies = [
  "bcs",
  "futures",
  "generic-array",
- "getrandom 0.2.8",
  "http",
  "linera-base",
  "linera-views",

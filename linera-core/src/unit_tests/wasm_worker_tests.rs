@@ -349,11 +349,16 @@ where
         .insert(application_id, application_description);
     creator_system_state.timestamp = Timestamp::from(4);
     let mut creator_state = ExecutionStateView::from_system_state(creator_system_state).await;
+    // chosen_key is formed of two parts:
+    // * 4 bytes equal to 0 that correspond to the base_key of the first index since "counter"
+    //   has just one RegisterView<C,u128>
+    // * 1 byte equal to zero that corresponds to the KeyTag::Value of RegisterView
+    let chosen_key = vec![0, 0, 0, 0, 0];
     creator_state
-        .users
+        .users_kv
         .try_load_entry_mut(application_id)
         .await?
-        .set(initial_value_bytes);
+        .insert(chosen_key.clone(), initial_value_bytes);
     let create_block_proposal = Value::ConfirmedBlock {
         block: create_block,
         effects: vec![],
@@ -361,11 +366,10 @@ where
     };
     let create_certificate = make_certificate(&committee, &worker, create_block_proposal);
 
-    let info = worker
+    let result = worker
         .fully_handle_certificate(create_certificate.clone())
-        .await
-        .unwrap()
-        .info;
+        .await;
+    let info = result.unwrap().info;
     assert_eq!(ChainId::root(2), info.chain_id);
     assert_eq!(Balance::from(0), info.system_balance);
     assert_eq!(BlockHeight::from(2), info.next_block_height);
@@ -387,10 +391,10 @@ where
     let expected_value = initial_value + increment;
     let expected_state_bytes = bcs::to_bytes(&expected_value)?;
     creator_state
-        .users
+        .users_kv
         .try_load_entry_mut(application_id)
         .await?
-        .set(expected_state_bytes);
+        .insert(chosen_key.clone(), expected_state_bytes);
     creator_state.system.timestamp.set(Timestamp::from(5));
     let run_block_proposal = Value::ConfirmedBlock {
         block: run_block,

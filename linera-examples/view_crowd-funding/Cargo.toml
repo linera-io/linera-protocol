@@ -1,0 +1,23 @@
+[package]
+name = "view_crowd-funding"
+version = "0.1.0"
+authors = ["Linera <contact@linera.io>"]
+edition = "2021"
+
+[dependencies]
+async-trait = "0.1.52"
+bcs = "0.1.3"
+view_fungible = { path = "../view_fungible" }
+futures = "0.3.17"
+linera-sdk = { path = "../../linera-sdk", features = ["crypto"] }
+linera-views = { path = "../../linera-views" }
+serde = { version = "1.0.130", features = ["derive"] }
+thiserror = "1.0.31"
+
+[[bin]]
+name = "view_crowd-funding_contract"
+path = "src/contract.rs"
+
+[[bin]]
+name = "view_crowd-funding_service"
+path = "src/service.rs"

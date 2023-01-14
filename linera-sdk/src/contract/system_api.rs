@@ -12,43 +12,107 @@ use linera_views::{
 use serde::{de::DeserializeOwned, Serialize};
 use std::{fmt, future::Future};
 
-/// Load the contract state, without locking it for writes.
-pub async fn load<State>() -> State
-where
-    State: Default + DeserializeOwned,
-{
-    let future = system::Load::new();
-    load_using(future::poll_fn(|_context| future.poll().into())).await
-}
+#[derive(Default, Clone)]
+pub struct HostContractWasmClient;
 
-/// Load the contract state and lock it for writes.
-pub async fn load_and_lock<State>() -> State
-where
-    State: Default + DeserializeOwned,
-{
-    let future = system::LoadAndLock::new();
-    load_using(future::poll_fn(|_context| future.poll().into())).await
-}
+impl HostContractWasmClient {
+    async fn find_keys_by_prefix_load(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, ViewError> {
+        let future = system::ViewFindKeys::new(key_prefix);
+        future::poll_fn(|_context| future.poll().into()).await
+    }
 
-/// Helper function to load the contract state or create a new one if it doesn't exist.
-async fn load_using<State>(future: impl Future<Output = Result<Vec<u8>, String>>) -> State
-where
-    State: Default + DeserializeOwned,
-{
-    let bytes = future.await.expect("Failed to load contract state");
-    if bytes.is_empty() {
-        State::default()
-    } else {
-        bcs::from_bytes(&bytes).expect("Invalid contract state")
+    async fn find_key_values_by_prefix_load(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ViewError> {
+        let future = system::ViewFindKeyValues::new(key_prefix);
+        future::poll_fn(|_context| future.poll().into()).await
     }
 }
 
+#[async_trait]
+impl KeyValueOperations for HostContractWasmClient {
+    type Error = ViewError;
+    type Keys = Vec<Vec<u8>>;
+    type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
+
+    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+        let future = system::ViewReadKeyBytes::new(key);
+        let r = future::poll_fn(|_context| future.poll().into()).await;
+        r
+    }
+
+    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, ViewError> {
+        let keys = self.find_keys_by_prefix_load(key_prefix).await?;
+        Ok(keys)
+    }
+
+    async fn find_key_values_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::KeyValues, ViewError> {
+        let key_values = self.find_key_values_by_prefix_load(key_prefix).await?;
+        Ok(key_values)
+    }
+
+    async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
+        let mut list_oper = Vec::new();
+        for op in &batch.operations {
+            match op {
+                WriteOperation::Delete { key } => {
+                    list_oper.push(system::ViewWriteOperation::Delete(key));
+                }
+                WriteOperation::Put { key, value } => {
+                    list_oper.push(system::ViewWriteOperation::Put((key, value)))
+                }
+                WriteOperation::DeletePrefix { key_prefix } => {
+                    list_oper.push(system::ViewWriteOperation::Deleteprefix(key_prefix))
+                }
+            }
+        }
+        let future = system::ViewWriteBatch::new(&list_oper);
+        future::poll_fn(|_context| future.poll().into()).await
+    }
+}
+
+pub type HostContractWasmContext = ContextFromDb<(), HostContractWasmClient>;
+
+pub trait DefaultContractContext {
+    fn new() -> Self;
+}
+
+impl DefaultContractContext for HostContractWasmContext {
+    fn new() -> Self {
+        Self {
+            db: HostContractWasmClient::default(),
+            base_key: Vec::new(),
+            extra: (),
+        }
+    }
+}
+
+/// Load the contract state and lock it for writes.
+pub async fn view_lock<State: View<HostContractWasmContext>>() -> State {
+    let future = system::ViewLock::new();
+    future::poll_fn(|_context| {
+        let r2: std::task::Poll<Result<(), ViewError>> = future.poll().into();
+        r2
+    })
+    .await
+    .expect("error happens in the into operation");
+    view_load_using::<State>().await
+}
+
+/// Helper function to load the contract state or create a new one if it doesn't exist.
+pub async fn view_load_using<State: View<HostContractWasmContext>>() -> State {
+    let context = HostContractWasmContext::new();
+    let r = State::load(context).await;
+    r.expect("Failed to load contract state")
+}
+
 /// Save the contract state and unlock it.
-pub async fn store_and_unlock<State>(state: State)
-where
-    State: Serialize,
-{
-    system::store_and_unlock(&bcs::to_bytes(&state).expect("State serialization failed"));
+pub async fn view_store_and_unlock<State: ContainerView<HostContractWasmContext>>(mut state: State) {
+    state.save().await.expect("save operation failed");
 }
 
 #[derive(Default, Clone)]
@@ -112,46 +176,6 @@ impl KeyValueOperations for WasmClient {
         let future = system::WriteBatch::new(&list_oper);
         future::poll_fn(|_context| future.poll().into()).await
     }
-}
-
-pub type WasmContext = ContextFromDb<(), WasmClient>;
-
-pub trait WasmContextExt {
-    fn new() -> Self;
-}
-
-impl WasmContextExt for WasmContext {
-    fn new() -> Self {
-        Self {
-            db: WasmClient::default(),
-            base_key: Vec::new(),
-            extra: (),
-        }
-    }
-}
-
-/// Load the contract state and lock it for writes.
-pub async fn load_and_lock_view<State: View<WasmContext>>() -> State {
-    let future = system::Lock::new();
-    future::poll_fn(|_context| {
-        let r2: std::task::Poll<Result<(), ViewError>> = future.poll().into();
-        r2
-    })
-    .await
-    .expect("error happens in the into operation");
-    load_view_using::<State>().await
-}
-
-/// Helper function to load the contract state or create a new one if it doesn't exist.
-pub async fn load_view_using<State: View<WasmContext>>() -> State {
-    let context = WasmContext::new();
-    let r = State::load(context).await;
-    r.expect("Failed to load contract state")
-}
-
-/// Save the contract state and unlock it.
-pub async fn store_and_unlock_view<State: ContainerView<WasmContext>>(mut state: State) {
-    state.save().await.expect("save operation failed");
 }
 
 /// Retrieve the current chain ID.

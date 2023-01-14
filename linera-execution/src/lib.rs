@@ -251,26 +251,26 @@ pub trait ReadableStorage: Send + Sync {
     /// Read the application state.
     async fn try_read_my_state(&self) -> Result<Vec<u8>, ExecutionError>;
 
-    /// Lock the userkv stat and prevent further reading/loading
-    async fn lock_userkv_state(&self) -> Result<(), ExecutionError>;
+    /// Lock the view user state and prevent further reading/loading
+    async fn view_lock_user_state(&self) -> Result<(), ExecutionError>;
 
-    /// Unlock the userkv stat and prevent further reading/loading
-    async fn unlock_userkv_state(&self) -> Result<(), ExecutionError>;
+    /// Unlock the view user state and prevent further reading/loading
+    async fn view_unlock_user_state(&self) -> Result<(), ExecutionError>;
 
-    /// Pass the reading of one key
-    async fn pass_userkv_read_key_bytes(
+    /// Read the key from the KV store
+    async fn view_read_key_bytes(
         &self,
         key: Vec<u8>,
     ) -> Result<Option<Vec<u8>>, ExecutionError>;
 
     /// Reads the data from the keys having a specific prefix.
-    async fn pass_userkv_find_keys_by_prefix(
+    async fn view_find_keys_by_prefix(
         &self,
         key_prefix: Vec<u8>,
     ) -> Result<Vec<Vec<u8>>, ExecutionError>;
 
     /// Reads the data from the key/values having a specific prefix.
-    async fn pass_userkv_find_key_values_by_prefix(
+    async fn view_find_key_values_by_prefix(
         &self,
         key_prefix: Vec<u8>,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError>;
@@ -315,6 +315,9 @@ pub trait WritableStorage: ReadableStorage {
 
     /// Allow reading/loading the state again (without saving anything).
     fn unlock_my_state(&self);
+
+    /// Write the batch and then unlock
+    async fn view_write_batch_and_unlock(&self, batch: Batch) -> Result<(), ExecutionError>;
 
     /// Write the batch and then unlock
     async fn write_batch_and_unlock(&self, batch: Batch) -> Result<(), ExecutionError>;

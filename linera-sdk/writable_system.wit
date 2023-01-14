@@ -13,22 +13,61 @@ enum log-level {
     error,
 }
 
-resource load {
-    static new: func() -> load
-    poll: func() -> poll-load
+resource view-lock {
+    static new: func() -> view-lock
+    poll: func() -> poll-view-lock
 }
 
-resource load-and-lock {
-    static new: func() -> load-and-lock
-    poll: func() -> poll-load
-}
-
-variant poll-load {
+variant poll-view-lock {
     pending,
-    ready(result<list<u8>, string>),
+    ready(result<unit, string>),
 }
 
-store-and-unlock: func(value: list<u8>) -> bool
+resource view-read-key-bytes {
+    static new: func(key: list<u8>) -> view-read-key-bytes
+    poll: func() -> poll-view-read-key-bytes
+}
+
+variant poll-view-read-key-bytes {
+    pending,
+    ready(result<option<list<u8>>, string>),
+}
+
+resource view-find-keys {
+    static new: func(prefix: list<u8>) -> view-find-keys
+    poll: func() -> poll-view-find-keys
+}
+
+variant poll-view-find-keys {
+    pending,
+    ready(result<list<list<u8>>, string>),
+}
+
+resource view-find-key-values {
+    static new: func(prefix: list<u8>) -> view-find-key-values
+    poll: func() -> poll-view-find-key-values
+}
+
+variant poll-view-find-key-values {
+    pending,
+    ready(result<list<tuple<list<u8>,list<u8>>>, string>),
+}
+
+variant view-write-operation {
+    delete(list<u8>),
+    deleteprefix(list<u8>),
+    put(tuple<list<u8>,list<u8>>),
+}
+
+resource view-write-batch {
+    static new: func(key: list<view-write-operation>) -> view-write-batch
+    poll: func() -> poll-view-write-batch
+}
+
+variant poll-view-write-batch {
+    pending,
+    ready(result<unit, string>),
+}
 
 resource lock {
     static new: func() -> lock

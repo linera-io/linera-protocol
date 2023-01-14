@@ -35,11 +35,6 @@ use {
 /// * a write_batch that writes in the context instead of writing of the view.
 /// At the present time, that second type is only used for tests.
 
-#[cfg(not(target_arch = "wasm32"))]
-use tokio::sync::{OwnedMutexGuard, RwLock};
-#[cfg(not(target_arch = "wasm32"))]
-use std::sync::Arc;
-
 /// Key tags to create the sub-keys of a KeyValueStoreView on top of the base key.
 #[repr(u8)]
 enum KeyTag {
@@ -641,7 +636,6 @@ where
 pub type KeyValueStoreMemoryContext<E> = ContextFromDb<E, ViewContainer<MemoryContext<()>>>;
 
 #[cfg(any(test, feature = "test"))]
-#[cfg(not(target_arch = "wasm32"))]
 impl<E> KeyValueStoreMemoryContext<E> {
     /// Create a [`KeyValueStoreMemoryContext`].
     pub async fn new(

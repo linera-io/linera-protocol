@@ -46,8 +46,8 @@ pub(crate) struct ExecutionRuntime<'a, C, const WRITABLE: bool> {
     execution_results: Arc<Mutex<&'a mut Vec<ExecutionResult>>>,
 }
 
-type ActiveUserStates<C> =
-    BTreeMap<UserApplicationId, OwnedRwLockWriteGuard<RegisterView<C, Vec<u8>>>>;
+type ActiveUserkvStates<C> =
+    BTreeMap<UserApplicationId, OwnedRwLockWriteGuard<KeyValueStoreView<C>>>;
 
 type ActiveUserkvStates<C> =
     BTreeMap<UserApplicationId, OwnedRwLockWriteGuard<KeyValueStoreView<C>>>;
@@ -115,10 +115,10 @@ where
             .expect("single-threaded execution should not lock `session_manager`")
     }
 
-    fn active_user_states_mut(&self) -> MutexGuard<'_, ActiveUserStates<C>> {
-        self.active_user_states
+    fn active_userkv_states_mut(&self) -> MutexGuard<'_, ActiveUserkvStates<C>> {
+        self.active_userkv_states
             .try_lock()
-            .expect("single-threaded execution should not lock `active_user_states`")
+            .expect("single-threaded execution should not lock `active_userkv_states`")
     }
 
     fn active_userkv_states_mut(&self) -> MutexGuard<'_, ActiveUserkvStates<C>> {
@@ -301,15 +301,59 @@ where
         *self.execution_state_mut().system.timestamp.get()
     }
 
-    async fn try_read_my_state(&self) -> Result<Vec<u8>, ExecutionError> {
-        let state = self
+    async fn view_lock_user_state(&self) -> Result<(), ExecutionError> {
+        let view = self
             .execution_state_mut()
-            .users
+            .users_kv
             .try_load_entry_mut(self.application_id())
-            .await?
-            .get()
-            .to_vec();
-        Ok(state)
+            .await?;
+        self.active_userkv_states_mut()
+            .insert(self.application_id(), view);
+        Ok(())
+    }
+
+    async fn view_unlock_user_state(&self) -> Result<(), ExecutionError> {
+        // Make the view available again.
+        match self
+            .active_userkv_states_mut()
+            .remove(&self.application_id())
+        {
+            Some(_) => Ok(()),
+            None => Err(ExecutionError::ApplicationStateNotLocked),
+        }
+    }
+
+    async fn view_read_key_bytes(
+        &self,
+        key: Vec<u8>,
+    ) -> Result<Option<Vec<u8>>, ExecutionError> {
+        // read a key from the KV store
+        match self.active_userkv_states_mut().get(&self.application_id()) {
+            Some(view) => Ok(view.get(&key).await?),
+            None => Err(ExecutionError::ApplicationStateNotLocked),
+        }
+    }
+
+    async fn view_find_keys_by_prefix(
+        &self,
+        key_prefix: Vec<u8>,
+    ) -> Result<Vec<Vec<u8>>, ExecutionError> {
+        // Read keys matching a prefix. We have to collect since iterators do not pass the wit barrier
+        match self.active_userkv_states_mut().get(&self.application_id()) {
+            Some(view) => Ok(view.find_keys_by_prefix(&key_prefix).await?),
+            None => Err(ExecutionError::ApplicationStateNotLocked),
+        }
+    }
+
+    async fn view_find_key_values_by_prefix(
+        &self,
+        key_prefix: Vec<u8>,
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError> {
+        // Read key/values matching a prefix. We have to collect since iterators do not pass the wit barrier
+        match self.active_userkv_states_mut().get(&self.application_id()) {
+            Some(view) => Ok(view.find_key_values_by_prefix(&key_prefix).await?),
+            None => Err(ExecutionError::ApplicationStateNotLocked),
+        }
     }
 
     async fn lock_userkv_state(&self) -> Result<(), ExecutionError> {
@@ -432,7 +476,7 @@ where
         self.active_user_states_mut().remove(&self.application_id());
     }
 
-    async fn write_batch_and_unlock(&self, batch: Batch) -> Result<(), ExecutionError> {
+    async fn view_write_batch_and_unlock(&self, batch: Batch) -> Result<(), ExecutionError> {
         // Make the view available again.
         match self
             .active_userkv_states_mut()

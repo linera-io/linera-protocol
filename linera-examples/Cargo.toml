@@ -5,6 +5,9 @@ members = [
         "crowd-funding",
         "fungible",
         "meta-counter",
+        "view_counter",
+        "view_crowd-funding",
+        "view_fungible",
 ]
 
 [profile.release]

@@ -8,14 +8,12 @@
 //! contract type that implements [`linera_sdk::Contract`].
 
 use crate::{
-    contract::{
-        self,
-        system_api::{self, WasmContext},
-    },
+    contract::{self, system_api, system_api::HostContractWasmContext},
     ApplicationCallResult, Contract, ContractLogger, ExecutionResult, ExportedFuture,
     SessionCallResult, SessionId, SimpleStateStorage, ViewStateStorage,
 };
-use linera_views::views::ContainerView;
+
+use linera_views::views::{ContainerView, View};
 use serde::{de::DeserializeOwned, Serialize};
 use std::marker::PhantomData;
 
@@ -269,7 +267,7 @@ pub struct Initialize<Application> {
 
 impl<Application> Initialize<Application>
 where
-    Application: Contract,
+    Application: Contract + ContainerView<HostContractWasmContext> + View<HostContractWasmContext>,
     Application::Storage: ContractStateStorage,
 {
     /// Creates the exported future that the host can poll.
@@ -303,7 +301,7 @@ pub struct ExecuteOperation<Application> {
 
 impl<Application> ExecuteOperation<Application>
 where
-    Application: Contract,
+    Application: Contract + ContainerView<HostContractWasmContext> + View<HostContractWasmContext>,
     Application::Storage: ContractStateStorage,
 {
     /// Creates the exported future that the host can poll.
@@ -337,7 +335,7 @@ pub struct ExecuteEffect<Application> {
 
 impl<Application> ExecuteEffect<Application>
 where
-    Application: Contract,
+    Application: Contract + ContainerView<HostContractWasmContext> + View<HostContractWasmContext>,
     Application::Storage: ContractStateStorage,
 {
     /// Creates the exported future that the host can poll.
@@ -371,7 +369,7 @@ pub struct CallApplication<Application> {
 
 impl<Application> CallApplication<Application>
 where
-    Application: Contract,
+    Application: Contract + ContainerView<HostContractWasmContext> + View<HostContractWasmContext>,
     Application::Storage: ContractStateStorage,
 {
     /// Creates the exported future that the host can poll.
@@ -408,7 +406,7 @@ pub struct CallSession<Application> {
 
 impl<Application> CallSession<Application>
 where
-    Application: Contract,
+    Application: Contract + ContainerView<HostContractWasmContext> + View<HostContractWasmContext>,
     Application::Storage: ContractStateStorage,
 {
     /// Creates the exported future that the host can poll.

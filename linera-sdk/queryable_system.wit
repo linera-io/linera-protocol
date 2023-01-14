@@ -13,14 +13,54 @@ enum log-level {
     error,
 }
 
-resource load {
-    static new: func() -> load
-    poll: func() -> poll-load
+resource view-lock {
+    static new: func() -> view-lock
+    poll: func() -> poll-view-lock
 }
 
-variant poll-load {
+variant poll-view-lock {
     pending,
-    ready(result<list<u8>, string>),
+    ready(result<unit, string>),
+}
+
+resource view-unlock {
+    static new: func() -> view-unlock
+    poll: func() -> poll-view-unlock
+}
+
+variant poll-view-unlock {
+    pending,
+    ready(result<unit, string>),
+}
+
+resource view-read-key-bytes {
+    static new: func(key: list<u8>) -> view-read-key-bytes
+    poll: func() -> poll-view-read-key-bytes
+}
+
+variant poll-view-read-key-bytes {
+    pending,
+    ready(result<option<list<u8>>, string>),
+}
+
+resource view-find-keys {
+    static new: func(prefix: list<u8>) -> view-find-keys
+    poll: func() -> poll-view-find-keys
+}
+
+variant poll-view-find-keys {
+    pending,
+    ready(result<list<list<u8>>, string>),
+}
+
+resource view-find-key-values {
+    static new: func(prefix: list<u8>) -> view-find-key-values
+    poll: func() -> poll-view-find-key-values
+}
+
+variant poll-view-find-key-values {
+    pending,
+    ready(result<list<tuple<list<u8>,list<u8>>>, string>),
 }
 
 resource lock {
