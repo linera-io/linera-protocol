@@ -30,12 +30,7 @@ use wasmtime::*;
 fn main() -> Result<()> {
     let engine = Engine::default();
     let test_module = load_test_module(&engine)?;
-    let mut tests = Vec::new();
-    for export in test_module.exports() {
-        if let Some(test) = Test::new(export) {
-            tests.push(test);
-        }
-    }
+    let tests: Vec<_> = test_module.exports().filter_map(Test::new).collect();
 
     eprintln!("\nrunning {} tests", tests.len());
     let mut store = Store::new(&engine, ());
