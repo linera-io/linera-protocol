@@ -36,9 +36,8 @@ fn main() -> Result<()> {
             tests.push(test);
         }
     }
-    let total = tests.len();
 
-    eprintln!("\nrunning {} tests", total);
+    eprintln!("\nrunning {} tests", tests.len());
     let mut store = Store::new(&engine, ());
     let mut instance = Instance::new(&mut store, &test_module, &[])?;
     let mut passed = 0;
