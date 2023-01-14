@@ -40,7 +40,7 @@ fn main() -> Result<()> {
                 ignore = false;
                 name
             });
-            tests.push(TestMeta {
+            tests.push(Test {
                 name,
                 function,
                 ignore,
@@ -55,13 +55,13 @@ fn main() -> Result<()> {
     let mut passed = 0;
     let mut failed = 0;
     let mut ignored = 0;
-    for meta in tests {
-        eprint!("test {} ...", meta.name);
-        if meta.ignore {
+    for test in tests {
+        eprint!("test {} ...", test.name);
+        if test.ignore {
             ignored += 1;
             eprintln!(" ignored")
         } else {
-            let f = instance.get_typed_func::<(), (), _>(&mut store, meta.function)?;
+            let f = instance.get_typed_func::<(), (), _>(&mut store, test.function)?;
 
             let pass = f.call(&mut store, ()).is_ok();
             if pass {
@@ -106,7 +106,8 @@ fn parse_args() -> Result<String> {
     }
 }
 
-struct TestMeta<'a> {
+/// Information of a test in the input WASM module.
+struct Test<'a> {
     name: &'a str,
     function: &'a str,
     ignore: bool,
