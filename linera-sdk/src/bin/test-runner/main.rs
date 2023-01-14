@@ -29,28 +29,15 @@ use wasmtime::*;
 ///
 /// Prints out a summary of executed tests and their results.
 fn main() -> Result<ExitCode> {
+    let mut report = TestReport::default();
     let engine = Engine::default();
     let test_module = load_test_module(&engine)?;
     let tests: Vec<_> = test_module.exports().filter_map(Test::new).collect();
 
     eprintln!("\nrunning {} tests", tests.len());
-    let mut report = TestReport::default();
-    for test in tests {
-        eprint!("test {} ...", test.name);
-        if test.ignore {
-            report.ignore();
-        } else {
-            let mut store = Store::new(&engine, ());
-            let instance = Instance::new(&mut store, &test_module, &[])?;
-            let f = instance.get_typed_func::<(), (), _>(&mut store, test.function)?;
 
-            let pass = f.call(&mut store, ()).is_ok();
-            if pass {
-                report.pass();
-            } else {
-                report.fail();
-            }
-        }
+    for test in tests {
+        test.run(&mut report, &engine, &test_module)?;
     }
 
     Ok(report.print())
@@ -92,6 +79,31 @@ impl<'a> Test<'a> {
             name: ignored_test_name.unwrap_or(test_name),
             ignore: ignored_test_name.is_some(),
         })
+    }
+
+    /// Run an test function exported from the WASM module and report its result.
+    ///
+    /// The test is executed in a clean WASM environment.
+    pub fn run(self, report: &mut TestReport, engine: &Engine, test_module: &Module) -> Result<()> {
+        eprint!("test {} ...", self.name);
+
+        if self.ignore {
+            report.ignore();
+        } else {
+            let mut store = Store::new(&engine, ());
+            let instance = Instance::new(&mut store, test_module, &[])?;
+
+            let function = instance.get_typed_func::<(), (), _>(&mut store, self.function)?;
+
+            let pass = function.call(&mut store, ()).is_ok();
+            if pass {
+                report.pass();
+            } else {
+                report.fail();
+            }
+        }
+
+        Ok(())
     }
 }
 
