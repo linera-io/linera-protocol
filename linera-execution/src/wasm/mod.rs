@@ -29,7 +29,6 @@ use crate::{
 use async_trait::async_trait;
 use std::{io, path::Path};
 use thiserror::Error;
-use tokio::fs;
 
 /// A user application in a compiled WebAssembly module.
 pub struct WasmApplication {
@@ -52,8 +51,8 @@ impl WasmApplication {
         service_bytecode_file: impl AsRef<Path>,
     ) -> Result<Self, io::Error> {
         Ok(WasmApplication {
-            contract_bytecode: Bytecode(fs::read(contract_bytecode_file).await?),
-            service_bytecode: Bytecode(fs::read(service_bytecode_file).await?),
+            contract_bytecode: Bytecode::load_from_file(contract_bytecode_file).await?,
+            service_bytecode: Bytecode::load_from_file(service_bytecode_file).await?,
         })
     }
 }

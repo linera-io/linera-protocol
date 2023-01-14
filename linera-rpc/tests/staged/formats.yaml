@@ -69,8 +69,8 @@ BlockProposal:
     - signature:
         TYPENAME: Signature
 Bytecode:
-  NEWTYPESTRUCT:
-    SEQ: U8
+  STRUCT:
+    - bytes: BYTES
 BytecodeId:
   NEWTYPESTRUCT:
     TYPENAME: EffectId
