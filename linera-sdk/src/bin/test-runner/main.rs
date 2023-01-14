@@ -35,25 +35,19 @@ fn main() -> Result<ExitCode> {
 
     eprintln!("\nrunning {} tests", tests.len());
     let mut report = TestReport::default();
-    let mut store = Store::new(&engine, ());
-    let mut instance = Instance::new(&mut store, &test_module, &[])?;
     for test in tests {
         eprint!("test {} ...", test.name);
         if test.ignore {
             report.ignore();
         } else {
+            let mut store = Store::new(&engine, ());
+            let instance = Instance::new(&mut store, &test_module, &[])?;
             let f = instance.get_typed_func::<(), (), _>(&mut store, test.function)?;
 
             let pass = f.call(&mut store, ()).is_ok();
             if pass {
                 report.pass();
             } else {
-                // Reset instance on test failure. WASM uses `panic=abort`, so
-                // `Drop`s are not called after test failures, and a failed test
-                // might leave an instance in an inconsistent state.
-                store = Store::new(&engine, ());
-                instance = Instance::new(&mut store, &test_module, &[])?;
-
                 report.fail();
             }
         }
