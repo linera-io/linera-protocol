@@ -306,10 +306,13 @@ impl std::fmt::Debug for HashValue {
     }
 }
 
-/// Something that we know how to hash and sign.
-pub trait Signable<Hasher> {
+/// Something that we know how to hash.
+pub trait Hashable<Hasher> {
     fn write(&self, hasher: &mut Hasher);
+}
 
+/// Something that we know how to hash and sign.
+pub trait Signable<Hasher>: Hashable<Hasher> {
     fn type_name() -> &'static str;
 }
 
@@ -318,7 +321,7 @@ pub trait Signable<Hasher> {
 /// * We use `BCS` to generate canonical bytes suitable for hashing and signing.
 pub trait BcsSignable: Serialize + serde::de::DeserializeOwned {}
 
-impl<T, Hasher> Signable<Hasher> for T
+impl<T, Hasher> Hashable<Hasher> for T
 where
     T: BcsSignable,
     Hasher: std::io::Write,
@@ -329,16 +332,31 @@ where
         write!(hasher, "{}::", name).expect("Hasher should not fail");
         bcs::serialize_into(hasher, &self).expect("Message serialization should not fail");
     }
+}
 
+impl<Hasher> Hashable<Hasher> for [u8]
+where
+    Hasher: std::io::Write,
+{
+    fn write(&self, hasher: &mut Hasher) {
+        hasher.write_all(self).expect("Hasher should not fail");
+    }
+}
+
+impl<T, Hasher> Signable<Hasher> for T
+where
+    T: BcsSignable,
+    Hasher: std::io::Write,
+{
     fn type_name() -> &'static str {
         serde_name::trace_name::<Self>().expect("Self must be a struct or an enum")
     }
 }
 
 impl HashValue {
-    pub fn new<T>(value: &T) -> Self
+    pub fn new<T: ?Sized>(value: &T) -> Self
     where
-        T: Signable<sha2::Sha512>,
+        T: Hashable<sha2::Sha512>,
     {
         use sha2::Digest;
 
