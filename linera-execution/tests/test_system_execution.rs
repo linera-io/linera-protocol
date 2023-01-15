@@ -36,7 +36,7 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
         height: BlockHeight(0),
         index: 0,
     };
-    let result = view
+    let results = view
         .execute_operation(
             &ApplicationDescription::System,
             &context,
@@ -47,11 +47,8 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
         .unwrap();
     assert_eq!(view.system.balance.get(), &Balance::from(0));
     assert_eq!(
-        result,
-        vec![ExecutionResult::System {
-            result: RawExecutionResult::default(),
-            new_application: None
-        }]
+        results,
+        vec![ExecutionResult::System(RawExecutionResult::default())]
     );
     Ok(())
 }
@@ -83,7 +80,7 @@ async fn test_simple_system_effect() -> anyhow::Result<()> {
             index: 0,
         },
     };
-    let result = view
+    let results = view
         .execute_effect(
             &ApplicationDescription::System,
             &context,
@@ -94,11 +91,8 @@ async fn test_simple_system_effect() -> anyhow::Result<()> {
         .unwrap();
     assert_eq!(view.system.balance.get(), &Balance::from(4));
     assert_eq!(
-        result,
-        vec![ExecutionResult::System {
-            result: RawExecutionResult::default(),
-            new_application: None
-        }]
+        results,
+        vec![ExecutionResult::System(RawExecutionResult::default())]
     );
     Ok(())
 }

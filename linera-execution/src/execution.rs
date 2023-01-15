@@ -5,8 +5,8 @@ use crate::{
     runtime::{ExecutionRuntime, SessionManager},
     system::SystemExecutionStateView,
     ApplicationDescription, ApplicationRegistryView, Effect, EffectContext, ExecutionError,
-    ExecutionResult, ExecutionRuntimeContext, Operation, OperationContext, Query, QueryContext,
-    Response, UserApplicationDescription, UserApplicationId,
+    ExecutionResult, ExecutionRuntimeContext, NewApplication, Operation, OperationContext, Query,
+    QueryContext, Response, UserApplicationDescription, UserApplicationId,
 };
 use linera_base::{data_types::ChainId, ensure};
 use linera_views::{
@@ -147,12 +147,14 @@ where
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match (application, operation) {
             (ApplicationDescription::System, Operation::System(op)) => {
-                let result = self.system.execute_operation(context, op).await?;
-                let mut results = vec![result];
-                results.extend(
-                    self.try_initialize_new_application(context, &results[0], applications)
-                        .await?,
-                );
+                let (result, new_application) = self.system.execute_operation(context, op).await?;
+                let mut results = vec![ExecutionResult::System(result)];
+                if let Some(new_application) = new_application {
+                    results.extend(
+                        self.initialize_new_application(context, new_application, applications)
+                            .await?,
+                    );
+                }
                 Ok(results)
             }
             (ApplicationDescription::User(application), Operation::User(operation)) => {
@@ -170,29 +172,20 @@ where
 
     /// Call a newly created application's [`initialize`][crate::UserApplication::initialize]
     /// method, so that it can initialize its state using the initialization argument.
-    async fn try_initialize_new_application(
+    async fn initialize_new_application(
         &mut self,
         context: &OperationContext,
-        result: &ExecutionResult,
+        new_application: NewApplication,
         applications: &mut ApplicationRegistryView<C>,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
-        if let ExecutionResult::System {
-            new_application: Some(new_application),
-            ..
-        } = result
-        {
-            let user_action =
-                UserAction::Initialize(context, &new_application.initialization_argument);
-            let application = applications
-                .register_new_application(new_application.clone())
-                .await?;
-            let results = self
-                .run_user_action(&application, context.chain_id, user_action, applications)
-                .await?;
-            Ok(results)
-        } else {
-            Ok(vec![])
-        }
+        let application = applications
+            .register_new_application(new_application)
+            .await?;
+        let user_action = UserAction::Initialize(context, &application.initialization_argument);
+        let results = self
+            .run_user_action(&application, context.chain_id, user_action, applications)
+            .await?;
+        Ok(results)
     }
 
     pub async fn execute_effect(
@@ -206,10 +199,7 @@ where
         match (application, effect) {
             (ApplicationDescription::System, Effect::System(effect)) => {
                 let result = self.system.execute_effect(applications, context, effect)?;
-                Ok(vec![ExecutionResult::System {
-                    result,
-                    new_application: None,
-                }])
+                Ok(vec![ExecutionResult::System(result)])
             }
             (ApplicationDescription::User(application), Effect::User(effect)) => {
                 self.run_user_action(

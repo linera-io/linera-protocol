@@ -473,7 +473,7 @@ where
     ) -> Result<(), ChainError> {
         for result in results {
             match result {
-                ExecutionResult::System { result, .. } => {
+                ExecutionResult::System(result) => {
                     Self::process_raw_execution_result(
                         ApplicationId::System,
                         outboxes,
@@ -484,14 +484,14 @@ where
                     )
                     .await?;
                 }
-                ExecutionResult::User(application_id, raw) => {
+                ExecutionResult::User(application_id, result) => {
                     Self::process_raw_execution_result(
                         ApplicationId::User(application_id),
                         outboxes,
                         channels,
                         effects,
                         height,
-                        raw,
+                        result,
                     )
                     .await?;
                 }

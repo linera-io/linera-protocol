@@ -385,12 +385,9 @@ pub enum Destination {
 /// Externally visible results of an execution, tagged by their application.
 #[derive(Debug)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+#[allow(clippy::large_enum_variant)]
 pub enum ExecutionResult {
-    System {
-        result: RawExecutionResult<SystemEffect>,
-        new_application: Option<NewApplication>,
-    },
-
+    System(RawExecutionResult<SystemEffect>),
     User(UserApplicationId, RawExecutionResult<Vec<u8>>),
 }
 
