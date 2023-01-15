@@ -179,8 +179,7 @@ ChannelId:
     - name:
         TYPENAME: ChannelName
 ChannelName:
-  NEWTYPESTRUCT:
-    SEQ: U8
+  NEWTYPESTRUCT: BYTES
 Committee:
   STRUCT:
     - validators:
@@ -235,8 +234,7 @@ Effect:
           TYPENAME: SystemEffect
     1:
       User:
-        NEWTYPE:
-          SEQ: U8
+        NEWTYPE: BYTES
 EffectId:
   STRUCT:
     - chain_id:
@@ -386,8 +384,7 @@ Operation:
           TYPENAME: SystemOperation
     1:
       User:
-        NEWTYPE:
-          SEQ: U8
+        NEWTYPE: BYTES
 Origin:
   STRUCT:
     - sender:
@@ -595,8 +592,7 @@ SystemOperation:
         STRUCT:
           - bytecode_id:
               TYPENAME: BytecodeId
-          - argument:
-              SEQ: U8
+          - argument: BYTES
 UserApplicationDescription:
   STRUCT:
     - bytecode_id:
@@ -605,8 +601,7 @@ UserApplicationDescription:
         TYPENAME: BytecodeLocation
     - creation:
         TYPENAME: EffectId
-    - initialization_argument:
-        SEQ: U8
+    - initialization_argument: BYTES
 UserApplicationId:
   STRUCT:
     - bytecode_id:

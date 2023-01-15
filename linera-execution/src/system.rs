@@ -117,6 +117,7 @@ pub enum SystemOperation {
     /// Create a new application.
     CreateNewApplication {
         bytecode_id: BytecodeId,
+        #[serde(with = "serde_bytes")]
         argument: Vec<u8>,
     },
 }

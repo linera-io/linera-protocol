@@ -49,6 +49,7 @@ pub struct UserApplicationDescription {
     /// The unique ID of the application's creation.
     pub creation: EffectId,
     /// The argument used during application initialization.
+    #[serde(with = "serde_bytes")]
     pub initialization_argument: Vec<u8>,
 }
 
