@@ -5,7 +5,7 @@
 use crate::{
     ApplicationRegistryView, Bytecode, BytecodeId, BytecodeLocation, ChainOwnership, ChannelId,
     ChannelName, Destination, EffectContext, NewApplication, OperationContext, QueryContext,
-    RawExecutionResult, UserApplicationId,
+    RawExecutionResult, UserApplicationDescription, UserApplicationId,
 };
 use linera_base::{
     committee::Committee,
@@ -147,6 +147,10 @@ pub enum SystemEffect {
     Unsubscribe { id: ChainId, channel_id: ChannelId },
     /// Notify that a new application bytecode was published.
     BytecodePublished,
+    /// Share information about an application to help the recipient use it.
+    DeclareApplication {
+        application: UserApplicationDescription,
+    },
     /// Does nothing. Used to debug the intended recipients of a block.
     Notify { id: ChainId },
 }
@@ -565,6 +569,9 @@ where
             Notify { .. } => (),
             OpenChain { .. } => {
                 // This special effect is executed immediately when cross-chain requests are received.
+            }
+            DeclareApplication { application } => {
+                applications.declare_application(application.clone())?;
             }
             _ => {
                 log::error!("Skipping unexpected received effect: {effect:?}");

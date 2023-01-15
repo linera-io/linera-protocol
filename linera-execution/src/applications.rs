@@ -40,7 +40,7 @@ pub enum ApplicationDescription {
 
 /// Description of the necessary information to run a user application.
 #[allow(clippy::large_enum_variant)]
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Hash, Serialize)]
 pub struct UserApplicationDescription {
     /// The unique ID of the bytecode to use for the application.
     pub bytecode_id: BytecodeId,
@@ -118,10 +118,10 @@ where
     /// Register an existing application.
     ///
     /// Keeps track of an existing application that the current chain is seeing for the first time.
-    pub fn register_existing_application(
+    pub fn declare_application(
         &mut self,
         application: UserApplicationDescription,
-    ) -> Result<UserApplicationId, ExecutionError> {
+    ) -> Result<UserApplicationId, SystemExecutionError> {
         let id = UserApplicationId::from(&application);
         self.known_applications.insert(&id, application)?;
         Ok(id)

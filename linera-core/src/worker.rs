@@ -14,7 +14,7 @@ use linera_chain::{
     data_types::{Block, BlockProposal, Certificate, Message, Origin, Target, Value},
     ChainManagerOutcome, ChainStateView,
 };
-use linera_execution::{ApplicationDescription, ApplicationId, Query, Response};
+use linera_execution::{ApplicationId, Query, Response};
 use linera_storage::Store;
 use linera_views::{
     log_view::LogView,
@@ -249,7 +249,7 @@ where
     async fn create_cross_chain_request(
         &mut self,
         confirmed_log: &mut LogView<Client::Context, HashValue>,
-        application: ApplicationDescription,
+        application_id: ApplicationId,
         origin: Origin,
         recipient: ChainId,
         heights: &[BlockHeight],
@@ -262,7 +262,7 @@ where
         }
         let certificates = self.storage.read_certificates(keys).await?;
         Ok(CrossChainRequest::UpdateRecipient {
-            application,
+            application_id,
             origin,
             recipient,
             certificates,
@@ -277,7 +277,6 @@ where
         let mut actions = NetworkActions::default();
         let chain_id = chain.chain_id();
         for application_id in chain.communication_states.indices().await? {
-            let application = chain.describe_application(application_id).await?;
             let state = chain
                 .communication_states
                 .load_entry(application_id)
@@ -292,7 +291,7 @@ where
                 let request = self
                     .create_cross_chain_request(
                         &mut chain.confirmed_log,
-                        application.clone(),
+                        application_id,
                         origin,
                         target.recipient,
                         &heights,
@@ -448,13 +447,12 @@ where
 
     async fn process_cross_chain_update(
         &mut self,
-        application: ApplicationDescription,
+        application_id: ApplicationId,
         origin: Origin,
         recipient: ChainId,
         certificates: Vec<Certificate>,
     ) -> Result<NetworkActions, WorkerError> {
         let mut chain = self.storage.load_chain(recipient).await?;
-        let application_id = chain.register_application(application)?;
         // Only process certificates with relevant heights and epochs.
         let next_height_to_receive = chain
             .next_block_height_to_receive(application_id, origin.clone())
@@ -695,12 +693,12 @@ where
         log::trace!("{} <-- {:?}", self.nickname, request);
         match request {
             CrossChainRequest::UpdateRecipient {
-                application,
+                application_id,
                 origin,
                 recipient,
                 certificates,
             } => {
-                self.process_cross_chain_update(application, origin, recipient, certificates)
+                self.process_cross_chain_update(application_id, origin, recipient, certificates)
                     .await
             }
             CrossChainRequest::ConfirmUpdatedRecipient {

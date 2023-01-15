@@ -24,7 +24,7 @@ async fn test_missing_user_application() -> anyhow::Result<()> {
     let mut applications = ApplicationRegistryView::load(view.context().clone()).await?;
 
     let app_desc = create_dummy_user_application_description();
-    let app_id = applications.register_existing_application(app_desc.clone())?;
+    let app_id = applications.declare_application(app_desc.clone())?;
 
     let context = OperationContext {
         chain_id: ChainId::root(0),
@@ -168,7 +168,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
             .await;
     let mut applications = ApplicationRegistryView::load(view.context().clone()).await?;
     let app_desc = create_dummy_user_application_description();
-    let app_id = applications.register_existing_application(app_desc.clone())?;
+    let app_id = applications.declare_application(app_desc.clone())?;
     view.context()
         .extra()
         .user_applications()
@@ -223,7 +223,7 @@ async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()>
             .await;
     let mut applications = ApplicationRegistryView::load(view.context().clone()).await?;
     let app_desc = create_dummy_user_application_description();
-    let app_id = applications.register_existing_application(app_desc.clone())?;
+    let app_id = applications.declare_application(app_desc.clone())?;
     view.context()
         .extra()
         .user_applications()

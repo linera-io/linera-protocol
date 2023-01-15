@@ -93,7 +93,7 @@ message CrossChainRequest {
 // Communicate a number of confirmed blocks from the sender to the recipient.
 // Blocks must be given by increasing heights.
 message UpdateRecipient {
-  ApplicationDescription application = 1;
+  ApplicationId application_id = 1;
   Origin origin = 2;
   ChainId recipient = 3;
   repeated Certificate certificates = 4;

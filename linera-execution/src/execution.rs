@@ -6,7 +6,8 @@ use crate::{
     system::SystemExecutionStateView,
     ApplicationDescription, ApplicationRegistryView, Effect, EffectContext, ExecutionError,
     ExecutionResult, ExecutionRuntimeContext, NewApplication, Operation, OperationContext, Query,
-    QueryContext, Response, UserApplicationDescription, UserApplicationId,
+    QueryContext, RawExecutionResult, Response, SystemEffect, UserApplicationDescription,
+    UserApplicationId,
 };
 use linera_base::{data_types::ChainId, ensure};
 use linera_views::{
@@ -85,18 +86,18 @@ where
 {
     async fn run_user_action(
         &mut self,
-        application: &UserApplicationDescription,
+        application_description: &UserApplicationDescription,
         chain_id: ChainId,
         action: UserAction<'_>,
         applications: &mut ApplicationRegistryView<C>,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
         // Try to load the application. This may fail if the corresponding
         // bytecode-publishing certificate doesn't exist yet on this validator.
-        let application_id = UserApplicationId::from(application);
+        let application_id = UserApplicationId::from(application_description);
         let application = self
             .context()
             .extra()
-            .get_user_application(application)
+            .get_user_application(application_description)
             .await?;
         // Create the execution runtime for this transaction.
         let mut session_manager = SessionManager::default();
@@ -127,6 +128,20 @@ where
             }
         };
         assert_eq!(application_ids, vec![application_id]);
+        // Make sure to declare the application first for all recipients of the user
+        // execution result.
+        let mut system_result = RawExecutionResult::default();
+        for effect in &result.effects {
+            system_result.effects.push((
+                effect.0.clone(),
+                SystemEffect::DeclareApplication {
+                    application: application_description.clone(),
+                },
+            ));
+        }
+        if !system_result.effects.is_empty() {
+            results.push(ExecutionResult::System(system_result));
+        }
         // Update externally-visible results.
         results.push(ExecutionResult::User(application_id, result));
         // Check that all sessions were properly closed.
