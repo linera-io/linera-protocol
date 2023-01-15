@@ -10,6 +10,9 @@ use linera_views::{
 };
 use serde::{Deserialize, Serialize};
 
+#[cfg(any(test, feature = "test"))]
+use std::collections::BTreeMap;
+
 /// A unique identifier for an application.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
 pub enum ApplicationId {
@@ -98,11 +101,29 @@ pub struct ApplicationRegistryView<C> {
     pub known_applications: MapView<C, UserApplicationId, UserApplicationDescription>,
 }
 
+#[cfg(any(test, feature = "test"))]
+#[derive(Default, Eq, PartialEq, Debug, Clone)]
+pub struct ApplicationRegistry {
+    pub published_bytecodes: BTreeMap<BytecodeId, BytecodeLocation>,
+    pub known_applications: BTreeMap<UserApplicationId, UserApplicationDescription>,
+}
+
 impl<C> ApplicationRegistryView<C>
 where
     C: Context + Clone + Send + Sync + 'static,
     ViewError: From<C::Error>,
 {
+    #[cfg(any(test, feature = "test"))]
+    pub fn import(&mut self, registry: ApplicationRegistry) -> Result<(), SystemExecutionError> {
+        for (id, location) in registry.published_bytecodes {
+            self.published_bytecodes.insert(&id, location)?;
+        }
+        for (id, description) in registry.known_applications {
+            self.known_applications.insert(&id, description)?;
+        }
+        Ok(())
+    }
+
     /// Register a published bytecode so that it can be used by applications.
     ///
     /// Keeps track of the bytecode's location so that it can be loaded when needed.

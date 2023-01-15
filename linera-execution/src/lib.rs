@@ -14,14 +14,14 @@ pub use applications::{
 };
 pub use execution::ExecutionStateView;
 pub use ownership::ChainOwnership;
-#[cfg(any(test, feature = "test"))]
-pub use system::SystemExecutionState;
 pub use system::{
     SystemEffect, SystemExecutionError, SystemExecutionStateView, SystemOperation, SystemQuery,
     SystemResponse,
 };
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 pub use wasm::{WasmApplication, WasmExecutionError};
+#[cfg(any(test, feature = "test"))]
+pub use {applications::ApplicationRegistry, system::SystemExecutionState};
 
 use async_trait::async_trait;
 use dashmap::DashMap;

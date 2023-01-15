@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    execution::ExecutionStateView, ApplicationRegistryView, ApplicationStateNotLocked, CallResult,
-    ExecutionError, ExecutionResult, ExecutionRuntimeContext, NewSession, QueryableStorage,
-    ReadableStorage, SessionId, UserApplicationCode, UserApplicationId, WritableStorage,
+    execution::ExecutionStateView, ApplicationStateNotLocked, CallResult, ExecutionError,
+    ExecutionResult, ExecutionRuntimeContext, NewSession, QueryableStorage, ReadableStorage,
+    SessionId, UserApplicationCode, UserApplicationId, WritableStorage,
 };
 use async_trait::async_trait;
 use linera_base::{data_types::ChainId, ensure};
@@ -25,8 +25,6 @@ use tokio::sync::{Mutex, MutexGuard, OwnedMutexGuard};
 pub(crate) struct ExecutionRuntime<'a, C, const WRITABLE: bool> {
     /// The current chain ID.
     chain_id: ChainId,
-    /// The registry of applications known by the current chain.
-    application_registry: Arc<Mutex<&'a mut ApplicationRegistryView<C>>>,
     /// The current stack of application IDs.
     application_ids: Arc<Mutex<&'a mut Vec<UserApplicationId>>>,
     /// The storage view on the execution state.
@@ -69,7 +67,6 @@ where
 {
     pub(crate) fn new(
         chain_id: ChainId,
-        application_registry: &'a mut ApplicationRegistryView<C>,
         application_ids: &'a mut Vec<UserApplicationId>,
         execution_state: &'a mut ExecutionStateView<C>,
         session_manager: &'a mut SessionManager,
@@ -78,7 +75,6 @@ where
         assert_eq!(chain_id, execution_state.context().extra().chain_id());
         Self {
             chain_id,
-            application_registry: Arc::new(Mutex::new(application_registry)),
             application_ids: Arc::new(Mutex::new(application_ids)),
             execution_state: Arc::new(Mutex::new(execution_state)),
             session_manager: Arc::new(Mutex::new(session_manager)),
@@ -128,11 +124,12 @@ where
         &self,
         id: UserApplicationId,
     ) -> Result<UserApplicationCode, ExecutionError> {
-        let mut registry = self
-            .application_registry
-            .try_lock()
-            .expect("single-threaded execution should not lock `application_registry`");
-        let description = registry.describe_application(id).await?;
+        let description = self
+            .execution_state_mut()
+            .system
+            .registry
+            .describe_application(id)
+            .await?;
         self.execution_state_mut()
             .context()
             .extra()

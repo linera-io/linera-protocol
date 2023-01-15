@@ -26,8 +26,9 @@ use linera_chain::{
 };
 use linera_execution::{
     system::{Address, Amount, Balance, SystemChannel, SystemEffect, SystemOperation, UserData},
-    ApplicationId, ChainOwnership, ChannelId, Destination, Effect, ExecutionStateView, Operation,
-    Query, Response, SystemExecutionState, SystemQuery, SystemResponse, UserApplicationId,
+    ApplicationId, ApplicationRegistry, ChainOwnership, ChannelId, Destination, Effect,
+    ExecutionStateView, Operation, Query, Response, SystemExecutionState, SystemQuery,
+    SystemResponse, UserApplicationId,
 };
 use linera_storage::{DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient, Store};
 use linera_views::{
@@ -225,6 +226,7 @@ async fn make_transfer_certificate_for_epoch<S>(
         committees: [(epoch, committee.clone())].into_iter().collect(),
         ownership: ChainOwnership::single(key_pair.public().into()),
         balance,
+        registry: ApplicationRegistry::default(),
     };
     let block = make_block(
         epoch,
@@ -707,6 +709,7 @@ where
                 committees: [(epoch, committee.clone())].into_iter().collect(),
                 ownership: ChainOwnership::single(sender_key_pair.public().into()),
                 balance: Balance::from(3),
+                registry: ApplicationRegistry::default(),
             })
             .await,
         },
@@ -747,6 +750,7 @@ where
                 committees: [(epoch, committee.clone())].into_iter().collect(),
                 ownership: ChainOwnership::single(sender_key_pair.public().into()),
                 balance: Balance::from(0),
+                registry: ApplicationRegistry::default(),
             })
             .await,
         },
@@ -1015,6 +1019,7 @@ where
                     committees: [(epoch, committee.clone())].into_iter().collect(),
                     ownership: ChainOwnership::single(recipient_key_pair.public().into()),
                     balance: Balance::from(0),
+                    registry: ApplicationRegistry::default(),
                 })
                 .await,
             },
@@ -2293,6 +2298,7 @@ where
                 committees: committees.clone(),
                 ownership: ChainOwnership::single(key_pair.public().into()),
                 balance: Balance::from(2),
+                registry: ApplicationRegistry::default(),
             })
             .await,
         },
@@ -2397,6 +2403,7 @@ where
                 committees: committees2.clone(),
                 ownership: ChainOwnership::single(key_pair.public().into()),
                 balance: Balance::from(0),
+                registry: ApplicationRegistry::default(),
             })
             .await,
         },
@@ -2445,6 +2452,7 @@ where
                 committees: committees2.clone(),
                 ownership: ChainOwnership::single(key_pair.public().into()),
                 balance: Balance::from(0),
+                registry: ApplicationRegistry::default(),
             })
             .await,
         },
@@ -2628,6 +2636,7 @@ where
                 committees: committees2.clone(),
                 ownership: ChainOwnership::single(key_pair.public().into()),
                 balance: Balance::from(2),
+                registry: ApplicationRegistry::default(),
             })
             .await,
         },
@@ -2781,6 +2790,7 @@ where
                 committees: committees.clone(),
                 ownership: ChainOwnership::single(key_pair1.public().into()),
                 balance: Balance::from(2),
+                registry: ApplicationRegistry::default(),
             })
             .await,
         },
@@ -2826,6 +2836,7 @@ where
                 committees: committees2.clone(),
                 ownership: ChainOwnership::single(key_pair0.public().into()),
                 balance: Balance::from(0),
+                registry: ApplicationRegistry::default(),
             })
             .await,
         },
@@ -2980,6 +2991,7 @@ where
                 committees: committees.clone(),
                 ownership: ChainOwnership::single(key_pair1.public().into()),
                 balance: Balance::from(2),
+                registry: ApplicationRegistry::default(),
             })
             .await,
         },
@@ -3046,6 +3058,7 @@ where
                 committees: committees3.clone(),
                 ownership: ChainOwnership::single(key_pair0.public().into()),
                 balance: Balance::from(0),
+                registry: ApplicationRegistry::default(),
             })
             .await,
         },
@@ -3125,6 +3138,7 @@ where
                 committees: committees3.clone(),
                 ownership: ChainOwnership::single(key_pair0.public().into()),
                 balance: Balance::from(1),
+                registry: ApplicationRegistry::default(),
             })
             .await,
         },
