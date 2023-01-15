@@ -12,9 +12,7 @@ use linera_chain::{
     data_types::{Certificate, Message, Origin},
     ChainManager, ChainStateView,
 };
-use linera_execution::{
-    system::Balance, ApplicationDescription, ApplicationId, ExecutionRuntimeContext,
-};
+use linera_execution::{system::Balance, ApplicationId, ExecutionRuntimeContext};
 use linera_storage::ChainRuntimeContext;
 use linera_views::{common::Context, views::ViewError};
 use serde::{Deserialize, Serialize};
@@ -135,7 +133,7 @@ pub enum CrossChainRequest {
     /// Communicate a number of confirmed blocks from the sender to the recipient.
     /// Blocks must be given by increasing heights.
     UpdateRecipient {
-        application: ApplicationDescription,
+        application_id: ApplicationId,
         origin: Origin,
         recipient: ChainId,
         certificates: Vec<Certificate>,

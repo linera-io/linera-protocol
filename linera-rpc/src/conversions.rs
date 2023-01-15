@@ -280,12 +280,12 @@ impl TryFrom<grpc::CrossChainRequest> for CrossChainRequest {
             .ok_or(ProtoConversionError::MissingField)?
         {
             Inner::UpdateRecipient(grpc::UpdateRecipient {
-                application,
+                application_id,
                 origin,
                 recipient,
                 certificates,
             }) => UpdateRecipient {
-                application: try_proto_convert!(application),
+                application_id: try_proto_convert!(application_id),
                 origin: try_proto_convert!(origin),
                 recipient: try_proto_convert!(recipient),
                 certificates: try_proto_convert_vec!(certificates, Certificate),
@@ -312,12 +312,12 @@ impl TryFrom<CrossChainRequest> for grpc::CrossChainRequest {
     fn try_from(cross_chain_request: CrossChainRequest) -> Result<Self, Self::Error> {
         let inner = match cross_chain_request {
             UpdateRecipient {
-                application,
+                application_id,
                 origin,
                 recipient,
                 certificates,
             } => Inner::UpdateRecipient(grpc::UpdateRecipient {
-                application: Some(application.into()),
+                application_id: Some(application_id.into()),
                 origin: Some(origin.into()),
                 recipient: Some(recipient.into()),
                 certificates: try_proto_convert_vec!(certificates, grpc::Certificate),
@@ -972,7 +972,7 @@ pub mod tests {
     #[test]
     pub fn test_cross_chain_request() {
         let cross_chain_request_update_recipient = UpdateRecipient {
-            application: ApplicationDescription::System,
+            application_id: ApplicationId::System,
             origin: Origin::chain(ChainId::root(0)),
             recipient: ChainId::root(0),
             certificates: vec![],

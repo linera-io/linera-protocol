@@ -26,9 +26,8 @@ use linera_chain::{
 };
 use linera_execution::{
     system::{Address, Amount, Balance, SystemChannel, SystemEffect, SystemOperation, UserData},
-    ApplicationDescription, ApplicationId, ChainOwnership, ChannelId, Destination, Effect,
-    ExecutionStateView, Operation, Query, Response, SystemExecutionState, SystemQuery,
-    SystemResponse, UserApplicationId,
+    ApplicationId, ChainOwnership, ChannelId, Destination, Effect, ExecutionStateView, Operation,
+    Query, Response, SystemExecutionState, SystemQuery, SystemResponse, UserApplicationId,
 };
 use linera_storage::{DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient, Store};
 use linera_views::{
@@ -1741,7 +1740,7 @@ where
     .await;
     worker
         .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
-            application: ApplicationDescription::System,
+            application_id: ApplicationId::System,
             origin: Origin::chain(ChainId::root(1)),
             recipient: ChainId::root(2),
             certificates: vec![certificate.clone()],
@@ -1830,7 +1829,7 @@ where
     .await;
     assert!(worker
         .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
-            application: ApplicationDescription::System,
+            application_id: ApplicationId::System,
             origin: Origin::chain(ChainId::root(1)),
             recipient: ChainId::root(2),
             certificates: vec![certificate],
@@ -1896,7 +1895,7 @@ where
     // An inactive target chain is created and it acknowledges the message.
     let actions = worker
         .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
-            application: ApplicationDescription::System,
+            application_id: ApplicationId::System,
             origin: Origin::chain(ChainId::root(1)),
             recipient: ChainId::root(2),
             certificates: vec![certificate],

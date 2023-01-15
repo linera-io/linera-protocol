@@ -196,8 +196,8 @@ CrossChainRequest:
     0:
       UpdateRecipient:
         STRUCT:
-          - application:
-              TYPENAME: ApplicationDescription
+          - application_id:
+              TYPENAME: ApplicationId
           - origin:
               TYPENAME: Origin
           - recipient:
@@ -505,6 +505,11 @@ SystemEffect:
     5:
       BytecodePublished: UNIT
     6:
+      DeclareApplication:
+        STRUCT:
+          - application:
+              TYPENAME: UserApplicationDescription
+    7:
       Notify:
         STRUCT:
           - id:
