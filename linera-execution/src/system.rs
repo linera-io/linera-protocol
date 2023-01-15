@@ -516,6 +516,7 @@ where
         context: &EffectContext,
         effect: &SystemEffect,
     ) -> Result<RawExecutionResult<SystemEffect>, SystemExecutionError> {
+        let mut result = RawExecutionResult::default();
         use SystemEffect::*;
         match effect {
             Credit { amount, recipient } if context.chain_id == *recipient => {
@@ -525,7 +526,6 @@ where
                     .try_add((*amount).into())
                     .unwrap_or_else(|_| Balance::max());
                 self.balance.set(new_balance);
-                Ok(RawExecutionResult::default())
             }
             SetCommittees {
                 admin_id,
@@ -538,31 +538,22 @@ where
                 );
                 self.epoch.set(Some(*epoch));
                 self.committees.set(committees.clone());
-                Ok(RawExecutionResult::default())
             }
             Subscribe { id, channel_id } if channel_id.chain_id == context.chain_id => {
                 // Notify the subscriber about this block, so that it is included in the
                 // receive_log of the subscriber and correctly synchronized.
-                let application = RawExecutionResult {
-                    effects: vec![(
-                        Destination::Recipient(*id),
-                        SystemEffect::Notify { id: *id },
-                    )],
-                    subscribe: vec![(channel_id.name.clone(), *id)],
-                    unsubscribe: vec![],
-                };
-                Ok(application)
+                result.effects = vec![(
+                    Destination::Recipient(*id),
+                    SystemEffect::Notify { id: *id },
+                )];
+                result.subscribe = vec![(channel_id.name.clone(), *id)];
             }
             Unsubscribe { id, channel_id } if channel_id.chain_id == context.chain_id => {
-                let application = RawExecutionResult {
-                    effects: vec![(
-                        Destination::Recipient(*id),
-                        SystemEffect::Notify { id: *id },
-                    )],
-                    subscribe: vec![],
-                    unsubscribe: vec![(channel_id.name.clone(), *id)],
-                };
-                Ok(application)
+                result.effects = vec![(
+                    Destination::Recipient(*id),
+                    SystemEffect::Notify { id: *id },
+                )];
+                result.unsubscribe = vec![(channel_id.name.clone(), *id)];
             }
             BytecodePublished => {
                 let bytecode_id = BytecodeId(context.effect_id);
@@ -571,18 +562,16 @@ where
                     operation_index: context.effect_id.index,
                 };
                 applications.register_published_bytecode(bytecode_id, bytecode_location)?;
-                Ok(RawExecutionResult::default())
             }
-            Notify { .. } => Ok(RawExecutionResult::default()),
+            Notify { .. } => (),
             OpenChain { .. } => {
                 // This special effect is executed immediately when cross-chain requests are received.
-                Ok(RawExecutionResult::default())
             }
             _ => {
                 log::error!("Skipping unexpected received effect: {effect:?}");
-                Ok(RawExecutionResult::default())
             }
         }
+        Ok(result)
     }
 
     /// Initialize the system application state on a newly opened chain.
