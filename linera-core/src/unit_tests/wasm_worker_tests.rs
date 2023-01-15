@@ -140,7 +140,7 @@ where
     };
     let subscribe_effect = SystemEffect::Subscribe {
         id: creator_chain.into(),
-        channel: publisher_channel.clone(),
+        channel_id: publisher_channel.clone(),
     };
     let subscribe_block = make_block(
         Epoch::from(0),

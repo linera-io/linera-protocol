@@ -496,14 +496,14 @@ SystemEffect:
         STRUCT:
           - id:
               TYPENAME: ChainId
-          - channel:
+          - channel_id:
               TYPENAME: ChannelId
     4:
       Unsubscribe:
         STRUCT:
           - id:
               TYPENAME: ChainId
-          - channel:
+          - channel_id:
               TYPENAME: ChannelId
     5:
       BytecodePublished: UNIT
