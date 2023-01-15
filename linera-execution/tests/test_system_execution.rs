@@ -9,12 +9,12 @@ use linera_base::{
 };
 use linera_execution::{
     system::{Address, Amount, Balance, UserData},
-    ApplicationDescription, ApplicationRegistryView, Effect, EffectContext, ExecutionResult,
-    ExecutionStateView, Operation, OperationContext, Query, QueryContext, RawExecutionResult,
-    Response, SystemEffect, SystemExecutionState, SystemOperation, SystemQuery, SystemResponse,
+    ApplicationId, Effect, EffectContext, ExecutionResult, ExecutionStateView, Operation,
+    OperationContext, Query, QueryContext, RawExecutionResult, Response, SystemEffect,
+    SystemExecutionState, SystemOperation, SystemQuery, SystemResponse,
     TestExecutionRuntimeContext,
 };
-use linera_views::{memory::MemoryContext, views::View};
+use linera_views::memory::MemoryContext;
 use serde::{Deserialize, Serialize};
 
 #[tokio::test]
@@ -25,7 +25,6 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
     let mut view =
         ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(state)
             .await;
-    let mut applications = ApplicationRegistryView::load(view.context().clone()).await?;
     let operation = SystemOperation::Transfer {
         amount: Amount::from(4),
         recipient: Address::Burn,
@@ -38,10 +37,9 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
     };
     let results = view
         .execute_operation(
-            &ApplicationDescription::System,
+            ApplicationId::System,
             &context,
             &Operation::System(operation),
-            &mut applications,
         )
         .await
         .unwrap();
@@ -65,7 +63,6 @@ async fn test_simple_system_effect() -> anyhow::Result<()> {
     let mut view =
         ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(state)
             .await;
-    let mut applications = ApplicationRegistryView::load(view.context().clone()).await?;
     let effect = SystemEffect::Credit {
         amount: Amount::from(4),
         recipient: ChainId::root(0),
@@ -81,12 +78,7 @@ async fn test_simple_system_effect() -> anyhow::Result<()> {
         },
     };
     let results = view
-        .execute_effect(
-            &ApplicationDescription::System,
-            &context,
-            &Effect::System(effect),
-            &mut applications,
-        )
+        .execute_effect(ApplicationId::System, &context, &Effect::System(effect))
         .await
         .unwrap();
     assert_eq!(view.system.balance.get(), &Balance::from(4));
@@ -105,17 +97,11 @@ async fn test_simple_system_query() -> anyhow::Result<()> {
     let mut view =
         ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(state)
             .await;
-    let mut applications = ApplicationRegistryView::load(view.context().clone()).await?;
     let context = QueryContext {
         chain_id: ChainId::root(0),
     };
     let response = view
-        .query_application(
-            &ApplicationDescription::System,
-            &context,
-            &Query::System(SystemQuery),
-            &mut applications,
-        )
+        .query_application(ApplicationId::System, &context, &Query::System(SystemQuery))
         .await
         .unwrap();
     assert_eq!(

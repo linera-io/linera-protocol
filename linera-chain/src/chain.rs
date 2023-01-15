@@ -13,9 +13,9 @@ use linera_base::{
     ensure,
 };
 use linera_execution::{
-    system::SystemEffect, ApplicationDescription, ApplicationId, ApplicationRegistryView,
-    ChannelName, Destination, Effect, EffectContext, ExecutionResult, ExecutionRuntimeContext,
-    ExecutionStateView, OperationContext, Query, QueryContext, RawExecutionResult, Response,
+    system::SystemEffect, ApplicationId, ChannelName, Destination, Effect, EffectContext,
+    ExecutionResult, ExecutionRuntimeContext, ExecutionStateView, OperationContext, Query,
+    QueryContext, RawExecutionResult, Response,
 };
 use linera_views::{
     collection_view::CollectionView,
@@ -50,9 +50,6 @@ pub struct ChainStateView<C> {
 
     /// Communication state of applications.
     pub communication_states: CollectionView<C, ApplicationId, CommunicationStateView<C>>,
-
-    /// The application bytecodes that have been published.
-    pub application_registry: ApplicationRegistryView<C>,
 }
 
 /// Block-chaining state.
@@ -102,15 +99,9 @@ where
         let context = QueryContext {
             chain_id: self.chain_id(),
         };
-        let application = self.describe_application(application_id).await?;
         let response = self
             .execution_state
-            .query_application(
-                &application,
-                &context,
-                query,
-                &mut self.application_registry,
-            )
+            .query_application(application_id, &context, query)
             .await?;
         Ok(response)
     }
@@ -367,15 +358,9 @@ where
                     index: message.event.index,
                 },
             };
-            let application = self.describe_application(message.application_id).await?;
             let results = self
                 .execution_state
-                .execute_effect(
-                    &application,
-                    &context,
-                    &message.event.effect,
-                    &mut self.application_registry,
-                )
+                .execute_effect(message.application_id, &context, &message.event.effect)
                 .await?;
             let communication_state = self
                 .communication_states
@@ -392,7 +377,6 @@ where
         }
         // Second, execute the operations in the block and remember the recipients to notify.
         for (index, (application_id, operation)) in block.operations.iter().enumerate() {
-            let application = self.describe_application(*application_id).await?;
             let context = OperationContext {
                 chain_id,
                 height: block.height,
@@ -404,12 +388,7 @@ where
                 .await?;
             let results = self
                 .execution_state
-                .execute_operation(
-                    &application,
-                    &context,
-                    operation,
-                    &mut self.application_registry,
-                )
+                .execute_operation(*application_id, &context, operation)
                 .await?;
 
             Self::process_execution_results(
@@ -429,23 +408,6 @@ where
             .get_mut()
             .reset(self.execution_state.system.ownership.get());
         Ok(effects)
-    }
-
-    /// Retrieve an application description.
-    ///
-    /// Retrieves the application description (with its bytecode location) from the internal map of
-    /// applications known by this chain.
-    pub async fn describe_application(
-        &mut self,
-        application_id: ApplicationId,
-    ) -> Result<ApplicationDescription, ChainError> {
-        match application_id {
-            ApplicationId::System => Ok(ApplicationDescription::System),
-            ApplicationId::User(id) => {
-                let description = self.application_registry.describe_application(id).await?;
-                Ok(ApplicationDescription::User(description))
-            }
-        }
     }
 
     async fn process_execution_results(

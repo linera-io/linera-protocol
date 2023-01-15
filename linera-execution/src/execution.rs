@@ -4,10 +4,9 @@
 use crate::{
     runtime::{ExecutionRuntime, SessionManager},
     system::SystemExecutionStateView,
-    ApplicationDescription, ApplicationRegistryView, Effect, EffectContext, ExecutionError,
-    ExecutionResult, ExecutionRuntimeContext, NewApplication, Operation, OperationContext, Query,
-    QueryContext, RawExecutionResult, Response, SystemEffect, UserApplicationDescription,
-    UserApplicationId,
+    ApplicationId, Effect, EffectContext, ExecutionError, ExecutionResult, ExecutionRuntimeContext,
+    NewApplication, Operation, OperationContext, Query, QueryContext, RawExecutionResult, Response,
+    SystemEffect, UserApplicationId,
 };
 use linera_base::{data_types::ChainId, ensure};
 use linera_views::{
@@ -68,6 +67,10 @@ where
         view.system.committees.set(state.committees);
         view.system.ownership.set(state.ownership);
         view.system.balance.set(state.balance);
+        view.system
+            .registry
+            .import(state.registry)
+            .expect("serialization of registry components should not fail");
         view
     }
 }
@@ -86,18 +89,21 @@ where
 {
     async fn run_user_action(
         &mut self,
-        application_description: &UserApplicationDescription,
+        application_id: UserApplicationId,
         chain_id: ChainId,
         action: UserAction<'_>,
-        applications: &mut ApplicationRegistryView<C>,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
         // Try to load the application. This may fail if the corresponding
         // bytecode-publishing certificate doesn't exist yet on this validator.
-        let application_id = UserApplicationId::from(application_description);
+        let application_description = self
+            .system
+            .registry
+            .describe_application(application_id)
+            .await?;
         let application = self
             .context()
             .extra()
-            .get_user_application(application_description)
+            .get_user_application(&application_description)
             .await?;
         // Create the execution runtime for this transaction.
         let mut session_manager = SessionManager::default();
@@ -105,7 +111,6 @@ where
         let mut application_ids = vec![application_id];
         let runtime = ExecutionRuntime::new(
             chain_id,
-            applications,
             &mut application_ids,
             self,
             &mut session_manager,
@@ -154,30 +159,28 @@ where
 
     pub async fn execute_operation(
         &mut self,
-        application: &ApplicationDescription,
+        application_id: ApplicationId,
         context: &OperationContext,
         operation: &Operation,
-        applications: &mut ApplicationRegistryView<C>,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
-        match (application, operation) {
-            (ApplicationDescription::System, Operation::System(op)) => {
+        match (application_id, operation) {
+            (ApplicationId::System, Operation::System(op)) => {
                 let (result, new_application) = self.system.execute_operation(context, op).await?;
                 let mut results = vec![ExecutionResult::System(result)];
                 if let Some(new_application) = new_application {
                     results.extend(
-                        self.initialize_new_application(context, new_application, applications)
+                        self.initialize_new_application(context, new_application)
                             .await?,
                     );
                 }
                 Ok(results)
             }
-            (ApplicationDescription::User(application), Operation::User(operation)) => {
+            (ApplicationId::User(application_id), Operation::User(operation)) => {
                 self.run_user_action(
-                    application,
+                    application_id,
                     context.chain_id,
                     UserAction::Operation(context, operation),
-                    applications,
                 )
                 .await
             }
@@ -191,37 +194,37 @@ where
         &mut self,
         context: &OperationContext,
         new_application: NewApplication,
-        applications: &mut ApplicationRegistryView<C>,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
-        let application = applications
+        let application_id = new_application.id;
+        let application = self
+            .system
+            .registry
             .register_new_application(new_application)
             .await?;
         let user_action = UserAction::Initialize(context, &application.initialization_argument);
         let results = self
-            .run_user_action(&application, context.chain_id, user_action, applications)
+            .run_user_action(application_id, context.chain_id, user_action)
             .await?;
         Ok(results)
     }
 
     pub async fn execute_effect(
         &mut self,
-        application: &ApplicationDescription,
+        application_id: ApplicationId,
         context: &EffectContext,
         effect: &Effect,
-        applications: &mut ApplicationRegistryView<C>,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
-        match (application, effect) {
-            (ApplicationDescription::System, Effect::System(effect)) => {
-                let result = self.system.execute_effect(applications, context, effect)?;
+        match (application_id, effect) {
+            (ApplicationId::System, Effect::System(effect)) => {
+                let result = self.system.execute_effect(context, effect)?;
                 Ok(vec![ExecutionResult::System(result)])
             }
-            (ApplicationDescription::User(application), Effect::User(effect)) => {
+            (ApplicationId::User(application_id), Effect::User(effect)) => {
                 self.run_user_action(
-                    application,
+                    application_id,
                     context.chain_id,
                     UserAction::Effect(context, effect),
-                    applications,
                 )
                 .await
             }
@@ -231,24 +234,27 @@ where
 
     pub async fn query_application(
         &mut self,
-        application: &ApplicationDescription,
+        application_id: ApplicationId,
         context: &QueryContext,
         query: &Query,
-        applications: &mut ApplicationRegistryView<C>,
     ) -> Result<Response, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
-        match (application, query) {
-            (ApplicationDescription::System, Query::System(query)) => {
+        match (application_id, query) {
+            (ApplicationId::System, Query::System(query)) => {
                 let response = self.system.query_application(context, query).await?;
                 Ok(Response::System(response))
             }
-            (ApplicationDescription::User(application), Query::User(query)) => {
+            (ApplicationId::User(application_id), Query::User(query)) => {
                 // Load the application.
-                let application_id = UserApplicationId::from(application);
+                let application_description = self
+                    .system
+                    .registry
+                    .describe_application(application_id)
+                    .await?;
                 let application = self
                     .context()
                     .extra()
-                    .get_user_application(application)
+                    .get_user_application(&application_description)
                     .await?;
                 // Create the execution runtime for this transaction.
                 let mut session_manager = SessionManager::default();
@@ -256,7 +262,6 @@ where
                 let mut application_ids = vec![application_id];
                 let runtime = ExecutionRuntime::new(
                     context.chain_id,
-                    applications,
                     &mut application_ids,
                     self,
                     &mut session_manager,

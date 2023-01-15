@@ -17,8 +17,9 @@ use linera_base::{
 use linera_chain::data_types::{Event, Message, Origin, Value};
 use linera_execution::{
     system::{Balance, SystemChannel, SystemEffect, SystemOperation},
-    ApplicationId, Bytecode, BytecodeId, ChainOwnership, ChannelId, Destination, Effect,
-    ExecutionStateView, SystemExecutionState, UserApplicationId,
+    ApplicationId, ApplicationRegistry, Bytecode, BytecodeId, BytecodeLocation, ChainOwnership,
+    ChannelId, Destination, Effect, ExecutionStateView, SystemExecutionState,
+    UserApplicationDescription, UserApplicationId,
 };
 use linera_storage::{DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient, Store};
 use linera_views::{
@@ -105,6 +106,7 @@ where
         committees: [(Epoch::from(0), committee.clone())].into_iter().collect(),
         ownership: ChainOwnership::single(publisher_key_pair.public().into()),
         balance: Balance::from(0),
+        registry: ApplicationRegistry::default(),
     };
     let publisher_state_hash = make_state_hash(publisher_system_state).await;
     let publish_block_proposal = Value::ConfirmedBlock {
@@ -150,7 +152,7 @@ where
         None,
     );
     let subscribe_block_height = subscribe_block.height;
-    let creator_system_state = SystemExecutionState {
+    let mut creator_system_state = SystemExecutionState {
         epoch: Some(Epoch::from(0)),
         description: Some(creator_chain),
         admin_id: Some(admin_id.into()),
@@ -158,8 +160,10 @@ where
         committees: [(Epoch::from(0), committee.clone())].into_iter().collect(),
         ownership: ChainOwnership::single(creator_key_pair.public().into()),
         balance: Balance::from(0),
+        registry: ApplicationRegistry::default(),
     };
-    let mut creator_state = ExecutionStateView::from_system_state(creator_system_state).await;
+    let mut creator_state =
+        ExecutionStateView::from_system_state(creator_system_state.clone()).await;
     let subscribe_block_proposal = Value::ConfirmedBlock {
         block: subscribe_block,
         effects: vec![(
@@ -230,6 +234,10 @@ where
         height: publish_block_height,
         index: 0,
     });
+    let bytecode_location = BytecodeLocation {
+        certificate_hash: publish_certificate.hash,
+        operation_index: 0,
+    };
     let initial_value = 10_u128;
     let initial_value_bytes = bcs::to_bytes(&initial_value)?;
     let create_operation = SystemOperation::CreateNewApplication {
@@ -243,6 +251,12 @@ where
             height: BlockHeight::from(1),
             index: 0,
         },
+    };
+    let application_description = UserApplicationDescription {
+        bytecode_id,
+        bytecode_location,
+        creation: application_id.creation.clone(),
+        initialization_argument: initial_value_bytes.clone(),
     };
     let create_block = make_block(
         Epoch::from(0),
@@ -263,6 +277,15 @@ where
         }],
         Some(&subscribe_certificate),
     );
+    creator_system_state
+        .registry
+        .published_bytecodes
+        .insert(bytecode_id, bytecode_location);
+    creator_system_state
+        .registry
+        .known_applications
+        .insert(application_id, application_description);
+    let mut creator_state = ExecutionStateView::from_system_state(creator_system_state).await;
     creator_state
         .users
         .try_load_entry(application_id)

@@ -48,6 +48,8 @@ pub struct SystemExecutionStateView<C> {
     pub ownership: RegisterView<C, ChainOwnership>,
     /// Balance of the chain.
     pub balance: RegisterView<C, Balance>,
+    /// Track the locations of known bytecodes as well as the descriptions of known applications.
+    pub registry: ApplicationRegistryView<C>,
 }
 
 /// For testing only.
@@ -61,6 +63,7 @@ pub struct SystemExecutionState {
     pub committees: BTreeMap<Epoch, Committee>,
     pub ownership: ChainOwnership,
     pub balance: Balance,
+    pub registry: crate::applications::ApplicationRegistry,
 }
 
 /// A system operation.
@@ -515,7 +518,6 @@ where
     /// Effects must be executed by order of heights in the sender's chain.
     pub fn execute_effect(
         &mut self,
-        applications: &mut ApplicationRegistryView<C>,
         context: &EffectContext,
         effect: &SystemEffect,
     ) -> Result<RawExecutionResult<SystemEffect>, SystemExecutionError> {
@@ -564,14 +566,15 @@ where
                     certificate_hash: context.certificate_hash,
                     operation_index: context.effect_id.index,
                 };
-                applications.register_published_bytecode(bytecode_id, bytecode_location)?;
+                self.registry
+                    .register_published_bytecode(bytecode_id, bytecode_location)?;
             }
             Notify { .. } => (),
             OpenChain { .. } => {
                 // This special effect is executed immediately when cross-chain requests are received.
             }
             DeclareApplication { application } => {
-                applications.declare_application(application.clone())?;
+                self.registry.declare_application(application.clone())?;
             }
             _ => {
                 log::error!("Skipping unexpected received effect: {effect:?}");
