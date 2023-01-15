@@ -4,8 +4,8 @@
 
 use crate::{
     ApplicationRegistryView, Bytecode, BytecodeId, BytecodeLocation, ChainOwnership, ChannelId,
-    ChannelName, Destination, EffectContext, ExecutionResult, NewApplication, OperationContext,
-    QueryContext, RawExecutionResult, UserApplicationId,
+    ChannelName, Destination, EffectContext, NewApplication, OperationContext, QueryContext,
+    RawExecutionResult, UserApplicationId,
 };
 use linera_base::{
     committee::Committee,
@@ -279,7 +279,8 @@ where
         &mut self,
         context: &OperationContext,
         operation: &SystemOperation,
-    ) -> Result<ExecutionResult, SystemExecutionError> {
+    ) -> Result<(RawExecutionResult<SystemEffect>, Option<NewApplication>), SystemExecutionError>
+    {
         use SystemOperation::*;
         let mut result = RawExecutionResult::default();
         let mut new_application = None;
@@ -504,10 +505,7 @@ where
             }
         }
 
-        Ok(ExecutionResult::System {
-            result,
-            new_application,
-        })
+        Ok((result, new_application))
     }
 
     /// Execute the recipient's side of an operation, aka a "remote effect".
