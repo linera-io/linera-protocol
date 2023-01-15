@@ -2228,7 +2228,7 @@ where
     let mut committees = BTreeMap::new();
     committees.insert(Epoch::from(0), committee.clone());
     let admin_id = ChainId::root(0);
-    let admin_channel = ChannelId {
+    let admin_channel_id = ChannelId {
         chain_id: admin_id,
         name: SystemChannel::Admin.name(),
     };
@@ -2282,7 +2282,7 @@ where
                     Destination::Recipient(admin_id),
                     Effect::System(SystemEffect::Subscribe {
                         id: user_id,
-                        channel: admin_channel.clone(),
+                        channel_id: admin_channel_id.clone(),
                     }),
                 ),
             ],
@@ -2424,7 +2424,7 @@ where
                         index: 1,
                         effect: Effect::System(SystemEffect::Subscribe {
                             id: user_id,
-                            channel: admin_channel.clone(),
+                            channel_id: admin_channel_id.clone(),
                         }),
                     },
                 }],

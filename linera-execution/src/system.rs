@@ -141,9 +141,9 @@ pub enum SystemEffect {
         committees: BTreeMap<Epoch, Committee>,
     },
     /// Subscribe to a channel.
-    Subscribe { id: ChainId, channel: ChannelId },
+    Subscribe { id: ChainId, channel_id: ChannelId },
     /// Unsubscribe to a channel.
-    Unsubscribe { id: ChainId, channel: ChannelId },
+    Unsubscribe { id: ChainId, channel_id: ChannelId },
     /// Notify that a new application bytecode was published.
     BytecodePublished,
     /// Does nothing. Used to debug the intended recipients of a block.
@@ -321,14 +321,15 @@ where
                         epoch: *epoch,
                     },
                 );
+                let channel_id = ChannelId {
+                    chain_id: *admin_id,
+                    name: SystemChannel::Admin.name(),
+                };
                 let e2 = (
                     Destination::Recipient(*admin_id),
                     SystemEffect::Subscribe {
                         id: *id,
-                        channel: ChannelId {
-                            chain_id: *admin_id,
-                            name: SystemChannel::Admin.name(),
-                        },
+                        channel_id,
                     },
                 );
                 result.effects = vec![e1, e2];
@@ -345,12 +346,12 @@ where
                 // Unsubscribe to all channels.
                 let mut effects = Vec::new();
                 self.subscriptions
-                    .for_each_index(|channel| {
+                    .for_each_index(|channel_id| {
                         effects.push((
-                            Destination::Recipient(channel.chain_id),
+                            Destination::Recipient(channel_id.chain_id),
                             SystemEffect::Unsubscribe {
                                 id: context.chain_id,
-                                channel,
+                                channel_id,
                             },
                         ));
                         Ok(())
@@ -461,10 +462,7 @@ where
                     Destination::Recipient(*chain_id),
                     SystemEffect::Subscribe {
                         id: context.chain_id,
-                        channel: ChannelId {
-                            chain_id: *chain_id,
-                            name: channel.name(),
-                        },
+                        channel_id,
                     },
                 )];
             }
@@ -482,10 +480,7 @@ where
                     Destination::Recipient(*chain_id),
                     SystemEffect::Unsubscribe {
                         id: context.chain_id,
-                        channel: ChannelId {
-                            chain_id: *chain_id,
-                            name: channel.name(),
-                        },
+                        channel_id,
                     },
                 )];
             }
@@ -547,7 +542,7 @@ where
                 self.committees.set(committees.clone());
                 Ok(RawExecutionResult::default())
             }
-            Subscribe { id, channel } if channel.chain_id == context.chain_id => {
+            Subscribe { id, channel_id } if channel_id.chain_id == context.chain_id => {
                 // Notify the subscriber about this block, so that it is included in the
                 // receive_log of the subscriber and correctly synchronized.
                 let application = RawExecutionResult {
@@ -555,19 +550,19 @@ where
                         Destination::Recipient(*id),
                         SystemEffect::Notify { id: *id },
                     )],
-                    subscribe: vec![(channel.name.clone(), *id)],
+                    subscribe: vec![(channel_id.name.clone(), *id)],
                     unsubscribe: vec![],
                 };
                 Ok(application)
             }
-            Unsubscribe { id, channel } if channel.chain_id == context.chain_id => {
+            Unsubscribe { id, channel_id } if channel_id.chain_id == context.chain_id => {
                 let application = RawExecutionResult {
                     effects: vec![(
                         Destination::Recipient(*id),
                         SystemEffect::Notify { id: *id },
                     )],
                     subscribe: vec![],
-                    unsubscribe: vec![(channel.name.clone(), *id)],
+                    unsubscribe: vec![(channel_id.name.clone(), *id)],
                 };
                 Ok(application)
             }
