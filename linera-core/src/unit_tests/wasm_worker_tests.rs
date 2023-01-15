@@ -79,11 +79,11 @@ where
     // Publish some bytecode.
     let publish_operation = SystemOperation::PublishBytecode {
         contract: Bytecode::load_from_file(
-            "../target/wasm32-unknown-unknown/debug/examples/counter_contract.wasm",
+            "../target/wasm32-unknown-unknown/release/examples/counter_contract.wasm",
         )
         .await?,
         service: Bytecode::load_from_file(
-            "../target/wasm32-unknown-unknown/debug/examples/counter_service.wasm",
+            "../target/wasm32-unknown-unknown/release/examples/counter_service.wasm",
         )
         .await?,
     };

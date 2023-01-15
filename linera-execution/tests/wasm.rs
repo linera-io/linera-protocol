@@ -33,8 +33,8 @@ async fn test_counter_wasm_application() -> anyhow::Result<()> {
         app_id,
         Arc::new(
             WasmApplication::from_files(
-                "../target/wasm32-unknown-unknown/debug/examples/counter_contract.wasm",
-                "../target/wasm32-unknown-unknown/debug/examples/counter_service.wasm",
+                "../target/wasm32-unknown-unknown/release/examples/counter_contract.wasm",
+                "../target/wasm32-unknown-unknown/release/examples/counter_service.wasm",
             )
             .await?,
         ),
