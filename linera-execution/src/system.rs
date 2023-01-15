@@ -333,7 +333,7 @@ where
                         channel_id,
                     },
                 );
-                result.effects = vec![e1, e2];
+                result.effects.extend([e1, e2]);
             }
             ChangeOwner { new_owner } => {
                 self.ownership.set(ChainOwnership::single(*new_owner));
@@ -345,10 +345,9 @@ where
             CloseChain => {
                 self.ownership.set(ChainOwnership::default());
                 // Unsubscribe to all channels.
-                let mut effects = Vec::new();
                 self.subscriptions
                     .for_each_index(|channel_id| {
-                        effects.push((
+                        result.effects.push((
                             Destination::Recipient(channel_id.chain_id),
                             SystemEffect::Unsubscribe {
                                 id: context.chain_id,
@@ -359,7 +358,6 @@ where
                     })
                     .await?;
                 self.subscriptions.clear();
-                result.effects = effects;
             }
             Transfer {
                 amount, recipient, ..
@@ -376,13 +374,13 @@ where
                 );
                 self.balance.get_mut().try_sub_assign((*amount).into())?;
                 if let Address::Account(id) = recipient {
-                    result.effects = vec![(
+                    result.effects.push((
                         Destination::Recipient(*id),
                         SystemEffect::Credit {
                             amount: *amount,
                             recipient: *id,
                         },
-                    )];
+                    ));
                 }
             }
             CreateCommittee {
@@ -405,14 +403,14 @@ where
                 );
                 self.committees.get_mut().insert(*epoch, committee.clone());
                 self.epoch.set(Some(*epoch));
-                result.effects = vec![(
+                result.effects.push((
                     Destination::Subscribers(SystemChannel::Admin.name()),
                     SystemEffect::SetCommittees {
                         admin_id: *admin_id,
                         epoch: self.epoch.get().expect("chain is active"),
                         committees: self.committees.get().clone(),
                     },
-                )];
+                ));
             }
             RemoveCommittee { admin_id, epoch } => {
                 // We are the admin chain and want to remove a committee.
@@ -428,14 +426,14 @@ where
                     self.committees.get_mut().remove(epoch).is_some(),
                     SystemExecutionError::InvalidCommitteeRemoval
                 );
-                result.effects = vec![(
+                result.effects.push((
                     Destination::Subscribers(SystemChannel::Admin.name()),
                     SystemEffect::SetCommittees {
                         admin_id: *admin_id,
                         epoch: self.epoch.get().expect("chain is active"),
                         committees: self.committees.get().clone(),
                     },
-                )];
+                ));
             }
             Subscribe { chain_id, channel } => {
                 // We should not subscribe to ourself in this case.
@@ -459,13 +457,13 @@ where
                     SystemExecutionError::InvalidSubscription(context.chain_id, *channel)
                 );
                 self.subscriptions.insert(&channel_id)?;
-                result.effects = vec![(
+                result.effects.push((
                     Destination::Recipient(*chain_id),
                     SystemEffect::Subscribe {
                         id: context.chain_id,
                         channel_id,
                     },
-                )];
+                ));
             }
             Unsubscribe { chain_id, channel } => {
                 let channel_id = ChannelId {
@@ -477,19 +475,19 @@ where
                     SystemExecutionError::InvalidUnsubscription(context.chain_id, *channel)
                 );
                 self.subscriptions.remove(&channel_id)?;
-                result.effects = vec![(
+                result.effects.push((
                     Destination::Recipient(*chain_id),
                     SystemEffect::Unsubscribe {
                         id: context.chain_id,
                         channel_id,
                     },
-                )];
+                ));
             }
             PublishBytecode { .. } => {
-                result.effects = vec![(
+                result.effects.push((
                     Destination::Subscribers(SystemChannel::PublishedBytecodes.name()),
                     SystemEffect::BytecodePublished,
-                )];
+                ));
             }
             CreateNewApplication {
                 bytecode_id,
@@ -542,18 +540,18 @@ where
             Subscribe { id, channel_id } if channel_id.chain_id == context.chain_id => {
                 // Notify the subscriber about this block, so that it is included in the
                 // receive_log of the subscriber and correctly synchronized.
-                result.effects = vec![(
+                result.effects.push((
                     Destination::Recipient(*id),
                     SystemEffect::Notify { id: *id },
-                )];
-                result.subscribe = vec![(channel_id.name.clone(), *id)];
+                ));
+                result.subscribe.push((channel_id.name.clone(), *id));
             }
             Unsubscribe { id, channel_id } if channel_id.chain_id == context.chain_id => {
-                result.effects = vec![(
+                result.effects.push((
                     Destination::Recipient(*id),
                     SystemEffect::Notify { id: *id },
-                )];
-                result.unsubscribe = vec![(channel_id.name.clone(), *id)];
+                ));
+                result.unsubscribe.push((channel_id.name.clone(), *id));
             }
             BytecodePublished => {
                 let bytecode_id = BytecodeId(context.effect_id);
