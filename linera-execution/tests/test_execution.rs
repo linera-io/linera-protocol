@@ -45,7 +45,7 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
 
     assert!(matches!(
         result,
-        Err(ExecutionError::UnknownApplicationId(id)) if *id == app_id
+        Err(ExecutionError::ApplicationBytecodeNotFound(desc)) if *desc == app_desc
     ));
     Ok(())
 }

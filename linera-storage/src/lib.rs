@@ -142,7 +142,13 @@ pub trait Store: Sized {
         } = application_description;
         let certificate = self
             .read_certificate(bytecode_location.certificate_hash)
-            .await?;
+            .await
+            .map_err(|error| match error {
+                ViewError::NotFound(_) => ExecutionError::ApplicationBytecodeNotFound(Box::new(
+                    application_description.clone(),
+                )),
+                _ => error.into(),
+            })?;
         let operations = &certificate.value.block().operations;
         match operations.get(bytecode_location.operation_index) {
             Some((

@@ -17,7 +17,9 @@ use linera_chain::{
     data_types::{Block, BlockProposal, Certificate, Origin, Value},
     ChainError, ChainManager,
 };
-use linera_execution::{ApplicationId, Query, Response};
+use linera_execution::{
+    ApplicationId, BytecodeLocation, ExecutionError, Query, Response, UserApplicationId,
+};
 use linera_storage::Store;
 use linera_views::views::ViewError;
 use rand::prelude::SliceRandom;
@@ -93,6 +95,13 @@ pub enum NodeError {
         application_id: Box<ApplicationId>,
         origin: Origin,
         height: BlockHeight,
+    },
+
+    // This error must be normalized during conversions.
+    #[error("Failed to load bytecode of {application_id:?} from storage {bytecode_location:?}")]
+    ApplicationBytecodeNotFound {
+        application_id: UserApplicationId,
+        bytecode_location: BytecodeLocation,
     },
 
     #[error(
@@ -185,6 +194,12 @@ impl From<ChainError> for NodeError {
                 height,
             },
             ChainError::InactiveChain(chain_id) => Self::InactiveChain(chain_id),
+            ChainError::ExecutionError(ExecutionError::ApplicationBytecodeNotFound(app)) => {
+                NodeError::ApplicationBytecodeNotFound {
+                    application_id: (&*app).into(),
+                    bytecode_location: app.bytecode_location,
+                }
+            }
             error => Self::ChainError {
                 error: error.to_string(),
             },

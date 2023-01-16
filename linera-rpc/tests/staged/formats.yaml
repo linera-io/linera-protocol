@@ -332,47 +332,54 @@ NodeError:
           - height:
               TYPENAME: BlockHeight
     8:
+      ApplicationBytecodeNotFound:
+        STRUCT:
+          - application_id:
+              TYPENAME: UserApplicationId
+          - bytecode_location:
+              TYPENAME: BytecodeLocation
+    9:
       CannotDownloadCertificates:
         STRUCT:
           - chain_id:
               TYPENAME: ChainId
           - target_next_block_height:
               TYPENAME: BlockHeight
-    9:
-      MissingVoteInValidatorResponse: UNIT
     10:
+      MissingVoteInValidatorResponse: UNIT
+    11:
       InactiveLocalChain:
         NEWTYPE:
           TYPENAME: ChainId
-    11:
-      InvalidLocalBlockChaining: UNIT
     12:
-      InvalidChainInfoResponse: UNIT
+      InvalidLocalBlockChaining: UNIT
     13:
+      InvalidChainInfoResponse: UNIT
+    14:
       ProposedBlockToInactiveChain:
         STRUCT:
           - chain_id:
               TYPENAME: ChainId
           - retries: U64
-    14:
+    15:
       ProposedBlockWithLaggingMessages:
         STRUCT:
           - chain_id:
               TYPENAME: ChainId
           - retries: U64
-    15:
-      InvalidDecoding: UNIT
     16:
-      UnexpectedMessage: UNIT
+      InvalidDecoding: UNIT
     17:
+      UnexpectedMessage: UNIT
+    18:
       ClientIoError:
         STRUCT:
           - error: STR
-    18:
+    19:
       CannotResolveValidatorAddress:
         STRUCT:
           - address: STR
-    19:
+    20:
       SubscriptionError:
         STRUCT:
           - transport: STR

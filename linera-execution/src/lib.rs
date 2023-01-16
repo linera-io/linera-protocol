@@ -74,6 +74,8 @@ pub enum ExecutionError {
     UnknownBytecodeId(BytecodeId),
     #[error("Application {0:?} is not registered on the chain")]
     UnknownApplicationId(Box<UserApplicationId>),
+    #[error("Failed to load bytecode from storage {0:?}")]
+    ApplicationBytecodeNotFound(Box<UserApplicationDescription>),
 }
 
 impl From<ViewError> for ExecutionError {
@@ -455,7 +457,9 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
         Ok(self
             .user_applications()
             .get(&application_id)
-            .ok_or_else(|| ExecutionError::UnknownApplicationId(Box::new(application_id)))?
+            .ok_or_else(|| {
+                ExecutionError::ApplicationBytecodeNotFound(Box::new(description.clone()))
+            })?
             .clone())
     }
 }
