@@ -9,7 +9,7 @@ use self::state::{ApplicationState, Counter};
 use async_trait::async_trait;
 use linera_sdk::{
     ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
-    OperationContext, Session, SessionCallResult, SessionId,
+    OperationContext, SessionCallResult, SessionId,
 };
 use thiserror::Error;
 
@@ -93,7 +93,8 @@ mod tests {
     use super::{Counter, Error};
     use futures::FutureExt;
     use linera_sdk::{
-        BlockHeight, ChainId, Contract, EffectContext, EffectId, ExecutionResult, OperationContext,
+        ApplicationCallResult, BlockHeight, CalleeContext, ChainId, Contract, EffectContext,
+        EffectId, ExecutionResult, OperationContext, Session,
     };
     use webassembly_test::webassembly_test;
 
@@ -127,6 +128,31 @@ mod tests {
 
         assert!(matches!(result, Err(Error::EffectsNotSupported)));
         assert_eq!(counter.value, initial_value);
+    }
+
+    #[webassembly_test]
+    fn cross_application_call() {
+        let initial_value = 2_845_u128;
+        let mut counter = create_and_initialize_counter(initial_value);
+
+        let increment = 8_u128;
+        let argument = bcs::to_bytes(&increment).expect("Increment value is not serializable");
+
+        let result = counter
+            .call_application(&dummy_callee_context(), &argument, vec![])
+            .now_or_never()
+            .expect("Execution of counter operation should not await anything");
+
+        let expected_value = initial_value + increment;
+        let expected_result = ApplicationCallResult {
+            value: bcs::to_bytes(&expected_value).expect("Expected value is not serializable"),
+            create_sessions: vec![],
+            execution_result: ExecutionResult::default(),
+        };
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), expected_result);
+        assert_eq!(counter.value, expected_value);
     }
 
     fn create_and_initialize_counter(initial_value: u128) -> Counter {
@@ -163,6 +189,13 @@ mod tests {
                 height: BlockHeight(1),
                 index: 1,
             },
+        }
+    }
+
+    fn dummy_callee_context() -> CalleeContext {
+        CalleeContext {
+            chain_id: ChainId([0; 8].into()),
+            authenticated_caller_id: None,
         }
     }
 }
