@@ -87,3 +87,54 @@ pub enum Error {
 
 #[path = "../boilerplate/contract/mod.rs"]
 mod boilerplate;
+
+#[cfg(test)]
+mod tests {
+    use super::Counter;
+    use futures::FutureExt;
+    use linera_sdk::{BlockHeight, ChainId, Contract, ExecutionResult, OperationContext};
+    use webassembly_test::webassembly_test;
+
+    #[webassembly_test]
+    fn operation() {
+        let initial_value = 72_u128;
+        let mut counter = create_and_initialize_counter(initial_value);
+
+        let increment = 42_308_u128;
+        let operation = bcs::to_bytes(&increment).expect("Increment value is not serializable");
+
+        let result = counter
+            .execute_operation(&dummy_operation_context(), &operation)
+            .now_or_never()
+            .expect("Execution of counter operation should not await anything");
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), ExecutionResult::default());
+        assert_eq!(counter.value, initial_value + increment);
+    }
+
+    fn create_and_initialize_counter(initial_value: u128) -> Counter {
+        let mut counter = Counter::default();
+        let initial_argument =
+            bcs::to_bytes(&initial_value).expect("Initial value is not serializable");
+
+        let result = counter
+            .initialize(&dummy_operation_context(), &initial_argument)
+            .now_or_never()
+            .expect("Initialization of counter state should not await anything");
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), ExecutionResult::default());
+        assert_eq!(counter.value, initial_value);
+
+        counter
+    }
+
+    fn dummy_operation_context() -> OperationContext {
+        OperationContext {
+            chain_id: ChainId([0; 8].into()),
+            height: BlockHeight(0),
+            index: 0,
+        }
+    }
+}
