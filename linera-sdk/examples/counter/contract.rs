@@ -90,9 +90,11 @@ mod boilerplate;
 
 #[cfg(test)]
 mod tests {
-    use super::Counter;
+    use super::{Counter, Error};
     use futures::FutureExt;
-    use linera_sdk::{BlockHeight, ChainId, Contract, ExecutionResult, OperationContext};
+    use linera_sdk::{
+        BlockHeight, ChainId, Contract, EffectContext, EffectId, ExecutionResult, OperationContext,
+    };
     use webassembly_test::webassembly_test;
 
     #[webassembly_test]
@@ -111,6 +113,20 @@ mod tests {
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), ExecutionResult::default());
         assert_eq!(counter.value, initial_value + increment);
+    }
+
+    #[webassembly_test]
+    fn effect() {
+        let initial_value = 72_u128;
+        let mut counter = create_and_initialize_counter(initial_value);
+
+        let result = counter
+            .execute_effect(&dummy_effect_context(), &[])
+            .now_or_never()
+            .expect("Execution of counter operation should not await anything");
+
+        assert!(matches!(result, Err(Error::EffectsNotSupported)));
+        assert_eq!(counter.value, initial_value);
     }
 
     fn create_and_initialize_counter(initial_value: u128) -> Counter {
@@ -135,6 +151,18 @@ mod tests {
             chain_id: ChainId([0; 8].into()),
             height: BlockHeight(0),
             index: 0,
+        }
+    }
+
+    fn dummy_effect_context() -> EffectContext {
+        EffectContext {
+            chain_id: ChainId([0; 8].into()),
+            height: BlockHeight(0),
+            effect_id: EffectId {
+                chain_id: ChainId([1; 8].into()),
+                height: BlockHeight(1),
+                index: 1,
+            },
         }
     }
 }
