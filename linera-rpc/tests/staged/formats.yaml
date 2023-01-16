@@ -606,7 +606,7 @@ SystemOperation:
           - service:
               TYPENAME: Bytecode
     10:
-      CreateNewApplication:
+      CreateApplication:
         STRUCT:
           - bytecode_id:
               TYPENAME: BytecodeId

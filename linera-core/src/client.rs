@@ -1024,7 +1024,7 @@ where
                 vec![],
                 vec![(
                     ApplicationId::System,
-                    Operation::System(SystemOperation::CreateNewApplication {
+                    Operation::System(SystemOperation::CreateApplication {
                         bytecode_id,
                         argument,
                     }),

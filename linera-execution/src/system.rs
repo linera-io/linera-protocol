@@ -118,7 +118,7 @@ pub enum SystemOperation {
         service: Bytecode,
     },
     /// Create a new application.
-    CreateNewApplication {
+    CreateApplication {
         bytecode_id: BytecodeId,
         #[serde(with = "serde_bytes")]
         argument: Vec<u8>,
@@ -497,7 +497,7 @@ where
                     SystemEffect::BytecodePublished,
                 ));
             }
-            CreateNewApplication {
+            CreateApplication {
                 bytecode_id,
                 argument,
             } => {
