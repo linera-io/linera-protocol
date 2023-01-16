@@ -209,7 +209,7 @@ where
             origin,
             height
         );
-        // Process immediate effets and create inbox events.
+        // Process immediate effects and create inbox events.
         let mut events = Vec::new();
         for (index, (app_id, destination, effect)) in effects.into_iter().enumerate() {
             // Skip events that do not belong to this application.
