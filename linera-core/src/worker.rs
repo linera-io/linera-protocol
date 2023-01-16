@@ -72,14 +72,14 @@ pub struct NetworkActions {
     pub notifications: Vec<Notification>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 /// Notify that a chain has a new certified block or a new message.
 pub struct Notification {
     pub chain_id: ChainId,
     pub reason: Reason,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 #[allow(clippy::large_enum_variant)]
 /// Reason for the notification.
 pub enum Reason {
