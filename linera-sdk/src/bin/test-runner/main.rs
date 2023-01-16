@@ -7,6 +7,9 @@
 //! The tests must be compiled for the `wasm32-unknown-unknown` target, and each unit test should
 //! use the [webassembly_test attribute][webassembly_test].
 //!
+//! System APIs are not available to tests, so attempts to use any of them will lead to test
+//! failures.
+//!
 //! # Using With Cargo
 //!
 //! It's possible to make Cargo use this test-runner for the `wasm32-unknown-unknown` target
@@ -31,9 +34,11 @@ use wasmtime::*;
 fn main() -> Result<ExitCode> {
     let mut report = TestReport::default();
     let engine = Engine::default();
-    let linker = Linker::new(&engine);
+    let mut linker = Linker::new(&engine);
     let test_module = load_test_module(&engine)?;
     let tests: Vec<_> = test_module.exports().filter_map(Test::new).collect();
+
+    linker.define_unknown_imports_as_traps(&test_module)?;
 
     eprintln!("\nrunning {} tests", tests.len());
 
