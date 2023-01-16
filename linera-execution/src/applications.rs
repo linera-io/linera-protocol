@@ -149,7 +149,7 @@ where
     }
 
     /// Register a newly created application.
-    pub async fn register_new_application(
+    pub async fn create_application(
         &mut self,
         new_application: NewApplication,
     ) -> Result<UserApplicationDescription, ExecutionError> {
