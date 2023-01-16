@@ -9,7 +9,7 @@ use self::state::{ApplicationState, Counter};
 use async_trait::async_trait;
 use linera_sdk::{
     ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
-    OperationContext, SessionCallResult, SessionId,
+    OperationContext, Session, SessionCallResult, SessionId,
 };
 use thiserror::Error;
 
@@ -153,6 +153,20 @@ mod tests {
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), expected_result);
         assert_eq!(counter.value, expected_value);
+    }
+
+    #[webassembly_test]
+    fn sessions() {
+        let initial_value = 72_u128;
+        let mut counter = create_and_initialize_counter(initial_value);
+
+        let result = counter
+            .call_session(&dummy_callee_context(), Session::default(), &[], vec![])
+            .now_or_never()
+            .expect("Execution of counter operation should not await anything");
+
+        assert!(matches!(result, Err(Error::SessionsNotSupported)));
+        assert_eq!(counter.value, initial_value);
     }
 
     fn create_and_initialize_counter(initial_value: u128) -> Counter {
