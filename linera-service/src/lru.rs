@@ -46,8 +46,8 @@ impl<T: Ord + Clone> LruSet<T> {
 
 #[cfg(test)]
 pub mod tests {
-    use std::time::Duration;
     use crate::lru::LruSet;
+    use std::time::Duration;
 
     #[test]
     fn test_insert() {

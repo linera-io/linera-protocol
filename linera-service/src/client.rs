@@ -780,18 +780,16 @@ where
                         warn!("No chains specified, exiting...");
                         return Ok(());
                     }
-                    Some(chain_id) => chain_id
+                    Some(chain_id) => chain_id,
                 };
-                let mut client_state = context.make_chain_client(storage, chain_id.clone());
+                let mut client_state = context.make_chain_client(storage, *chain_id);
                 let mut seen = LruSet::with_expiry_duration(Duration::from_secs(10 * 60));
                 let mut notification_stream = client_state.subscribe_all(chain_ids).await?;
                 while let Some(notification) = notification_stream.next().await {
                     if raw {
                         info!("{:?}", notification);
-                    } else {
-                        if seen.insert(notification.clone()) {
-                            info!("{:?}", notification);
-                        }
+                    } else if seen.insert(notification.clone()) {
+                        info!("{:?}", notification);
                     }
                 }
                 warn!("Notification stream ended.")
