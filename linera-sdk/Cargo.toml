@@ -4,6 +4,9 @@ version = "0.1.0"
 authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 
+[package.metadata.cargo-udeps.ignore]
+development = ["linera-sdk"]
+
 [features]
 crypto = ["serde", "ed25519-dalek", "generic-array", "hex", "serde-name", "sha2", "thiserror"]
 serde = ["bcs", "dep:serde", "serde_with"]
@@ -28,8 +31,10 @@ wasmtime = "0.39.1"
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 bcs = "0.1.3"
 futures = "0.3.17"
+linera-sdk = { path = ".", features = ["test"] }
 serde = { version = "1.0.130", features = ["derive"] }
 thiserror = "1.0.31"
+webassembly-test = "0.1.0"
 wit-bindgen-guest-rust = { git = "https://github.com/jvff/wit-bindgen", rev = "4a9e7cc6899a9736e2a2d23dcfc4f8744b6107a1" }
 
 [[example]]

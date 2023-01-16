@@ -27,7 +27,7 @@ impl Service for Counter {
 }
 
 /// An error that can occur during the contract execution.
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Eq, PartialEq)]
 pub enum Error {
     /// Invalid query argument; Counter application only supports a single (empty) query.
     #[error("Invalid query argument; Counter application only supports a single (empty) query")]
@@ -36,3 +36,33 @@ pub enum Error {
 
 #[path = "../boilerplate/service/mod.rs"]
 mod boilerplate;
+
+#[cfg(test)]
+mod tests {
+    use super::Counter;
+    use futures::FutureExt;
+    use linera_sdk::{ChainId, QueryContext, Service};
+    use webassembly_test::webassembly_test;
+
+    #[webassembly_test]
+    fn query() {
+        let value = 61_098_721_u128;
+        let counter = Counter { value };
+
+        let result = counter
+            .query_application(&dummy_query_context(), &[])
+            .now_or_never()
+            .expect("Query should not await anything");
+
+        let expected_response =
+            bcs::to_bytes(&value).expect("Counter value could not be serialized");
+
+        assert_eq!(result, Ok(expected_response));
+    }
+
+    fn dummy_query_context() -> QueryContext {
+        QueryContext {
+            chain_id: ChainId([0; 8].into()),
+        }
+    }
+}
