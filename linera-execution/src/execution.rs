@@ -199,7 +199,7 @@ where
         let application = self
             .system
             .registry
-            .register_new_application(new_application)
+            .create_application(new_application)
             .await?;
         let user_action = UserAction::Initialize(context, &application.initialization_argument);
         let results = self
