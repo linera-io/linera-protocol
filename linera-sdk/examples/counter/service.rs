@@ -39,7 +39,7 @@ mod boilerplate;
 
 #[cfg(test)]
 mod tests {
-    use super::Counter;
+    use super::{Counter, Error};
     use futures::FutureExt;
     use linera_sdk::{ChainId, QueryContext, Service};
     use webassembly_test::webassembly_test;
@@ -58,6 +58,20 @@ mod tests {
             bcs::to_bytes(&value).expect("Counter value could not be serialized");
 
         assert_eq!(result, Ok(expected_response));
+    }
+
+    #[webassembly_test]
+    fn invalid_query() {
+        let value = 4_u128;
+        let counter = Counter { value };
+
+        let dummy_argument = [2];
+        let result = counter
+            .query_application(&dummy_query_context(), &dummy_argument)
+            .now_or_never()
+            .expect("Query should not await anything");
+
+        assert_eq!(result, Err(Error::InvalidQuery));
     }
 
     fn dummy_query_context() -> QueryContext {
