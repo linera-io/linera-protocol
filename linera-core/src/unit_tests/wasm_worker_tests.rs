@@ -240,7 +240,7 @@ where
     };
     let initial_value = 10_u128;
     let initial_value_bytes = bcs::to_bytes(&initial_value)?;
-    let create_operation = SystemOperation::CreateNewApplication {
+    let create_operation = SystemOperation::CreateApplication {
         bytecode_id,
         argument: initial_value_bytes.clone(),
     };
