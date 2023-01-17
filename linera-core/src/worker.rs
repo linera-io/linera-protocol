@@ -14,7 +14,7 @@ use linera_chain::{
     data_types::{Block, BlockProposal, Certificate, Message, Origin, Target, Value},
     ChainManagerOutcome, ChainStateView,
 };
-use linera_execution::{ApplicationId, Query, Response};
+use linera_execution::{system::Timestamp, ApplicationId, Query, Response};
 use linera_storage::Store;
 use linera_views::{
     log_view::LogView,
@@ -131,6 +131,8 @@ pub enum WorkerError {
     IncorrectStateHash,
     #[error("The given effects are not what we computed after executing the block")]
     IncorrectEffects,
+    #[error("The timestamp of a Tick operation is in the future.")]
+    InvalidTick,
 }
 
 impl From<linera_chain::ChainError> for WorkerError {
@@ -589,6 +591,10 @@ where
         let (effects, state_hash) = {
             let effects = chain.execute_block(&proposal.content.block).await?;
             let hash = chain.execution_state_hash.get().expect("was just computed");
+            ensure!(
+                *chain.execution_state.system.time.get() <= Timestamp::now(),
+                WorkerError::InvalidTick
+            );
             // Verify that the resulting chain would have no unconfirmed incoming
             // messages.
             chain.validate_incoming_messages().await?;

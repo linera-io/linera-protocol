@@ -16,7 +16,7 @@ use linera_base::{
 };
 use linera_chain::data_types::{Event, Message, Origin, Value};
 use linera_execution::{
-    system::{Balance, SystemChannel, SystemEffect, SystemOperation},
+    system::{Balance, SystemChannel, SystemEffect, SystemOperation, Timestamp},
     ApplicationId, ApplicationRegistry, Bytecode, BytecodeId, BytecodeLocation, ChainOwnership,
     ChannelId, Destination, Effect, ExecutionStateView, SystemExecutionState,
     UserApplicationDescription, UserApplicationId,
@@ -106,6 +106,7 @@ where
         committees: [(Epoch::from(0), committee.clone())].into_iter().collect(),
         ownership: ChainOwnership::single(publisher_key_pair.public().into()),
         balance: Balance::from(0),
+        time: Timestamp::from(0),
         registry: ApplicationRegistry::default(),
     };
     let publisher_state_hash = make_state_hash(publisher_system_state).await;
@@ -160,6 +161,7 @@ where
         committees: [(Epoch::from(0), committee.clone())].into_iter().collect(),
         ownership: ChainOwnership::single(creator_key_pair.public().into()),
         balance: Balance::from(0),
+        time: Timestamp::from(0),
         registry: ApplicationRegistry::default(),
     };
     let mut creator_state =

@@ -301,3 +301,21 @@ pub struct SessionCallResult {
 #[derive(Default, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 pub struct SystemBalance(pub u128);
+
+/// A timestamp, in seconds since the Unix epoch.
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug)]
+#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+pub struct Timestamp(u64);
+
+impl Timestamp {
+    /// Returns the number of seconds since the Unix epoch.
+    pub fn seconds(&self) -> u64 {
+        self.0
+    }
+}
+
+impl From<u64> for Timestamp {
+    fn from(t: u64) -> Timestamp {
+        Timestamp(t)
+    }
+}

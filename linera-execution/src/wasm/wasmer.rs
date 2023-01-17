@@ -324,6 +324,10 @@ impl writable_system::WritableSystem for SystemApi<&'static dyn WritableStorage>
         self.storage().read_system_balance().into()
     }
 
+    fn read_system_time(&mut self) -> writable_system::Timestamp {
+        self.storage().read_system_time().seconds()
+    }
+
     fn load_new(&mut self) -> Self::Load {
         self.future_queue.add(self.storage().try_read_my_state())
     }
@@ -444,6 +448,10 @@ impl queryable_system::QueryableSystem for SystemApi<&'static dyn QueryableStora
 
     fn read_system_balance(&mut self) -> queryable_system::SystemBalance {
         self.storage().read_system_balance().into()
+    }
+
+    fn read_system_time(&mut self) -> queryable_system::Timestamp {
+        self.storage().read_system_time().seconds()
     }
 
     fn load_new(&mut self) -> Self::Load {

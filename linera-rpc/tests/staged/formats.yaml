@@ -611,6 +611,12 @@ SystemOperation:
           - bytecode_id:
               TYPENAME: BytecodeId
           - argument: BYTES
+    11:
+      Tick:
+        NEWTYPE:
+          TYPENAME: Timestamp
+Timestamp:
+  NEWTYPESTRUCT: U64
 UserApplicationDescription:
   STRUCT:
     - bytecode_id:

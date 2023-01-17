@@ -1,6 +1,7 @@
 chain-id: func() -> chain-id
 application-id: func() -> application-id
 read-system-balance: func() -> system-balance
+read-system-time: func() -> timestamp
 
 resource load {
     static new: func() -> load
@@ -27,6 +28,7 @@ record effect-id {
 
 type chain-id = hash-value
 type block-height = u64
+type timestamp = u64
 
 record hash-value {
     part1: u64,

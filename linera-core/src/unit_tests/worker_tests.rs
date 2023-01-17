@@ -25,7 +25,9 @@ use linera_chain::{
     ChainError,
 };
 use linera_execution::{
-    system::{Address, Amount, Balance, SystemChannel, SystemEffect, SystemOperation, UserData},
+    system::{
+        Address, Amount, Balance, SystemChannel, SystemEffect, SystemOperation, Timestamp, UserData,
+    },
     ApplicationId, ApplicationRegistry, ChainOwnership, ChannelId, Destination, Effect,
     ExecutionStateView, Operation, Query, Response, SystemExecutionState, SystemQuery,
     SystemResponse, UserApplicationId,
@@ -226,6 +228,7 @@ async fn make_transfer_certificate_for_epoch<S>(
         committees: [(epoch, committee.clone())].into_iter().collect(),
         ownership: ChainOwnership::single(key_pair.public().into()),
         balance,
+        time: Timestamp::from(0),
         registry: ApplicationRegistry::default(),
     };
     let block = make_block(
@@ -418,6 +421,104 @@ where
         .get()
         .pending()
         .is_none());
+}
+
+#[test(tokio::test)]
+async fn test_memory_handle_block_proposal_ticks() {
+    let client = MemoryStoreClient::default();
+    run_test_handle_block_proposal_ticks(client).await;
+}
+
+#[test(tokio::test)]
+async fn test_rocksdb_handle_block_proposal_ticks() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf());
+    run_test_handle_block_proposal_ticks(client).await;
+}
+
+#[test(tokio::test)]
+#[ignore]
+async fn test_dynamo_db_handle_block_proposal_ticks() -> Result<(), anyhow::Error> {
+    let table = "linera".parse().expect("Invalid table name");
+    let localstack = LocalStackTestContext::new().await?;
+    let (client, _) =
+        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table).await?;
+    run_test_handle_block_proposal_ticks(client).await;
+    Ok(())
+}
+
+async fn run_test_handle_block_proposal_ticks<S>(client: S)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    ViewError: From<S::ContextError>,
+{
+    let key_pair = KeyPair::generate();
+    let balance = Balance::from(5);
+    let balances = vec![(ChainDescription::Root(1), key_pair.public(), balance)];
+    let epoch = Epoch::from(0);
+    let (committee, mut worker) = init_worker_with_chains(client, balances).await;
+
+    let make_tick_block = |seconds: u64, parent: Option<&Certificate>| {
+        make_block(
+            epoch,
+            ChainId::root(1),
+            vec![SystemOperation::Tick(Timestamp::from(seconds))],
+            vec![],
+            parent,
+        )
+    };
+
+    let make_proposal = |block: Block| {
+        BlockProposal::new(
+            BlockAndRound {
+                block,
+                round: RoundNumber::default(),
+            },
+            &key_pair,
+        )
+    };
+
+    {
+        let block_proposal = make_proposal(make_tick_block(u64::MAX, None));
+        // Timestamp in the future
+        assert!(worker.handle_block_proposal(block_proposal).await.is_err());
+    }
+
+    let certificate;
+    {
+        let block = make_tick_block(1000, None);
+        let block_proposal = make_proposal(block.clone());
+        assert!(worker.handle_block_proposal(block_proposal).await.is_ok());
+
+        let system_state = SystemExecutionState {
+            epoch: Some(epoch),
+            description: Some(ChainDescription::Root(1)),
+            admin_id: Some(ChainId::root(0)),
+            subscriptions: BTreeSet::new(),
+            committees: [(epoch, committee.clone())].into_iter().collect(),
+            ownership: ChainOwnership::single(key_pair.public().into()),
+            balance,
+            time: Timestamp::from(1000),
+            registry: ApplicationRegistry::default(),
+        };
+        let state_hash = make_state_hash(system_state).await;
+        let value = Value::ConfirmedBlock {
+            block,
+            effects: vec![],
+            state_hash,
+        };
+        certificate = make_certificate(&committee, &worker, value);
+        worker
+            .fully_handle_certificate(certificate.clone())
+            .await
+            .expect("handle certificate with valid tick");
+    }
+
+    {
+        let block_proposal = make_proposal(make_tick_block(500, Some(&certificate)));
+        // Timestamp older than previous one
+        assert!(worker.handle_block_proposal(block_proposal).await.is_err());
+    }
 }
 
 #[test(tokio::test)]
@@ -709,6 +810,7 @@ where
                 committees: [(epoch, committee.clone())].into_iter().collect(),
                 ownership: ChainOwnership::single(sender_key_pair.public().into()),
                 balance: Balance::from(3),
+                time: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
             })
             .await,
@@ -750,6 +852,7 @@ where
                 committees: [(epoch, committee.clone())].into_iter().collect(),
                 ownership: ChainOwnership::single(sender_key_pair.public().into()),
                 balance: Balance::from(0),
+                time: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
             })
             .await,
@@ -1019,6 +1122,7 @@ where
                     committees: [(epoch, committee.clone())].into_iter().collect(),
                     ownership: ChainOwnership::single(recipient_key_pair.public().into()),
                     balance: Balance::from(0),
+                    time: Timestamp::from(0),
                     registry: ApplicationRegistry::default(),
                 })
                 .await,
@@ -2298,6 +2402,7 @@ where
                 committees: committees.clone(),
                 ownership: ChainOwnership::single(key_pair.public().into()),
                 balance: Balance::from(2),
+                time: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
             })
             .await,
@@ -2403,6 +2508,7 @@ where
                 committees: committees2.clone(),
                 ownership: ChainOwnership::single(key_pair.public().into()),
                 balance: Balance::from(0),
+                time: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
             })
             .await,
@@ -2452,6 +2558,7 @@ where
                 committees: committees2.clone(),
                 ownership: ChainOwnership::single(key_pair.public().into()),
                 balance: Balance::from(0),
+                time: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
             })
             .await,
@@ -2636,6 +2743,7 @@ where
                 committees: committees2.clone(),
                 ownership: ChainOwnership::single(key_pair.public().into()),
                 balance: Balance::from(2),
+                time: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
             })
             .await,
@@ -2790,6 +2898,7 @@ where
                 committees: committees.clone(),
                 ownership: ChainOwnership::single(key_pair1.public().into()),
                 balance: Balance::from(2),
+                time: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
             })
             .await,
@@ -2836,6 +2945,7 @@ where
                 committees: committees2.clone(),
                 ownership: ChainOwnership::single(key_pair0.public().into()),
                 balance: Balance::from(0),
+                time: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
             })
             .await,
@@ -2991,6 +3101,7 @@ where
                 committees: committees.clone(),
                 ownership: ChainOwnership::single(key_pair1.public().into()),
                 balance: Balance::from(2),
+                time: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
             })
             .await,
@@ -3058,6 +3169,7 @@ where
                 committees: committees3.clone(),
                 ownership: ChainOwnership::single(key_pair0.public().into()),
                 balance: Balance::from(0),
+                time: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
             })
             .await,
@@ -3138,6 +3250,7 @@ where
                 committees: committees3.clone(),
                 ownership: ChainOwnership::single(key_pair0.public().into()),
                 balance: Balance::from(1),
+                time: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
             })
             .await,

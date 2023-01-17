@@ -278,6 +278,10 @@ where
         *self.execution_state_mut().system.balance.get()
     }
 
+    fn read_system_time(&self) -> crate::system::Timestamp {
+        *self.execution_state_mut().system.time.get()
+    }
+
     async fn try_read_my_state(&self) -> Result<Vec<u8>, ExecutionError> {
         let state = self
             .execution_state_mut()
