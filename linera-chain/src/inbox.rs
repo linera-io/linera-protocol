@@ -152,6 +152,11 @@ where
         // Reconcile the event with the next added event, or mark it as removed.
         match self.added_events.front().await? {
             Some(previous_event) => {
+                // Rationale: If the two cursors are equal, then the events should match.
+                // Otherwise, we have that `self.next_cursor_to_add >
+                // Cursor::from(&previous_event) > cursor`. Notably, `event` will never be
+                // added in the future. Therefore, we should fail instead of adding
+                // it to `self.removed_events`.
                 ensure!(
                     event == &previous_event,
                     InboxError::UnexpectedEvent {
