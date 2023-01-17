@@ -10,7 +10,7 @@ pub trait FromBcsBytes: Sized {
 }
 
 #[cfg(feature = "serde")]
-impl<'de, AnyType> FromBcsBytes for AnyType
+impl<AnyType> FromBcsBytes for AnyType
 where
     AnyType: DeserializeOwned,
 {
