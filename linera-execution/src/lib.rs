@@ -238,6 +238,9 @@ pub trait ReadableStorage: Send + Sync {
     /// Read the system balance.
     fn read_system_balance(&self) -> crate::system::Balance;
 
+    /// Read the system balance.
+    fn read_system_time(&self) -> crate::system::Timestamp;
+
     /// Read the application state.
     async fn try_read_my_state(&self) -> Result<Vec<u8>, ExecutionError>;
 }

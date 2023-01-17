@@ -22,6 +22,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
     fmt::{self, Display, Formatter},
+    time::SystemTime,
 };
 use thiserror::Error;
 
@@ -48,6 +49,8 @@ pub struct SystemExecutionStateView<C> {
     pub ownership: RegisterView<C, ChainOwnership>,
     /// Balance of the chain.
     pub balance: RegisterView<C, Balance>,
+    /// The timestamp of the most recent `Tick` operation.
+    pub time: RegisterView<C, Timestamp>,
     /// Track the locations of known bytecodes as well as the descriptions of known applications.
     pub registry: ApplicationRegistryView<C>,
 }
@@ -63,6 +66,7 @@ pub struct SystemExecutionState {
     pub committees: BTreeMap<Epoch, Committee>,
     pub ownership: ChainOwnership,
     pub balance: Balance,
+    pub time: Timestamp,
     pub registry: crate::applications::ApplicationRegistry,
 }
 
@@ -123,6 +127,9 @@ pub enum SystemOperation {
         #[serde(with = "serde_bytes")]
         argument: Vec<u8>,
     },
+    /// Update the chain's internal clock. This block will only be certified when a quorum of
+    /// validators' local clocks have moved past that timestamp.
+    Tick(Timestamp),
 }
 
 /// The effect of a system operation to be performed on a remote chain.
@@ -219,6 +226,35 @@ pub struct Amount(u64);
 )]
 pub struct Balance(u128);
 
+/// A timestamp, in seconds since the Unix epoch.
+#[derive(
+    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
+)]
+pub struct Timestamp(u64);
+
+impl Timestamp {
+    /// Returns the current time according to the system clock.
+    pub fn now() -> Timestamp {
+        Timestamp(
+            SystemTime::UNIX_EPOCH
+                .elapsed()
+                .expect("system time should be after Unix epoch")
+                .as_secs(),
+        )
+    }
+
+    /// Returns the number of seconds since the Unix epoch.
+    pub fn seconds(&self) -> u64 {
+        self.0
+    }
+}
+
+impl From<u64> for Timestamp {
+    fn from(t: u64) -> Timestamp {
+        Timestamp(t)
+    }
+}
+
 /// Optional user message attached to a transfer.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]
 pub struct UserData(pub Option<[u8; 32]>);
@@ -262,6 +298,8 @@ pub enum SystemExecutionError {
     BalanceUnderflow,
     #[error("Cannot set epoch to a lower value")]
     CannotRewindEpoch,
+    #[error("Cannot decrease the chain's timestamp")]
+    TicksOutOfOrder,
 }
 
 impl<C> SystemExecutionStateView<C>
@@ -508,6 +546,13 @@ where
                     },
                     initialization_argument: argument.clone(),
                 });
+            }
+            Tick(timestamp) => {
+                ensure!(
+                    self.time.get() <= timestamp,
+                    SystemExecutionError::TicksOutOfOrder
+                );
+                self.time.set(*timestamp);
             }
         }
 

@@ -44,32 +44,42 @@ where
     /// Create an in-memory view where the system state is set. This is used notably to
     /// generate state hashes in tests.
     pub async fn from_system_state(state: SystemExecutionState) -> Self {
+        // Destructure, to make sure we don't miss any fields.
+        let SystemExecutionState {
+            description,
+            epoch,
+            admin_id,
+            subscriptions,
+            committees,
+            ownership,
+            balance,
+            time,
+            registry,
+        } = state;
         let guard = Arc::new(Mutex::new(BTreeMap::new())).lock_owned().await;
         let extra = TestExecutionRuntimeContext::new(
-            state
-                .description
-                .expect("Chain description should be set")
-                .into(),
+            description.expect("Chain description should be set").into(),
         );
         let context = MemoryContext::new(guard, extra);
         let mut view = Self::load(context)
             .await
             .expect("Loading from memory should work");
-        view.system.description.set(state.description);
-        view.system.epoch.set(state.epoch);
-        view.system.admin_id.set(state.admin_id);
-        for channel_id in state.subscriptions {
+        view.system.description.set(description);
+        view.system.epoch.set(epoch);
+        view.system.admin_id.set(admin_id);
+        for channel_id in subscriptions {
             view.system
                 .subscriptions
                 .insert(&channel_id)
                 .expect("serialization of channel_id should not fail");
         }
-        view.system.committees.set(state.committees);
-        view.system.ownership.set(state.ownership);
-        view.system.balance.set(state.balance);
+        view.system.committees.set(committees);
+        view.system.ownership.set(ownership);
+        view.system.balance.set(balance);
+        view.system.time.set(time);
         view.system
             .registry
-            .import(state.registry)
+            .import(registry)
             .expect("serialization of registry components should not fail");
         view
     }

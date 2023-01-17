@@ -3,7 +3,7 @@
 
 use super::{super::ApplicationState, writable_system as system};
 use futures::future;
-use linera_sdk::{ApplicationId, ChainId, SystemBalance};
+use linera_sdk::{ApplicationId, ChainId, SystemBalance, Timestamp};
 use std::future::Future;
 
 #[allow(dead_code)]
@@ -51,5 +51,11 @@ impl ApplicationState {
     #[allow(dead_code)]
     pub fn current_system_balance() -> SystemBalance {
         system::read_system_balance().into()
+    }
+
+    /// Retrieve the current system time.
+    #[allow(dead_code)]
+    pub fn current_system_time() -> Timestamp {
+        system::read_system_time().into()
     }
 }
