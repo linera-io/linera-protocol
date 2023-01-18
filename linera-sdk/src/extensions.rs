@@ -10,9 +10,9 @@ pub trait FromBcsBytes: Sized {
 }
 
 #[cfg(feature = "serde")]
-impl<AnyType> FromBcsBytes for AnyType
+impl<T> FromBcsBytes for T
 where
-    AnyType: DeserializeOwned,
+    T: DeserializeOwned,
 {
     fn from_bcs_bytes(bytes: &[u8]) -> Result<Self, bcs::Error> {
         bcs::from_bytes(bytes)
