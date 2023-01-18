@@ -5,6 +5,7 @@
 #![deny(warnings)]
 
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use futures::StreamExt;
 use linera_base::{
     committee::ValidatorState,
@@ -23,7 +24,7 @@ use linera_core::{
     worker::WorkerState,
 };
 use linera_execution::{
-    system::{Address, Amount, Balance, SystemOperation, UserData},
+    system::{Address, Amount, Balance, SystemOperation, Timestamp, UserData},
     ApplicationId, Operation,
 };
 use linera_rpc::{
@@ -520,6 +521,10 @@ enum ClientCommand {
         #[structopt(long, default_value = "0")]
         initial_funding: Balance,
 
+        /// The start timestamp: no blocks can be created before this time.
+        #[structopt(long)]
+        start_timestamp: Option<DateTime<Utc>>,
+
         /// Number of additional chains to create
         num: u32,
     },
@@ -811,12 +816,16 @@ async fn main() {
             committee_config_path,
             admin_root,
             initial_funding,
+            start_timestamp,
             num,
         } => {
             let committee_config = CommitteeConfig::read(&committee_config_path)
                 .expect("Unable to read committee config file");
             let mut genesis_config =
                 GenesisConfig::new(committee_config, ChainId::root(admin_root));
+            let latest_clock_tick = start_timestamp
+                .map(|st| Timestamp::from(st.timestamp() as u64))
+                .unwrap_or_default();
             for i in 0..num {
                 let description = ChainDescription::Root(i as usize);
                 // Create keys.
@@ -826,6 +835,7 @@ async fn main() {
                     description,
                     Owner(chain.key_pair.as_ref().unwrap().public()),
                     initial_funding,
+                    latest_clock_tick,
                 ));
                 // Private keys.
                 context.wallet_state.insert(chain);

@@ -86,6 +86,7 @@ where
                 description,
                 pubk.into(),
                 balance,
+                Timestamp::from(0),
             )
             .await
             .unwrap();
@@ -2382,6 +2383,7 @@ where
                         epoch: Epoch::from(0),
                         committees: committees.clone(),
                         admin_id,
+                        latest_clock_tick: Timestamp::from(0),
                     }),
                 ),
                 (

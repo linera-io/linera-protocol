@@ -488,6 +488,8 @@ SystemEffect:
                   TYPENAME: Epoch
                 VALUE:
                   TYPENAME: Committee
+          - latest_clock_tick:
+              TYPENAME: Timestamp
     2:
       SetCommittees:
         STRUCT:

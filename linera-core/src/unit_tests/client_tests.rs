@@ -14,7 +14,7 @@ use linera_chain::data_types::{Block, BlockProposal, Certificate, Value};
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 use linera_execution::Bytecode;
 use linera_execution::{
-    system::{Amount, Balance, SystemOperation, UserData},
+    system::{Amount, Balance, SystemOperation, Timestamp, UserData},
     ApplicationId, Operation, Query, Response, SystemQuery, SystemResponse,
 };
 use linera_storage::{DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient, Store};
@@ -177,6 +177,7 @@ impl GenesisStoreBuilder {
                     account.description,
                     account.owner,
                     account.balance,
+                    Timestamp::from(0),
                 )
                 .await
                 .unwrap();
@@ -256,6 +257,7 @@ where
                         description,
                         owner,
                         Balance::from(0),
+                        Timestamp::from(0),
                     )
                     .await
                     .unwrap();
@@ -267,6 +269,7 @@ where
                         description,
                         owner,
                         balance,
+                        Timestamp::from(0),
                     )
                     .await
                     .unwrap();
@@ -280,6 +283,7 @@ where
                     description,
                     owner,
                     balance,
+                    Timestamp::from(0),
                 )
                 .await
                 .unwrap();
