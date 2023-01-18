@@ -138,7 +138,7 @@ pub enum Value {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct Vote {
-    pub value: Value,
+    pub hash: HashValue,
     pub validator: ValidatorName,
     pub signature: Signature,
 }
@@ -253,18 +253,18 @@ impl BlockProposal {
 
 impl Vote {
     /// Use signing key to create a signed object.
-    pub fn new(value: Value, key_pair: &KeyPair) -> Self {
-        let signature = Signature::new(&value, key_pair);
+    pub fn new(hash: HashValue, key_pair: &KeyPair) -> Self {
+        let signature = Signature::new(&hash, key_pair);
         Self {
-            value,
+            hash,
             validator: ValidatorName(key_pair.public()),
             signature,
         }
     }
 
     /// Verify the signature in the vote.
-    pub fn check(&self, name: ValidatorName) -> Result<(), ChainError> {
-        Ok(self.signature.check(&self.value, name.0)?)
+    pub fn check(&self) -> Result<(), ChainError> {
+        Ok(self.signature.check(&self.hash, self.validator.0)?)
     }
 }
 
@@ -299,7 +299,7 @@ impl<'a> SignatureAggregator<'a> {
         validator: ValidatorName,
         signature: Signature,
     ) -> Result<Option<Certificate>, ChainError> {
-        signature.check(&self.partial.value, validator.0)?;
+        signature.check(&HashValue::new(&self.partial.value), validator.0)?;
         // Check that each validator only appears once.
         ensure!(
             !self.used_validators.contains(&validator),
@@ -371,7 +371,10 @@ impl Certificate {
             ChainError::CertificateRequiresQuorum
         );
         // All what is left is checking signatures!
-        Signature::verify_batch(&self.value, self.signatures.iter().map(|(v, s)| (&v.0, s)))?;
+        Signature::verify_batch(
+            &HashValue::new(&self.value),
+            self.signatures.iter().map(|(v, s)| (&v.0, s)),
+        )?;
         Ok(&self.value)
     }
 }

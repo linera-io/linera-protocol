@@ -15,7 +15,7 @@ use linera_base::{
     },
 };
 use linera_chain::data_types::{
-    Block, BlockAndRound, BlockProposal, Certificate, SignatureAggregator, Vote,
+    Block, BlockAndRound, BlockProposal, Certificate, SignatureAggregator, Value, Vote,
 };
 use linera_core::{
     client::{ChainClientState, ValidatorNodeProvider},
@@ -189,14 +189,17 @@ impl ClientContext {
     }
 
     /// Try to aggregate votes into certificates.
-    fn make_benchmark_certificates_from_votes(&self, votes: Vec<Vote>) -> Vec<Certificate> {
+    fn make_benchmark_certificates_from_votes(
+        &self,
+        votes: Vec<(Vote, Value)>,
+    ) -> Vec<Certificate> {
         let committee = self.genesis_config.committee.clone().into_committee();
         let mut aggregators = HashMap::new();
         let mut certificates = Vec::new();
         let mut done_senders = HashSet::new();
-        for vote in votes {
+        for (vote, value) in votes {
             // We aggregate votes indexed by sender.
-            let chain_id = vote.value.chain_id();
+            let chain_id = value.chain_id();
             if done_senders.contains(&chain_id) {
                 continue;
             }
@@ -204,7 +207,6 @@ impl ClientContext {
                 "Processing vote on {:?}'s block by {:?}",
                 chain_id, vote.validator,
             );
-            let value = vote.value;
             let aggregator = aggregators
                 .entry(chain_id)
                 .or_insert_with(|| SignatureAggregator::new(value, &committee));
