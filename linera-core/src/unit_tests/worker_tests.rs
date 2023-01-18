@@ -177,7 +177,7 @@ fn make_certificate<S>(
     worker: &WorkerState<S>,
     value: Value,
 ) -> Certificate {
-    let vote = Vote::new(value.clone(), worker.key_pair.as_ref().unwrap());
+    let vote = Vote::new(HashValue::new(&value), worker.key_pair.as_ref().unwrap());
     let mut builder = SignatureAggregator::new(value, committee);
     builder
         .append(vote.validator, vote.signature)
@@ -1303,7 +1303,7 @@ where
     chain_info_response
         .check(ValidatorName(worker.key_pair.unwrap().public()))
         .unwrap();
-    let pending = worker
+    let (_, pending_value) = worker
         .storage
         .load_active_chain(ChainId::root(1))
         .await
@@ -1314,8 +1314,8 @@ where
         .cloned()
         .unwrap();
     assert_eq!(
-        chain_info_response.info.manager.pending().unwrap().value,
-        pending.value
+        chain_info_response.info.manager.pending().unwrap().1,
+        pending_value
     );
 }
 

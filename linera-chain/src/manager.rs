@@ -33,7 +33,7 @@ pub struct SingleOwnerManager {
     /// The owner of the chain.
     pub owner: Owner,
     /// Latest proposal that we have voted on last (both to validate and confirm it).
-    pub pending: Option<Vote>,
+    pub pending: Option<(Vote, Value)>,
 }
 
 /// The specific state of a chain managed by multiple owners.
@@ -48,7 +48,7 @@ pub struct MultiOwnerManager {
     /// Latest validated proposal that we have seen (and voted to confirm).
     pub locked: Option<Certificate>,
     /// Latest proposal that we have voted on (either to validate or to confirm it).
-    pub pending: Option<Vote>,
+    pub pending: Option<(Vote, Value)>,
 }
 
 /// The result of verifying a (valid) query.
@@ -138,7 +138,7 @@ impl ChainManager {
         }
     }
 
-    pub fn pending(&self) -> Option<&Vote> {
+    pub fn pending(&self) -> Option<&(Vote, Value)> {
         match self {
             ChainManager::Single(manager) => manager.pending.as_ref(),
             ChainManager::Multi(manager) => manager.pending.as_ref(),
@@ -175,8 +175,8 @@ impl ChainManager {
                     new_round == RoundNumber::default(),
                     ChainError::InvalidBlockProposal
                 );
-                if let Some(vote) = &manager.pending {
-                    match &vote.value {
+                if let Some((_, value)) = &manager.pending {
+                    match value {
                         Value::ConfirmedBlock { block, .. } if block != new_block => {
                             log::error!("Attempting to sign a different block at the same height:\n{:?}\n{:?}", block, new_block);
                             return Err(ChainError::PreviousBlockMustBeConfirmedFirst);
@@ -234,8 +234,8 @@ impl ChainManager {
         }
         match self {
             ChainManager::Multi(manager) => {
-                if let Some(vote) = &manager.pending {
-                    match &vote.value {
+                if let Some((_, value)) = &manager.pending {
+                    match value {
                         Value::ConfirmedBlock { block, .. } if block == new_block => {
                             return Ok(Outcome::Skip);
                         }
@@ -280,8 +280,8 @@ impl ChainManager {
                         effects,
                         state_hash,
                     };
-                    let vote = Vote::new(value, key_pair);
-                    manager.pending = Some(vote);
+                    let vote = Vote::new(HashValue::new(&value), key_pair);
+                    manager.pending = Some((vote, value));
                 }
             }
             ChainManager::Multi(manager) => {
@@ -297,8 +297,8 @@ impl ChainManager {
                         effects,
                         state_hash,
                     };
-                    let vote = Vote::new(value, key_pair);
-                    manager.pending = Some(vote);
+                    let vote = Vote::new(HashValue::new(&value), key_pair);
+                    manager.pending = Some((vote, value));
                 }
             }
             _ => panic!("unexpected chain manager"),
@@ -325,10 +325,10 @@ impl ChainManager {
                         effects,
                         state_hash,
                     };
-                    let vote = Vote::new(value, key_pair);
+                    let vote = Vote::new(HashValue::new(&value), key_pair);
                     // Ok to overwrite validation votes with confirmation votes at equal or
                     // higher round.
-                    manager.pending = Some(vote);
+                    manager.pending = Some((vote, value));
                 }
             }
             _ => panic!("unexpected chain manager"),

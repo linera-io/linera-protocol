@@ -386,10 +386,10 @@ where
         let result = communicate_with_quorum(
             &nodes,
             committee,
-            |value: &Option<Vote>| -> Option<_> {
+            |value: &Option<(Vote, Value)>| -> Option<_> {
                 value
                     .as_ref()
-                    .map(|vote| vote.value.effects_and_state_hash())
+                    .map(|(_, value)| value.effects_and_state_hash())
             },
             |name, client| {
                 let mut updater = ValidatorUpdater {
@@ -426,10 +426,7 @@ where
         };
         let signatures: Vec<_> = votes
             .into_iter()
-            .filter_map(|vote| match vote {
-                Some(vote) => Some((vote.validator, vote.signature)),
-                None => None,
-            })
+            .filter_map(|vote| vote.map(|(vote, _)| (vote.validator, vote.signature)))
             .collect();
         match action {
             CommunicateAction::SubmitBlockForConfirmation(proposal) => {
