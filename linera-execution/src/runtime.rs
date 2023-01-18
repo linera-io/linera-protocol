@@ -279,7 +279,7 @@ where
     }
 
     fn read_system_time(&self) -> crate::system::Timestamp {
-        *self.execution_state_mut().system.time.get()
+        *self.execution_state_mut().system.latest_clock_tick.get()
     }
 
     async fn try_read_my_state(&self) -> Result<Vec<u8>, ExecutionError> {

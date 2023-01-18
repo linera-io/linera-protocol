@@ -50,7 +50,7 @@ pub struct SystemExecutionStateView<C> {
     /// Balance of the chain.
     pub balance: RegisterView<C, Balance>,
     /// The timestamp of the most recent `Tick` operation.
-    pub time: RegisterView<C, Timestamp>,
+    pub latest_clock_tick: RegisterView<C, Timestamp>,
     /// Track the locations of known bytecodes as well as the descriptions of known applications.
     pub registry: ApplicationRegistryView<C>,
 }
@@ -66,7 +66,7 @@ pub struct SystemExecutionState {
     pub committees: BTreeMap<Epoch, Committee>,
     pub ownership: ChainOwnership,
     pub balance: Balance,
-    pub time: Timestamp,
+    pub latest_clock_tick: Timestamp,
     pub registry: crate::applications::ApplicationRegistry,
 }
 
@@ -549,10 +549,10 @@ where
             }
             Tick(timestamp) => {
                 ensure!(
-                    self.time.get() <= timestamp,
+                    self.latest_clock_tick.get() <= timestamp,
                     SystemExecutionError::TicksOutOfOrder
                 );
-                self.time.set(*timestamp);
+                self.latest_clock_tick.set(*timestamp);
             }
         }
 

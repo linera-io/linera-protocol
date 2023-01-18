@@ -132,7 +132,7 @@ pub enum WorkerError {
     #[error("The given effects are not what we computed after executing the block")]
     IncorrectEffects,
     #[error("The timestamp of a Tick operation is in the future.")]
-    InvalidTick,
+    InvalidTimestamp,
 }
 
 impl From<linera_chain::ChainError> for WorkerError {
@@ -592,8 +592,8 @@ where
             let effects = chain.execute_block(&proposal.content.block).await?;
             let hash = chain.execution_state_hash.get().expect("was just computed");
             ensure!(
-                *chain.execution_state.system.time.get() <= Timestamp::now(),
-                WorkerError::InvalidTick
+                *chain.execution_state.system.latest_clock_tick.get() <= Timestamp::now(),
+                WorkerError::InvalidTimestamp
             );
             // Verify that the resulting chain would have no unconfirmed incoming
             // messages.
