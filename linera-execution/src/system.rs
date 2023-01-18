@@ -144,6 +144,7 @@ pub enum SystemEffect {
         admin_id: ChainId,
         epoch: Epoch,
         committees: BTreeMap<Epoch, Committee>,
+        latest_clock_tick: Timestamp,
     },
     /// Set the current epoch and the recognized committees.
     SetCommittees {
@@ -366,6 +367,7 @@ where
                         committees: committees.clone(),
                         admin_id: *admin_id,
                         epoch: *epoch,
+                        latest_clock_tick: *self.latest_clock_tick.get(),
                     },
                 );
                 let channel_id = ChannelId {
@@ -629,6 +631,7 @@ where
     }
 
     /// Initialize the system application state on a newly opened chain.
+    #[allow(clippy::too_many_arguments)]
     pub fn open_chain(
         &mut self,
         effect_id: EffectId,
@@ -637,6 +640,7 @@ where
         epoch: Epoch,
         committees: BTreeMap<Epoch, Committee>,
         admin_id: ChainId,
+        latest_clock_tick: Timestamp,
     ) {
         // Guaranteed under BFT assumptions.
         assert!(self.description.get().is_none());
@@ -655,6 +659,7 @@ where
             })
             .expect("serialization failed");
         self.ownership.set(ChainOwnership::single(owner));
+        self.latest_clock_tick.set(latest_clock_tick);
     }
 
     pub async fn query_application(

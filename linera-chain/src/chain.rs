@@ -288,6 +288,7 @@ where
                 epoch,
                 committees,
                 admin_id,
+                latest_clock_tick,
             }) if id == &chain_id => {
                 // Initialize ourself.
                 self.execution_state.system.open_chain(
@@ -297,6 +298,7 @@ where
                     *epoch,
                     committees.clone(),
                     *admin_id,
+                    *latest_clock_tick,
                 );
                 // Recompute the state hash.
                 let hash = self.execution_state.hash_value().await?;
