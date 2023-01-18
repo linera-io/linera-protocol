@@ -30,8 +30,10 @@ jobs:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Rustfmt
       run: cargo fmt -- --check --config unstable_features=true --config imports_granularity=Crate
-    - name: Clippy
-      run: cargo clippy --all-targets --features crypto
+    - name: Clippy using Wasmer
+      run: cargo clippy --all-targets --features crypto,serde,wasmer
+    - name: Clippy using Wasmtime
+      run: cargo clippy --all-targets --features crypto,serde,wasmtime
     - name: Build
       run: cargo build --locked
     - name: Run tests
