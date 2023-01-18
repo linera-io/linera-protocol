@@ -53,7 +53,7 @@ where
             committees,
             ownership,
             balance,
-            time,
+            latest_clock_tick,
             registry,
         } = state;
         let guard = Arc::new(Mutex::new(BTreeMap::new())).lock_owned().await;
@@ -76,7 +76,7 @@ where
         view.system.committees.set(committees);
         view.system.ownership.set(ownership);
         view.system.balance.set(balance);
-        view.system.time.set(time);
+        view.system.latest_clock_tick.set(latest_clock_tick);
         view.system
             .registry
             .import(registry)

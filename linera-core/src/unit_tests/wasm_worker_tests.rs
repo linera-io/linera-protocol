@@ -106,7 +106,7 @@ where
         committees: [(Epoch::from(0), committee.clone())].into_iter().collect(),
         ownership: ChainOwnership::single(publisher_key_pair.public().into()),
         balance: Balance::from(0),
-        time: Timestamp::from(0),
+        latest_clock_tick: Timestamp::from(0),
         registry: ApplicationRegistry::default(),
     };
     let publisher_state_hash = make_state_hash(publisher_system_state).await;
@@ -161,7 +161,7 @@ where
         committees: [(Epoch::from(0), committee.clone())].into_iter().collect(),
         ownership: ChainOwnership::single(creator_key_pair.public().into()),
         balance: Balance::from(0),
-        time: Timestamp::from(0),
+        latest_clock_tick: Timestamp::from(0),
         registry: ApplicationRegistry::default(),
     };
     let mut creator_state =
@@ -257,7 +257,7 @@ where
     let application_description = UserApplicationDescription {
         bytecode_id,
         bytecode_location,
-        creation: application_id.creation.clone(),
+        creation: application_id.creation,
         initialization_argument: initial_value_bytes.clone(),
     };
     let create_block = make_block(
