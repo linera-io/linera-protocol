@@ -329,7 +329,7 @@ impl<'storage> WritableSystem for SystemApi<&'storage dyn WritableStorage> {
     }
 
     fn read_system_timestamp(&mut self) -> writable_system::Timestamp {
-        self.storage.read_system_timestamp().seconds()
+        self.storage.read_system_timestamp().millis()
     }
 
     fn load_new(&mut self) -> Self::Load {
@@ -455,7 +455,7 @@ impl<'storage> QueryableSystem for SystemApi<&'storage dyn QueryableStorage> {
     }
 
     fn read_system_timestamp(&mut self) -> queryable_system::Timestamp {
-        self.storage.read_system_timestamp().seconds()
+        self.storage.read_system_timestamp().millis()
     }
 
     fn load_new(&mut self) -> Self::Load {

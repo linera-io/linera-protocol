@@ -302,14 +302,14 @@ pub struct SessionCallResult {
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 pub struct SystemBalance(pub u128);
 
-/// A timestamp, in seconds since the Unix epoch.
+/// A timestamp, in milliseconds since the Unix epoch.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug)]
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 pub struct Timestamp(u64);
 
 impl Timestamp {
-    /// Returns the number of seconds since the Unix epoch.
-    pub fn seconds(&self) -> u64 {
+    /// Returns the number of milliseconds since the Unix epoch.
+    pub fn millis(&self) -> u64 {
         self.0
     }
 }
