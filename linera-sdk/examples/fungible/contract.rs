@@ -36,12 +36,7 @@ impl Contract for FungibleToken {
         let signed_transfer =
             SignedTransfer::from_bcs_bytes(operation).map_err(Error::InvalidOperation)?;
 
-        let (source, transfer, nonce) = self.check_signed_transfer(signed_transfer)?;
-
-        self.debit(source, transfer.amount)?;
-        self.mark_nonce_as_used(source, nonce);
-
-        Ok(self.finish_transfer(transfer))
+        self.handle_signed_transfer(signed_transfer)
     }
 
     async fn execute_effect(
@@ -107,6 +102,21 @@ impl Contract for FungibleToken {
 }
 
 impl FungibleToken {
+    /// Handles a signed transfer.
+    ///
+    /// A signed transfer is either requested through an operation or a delegated application call.
+    fn handle_signed_transfer(
+        &mut self,
+        signed_transfer: SignedTransfer,
+    ) -> Result<ExecutionResult, Error> {
+        let (source, transfer, nonce) = self.check_signed_transfer(signed_transfer)?;
+
+        self.debit(source, transfer.amount)?;
+        self.mark_nonce_as_used(source, nonce);
+
+        Ok(self.finish_transfer(transfer))
+    }
+
     /// Handles an account balance request sent by an application.
     fn handle_application_balance(&mut self, context: &CalleeContext) -> Result<Vec<u8>, Error> {
         let caller = context
