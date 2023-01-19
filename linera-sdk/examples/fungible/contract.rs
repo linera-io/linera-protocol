@@ -66,6 +66,9 @@ impl Contract for FungibleToken {
         let mut result = ApplicationCallResult::default();
 
         match request {
+            ApplicationCall::Balance => {
+                result.value = self.handle_application_balance(context)?;
+            }
             ApplicationCall::Transfer(transfer) => {
                 result = self.handle_application_transfer(context, transfer)?;
             }
@@ -104,6 +107,19 @@ impl Contract for FungibleToken {
 }
 
 impl FungibleToken {
+    /// Handles an account balance request sent by an application.
+    fn handle_application_balance(&mut self, context: &CalleeContext) -> Result<Vec<u8>, Error> {
+        let caller = context
+            .authenticated_caller_id
+            .ok_or(Error::MissingSourceApplication)?;
+        let account = AccountOwner::Application(caller);
+
+        let balance = self.balance(&account);
+        let balance_bytes = bcs::to_bytes(&balance).expect("Couldn't serialize account balance");
+
+        Ok(balance_bytes)
+    }
+
     /// Handles a transfer requested by an application.
     fn handle_application_transfer(
         &mut self,
@@ -212,6 +228,8 @@ pub struct SignedTransferPayload {
 /// A cross-application call.
 #[derive(Deserialize, Serialize)]
 pub enum ApplicationCall {
+    /// A request for the application's account balance.
+    Balance,
     /// A transfer from the application's account.
     Transfer(ApplicationTransfer),
 }
