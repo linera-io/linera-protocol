@@ -6,6 +6,7 @@
     - If possible, in user land e.g. in `$HOME/git/homebrew`
     - See https://docs.brew.sh/Installation#untar-anywhere
 * `brew install rustup-init`
+* `rustup target add wasm32-unknown-unknown`
 * Protoc
     - `curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v21.11/protoc-21.11-osx-x86_64.zip`
     - `unzip protoc-21.11-osx-x86_64.zip -d $HOME/.local`
@@ -27,6 +28,7 @@
 ## Basics
 
 * `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+* `rustup target add wasm32-unknown-unknown`
 * Protoc
     - `curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v21.11/protoc-21.11-linux-x86_64.zip`
     - `unzip protoc-21.11-linux-x86_64.zip -d $HOME/.local`
