@@ -43,6 +43,8 @@ Block:
             - TYPENAME: Operation
     - height:
         TYPENAME: BlockHeight
+    - timestamp:
+        TYPENAME: Timestamp
     - previous_block_hash:
         OPTION:
           TYPENAME: HashValue
@@ -117,6 +119,8 @@ ChainInfo:
     - block_hash:
         OPTION:
           TYPENAME: HashValue
+    - timestamp:
+        TYPENAME: Timestamp
     - next_block_height:
         TYPENAME: BlockHeight
     - state_hash:
@@ -251,6 +255,8 @@ Event:
     - height:
         TYPENAME: BlockHeight
     - index: U64
+    - timestamp:
+        TYPENAME: Timestamp
     - effect:
         TYPENAME: Effect
 HashValue:
@@ -488,8 +494,6 @@ SystemEffect:
                   TYPENAME: Epoch
                 VALUE:
                   TYPENAME: Committee
-          - latest_clock_tick:
-              TYPENAME: Timestamp
     2:
       SetCommittees:
         STRUCT:
@@ -613,10 +617,6 @@ SystemOperation:
           - bytecode_id:
               TYPENAME: BytecodeId
           - argument: BYTES
-    11:
-      Tick:
-        NEWTYPE:
-          TYPENAME: Timestamp
 Timestamp:
   NEWTYPESTRUCT: U64
 UserApplicationDescription:

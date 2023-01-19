@@ -27,6 +27,7 @@ fn test_signed_values() {
             }),
         )],
         height: BlockHeight::from(0),
+        timestamp: Default::default(),
         previous_block_hash: None,
     };
     let value = Value::ConfirmedBlock {
@@ -66,6 +67,7 @@ fn test_certificates() {
         )],
         previous_block_hash: None,
         height: BlockHeight::from(0),
+        timestamp: Default::default(),
     };
     let value = Value::ConfirmedBlock {
         block,

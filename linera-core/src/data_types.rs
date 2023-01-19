@@ -6,7 +6,7 @@ use crate::node::NodeError;
 use linera_base::{
     committee::Committee,
     crypto::{BcsSignable, HashValue, KeyPair, Signature},
-    data_types::{BlockHeight, ChainDescription, ChainId, Epoch, ValidatorName},
+    data_types::{BlockHeight, ChainDescription, ChainId, Epoch, Timestamp, ValidatorName},
 };
 use linera_chain::{
     data_types::{Certificate, Message, Origin},
@@ -102,6 +102,8 @@ pub struct ChainInfo {
     pub system_balance: Balance,
     /// The last block hash, if any.
     pub block_hash: Option<HashValue>,
+    /// The earliest possible timestamp for the next block.
+    pub timestamp: Timestamp,
     /// The height after the latest block in the chain.
     pub next_block_height: BlockHeight,
     /// The hash of the current execution state.
@@ -176,6 +178,7 @@ where
             system_balance: *system_state.balance.get(),
             block_hash: tip_state.block_hash,
             next_block_height: tip_state.next_block_height,
+            timestamp: *view.execution_state.system.timestamp.get(),
             state_hash: *view.execution_state_hash.get(),
             requested_committees: None,
             requested_pending_messages: Vec::new(),

@@ -6,7 +6,7 @@ use crate::ChainError;
 use linera_base::{
     committee::Committee,
     crypto::{BcsSignable, HashValue, KeyPair, Signature},
-    data_types::{BlockHeight, ChainId, Epoch, Owner, RoundNumber, ValidatorName},
+    data_types::{BlockHeight, ChainId, Epoch, Owner, RoundNumber, Timestamp, ValidatorName},
     ensure,
 };
 use linera_execution::{ApplicationId, ChannelName, Destination, Effect, Operation};
@@ -37,6 +37,9 @@ pub struct Block {
     pub operations: Vec<(ApplicationId, Operation)>,
     /// The block height.
     pub height: BlockHeight,
+    /// The timestamp when this block was created. This must be later than all messages received
+    /// in this block, but no later than the current time.
+    pub timestamp: Timestamp,
     /// Certified hash (see `Certificate` below) of the previous block in the
     /// chain, if any.
     pub previous_block_hash: Option<HashValue>,
@@ -71,6 +74,8 @@ pub struct Event {
     pub height: BlockHeight,
     /// The index of the effect.
     pub index: usize,
+    /// The timestamp of the block that caused the effect.
+    pub timestamp: Timestamp,
     /// The effect of the event (i.e. the actual payload of a message).
     pub effect: Effect,
 }

@@ -282,7 +282,7 @@ where
     }
 
     fn read_system_time(&self) -> Timestamp {
-        *self.execution_state_mut().system.latest_clock_tick.get()
+        *self.execution_state_mut().system.timestamp.get()
     }
 
     async fn try_read_my_state(&self) -> Result<Vec<u8>, ExecutionError> {

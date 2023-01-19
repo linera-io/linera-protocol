@@ -9,7 +9,7 @@ use crate::{
 };
 use linera_base::{
     crypto::HashValue,
-    data_types::{BlockHeight, ChainId, EffectId},
+    data_types::{BlockHeight, ChainId, EffectId, Timestamp},
     ensure,
 };
 use linera_execution::{
@@ -191,6 +191,7 @@ where
         application_id: ApplicationId,
         origin: &Origin,
         height: BlockHeight,
+        timestamp: Timestamp,
         effects: Vec<(ApplicationId, Destination, Effect)>,
         certificate_hash: HashValue,
     ) -> Result<(), ChainError> {
@@ -237,7 +238,7 @@ where
                     height,
                     index,
                 };
-                self.execute_immediate_effect(effect_id, &effect, chain_id)
+                self.execute_immediate_effect(effect_id, &effect, chain_id, timestamp)
                     .await?;
             }
             // Record the inbox event to process it below.
@@ -245,6 +246,7 @@ where
                 certificate_hash,
                 height,
                 index,
+                timestamp,
                 effect,
             });
         }
@@ -280,6 +282,7 @@ where
         effect_id: EffectId,
         effect: &Effect,
         chain_id: ChainId,
+        timestamp: Timestamp,
     ) -> Result<(), ChainError> {
         match &effect {
             Effect::System(SystemEffect::OpenChain {
@@ -288,7 +291,6 @@ where
                 epoch,
                 committees,
                 admin_id,
-                latest_clock_tick,
             }) if id == &chain_id => {
                 // Initialize ourself.
                 self.execution_state.system.open_chain(
@@ -298,7 +300,7 @@ where
                     *epoch,
                     committees.clone(),
                     *admin_id,
-                    *latest_clock_tick,
+                    timestamp,
                 );
                 // Recompute the state hash.
                 let hash = self.execution_state.hash_value().await?;
@@ -329,6 +331,11 @@ where
     ) -> Result<Vec<(ApplicationId, Destination, Effect)>, ChainError> {
         assert_eq!(block.chain_id, self.chain_id());
         let chain_id = self.chain_id();
+        ensure!(
+            *self.execution_state.system.timestamp.get() <= block.timestamp,
+            ChainError::InvalidBlockTimestamp
+        );
+        self.execution_state.system.timestamp.set(block.timestamp);
         let mut effects = Vec::new();
         for message in &block.incoming_messages {
             log::trace!(
@@ -337,6 +344,13 @@ where
                 message.origin,
                 chain_id
             );
+            if message.event.timestamp > block.timestamp {
+                return Err(ChainError::IncorrectEventTimestamp {
+                    chain_id,
+                    message_timestamp: message.event.timestamp,
+                    block_timestamp: block.timestamp,
+                });
+            }
             // Mark the message as processed in the inbox.
             let communication_state = self
                 .communication_states

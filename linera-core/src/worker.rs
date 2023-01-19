@@ -488,6 +488,7 @@ where
                     application_id,
                     &origin,
                     block.height,
+                    block.timestamp,
                     effects.clone(),
                     certificate.hash,
                 )
@@ -588,13 +589,13 @@ where
             // unchanged.
             return Ok(ChainInfoResponse::new(&chain, self.key_pair()));
         }
+        ensure!(
+            proposal.content.block.timestamp <= Timestamp::now(),
+            WorkerError::InvalidTimestamp
+        );
         let (effects, state_hash) = {
             let effects = chain.execute_block(&proposal.content.block).await?;
             let hash = chain.execution_state_hash.get().expect("was just computed");
-            ensure!(
-                *chain.execution_state.system.latest_clock_tick.get() <= Timestamp::now(),
-                WorkerError::InvalidTimestamp
-            );
             // Verify that the resulting chain would have no unconfirmed incoming
             // messages.
             chain.validate_incoming_messages().await?;

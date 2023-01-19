@@ -14,7 +14,9 @@ use futures::stream::select_all;
 use linera_base::{
     committee::{Committee, ValidatorState},
     crypto::{HashValue, KeyPair},
-    data_types::{BlockHeight, ChainId, EffectId, Epoch, Owner, RoundNumber, ValidatorName},
+    data_types::{
+        BlockHeight, ChainId, EffectId, Epoch, Owner, RoundNumber, Timestamp, ValidatorName,
+    },
 };
 use linera_chain::{
     data_types::{Block, BlockAndRound, BlockProposal, Certificate, Message, Value, Vote},
@@ -48,6 +50,8 @@ pub struct ChainClientState<ValidatorNodeProvider, StorageClient> {
     validator_node_provider: ValidatorNodeProvider,
     /// Latest block hash, if any.
     block_hash: Option<HashValue>,
+    /// The earliest possible timestamp for the next block.
+    timestamp: Timestamp,
     /// Sequence number that we plan to use for the next block.
     /// We track this value outside local storage mainly for security reasons.
     next_block_height: BlockHeight,
@@ -91,6 +95,7 @@ impl<P, S> ChainClientState<P, S> {
         admin_id: ChainId,
         max_pending_messages: usize,
         block_hash: Option<HashValue>,
+        timestamp: Timestamp,
         next_block_height: BlockHeight,
         cross_chain_delay: Duration,
         cross_chain_retries: usize,
@@ -107,6 +112,7 @@ impl<P, S> ChainClientState<P, S> {
             chain_id,
             validator_node_provider,
             block_hash,
+            timestamp,
             next_block_height,
             next_round: RoundNumber::default(),
             pending_block: None,
@@ -126,6 +132,11 @@ impl<P, S> ChainClientState<P, S> {
 
     pub fn block_hash(&self) -> Option<HashValue> {
         self.block_hash
+    }
+
+    /// Returns the earliest possible timestamp for the next block.
+    pub fn timestamp(&self) -> Timestamp {
+        self.timestamp
     }
 
     pub fn next_block_height(&self) -> BlockHeight {
@@ -355,6 +366,7 @@ where
             self.next_block_height = info.next_block_height;
             self.next_round = info.manager.next_round();
             self.block_hash = info.block_hash;
+            self.timestamp = info.timestamp;
         }
         Ok(())
     }
@@ -679,6 +691,7 @@ where
             self.block_hash = info.block_hash;
             self.next_block_height = info.next_block_height;
             self.next_round = info.manager.next_round();
+            self.timestamp = info.timestamp;
         }
         Ok(())
     }
@@ -799,6 +812,7 @@ where
         incoming_messages: Vec<Message>,
         operations: Vec<(ApplicationId, Operation)>,
     ) -> Result<Certificate> {
+        let timestamp = self.next_timestamp(&incoming_messages);
         let block = Block {
             epoch: self.epoch().await?,
             chain_id: self.chain_id,
@@ -806,9 +820,23 @@ where
             operations,
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
+            timestamp,
         };
         let certificate = self.propose_block(block).await?;
         Ok(certificate)
+    }
+
+    /// Returns a suitable timestamp for the next block.
+    ///
+    /// This will usually be the current time according to the local clock, but may be slightly
+    /// ahead to make sure it's not earlier than the incoming messages or the previous block.
+    fn next_timestamp(&self, incoming_messages: &[Message]) -> Timestamp {
+        incoming_messages
+            .iter()
+            .map(|msg| msg.event.timestamp)
+            .max()
+            .map_or_else(Timestamp::now, |timestamp| timestamp.max(Timestamp::now()))
+            .max(self.timestamp)
     }
 
     /// Query an application.
@@ -829,13 +857,16 @@ where
             self.chain_info().await?.next_block_height == self.next_block_height,
             "The local node is behind the trusted state in wallet and needs synchronization with validators"
         );
+        let incoming_messages = self.pending_messages().await?;
+        let timestamp = self.next_timestamp(&incoming_messages);
         let block = Block {
             epoch: self.epoch().await?,
             chain_id: self.chain_id,
-            incoming_messages: self.pending_messages().await?,
+            incoming_messages,
             operations: Vec::new(),
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
+            timestamp,
         };
         Ok(self
             .node_client

@@ -48,8 +48,8 @@ pub struct SystemExecutionStateView<C> {
     pub ownership: RegisterView<C, ChainOwnership>,
     /// Balance of the chain.
     pub balance: RegisterView<C, Balance>,
-    /// The timestamp of the most recent `Tick` operation.
-    pub latest_clock_tick: RegisterView<C, Timestamp>,
+    /// The timestamp of the most recent block.
+    pub timestamp: RegisterView<C, Timestamp>,
     /// Track the locations of known bytecodes as well as the descriptions of known applications.
     pub registry: ApplicationRegistryView<C>,
 }
@@ -65,7 +65,7 @@ pub struct SystemExecutionState {
     pub committees: BTreeMap<Epoch, Committee>,
     pub ownership: ChainOwnership,
     pub balance: Balance,
-    pub latest_clock_tick: Timestamp,
+    pub timestamp: Timestamp,
     pub registry: crate::applications::ApplicationRegistry,
 }
 
@@ -126,9 +126,6 @@ pub enum SystemOperation {
         #[serde(with = "serde_bytes")]
         argument: Vec<u8>,
     },
-    /// Update the chain's internal clock. This block will only be certified when a quorum of
-    /// validators' local clocks have moved past that timestamp.
-    Tick(Timestamp),
 }
 
 /// The effect of a system operation to be performed on a remote chain.
@@ -143,7 +140,6 @@ pub enum SystemEffect {
         admin_id: ChainId,
         epoch: Epoch,
         committees: BTreeMap<Epoch, Committee>,
-        latest_clock_tick: Timestamp,
     },
     /// Set the current epoch and the recognized committees.
     SetCommittees {
@@ -337,7 +333,6 @@ where
                         committees: committees.clone(),
                         admin_id: *admin_id,
                         epoch: *epoch,
-                        latest_clock_tick: *self.latest_clock_tick.get(),
                     },
                 );
                 let channel_id = ChannelId {
@@ -519,13 +514,6 @@ where
                     initialization_argument: argument.clone(),
                 });
             }
-            Tick(timestamp) => {
-                ensure!(
-                    self.latest_clock_tick.get() <= timestamp,
-                    SystemExecutionError::TicksOutOfOrder
-                );
-                self.latest_clock_tick.set(*timestamp);
-            }
         }
 
         Ok((result, new_application))
@@ -610,7 +598,7 @@ where
         epoch: Epoch,
         committees: BTreeMap<Epoch, Committee>,
         admin_id: ChainId,
-        latest_clock_tick: Timestamp,
+        timestamp: Timestamp,
     ) {
         // Guaranteed under BFT assumptions.
         assert!(self.description.get().is_none());
@@ -629,7 +617,7 @@ where
             })
             .expect("serialization failed");
         self.ownership.set(ChainOwnership::single(owner));
-        self.latest_clock_tick.set(latest_clock_tick);
+        self.timestamp.set(timestamp);
     }
 
     pub async fn query_application(
