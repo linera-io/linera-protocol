@@ -238,7 +238,7 @@ pub trait ReadableStorage: Send + Sync {
     /// Read the system balance.
     fn read_system_balance(&self) -> crate::system::Balance;
 
-    /// Read the system balance.
+    /// Read the system timestamp.
     fn read_system_timestamp(&self) -> Timestamp;
 
     /// Read the application state.
