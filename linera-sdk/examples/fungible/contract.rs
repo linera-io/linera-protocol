@@ -67,6 +67,9 @@ impl Contract for FungibleToken {
             ApplicationCall::Transfer(transfer) => {
                 result = self.handle_application_transfer(context, transfer)?;
             }
+            ApplicationCall::Delegated(transfer) => {
+                result.execution_result = self.handle_signed_transfer(transfer)?;
+            }
         }
 
         Ok(result)
@@ -242,6 +245,8 @@ pub enum ApplicationCall {
     Balance,
     /// A transfer from the application's account.
     Transfer(ApplicationTransfer),
+    /// A signed transfer operation delegated to the application.
+    Delegated(SignedTransfer),
 }
 
 /// A cross-application transfer request.
