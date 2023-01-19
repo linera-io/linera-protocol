@@ -9,7 +9,7 @@ use crate::{
 };
 use linera_base::{
     committee::Committee,
-    data_types::{ArithmeticError, ChainDescription, ChainId, EffectId, Epoch, Owner},
+    data_types::{ArithmeticError, ChainDescription, ChainId, EffectId, Epoch, Owner, Timestamp},
     ensure,
 };
 use linera_views::{
@@ -22,7 +22,6 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
     fmt::{self, Display, Formatter},
-    time::SystemTime,
 };
 use thiserror::Error;
 
@@ -226,35 +225,6 @@ pub struct Amount(u64);
     Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
 )]
 pub struct Balance(u128);
-
-/// A timestamp, in seconds since the Unix epoch.
-#[derive(
-    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
-)]
-pub struct Timestamp(u64);
-
-impl Timestamp {
-    /// Returns the current time according to the system clock.
-    pub fn now() -> Timestamp {
-        Timestamp(
-            SystemTime::UNIX_EPOCH
-                .elapsed()
-                .expect("system time should be after Unix epoch")
-                .as_secs(),
-        )
-    }
-
-    /// Returns the number of seconds since the Unix epoch.
-    pub fn seconds(&self) -> u64 {
-        self.0
-    }
-}
-
-impl From<u64> for Timestamp {
-    fn from(t: u64) -> Timestamp {
-        Timestamp(t)
-    }
-}
 
 /// Optional user message attached to a transfer.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]

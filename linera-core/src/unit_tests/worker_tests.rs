@@ -25,9 +25,7 @@ use linera_chain::{
     ChainError,
 };
 use linera_execution::{
-    system::{
-        Address, Amount, Balance, SystemChannel, SystemEffect, SystemOperation, Timestamp, UserData,
-    },
+    system::{Address, Amount, Balance, SystemChannel, SystemEffect, SystemOperation, UserData},
     ApplicationId, ApplicationRegistry, ChainOwnership, ChannelId, Destination, Effect,
     ExecutionStateView, Operation, Query, Response, SystemExecutionState, SystemQuery,
     SystemResponse, UserApplicationId,

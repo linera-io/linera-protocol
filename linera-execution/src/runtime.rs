@@ -7,7 +7,10 @@ use crate::{
     SessionId, UserApplicationCode, UserApplicationId, WritableStorage,
 };
 use async_trait::async_trait;
-use linera_base::{data_types::ChainId, ensure};
+use linera_base::{
+    data_types::{ChainId, Timestamp},
+    ensure,
+};
 use linera_views::{
     common::Context,
     register_view::RegisterView,
@@ -278,7 +281,7 @@ where
         *self.execution_state_mut().system.balance.get()
     }
 
-    fn read_system_time(&self) -> crate::system::Timestamp {
+    fn read_system_time(&self) -> Timestamp {
         *self.execution_state_mut().system.latest_clock_tick.get()
     }
 

@@ -11,7 +11,7 @@ use linera_base::{
     committee::ValidatorState,
     crypto::KeyPair,
     data_types::{
-        BlockHeight, ChainDescription, ChainId, Epoch, Owner, RoundNumber, ValidatorName,
+        BlockHeight, ChainDescription, ChainId, Epoch, Owner, RoundNumber, Timestamp, ValidatorName,
     },
 };
 use linera_chain::data_types::{
@@ -24,7 +24,7 @@ use linera_core::{
     worker::WorkerState,
 };
 use linera_execution::{
-    system::{Address, Amount, Balance, SystemOperation, Timestamp, UserData},
+    system::{Address, Amount, Balance, SystemOperation, UserData},
     ApplicationId, Operation,
 };
 use linera_rpc::{

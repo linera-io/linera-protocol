@@ -12,11 +12,11 @@
 use super::{init_worker_with_chains, make_block, make_certificate, make_state_hash};
 use linera_base::{
     crypto::KeyPair,
-    data_types::{BlockHeight, ChainDescription, ChainId, EffectId, Epoch},
+    data_types::{BlockHeight, ChainDescription, ChainId, EffectId, Epoch, Timestamp},
 };
 use linera_chain::data_types::{Event, Message, Origin, Value};
 use linera_execution::{
-    system::{Balance, SystemChannel, SystemEffect, SystemOperation, Timestamp},
+    system::{Balance, SystemChannel, SystemEffect, SystemOperation},
     ApplicationId, ApplicationRegistry, Bytecode, BytecodeId, BytecodeLocation, ChainOwnership,
     ChannelId, Destination, Effect, ExecutionStateView, SystemExecutionState,
     UserApplicationDescription, UserApplicationId,

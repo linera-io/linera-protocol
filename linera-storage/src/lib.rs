@@ -17,12 +17,11 @@ use futures::future;
 use linera_base::{
     committee::Committee,
     crypto::HashValue,
-    data_types::{ChainDescription, ChainId, Epoch, Owner},
+    data_types::{ChainDescription, ChainId, Epoch, Owner, Timestamp},
 };
 use linera_chain::{data_types::Certificate, ChainError, ChainStateView};
 use linera_execution::{
-    system::{Balance, Timestamp},
-    ChainOwnership, ExecutionError, ExecutionRuntimeContext, UserApplicationCode,
+    system::Balance, ChainOwnership, ExecutionError, ExecutionRuntimeContext, UserApplicationCode,
     UserApplicationDescription, UserApplicationId,
 };
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
