@@ -14,7 +14,7 @@ use linera_chain::data_types::{Block, BlockProposal, Certificate, Value};
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 use linera_execution::Bytecode;
 use linera_execution::{
-    system::{Amount, Balance, SystemOperation, Timestamp, UserData},
+    system::{Amount, Balance, SystemOperation, UserData},
     ApplicationId, Operation, Query, Response, SystemQuery, SystemResponse,
 };
 use linera_storage::{DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient, Store};

@@ -27,7 +27,7 @@ use async_trait::async_trait;
 use dashmap::DashMap;
 use linera_base::{
     crypto::HashValue,
-    data_types::{BlockHeight, ChainId, EffectId},
+    data_types::{BlockHeight, ChainId, EffectId, Timestamp},
 };
 use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
@@ -239,7 +239,7 @@ pub trait ReadableStorage: Send + Sync {
     fn read_system_balance(&self) -> crate::system::Balance;
 
     /// Read the system balance.
-    fn read_system_time(&self) -> crate::system::Timestamp;
+    fn read_system_time(&self) -> Timestamp;
 
     /// Read the application state.
     async fn try_read_my_state(&self) -> Result<Vec<u8>, ExecutionError>;

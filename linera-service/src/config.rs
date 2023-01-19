@@ -5,10 +5,10 @@
 use linera_base::{
     committee::{Committee, ValidatorState},
     crypto::{HashValue, KeyPair},
-    data_types::{BlockHeight, ChainDescription, ChainId, Owner, ValidatorName},
+    data_types::{BlockHeight, ChainDescription, ChainId, Owner, Timestamp, ValidatorName},
 };
 use linera_core::client::{ChainClientState, ValidatorNodeProvider};
-use linera_execution::system::{Balance, Timestamp};
+use linera_execution::system::Balance;
 use linera_rpc::config::{ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig};
 use linera_storage::Store;
 use linera_views::views::ViewError;

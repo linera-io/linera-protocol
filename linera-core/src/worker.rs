@@ -7,14 +7,14 @@ use async_trait::async_trait;
 use linera_base::{
     committee::Committee,
     crypto::{HashValue, KeyPair},
-    data_types::{ArithmeticError, BlockHeight, ChainId, Epoch},
+    data_types::{ArithmeticError, BlockHeight, ChainId, Epoch, Timestamp},
     ensure,
 };
 use linera_chain::{
     data_types::{Block, BlockProposal, Certificate, Message, Origin, Target, Value},
     ChainManagerOutcome, ChainStateView,
 };
-use linera_execution::{system::Timestamp, ApplicationId, Query, Response};
+use linera_execution::{ApplicationId, Query, Response};
 use linera_storage::Store;
 use linera_views::{
     log_view::LogView,

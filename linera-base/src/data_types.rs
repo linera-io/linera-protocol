@@ -4,7 +4,7 @@
 
 use crate::crypto::{BcsSignable, HashValue, PublicKey};
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
+use std::{str::FromStr, time::SystemTime};
 use thiserror::Error;
 
 use crate::crypto::CryptoError;
@@ -23,6 +23,35 @@ pub struct BlockHeight(pub u64);
     Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
 )]
 pub struct RoundNumber(pub u64);
+
+/// A timestamp, in seconds since the Unix epoch.
+#[derive(
+    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
+)]
+pub struct Timestamp(u64);
+
+impl Timestamp {
+    /// Returns the current time according to the system clock.
+    pub fn now() -> Timestamp {
+        Timestamp(
+            SystemTime::UNIX_EPOCH
+                .elapsed()
+                .expect("system time should be after Unix epoch")
+                .as_secs(),
+        )
+    }
+
+    /// Returns the number of seconds since the Unix epoch.
+    pub fn seconds(&self) -> u64 {
+        self.0
+    }
+}
+
+impl From<u64> for Timestamp {
+    fn from(t: u64) -> Timestamp {
+        Timestamp(t)
+    }
+}
 
 /// The identity of a validator.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
