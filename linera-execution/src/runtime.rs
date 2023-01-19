@@ -281,7 +281,7 @@ where
         *self.execution_state_mut().system.balance.get()
     }
 
-    fn read_system_time(&self) -> Timestamp {
+    fn read_system_timestamp(&self) -> Timestamp {
         *self.execution_state_mut().system.timestamp.get()
     }
 

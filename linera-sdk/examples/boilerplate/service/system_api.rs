@@ -44,6 +44,6 @@ impl ApplicationState {
     /// Retrieve the current system time.
     #[allow(dead_code)]
     pub fn current_system_time() -> Timestamp {
-        system::read_system_time().into()
+        system::read_system_timestamp().into()
     }
 }

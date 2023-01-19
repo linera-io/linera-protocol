@@ -1,7 +1,7 @@
 chain-id: func() -> chain-id
 application-id: func() -> application-id
 read-system-balance: func() -> system-balance
-read-system-time: func() -> timestamp
+read-system-timestamp: func() -> timestamp
 
 resource load {
     static new: func() -> load

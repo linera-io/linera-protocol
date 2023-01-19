@@ -328,8 +328,8 @@ impl<'storage> WritableSystem for SystemApi<&'storage dyn WritableStorage> {
         self.storage.read_system_balance().into()
     }
 
-    fn read_system_time(&mut self) -> writable_system::Timestamp {
-        self.storage.read_system_time().seconds()
+    fn read_system_timestamp(&mut self) -> writable_system::Timestamp {
+        self.storage.read_system_timestamp().seconds()
     }
 
     fn load_new(&mut self) -> Self::Load {
@@ -454,8 +454,8 @@ impl<'storage> QueryableSystem for SystemApi<&'storage dyn QueryableStorage> {
         self.storage.read_system_balance().into()
     }
 
-    fn read_system_time(&mut self) -> queryable_system::Timestamp {
-        self.storage.read_system_time().seconds()
+    fn read_system_timestamp(&mut self) -> queryable_system::Timestamp {
+        self.storage.read_system_timestamp().seconds()
     }
 
     fn load_new(&mut self) -> Self::Load {
