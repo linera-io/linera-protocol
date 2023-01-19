@@ -125,13 +125,14 @@ fn generate_save_delete_view_code(input: TokenStream) -> TokenStream {
                 use linera_views::common::Batch;
                 let mut batch = Batch::default();
                 #(#flushes)*
-                self.context().write_batch(batch).await?;
+                let mut context = self.context().clone();
+                context.write_batch(batch).await?;
                 Ok(())
             }
 
             async fn write_delete(self) -> Result<(), linera_views::views::ViewError> {
                 use linera_views::common::Batch;
-                let context = self.context().clone();
+                let mut context = self.context().clone();
                 let batch = Batch::build(move |batch| {
                     Box::pin(async move {
                         #(#deletes)*

@@ -133,7 +133,7 @@ where
                 expected_state.pop_front();
             }
             Operation::CommitAndReload => {
-                let context = context.clone();
+                let mut context = context.clone();
                 let mut batch = Batch::default();
                 queue.flush(&mut batch)?;
                 context.write_batch(batch).await?;

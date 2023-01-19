@@ -3,14 +3,19 @@
 
 use crate::{
     common::{
-        get_upper_bound, Batch, Context, ContextFromDb, HashOutput, KeyValueOperations,
-        SimpleTypeIterator, WriteOperation,
+        get_interval, get_upper_bound, Batch, Context, ContextFromDb, HashOutput,
+        KeyValueOperations, SimpleTypeIterator, WriteOperation,
     },
     memory::{MemoryContext, MemoryStoreMap},
     views::{HashableView, Hasher, View, ViewError},
 };
 use async_trait::async_trait;
-use std::{collections::BTreeMap, fmt::Debug, mem, ops::Bound::Included};
+use std::{
+    collections::{btree_set::Iter, BTreeMap, BTreeSet},
+    fmt::Debug,
+    mem,
+    ops::Bound::Included,
+};
 use tokio::sync::OwnedMutexGuard;
 
 /// Key tags to create the sub-keys of a KeyValueStoreView on top of the base key.
@@ -23,11 +28,27 @@ enum KeyTag {
 }
 
 /// A view that represents the KeyValueOperations
+///
+/// Comment on the data set:
+/// In order to work, the view needs to store the updates and deleteprefixes.
+/// The updates and deleteprefixes have to be coherent. This means:
+/// ---If an index is deleted by one in deleteprefixes then it should not be present
+///    in updates at al.
+/// ---deleted prefix in deleteprefix should not dominate anyone. That is if
+///    we have [0,2] then we should not have [0,2,3] since it would be dominated
+///    by the preceding.
+///
+/// With that we have:
+/// ---in order to test if an index is deleted by a prefix we compute the highest deleteprefix dp
+///    such that dp <= index.
+///    If dp is indeed a prefix then we conclude from that.index is deletd, otherwise not.
+///    The no domination is essential here.
 #[derive(Debug, Clone)]
 pub struct KeyValueStoreView<C> {
     context: C,
     was_cleared: bool,
     updates: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
+    deleteprefixes: BTreeSet<Vec<u8>>,
     stored_hash: Option<HashOutput>,
     hash: Option<HashOutput>,
 }
@@ -49,6 +70,7 @@ where
             context,
             was_cleared: false,
             updates: BTreeMap::new(),
+            deleteprefixes: BTreeSet::new(),
             stored_hash: hash,
             hash,
         })
@@ -57,6 +79,7 @@ where
     fn rollback(&mut self) {
         self.was_cleared = false;
         self.updates.clear();
+        self.deleteprefixes.clear();
         self.hash = self.stored_hash;
     }
 
@@ -71,6 +94,10 @@ where
                 }
             }
         } else {
+            for index in mem::take(&mut self.deleteprefixes) {
+                let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
+                batch.delete_key_prefix(key);
+            }
             for (index, update) in mem::take(&mut self.updates) {
                 let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
                 match update {
@@ -97,6 +124,7 @@ where
     fn clear(&mut self) {
         self.was_cleared = true;
         self.updates.clear();
+        self.deleteprefixes.clear();
         self.hash = None;
     }
 }
@@ -111,8 +139,32 @@ where
             context,
             was_cleared: false,
             updates: BTreeMap::new(),
+            deleteprefixes: BTreeSet::new(),
             stored_hash: None,
             hash: None,
+        }
+    }
+
+    fn is_index_deleted(deleteprefixes: &mut Iter<Vec<u8>>, index: &[u8]) -> bool {
+        loop {
+            match deleteprefixes.peekable().peek() {
+                None => break,
+                Some(val) => {
+                    if val.to_vec() > index.to_vec() {
+                        break;
+                    }
+                }
+            }
+            deleteprefixes.next();
+        }
+        match deleteprefixes.peekable().peek() {
+            None => false,
+            Some(key_prefix) => {
+                if key_prefix.len() > index.len() {
+                    return false;
+                }
+                index[0..key_prefix.len()].to_vec() == key_prefix.to_vec()
+            }
         }
     }
 
@@ -123,6 +175,7 @@ where
         let key_prefix = self.context.base_tag(KeyTag::Index as u8);
         let mut updates = self.updates.iter();
         let mut update = updates.next();
+        let mut deleteprefixes = self.deleteprefixes.iter();
         if !self.was_cleared {
             for index in self
                 .context
@@ -141,7 +194,9 @@ where
                             }
                         }
                         _ => {
-                            f(index)?;
+                            if !Self::is_index_deleted(&mut deleteprefixes, &index) {
+                                f(index)?;
+                            }
                             break;
                         }
                     }
@@ -165,6 +220,7 @@ where
         let key_prefix = self.context.base_tag(KeyTag::Index as u8);
         let mut updates = self.updates.iter();
         let mut update = updates.next();
+        let mut deleteprefixes = self.deleteprefixes.iter();
         if !self.was_cleared {
             for (index, index_val) in self
                 .context
@@ -183,7 +239,9 @@ where
                             }
                         }
                         _ => {
-                            f(index, index_val)?;
+                            if !Self::is_index_deleted(&mut deleteprefixes, &index) {
+                                f(index, index_val)?;
+                            }
                             break;
                         }
                     }
@@ -237,6 +295,30 @@ where
             self.updates.insert(index, None);
         }
     }
+
+    /// Delete a key_refix
+    pub fn delete_prefix(&mut self, key_prefix: Vec<u8>) {
+        self.hash = None;
+        let key_list: Vec<Vec<u8>> = self
+            .updates
+            .range(get_interval(key_prefix.clone()))
+            .map(|x| x.0.to_vec())
+            .collect();
+        for key in key_list {
+            self.updates.remove(&key);
+        }
+        if !self.was_cleared {
+            let key_prefix_list: Vec<Vec<u8>> = self
+                .deleteprefixes
+                .range(get_interval(key_prefix.clone()))
+                .map(|x| x.to_vec())
+                .collect();
+            for key in key_prefix_list {
+                self.deleteprefixes.remove(&key);
+            }
+            self.deleteprefixes.insert(key_prefix);
+        }
+    }
 }
 
 #[async_trait]
@@ -273,6 +355,7 @@ where
             .updates
             .range((Included(key_prefix.to_vec()), key_prefix_upper));
         let mut update = updates.next();
+        let mut deleteprefixes = self.deleteprefixes.iter();
         if !self.was_cleared {
             for stripped_key in self
                 .context
@@ -293,7 +376,11 @@ where
                             }
                         }
                         _ => {
-                            keys.push(stripped_key.to_vec());
+                            let mut key = key_prefix.to_vec();
+                            key.extend_from_slice(&stripped_key);
+                            if !Self::is_index_deleted(&mut deleteprefixes, &key) {
+                                keys.push(stripped_key.to_vec());
+                            }
                             break;
                         }
                     }
@@ -322,6 +409,7 @@ where
             .updates
             .range((Included(key_prefix.to_vec()), key_prefix_upper));
         let mut update = updates.next();
+        let mut deleteprefixes = self.deleteprefixes.iter();
         if !self.was_cleared {
             for (stripped_key, value) in self
                 .context
@@ -343,7 +431,11 @@ where
                             }
                         }
                         _ => {
-                            key_values.push((stripped_key.to_vec(), value.clone()));
+                            let mut key = key_prefix.to_vec();
+                            key.extend_from_slice(&stripped_key);
+                            if !Self::is_index_deleted(&mut deleteprefixes, &key) {
+                                key_values.push((stripped_key.to_vec(), value.clone()));
+                            }
                             break;
                         }
                     }
@@ -360,27 +452,25 @@ where
         Ok(Self::KeyValueIterator::new(key_values))
     }
 
-    async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
-        let mut batch_new = Batch::default();
+    async fn write_batch(&mut self, batch: Batch) -> Result<(), ViewError> {
+        self.hash = None;
         for op in batch.operations {
             match op {
                 WriteOperation::Delete { key } => {
-                    let key = self.context.base_tag_index(KeyTag::Index as u8, &key);
-                    batch_new.delete_key(key);
+                    if self.was_cleared {
+                        self.updates.remove(&key);
+                    } else {
+                        self.updates.insert(key, None);
+                    }
                 }
                 WriteOperation::Put { key, value } => {
-                    let key = self.context.base_tag_index(KeyTag::Index as u8, &key);
-                    batch_new.put_key_value_bytes(key, value);
+                    self.updates.insert(key, Some(value));
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
-                    let key_prefix = self
-                        .context
-                        .base_tag_index(KeyTag::Index as u8, &key_prefix);
-                    batch_new.delete_key_prefix(key_prefix);
+                    self.delete_prefix(key_prefix);
                 }
             }
         }
-        self.context.write_batch(batch_new).await?;
         Ok(())
     }
 }
@@ -417,15 +507,75 @@ where
     }
 }
 
+#[cfg(any(test, feature = "test"))]
+#[derive(Debug, Clone)]
+pub struct IntegratedKeyValueStoreView<C> {
+    kvsv: KeyValueStoreView<C>,
+}
+
+#[cfg(any(test, feature = "test"))]
+#[async_trait]
+impl<C> KeyValueOperations for IntegratedKeyValueStoreView<C>
+where
+    C: Context + Sync + Send + Clone,
+    ViewError: From<C::Error>,
+{
+    type Error = ViewError;
+    type KeyIterator = SimpleTypeIterator<Vec<u8>, ViewError>;
+    type KeyValueIterator = SimpleTypeIterator<(Vec<u8>, Vec<u8>), ViewError>;
+
+    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
+        self.kvsv.read_key_bytes(key).await
+    }
+
+    async fn find_stripped_keys_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::KeyIterator, ViewError> {
+        self.kvsv.find_stripped_keys_by_prefix(key_prefix).await
+    }
+
+    async fn find_stripped_key_values_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::KeyValueIterator, ViewError> {
+        self.kvsv
+            .find_stripped_key_values_by_prefix(key_prefix)
+            .await
+    }
+
+    async fn write_batch(&mut self, batch: Batch) -> Result<(), ViewError> {
+        self.kvsv.write_batch(batch).await?;
+        let mut batch = Batch::default();
+        self.kvsv.flush(&mut batch)?;
+        let mut context = self.kvsv.context().clone();
+        context.write_batch(batch).await?;
+        Ok(())
+    }
+}
+
+#[cfg(any(test, feature = "test"))]
+impl<C> IntegratedKeyValueStoreView<C>
+where
+    C: Context + Sync + Send + Clone,
+    ViewError: From<C::Error>,
+{
+    pub fn new(context: C) -> Self {
+        let kvsv = KeyValueStoreView::new(context);
+        Self { kvsv }
+    }
+}
+
 /// A context that stores all values in memory.
 #[cfg(any(test, feature = "test"))]
-pub type KeyValueStoreMemoryContext<E> = ContextFromDb<E, KeyValueStoreView<MemoryContext<()>>>;
+pub type KeyValueStoreMemoryContext<E> =
+    ContextFromDb<E, IntegratedKeyValueStoreView<MemoryContext<()>>>;
 
 #[cfg(any(test, feature = "test"))]
 impl<E> KeyValueStoreMemoryContext<E> {
     pub fn new(guard: OwnedMutexGuard<MemoryStoreMap>, base_key: Vec<u8>, extra: E) -> Self {
         let context = MemoryContext::new(guard, ());
-        let key_value_store_view = KeyValueStoreView::new(context);
+        let key_value_store_view = IntegratedKeyValueStoreView::new(context);
         Self {
             db: key_value_store_view,
             base_key,

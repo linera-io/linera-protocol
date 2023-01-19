@@ -18,7 +18,7 @@ use tokio::sync::{Mutex, RwLock};
 
 #[cfg(test)]
 async fn test_ordering_keys_key_value_vec<OP: KeyValueOperations + Sync>(
-    key_value_operation: OP,
+    mut key_value_operation: OP,
     key_value_vec: Vec<(Vec<u8>, Vec<u8>)>,
 ) {
     // We need a nontrivial key_prefix because dynamo requires a non-trivial prefix

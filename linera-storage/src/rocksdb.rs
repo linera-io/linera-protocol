@@ -88,7 +88,8 @@ impl Store for RocksdbStoreClient {
         let key = bcs::to_bytes(&BaseKey::Certificate(certificate.hash))?;
         let mut batch = Batch::default();
         batch.put_key_value(key.to_vec(), &certificate)?;
-        self.0.db.write_batch(batch).await?;
+        let mut db = self.0.db.clone();
+        db.write_batch(batch).await?;
         Ok(())
     }
 }
