@@ -104,7 +104,7 @@ impl Contract for FungibleToken {
 }
 
 impl FungibleToken {
-    /// Check if a signed transfer can be executed.
+    /// Checks if a signed transfer can be executed.
     ///
     /// If the transfer can be executed, return the source [`AccountOwner`], the [`Transfer`] to be
     /// executed and the [`Nonce`] used to prevent the transfer from being replayed.
@@ -130,7 +130,7 @@ impl FungibleToken {
         Ok((source, payload.transfer, payload.nonce))
     }
 
-    /// Credit an account or forward it into a session or another micro-chain.
+    /// Credits an account or forward it into a session or another micro-chain.
     fn finish_application_transfer(
         &mut self,
         application_transfer: ApplicationTransfer,
@@ -149,7 +149,7 @@ impl FungibleToken {
         result
     }
 
-    /// Credit an account or forward it to another micro-chain.
+    /// Credits an account or forward it to another micro-chain.
     fn finish_transfer(&mut self, transfer: Transfer) -> ExecutionResult {
         if transfer.destination_chain == Self::current_chain_id() {
             self.credit(transfer.destination_account, transfer.amount);
@@ -160,7 +160,7 @@ impl FungibleToken {
         }
     }
 
-    /// Create a new session with the specified `amount` of tokens.
+    /// Creates a new session with the specified `amount` of tokens.
     fn new_session(amount: u128) -> Session {
         Session {
             kind: 0,
@@ -221,7 +221,7 @@ pub struct Transfer {
 }
 
 impl SignedTransfer {
-    /// Check that the [`SignedTransfer`] is correctly signed.
+    /// Checks that the [`SignedTransfer`] is correctly signed.
     ///
     /// If correctly signed, returns the source of the transfer and the [`SignedTransferPayload`].
     pub fn check_signature(self) -> Result<(AccountOwner, SignedTransferPayload), Error> {
