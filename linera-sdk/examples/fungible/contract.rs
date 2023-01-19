@@ -62,16 +62,16 @@ impl Contract for FungibleToken {
         argument: &[u8],
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, Self::Error> {
-        let transfer =
-            ApplicationTransfer::from_bcs_bytes(argument).map_err(Error::InvalidArgument)?;
-        let caller = context
-            .authenticated_caller_id
-            .ok_or(Error::MissingSourceApplication)?;
-        let source = AccountOwner::Application(caller);
+        let request = ApplicationCall::from_bcs_bytes(argument).map_err(Error::InvalidArgument)?;
+        let mut result = ApplicationCallResult::default();
 
-        self.debit(source, transfer.amount())?;
+        match request {
+            ApplicationCall::Transfer(transfer) => {
+                result = self.handle_application_transfer(context, transfer)?;
+            }
+        }
 
-        Ok(self.finish_application_transfer(transfer))
+        Ok(result)
     }
 
     async fn call_session(
@@ -104,6 +104,22 @@ impl Contract for FungibleToken {
 }
 
 impl FungibleToken {
+    /// Handles a transfer requested by an application.
+    fn handle_application_transfer(
+        &mut self,
+        context: &CalleeContext,
+        transfer: ApplicationTransfer,
+    ) -> Result<ApplicationCallResult, Error> {
+        let caller = context
+            .authenticated_caller_id
+            .ok_or(Error::MissingSourceApplication)?;
+        let source = AccountOwner::Application(caller);
+
+        self.debit(source, transfer.amount())?;
+
+        Ok(self.finish_application_transfer(transfer))
+    }
+
     /// Checks if a signed transfer can be executed.
     ///
     /// If the transfer can be executed, return the source [`AccountOwner`], the [`Transfer`] to be
@@ -191,6 +207,13 @@ pub struct SignedTransferPayload {
     source_chain: ChainId,
     nonce: Nonce,
     transfer: Transfer,
+}
+
+/// A cross-application call.
+#[derive(Deserialize, Serialize)]
+pub enum ApplicationCall {
+    /// A transfer from the application's account.
+    Transfer(ApplicationTransfer),
 }
 
 /// A cross-application transfer request.
