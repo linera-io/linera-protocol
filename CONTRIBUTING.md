@@ -78,6 +78,39 @@ outdated. In the most case (but not always sadly), this can be fixed by running
 
 See https://github.com/zefchain/serde-reflection for more context.
 
+## WebAssembly support
+
+WebAssembly support is currently not compiled in by default. It must be enabled using either the
+`wasmer` or the `wasmtime` features.
+
+Some tests require the Counter application example from `linera-sdk/examples/counter` to be
+compiled, and that can be done with:
+
+```
+cargo build -p linera-sdk --release --target wasm32-unknown-unknown --examples
+```
+
+Testing the WASM application examples requires configuring a custom test runner included with
+`linera-sdk`. First it has to be built:
+
+```
+cargo build -p linera-sdk --release --bin test-runner
+```
+
+Then Cargo has to be configured to use it, by adding the following lines to one of its
+[configuration files](https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure):
+
+```
+[target.wasm32-unknown-unknown]
+runner = "/path/to/repository/target/release/test-runner"
+```
+
+After that, the WASM tests can be executed with:
+
+```
+cargo test -p linera-sdk --target wasm32-unknown-unknown --examples
+```
+
 ## Adding dependencies to third-party crates
 
 Given the nature of the project, every dependency will be eventually tracked and audited.
