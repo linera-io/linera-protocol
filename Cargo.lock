@@ -1754,6 +1754,7 @@ name = "linera-base"
 version = "0.1.0"
 dependencies = [
  "bcs",
+ "chrono",
  "ed25519",
  "ed25519-dalek",
  "generic-array",

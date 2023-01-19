@@ -3,8 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::crypto::{BcsSignable, HashValue, PublicKey};
+use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
-use std::{str::FromStr, time::SystemTime};
+use std::{fmt, str::FromStr, time::SystemTime};
 use thiserror::Error;
 
 use crate::crypto::CryptoError;
@@ -50,6 +51,17 @@ impl Timestamp {
 impl From<u64> for Timestamp {
     fn from(t: u64) -> Timestamp {
         Timestamp(t)
+    }
+}
+
+impl fmt::Display for Timestamp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Ok(secs) = self.0.try_into() {
+            if let Some(date_time) = NaiveDateTime::from_timestamp_opt(secs, 0) {
+                return date_time.fmt(f);
+            }
+        }
+        self.0.fmt(f)
     }
 }
 

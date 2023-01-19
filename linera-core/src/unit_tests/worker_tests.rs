@@ -112,6 +112,7 @@ fn make_block(
     operations: Vec<impl IntoApplicationIdAndOperation>,
     incoming_messages: Vec<Message>,
     previous_confirmed_block: Option<&Certificate>,
+    timestamp: Timestamp,
 ) -> Block {
     let previous_block_hash = previous_confirmed_block.as_ref().map(|cert| cert.hash);
     let height = match &previous_confirmed_block {
@@ -134,6 +135,7 @@ fn make_block(
             .collect(),
         previous_block_hash,
         height,
+        timestamp,
     }
 }
 
@@ -155,6 +157,7 @@ fn make_transfer_block_proposal(
         }],
         incoming_messages,
         previous_confirmed_block,
+        Timestamp::from(0),
     );
     BlockProposal::new(
         BlockAndRound {
@@ -227,7 +230,7 @@ async fn make_transfer_certificate_for_epoch<S>(
         committees: [(epoch, committee.clone())].into_iter().collect(),
         ownership: ChainOwnership::single(key_pair.public().into()),
         balance,
-        latest_clock_tick: Timestamp::from(0),
+        timestamp: Timestamp::from(0),
         registry: ApplicationRegistry::default(),
     };
     let block = make_block(
@@ -240,6 +243,7 @@ async fn make_transfer_certificate_for_epoch<S>(
         }],
         incoming_messages,
         previous_confirmed_block,
+        Timestamp::from(0),
     );
     let effects = match recipient {
         Address::Account(id) => vec![(
@@ -461,9 +465,10 @@ where
         make_block(
             epoch,
             ChainId::root(1),
-            vec![SystemOperation::Tick(Timestamp::from(seconds))],
+            Vec::<SystemOperation>::new(),
             vec![],
             parent,
+            Timestamp::from(seconds),
         )
     };
 
@@ -496,7 +501,7 @@ where
             committees: [(epoch, committee.clone())].into_iter().collect(),
             ownership: ChainOwnership::single(key_pair.public().into()),
             balance,
-            latest_clock_tick: Timestamp::from(1000),
+            timestamp: Timestamp::from(1000),
             registry: ApplicationRegistry::default(),
         };
         let state_hash = make_state_hash(system_state).await;
@@ -781,6 +786,7 @@ where
                 ],
                 previous_block_hash: None,
                 height: BlockHeight::from(0),
+                timestamp: Timestamp::from(0),
             },
             effects: vec![
                 (
@@ -808,7 +814,7 @@ where
                 committees: [(epoch, committee.clone())].into_iter().collect(),
                 ownership: ChainOwnership::single(sender_key_pair.public().into()),
                 balance: Balance::from(3),
-                latest_clock_tick: Timestamp::from(0),
+                timestamp: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
             })
             .await,
@@ -833,6 +839,7 @@ where
                 )],
                 previous_block_hash: Some(certificate0.hash),
                 height: BlockHeight::from(1),
+                timestamp: Timestamp::from(0),
             },
             effects: vec![(
                 ApplicationId::System,
@@ -850,7 +857,7 @@ where
                 committees: [(epoch, committee.clone())].into_iter().collect(),
                 ownership: ChainOwnership::single(sender_key_pair.public().into()),
                 balance: Balance::from(0),
-                latest_clock_tick: Timestamp::from(0),
+                timestamp: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
             })
             .await,
@@ -919,6 +926,7 @@ where
                         certificate_hash: certificate0.hash,
                         height: BlockHeight::from(0),
                         index: 0,
+                        timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
                             recipient: ChainId::root(2),
                             amount: Amount::from(1),
@@ -932,6 +940,7 @@ where
                         certificate_hash: certificate0.hash,
                         height: BlockHeight::from(0),
                         index: 1,
+                        timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
                             recipient: ChainId::root(2),
                             amount: Amount::from(2),
@@ -945,6 +954,7 @@ where
                         certificate_hash: certificate1.hash,
                         height: BlockHeight::from(1),
                         index: 0,
+                        timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
                             recipient: ChainId::root(2),
                             amount: Amount::from(2), // wrong
@@ -975,6 +985,7 @@ where
                         certificate_hash: certificate0.hash,
                         height: BlockHeight::from(0),
                         index: 1,
+                        timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
                             recipient: ChainId::root(2),
                             amount: Amount::from(2),
@@ -988,6 +999,7 @@ where
                         certificate_hash: certificate0.hash,
                         height: BlockHeight::from(0),
                         index: 0,
+                        timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
                             recipient: ChainId::root(2),
                             amount: Amount::from(1),
@@ -1001,6 +1013,7 @@ where
                         certificate_hash: certificate0.hash,
                         height: BlockHeight::from(1),
                         index: 0,
+                        timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
                             recipient: ChainId::root(2),
                             amount: Amount::from(3),
@@ -1031,6 +1044,7 @@ where
                         certificate_hash: certificate1.hash,
                         height: BlockHeight::from(1),
                         index: 0,
+                        timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
                             recipient: ChainId::root(2),
                             amount: Amount::from(3),
@@ -1044,6 +1058,7 @@ where
                         certificate_hash: certificate0.hash,
                         height: BlockHeight::from(0),
                         index: 0,
+                        timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
                             recipient: ChainId::root(2),
                             amount: Amount::from(1),
@@ -1057,6 +1072,7 @@ where
                         certificate_hash: certificate0.hash,
                         height: BlockHeight::from(0),
                         index: 1,
+                        timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
                             recipient: ChainId::root(2),
                             amount: Amount::from(2),
@@ -1086,6 +1102,7 @@ where
                     certificate_hash: certificate0.hash,
                     height: BlockHeight::from(0),
                     index: 0,
+                    timestamp: Timestamp::from(0),
                     effect: Effect::System(SystemEffect::Credit {
                         recipient: ChainId::root(2),
                         amount: Amount::from(1),
@@ -1120,7 +1137,7 @@ where
                     committees: [(epoch, committee.clone())].into_iter().collect(),
                     ownership: ChainOwnership::single(recipient_key_pair.public().into()),
                     balance: Balance::from(0),
-                    latest_clock_tick: Timestamp::from(0),
+                    timestamp: Timestamp::from(0),
                     registry: ApplicationRegistry::default(),
                 })
                 .await,
@@ -1143,6 +1160,7 @@ where
                     certificate_hash: certificate1.hash,
                     height: BlockHeight::from(1),
                     index: 0,
+                    timestamp: Timestamp::from(0),
                     effect: Effect::System(SystemEffect::Credit {
                         recipient: ChainId::root(2),
                         amount: Amount::from(3),
@@ -1546,6 +1564,7 @@ where
                 certificate_hash: HashValue::new(&Dummy),
                 height: BlockHeight::from(0),
                 index: 0,
+                timestamp: Timestamp::from(0),
                 effect: Effect::System(SystemEffect::Credit {
                     recipient: ChainId::root(1),
                     amount: Amount::from(995),
@@ -1604,8 +1623,30 @@ where
         0
     );
     assert!(matches!(
-        chain.communication_states.load_entry(ApplicationId::System).await.unwrap().inboxes.load_entry(Origin::chain(ChainId::root(3))).await.unwrap().removed_events.front().await.unwrap().unwrap(),
-        Event { certificate_hash, height, index: 0, effect: Effect::System(SystemEffect::Credit { amount, .. })} if certificate_hash == HashValue::new(&Dummy) && height == BlockHeight::from(0) && amount == Amount::from(995),
+        chain
+            .communication_states
+            .load_entry(ApplicationId::System)
+            .await
+            .unwrap()
+            .inboxes
+            .load_entry(Origin::chain(ChainId::root(3)))
+            .await
+            .unwrap()
+            .removed_events
+            .front()
+            .await
+            .unwrap()
+            .unwrap(),
+        Event {
+            certificate_hash,
+            height,
+            index: 0,
+            timestamp,
+            effect: Effect::System(SystemEffect::Credit { amount, .. }),
+        } if certificate_hash == HashValue::new(&Dummy)
+            && height == BlockHeight::from(0)
+            && timestamp == Timestamp::from(0)
+            && amount == Amount::from(995),
     ));
     assert_eq!(chain.confirmed_log.count(), 1);
     assert_eq!(Some(certificate.hash), chain.tip_state.get().block_hash);
@@ -1783,8 +1824,30 @@ where
             .unwrap()
     );
     assert!(matches!(
-        chain.communication_states.load_entry(ApplicationId::System).await.unwrap().inboxes.load_entry(Origin::chain(ChainId::root(1))).await.unwrap().added_events.front().await.unwrap().unwrap(),
-        Event { certificate_hash, height, index: 0, effect: Effect::System(SystemEffect::Credit { amount, .. })} if certificate_hash == certificate.hash && height == BlockHeight::from(0) && amount == Amount::from(1),
+        chain
+            .communication_states
+            .load_entry(ApplicationId::System)
+            .await
+            .unwrap()
+            .inboxes
+            .load_entry(Origin::chain(ChainId::root(1)))
+            .await
+            .unwrap()
+            .added_events
+            .front()
+            .await
+            .unwrap()
+            .unwrap(),
+        Event {
+            certificate_hash,
+            height,
+            index: 0,
+            timestamp,
+            effect: Effect::System(SystemEffect::Credit { amount, .. })
+        } if certificate_hash == certificate.hash
+            && height == BlockHeight::from(0)
+            && timestamp == Timestamp::from(0)
+            && amount == Amount::from(1),
     ));
     assert_eq!(
         BlockHeight::from(1),
@@ -1882,8 +1945,30 @@ where
             .unwrap()
     );
     assert!(matches!(
-        chain.communication_states.load_entry(ApplicationId::System).await.unwrap().inboxes.load_entry(Origin::chain(ChainId::root(1))).await.unwrap().added_events.front().await.unwrap().unwrap(),
-        Event { certificate_hash, height, index: 0, effect: Effect::System(SystemEffect::Credit { amount, .. })} if certificate_hash == certificate.hash && height == BlockHeight::from(0) && amount == Amount::from(10),
+        chain
+            .communication_states
+            .load_entry(ApplicationId::System)
+            .await
+            .unwrap()
+            .inboxes
+            .load_entry(Origin::chain(ChainId::root(1)))
+            .await
+            .unwrap()
+            .added_events
+            .front()
+            .await
+            .unwrap()
+            .unwrap(),
+        Event {
+            certificate_hash,
+            height,
+            index: 0,
+            timestamp,
+            effect: Effect::System(SystemEffect::Credit { amount, .. })
+        } if certificate_hash == certificate.hash
+            && height == BlockHeight::from(0)
+            && timestamp == Timestamp::from(0)
+            && amount == Amount::from(10),
     ));
     assert_eq!(chain.confirmed_log.count(), 0);
     assert_eq!(None, chain.tip_state.get().block_hash);
@@ -2164,6 +2249,7 @@ where
                 certificate_hash: certificate.hash,
                 height: BlockHeight::from(0),
                 index: 0,
+                timestamp: Timestamp::from(0),
                 effect: Effect::System(SystemEffect::Credit {
                     recipient: ChainId::root(2),
                     amount: Amount::from(5),
@@ -2370,6 +2456,7 @@ where
                 )],
                 previous_block_hash: None,
                 height: BlockHeight::from(0),
+                timestamp: Timestamp::from(0),
             },
             effects: vec![
                 (
@@ -2381,7 +2468,6 @@ where
                         epoch: Epoch::from(0),
                         committees: committees.clone(),
                         admin_id,
-                        latest_clock_tick: Timestamp::from(0),
                     }),
                 ),
                 (
@@ -2401,7 +2487,7 @@ where
                 committees: committees.clone(),
                 ownership: ChainOwnership::single(key_pair.public().into()),
                 balance: Balance::from(2),
-                latest_clock_tick: Timestamp::from(0),
+                timestamp: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
             })
             .await,
@@ -2478,6 +2564,7 @@ where
                 ],
                 previous_block_hash: Some(certificate0.hash),
                 height: BlockHeight::from(1),
+                timestamp: Timestamp::from(0),
             },
             effects: vec![
                 (
@@ -2507,7 +2594,7 @@ where
                 committees: committees2.clone(),
                 ownership: ChainOwnership::single(key_pair.public().into()),
                 balance: Balance::from(0),
-                latest_clock_tick: Timestamp::from(0),
+                timestamp: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
             })
             .await,
@@ -2533,6 +2620,7 @@ where
                         certificate_hash: certificate0.hash,
                         height: BlockHeight::from(0),
                         index: 1,
+                        timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Subscribe {
                             id: user_id,
                             channel_id: admin_channel_id.clone(),
@@ -2542,6 +2630,7 @@ where
                 operations: Vec::new(),
                 previous_block_hash: Some(certificate1.hash),
                 height: BlockHeight::from(2),
+                timestamp: Timestamp::from(0),
             },
             effects: vec![(
                 ApplicationId::System,
@@ -2557,7 +2646,7 @@ where
                 committees: committees2.clone(),
                 ownership: ChainOwnership::single(key_pair.public().into()),
                 balance: Balance::from(0),
-                latest_clock_tick: Timestamp::from(0),
+                timestamp: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
             })
             .await,
@@ -2692,6 +2781,7 @@ where
                             certificate_hash: certificate1.hash,
                             height: BlockHeight::from(1),
                             index: 0,
+                            timestamp: Timestamp::from(0),
                             effect: Effect::System(SystemEffect::SetCommittees {
                                 admin_id,
                                 epoch: Epoch::from(1),
@@ -2706,6 +2796,7 @@ where
                             certificate_hash: certificate1.hash,
                             height: BlockHeight::from(1),
                             index: 1,
+                            timestamp: Timestamp::from(0),
                             effect: Effect::System(SystemEffect::Credit {
                                 recipient: user_id,
                                 amount: Amount::from(2),
@@ -2719,6 +2810,7 @@ where
                             certificate_hash: certificate2.hash,
                             height: BlockHeight::from(2),
                             index: 0,
+                            timestamp: Timestamp::from(0),
                             effect: Effect::System(SystemEffect::Notify { id: user_id }),
                         },
                     },
@@ -2726,6 +2818,7 @@ where
                 operations: Vec::new(),
                 previous_block_hash: None,
                 height: BlockHeight::from(0),
+                timestamp: Timestamp::from(0),
             },
             effects: Vec::new(),
             state_hash: make_state_hash(SystemExecutionState {
@@ -2742,7 +2835,7 @@ where
                 committees: committees2.clone(),
                 ownership: ChainOwnership::single(key_pair.public().into()),
                 balance: Balance::from(2),
-                latest_clock_tick: Timestamp::from(0),
+                timestamp: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
             })
             .await,
@@ -2880,6 +2973,7 @@ where
                 )],
                 previous_block_hash: None,
                 height: BlockHeight::from(0),
+                timestamp: Timestamp::from(0),
             },
             effects: vec![(
                 ApplicationId::System,
@@ -2897,7 +2991,7 @@ where
                 committees: committees.clone(),
                 ownership: ChainOwnership::single(key_pair1.public().into()),
                 balance: Balance::from(2),
-                latest_clock_tick: Timestamp::from(0),
+                timestamp: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
             })
             .await,
@@ -2926,6 +3020,7 @@ where
                 )],
                 previous_block_hash: None,
                 height: BlockHeight::from(0),
+                timestamp: Timestamp::from(0),
             },
             effects: vec![(
                 ApplicationId::System,
@@ -2944,7 +3039,7 @@ where
                 committees: committees2.clone(),
                 ownership: ChainOwnership::single(key_pair0.public().into()),
                 balance: Balance::from(0),
-                latest_clock_tick: Timestamp::from(0),
+                timestamp: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
             })
             .await,
@@ -3083,6 +3178,7 @@ where
                 )],
                 previous_block_hash: None,
                 height: BlockHeight::from(0),
+                timestamp: Timestamp::from(0),
             },
             effects: vec![(
                 ApplicationId::System,
@@ -3100,7 +3196,7 @@ where
                 committees: committees.clone(),
                 ownership: ChainOwnership::single(key_pair1.public().into()),
                 balance: Balance::from(2),
-                latest_clock_tick: Timestamp::from(0),
+                timestamp: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
             })
             .await,
@@ -3139,6 +3235,7 @@ where
                 ],
                 previous_block_hash: None,
                 height: BlockHeight::from(0),
+                timestamp: Timestamp::from(0),
             },
             effects: vec![
                 (
@@ -3168,7 +3265,7 @@ where
                 committees: committees3.clone(),
                 ownership: ChainOwnership::single(key_pair0.public().into()),
                 balance: Balance::from(0),
-                latest_clock_tick: Timestamp::from(0),
+                timestamp: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
             })
             .await,
@@ -3230,6 +3327,7 @@ where
                         certificate_hash: certificate0.hash,
                         height: BlockHeight::from(0),
                         index: 0,
+                        timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
                             recipient: admin_id,
                             amount: Amount::from(1),
@@ -3239,6 +3337,7 @@ where
                 operations: Vec::new(),
                 previous_block_hash: Some(certificate1.hash),
                 height: BlockHeight::from(1),
+                timestamp: Timestamp::from(0),
             },
             effects: Vec::new(),
             state_hash: make_state_hash(SystemExecutionState {
@@ -3249,7 +3348,7 @@ where
                 committees: committees3.clone(),
                 ownership: ChainOwnership::single(key_pair0.public().into()),
                 balance: Balance::from(1),
-                latest_clock_tick: Timestamp::from(0),
+                timestamp: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
             })
             .await,

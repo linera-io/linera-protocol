@@ -100,7 +100,7 @@ pub trait Store: Sized {
         description: ChainDescription,
         owner: Owner,
         balance: Balance,
-        latest_clock_tick: Timestamp,
+        timestamp: Timestamp,
     ) -> Result<(), ChainError>
     where
         ChainRuntimeContext<Self>: ExecutionRuntimeContext,
@@ -119,7 +119,7 @@ pub trait Store: Sized {
             .insert(Epoch::from(0), committee);
         system_state.ownership.set(ChainOwnership::single(owner));
         system_state.balance.set(balance);
-        system_state.latest_clock_tick.set(latest_clock_tick);
+        system_state.timestamp.set(timestamp);
         let state_hash = chain.execution_state.hash_value().await?;
         chain.execution_state_hash.set(Some(state_hash));
         chain

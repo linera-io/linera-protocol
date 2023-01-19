@@ -95,10 +95,11 @@ where
         vec![publish_operation],
         vec![],
         None,
+        Timestamp::from(1),
     );
     let publish_block_height = publish_block.height;
     let publish_channel = Destination::Subscribers(SystemChannel::PublishedBytecodes.name());
-    let publisher_system_state = SystemExecutionState {
+    let mut publisher_system_state = SystemExecutionState {
         epoch: Some(Epoch::from(0)),
         description: Some(publisher_chain),
         admin_id: Some(admin_id.into()),
@@ -106,10 +107,10 @@ where
         committees: [(Epoch::from(0), committee.clone())].into_iter().collect(),
         ownership: ChainOwnership::single(publisher_key_pair.public().into()),
         balance: Balance::from(0),
-        latest_clock_tick: Timestamp::from(0),
+        timestamp: Timestamp::from(1),
         registry: ApplicationRegistry::default(),
     };
-    let publisher_state_hash = make_state_hash(publisher_system_state).await;
+    let publisher_state_hash = make_state_hash(publisher_system_state.clone()).await;
     let publish_block_proposal = Value::ConfirmedBlock {
         block: publish_block,
         effects: vec![(
@@ -129,6 +130,7 @@ where
     assert_eq!(ChainId::from(publisher_chain), info.chain_id);
     assert_eq!(Balance::from(0), info.system_balance);
     assert_eq!(BlockHeight::from(1), info.next_block_height);
+    assert_eq!(Timestamp::from(1), info.timestamp);
     assert_eq!(Some(publish_certificate.hash), info.block_hash);
     assert!(info.manager.pending().is_none());
 
@@ -151,6 +153,7 @@ where
         vec![subscribe_operation],
         vec![],
         None,
+        Timestamp::from(2),
     );
     let subscribe_block_height = subscribe_block.height;
     let mut creator_system_state = SystemExecutionState {
@@ -161,7 +164,7 @@ where
         committees: [(Epoch::from(0), committee.clone())].into_iter().collect(),
         ownership: ChainOwnership::single(creator_key_pair.public().into()),
         balance: Balance::from(0),
-        latest_clock_tick: Timestamp::from(0),
+        timestamp: Timestamp::from(2),
         registry: ApplicationRegistry::default(),
     };
     let mut creator_state =
@@ -185,6 +188,7 @@ where
     assert_eq!(ChainId::from(creator_chain), info.chain_id);
     assert_eq!(Balance::from(0), info.system_balance);
     assert_eq!(BlockHeight::from(1), info.next_block_height);
+    assert_eq!(Timestamp::from(2), info.timestamp);
     assert_eq!(Some(subscribe_certificate.hash), info.block_hash);
     assert!(info.manager.pending().is_none());
 
@@ -196,6 +200,7 @@ where
             certificate_hash: subscribe_certificate.hash,
             height: subscribe_block_height,
             index: 0,
+            timestamp: Timestamp::from(2),
             effect: subscribe_effect.into(),
         },
     };
@@ -205,7 +210,10 @@ where
         Vec::<SystemOperation>::new(),
         vec![accept_message],
         Some(&publish_certificate),
+        Timestamp::from(3),
     );
+    publisher_system_state.timestamp = Timestamp::from(3);
+    let publisher_state_hash = make_state_hash(publisher_system_state).await;
     let accept_block_proposal = Value::ConfirmedBlock {
         block: accept_block,
         effects: vec![(
@@ -227,6 +235,7 @@ where
     assert_eq!(ChainId::from(publisher_chain), info.chain_id);
     assert_eq!(Balance::from(0), info.system_balance);
     assert_eq!(BlockHeight::from(2), info.next_block_height);
+    assert_eq!(Timestamp::from(3), info.timestamp);
     assert_eq!(Some(accept_certificate.hash), info.block_hash);
     assert!(info.manager.pending().is_none());
 
@@ -274,10 +283,12 @@ where
                 certificate_hash: publish_certificate.hash,
                 height: publish_block_height,
                 index: 0,
+                timestamp: Timestamp::from(1),
                 effect: Effect::System(SystemEffect::BytecodePublished),
             },
         }],
         Some(&subscribe_certificate),
+        Timestamp::from(4),
     );
     creator_system_state
         .registry
@@ -287,6 +298,7 @@ where
         .registry
         .known_applications
         .insert(application_id, application_description);
+    creator_system_state.timestamp = Timestamp::from(4);
     let mut creator_state = ExecutionStateView::from_system_state(creator_system_state).await;
     creator_state
         .users
@@ -308,6 +320,7 @@ where
     assert_eq!(ChainId::root(2), info.chain_id);
     assert_eq!(Balance::from(0), info.system_balance);
     assert_eq!(BlockHeight::from(2), info.next_block_height);
+    assert_eq!(Timestamp::from(4), info.timestamp);
     assert_eq!(Some(create_certificate.hash), info.block_hash);
     assert!(info.manager.pending().is_none());
 
@@ -320,6 +333,7 @@ where
         vec![(application_id, user_operation)],
         vec![],
         Some(&create_certificate),
+        Timestamp::from(5),
     );
     let expected_value = initial_value + increment;
     let expected_state_bytes = bcs::to_bytes(&expected_value)?;
@@ -328,6 +342,7 @@ where
         .try_load_entry(application_id)
         .await?
         .set(expected_state_bytes);
+    creator_state.system.timestamp.set(Timestamp::from(5));
     let run_block_proposal = Value::ConfirmedBlock {
         block: run_block,
         effects: vec![],
@@ -344,6 +359,7 @@ where
     assert_eq!(Balance::from(0), info.system_balance);
     assert_eq!(BlockHeight::from(3), info.next_block_height);
     assert_eq!(Some(run_certificate.hash), info.block_hash);
+    assert_eq!(Timestamp::from(5), info.timestamp);
     assert!(info.manager.pending().is_none());
     Ok(())
 }

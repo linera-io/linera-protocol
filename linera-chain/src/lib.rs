@@ -11,7 +11,7 @@ pub use chain::ChainStateView;
 use data_types::{Event, Origin};
 use linera_base::{
     crypto::CryptoError,
-    data_types::{ArithmeticError, BlockHeight, ChainId, RoundNumber},
+    data_types::{ArithmeticError, BlockHeight, ChainId, RoundNumber, Timestamp},
 };
 use linera_execution::{ApplicationId, ExecutionError};
 use linera_views::views::ViewError;
@@ -64,6 +64,15 @@ pub enum ChainError {
         next_height: BlockHeight,
         next_index: usize,
     },
+    #[error(
+        "Incoming message in block proposed to {chain_id:?} has timestamp {message_timestamp:},
+        which is later than the block timestamp {block_timestamp:}."
+    )]
+    IncorrectEventTimestamp {
+        chain_id: ChainId,
+        message_timestamp: Timestamp,
+        block_timestamp: Timestamp,
+    },
     #[error("The signature was not created by a valid entity")]
     InvalidSigner,
     #[error(
@@ -77,6 +86,8 @@ pub enum ChainError {
     UnexpectedPreviousBlockHash,
     #[error("Sequence numbers above the maximal value are not usable for blocks")]
     InvalidBlockHeight,
+    #[error("Block timestamp must not be earlier than the parent block's.")]
+    InvalidBlockTimestamp,
     #[error("Cannot initiate a new block while the previous one is still pending confirmation")]
     PreviousBlockMustBeConfirmedFirst,
     #[error("Invalid block proposal")]

@@ -91,25 +91,18 @@ pub struct UserChain {
     pub chain_id: ChainId,
     pub key_pair: Option<KeyPair>,
     pub block_hash: Option<HashValue>,
+    pub timestamp: Timestamp,
     pub next_block_height: BlockHeight,
 }
 
 impl UserChain {
-    pub fn new(chain_id: ChainId) -> Self {
-        Self {
-            chain_id,
-            key_pair: None,
-            block_hash: None,
-            next_block_height: BlockHeight::from(0),
-        }
-    }
-
-    pub fn make_initial(description: ChainDescription) -> Self {
+    pub fn make_initial(description: ChainDescription, timestamp: Timestamp) -> Self {
         let key_pair = KeyPair::generate();
         Self {
             chain_id: description.into(),
             key_pair: Some(key_pair),
             block_hash: None,
+            timestamp,
             next_block_height: BlockHeight::from(0),
         }
     }
@@ -122,12 +115,6 @@ pub struct WalletState {
 impl WalletState {
     pub fn get(&self, chain_id: ChainId) -> Option<&UserChain> {
         self.chains.get(&chain_id)
-    }
-
-    pub fn get_or_insert(&mut self, chain_id: ChainId) -> &UserChain {
-        self.chains
-            .entry(chain_id)
-            .or_insert_with(|| UserChain::new(chain_id))
     }
 
     pub fn insert(&mut self, chain: UserChain) {
@@ -156,13 +143,16 @@ impl WalletState {
         S: Store + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
-        let chain = self
-            .chains
-            .entry(state.chain_id())
-            .or_insert_with(|| UserChain::new(state.chain_id()));
-        chain.key_pair = state.key_pair().await.map(|k| k.copy()).ok();
-        chain.block_hash = state.block_hash();
-        chain.next_block_height = state.next_block_height();
+        self.chains.insert(
+            state.chain_id(),
+            UserChain {
+                chain_id: state.chain_id(),
+                key_pair: state.key_pair().await.map(|k| k.copy()).ok(),
+                block_hash: state.block_hash(),
+                next_block_height: state.next_block_height(),
+                timestamp: state.timestamp(),
+            },
+        );
     }
 
     pub fn read_or_create(path: &Path) -> Result<Self, std::io::Error> {
@@ -216,7 +206,7 @@ impl GenesisConfig {
         S: Store + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
-        for (description, owner, balance, latest_clock_tick) in &self.chains {
+        for (description, owner, balance, timestamp) in &self.chains {
             store
                 .create_chain(
                     self.committee.clone().into_committee(),
@@ -224,7 +214,7 @@ impl GenesisConfig {
                     *description,
                     *owner,
                     *balance,
-                    *latest_clock_tick,
+                    *timestamp,
                 )
                 .await?;
         }

@@ -126,6 +126,7 @@ impl ClientContext {
             self.genesis_config.admin_id,
             self.max_pending_messages,
             chain.block_hash,
+            chain.timestamp,
             chain.next_block_height,
             self.cross_chain_delay,
             self.cross_chain_retries,
@@ -168,8 +169,9 @@ impl ClientContext {
                 )],
                 previous_block_hash: chain.block_hash,
                 height: chain.next_block_height,
+                timestamp: chain.timestamp.max(Timestamp::now()),
             };
-            debug!("Preparing block proposal: {:?}", block);
+            info!("Preparing block proposal: {:?}", block);
             let proposal = BlockProposal::new(
                 BlockAndRound {
                     block: block.clone(),
@@ -279,11 +281,17 @@ impl ClientContext {
     }
 
     /// Remember the new private key (if any) in the wallet.
-    fn update_wallet_for_new_chain(&mut self, chain_id: ChainId, key_pair: Option<KeyPair>) {
+    fn update_wallet_for_new_chain(
+        &mut self,
+        chain_id: ChainId,
+        key_pair: Option<KeyPair>,
+        timestamp: Timestamp,
+    ) {
         self.wallet_state.insert(UserChain {
             chain_id,
             key_pair: key_pair.as_ref().map(|kp| kp.copy()),
             block_hash: None,
+            timestamp,
             next_block_height: BlockHeight::from(0),
         });
     }
@@ -590,7 +598,8 @@ where
                 info!("Operation confirmed after {} us", time_total);
                 info!("{:?}", certificate);
                 context.update_wallet_from_client(&mut client_state).await;
-                context.update_wallet_for_new_chain(id, key_pair);
+                let timestamp = certificate.value.block().timestamp;
+                context.update_wallet_for_new_chain(id, key_pair, timestamp);
                 // Print the new chain id(s) on stdout for the scripting purposes.
                 println!("{}", id);
                 context.save_chains();
@@ -823,19 +832,19 @@ async fn main() {
                 .expect("Unable to read committee config file");
             let mut genesis_config =
                 GenesisConfig::new(committee_config, ChainId::root(admin_root));
-            let latest_clock_tick = start_timestamp
+            let timestamp = start_timestamp
                 .map(|st| Timestamp::from(st.timestamp() as u64))
                 .unwrap_or_default();
             for i in 0..num {
                 let description = ChainDescription::Root(i as usize);
                 // Create keys.
-                let chain = UserChain::make_initial(description);
+                let chain = UserChain::make_initial(description, timestamp);
                 // Public "genesis" state.
                 genesis_config.chains.push((
                     description,
                     Owner(chain.key_pair.as_ref().unwrap().public()),
                     initial_funding,
-                    latest_clock_tick,
+                    timestamp,
                 ));
                 // Private keys.
                 context.wallet_state.insert(chain);

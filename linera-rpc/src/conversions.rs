@@ -773,6 +773,7 @@ pub mod tests {
             incoming_messages: vec![],
             operations: vec![],
             height: Default::default(),
+            timestamp: Default::default(),
             previous_block_hash: None,
         }
     }
@@ -907,6 +908,7 @@ pub mod tests {
             manager: Default::default(),
             system_balance: Default::default(),
             block_hash: None,
+            timestamp: Default::default(),
             next_block_height: Default::default(),
             state_hash: None,
             requested_committees: None,
