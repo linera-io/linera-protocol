@@ -461,14 +461,14 @@ where
     let epoch = Epoch::from(0);
     let (committee, mut worker) = init_worker_with_chains(client, balances).await;
 
-    let make_tick_block = |millis: u64, parent: Option<&Certificate>| {
+    let make_tick_block = |micros: u64, parent: Option<&Certificate>| {
         make_block(
             epoch,
             ChainId::root(1),
             Vec::<SystemOperation>::new(),
             vec![],
             parent,
-            Timestamp::from(millis),
+            Timestamp::from(micros),
         )
     };
 

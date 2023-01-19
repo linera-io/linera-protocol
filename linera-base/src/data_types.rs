@@ -25,7 +25,7 @@ pub struct BlockHeight(pub u64);
 )]
 pub struct RoundNumber(pub u64);
 
-/// A timestamp, in milliseconds since the Unix epoch.
+/// A timestamp, in microseconds since the Unix epoch.
 #[derive(
     Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
 )]
@@ -38,14 +38,14 @@ impl Timestamp {
             SystemTime::UNIX_EPOCH
                 .elapsed()
                 .expect("system time should be after Unix epoch")
-                .as_millis()
+                .as_micros()
                 .try_into()
                 .unwrap_or(u64::MAX),
         )
     }
 
-    /// Returns the number of milliseconds since the Unix epoch.
-    pub fn millis(&self) -> u64 {
+    /// Returns the number of microseconds since the Unix epoch.
+    pub fn micros(&self) -> u64 {
         self.0
     }
 }
@@ -59,8 +59,8 @@ impl From<u64> for Timestamp {
 impl fmt::Display for Timestamp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(date_time) = NaiveDateTime::from_timestamp_opt(
-            (self.0 / 1000) as i64,
-            ((self.0 % 1000) * 1_000_000) as u32,
+            (self.0 / 1_000_000) as i64,
+            ((self.0 % 1_000_000) * 1_000) as u32,
         ) {
             return date_time.fmt(f);
         }
