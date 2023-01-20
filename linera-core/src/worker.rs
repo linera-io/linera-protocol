@@ -93,20 +93,6 @@ pub enum Reason {
     },
 }
 
-impl Reason {
-    pub fn new_block(height: BlockHeight) -> Self {
-        Self::NewBlock { height }
-    }
-
-    pub fn new_message(application_id: ApplicationId, origin: Origin, height: BlockHeight) -> Self {
-        Self::NewMessage {
-            application_id,
-            origin,
-            height,
-        }
-    }
-}
-
 /// Error type for [`ValidatorWorker`].
 #[derive(Debug, Error)]
 pub enum WorkerError {

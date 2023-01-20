@@ -28,7 +28,7 @@ impl NotificationTracker {
     }
 
     fn insert_new_block(&mut self, chain_id: ChainId, height: BlockHeight) -> bool {
-        return match self.new_block.get(&chain_id) {
+        match self.new_block.get(&chain_id) {
             None => {
                 self.new_block.insert(chain_id, height);
                 true
@@ -41,7 +41,7 @@ impl NotificationTracker {
                     false
                 }
             }
-        };
+        }
     }
 
     fn insert_new_message(
@@ -52,7 +52,7 @@ impl NotificationTracker {
         height: BlockHeight,
     ) -> bool {
         let key = (chain_id, application_id, origin);
-        return match self.new_message.get(&key) {
+        match self.new_message.get(&key) {
             None => {
                 self.new_message.insert(key, height);
                 true
@@ -65,20 +65,21 @@ impl NotificationTracker {
                     false
                 }
             }
-        };
+        }
     }
 }
 
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use Reason;
 
     #[test]
     fn test_empty() {
         let notification = Notification {
             chain_id: ChainId::root(0),
-            reason: Reason::new_block(BlockHeight(0)),
+            reason: Reason::NewBlock {
+                height: BlockHeight(0),
+            },
         };
 
         let mut tracker = NotificationTracker::default();
@@ -89,8 +90,12 @@ pub mod tests {
 
     #[test]
     fn test_new_blocks() {
-        let reason_0 = Reason::new_block(BlockHeight(0));
-        let reason_1 = Reason::new_block(BlockHeight(1));
+        let reason_0 = Reason::NewBlock {
+            height: BlockHeight(0),
+        };
+        let reason_1 = Reason::NewBlock {
+            height: BlockHeight(1),
+        };
         let chain_0 = ChainId::root(0);
         let chain_1 = ChainId::root(1);
 
@@ -126,16 +131,16 @@ pub mod tests {
 
     #[test]
     fn test_application_origin() {
-        let reason_0 = Reason::new_message(
-            ApplicationId::System,
-            Origin::chain(ChainId::root(0)),
-            BlockHeight::from(0),
-        );
-        let reason_1 = Reason::new_message(
-            ApplicationId::System,
-            Origin::chain(ChainId::root(0)),
-            BlockHeight::from(1),
-        );
+        let reason_0 = Reason::NewMessage {
+            application_id: ApplicationId::System,
+            origin: Origin::chain(ChainId::root(0)),
+            height: BlockHeight::from(0),
+        };
+        let reason_1 = Reason::NewMessage {
+            application_id: ApplicationId::System,
+            origin: Origin::chain(ChainId::root(0)),
+            height: BlockHeight::from(1),
+        };
 
         let chain_0 = ChainId::root(0);
         let chain_1 = ChainId::root(1);
