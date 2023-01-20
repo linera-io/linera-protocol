@@ -15,8 +15,9 @@ use std::{
     fmt::Debug,
     mem,
     ops::Bound::Included,
+    sync::Arc,
 };
-use tokio::sync::OwnedMutexGuard;
+use tokio::sync::{OwnedMutexGuard, RwLock};
 
 /// Key tags to create the sub-keys of a KeyValueStoreView on top of the base key.
 #[repr(u8)]
@@ -30,25 +31,25 @@ enum KeyTag {
 /// A view that represents the KeyValueOperations
 ///
 /// Comment on the data set:
-/// In order to work, the view needs to store the updates and deleteprefixes.
-/// The updates and deleteprefixes have to be coherent. This means:
-/// ---If an index is deleted by one in deleteprefixes then it should not be present
-///    in updates at al.
-/// ---deleted prefix in deleteprefix should not dominate anyone. That is if
-///    we have [0,2] then we should not have [0,2,3] since it would be dominated
-///    by the preceding.
+/// In order to work, the view needs to store the updates and deleted_prefixes.
+/// The updates and deleted_prefixes have to be coherent. This means:
+/// * If an index is deleted by one in deleted_prefixes then it should not be present
+///   in updates at al.
+/// * deleted prefix in deleteprefix should not dominate anyone. That is if
+///   we have [0,2] then we should not have [0,2,3] since it would be dominated
+///   by the preceding.
 ///
 /// With that we have:
-/// ---in order to test if an index is deleted by a prefix we compute the highest deleteprefix dp
-///    such that dp <= index.
-///    If dp is indeed a prefix then we conclude from that.index is deletd, otherwise not.
-///    The no domination is essential here.
-#[derive(Debug, Clone)]
+/// * in order to test if an index is deleted by a prefix we compute the highest deleteprefix dp
+///   such that dp <= index.
+///   If dp is indeed a prefix then we conclude from that.index is deleted, otherwise not.
+///   The no domination is essential here.
+#[derive(Debug)]
 pub struct KeyValueStoreView<C> {
     context: C,
     was_cleared: bool,
     updates: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
-    deleteprefixes: BTreeSet<Vec<u8>>,
+    deleted_prefixes: BTreeSet<Vec<u8>>,
     stored_hash: Option<HashOutput>,
     hash: Option<HashOutput>,
 }
@@ -70,7 +71,7 @@ where
             context,
             was_cleared: false,
             updates: BTreeMap::new(),
-            deleteprefixes: BTreeSet::new(),
+            deleted_prefixes: BTreeSet::new(),
             stored_hash: hash,
             hash,
         })
@@ -79,7 +80,7 @@ where
     fn rollback(&mut self) {
         self.was_cleared = false;
         self.updates.clear();
-        self.deleteprefixes.clear();
+        self.deleted_prefixes.clear();
         self.hash = self.stored_hash;
     }
 
@@ -94,7 +95,7 @@ where
                 }
             }
         } else {
-            for index in mem::take(&mut self.deleteprefixes) {
+            for index in mem::take(&mut self.deleted_prefixes) {
                 let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
                 batch.delete_key_prefix(key);
             }
@@ -124,7 +125,7 @@ where
     fn clear(&mut self) {
         self.was_cleared = true;
         self.updates.clear();
-        self.deleteprefixes.clear();
+        self.deleted_prefixes.clear();
         self.hash = None;
     }
 }
@@ -139,15 +140,15 @@ where
             context,
             was_cleared: false,
             updates: BTreeMap::new(),
-            deleteprefixes: BTreeSet::new(),
+            deleted_prefixes: BTreeSet::new(),
             stored_hash: None,
             hash: None,
         }
     }
 
-    fn is_index_deleted(deleteprefixes: &mut Iter<Vec<u8>>, index: &[u8]) -> bool {
+    fn is_index_deleted(deleted_prefixes: &mut Iter<Vec<u8>>, index: &[u8]) -> bool {
         loop {
-            match deleteprefixes.peekable().peek() {
+            match deleted_prefixes.peekable().peek() {
                 None => break,
                 Some(val) => {
                     if val.to_vec() > index.to_vec() {
@@ -155,9 +156,9 @@ where
                     }
                 }
             }
-            deleteprefixes.next();
+            deleted_prefixes.next();
         }
-        match deleteprefixes.peekable().peek() {
+        match deleted_prefixes.peekable().peek() {
             None => false,
             Some(key_prefix) => {
                 if key_prefix.len() > index.len() {
@@ -175,7 +176,7 @@ where
         let key_prefix = self.context.base_tag(KeyTag::Index as u8);
         let mut updates = self.updates.iter();
         let mut update = updates.next();
-        let mut deleteprefixes = self.deleteprefixes.iter();
+        let mut deleted_prefixes = self.deleted_prefixes.iter();
         if !self.was_cleared {
             for index in self
                 .context
@@ -194,7 +195,7 @@ where
                             }
                         }
                         _ => {
-                            if !Self::is_index_deleted(&mut deleteprefixes, &index) {
+                            if !Self::is_index_deleted(&mut deleted_prefixes, &index) {
                                 f(index)?;
                             }
                             break;
@@ -220,7 +221,7 @@ where
         let key_prefix = self.context.base_tag(KeyTag::Index as u8);
         let mut updates = self.updates.iter();
         let mut update = updates.next();
-        let mut deleteprefixes = self.deleteprefixes.iter();
+        let mut deleted_prefixes = self.deleted_prefixes.iter();
         if !self.was_cleared {
             for (index, index_val) in self
                 .context
@@ -239,7 +240,7 @@ where
                             }
                         }
                         _ => {
-                            if !Self::is_index_deleted(&mut deleteprefixes, &index) {
+                            if !Self::is_index_deleted(&mut deleted_prefixes, &index) {
                                 f(index, index_val)?;
                             }
                             break;
@@ -296,7 +297,7 @@ where
         }
     }
 
-    /// Delete a key_refix
+    /// Delete a key_prefix
     pub fn delete_prefix(&mut self, key_prefix: Vec<u8>) {
         self.hash = None;
         let key_list: Vec<Vec<u8>> = self
@@ -309,14 +310,14 @@ where
         }
         if !self.was_cleared {
             let key_prefix_list: Vec<Vec<u8>> = self
-                .deleteprefixes
+                .deleted_prefixes
                 .range(get_interval(key_prefix.clone()))
                 .map(|x| x.to_vec())
                 .collect();
             for key in key_prefix_list {
-                self.deleteprefixes.remove(&key);
+                self.deleted_prefixes.remove(&key);
             }
-            self.deleteprefixes.insert(key_prefix);
+            self.deleted_prefixes.insert(key_prefix);
         }
     }
 }
@@ -355,7 +356,7 @@ where
             .updates
             .range((Included(key_prefix.to_vec()), key_prefix_upper));
         let mut update = updates.next();
-        let mut deleteprefixes = self.deleteprefixes.iter();
+        let mut deleted_prefixes = self.deleted_prefixes.iter();
         if !self.was_cleared {
             for stripped_key in self
                 .context
@@ -378,7 +379,7 @@ where
                         _ => {
                             let mut key = key_prefix.to_vec();
                             key.extend_from_slice(&stripped_key);
-                            if !Self::is_index_deleted(&mut deleteprefixes, &key) {
+                            if !Self::is_index_deleted(&mut deleted_prefixes, &key) {
                                 keys.push(stripped_key.to_vec());
                             }
                             break;
@@ -409,7 +410,7 @@ where
             .updates
             .range((Included(key_prefix.to_vec()), key_prefix_upper));
         let mut update = updates.next();
-        let mut deleteprefixes = self.deleteprefixes.iter();
+        let mut deleted_prefixes = self.deleted_prefixes.iter();
         if !self.was_cleared {
             for (stripped_key, value) in self
                 .context
@@ -433,7 +434,7 @@ where
                         _ => {
                             let mut key = key_prefix.to_vec();
                             key.extend_from_slice(&stripped_key);
-                            if !Self::is_index_deleted(&mut deleteprefixes, &key) {
+                            if !Self::is_index_deleted(&mut deleted_prefixes, &key) {
                                 key_values.push((stripped_key.to_vec(), value.clone()));
                             }
                             break;
@@ -509,13 +510,13 @@ where
 
 #[cfg(any(test, feature = "test"))]
 #[derive(Debug, Clone)]
-pub struct IntegratedKeyValueStoreView<C> {
-    kvsv: KeyValueStoreView<C>,
+pub struct ViewContainer<C> {
+    kvsv: Arc<RwLock<KeyValueStoreView<C>>>,
 }
 
 #[cfg(any(test, feature = "test"))]
 #[async_trait]
-impl<C> KeyValueOperations for IntegratedKeyValueStoreView<C>
+impl<C> KeyValueOperations for ViewContainer<C>
 where
     C: Context + Sync + Send + Clone,
     ViewError: From<C::Error>,
@@ -525,57 +526,60 @@ where
     type KeyValueIterator = SimpleTypeIterator<(Vec<u8>, Vec<u8>), ViewError>;
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
-        self.kvsv.read_key_bytes(key).await
+        let kvsv = self.kvsv.read().await;
+        kvsv.read_key_bytes(key).await
     }
 
     async fn find_stripped_keys_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyIterator, ViewError> {
-        self.kvsv.find_stripped_keys_by_prefix(key_prefix).await
+        let kvsv = self.kvsv.read().await;
+        kvsv.find_stripped_keys_by_prefix(key_prefix).await
     }
 
     async fn find_stripped_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValueIterator, ViewError> {
-        self.kvsv
-            .find_stripped_key_values_by_prefix(key_prefix)
+        let kvsv = self.kvsv.read().await;
+        kvsv.find_stripped_key_values_by_prefix(key_prefix)
             .await
     }
 
     async fn write_batch(&mut self, batch: Batch) -> Result<(), ViewError> {
-        self.kvsv.write_batch(batch).await?;
+        let mut kvsv = self.kvsv.write().await;
+        kvsv.write_batch(batch).await?;
         let mut batch = Batch::default();
-        self.kvsv.flush(&mut batch)?;
-        let mut context = self.kvsv.context().clone();
+        kvsv.flush(&mut batch)?;
+        let mut context = kvsv.context().clone();
         context.write_batch(batch).await?;
         Ok(())
     }
 }
 
 #[cfg(any(test, feature = "test"))]
-impl<C> IntegratedKeyValueStoreView<C>
+impl<C> ViewContainer<C>
 where
     C: Context + Sync + Send + Clone,
     ViewError: From<C::Error>,
 {
     pub fn new(context: C) -> Self {
         let kvsv = KeyValueStoreView::new(context);
-        Self { kvsv }
+        Self { kvsv: Arc::new(RwLock::new(kvsv)) }
     }
 }
 
 /// A context that stores all values in memory.
 #[cfg(any(test, feature = "test"))]
 pub type KeyValueStoreMemoryContext<E> =
-    ContextFromDb<E, IntegratedKeyValueStoreView<MemoryContext<()>>>;
+    ContextFromDb<E, ViewContainer<MemoryContext<()>>>;
 
 #[cfg(any(test, feature = "test"))]
 impl<E> KeyValueStoreMemoryContext<E> {
     pub fn new(guard: OwnedMutexGuard<MemoryStoreMap>, base_key: Vec<u8>, extra: E) -> Self {
         let context = MemoryContext::new(guard, ());
-        let key_value_store_view = IntegratedKeyValueStoreView::new(context);
+        let key_value_store_view = ViewContainer::new(context);
         Self {
             db: key_value_store_view,
             base_key,
