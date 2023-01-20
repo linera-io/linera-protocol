@@ -72,14 +72,14 @@ pub struct NetworkActions {
     pub notifications: Vec<Notification>,
 }
 
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 /// Notify that a chain has a new certified block or a new message.
 pub struct Notification {
     pub chain_id: ChainId,
     pub reason: Reason,
 }
 
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 #[allow(clippy::large_enum_variant)]
 /// Reason for the notification.
 pub enum Reason {
@@ -91,6 +91,20 @@ pub enum Reason {
         origin: Origin,
         height: BlockHeight,
     },
+}
+
+impl Reason {
+    pub fn new_block(height: BlockHeight) -> Self {
+        Self::NewBlock { height }
+    }
+
+    pub fn new_message(application_id: ApplicationId, origin: Origin, height: BlockHeight) -> Self {
+        Self::NewMessage {
+            application_id,
+            origin,
+            height,
+        }
+    }
 }
 
 /// Error type for [`ValidatorWorker`].

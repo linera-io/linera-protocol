@@ -32,8 +32,8 @@ use linera_rpc::{
 };
 use linera_service::{
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain, WalletState},
-    lru::LruSet,
     storage::{Runnable, StorageConfig},
+    tracker::NotificationTracker,
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -783,12 +783,12 @@ where
                     Some(chain_id) => chain_id,
                 };
                 let mut client_state = context.make_chain_client(storage, *chain_id);
-                let mut seen = LruSet::with_expiry_duration(Duration::from_secs(10 * 60));
+                let mut tracker = NotificationTracker::default();
                 let mut notification_stream = client_state.subscribe_all(chain_ids).await?;
                 while let Some(notification) = notification_stream.next().await {
                     if raw {
                         info!("{:?}", notification);
-                    } else if seen.insert(notification.clone()) {
+                    } else if tracker.insert(notification.clone()) {
                         info!("{:?}", notification);
                     }
                 }
