@@ -171,7 +171,7 @@ impl ClientContext {
                 height: chain.next_block_height,
                 timestamp: chain.timestamp.max(Timestamp::now()),
             };
-            info!("Preparing block proposal: {:?}", block);
+            debug!("Preparing block proposal: {:?}", block);
             let proposal = BlockProposal::new(
                 BlockAndRound {
                     block: block.clone(),
