@@ -28,7 +28,15 @@ enum KeyTag {
     Hash = 1,
 }
 
-/// A view that represents the KeyValueOperations
+/// We actually implement two types:
+/// The KeyValueStoreView that implements View and the function of KeyValueOperations (though not KeyValueOperations).
+///
+/// The second type ViewContainer encapsulates the following and provides the following functionalities:
+/// * The Clone trait
+/// * a write_batch that takes a &self instead of a "&mut self"
+/// * a write_batch that writes in the context instead of writing of the view.
+
+/// A view that represents the function of KeyValueOperations (though not KeyValueOperations)
 ///
 /// Comment on the data set:
 /// In order to work, the view needs to store the updates and deleted_prefixes.
@@ -320,17 +328,6 @@ where
             self.deleted_prefixes.insert(key_prefix);
         }
     }
-}
-
-#[async_trait]
-impl<C> KeyValueOperations for KeyValueStoreView<C>
-where
-    C: Context + Sync + Send,
-    ViewError: From<C::Error>,
-{
-    type Error = ViewError;
-    type KeyIterator = SimpleTypeIterator<Vec<u8>, ViewError>;
-    type KeyValueIterator = SimpleTypeIterator<(Vec<u8>, Vec<u8>), ViewError>;
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
         if let Some(update) = self.updates.get(key) {
@@ -347,7 +344,7 @@ where
     async fn find_stripped_keys_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::KeyIterator, ViewError> {
+    ) -> Result<SimpleTypeIterator<Vec<u8>, ViewError>, ViewError> {
         let len = key_prefix.len();
         let key_prefix_full = self.context.base_tag_index(KeyTag::Index as u8, key_prefix);
         let mut keys = Vec::new();
@@ -395,13 +392,13 @@ where
             }
             update = updates.next();
         }
-        Ok(Self::KeyIterator::new(keys))
+        Ok(SimpleTypeIterator::<Vec<u8>, ViewError>::new(keys))
     }
 
     async fn find_stripped_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::KeyValueIterator, ViewError> {
+    ) -> Result<SimpleTypeIterator<(Vec<u8>, Vec<u8>), ViewError>, ViewError> {
         let len = key_prefix.len();
         let key_prefix_full = self.context.base_tag_index(KeyTag::Index as u8, key_prefix);
         let mut key_values = Vec::new();
@@ -450,7 +447,9 @@ where
             }
             update = updates.next();
         }
-        Ok(Self::KeyValueIterator::new(key_values))
+        Ok(SimpleTypeIterator::<(Vec<u8>, Vec<u8>), ViewError>::new(
+            key_values,
+        ))
     }
 
     async fn write_batch(&mut self, batch: Batch) -> Result<(), ViewError> {
@@ -543,17 +542,15 @@ where
         key_prefix: &[u8],
     ) -> Result<Self::KeyValueIterator, ViewError> {
         let kvsv = self.kvsv.read().await;
-        kvsv.find_stripped_key_values_by_prefix(key_prefix)
-            .await
+        kvsv.find_stripped_key_values_by_prefix(key_prefix).await
     }
 
-    async fn write_batch(&mut self, batch: Batch) -> Result<(), ViewError> {
+    async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
         let mut kvsv = self.kvsv.write().await;
         kvsv.write_batch(batch).await?;
         let mut batch = Batch::default();
         kvsv.flush(&mut batch)?;
-        let mut context = kvsv.context().clone();
-        context.write_batch(batch).await?;
+        kvsv.context().write_batch(batch).await?;
         Ok(())
     }
 }
@@ -566,14 +563,15 @@ where
 {
     pub fn new(context: C) -> Self {
         let kvsv = KeyValueStoreView::new(context);
-        Self { kvsv: Arc::new(RwLock::new(kvsv)) }
+        Self {
+            kvsv: Arc::new(RwLock::new(kvsv)),
+        }
     }
 }
 
 /// A context that stores all values in memory.
 #[cfg(any(test, feature = "test"))]
-pub type KeyValueStoreMemoryContext<E> =
-    ContextFromDb<E, ViewContainer<MemoryContext<()>>>;
+pub type KeyValueStoreMemoryContext<E> = ContextFromDb<E, ViewContainer<MemoryContext<()>>>;
 
 #[cfg(any(test, feature = "test"))]
 impl<E> KeyValueStoreMemoryContext<E> {

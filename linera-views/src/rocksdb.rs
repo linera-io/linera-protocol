@@ -84,7 +84,7 @@ impl KeyValueOperations for RocksdbContainer {
         Ok(Self::KeyValueIterator::new(key_values))
     }
 
-    async fn write_batch(&mut self, mut batch: Batch) -> Result<(), RocksdbContextError> {
+    async fn write_batch(&self, mut batch: Batch) -> Result<(), RocksdbContextError> {
         let db = self.clone();
         // NOTE: The delete_range functionality of rocksdb needs to have an upper bound in order to work.
         // Thus in order to have the system working, we need to handle the unlikely case of having to

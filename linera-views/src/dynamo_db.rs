@@ -243,7 +243,7 @@ impl KeyValueOperations for DynamoDbContainer {
     /// We put submit the transaction in blocks (called BatchWriteItem in dynamoDb) of at most 25
     /// so as to decrease the number of needed transactions. That constant 25 comes from
     /// https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_BatchWriteItem.html
-    async fn write_batch(&mut self, batch: Batch) -> Result<(), DynamoDbContextError> {
+    async fn write_batch(&self, batch: Batch) -> Result<(), DynamoDbContextError> {
         let max_size_batch_write_item = 25;
         // We put the delete in insert in separate lists since the use of `DeletePrefix` forces us
         // to download the list of prefix and insert them. Having two lists is preferable as

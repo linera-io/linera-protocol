@@ -4,7 +4,7 @@
 use linera_views::{
     common::{Batch, KeyValueOperations},
     dynamo_db::DynamoDbContainer,
-    key_value_store_view::KeyValueStoreView,
+    key_value_store_view::ViewContainer,
     memory::MemoryContext,
     rocksdb::DB,
     test_utils::{get_random_key_value_vec_prefix, LocalStackTestContext},
@@ -18,7 +18,7 @@ use tokio::sync::{Mutex, RwLock};
 
 #[cfg(test)]
 async fn test_ordering_keys_key_value_vec<OP: KeyValueOperations + Sync>(
-    mut key_value_operation: OP,
+    key_value_operation: OP,
     key_value_vec: Vec<(Vec<u8>, Vec<u8>)>,
 ) {
     // We need a nontrivial key_prefix because dynamo requires a non-trivial prefix
@@ -109,7 +109,7 @@ async fn test_ordering_key_value_store_view_memory() {
     let map = Arc::new(Mutex::new(BTreeMap::new()));
     let guard = map.clone().lock_owned().await;
     let context = MemoryContext::new(guard, ());
-    let key_value_operation = KeyValueStoreView::new(context);
+    let key_value_operation = ViewContainer::new(context);
     test_ordering_keys(key_value_operation).await;
 }
 
