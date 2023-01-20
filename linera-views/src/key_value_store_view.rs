@@ -146,7 +146,7 @@ where
         }
     }
 
-    fn is_index_deleted(deleted_prefixes: &mut Iter<Vec<u8>>, index: &[u8]) -> bool {
+    fn is_index_present(deleted_prefixes: &mut Iter<Vec<u8>>, index: &[u8]) -> bool {
         loop {
             match deleted_prefixes.peekable().peek() {
                 None => break,
@@ -159,12 +159,12 @@ where
             deleted_prefixes.next();
         }
         match deleted_prefixes.peekable().peek() {
-            None => false,
+            None => true,
             Some(key_prefix) => {
                 if key_prefix.len() > index.len() {
-                    return false;
+                    return true;
                 }
-                index[0..key_prefix.len()].to_vec() == key_prefix.to_vec()
+                index[0..key_prefix.len()].to_vec() != key_prefix.to_vec()
             }
         }
     }
@@ -195,7 +195,7 @@ where
                             }
                         }
                         _ => {
-                            if !Self::is_index_deleted(&mut deleted_prefixes, &index) {
+                            if Self::is_index_present(&mut deleted_prefixes, &index) {
                                 f(index)?;
                             }
                             break;
@@ -240,7 +240,7 @@ where
                             }
                         }
                         _ => {
-                            if !Self::is_index_deleted(&mut deleted_prefixes, &index) {
+                            if Self::is_index_present(&mut deleted_prefixes, &index) {
                                 f(index, index_val)?;
                             }
                             break;
@@ -379,7 +379,7 @@ where
                         _ => {
                             let mut key = key_prefix.to_vec();
                             key.extend_from_slice(&stripped_key);
-                            if !Self::is_index_deleted(&mut deleted_prefixes, &key) {
+                            if Self::is_index_present(&mut deleted_prefixes, &key) {
                                 keys.push(stripped_key.to_vec());
                             }
                             break;
@@ -434,7 +434,7 @@ where
                         _ => {
                             let mut key = key_prefix.to_vec();
                             key.extend_from_slice(&stripped_key);
-                            if !Self::is_index_deleted(&mut deleted_prefixes, &key) {
+                            if Self::is_index_present(&mut deleted_prefixes, &key) {
                                 key_values.push((stripped_key.to_vec(), value.clone()));
                             }
                             break;
