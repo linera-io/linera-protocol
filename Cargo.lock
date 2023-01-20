@@ -1914,7 +1914,6 @@ dependencies = [
  "linera-storage",
  "linera-views",
  "log",
- "lru_time_cache",
  "proptest",
  "serde",
  "serde_json",
@@ -2031,12 +2030,6 @@ checksum = "abb12e687cfb44aa40f41fc3978ef76448f9b6038cad6aef4259d3c095a2382e"
 dependencies = [
  "cfg-if",
 ]
-
-[[package]]
-name = "lru_time_cache"
-version = "0.11.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9106e1d747ffd48e6be5bb2d97fa706ed25b144fbee4d5c02eae110cd8d6badd"
 
 [[package]]
 name = "mach"
