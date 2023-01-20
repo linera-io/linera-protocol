@@ -4,6 +4,7 @@
 #![cfg(target_arch = "wasm32")]
 
 mod state;
+mod types;
 
 use self::state::{ApplicationState, FungibleToken};
 use async_trait::async_trait;

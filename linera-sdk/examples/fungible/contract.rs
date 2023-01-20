@@ -7,8 +7,11 @@ mod interface;
 mod state;
 
 use self::{
-    interface::{ApplicationCall, ApplicationTransfer, SignedTransfer, Transfer},
-    state::{AccountOwner, ApplicationState, FungibleToken, Nonce},
+    interface::{
+        types::{self, AccountOwner, Nonce},
+        ApplicationCall, ApplicationTransfer, SignedTransfer, Transfer,
+    },
+    state::{ApplicationState, FungibleToken},
 };
 use async_trait::async_trait;
 use linera_sdk::{

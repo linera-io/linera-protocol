@@ -1,7 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::state::{AccountOwner, Nonce};
+#[path = "./types.rs"]
+pub mod types;
+
+use self::types::{AccountOwner, Nonce};
 use linera_sdk::{
     crypto::{BcsSignable, CryptoError, PublicKey, Signature},
     ApplicationId, ChainId,
