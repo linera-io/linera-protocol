@@ -3,13 +3,16 @@
 
 #![cfg(target_arch = "wasm32")]
 
+mod interface;
 mod state;
 
-use self::state::{AccountOwner, ApplicationState, FungibleToken, Nonce};
+use self::{
+    interface::{ApplicationCall, ApplicationTransfer, SignedTransfer, Transfer},
+    state::{AccountOwner, ApplicationState, FungibleToken, Nonce},
+};
 use async_trait::async_trait;
 use linera_sdk::{
-    crypto::{BcsSignable, CryptoError, PublicKey, Signature},
-    ensure, ApplicationCallResult, ApplicationId, CalleeContext, ChainId, Contract, EffectContext,
+    crypto::CryptoError, ensure, ApplicationCallResult, CalleeContext, Contract, EffectContext,
     ExecutionResult, FromBcsBytes, OperationContext, Session, SessionCallResult, SessionId,
 };
 use serde::{Deserialize, Serialize};
@@ -213,81 +216,6 @@ impl FungibleToken {
         }
     }
 }
-
-/// The transfer operation.
-#[derive(Deserialize, Serialize)]
-pub struct SignedTransfer {
-    source: PublicKey,
-    signature: Signature,
-    payload: SignedTransferPayload,
-}
-
-/// The payload to be signed for a signed transfer.
-///
-/// Contains extra meta-data in to be included in signature to ensure that the transfer can't be
-/// replayed:
-///
-/// - on the same chain
-/// - on different chains
-/// - on different tokens
-#[derive(Debug, Deserialize, Serialize)]
-pub struct SignedTransferPayload {
-    token_id: ApplicationId,
-    source_chain: ChainId,
-    nonce: Nonce,
-    transfer: Transfer,
-}
-
-/// A cross-application call.
-#[derive(Deserialize, Serialize)]
-pub enum ApplicationCall {
-    /// A request for the application's account balance.
-    Balance,
-    /// A transfer from the application's account.
-    Transfer(ApplicationTransfer),
-    /// A signed transfer operation delegated to the application.
-    Delegated(SignedTransfer),
-}
-
-/// A cross-application transfer request.
-#[derive(Deserialize, Serialize)]
-pub enum ApplicationTransfer {
-    /// A static transfer to a specific destination.
-    Static(Transfer),
-    /// A dynamic transfer into a session, that can then be credited to destinations later.
-    Dynamic(u128),
-}
-
-impl ApplicationTransfer {
-    /// The amount of tokens to be transfered.
-    pub fn amount(&self) -> u128 {
-        match self {
-            ApplicationTransfer::Static(transfer) => transfer.amount,
-            ApplicationTransfer::Dynamic(amount) => *amount,
-        }
-    }
-}
-
-/// A transfer payload.
-#[derive(Debug, Deserialize, Serialize)]
-pub struct Transfer {
-    destination_account: AccountOwner,
-    destination_chain: ChainId,
-    amount: u128,
-}
-
-impl SignedTransfer {
-    /// Checks that the [`SignedTransfer`] is correctly signed.
-    ///
-    /// If correctly signed, returns the source of the transfer and the [`SignedTransferPayload`].
-    pub fn check_signature(self) -> Result<(AccountOwner, SignedTransferPayload), Error> {
-        self.signature.check(&self.payload, self.source)?;
-
-        Ok((AccountOwner::Key(self.source), self.payload))
-    }
-}
-
-impl BcsSignable for SignedTransferPayload {}
 
 /// The credit effect.
 #[derive(Deserialize, Serialize)]
