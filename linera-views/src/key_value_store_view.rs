@@ -4,14 +4,14 @@
 use crate::{
     common::{
         get_interval, get_upper_bound, Batch, Context, ContextFromDb, HashOutput,
-        KeyValueOperations, SimpleTypeIterator, WriteOperation,
+        KeyValueOperations, LowerBound, SimpleTypeIterator, WriteOperation,
     },
     memory::{MemoryContext, MemoryStoreMap},
     views::{HashableView, Hasher, View, ViewError},
 };
 use async_trait::async_trait;
 use std::{
-    collections::{btree_set::Iter, BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet},
     fmt::Debug,
     mem,
     ops::Bound::Included,
@@ -138,7 +138,7 @@ where
     }
 }
 
-impl<C> KeyValueStoreView<C>
+impl<'a, C> KeyValueStoreView<C>
 where
     C: Send + Context,
     ViewError: From<C::Error>,
@@ -154,19 +154,9 @@ where
         }
     }
 
-    fn is_index_present(deleted_prefixes: &mut Iter<Vec<u8>>, index: &[u8]) -> bool {
-        loop {
-            match deleted_prefixes.peekable().peek() {
-                None => break,
-                Some(val) => {
-                    if val.to_vec() > index.to_vec() {
-                        break;
-                    }
-                }
-            }
-            deleted_prefixes.next();
-        }
-        match deleted_prefixes.peekable().peek() {
+    fn is_index_present(lower_bound: &mut LowerBound<'a, Vec<u8>>, index: &[u8]) -> bool {
+        let lower_bound = lower_bound.get_lower_bound(index.to_vec());
+        match lower_bound {
             None => true,
             Some(key_prefix) => {
                 if key_prefix.len() > index.len() {
@@ -184,7 +174,7 @@ where
         let key_prefix = self.context.base_tag(KeyTag::Index as u8);
         let mut updates = self.updates.iter();
         let mut update = updates.next();
-        let mut deleted_prefixes = self.deleted_prefixes.iter();
+        let mut lower_bound = LowerBound::new(&self.deleted_prefixes);
         if !self.was_cleared {
             for index in self
                 .context
@@ -203,7 +193,7 @@ where
                             }
                         }
                         _ => {
-                            if Self::is_index_present(&mut deleted_prefixes, &index) {
+                            if Self::is_index_present(&mut lower_bound, &index) {
                                 f(index)?;
                             }
                             break;
@@ -229,7 +219,7 @@ where
         let key_prefix = self.context.base_tag(KeyTag::Index as u8);
         let mut updates = self.updates.iter();
         let mut update = updates.next();
-        let mut deleted_prefixes = self.deleted_prefixes.iter();
+        let mut lower_bound = LowerBound::new(&self.deleted_prefixes);
         if !self.was_cleared {
             for (index, index_val) in self
                 .context
@@ -248,7 +238,7 @@ where
                             }
                         }
                         _ => {
-                            if Self::is_index_present(&mut deleted_prefixes, &index) {
+                            if Self::is_index_present(&mut lower_bound, &index) {
                                 f(index, index_val)?;
                             }
                             break;
@@ -353,7 +343,7 @@ where
             .updates
             .range((Included(key_prefix.to_vec()), key_prefix_upper));
         let mut update = updates.next();
-        let mut deleted_prefixes = self.deleted_prefixes.iter();
+        let mut lower_bound = LowerBound::new(&self.deleted_prefixes);
         if !self.was_cleared {
             for stripped_key in self
                 .context
@@ -376,7 +366,7 @@ where
                         _ => {
                             let mut key = key_prefix.to_vec();
                             key.extend_from_slice(&stripped_key);
-                            if Self::is_index_present(&mut deleted_prefixes, &key) {
+                            if Self::is_index_present(&mut lower_bound, &key) {
                                 keys.push(stripped_key.to_vec());
                             }
                             break;
@@ -407,7 +397,7 @@ where
             .updates
             .range((Included(key_prefix.to_vec()), key_prefix_upper));
         let mut update = updates.next();
-        let mut deleted_prefixes = self.deleted_prefixes.iter();
+        let mut lower_bound = LowerBound::new(&self.deleted_prefixes);
         if !self.was_cleared {
             for (stripped_key, value) in self
                 .context
@@ -431,7 +421,7 @@ where
                         _ => {
                             let mut key = key_prefix.to_vec();
                             key.extend_from_slice(&stripped_key);
-                            if Self::is_index_present(&mut deleted_prefixes, &key) {
+                            if Self::is_index_present(&mut lower_bound, &key) {
                                 key_values.push((stripped_key.to_vec(), value.clone()));
                             }
                             break;

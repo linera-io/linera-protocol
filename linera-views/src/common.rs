@@ -39,6 +39,47 @@ pub fn get_interval(key_prefix: Vec<u8>) -> (Bound<Vec<u8>>, Bound<Vec<u8>>) {
     (Included(key_prefix), upper_bound)
 }
 
+/// LowerBound it iterating over the entries of a BTreeSet.
+/// the function get_lower_bound(val) returns a Some(x) where x is the highest
+/// entry such that x <= val. If none exist then None is returned.
+///
+/// the function calls get_lower_bound have to be called with increasing
+/// values.
+pub struct LowerBound<'a, T: 'static> {
+    prec1: Option<T>,
+    prec2: Option<T>,
+    iter: std::collections::btree_set::Iter<'a, T>,
+}
+
+impl<'a, T> LowerBound<'a, T>
+where
+    T: PartialOrd + Clone,
+{
+    pub fn new(set: &'a BTreeSet<T>) -> Self {
+        let mut iter = set.iter();
+        let prec1 = None;
+        let prec2 = iter.next().cloned();
+        Self { prec1, prec2, iter }
+    }
+
+    pub fn get_lower_bound(&mut self, val: T) -> Option<T> {
+        loop {
+            match &self.prec2 {
+                None => {
+                    return self.prec1.as_ref().cloned();
+                }
+                Some(x) => {
+                    if x.clone() > val {
+                        return self.prec1.as_ref().cloned();
+                    }
+                }
+            }
+            self.prec1 = self.prec2.clone();
+            self.prec2 = self.iter.next().cloned();
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum WriteOperation {
     Delete { key: Vec<u8> },
