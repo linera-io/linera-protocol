@@ -1,8 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
 use linera_views::common::LowerBound;
+use std::collections::BTreeSet;
 
 #[test]
 fn test_lower_bound() {
