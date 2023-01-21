@@ -5,7 +5,7 @@
 
 use super::{
     contract,
-    writable_system::{self, PollLoad},
+    writable_system::{self as system, PollLoad},
 };
 use linera_sdk::{
     ApplicationId, BlockHeight, BytecodeId, CalleeContext, ChainId, EffectContext, EffectId,
@@ -43,8 +43,8 @@ impl From<contract::EffectId> for EffectId {
     }
 }
 
-impl From<writable_system::EffectId> for EffectId {
-    fn from(effect_id: writable_system::EffectId) -> Self {
+impl From<system::EffectId> for EffectId {
+    fn from(effect_id: system::EffectId) -> Self {
         EffectId {
             chain_id: ChainId(effect_id.chain_id.into()),
             height: BlockHeight(effect_id.height),
@@ -73,8 +73,8 @@ impl From<contract::ApplicationId> for ApplicationId {
     }
 }
 
-impl From<writable_system::ApplicationId> for ApplicationId {
-    fn from(application_id: writable_system::ApplicationId) -> Self {
+impl From<system::ApplicationId> for ApplicationId {
+    fn from(application_id: system::ApplicationId) -> Self {
         ApplicationId {
             bytecode: BytecodeId(application_id.bytecode_id.into()),
             creation: application_id.creation.into(),
@@ -116,8 +116,8 @@ impl From<contract::HashValue> for HashValue {
     }
 }
 
-impl From<writable_system::HashValue> for HashValue {
-    fn from(hash_value: writable_system::HashValue) -> Self {
+impl From<system::HashValue> for HashValue {
+    fn from(hash_value: system::HashValue) -> Self {
         HashValue::from([
             hash_value.part1,
             hash_value.part2,
@@ -131,8 +131,8 @@ impl From<writable_system::HashValue> for HashValue {
     }
 }
 
-impl From<writable_system::SystemBalance> for SystemBalance {
-    fn from(balance: writable_system::SystemBalance) -> Self {
+impl From<system::SystemBalance> for SystemBalance {
+    fn from(balance: system::SystemBalance) -> Self {
         let value = ((balance.upper_half as u128) << 64) | (balance.lower_half as u128);
         SystemBalance(value)
     }
