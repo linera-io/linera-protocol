@@ -64,7 +64,8 @@ impl Contract for FungibleToken {
         argument: &[u8],
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, Self::Error> {
-        let request = ApplicationCall::from_bcs_bytes(argument).map_err(Error::InvalidArgument)?;
+        let request =
+            ApplicationCall::from_bcs_bytes(argument).map_err(Error::InvalidApplicationCall)?;
         let mut result = ApplicationCallResult::default();
 
         match request {
@@ -90,7 +91,7 @@ impl Contract for FungibleToken {
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<SessionCallResult, Self::Error> {
         let transfer =
-            ApplicationTransfer::from_bcs_bytes(argument).map_err(Error::InvalidArgument)?;
+            ApplicationTransfer::from_bcs_bytes(argument).map_err(Error::InvalidSessionCall)?;
         let mut balance =
             u128::from_bcs_bytes(&session.data).expect("Session contains corrupt data");
 
@@ -260,9 +261,13 @@ pub enum Error {
     #[error("Applications must identify themselves to perform transfers")]
     MissingSourceApplication,
 
-    /// Invalid serialized [`Transfer`].
-    #[error("Cross-application call argument is not a valid serialized transfer")]
-    InvalidArgument(#[source] bcs::Error),
+    /// Invalid serialized [`ApplicationCall`].
+    #[error("Cross-application call argument is not a valid request")]
+    InvalidApplicationCall(#[source] bcs::Error),
+
+    /// Invalid serialized [`SessionCall`].
+    #[error("Cross-application session call argument is not a valid request")]
+    InvalidSessionCall(#[source] bcs::Error),
 
     /// Incorrect token ID in operation.
     #[error("Operation attempts to transfer the incorrect token")]
