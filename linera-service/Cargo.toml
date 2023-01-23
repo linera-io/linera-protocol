@@ -23,6 +23,7 @@ linera-rpc = { path = "../linera-rpc" }
 linera-storage = { path = "../linera-storage" }
 linera-views = { path = "../linera-views" }
 log = "0.4.14"
+parse_duration = "2.1.1"
 serde = { version = "1.0.130", features = ["derive"] }
 serde_json = "1.0.68"
 structopt = "0.3.23"
