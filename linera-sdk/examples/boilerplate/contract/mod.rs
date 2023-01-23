@@ -21,7 +21,7 @@ wit_bindgen_guest_rust::import!("writable_system.wit");
 mod conversions_from_wit;
 mod conversions_to_wit;
 mod exported_futures;
-mod system_api;
+pub mod system_api;
 
 use self::exported_futures::{
     CallApplication, CallSession, ExecuteEffect, ExecuteOperation, Initialize,

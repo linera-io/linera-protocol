@@ -22,28 +22,28 @@ impl ApplicationState {
             bcs::from_bytes(&bytes).expect("Invalid service state")
         }
     }
+}
 
-    /// Retrieve the current chain ID.
-    #[allow(dead_code)]
-    pub fn current_chain_id() -> ChainId {
-        ChainId(system::chain_id().into())
-    }
+/// Retrieve the current chain ID.
+#[allow(dead_code)]
+pub fn current_chain_id() -> ChainId {
+    ChainId(system::chain_id().into())
+}
 
-    /// Retrieve the current application ID.
-    #[allow(dead_code)]
-    pub fn current_application_id() -> ApplicationId {
-        system::application_id().into()
-    }
+/// Retrieve the current application ID.
+#[allow(dead_code)]
+pub fn current_application_id() -> ApplicationId {
+    system::application_id().into()
+}
 
-    /// Retrieve the current system balance.
-    #[allow(dead_code)]
-    pub fn current_system_balance() -> SystemBalance {
-        system::read_system_balance().into()
-    }
+/// Retrieve the current system balance.
+#[allow(dead_code)]
+pub fn current_system_balance() -> SystemBalance {
+    system::read_system_balance().into()
+}
 
-    /// Retrieve the current system time.
-    #[allow(dead_code)]
-    pub fn current_system_time() -> Timestamp {
-        system::read_system_timestamp().into()
-    }
+/// Retrieves the current system time.
+#[allow(dead_code)]
+pub fn current_system_time() -> Timestamp {
+    system::read_system_timestamp().into()
 }

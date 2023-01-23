@@ -7,6 +7,7 @@ mod interface;
 mod state;
 
 use self::{
+    boilerplate::system_api,
     interface::{
         types::{self, AccountOwner, Nonce},
         ApplicationCall, ApplicationTransfer, SignedTransfer, Transfer,
@@ -166,11 +167,11 @@ impl FungibleToken {
         let (source, payload) = signed_transfer.check_signature()?;
 
         ensure!(
-            payload.token_id == Self::current_application_id(),
+            payload.token_id == system_api::current_application_id(),
             Error::IncorrectTokenId
         );
         ensure!(
-            payload.source_chain == Self::current_chain_id(),
+            payload.source_chain == system_api::current_chain_id(),
             Error::IncorrectSourceChain
         );
         ensure!(
@@ -202,7 +203,7 @@ impl FungibleToken {
 
     /// Credits an account or forward it to another micro-chain.
     fn finish_transfer(&mut self, transfer: Transfer) -> ExecutionResult {
-        if transfer.destination_chain == Self::current_chain_id() {
+        if transfer.destination_chain == system_api::current_chain_id() {
             self.credit(transfer.destination_account, transfer.amount);
             ExecutionResult::default()
         } else {
