@@ -24,6 +24,15 @@ pub enum ApplicationCall {
     Delegated(SignedTransfer),
 }
 
+/// A cross-application call into a session.
+#[derive(Deserialize, Serialize)]
+pub enum SessionCall {
+    /// A request for the session's balance.
+    Balance,
+    /// A transfer from the session.
+    Transfer(ApplicationTransfer),
+}
+
 /// A cross-application transfer request.
 #[derive(Deserialize, Serialize)]
 pub enum ApplicationTransfer {
