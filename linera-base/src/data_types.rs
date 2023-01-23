@@ -48,6 +48,12 @@ impl Timestamp {
     pub fn micros(&self) -> u64 {
         self.0
     }
+
+    /// Returns the number of microseconds from `other` until `self`, or `0` if `other` is not
+    /// earlier than `self`.
+    pub fn saturating_diff_micros(&self, other: Timestamp) -> u64 {
+        self.0.saturating_sub(other.0)
+    }
 }
 
 impl From<u64> for Timestamp {
