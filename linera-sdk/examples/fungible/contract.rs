@@ -92,23 +92,8 @@ impl Contract for FungibleToken {
     ) -> Result<SessionCallResult, Self::Error> {
         let transfer =
             ApplicationTransfer::from_bcs_bytes(argument).map_err(Error::InvalidSessionCall)?;
-        let mut balance =
-            u128::from_bcs_bytes(&session.data).expect("Session contains corrupt data");
 
-        ensure!(
-            balance >= transfer.amount(),
-            Error::InsufficientSessionBalance
-        );
-
-        balance -= transfer.amount();
-
-        let updated_session = (balance > 0)
-            .then(|| bcs::to_bytes(&balance).expect("Serializing a `u128` should not fail"));
-
-        Ok(SessionCallResult {
-            inner: self.finish_application_transfer(transfer),
-            data: updated_session,
-        })
+        self.handle_session_balance(session.data)
     }
 }
 
@@ -155,6 +140,31 @@ impl FungibleToken {
         self.debit(source, transfer.amount())?;
 
         Ok(self.finish_application_transfer(transfer))
+    }
+
+    /// Handles a session transfer request sent by an application.
+    fn handle_session_transfer(
+        &mut self,
+        transfer: ApplicationTransfer,
+        session_data: Vec<u8>,
+    ) -> Result<SessionCallResult, Error> {
+        let mut balance =
+            u128::from_bcs_bytes(&session_data).expect("Session contains corrupt data");
+
+        ensure!(
+            balance >= transfer.amount(),
+            Error::InsufficientSessionBalance
+        );
+
+        balance -= transfer.amount();
+
+        let updated_session = (balance > 0)
+            .then(|| bcs::to_bytes(&balance).expect("Serializing a `u128` should not fail"));
+
+        Ok(SessionCallResult {
+            inner: self.finish_application_transfer(transfer),
+            data: updated_session,
+        })
     }
 
     /// Checks if a signed transfer can be executed.
