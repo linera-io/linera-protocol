@@ -52,6 +52,9 @@ async fn make_state_hash(state: SystemExecutionState) -> HashValue {
         .expect("hashing from memory should not fail")
 }
 
+/// The test worker accepts blocks with a timestamp this far in the future.
+const TEST_GRACE_PERIOD_MICROS: u64 = 500_000;
+
 /// Instantiate the protocol with a single validator. Returns the corresponding committee
 /// and the (non-sharded, in-memory) "worker" that we can interact with.
 fn init_worker<S>(client: S, is_client: bool) -> (Committee, WorkerState<S>)
@@ -63,7 +66,8 @@ where
     let committee = Committee::make_simple(vec![ValidatorName(key_pair.public())]);
     let worker = WorkerState::new("Single validator node".to_string(), Some(key_pair), client)
         .with_allow_inactive_chains(is_client)
-        .with_allow_messages_from_deprecated_epochs(is_client);
+        .with_allow_messages_from_deprecated_epochs(is_client)
+        .with_grace_period_micros(TEST_GRACE_PERIOD_MICROS);
     (committee, worker)
 }
 
@@ -483,13 +487,15 @@ where
     };
 
     {
-        let block_proposal = make_proposal(make_tick_block(u64::MAX, None));
-        // Timestamp in the future
+        let time = Timestamp::now().micros() + TEST_GRACE_PERIOD_MICROS + 1_000_000;
+        let block_proposal = make_proposal(make_tick_block(time, None));
+        // Timestamp too far in the future
         assert!(worker.handle_block_proposal(block_proposal).await.is_err());
     }
 
+    let block_0_time = Timestamp::now().micros() + TEST_GRACE_PERIOD_MICROS;
     let certificate = {
-        let block = make_tick_block(1000, None);
+        let block = make_tick_block(block_0_time, None);
         let block_proposal = make_proposal(block.clone());
         assert!(worker.handle_block_proposal(block_proposal).await.is_ok());
 
@@ -501,7 +507,7 @@ where
             committees: [(epoch, committee.clone())].into_iter().collect(),
             ownership: ChainOwnership::single(key_pair.public().into()),
             balance,
-            timestamp: Timestamp::from(1000),
+            timestamp: Timestamp::from(block_0_time),
             registry: ApplicationRegistry::default(),
         };
         let state_hash = make_state_hash(system_state).await;
@@ -516,9 +522,10 @@ where
         .fully_handle_certificate(certificate.clone())
         .await
         .expect("handle certificate with valid tick");
+    assert!(Timestamp::now().micros() >= block_0_time);
 
     {
-        let block_proposal = make_proposal(make_tick_block(500, Some(&certificate)));
+        let block_proposal = make_proposal(make_tick_block(block_0_time - 1, Some(&certificate)));
         // Timestamp older than previous one
         assert!(worker.handle_block_proposal(block_proposal).await.is_err());
     }

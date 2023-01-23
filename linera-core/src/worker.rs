@@ -23,6 +23,7 @@ use linera_views::{
 use std::{
     collections::{BTreeMap, VecDeque},
     sync::Arc,
+    time::Duration,
 };
 use thiserror::Error;
 
@@ -155,6 +156,9 @@ pub struct WorkerState<StorageClient> {
     allow_inactive_chains: bool,
     /// Whether new messages from deprecated epochs are allowed.
     allow_messages_from_deprecated_epochs: bool,
+    /// Blocks with a timestamp this far in the future will still be accepted, but the validator
+    /// will wait until that timestamp before voting.
+    grace_period_micros: u64,
 }
 
 impl<Client> WorkerState<Client> {
@@ -165,6 +169,7 @@ impl<Client> WorkerState<Client> {
             storage,
             allow_inactive_chains: false,
             allow_messages_from_deprecated_epochs: false,
+            grace_period_micros: 0,
         }
     }
 
@@ -175,6 +180,15 @@ impl<Client> WorkerState<Client> {
 
     pub fn with_allow_messages_from_deprecated_epochs(mut self, value: bool) -> Self {
         self.allow_messages_from_deprecated_epochs = value;
+        self
+    }
+
+    /// Returns an instance with the specified grace period, in microseconds.
+    ///
+    /// Blocks with a timestamp this far in the future will still be accepted, but the validator
+    /// will wait until that timestamp before voting.
+    pub fn with_grace_period_micros(mut self, grace_period_micros: u64) -> Self {
+        self.grace_period_micros = grace_period_micros;
         self
     }
 
@@ -589,10 +603,18 @@ where
             // unchanged.
             return Ok(ChainInfoResponse::new(&chain, self.key_pair()));
         }
+        let time_till_block = proposal
+            .content
+            .block
+            .timestamp
+            .saturating_diff_micros(Timestamp::now());
         ensure!(
-            proposal.content.block.timestamp <= Timestamp::now(),
+            time_till_block <= self.grace_period_micros,
             WorkerError::InvalidTimestamp
         );
+        if time_till_block > 0 {
+            tokio::time::sleep(Duration::from_micros(time_till_block)).await;
+        }
         let (effects, state_hash) = {
             let effects = chain.execute_block(&proposal.content.block).await?;
             let hash = chain.execution_state_hash.get().expect("was just computed");

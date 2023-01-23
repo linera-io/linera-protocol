@@ -38,6 +38,7 @@ struct ServerContext {
     cross_chain_config: CrossChainConfig,
     notification_config: NotificationConfig,
     shard: Option<usize>,
+    grace_period_micros: u64,
 }
 
 impl ServerContext {
@@ -58,7 +59,8 @@ impl ServerContext {
             storage,
         )
         .with_allow_inactive_chains(false)
-        .with_allow_messages_from_deprecated_epochs(false);
+        .with_allow_messages_from_deprecated_epochs(false)
+        .with_grace_period_micros(self.grace_period_micros);
         (state, shard_id, shard.clone())
     }
 
@@ -316,6 +318,11 @@ enum ServerCommand {
         /// Runs a specific shard (from 0 to shards-1)
         #[structopt(long)]
         shard: Option<usize>,
+
+        /// Blocks with a timestamp this far in the future will still be accepted, but the validator
+        /// will wait until that timestamp before voting.
+        #[structopt(long, default_value = "500000")]
+        grace_period_micros: u64,
     },
 
     /// Act as a trusted third-party and generate all server configurations
@@ -346,6 +353,7 @@ async fn main() {
             notification_config,
             genesis_config_path,
             shard,
+            grace_period_micros,
         } => {
             let genesis_config = GenesisConfig::read(&genesis_config_path)
                 .expect("Fail to read initial chain config");
@@ -356,6 +364,7 @@ async fn main() {
                 cross_chain_config,
                 notification_config,
                 shard,
+                grace_period_micros,
             };
             storage_config
                 .run_with_storage(&genesis_config, job)
