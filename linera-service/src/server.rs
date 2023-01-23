@@ -321,8 +321,8 @@ enum ServerCommand {
 
         /// Blocks with a timestamp this far in the future will still be accepted, but the validator
         /// will wait until that timestamp before voting.
-        #[structopt(long, default_value = "500000")]
-        grace_period_micros: u64,
+        #[structopt(long, default_value = "500ms", parse(try_from_str = parse_duration))]
+        grace_period: u64,
     },
 
     /// Act as a trusted third-party and generate all server configurations
@@ -336,6 +336,14 @@ enum ServerCommand {
         #[structopt(long)]
         committee: Option<PathBuf>,
     },
+}
+
+/// Parses a string into a duration and returns the duration in microseconds.
+fn parse_duration(s: &str) -> Result<u64, parse_duration::parse::Error> {
+    Ok(parse_duration::parse(s)?
+        .as_micros()
+        .try_into()
+        .unwrap_or(u64::MAX))
 }
 
 #[tokio::main]
@@ -353,7 +361,7 @@ async fn main() {
             notification_config,
             genesis_config_path,
             shard,
-            grace_period_micros,
+            grace_period,
         } => {
             let genesis_config = GenesisConfig::read(&genesis_config_path)
                 .expect("Fail to read initial chain config");
@@ -364,7 +372,7 @@ async fn main() {
                 cross_chain_config,
                 notification_config,
                 shard,
-                grace_period_micros,
+                grace_period_micros: grace_period,
             };
             storage_config
                 .run_with_storage(&genesis_config, job)
