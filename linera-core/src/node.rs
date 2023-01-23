@@ -29,7 +29,7 @@ use thiserror::Error;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
 /// A pinned [`Stream`] of Notifications.
-pub type NotificationStream = Pin<Box<dyn Stream<Item = Notification>>>;
+pub type NotificationStream = Pin<Box<dyn Stream<Item = Notification> + Send>>;
 
 /// How to communicate with a validator or a local node.
 #[async_trait]

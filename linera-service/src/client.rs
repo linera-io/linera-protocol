@@ -5,6 +5,7 @@
 #![deny(warnings)]
 
 use async_trait::async_trait;
+use futures::StreamExt;
 use linera_base::{
     committee::ValidatorState,
     crypto::KeyPair,
@@ -32,6 +33,7 @@ use linera_rpc::{
 use linera_service::{
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain, WalletState},
     storage::{Runnable, StorageConfig},
+    tracker::NotificationTracker,
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -521,6 +523,17 @@ enum ClientCommand {
         /// Number of additional chains to create
         num: u32,
     },
+
+    /// Watch the network for notifications.
+    #[structopt(name = "watch")]
+    Watch {
+        /// The collection of Chain IDs to watch.
+        chain_ids: Vec<ChainId>,
+
+        /// Show all notifications from all validators.
+        #[structopt(long)]
+        raw: bool,
+    },
 }
 
 struct Job(ClientContext, ClientCommand);
@@ -759,6 +772,29 @@ where
                     .await;
                 context.save_chains();
             }
+
+            Watch { chain_ids, raw } => {
+                debug!("Watching for notifications for Chains: {:?}", &chain_ids);
+                let chain_id = match chain_ids.get(0) {
+                    None => {
+                        warn!("No chains specified, exiting...");
+                        return Ok(());
+                    }
+                    Some(chain_id) => chain_id,
+                };
+                let mut client_state = context.make_chain_client(storage, *chain_id);
+                let mut tracker = NotificationTracker::default();
+                let mut notification_stream = client_state.subscribe_all(chain_ids).await?;
+                while let Some(notification) = notification_stream.next().await {
+                    if raw {
+                        info!("{:?}", notification);
+                    } else if tracker.insert(notification.clone()) {
+                        info!("{:?}", notification);
+                    }
+                }
+                warn!("Notification stream ended.")
+            }
+
             CreateGenesisConfig { .. } => unreachable!(),
         }
         Ok(())
