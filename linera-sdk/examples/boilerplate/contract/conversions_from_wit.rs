@@ -5,7 +5,7 @@
 
 use super::{
     contract,
-    writable_system::{self as system, PollLoad},
+    writable_system::{self as system, PollCallResult, PollLoad},
 };
 use linera_sdk::{
     ApplicationId, BlockHeight, BytecodeId, CalleeContext, ChainId, EffectContext, EffectId,
@@ -143,6 +143,40 @@ impl From<PollLoad> for Poll<Result<Vec<u8>, String>> {
         match poll_get {
             PollLoad::Ready(bytes) => Poll::Ready(bytes),
             PollLoad::Pending => Poll::Pending,
+        }
+    }
+}
+
+impl From<PollCallResult> for Poll<Result<(Vec<u8>, Vec<SessionId>), String>> {
+    fn from(poll_call_result: PollCallResult) -> Poll<Result<(Vec<u8>, Vec<SessionId>), String>> {
+        match poll_call_result {
+            PollCallResult::Ready(Ok(result)) => Poll::Ready(Ok(result.into())),
+            PollCallResult::Ready(Err(message)) => Poll::Ready(Err(message)),
+            PollCallResult::Pending => Poll::Pending,
+        }
+    }
+}
+
+impl From<system::CallResult> for (Vec<u8>, Vec<SessionId>) {
+    fn from(call_result: system::CallResult) -> (Vec<u8>, Vec<SessionId>) {
+        let value = call_result.value;
+
+        let sessions = call_result
+            .sessions
+            .into_iter()
+            .map(SessionId::from)
+            .collect();
+
+        (value, sessions)
+    }
+}
+
+impl From<system::SessionId> for SessionId {
+    fn from(session_id: system::SessionId) -> SessionId {
+        SessionId {
+            application_id: session_id.application_id.into(),
+            kind: session_id.kind,
+            index: session_id.index,
         }
     }
 }

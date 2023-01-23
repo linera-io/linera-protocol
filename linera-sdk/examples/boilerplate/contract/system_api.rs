@@ -3,7 +3,7 @@
 
 use super::{super::ApplicationState, writable_system as system};
 use futures::future;
-use linera_sdk::{ApplicationId, ChainId, SystemBalance, Timestamp};
+use linera_sdk::{ApplicationId, ChainId, SessionId, SystemBalance, Timestamp};
 use std::future::Future;
 
 #[allow(dead_code)]
@@ -58,4 +58,27 @@ pub fn current_system_balance() -> SystemBalance {
 #[allow(dead_code)]
 pub fn current_system_time() -> Timestamp {
     system::read_system_timestamp().into()
+}
+
+/// Calls another application.
+#[allow(dead_code)]
+pub async fn call_application(
+    authenticated: bool,
+    application: ApplicationId,
+    argument: &[u8],
+    forwarded_sessions: Vec<SessionId>,
+) -> Result<(Vec<u8>, Vec<SessionId>), String> {
+    let forwarded_sessions: Vec<_> = forwarded_sessions
+        .into_iter()
+        .map(system::SessionId::from)
+        .collect();
+
+    let future = system::TryCallApplication::new(
+        authenticated,
+        application.into(),
+        argument,
+        &forwarded_sessions,
+    );
+
+    future::poll_fn(|_context| future.poll().into()).await
 }
