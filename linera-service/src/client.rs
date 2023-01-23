@@ -58,7 +58,7 @@ struct ClientContext {
 }
 
 impl ClientContext {
-    async fn from_options(options: &ClientOptions) -> Self {
+    fn from_options(options: &ClientOptions) -> Self {
         let wallet_state_path = options.wallet_state_path.clone();
         let wallet_state =
             WalletState::read_or_create(&wallet_state_path).expect("Unable to read user chains");
@@ -872,7 +872,7 @@ where
 async fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let options = ClientOptions::from_args();
-    let mut context = ClientContext::from_options(&options).await;
+    let mut context = ClientContext::from_options(&options);
     match options.command {
         ClientCommand::CreateGenesisConfig {
             committee_config_path,
