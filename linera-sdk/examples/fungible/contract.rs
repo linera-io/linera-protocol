@@ -10,7 +10,7 @@ use self::{
     boilerplate::system_api,
     interface::{
         types::{self, AccountOwner, Nonce},
-        ApplicationCall, ApplicationTransfer, SignedTransfer, Transfer,
+        ApplicationCall, ApplicationTransfer, SessionCall, SignedTransfer, Transfer,
     },
     state::{ApplicationState, FungibleToken},
 };
@@ -90,10 +90,12 @@ impl Contract for FungibleToken {
         argument: &[u8],
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<SessionCallResult, Self::Error> {
-        let transfer =
-            ApplicationTransfer::from_bcs_bytes(argument).map_err(Error::InvalidSessionCall)?;
+        let request = SessionCall::from_bcs_bytes(argument).map_err(Error::InvalidSessionCall)?;
 
-        self.handle_session_balance(session.data)
+        match request {
+            SessionCall::Balance => self.handle_session_balance(session.data),
+            SessionCall::Transfer(transfer) => self.handle_session_transfer(transfer, session.data),
+        }
     }
 }
 
@@ -140,6 +142,21 @@ impl FungibleToken {
         self.debit(source, transfer.amount())?;
 
         Ok(self.finish_application_transfer(transfer))
+    }
+
+    /// Handles a session balance request sent by an application.
+    fn handle_session_balance(&self, session_data: Vec<u8>) -> Result<SessionCallResult, Error> {
+        let balance_bytes = session_data.clone();
+        let mut application_call_result = ApplicationCallResult::default();
+
+        application_call_result.value = balance_bytes;
+
+        let session_call_result = SessionCallResult {
+            inner: application_call_result,
+            data: Some(session_data),
+        };
+
+        Ok(session_call_result)
     }
 
     /// Handles a session transfer request sent by an application.
