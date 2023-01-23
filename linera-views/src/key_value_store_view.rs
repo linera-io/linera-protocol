@@ -382,7 +382,7 @@ where
             }
             update = updates.next();
         }
-        Ok(SimpleTypeIterator::<Vec<u8>, ViewError>::new(keys))
+        Ok(SimpleTypeIterator::new(keys))
     }
 
     async fn find_stripped_key_values_by_prefix(
@@ -437,9 +437,7 @@ where
             }
             update = updates.next();
         }
-        Ok(SimpleTypeIterator::<(Vec<u8>, Vec<u8>), ViewError>::new(
-            key_values,
-        ))
+        Ok(SimpleTypeIterator::new(key_values))
     }
 
     async fn write_batch(&mut self, batch: Batch) -> Result<(), ViewError> {
