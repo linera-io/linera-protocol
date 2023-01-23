@@ -4,7 +4,9 @@
 #[path = "./types.rs"]
 pub mod types;
 
-use self::types::{AccountOwner, Nonce};
+pub use self::types::AccountOwner;
+
+use self::types::Nonce;
 use linera_sdk::{
     crypto::{BcsSignable, CryptoError, PublicKey, Signature},
     ApplicationId, ChainId,
