@@ -13,9 +13,10 @@ use self::{
 };
 use async_trait::async_trait;
 use fungible::{AccountOwner, ApplicationTransfer, SignedTransfer, Transfer};
+use futures::{future, stream, StreamExt, TryFutureExt, TryStreamExt};
 use linera_sdk::{
     ensure, ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
-    OperationContext, Session, SessionCallResult, SessionId,
+    FromBcsBytes, OperationContext, Session, SessionCallResult, SessionId,
 };
 use serde::{Deserialize, Serialize};
 use std::mem;
@@ -75,6 +76,7 @@ impl Contract for CrowdFunding {
             bcs::from_bytes(argument).map_err(Error::InvalidCrossApplicationCall)?;
 
         match call {
+            ApplicationCall::Pledge => self.application_pledge(context, sessions).await?,
             ApplicationCall::DelegatedPledge { transfer } => self.signed_pledge(transfer).await?,
             ApplicationCall::Collect => self.collect_pledges().await?,
             ApplicationCall::Cancel => self.cancel_campaign().await?,
@@ -119,6 +121,87 @@ impl CrowdFunding {
             .await?;
 
         self.finish_pledge(source, amount)
+    }
+
+    /// Adds a pledge sent from an application using token sessions.
+    async fn application_pledge(
+        &mut self,
+        context: &CalleeContext,
+        sessions: Vec<SessionId>,
+    ) -> Result<(), Error> {
+        self.check_session_tokens(&sessions)?;
+
+        let session_balances = Self::query_session_balances(&sessions).await?;
+        let amount = session_balances.iter().sum();
+
+        ensure!(amount > 0, Error::EmptyPledge);
+
+        Self::collect_session_tokens(sessions, session_balances).await?;
+
+        let source_application = context
+            .authenticated_caller_id
+            .ok_or(Error::MissingSourceApplication)?;
+        let source = AccountOwner::Application(source_application);
+
+        self.finish_pledge(source, amount)
+    }
+
+    /// Checks that the sessions pledged all use the correct token.
+    fn check_session_tokens(&self, sessions: &[SessionId]) -> Result<(), Error> {
+        ensure!(
+            sessions
+                .iter()
+                .all(|session_id| session_id.application_id == self.parameters().token),
+            Error::IncorrectToken
+        );
+
+        Ok(())
+    }
+
+    /// Gathers the balances in all the pledged sessions.
+    async fn query_session_balances(sessions: &[SessionId]) -> Result<Vec<u128>, Error> {
+        let balance_query = bcs::to_bytes(&fungible::SessionCall::Balance)
+            .map_err(Error::InvalidSessionBalanceQuery)?;
+
+        stream::iter(sessions)
+            .then(|session| {
+                system_api::call_session(false, *session, &balance_query, vec![])
+                    .map_err(Error::SessionBalance)
+            })
+            .and_then(|(balance_bytes, _)| {
+                future::ready(
+                    u128::from_bcs_bytes(&balance_bytes).map_err(Error::InvalidSessionBalance),
+                )
+            })
+            .try_collect()
+            .await
+    }
+
+    /// Collects all tokens in the sessions and places them in custody of the campaign.
+    async fn collect_session_tokens(
+        sessions: Vec<SessionId>,
+        balances: Vec<u128>,
+    ) -> Result<(), Error> {
+        let destination_account = AccountOwner::Application(system_api::current_application_id());
+        let destination_chain = system_api::current_chain_id();
+
+        stream::iter(sessions.into_iter().zip(balances))
+            .map(Ok)
+            .try_for_each_concurrent(None, move |(session, balance)| async move {
+                let transfer = Transfer {
+                    destination_account,
+                    destination_chain,
+                    amount: balance,
+                };
+                let transfer_bytes = bcs::to_bytes(&transfer).map_err(Error::InvalidTransfer)?;
+
+                system_api::call_session(false, session, &transfer_bytes, vec![])
+                    .map_err(Error::Transfer)
+                    .await?;
+
+                Ok(())
+            })
+            .await
     }
 
     /// Marks a pledge in the application state, so that it can be returned if the campaign is
@@ -257,6 +340,10 @@ pub enum Error {
     #[error("Pledge uses the incorrect destination account")]
     IncorrectDestination,
 
+    /// Cross-application call without a source application ID.
+    #[error("Applications must identify themselves to perform transfers")]
+    MissingSourceApplication,
+
     /// Fungible Token application did not execute the requested transfer.
     #[error("Failed to transfer tokens: {0}")]
     Transfer(String),
@@ -276,6 +363,18 @@ pub enum Error {
     /// Fungible Token application returned an invalid balance.
     #[error("Received an invalid balance from token application")]
     InvalidBalance(bcs::Error),
+
+    /// [`fungible::SessionCall::Balance`] could not be serialized.
+    #[error("Can't check session balance because the query can't be serialized")]
+    InvalidSessionBalanceQuery(bcs::Error),
+
+    /// Fungible Token application did not return the session's balance.
+    #[error("Failed to read session balance: {0}")]
+    SessionBalance(String),
+
+    /// Fungible Token application returned an invalid session balance.
+    #[error("Received an invalid session balance from token application")]
+    InvalidSessionBalance(bcs::Error),
 
     /// Can't collect pledges before the campaign target has been reached.
     #[error("Crowd-funding campaign has not reached its target yet")]
