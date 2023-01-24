@@ -5,10 +5,13 @@
 
 mod state;
 
-use self::state::{ApplicationState, CrowdFunding};
+use self::{
+    boilerplate::system_api,
+    state::{ApplicationState, CrowdFunding},
+};
 use async_trait::async_trait;
 use linera_sdk::{
-    ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
+    ensure, ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
     OperationContext, Session, SessionCallResult, SessionId,
 };
 use thiserror::Error;
@@ -22,7 +25,14 @@ impl Contract for CrowdFunding {
         _context: &OperationContext,
         argument: &[u8],
     ) -> Result<ExecutionResult, Self::Error> {
-        todo!();
+        self.parameters = Some(bcs::from_bytes(argument).map_err(Error::InvalidParameters)?);
+
+        ensure!(
+            self.parameters().deadline > system_api::current_system_time(),
+            Error::DeadlineInThePast
+        );
+
+        Ok(ExecutionResult::default())
     }
 
     async fn execute_operation(
@@ -63,7 +73,15 @@ impl Contract for CrowdFunding {
 
 /// An error that can occur during the contract execution.
 #[derive(Debug, Error)]
-pub enum Error {}
+pub enum Error {
+    /// Failure to deserialize the initialization parameters.
+    #[error("Crowd-funding campaign parameters are invalid")]
+    InvalidParameters(bcs::Error),
+
+    /// Crowd-funding campaigns can't start after its deadline.
+    #[error("Crowd-funding campaign can not start after its deadline")]
+    DeadlineInThePast,
+}
 
 #[path = "../boilerplate/contract/mod.rs"]
 mod boilerplate;
