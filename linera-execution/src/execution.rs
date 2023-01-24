@@ -149,8 +149,8 @@ where
         for effect in &result.effects {
             system_result.effects.push((
                 effect.0.clone(),
-                SystemEffect::RegisterApplication {
-                    application: application_description.clone(),
+                SystemEffect::RegisterApplications {
+                    applications: vec![application_description.clone()],
                 },
             ));
         }
