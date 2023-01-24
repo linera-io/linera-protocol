@@ -524,7 +524,7 @@ SystemEffect:
     5:
       BytecodePublished: UNIT
     6:
-      DeclareApplication:
+      RegisterApplication:
         STRUCT:
           - application:
               TYPENAME: UserApplicationDescription
