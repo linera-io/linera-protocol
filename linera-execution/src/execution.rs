@@ -86,7 +86,7 @@ where
 }
 
 enum UserAction<'a> {
-    Initialize(&'a OperationContext, &'a [u8]),
+    Initialize(&'a OperationContext),
     Operation(&'a OperationContext, &'a [u8]),
     Effect(&'a EffectContext, &'a [u8]),
 }
@@ -128,8 +128,14 @@ where
         );
         // Make the call to user code.
         let result = match action {
-            UserAction::Initialize(context, argument) => {
-                application.initialize(context, &runtime, argument).await?
+            UserAction::Initialize(context) => {
+                application
+                    .initialize(
+                        context,
+                        &runtime,
+                        &application_description.initialization_argument,
+                    )
+                    .await?
             }
             UserAction::Operation(context, operation) => {
                 application
@@ -146,11 +152,16 @@ where
         // Make sure to declare the application first for all recipients of the user
         // execution result.
         let mut system_result = RawExecutionResult::default();
+        let applications = self
+            .system
+            .registry
+            .describe_application_with_dependencies(application_id)
+            .await?;
         for effect in &result.effects {
             system_result.effects.push((
                 effect.0.clone(),
                 SystemEffect::RegisterApplications {
-                    applications: vec![application_description.clone()],
+                    applications: applications.clone(),
                 },
             ));
         }
@@ -178,11 +189,10 @@ where
             (ApplicationId::System, Operation::System(op)) => {
                 let (result, new_application) = self.system.execute_operation(context, op).await?;
                 let mut results = vec![ExecutionResult::System(result)];
-                if let Some(application) = new_application {
-                    let user_action =
-                        UserAction::Initialize(context, &application.initialization_argument);
+                if let Some(application_id) = new_application {
+                    let user_action = UserAction::Initialize(context);
                     results.extend(
-                        self.run_user_action(application.id, context.chain_id, user_action)
+                        self.run_user_action(application_id, context.chain_id, user_action)
                             .await?,
                     );
                 }
