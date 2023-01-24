@@ -20,7 +20,7 @@ use linera_core::{
     client::{ChainClientState, ValidatorNodeProvider},
     data_types::{ChainInfoQuery, ChainInfoResponse},
     node::{LocalNodeClient, ValidatorNode},
-    worker::WorkerState,
+    worker::{Reason, WorkerState},
 };
 use linera_execution::{
     system::{Address, Amount, Balance, SystemOperation, UserData},
@@ -534,6 +534,13 @@ enum ClientCommand {
         #[structopt(long)]
         raw: bool,
     },
+
+    /// Acts as a Synchronizer on the network.
+    #[structopt(name = "synchronize")]
+    Synchronize {
+        /// The collection of Chain IDs to synchronize for.
+        chain_ids: Vec<ChainId>,
+    },
 }
 
 struct Job(ClientContext, ClientCommand);
@@ -777,7 +784,7 @@ where
             }
 
             Watch { chain_ids, raw } => {
-                debug!("Watching for notifications for Chains: {:?}", &chain_ids);
+                debug!("Watching for notifications for chains: {:?}", &chain_ids);
                 let chain_id = match chain_ids.get(0) {
                     None => {
                         warn!("No chains specified, exiting...");
@@ -793,6 +800,47 @@ where
                         info!("{:?}", notification);
                     } else if tracker.insert(notification.clone()) {
                         info!("{:?}", notification);
+                    }
+                }
+                warn!("Notification stream ended.")
+            }
+
+            Synchronize { chain_ids } => {
+                debug!("Synchronizing chains: {:#?}", &chain_ids);
+                let chain_id = match chain_ids.get(0) {
+                    None => {
+                        warn!("No chains specified, exiting...");
+                        return Ok(());
+                    }
+                    Some(chain_id) => chain_id,
+                };
+                let mut notification_stream = context
+                    .make_chain_client(storage.clone(), *chain_id)
+                    .subscribe_all(chain_ids)
+                    .await?;
+                let mut tracker = NotificationTracker::default();
+                while let Some(notification) = notification_stream.next().await {
+                    debug!("Received notification: {:?}", notification);
+                    let mut client =
+                        context.make_chain_client(storage.clone(), notification.chain_id);
+                    if tracker.insert(notification.clone()) {
+                        if let Err(e) = client.synchronize_and_recompute_balance().await {
+                            warn!("Failed to synchronize and recompute balance for notification {:?} with error: {:?}", notification, e);
+                            // If synchronization failed there is nothing to update validators about.
+                            continue;
+                        }
+                        match &notification.reason {
+                            Reason::NewBlock { .. } => {
+                                if let Err(e) = client.update_validators_about_local_chain().await {
+                                    warn!("Failed to update validators about the local chain after receiving notification {:?} with error: {:?}", notification, e);
+                                }
+                            }
+                            Reason::NewMessage { .. } => {
+                                if let Err(e) = client.process_inbox().await {
+                                    warn!("Failed to process inbox after receiving new message: {:?} with error: {:?}", notification, e);
+                                }
+                            }
+                        }
                     }
                 }
                 warn!("Notification stream ended.")
