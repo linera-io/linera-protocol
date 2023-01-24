@@ -48,7 +48,7 @@ impl Contract for CrowdFunding {
         _context: &EffectContext,
         _effect: &[u8],
     ) -> Result<ExecutionResult, Self::Error> {
-        todo!();
+        Err(Error::EffectsNotSupported)
     }
 
     async fn call_application(
@@ -74,6 +74,10 @@ impl Contract for CrowdFunding {
 /// An error that can occur during the contract execution.
 #[derive(Debug, Error)]
 pub enum Error {
+    /// Crowd-funding application doesn't support any cross-chain effects.
+    #[error("Crowd-funding application doesn't support any cross-chain effects")]
+    EffectsNotSupported,
+
     /// Failure to deserialize the initialization parameters.
     #[error("Crowd-funding campaign parameters are invalid")]
     InvalidParameters(bcs::Error),
