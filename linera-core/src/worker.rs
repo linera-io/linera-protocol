@@ -14,7 +14,7 @@ use linera_chain::{
     data_types::{Block, BlockProposal, Certificate, Message, Origin, Target, Value},
     ChainManagerOutcome, ChainStateView,
 };
-use linera_execution::{ApplicationId, Query, Response};
+use linera_execution::{ApplicationId, Destination, Effect, Query, Response};
 use linera_storage::Store;
 use linera_views::{
     log_view::LogView,
@@ -235,15 +235,15 @@ where
     }
 
     /// Try to execute a block proposal without any verification other than block execution.
-    pub(crate) async fn stage_block_execution(
+    pub async fn stage_block_execution(
         &mut self,
         block: &Block,
-    ) -> Result<ChainInfoResponse, WorkerError> {
+    ) -> Result<(Vec<(ApplicationId, Destination, Effect)>, ChainInfoResponse), WorkerError> {
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
-        chain.execute_block(block).await?;
+        let effects = chain.execute_block(block).await?;
         let info = ChainInfoResponse::new(&chain, None);
         // Do not save the new state.
-        Ok(info)
+        Ok((effects, info))
     }
 
     pub(crate) async fn query_application(

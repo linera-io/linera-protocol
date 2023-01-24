@@ -1303,7 +1303,7 @@ where
     chain_info_response
         .check(ValidatorName(worker.key_pair.unwrap().public()))
         .unwrap();
-    let (_, pending_value) = worker
+    let pending_value = worker
         .storage
         .load_active_chain(ChainId::root(1))
         .await
@@ -1314,7 +1314,7 @@ where
         .cloned()
         .unwrap();
     assert_eq!(
-        chain_info_response.info.manager.pending().unwrap().1,
+        *chain_info_response.info.manager.pending().unwrap(),
         pending_value
     );
 }

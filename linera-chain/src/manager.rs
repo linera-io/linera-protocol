@@ -138,10 +138,10 @@ impl ChainManager {
         }
     }
 
-    pub fn pending(&self) -> Option<&(Vote, Value)> {
+    pub fn pending(&self) -> Option<&Vote> {
         match self {
-            ChainManager::Single(manager) => manager.pending.as_ref(),
-            ChainManager::Multi(manager) => manager.pending.as_ref(),
+            ChainManager::Single(manager) => manager.pending.as_ref().map(|(vote, _)| vote),
+            ChainManager::Multi(manager) => manager.pending.as_ref().map(|(vote, _)| vote),
             _ => None,
         }
     }
@@ -280,8 +280,8 @@ impl ChainManager {
                         effects,
                         state_hash,
                     };
-                    let vote = Vote::new(HashValue::new(&value), key_pair);
-                    manager.pending = Some((vote, value));
+                    let vote_value = (Vote::new(HashValue::new(&value), key_pair), value);
+                    manager.pending = Some(vote_value);
                 }
             }
             ChainManager::Multi(manager) => {
@@ -297,8 +297,8 @@ impl ChainManager {
                         effects,
                         state_hash,
                     };
-                    let vote = Vote::new(HashValue::new(&value), key_pair);
-                    manager.pending = Some((vote, value));
+                    let vote_value = (Vote::new(HashValue::new(&value), key_pair), value);
+                    manager.pending = Some(vote_value);
                 }
             }
             _ => panic!("unexpected chain manager"),
@@ -325,10 +325,10 @@ impl ChainManager {
                         effects,
                         state_hash,
                     };
-                    let vote = Vote::new(HashValue::new(&value), key_pair);
+                    let vote_value = (Vote::new(HashValue::new(&value), key_pair), value);
                     // Ok to overwrite validation votes with confirmation votes at equal or
                     // higher round.
-                    manager.pending = Some((vote, value));
+                    manager.pending = Some(vote_value);
                 }
             }
             _ => panic!("unexpected chain manager"),

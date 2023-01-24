@@ -18,7 +18,8 @@ use linera_chain::{
     ChainError, ChainManager,
 };
 use linera_execution::{
-    ApplicationId, BytecodeLocation, ExecutionError, Query, Response, UserApplicationId,
+    ApplicationId, BytecodeLocation, Destination, Effect, ExecutionError, Query, Response,
+    UserApplicationId,
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -319,8 +320,8 @@ where
     pub(crate) async fn stage_block_execution(
         &self,
         block: &Block,
-    ) -> Result<ChainInfoResponse, NodeError> {
-        let info = self
+    ) -> Result<(Vec<(ApplicationId, Destination, Effect)>, ChainInfoResponse), NodeError> {
+        let (effects, info) = self
             .node
             .clone()
             .lock()
@@ -328,7 +329,7 @@ where
             .state
             .stage_block_execution(block)
             .await?;
-        Ok(info)
+        Ok((effects, info))
     }
 
     async fn try_process_certificates(
