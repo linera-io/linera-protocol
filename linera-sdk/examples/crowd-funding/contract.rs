@@ -7,10 +7,10 @@ mod state;
 
 use self::{
     boilerplate::system_api,
-    state::{ApplicationState, CrowdFunding},
+    state::{ApplicationState, CrowdFunding, Status},
 };
 use async_trait::async_trait;
-use fungible::{AccountOwner, SignedTransfer};
+use fungible::{AccountOwner, ApplicationTransfer, SignedTransfer, Transfer};
 use linera_sdk::{
     ensure, ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
     OperationContext, Session, SessionCallResult, SessionId,
@@ -47,6 +47,7 @@ impl Contract for CrowdFunding {
 
         match operation {
             Operation::Pledge { transfer } => self.signed_pledge(transfer).await?,
+            Operation::Collect => self.collect_pledges().await?,
         }
 
         Ok(ExecutionResult::default())
@@ -117,6 +118,50 @@ impl CrowdFunding {
         Ok(())
     }
 
+    /// Collects all pledges and completes the campaign if the target has been reached.
+    async fn collect_pledges(&mut self) -> Result<(), Error> {
+        let total = self.balance().await?;
+
+        match self.status {
+            Status::Active => {
+                ensure!(total >= self.parameters().target, Error::TargetNotReached);
+            }
+            Status::Complete => (),
+            Status::Cancelled => return Err(Error::Cancelled),
+        }
+
+        self.send(total, self.parameters().owner).await?;
+        self.pledges.clear();
+        self.status = Status::Complete;
+
+        Ok(())
+    }
+
+    /// Queries the token application to determine the total amount of tokens in custody.
+    async fn balance(&self) -> Result<u128, Error> {
+        let query_bytes = bcs::to_bytes(&fungible::ApplicationCall::Balance)
+            .map_err(Error::InvalidBalanceQuery)?;
+
+        let (response, _sessions) =
+            system_api::call_application(true, self.parameters().token, &query_bytes, vec![])
+                .await
+                .map_err(Error::Balance)?;
+
+        Ok(bcs::from_bytes(&response).map_err(Error::InvalidBalance)?)
+    }
+
+    /// Transfers `amount` tokens from the funds in custody to the `destination`.
+    async fn send(&self, amount: u128, destination: AccountOwner) -> Result<(), Error> {
+        let transfer = ApplicationTransfer::Static(Transfer {
+            destination_account: destination,
+            destination_chain: system_api::current_chain_id(),
+            amount,
+        });
+
+        self.transfer(fungible::ApplicationCall::Transfer(transfer))
+            .await
+    }
+
     /// Calls into the Fungible Token application to execute the `transfer`.
     async fn transfer(&self, transfer: fungible::ApplicationCall) -> Result<(), Error> {
         let transfer_bytes = bcs::to_bytes(&transfer).map_err(Error::InvalidTransfer)?;
@@ -134,6 +179,8 @@ impl CrowdFunding {
 pub enum Operation {
     /// Pledge some tokens to the campaign.
     Pledge { transfer: SignedTransfer },
+    /// Collect the pledges after the campaign has reached its target.
+    Collect,
 }
 
 /// An error that can occur during the contract execution.
@@ -174,6 +221,22 @@ pub enum Error {
     /// An invalid transfer was constructed.
     #[error("Transfer is invalid because it can't be serialized")]
     InvalidTransfer(bcs::Error),
+
+    /// [`fungible::ApplicationCall::Balance`] could not be serialized.
+    #[error("Can't check balance because the query can't be serialized")]
+    InvalidBalanceQuery(bcs::Error),
+
+    /// Fungible Token application did not return the campaign's balance.
+    #[error("Failed to read application balance: {0}")]
+    Balance(String),
+
+    /// Fungible Token application returned an invalid balance.
+    #[error("Received an invalid balance from token application")]
+    InvalidBalance(bcs::Error),
+
+    /// Can't collect pledges before the campaign target has been reached.
+    #[error("Crowd-funding campaign has not reached its target yet")]
+    TargetNotReached,
 
     /// Can't pledge to or collect pledges from a cancelled campaign.
     #[error("Crowd-funding campaign has been cancelled")]
