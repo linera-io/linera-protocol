@@ -3,10 +3,12 @@
 
 #![cfg(target_arch = "wasm32")]
 
+mod interface;
 mod state;
 
 use self::{
     boilerplate::system_api,
+    interface::ApplicationCall,
     state::{ApplicationState, CrowdFunding, Status},
 };
 use async_trait::async_trait;
@@ -69,7 +71,16 @@ impl Contract for CrowdFunding {
         argument: &[u8],
         sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, Self::Error> {
-        todo!();
+        let call: ApplicationCall =
+            bcs::from_bytes(argument).map_err(Error::InvalidCrossApplicationCall)?;
+
+        match call {
+            ApplicationCall::DelegatedPledge { transfer } => self.signed_pledge(transfer).await?,
+            ApplicationCall::Collect => self.collect_pledges().await?,
+            ApplicationCall::Cancel => self.cancel_campaign().await?,
+        }
+
+        Ok(ApplicationCallResult::default())
     }
 
     async fn call_session(
@@ -229,6 +240,10 @@ pub enum Error {
     /// Operation bytes does not deserialize into an [`Operation`].
     #[error("Requested operation is invalid")]
     InvalidOperation(bcs::Error),
+
+    /// Cross-application call argument does not deserialize into an [`ApplicationCall`].
+    #[error("Requested cross-application call is invalid")]
+    InvalidCrossApplicationCall(bcs::Error),
 
     /// A pledge can not be empty.
     #[error("Pledge is empty")]
