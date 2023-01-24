@@ -149,7 +149,7 @@ where
         for effect in &result.effects {
             system_result.effects.push((
                 effect.0.clone(),
-                SystemEffect::DeclareApplication {
+                SystemEffect::RegisterApplication {
                     application: application_description.clone(),
                 },
             ));

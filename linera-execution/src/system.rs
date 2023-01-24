@@ -155,7 +155,7 @@ pub enum SystemEffect {
     /// Notify that a new application bytecode was published.
     BytecodePublished,
     /// Share information about an application to help the recipient use it.
-    DeclareApplication {
+    RegisterApplication {
         application: UserApplicationDescription,
     },
     /// Does nothing. Used to debug the intended recipients of a block.
@@ -600,8 +600,8 @@ where
             OpenChain { .. } => {
                 // This special effect is executed immediately when cross-chain requests are received.
             }
-            DeclareApplication { application } => {
-                self.registry.declare_application(application.clone())?;
+            RegisterApplication { application } => {
+                self.registry.register_application(application.clone())?;
             }
             _ => {
                 log::error!("Skipping unexpected received effect: {effect:?}");

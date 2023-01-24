@@ -310,7 +310,7 @@ where
                     .get_mut()
                     .reset(self.execution_state.system.ownership.get());
             }
-            Effect::System(SystemEffect::DeclareApplication { application }) => {
+            Effect::System(SystemEffect::RegisterApplication { application }) => {
                 // Nothing to execute but need to track the dependency to the bytecode of
                 // the application.
                 self.received_log

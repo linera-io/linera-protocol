@@ -141,7 +141,7 @@ where
     /// Register an existing application.
     ///
     /// Keeps track of an existing application that the current chain is seeing for the first time.
-    pub fn declare_application(
+    pub fn register_application(
         &mut self,
         application: UserApplicationDescription,
     ) -> Result<UserApplicationId, SystemExecutionError> {
