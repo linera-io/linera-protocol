@@ -154,9 +154,10 @@ pub enum SystemEffect {
     Unsubscribe { id: ChainId, channel_id: ChannelId },
     /// Notify that a new application bytecode was published.
     BytecodePublished,
-    /// Share information about an application to help the recipient use it.
-    RegisterApplication {
-        application: UserApplicationDescription,
+    /// Share information about some applications to help the recipient use them.
+    /// Applications must be registered after their dependencies.
+    RegisterApplications {
+        applications: Vec<UserApplicationDescription>,
     },
     /// Does nothing. Used to debug the intended recipients of a block.
     Notify { id: ChainId },
@@ -600,10 +601,12 @@ where
             OpenChain { .. } => {
                 // This special effect is executed immediately when cross-chain requests are received.
             }
-            RegisterApplication { application } => {
-                self.registry
-                    .register_application(application.clone())
-                    .await?;
+            RegisterApplications { applications } => {
+                for application in applications {
+                    self.registry
+                        .register_application(application.clone())
+                        .await?;
+                }
             }
             _ => {
                 log::error!("Skipping unexpected received effect: {effect:?}");

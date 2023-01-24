@@ -524,10 +524,11 @@ SystemEffect:
     5:
       BytecodePublished: UNIT
     6:
-      RegisterApplication:
+      RegisterApplications:
         STRUCT:
-          - application:
-              TYPENAME: UserApplicationDescription
+          - applications:
+              SEQ:
+                TYPENAME: UserApplicationDescription
     7:
       Notify:
         STRUCT:

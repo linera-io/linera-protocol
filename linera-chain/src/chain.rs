@@ -310,11 +310,13 @@ where
                     .get_mut()
                     .reset(self.execution_state.system.ownership.get());
             }
-            Effect::System(SystemEffect::RegisterApplication { application }) => {
-                // Nothing to execute but need to track the dependency to the bytecode of
-                // the application.
-                self.received_log
-                    .push(application.bytecode_location.certificate_hash);
+            Effect::System(SystemEffect::RegisterApplications { applications }) => {
+                // Nothing to execute but need to track the dependency to the bytecodes of
+                // the applications.
+                for application in applications {
+                    self.received_log
+                        .push(application.bytecode_location.certificate_hash);
+                }
             }
             _ => (),
         }
