@@ -4,7 +4,7 @@
 use crate::{
     common::{
         get_interval, get_upper_bound, Batch, Context, ContextFromDb, HashOutput,
-        KeyValueOperations, LowerBound, SimpleTypeIterator, WriteOperation,
+        KeyValueOperations, SimpleTypeIterator, WriteOperation,
     },
     memory::{MemoryContext, MemoryStoreMap},
     views::{HashableView, Hasher, View, ViewError},
@@ -19,6 +19,16 @@ use std::{
 };
 use tokio::sync::{OwnedMutexGuard, RwLock};
 
+/// We actually implement two types:
+/// 1) The first type KeyValueStoreView that implements View and the function of KeyValueOperations
+/// (though not KeyValueOperations).
+///
+/// 2) The second type ViewContainer encapsulates KeyValueStoreView and provides the following functionalities:
+/// * The Clone trait
+/// * a write_batch that takes a &self instead of a "&mut self"
+/// * a write_batch that writes in the context instead of writing of the view.
+/// At the present time, that second type is only used for tests.
+
 /// Key tags to create the sub-keys of a KeyValueStoreView on top of the base key.
 #[repr(u8)]
 enum KeyTag {
@@ -27,14 +37,6 @@ enum KeyTag {
     /// Prefix for the hash
     Hash = 1,
 }
-
-/// We actually implement two types:
-/// The KeyValueStoreView that implements View and the function of KeyValueOperations (though not KeyValueOperations).
-///
-/// The second type ViewContainer encapsulates the following and provides the following functionalities:
-/// * The Clone trait
-/// * a write_batch that takes a &self instead of a "&mut self"
-/// * a write_batch that writes in the context instead of writing of the view.
 
 /// A view that represents the function of KeyValueOperations (though not KeyValueOperations)
 ///
@@ -154,7 +156,7 @@ where
         }
     }
 
-    fn is_index_present(lower_bound: &mut LowerBound<'a, Vec<u8>>, index: &[u8]) -> bool {
+    fn is_index_present(lower_bound: &mut NextLowerKeyIterator<'a, Vec<u8>>, index: &[u8]) -> bool {
         let lower_bound = lower_bound.get_lower_bound(index.to_vec());
         match lower_bound {
             None => true,
@@ -174,7 +176,7 @@ where
         let key_prefix = self.context.base_tag(KeyTag::Index as u8);
         let mut updates = self.updates.iter();
         let mut update = updates.next();
-        let mut lower_bound = LowerBound::new(&self.deleted_prefixes);
+        let mut lower_bound = NextLowerKeyIterator::new(&self.deleted_prefixes);
         if !self.was_cleared {
             for index in self
                 .context
@@ -219,7 +221,7 @@ where
         let key_prefix = self.context.base_tag(KeyTag::Index as u8);
         let mut updates = self.updates.iter();
         let mut update = updates.next();
-        let mut lower_bound = LowerBound::new(&self.deleted_prefixes);
+        let mut lower_bound = NextLowerKeyIterator::new(&self.deleted_prefixes);
         if !self.was_cleared {
             for (index, index_val) in self
                 .context
@@ -343,7 +345,7 @@ where
             .updates
             .range((Included(key_prefix.to_vec()), key_prefix_upper));
         let mut update = updates.next();
-        let mut lower_bound = LowerBound::new(&self.deleted_prefixes);
+        let mut lower_bound = NextLowerKeyIterator::new(&self.deleted_prefixes);
         if !self.was_cleared {
             for stripped_key in self
                 .context
@@ -397,7 +399,7 @@ where
             .updates
             .range((Included(key_prefix.to_vec()), key_prefix_upper));
         let mut update = updates.next();
-        let mut lower_bound = LowerBound::new(&self.deleted_prefixes);
+        let mut lower_bound = NextLowerKeyIterator::new(&self.deleted_prefixes);
         if !self.was_cleared {
             for (stripped_key, value) in self
                 .context
@@ -541,6 +543,66 @@ where
         kvsv.context().write_batch(batch).await?;
         Ok(())
     }
+}
+
+/// NextLowerKeyIterator iterates over the entries of a BTreeSet.
+/// The function get_lower_bound(val) returns a Some(x) where x is the highest
+/// entry such that x <= val. If none exists then None is returned.
+///
+/// the function calls get_lower_bound have to be called with increasing
+/// values.
+struct NextLowerKeyIterator<'a, T: 'static> {
+    prec1: Option<T>,
+    prec2: Option<T>,
+    iter: std::collections::btree_set::Iter<'a, T>,
+}
+
+impl<'a, T> NextLowerKeyIterator<'a, T>
+where
+    T: PartialOrd + Clone,
+{
+    pub fn new(set: &'a BTreeSet<T>) -> Self {
+        let mut iter = set.iter();
+        let prec1 = None;
+        let prec2 = iter.next().cloned();
+        Self { prec1, prec2, iter }
+    }
+
+    pub fn get_lower_bound(&mut self, val: T) -> Option<T> {
+        loop {
+            match &self.prec2 {
+                None => {
+                    return self.prec1.as_ref().cloned();
+                }
+                Some(x) => {
+                    if x.clone() > val {
+                        return self.prec1.as_ref().cloned();
+                    }
+                }
+            }
+            self.prec1 = self.prec2.clone();
+            self.prec2 = self.iter.next().cloned();
+        }
+    }
+}
+
+#[test]
+fn test_lower_bound() {
+    let mut set = BTreeSet::<u8>::new();
+    set.insert(4);
+    set.insert(7);
+    set.insert(8);
+    set.insert(10);
+    set.insert(24);
+    set.insert(40);
+
+    let mut lower_bound = NextLowerKeyIterator::new(&set);
+    assert_eq!(lower_bound.get_lower_bound(3), None);
+    assert_eq!(lower_bound.get_lower_bound(15), Some(10));
+    assert_eq!(lower_bound.get_lower_bound(17), Some(10));
+    assert_eq!(lower_bound.get_lower_bound(25), Some(24));
+    assert_eq!(lower_bound.get_lower_bound(27), Some(24));
+    assert_eq!(lower_bound.get_lower_bound(42), Some(40));
 }
 
 #[cfg(any(test, feature = "test"))]
