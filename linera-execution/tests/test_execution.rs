@@ -26,7 +26,8 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
     let app_id = view
         .system
         .registry
-        .register_application(app_desc.clone())?;
+        .register_application(app_desc.clone())
+        .await?;
     assert_eq!(
         view.system.registry.describe_application(app_id).await?,
         app_desc
@@ -175,7 +176,8 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     let app_id = view
         .system
         .registry
-        .register_application(app_desc.clone())?;
+        .register_application(app_desc.clone())
+        .await?;
     view.context()
         .extra()
         .user_applications()
@@ -226,7 +228,8 @@ async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()>
     let app_id = view
         .system
         .registry
-        .register_application(app_desc.clone())?;
+        .register_application(app_desc.clone())
+        .await?;
     view.context()
         .extra()
         .user_applications()

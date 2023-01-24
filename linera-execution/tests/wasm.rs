@@ -27,7 +27,11 @@ async fn test_counter_wasm_application() -> anyhow::Result<()> {
         ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(state)
             .await;
     let app_desc = create_dummy_user_application_description();
-    let app_id = view.system.registry.register_application(app_desc.clone())?;
+    let app_id = view
+        .system
+        .registry
+        .register_application(app_desc.clone())
+        .await?;
     view.context().extra.user_applications().insert(
         app_id,
         Arc::new(
