@@ -79,7 +79,7 @@ impl Contract for CrowdFunding {
         _argument: &[u8],
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<SessionCallResult, Self::Error> {
-        todo!();
+        Err(Error::SessionsNotSupported)
     }
 }
 
@@ -213,6 +213,10 @@ pub enum Error {
     /// Crowd-funding application doesn't support any cross-chain effects.
     #[error("Crowd-funding application doesn't support any cross-chain effects")]
     EffectsNotSupported,
+
+    /// Crowd-funding application doesn't support any cross-application sessions.
+    #[error("Crowd-funding application doesn't support any cross-application sessions")]
+    SessionsNotSupported,
 
     /// Failure to deserialize the initialization parameters.
     #[error("Crowd-funding campaign parameters are invalid")]
