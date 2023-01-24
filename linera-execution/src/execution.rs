@@ -209,7 +209,7 @@ where
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match (application_id, effect) {
             (ApplicationId::System, Effect::System(effect)) => {
-                let result = self.system.execute_effect(context, effect)?;
+                let result = self.system.execute_effect(context, effect).await?;
                 Ok(vec![ExecutionResult::System(result)])
             }
             (ApplicationId::User(application_id), Effect::User(effect)) => {

@@ -543,7 +543,7 @@ where
 
     /// Execute the recipient's side of an operation, aka a "remote effect".
     /// Effects must be executed by order of heights in the sender's chain.
-    pub fn execute_effect(
+    pub async fn execute_effect(
         &mut self,
         context: &EffectContext,
         effect: &SystemEffect,
@@ -601,7 +601,9 @@ where
                 // This special effect is executed immediately when cross-chain requests are received.
             }
             RegisterApplication { application } => {
-                self.registry.register_application(application.clone())?;
+                self.registry
+                    .register_application(application.clone())
+                    .await?;
             }
             _ => {
                 log::error!("Skipping unexpected received effect: {effect:?}");

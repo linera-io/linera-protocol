@@ -141,10 +141,14 @@ where
     /// Register an existing application.
     ///
     /// Keeps track of an existing application that the current chain is seeing for the first time.
-    pub fn register_application(
+    pub async fn register_application(
         &mut self,
         application: UserApplicationDescription,
     ) -> Result<UserApplicationId, SystemExecutionError> {
+        // Make sure that referenced applications ids have been registered.
+        for required_id in &application.required_application_ids {
+            self.describe_application(*required_id).await?;
+        }
         let id = UserApplicationId::from(&application);
         self.known_applications.insert(&id, application)?;
         Ok(id)
