@@ -617,6 +617,9 @@ SystemOperation:
           - bytecode_id:
               TYPENAME: BytecodeId
           - argument: BYTES
+          - required_application_ids:
+              SEQ:
+                TYPENAME: UserApplicationId
 Timestamp:
   NEWTYPESTRUCT: U64
 UserApplicationDescription:
@@ -628,6 +631,9 @@ UserApplicationDescription:
     - creation:
         TYPENAME: EffectId
     - initialization_argument: BYTES
+    - required_application_ids:
+        SEQ:
+          TYPENAME: UserApplicationId
 UserApplicationId:
   STRUCT:
     - bytecode_id:

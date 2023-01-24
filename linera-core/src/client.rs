@@ -1039,6 +1039,7 @@ where
         &mut self,
         bytecode_id: BytecodeId,
         argument: Vec<u8>,
+        required_application_ids: Vec<UserApplicationId>,
     ) -> Result<(UserApplicationId, Certificate)> {
         self.prepare_chain().await?;
         let id = UserApplicationId {
@@ -1058,6 +1059,7 @@ where
                     Operation::System(SystemOperation::CreateApplication {
                         bytecode_id,
                         argument,
+                        required_application_ids,
                     }),
                 )],
             )
