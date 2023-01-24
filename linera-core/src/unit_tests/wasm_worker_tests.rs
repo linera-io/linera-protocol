@@ -253,7 +253,7 @@ where
     let initial_value_bytes = bcs::to_bytes(&initial_value)?;
     let create_operation = SystemOperation::CreateApplication {
         bytecode_id,
-        argument: initial_value_bytes.clone(),
+        initialization_argument: initial_value_bytes.clone(),
         required_application_ids: vec![],
     };
     let application_id = UserApplicationId {
