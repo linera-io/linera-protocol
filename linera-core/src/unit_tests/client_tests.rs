@@ -1369,7 +1369,7 @@ where
     let initial_value = 10_u128;
     let initial_value_bytes = bcs::to_bytes(&initial_value)?;
     let (application_id, _) = creator
-        .create_application(bytecode_id, initial_value_bytes)
+        .create_application(bytecode_id, initial_value_bytes, vec![])
         .await
         .unwrap();
 

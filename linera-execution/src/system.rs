@@ -125,6 +125,7 @@ pub enum SystemOperation {
         bytecode_id: BytecodeId,
         #[serde(with = "serde_bytes")]
         argument: Vec<u8>,
+        required_application_ids: Vec<UserApplicationId>,
     },
 }
 
@@ -267,6 +268,10 @@ pub enum SystemExecutionError {
     CannotRewindEpoch,
     #[error("Cannot decrease the chain's timestamp")]
     TicksOutOfOrder,
+    #[error("Attempt to create an application using unregistered bytecode identifier {0:?}")]
+    UnknownBytecodeId(BytecodeId),
+    #[error("Application {0:?} is not registered by the chain")]
+    UnknownApplicationId(Box<UserApplicationId>),
 }
 
 impl<C> SystemExecutionStateView<C>
@@ -505,13 +510,19 @@ where
             CreateApplication {
                 bytecode_id,
                 argument,
+                required_application_ids,
             } => {
+                // Make sure that referenced applications ids have been registered.
+                for id in required_application_ids {
+                    self.registry.describe_application(*id).await?;
+                }
                 new_application = Some(NewApplication {
                     id: UserApplicationId {
                         bytecode_id: *bytecode_id,
                         creation: (*context).into(),
                     },
                     initialization_argument: argument.clone(),
+                    required_application_ids: required_application_ids.clone(),
                 });
             }
         }

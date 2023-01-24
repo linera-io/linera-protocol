@@ -27,6 +27,7 @@ pub fn create_dummy_user_application_description() -> UserApplicationDescription
             height: BlockHeight(1),
             index: 1,
         },
+        required_application_ids: vec![],
         initialization_argument: vec![],
     }
 }

@@ -54,6 +54,8 @@ pub struct UserApplicationDescription {
     /// The argument used during application initialization.
     #[serde(with = "serde_bytes")]
     pub initialization_argument: Vec<u8>,
+    /// Required dependencies.
+    pub required_application_ids: Vec<UserApplicationId>,
 }
 
 impl From<EffectId> for BytecodeId {
@@ -162,12 +164,13 @@ where
             .published_bytecodes
             .get(&bytecode_id)
             .await?
-            .ok_or(ExecutionError::UnknownBytecodeId(bytecode_id))?;
+            .ok_or(SystemExecutionError::UnknownBytecodeId(bytecode_id))?;
 
         let description = UserApplicationDescription {
             bytecode_location,
             bytecode_id,
             creation,
+            required_application_ids: new_application.required_application_ids,
             initialization_argument: new_application.initialization_argument,
         };
 
@@ -181,10 +184,10 @@ where
     pub async fn describe_application(
         &mut self,
         id: UserApplicationId,
-    ) -> Result<UserApplicationDescription, ExecutionError> {
+    ) -> Result<UserApplicationDescription, SystemExecutionError> {
         self.known_applications
             .get(&id)
             .await?
-            .ok_or_else(|| ExecutionError::UnknownApplicationId(Box::new(id)))
+            .ok_or_else(|| SystemExecutionError::UnknownApplicationId(Box::new(id)))
     }
 }

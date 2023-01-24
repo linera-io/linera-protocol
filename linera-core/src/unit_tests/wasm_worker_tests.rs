@@ -254,6 +254,7 @@ where
     let create_operation = SystemOperation::CreateApplication {
         bytecode_id,
         argument: initial_value_bytes.clone(),
+        required_application_ids: vec![],
     };
     let application_id = UserApplicationId {
         bytecode_id,
@@ -267,6 +268,7 @@ where
         bytecode_id,
         bytecode_location,
         creation: application_id.creation,
+        required_application_ids: vec![],
         initialization_argument: initial_value_bytes.clone(),
     };
     let create_block = make_block(

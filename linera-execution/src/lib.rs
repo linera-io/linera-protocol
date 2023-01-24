@@ -70,10 +70,6 @@ pub enum ExecutionError {
 
     #[error("Bytecode ID {0:?} is invalid")]
     InvalidBytecodeId(BytecodeId),
-    #[error("Attempt to create an application using unregistered bytecode identifier {0:?}")]
-    UnknownBytecodeId(BytecodeId),
-    #[error("Application {0:?} is not registered on the chain")]
-    UnknownApplicationId(Box<UserApplicationId>),
     #[error("Failed to load bytecode from storage {0:?}")]
     ApplicationBytecodeNotFound(Box<UserApplicationDescription>),
 }
@@ -402,6 +398,7 @@ pub enum ExecutionResult {
 pub struct NewApplication {
     id: UserApplicationId,
     initialization_argument: Vec<u8>,
+    required_application_ids: Vec<UserApplicationId>,
 }
 
 impl<Effect> Default for RawExecutionResult<Effect> {
