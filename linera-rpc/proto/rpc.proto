@@ -196,39 +196,6 @@ message UserApplicationId {
   EffectId creation = 2;
 }
 
-message ApplicationDescription {
-  oneof inner {
-    // The system application.
-    google.protobuf.Empty system = 1;
-    // A user application.
-    UserApplicationDescription user = 2;
-  }
-}
-
-// Description of the necessary information to run a user application.
-message UserApplicationDescription {
-  // The bytecode to use for the application.
-  BytecodeId bytecode_id = 1;
-
-  // The location of the bytecode to use for the application
-  BytecodeLocation bytecode_location = 2;
-
-  // The unique ID of the application's creation.
-  EffectId creation = 3;
-
-  // The argument used during application initialization.
-  bytes InitialisationArgument = 4;
-}
-
-// A reference to where the application bytecode is stored.
-message BytecodeLocation {
-  // The certificate that published the bytecode.
-  bytes certificate_hash = 1;
-
-  // The index in the certificate of the operation that published the bytecode.
-  uint64 operation_index = 2;
-}
-
 // A unique identifier for an application bytecode.
 message BytecodeId {
   EffectId publish_effect = 1;

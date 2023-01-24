@@ -3,14 +3,11 @@
 
 use crate::grpc_network::{
     grpc,
-    grpc::{
-        application_description, cross_chain_request::Inner, ChainInfoResult, NameSignaturePair,
-        NewBlock, NewMessage,
-    },
+    grpc::{cross_chain_request::Inner, ChainInfoResult, NameSignaturePair, NewBlock, NewMessage},
 };
 use ed25519::signature::Signature as edSignature;
 use linera_base::{
-    crypto::{CryptoError, HashValue, PublicKey, Signature},
+    crypto::{CryptoError, PublicKey, Signature},
     data_types::{BlockHeight, ChainId, EffectId, Owner, ValidatorName},
 };
 use linera_chain::data_types::{BlockProposal, Certificate, Medium, Origin};
@@ -22,10 +19,7 @@ use linera_core::{
     node::NodeError,
     worker::{Notification, Reason},
 };
-use linera_execution::{
-    ApplicationDescription, ApplicationId, BytecodeId, BytecodeLocation,
-    UserApplicationDescription, UserApplicationId,
-};
+use linera_execution::{ApplicationId, BytecodeId, UserApplicationId};
 use thiserror::Error;
 use tonic::{Code, Status};
 
@@ -503,79 +497,6 @@ impl TryFrom<grpc::ApplicationId> for ApplicationId {
     }
 }
 
-impl From<ApplicationDescription> for grpc::ApplicationDescription {
-    fn from(application_description: ApplicationDescription) -> Self {
-        match application_description {
-            ApplicationDescription::System => grpc::ApplicationDescription {
-                inner: Some(application_description::Inner::System(())),
-            },
-            ApplicationDescription::User(UserApplicationDescription {
-                bytecode_id,
-                bytecode_location,
-                creation,
-                initialization_argument,
-            }) => grpc::ApplicationDescription {
-                inner: Some(application_description::Inner::User(
-                    grpc::UserApplicationDescription {
-                        bytecode_id: Some(bytecode_id.into()),
-                        bytecode_location: Some(bytecode_location.into()),
-                        creation: Some(creation.into()),
-                        initialisation_argument: initialization_argument,
-                    },
-                )),
-            },
-        }
-    }
-}
-
-impl TryFrom<grpc::ApplicationDescription> for ApplicationDescription {
-    type Error = ProtoConversionError;
-
-    fn try_from(
-        application_description: grpc::ApplicationDescription,
-    ) -> Result<Self, Self::Error> {
-        Ok(
-            match application_description
-                .inner
-                .ok_or(ProtoConversionError::MissingField)?
-            {
-                application_description::Inner::System(_) => ApplicationDescription::System,
-                application_description::Inner::User(user_application_description) => {
-                    ApplicationDescription::User(UserApplicationDescription {
-                        bytecode_id: try_proto_convert!(user_application_description.bytecode_id),
-                        bytecode_location: try_proto_convert!(
-                            user_application_description.bytecode_location
-                        ),
-                        creation: try_proto_convert!(user_application_description.creation),
-                        initialization_argument: user_application_description
-                            .initialisation_argument,
-                    })
-                }
-            },
-        )
-    }
-}
-
-impl From<BytecodeLocation> for grpc::BytecodeLocation {
-    fn from(bytecode_location: BytecodeLocation) -> Self {
-        Self {
-            certificate_hash: bytecode_location.certificate_hash.as_bytes().to_vec(),
-            operation_index: bytecode_location.operation_index as u64,
-        }
-    }
-}
-
-impl TryFrom<grpc::BytecodeLocation> for BytecodeLocation {
-    type Error = ProtoConversionError;
-
-    fn try_from(bytecode_location: grpc::BytecodeLocation) -> Result<Self, Self::Error> {
-        Ok(Self {
-            certificate_hash: HashValue::try_from(bytecode_location.certificate_hash.as_slice())?,
-            operation_index: bytecode_location.operation_index as usize,
-        })
-    }
-}
-
 impl From<BytecodeId> for grpc::BytecodeId {
     fn from(bytecode_id: BytecodeId) -> Self {
         Self {
@@ -856,32 +777,6 @@ pub mod tests {
         });
 
         round_trip_check::<_, grpc::ApplicationId>(application_id_user);
-    }
-
-    #[test]
-    pub fn test_application_description() {
-        round_trip_check::<_, grpc::ApplicationDescription>(ApplicationDescription::System);
-
-        let effect_id = EffectId {
-            chain_id: ChainId::root(0),
-            height: BlockHeight(10),
-            index: 20,
-        };
-
-        let bytecode_location = BytecodeLocation {
-            certificate_hash: HashValue::new(&Foo("test".into())),
-            operation_index: 30,
-        };
-
-        let application_description_user =
-            ApplicationDescription::User(UserApplicationDescription {
-                bytecode_id: BytecodeId(effect_id),
-                bytecode_location,
-                creation: effect_id,
-                initialization_argument: vec![0, 1],
-            });
-
-        round_trip_check::<_, grpc::ApplicationDescription>(application_description_user);
     }
 
     #[test]
