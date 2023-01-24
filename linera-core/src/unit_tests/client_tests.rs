@@ -507,7 +507,7 @@ where
     );
     assert_eq!(sender.local_balance().await.unwrap(), Balance::from(4));
     assert_eq!(
-        sender.synchronize_balance().await.unwrap(),
+        sender.synchronize_and_recompute_balance().await.unwrap(),
         Balance::from(4)
     );
     // Can still use the chain.
@@ -561,7 +561,7 @@ where
     );
     assert_eq!(sender.local_balance().await.unwrap(), Balance::from(4));
     assert_eq!(
-        sender.synchronize_balance().await.unwrap(),
+        sender.synchronize_and_recompute_balance().await.unwrap(),
         Balance::from(4)
     );
     // Cannot use the chain any more.
@@ -614,7 +614,7 @@ where
     );
     assert_eq!(sender.local_balance().await.unwrap(), Balance::from(4));
     assert_eq!(
-        sender.synchronize_balance().await.unwrap(),
+        sender.synchronize_and_recompute_balance().await.unwrap(),
         Balance::from(4)
     );
     // Can still use the chain with the old client.
@@ -636,7 +636,7 @@ where
     // the blocks yet.
     assert!(client.local_balance().await.is_err());
     assert_eq!(
-        client.synchronize_balance().await.unwrap(),
+        client.synchronize_and_recompute_balance().await.unwrap(),
         Balance::from(1)
     );
     assert_eq!(client.local_balance().await.unwrap(), Balance::from(1));
@@ -690,7 +690,7 @@ where
         .await?;
     client.receive_certificate(certificate).await.unwrap();
     assert_eq!(
-        client.synchronize_balance().await.unwrap(),
+        client.synchronize_and_recompute_balance().await.unwrap(),
         Balance::from(0)
     );
     assert_eq!(client.local_balance().await.unwrap(), Balance::from(0));
@@ -1008,7 +1008,7 @@ where
     assert_eq!(client2.local_balance().await.unwrap(), Balance::from(0));
     // Force synchronization of local balance.
     assert_eq!(
-        client2.synchronize_balance().await.unwrap(),
+        client2.synchronize_and_recompute_balance().await.unwrap(),
         Balance::from(3)
     );
     assert_eq!(client2.local_balance().await.unwrap(), Balance::from(3));
@@ -1035,7 +1035,7 @@ where
     assert!(client2.pending_block.is_none());
     assert_eq!(client2.local_balance().await.unwrap(), Balance::from(2));
     assert_eq!(
-        client1.synchronize_balance().await.unwrap(),
+        client1.synchronize_and_recompute_balance().await.unwrap(),
         Balance::from(1)
     );
     // Local balance from client2 is now consolidated.
@@ -1186,7 +1186,7 @@ where
     client2.clear_pending_block().await;
     // Retrying the whole command works after synchronization.
     assert_eq!(
-        client2.synchronize_balance().await.unwrap(),
+        client2.synchronize_and_recompute_balance().await.unwrap(),
         Balance::from(2)
     );
     let certificate = client2
@@ -1260,7 +1260,10 @@ where
     // epochs AFTER synchronizing the client with the admin chain.
     assert!(user.receive_certificate(cert).await.is_err());
     assert_eq!(user.epoch().await.unwrap(), Epoch::from(0));
-    assert_eq!(user.synchronize_balance().await.unwrap(), Balance::from(3));
+    assert_eq!(
+        user.synchronize_and_recompute_balance().await.unwrap(),
+        Balance::from(3)
+    );
 
     // User is a genesis chain so the migration message is not even in the inbox yet.
     user.process_inbox().await.unwrap();
@@ -1281,10 +1284,13 @@ where
         .unwrap();
     assert!(admin.receive_certificate(cert).await.is_err());
     // Transfer is blocked because the epoch #0 has been retired by admin.
-    assert_eq!(admin.synchronize_balance().await.unwrap(), Balance::from(0));
+    assert_eq!(
+        admin.synchronize_and_recompute_balance().await.unwrap(),
+        Balance::from(0)
+    );
 
     // Have the user receive the notification to migrate to epoch #1.
-    user.synchronize_balance().await.unwrap();
+    user.synchronize_and_recompute_balance().await.unwrap();
     user.process_inbox().await.unwrap();
     assert_eq!(user.epoch().await.unwrap(), Epoch::from(1));
 
@@ -1295,7 +1301,10 @@ where
         .unwrap();
     admin.receive_certificate(cert).await.unwrap();
     // Transfer goes through and the previous one as well thanks to block chaining.
-    assert_eq!(admin.synchronize_balance().await.unwrap(), Balance::from(3));
+    assert_eq!(
+        admin.synchronize_and_recompute_balance().await.unwrap(),
+        Balance::from(3)
+    );
     Ok(())
 }
 
@@ -1354,7 +1363,7 @@ where
         .await
         .unwrap();
 
-    creator.synchronize_balance().await.unwrap();
+    creator.synchronize_and_recompute_balance().await.unwrap();
     creator.process_inbox().await.unwrap();
 
     let initial_value = 10_u128;

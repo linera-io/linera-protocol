@@ -141,7 +141,7 @@ impl ClientContext {
         for chain_id in self.wallet_state.chain_ids() {
             let mut client = self.make_chain_client(storage.clone(), chain_id);
             client.process_inbox().await.unwrap();
-            client.force_validator_update().await.unwrap();
+            client.update_validators_about_local_chain().await.unwrap();
             self.update_wallet_from_client(&mut client).await;
         }
     }
@@ -636,7 +636,10 @@ where
                 let mut client_state = context.make_chain_client(storage, chain_id);
                 info!("Synchronize chain information");
                 let time_start = Instant::now();
-                let balance = client_state.synchronize_balance().await.unwrap();
+                let balance = client_state
+                    .synchronize_and_recompute_balance()
+                    .await
+                    .unwrap();
                 let time_total = time_start.elapsed().as_micros();
                 info!("Chain balance synchronized after {} us", time_total);
                 println!("{}", balance);

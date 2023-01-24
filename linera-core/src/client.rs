@@ -660,7 +660,7 @@ where
         recipient: Address,
         user_data: UserData,
     ) -> Result<Certificate> {
-        let balance = self.synchronize_balance().await?;
+        let balance = self.synchronize_and_recompute_balance().await?;
         ensure!(
             Balance::from(amount) <= balance,
             "Transferred amount ({}) is not backed by sufficient funds ({})",
@@ -877,7 +877,7 @@ where
     }
 
     /// Attempt to update all validators about the local chain.
-    pub async fn force_validator_update(&mut self) -> Result<()> {
+    pub async fn update_validators_about_local_chain(&mut self) -> Result<()> {
         let mut committee = self.local_committee().await?;
         committee.quorum_threshold = committee.total_votes;
         self.communicate_chain_updates(
@@ -906,7 +906,7 @@ where
     }
 
     /// Attempt to synchronize with validators and re-compute our balance.
-    pub async fn synchronize_balance(&mut self) -> Result<Balance> {
+    pub async fn synchronize_and_recompute_balance(&mut self) -> Result<Balance> {
         self.find_received_certificates().await?;
         self.prepare_chain().await?;
         self.local_balance().await
