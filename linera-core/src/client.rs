@@ -386,11 +386,7 @@ where
         let result = communicate_with_quorum(
             &nodes,
             committee,
-            |value: &Option<(Vote, Value)>| -> Option<_> {
-                value
-                    .as_ref()
-                    .map(|(_, value)| value.effects_and_state_hash())
-            },
+            |value: &Option<Vote>| -> Option<_> { value.as_ref().map(|vote| vote.hash) },
             |name, client| {
                 let mut updater = ValidatorUpdater {
                     name,
@@ -404,8 +400,8 @@ where
             },
         )
         .await;
-        let (effects_and_state_hash, votes): (Option<_>, Vec<_>) = match result {
-            Ok(content) => content,
+        let votes = match result {
+            Ok((_hash, votes)) => votes,
             Err(CommunicationError::Trusted(NodeError::InactiveChain(id)))
                 if id == chain_id
                     && matches!(action, CommunicateAction::AdvanceToNextBlockHeight(_)) =>
@@ -426,12 +422,15 @@ where
         };
         let signatures: Vec<_> = votes
             .into_iter()
-            .filter_map(|vote| vote.map(|(vote, _)| (vote.validator, vote.signature)))
+            .filter_map(|vote| vote.map(|vote| (vote.validator, vote.signature)))
             .collect();
         match action {
             CommunicateAction::SubmitBlockForConfirmation(proposal) => {
-                let (effects, state_hash) =
-                    effects_and_state_hash.expect("this action produces votes");
+                let (effects, response) = self
+                    .node_client
+                    .stage_block_execution(&proposal.content.block)
+                    .await?;
+                let state_hash = response.info.state_hash.expect("was just computed");
                 let value = Value::ConfirmedBlock {
                     block: proposal.content.block,
                     effects,
@@ -445,8 +444,11 @@ where
                 Ok(Some(certificate))
             }
             CommunicateAction::SubmitBlockForValidation(proposal) => {
-                let (effects, state_hash) =
-                    effects_and_state_hash.expect("this action produces votes");
+                let (effects, response) = self
+                    .node_client
+                    .stage_block_execution(&proposal.content.block)
+                    .await?;
+                let state_hash = response.info.state_hash.expect("was just computed");
                 let BlockAndRound { block, round } = proposal.content;
                 let value = Value::ValidatedBlock {
                     block,
@@ -865,12 +867,8 @@ where
             height: self.next_block_height,
             timestamp,
         };
-        Ok(self
-            .node_client
-            .stage_block_execution(&block)
-            .await?
-            .info
-            .system_balance)
+        let (_, response) = self.node_client.stage_block_execution(&block).await?;
+        Ok(response.info.system_balance)
     }
 
     /// Attempt to update all validators about the local chain.

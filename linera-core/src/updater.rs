@@ -11,7 +11,7 @@ use linera_base::{
     committee::Committee,
     data_types::{BlockHeight, ChainDescription, ChainId, EffectId, ValidatorName},
 };
-use linera_chain::data_types::{BlockProposal, Certificate, Value, Vote};
+use linera_chain::data_types::{BlockProposal, Certificate, Vote};
 use linera_storage::Store;
 use linera_views::views::ViewError;
 use std::{
@@ -314,7 +314,7 @@ where
         &mut self,
         chain_id: ChainId,
         action: CommunicateAction,
-    ) -> Result<Option<(Vote, Value)>, NodeError> {
+    ) -> Result<Option<Vote>, NodeError> {
         let target_block_height = match &action {
             CommunicateAction::SubmitBlockForValidation(proposal)
             | CommunicateAction::SubmitBlockForConfirmation(proposal) => {
@@ -334,9 +334,9 @@ where
             | CommunicateAction::SubmitBlockForConfirmation(proposal) => {
                 let info = self.send_block_proposal(proposal.clone()).await?;
                 match info.manager.pending() {
-                    Some((vote, value)) if vote.validator == self.name => {
+                    Some(vote) if vote.validator == self.name => {
                         vote.check()?;
-                        return Ok(Some((vote.clone(), value.clone())));
+                        return Ok(Some(vote.clone()));
                     }
                     Some(_) | None => {
                         return Err(NodeError::MissingVoteInValidatorResponse);
@@ -348,9 +348,9 @@ where
                 let retryable = target_block_height == BlockHeight::from(0);
                 let info = self.send_certificate(certificate, retryable).await?;
                 match info.manager.pending() {
-                    Some((vote, value)) if vote.validator == self.name => {
+                    Some(vote) if vote.validator == self.name => {
                         vote.check()?;
-                        return Ok(Some((vote.clone(), value.clone())));
+                        return Ok(Some(vote.clone()));
                     }
                     Some(_) | None => {
                         return Err(NodeError::MissingVoteInValidatorResponse);

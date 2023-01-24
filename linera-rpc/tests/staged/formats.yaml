@@ -293,9 +293,12 @@ MultiOwnerManager:
     - locked:
         OPTION:
           TYPENAME: Certificate
-    - pending:
+    - pending_vote:
         OPTION:
           TYPENAME: Vote
+    - pending_value:
+        OPTION:
+          TYPENAME: Value
 NodeError:
   ENUM:
     0:
@@ -459,9 +462,12 @@ SingleOwnerManager:
   STRUCT:
     - owner:
         TYPENAME: Owner
-    - pending:
+    - pending_vote:
         OPTION:
           TYPENAME: Vote
+    - pending_value:
+        OPTION:
+          TYPENAME: Value
 SystemChannel:
   ENUM:
     0:
@@ -694,8 +700,8 @@ Value:
               TYPENAME: HashValue
 Vote:
   STRUCT:
-    - value:
-        TYPENAME: Value
+    - hash:
+        TYPENAME: HashValue
     - validator:
         TYPENAME: ValidatorName
     - signature:

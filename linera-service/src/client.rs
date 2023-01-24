@@ -9,7 +9,7 @@ use chrono::{DateTime, Utc};
 use futures::StreamExt;
 use linera_base::{
     committee::ValidatorState,
-    crypto::KeyPair,
+    crypto::{HashValue, KeyPair},
     data_types::{
         BlockHeight, ChainDescription, ChainId, Epoch, Owner, RoundNumber, Timestamp, ValidatorName,
     },
@@ -750,14 +750,36 @@ where
                 warn!("Starting benchmark phase 1 (block proposals)");
                 let proposals = context.make_benchmark_block_proposals(max_proposals);
                 let num_proposal = proposals.len();
+                let mut values = HashMap::new();
+
+                for rpc_msg in &proposals {
+                    if let RpcMessage::BlockProposal(proposal) = rpc_msg {
+                        let block = proposal.content.block.clone();
+                        let (effects, response) =
+                            WorkerState::new("staging".to_string(), None, storage.clone())
+                                .stage_block_execution(&block)
+                                .await?;
+                        let state_hash = response.info.state_hash.expect("state was just computed");
+                        let value = Value::ConfirmedBlock {
+                            block,
+                            effects,
+                            state_hash,
+                        };
+                        values.insert(HashValue::new(&value), value);
+                    }
+                }
+
                 let responses = context
                     .mass_broadcast("block proposals", max_in_flight, proposals)
                     .await;
                 let votes: Vec<_> = responses
                     .into_iter()
                     .filter_map(|message| {
-                        deserialize_response(message)
-                            .and_then(|response| response.info.manager.pending().cloned())
+                        deserialize_response(message).and_then(|response| {
+                            response.info.manager.pending().and_then(|vote| {
+                                Some((vote.clone(), values.get(&vote.hash)?.clone()))
+                            })
+                        })
                     })
                     .collect();
                 warn!("Received {} valid votes.", votes.len());
