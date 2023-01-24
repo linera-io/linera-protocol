@@ -54,6 +54,12 @@ crate-type = ["cdylib"]
 required-features = ["crypto"]
 
 [[example]]
+name = "crowd_funding_service"
+path = "examples/crowd-funding/service.rs"
+crate-type = ["cdylib"]
+required-features = ["crypto"]
+
+[[example]]
 name = "fungible_contract"
 path = "examples/fungible/contract.rs"
 crate-type = ["cdylib"]
