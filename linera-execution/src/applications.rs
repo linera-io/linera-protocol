@@ -9,9 +9,17 @@ use linera_views::{
     views::{HashableContainerView, View, ViewError},
 };
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 #[cfg(any(test, feature = "test"))]
-use std::collections::BTreeMap;
+use {
+    linera_views::memory::MemoryContext, std::collections::BTreeMap, std::sync::Arc,
+    tokio::sync::Mutex,
+};
+
+#[cfg(test)]
+#[path = "unit_tests/applications_tests.rs"]
+mod applications_tests;
 
 /// A unique identifier for an application.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
@@ -196,5 +204,83 @@ where
             .get(&id)
             .await?
             .ok_or_else(|| SystemExecutionError::UnknownApplicationId(Box::new(id)))
+    }
+
+    /// Retrieve the recursive dependencies of an application and apply a topological
+    /// sort.
+    pub async fn find_dependencies(
+        &mut self,
+        id: UserApplicationId,
+    ) -> Result<Vec<UserApplicationId>, SystemExecutionError> {
+        // What we return at the end.
+        let mut result = Vec::new();
+        // The calling stack.
+        let mut stack = vec![id];
+        // The entries already inserted in `result`.
+        let mut sorted = HashSet::new();
+        // The entries for which dependencies have already been pushed once to the stack.
+        let mut seen = HashSet::new();
+
+        while let Some(id) = stack.pop() {
+            if sorted.contains(&id) {
+                continue;
+            }
+            if seen.contains(&id) {
+                // Second time we see this entry. It was last pushed just before its
+                // dependencies -- which are now fully sorted.
+                sorted.insert(id);
+                result.push(id);
+                continue;
+            }
+            // First time we see this entry:
+            // 1. Mark it so that its dependencies are no longer push to the stack.
+            seen.insert(id);
+            // 2. Schedule all the (yet unseen) dependencies, then this entry for a second visit.
+            stack.push(id);
+            let app = self
+                .known_applications
+                .get(&id)
+                .await?
+                .ok_or_else(|| SystemExecutionError::UnknownApplicationId(Box::new(id)))?;
+            for child in app.required_application_ids.iter().rev() {
+                if !seen.contains(child) {
+                    stack.push(*child);
+                }
+            }
+        }
+        Ok(result)
+    }
+
+    /// Retrieve an application's description preceded by its recursive dependencies.
+    pub async fn describe_application_with_dependencies(
+        &mut self,
+        id: UserApplicationId,
+    ) -> Result<Vec<UserApplicationDescription>, SystemExecutionError> {
+        let ids = self.find_dependencies(id).await?;
+        let mut result = Vec::new();
+        for id in ids {
+            let description = self
+                .known_applications
+                .get(&id)
+                .await?
+                .ok_or_else(|| SystemExecutionError::UnknownApplicationId(Box::new(id)))?;
+            result.push(description);
+        }
+        Ok(result)
+    }
+}
+
+#[cfg(any(test, feature = "test"))]
+impl ApplicationRegistryView<MemoryContext<()>>
+where
+    MemoryContext<()>: Context + Clone + Send + Sync + 'static,
+    ViewError: From<<MemoryContext<()> as linera_views::common::Context>::Error>,
+{
+    pub async fn new() -> Self {
+        let guard = Arc::new(Mutex::new(BTreeMap::new())).lock_owned().await;
+        let context = MemoryContext::new(guard, ());
+        Self::load(context)
+            .await
+            .expect("Loading from memory should work")
     }
 }

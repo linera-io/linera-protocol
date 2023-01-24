@@ -275,14 +275,6 @@ pub enum SystemExecutionError {
     UnknownApplicationId(Box<UserApplicationId>),
 }
 
-/// A request to create a new application.
-#[derive(Clone, Debug)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub struct NewApplication {
-    pub id: UserApplicationId,
-    pub initialization_argument: Vec<u8>,
-}
-
 impl<C> SystemExecutionStateView<C>
 where
     C: Context + Clone + Send + Sync + 'static,
@@ -306,7 +298,7 @@ where
         &mut self,
         context: &OperationContext,
         operation: &SystemOperation,
-    ) -> Result<(RawExecutionResult<SystemEffect>, Option<NewApplication>), SystemExecutionError>
+    ) -> Result<(RawExecutionResult<SystemEffect>, Option<UserApplicationId>), SystemExecutionError>
     {
         use SystemOperation::*;
         let mut result = RawExecutionResult::default();
@@ -532,10 +524,7 @@ where
                         required_application_ids.clone(),
                     )
                     .await?;
-                new_application = Some(NewApplication {
-                    id,
-                    initialization_argument: initialization_argument.clone(),
-                });
+                new_application = Some(id);
             }
         }
 
