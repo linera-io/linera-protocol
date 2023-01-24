@@ -16,6 +16,7 @@ use linera_sdk::{
     OperationContext, Session, SessionCallResult, SessionId,
 };
 use serde::{Deserialize, Serialize};
+use std::mem;
 use thiserror::Error;
 
 #[async_trait]
@@ -48,6 +49,7 @@ impl Contract for CrowdFunding {
         match operation {
             Operation::Pledge { transfer } => self.signed_pledge(transfer).await?,
             Operation::Collect => self.collect_pledges().await?,
+            Operation::Cancel => self.cancel_campaign().await?,
         }
 
         Ok(ExecutionResult::default())
@@ -137,6 +139,26 @@ impl CrowdFunding {
         Ok(())
     }
 
+    /// Cancels the campaign if the deadline has passed, refunding all pledges.
+    async fn cancel_campaign(&mut self) -> Result<(), Error> {
+        ensure!(!self.status.is_complete(), Error::Completed);
+
+        ensure!(
+            system_api::current_system_time() >= self.parameters().deadline,
+            Error::DeadlineNotReached
+        );
+
+        for (pledger, amount) in mem::take(&mut self.pledges) {
+            self.send(amount, pledger).await?;
+        }
+
+        self.send(self.balance().await?, self.parameters().owner)
+            .await?;
+        self.status = Status::Cancelled;
+
+        Ok(())
+    }
+
     /// Queries the token application to determine the total amount of tokens in custody.
     async fn balance(&self) -> Result<u128, Error> {
         let query_bytes = bcs::to_bytes(&fungible::ApplicationCall::Balance)
@@ -181,6 +203,8 @@ pub enum Operation {
     Pledge { transfer: SignedTransfer },
     /// Collect the pledges after the campaign has reached its target.
     Collect,
+    /// Cancel the campaign and refund all pledges after the campaign has reached its deadline.
+    Cancel,
 }
 
 /// An error that can occur during the contract execution.
@@ -237,6 +261,14 @@ pub enum Error {
     /// Can't collect pledges before the campaign target has been reached.
     #[error("Crowd-funding campaign has not reached its target yet")]
     TargetNotReached,
+
+    /// Can't cancel a campaign before its deadline.
+    #[error("Crowd-funding campaign has not reached its deadline yet")]
+    DeadlineNotReached,
+
+    /// Can't cancel a campaign after it has been completed.
+    #[error("Crowd-funding campaign has already been completed")]
+    Completed,
 
     /// Can't pledge to or collect pledges from a cancelled campaign.
     #[error("Crowd-funding campaign has been cancelled")]
