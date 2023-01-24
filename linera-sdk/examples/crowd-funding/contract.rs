@@ -120,7 +120,7 @@ impl CrowdFunding {
         self.transfer(fungible::ApplicationCall::Delegated(transfer))
             .await?;
 
-        self.finish_pledge(source, amount)
+        self.finish_pledge(source, amount).await
     }
 
     /// Adds a pledge sent from an application using token sessions.
@@ -143,7 +143,7 @@ impl CrowdFunding {
             .ok_or(Error::MissingSourceApplication)?;
         let source = AccountOwner::Application(source_application);
 
-        self.finish_pledge(source, amount)
+        self.finish_pledge(source, amount).await
     }
 
     /// Checks that the sessions pledged all use the correct token.
@@ -206,12 +206,16 @@ impl CrowdFunding {
 
     /// Marks a pledge in the application state, so that it can be returned if the campaign is
     /// cancelled.
-    fn finish_pledge(&mut self, source: AccountOwner, amount: u128) -> Result<(), Error> {
-        ensure!(!self.status.is_cancelled(), Error::Cancelled);
+    async fn finish_pledge(&mut self, source: AccountOwner, amount: u128) -> Result<(), Error> {
+        match self.status {
+            Status::Active => {
+                *self.pledges.entry(source).or_insert(0) += amount;
 
-        *self.pledges.entry(source).or_insert(0) += amount;
-
-        Ok(())
+                Ok(())
+            }
+            Status::Complete => self.send(amount, self.parameters().owner).await,
+            Status::Cancelled => Err(Error::Cancelled),
+        }
     }
 
     /// Collects all pledges and completes the campaign if the target has been reached.
