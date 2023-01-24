@@ -392,15 +392,6 @@ pub enum ExecutionResult {
     User(UserApplicationId, RawExecutionResult<Vec<u8>>),
 }
 
-/// A request to create a new application.
-#[derive(Clone, Debug)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub struct NewApplication {
-    id: UserApplicationId,
-    initialization_argument: Vec<u8>,
-    required_application_ids: Vec<UserApplicationId>,
-}
-
 impl<Effect> Default for RawExecutionResult<Effect> {
     fn default() -> Self {
         Self {

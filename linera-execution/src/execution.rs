@@ -5,8 +5,8 @@ use crate::{
     runtime::{ExecutionRuntime, SessionManager},
     system::SystemExecutionStateView,
     ApplicationId, Effect, EffectContext, ExecutionError, ExecutionResult, ExecutionRuntimeContext,
-    NewApplication, Operation, OperationContext, Query, QueryContext, RawExecutionResult, Response,
-    SystemEffect, UserApplicationId,
+    Operation, OperationContext, Query, QueryContext, RawExecutionResult, Response, SystemEffect,
+    UserApplicationId,
 };
 use linera_base::{data_types::ChainId, ensure};
 use linera_views::{
@@ -178,9 +178,11 @@ where
             (ApplicationId::System, Operation::System(op)) => {
                 let (result, new_application) = self.system.execute_operation(context, op).await?;
                 let mut results = vec![ExecutionResult::System(result)];
-                if let Some(new_application) = new_application {
+                if let Some(application) = new_application {
+                    let user_action =
+                        UserAction::Initialize(context, &application.initialization_argument);
                     results.extend(
-                        self.initialize_new_application(context, new_application)
+                        self.run_user_action(application.id, context.chain_id, user_action)
                             .await?,
                     );
                 }
@@ -196,26 +198,6 @@ where
             }
             _ => Err(ExecutionError::InvalidOperation),
         }
-    }
-
-    /// Call a newly created application's [`initialize`][crate::UserApplication::initialize]
-    /// method, so that it can initialize its state using the initialization argument.
-    async fn initialize_new_application(
-        &mut self,
-        context: &OperationContext,
-        new_application: NewApplication,
-    ) -> Result<Vec<ExecutionResult>, ExecutionError> {
-        let application_id = new_application.id;
-        let application = self
-            .system
-            .registry
-            .create_application(new_application)
-            .await?;
-        let user_action = UserAction::Initialize(context, &application.initialization_argument);
-        let results = self
-            .run_user_action(application_id, context.chain_id, user_action)
-            .await?;
-        Ok(results)
     }
 
     pub async fn execute_effect(

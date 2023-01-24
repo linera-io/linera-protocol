@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{ExecutionError, NewApplication, SystemExecutionError};
+use crate::SystemExecutionError;
 use linera_base::{crypto::HashValue, data_types::EffectId};
 use linera_views::{
     common::Context,
@@ -153,31 +153,34 @@ where
     /// Register a newly created application.
     pub async fn create_application(
         &mut self,
-        new_application: NewApplication,
-    ) -> Result<UserApplicationDescription, ExecutionError> {
+        application_id: UserApplicationId,
+        initialization_argument: Vec<u8>,
+        required_application_ids: Vec<UserApplicationId>,
+    ) -> Result<(), SystemExecutionError> {
+        // Make sure that referenced applications ids have been registered.
+        for required_id in &required_application_ids {
+            self.describe_application(*required_id).await?;
+        }
+        // Create description and register it.
         let UserApplicationId {
             bytecode_id,
             creation,
-        } = new_application.id;
-
+        } = application_id;
         let bytecode_location = self
             .published_bytecodes
             .get(&bytecode_id)
             .await?
             .ok_or(SystemExecutionError::UnknownBytecodeId(bytecode_id))?;
-
         let description = UserApplicationDescription {
             bytecode_location,
             bytecode_id,
             creation,
-            required_application_ids: new_application.required_application_ids,
-            initialization_argument: new_application.initialization_argument,
+            required_application_ids,
+            initialization_argument,
         };
-
         self.known_applications
-            .insert(&new_application.id, description.clone())?;
-
-        Ok(description)
+            .insert(&application_id, description)?;
+        Ok(())
     }
 
     /// Retrieve an application's description.

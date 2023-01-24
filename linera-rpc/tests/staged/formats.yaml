@@ -616,7 +616,7 @@ SystemOperation:
         STRUCT:
           - bytecode_id:
               TYPENAME: BytecodeId
-          - argument: BYTES
+          - initialization_argument: BYTES
           - required_application_ids:
               SEQ:
                 TYPENAME: UserApplicationId

@@ -1038,7 +1038,7 @@ where
     pub async fn create_application(
         &mut self,
         bytecode_id: BytecodeId,
-        argument: Vec<u8>,
+        initialization_argument: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
     ) -> Result<(UserApplicationId, Certificate)> {
         self.prepare_chain().await?;
@@ -1058,7 +1058,7 @@ where
                     ApplicationId::System,
                     Operation::System(SystemOperation::CreateApplication {
                         bytecode_id,
-                        argument,
+                        initialization_argument,
                         required_application_ids,
                     }),
                 )],

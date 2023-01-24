@@ -4,8 +4,8 @@
 
 use crate::{
     ApplicationRegistryView, Bytecode, BytecodeId, BytecodeLocation, ChainOwnership, ChannelId,
-    ChannelName, Destination, EffectContext, NewApplication, OperationContext, QueryContext,
-    RawExecutionResult, UserApplicationDescription, UserApplicationId,
+    ChannelName, Destination, EffectContext, OperationContext, QueryContext, RawExecutionResult,
+    UserApplicationDescription, UserApplicationId,
 };
 use linera_base::{
     committee::Committee,
@@ -124,7 +124,7 @@ pub enum SystemOperation {
     CreateApplication {
         bytecode_id: BytecodeId,
         #[serde(with = "serde_bytes")]
-        argument: Vec<u8>,
+        initialization_argument: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
     },
 }
@@ -272,6 +272,14 @@ pub enum SystemExecutionError {
     UnknownBytecodeId(BytecodeId),
     #[error("Application {0:?} is not registered by the chain")]
     UnknownApplicationId(Box<UserApplicationId>),
+}
+
+/// A request to create a new application.
+#[derive(Clone, Debug)]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+pub struct NewApplication {
+    pub id: UserApplicationId,
+    pub initialization_argument: Vec<u8>,
 }
 
 impl<C> SystemExecutionStateView<C>
@@ -509,20 +517,23 @@ where
             }
             CreateApplication {
                 bytecode_id,
-                argument,
+                initialization_argument,
                 required_application_ids,
             } => {
-                // Make sure that referenced applications ids have been registered.
-                for id in required_application_ids {
-                    self.registry.describe_application(*id).await?;
-                }
+                let id = UserApplicationId {
+                    bytecode_id: *bytecode_id,
+                    creation: (*context).into(),
+                };
+                self.registry
+                    .create_application(
+                        id,
+                        initialization_argument.clone(),
+                        required_application_ids.clone(),
+                    )
+                    .await?;
                 new_application = Some(NewApplication {
-                    id: UserApplicationId {
-                        bytecode_id: *bytecode_id,
-                        creation: (*context).into(),
-                    },
-                    initialization_argument: argument.clone(),
-                    required_application_ids: required_application_ids.clone(),
+                    id,
+                    initialization_argument: initialization_argument.clone(),
                 });
             }
         }
