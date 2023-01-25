@@ -15,13 +15,10 @@
 // Export the service interface.
 wit_bindgen_guest_rust::export!("service.wit");
 
-// Import the system interface.
-wit_bindgen_guest_rust::import!("queryable_system.wit");
-
 mod conversions_from_wit;
 mod conversions_to_wit;
 mod exported_futures;
-pub mod system_api;
+mod system_api;
 
 use self::exported_futures::QueryApplication;
 use super::ApplicationState as Service;
