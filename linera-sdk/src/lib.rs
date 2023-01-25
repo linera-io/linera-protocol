@@ -1,6 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod contract;
 #[cfg(feature = "crypto")]
 pub mod crypto;
 mod ensure;
