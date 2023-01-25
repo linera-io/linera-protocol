@@ -7,6 +7,7 @@ pub mod crypto;
 mod ensure;
 mod exported_future;
 mod extensions;
+pub mod service;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
