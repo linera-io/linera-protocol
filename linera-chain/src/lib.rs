@@ -15,7 +15,7 @@ use linera_base::{
 };
 use linera_execution::{ApplicationId, ExecutionError};
 use linera_views::views::ViewError;
-pub use manager::{ChainManager, Outcome as ChainManagerOutcome};
+pub use manager::{ChainManager, ChainManagerInfo, Outcome as ChainManagerOutcome};
 use thiserror::Error;
 
 #[derive(Error, Debug)]

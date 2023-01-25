@@ -10,7 +10,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{Certificate, Message, Origin},
-    ChainManager, ChainStateView,
+    ChainManagerInfo, ChainStateView,
 };
 use linera_execution::{system::Balance, ApplicationId, ExecutionRuntimeContext};
 use linera_storage::ChainRuntimeContext;
@@ -47,6 +47,8 @@ pub struct ChainInfoQuery {
     pub request_sent_certificates_in_range: Option<BlockHeightRange>,
     /// Query new certificates received from the chain.
     pub request_received_certificates_excluding_first_nth: Option<usize>,
+    /// Query values from the chain manager, not just votes.
+    pub request_manager_values: bool,
 }
 
 impl ChainInfoQuery {
@@ -58,6 +60,7 @@ impl ChainInfoQuery {
             request_pending_messages: false,
             request_sent_certificates_in_range: None,
             request_received_certificates_excluding_first_nth: None,
+            request_manager_values: false,
         }
     }
 
@@ -85,6 +88,11 @@ impl ChainInfoQuery {
         self.request_received_certificates_excluding_first_nth = Some(n);
         self
     }
+
+    pub fn with_manager_values(mut self) -> Self {
+        self.request_manager_values = true;
+        self
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -97,7 +105,7 @@ pub struct ChainInfo {
     /// The chain description.
     pub description: Option<ChainDescription>,
     /// The state of the chain authentication.
-    pub manager: ChainManager,
+    pub manager: ChainManagerInfo,
     /// The current balance.
     pub system_balance: Balance,
     /// The last block hash, if any.
@@ -167,14 +175,13 @@ where
     ViewError: From<C::Error>,
 {
     fn from(view: &ChainStateView<C>) -> Self {
-        let manager = view.manager.get().clone();
         let system_state = &view.execution_state.system;
         let tip_state = view.tip_state.get();
         ChainInfo {
             chain_id: view.chain_id(),
             epoch: *system_state.epoch.get(),
             description: *system_state.description.get(),
-            manager,
+            manager: ChainManagerInfo::from(view.manager.get()),
             system_balance: *system_state.balance.get(),
             block_hash: tip_state.block_hash,
             next_block_height: tip_state.next_block_height,

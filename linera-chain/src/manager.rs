@@ -11,12 +11,12 @@ use linera_base::{
     ensure,
 };
 use linera_execution::{ApplicationId, ChainOwnership, Destination, Effect};
+use log::error;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// How to produce new blocks.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub enum ChainManager {
     /// The chain is not active. (No blocks can be created)
     None,
@@ -28,7 +28,6 @@ pub enum ChainManager {
 
 /// The specific state of a chain managed by one owner.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct SingleOwnerManager {
     /// The owner of the chain.
     pub owner: Owner,
@@ -38,7 +37,6 @@ pub struct SingleOwnerManager {
 
 /// The specific state of a chain managed by multiple owners.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct MultiOwnerManager {
     /// The co-owners of the chain.
     /// Using a map instead a hashset because Serde treats HashSet's as vectors.
@@ -332,6 +330,110 @@ impl ChainManager {
                 }
             }
             _ => panic!("unexpected chain manager"),
+        }
+    }
+}
+
+/// Chain manager information that is included in `ChainInfo` sent to clients.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+pub enum ChainManagerInfo {
+    /// The chain is not active. (No blocks can be created)
+    None,
+    /// The chain is managed by a single owner.
+    Single(SingleOwnerManagerInfo),
+    /// The chain is managed by multiple owners.
+    Multi(MultiOwnerManagerInfo),
+}
+
+/// Chain manager information that is included in `ChainInfo` sent to clients, about chains
+/// with one owner.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+pub struct SingleOwnerManagerInfo {
+    /// The owner of the chain.
+    pub owner: Owner,
+    /// Latest vote we cast.
+    pub pending: Option<Vote>,
+    /// The value we voted for, if requested.
+    pub requested_pending_value: Option<Value>,
+}
+
+/// Chain manager information that is included in `ChainInfo` sent to clients, about chains
+/// with multiple owners.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+pub struct MultiOwnerManagerInfo {
+    /// The co-owners of the chain.
+    /// Using a map instead a hashset because Serde treats HashSet's as vectors.
+    pub owners: HashMap<Owner, ()>,
+    /// Latest authenticated block that we have received, if requested.
+    pub requested_proposed: Option<BlockProposal>,
+    /// Latest validated proposal that we have seen (and voted to confirm), if requested.
+    pub requested_locked: Option<Certificate>,
+    /// Latest vote we cast (either to validate or to confirm a block).
+    pub pending: Option<Vote>,
+    /// The value we voted for, if requested.
+    pub requested_pending_value: Option<Value>,
+    /// The current round.
+    pub round: RoundNumber,
+}
+
+impl From<&ChainManager> for ChainManagerInfo {
+    fn from(manager: &ChainManager) -> Self {
+        match manager {
+            ChainManager::Single(s) => ChainManagerInfo::Single(SingleOwnerManagerInfo {
+                owner: s.owner,
+                pending: s.pending.as_ref().map(|(vote, _)| vote.clone()),
+                requested_pending_value: None,
+            }),
+            ChainManager::Multi(m) => ChainManagerInfo::Multi(MultiOwnerManagerInfo {
+                owners: m.owners.clone(),
+                requested_proposed: None,
+                requested_locked: None,
+                pending: m.pending.as_ref().map(|(vote, _)| vote.clone()),
+                requested_pending_value: None,
+                round: m.round(),
+            }),
+            ChainManager::None => ChainManagerInfo::None,
+        }
+    }
+}
+
+impl Default for ChainManagerInfo {
+    fn default() -> Self {
+        ChainManagerInfo::None
+    }
+}
+
+impl ChainManagerInfo {
+    pub fn add_values(&mut self, manager: &ChainManager) {
+        match (self, manager) {
+            (ChainManagerInfo::None, ChainManager::None) => {}
+            (ChainManagerInfo::Single(info), ChainManager::Single(s)) => {
+                info.requested_pending_value = s.pending.as_ref().map(|(_, value)| value.clone());
+            }
+            (ChainManagerInfo::Multi(info), ChainManager::Multi(m)) => {
+                info.requested_proposed = m.proposed.clone();
+                info.requested_locked = m.locked.clone();
+                info.requested_pending_value = m.pending.as_ref().map(|(_, value)| value.clone());
+            }
+            (_, _) => error!("cannot assign info from a chain manager of different type"),
+        }
+    }
+
+    pub fn pending(&self) -> Option<&Vote> {
+        match self {
+            ChainManagerInfo::Single(s) => s.pending.as_ref(),
+            ChainManagerInfo::Multi(m) => m.pending.as_ref(),
+            _ => None,
+        }
+    }
+
+    pub fn next_round(&self) -> RoundNumber {
+        match self {
+            ChainManagerInfo::Multi(m) => m.round.try_add_one().unwrap_or(m.round),
+            _ => RoundNumber::default(),
         }
     }
 }
