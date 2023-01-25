@@ -31,9 +31,9 @@ jobs:
     - name: Rustfmt
       run: cargo fmt -- --check --config unstable_features=true --config imports_granularity=Crate
     - name: Clippy using Wasmer
-      run: cargo clippy --all-targets --features crypto,serde,wasmer
+      run: cargo clippy --all-targets --features crypto,wasmer
     - name: Clippy using Wasmtime
-      run: cargo clippy --all-targets --features crypto,serde,wasmtime
+      run: cargo clippy --all-targets --features crypto,wasmtime
     - name: Build
       run: cargo build --locked
     - name: Run tests

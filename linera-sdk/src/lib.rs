@@ -8,15 +8,11 @@ mod exported_future;
 mod extensions;
 
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use std::error::Error;
 
-#[cfg(feature = "serde")]
 pub use self::extensions::FromBcsBytes;
-#[cfg(feature = "serde")]
-use {
-    serde::{Deserialize, Serialize},
-    serde_with::serde_as,
-};
 
 pub use crate::exported_future::ExportedFuture;
 
@@ -82,8 +78,7 @@ pub trait Service {
     ) -> Result<Vec<u8>, Self::Error>;
 }
 
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct OperationContext {
     /// The current chain id.
     pub chain_id: ChainId,
@@ -93,8 +88,7 @@ pub struct OperationContext {
     pub index: u64,
 }
 
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct EffectContext {
     /// The current chain id.
     pub chain_id: ChainId,
@@ -105,8 +99,7 @@ pub struct EffectContext {
     pub effect_id: EffectId,
 }
 
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CalleeContext {
     /// The current chain id.
     pub chain_id: ChainId,
@@ -115,8 +108,7 @@ pub struct CalleeContext {
     pub authenticated_caller_id: Option<ApplicationId>,
 }
 
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct QueryContext {
     /// The current chain id.
     pub chain_id: ChainId,
@@ -124,8 +116,7 @@ pub struct QueryContext {
 
 /// Externally visible results of an execution. These results are meant in the context of
 /// the application that created them.
-#[derive(Debug, Default)]
-#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[derive(Debug, Default, Deserialize, Serialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct ExecutionResult {
     /// Send messages to the given destinations.
@@ -138,7 +129,6 @@ pub struct ExecutionResult {
 
 impl ExecutionResult {
     /// Add an effect to the execution result.
-    #[cfg(feature = "serde")]
     pub fn with_effect(
         mut self,
         destination: impl Into<Destination>,
@@ -151,8 +141,7 @@ impl ExecutionResult {
 }
 
 /// The index of an effect in a chain.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug)]
-#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Deserialize, Serialize)]
 pub struct EffectId {
     pub chain_id: ChainId,
     pub height: BlockHeight,
@@ -160,27 +149,20 @@ pub struct EffectId {
 }
 
 /// The unique identifier (UID) of a chain. This is the hash value of a ChainDescription.
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash)]
-#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Deserialize, Serialize)]
 pub struct ChainId(pub CryptoHash);
 
 /// The name of a subscription channel.
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Deserialize, Serialize)]
 pub struct ChannelName(pub Vec<u8>);
 
 /// A block height to identify blocks in a chain.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug)]
-#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[derive(
+    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Deserialize, Serialize,
+)]
 pub struct BlockHeight(pub u64);
 
 /// A Sha512 value.
-#[cfg(not(feature = "serde"))]
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
-pub struct CryptoHash([u8; 64]);
-
-/// A Sha512 value.
-#[cfg(feature = "serde")]
 #[serde_as]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord, Deserialize, Serialize)]
 pub struct CryptoHash(#[serde_as(as = "[_; 64]")] [u8; 64]);
@@ -221,8 +203,7 @@ impl From<CryptoHash> for [u64; 8] {
 }
 
 /// The destination of a message, relative to a particular application.
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
-#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Deserialize, Serialize)]
 pub enum Destination {
     /// Direct message to a chain.
     Recipient(ChainId),
@@ -237,8 +218,7 @@ impl From<ChainId> for Destination {
 }
 
 /// A unique identifier for an application.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug)]
-#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Deserialize, Serialize)]
 pub struct ApplicationId {
     /// The bytecode to use for the application.
     pub bytecode: BytecodeId,
@@ -247,13 +227,11 @@ pub struct ApplicationId {
 }
 
 /// A unique identifier for an application bytecode.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Deserialize, Serialize)]
 pub struct BytecodeId(pub EffectId);
 
 /// The identifier of a session.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
-#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Deserialize, Serialize)]
 pub struct SessionId {
     /// The application that runs the session.
     pub application_id: ApplicationId,
@@ -264,8 +242,7 @@ pub struct SessionId {
 }
 
 /// Syscall to request creating a new session.
-#[derive(Debug, Default)]
-#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[derive(Debug, Default, Deserialize, Serialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct Session {
     /// A kind provided by the creator (meant to be visible to other applications).
@@ -275,8 +252,7 @@ pub struct Session {
 }
 
 /// The result of calling into a user application.
-#[derive(Debug, Default)]
-#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[derive(Debug, Default, Deserialize, Serialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct ApplicationCallResult {
     /// The return value.
@@ -288,8 +264,7 @@ pub struct ApplicationCallResult {
 }
 
 /// The result of calling into a session.
-#[derive(Default)]
-#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[derive(Default, Deserialize, Serialize)]
 pub struct SessionCallResult {
     /// The application result.
     pub inner: ApplicationCallResult,
@@ -298,13 +273,13 @@ pub struct SessionCallResult {
 }
 
 /// The balance of a chain.
-#[derive(Default, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
-#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[derive(Default, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Deserialize, Serialize)]
 pub struct SystemBalance(pub u128);
 
 /// A timestamp, in microseconds since the Unix epoch.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug)]
-#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[derive(
+    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Deserialize, Serialize,
+)]
 pub struct Timestamp(u64);
 
 impl Timestamp {
