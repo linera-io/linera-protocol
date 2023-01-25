@@ -10,7 +10,7 @@ use linera_base::{
     crypto::{CryptoError, PublicKey, Signature},
     data_types::{BlockHeight, ChainId, EffectId, Owner, ValidatorName},
 };
-use linera_chain::data_types::{BlockProposal, Certificate, Medium, Origin};
+use linera_chain::data_types::{BlockProposal, Certificate, HashCertificate, Medium, Origin};
 use linera_core::{
     data_types::{
         BlockHeightRange, ChainInfoQuery, ChainInfoResponse, CrossChainRequest,
@@ -329,6 +329,49 @@ impl TryFrom<CrossChainRequest> for grpc::CrossChainRequest {
             }),
         };
         Ok(Self { inner: Some(inner) })
+    }
+}
+
+impl TryFrom<grpc::HashCertificate> for HashCertificate {
+    type Error = ProtoConversionError;
+
+    fn try_from(certificate: grpc::HashCertificate) -> Result<Self, Self::Error> {
+        let mut signatures = Vec::with_capacity(certificate.signatures.len());
+
+        for name_signature_pair in certificate.signatures {
+            let validator_name: ValidatorName =
+                try_proto_convert!(name_signature_pair.validator_name);
+            let signature: Signature = try_proto_convert!(name_signature_pair.signature);
+            signatures.push((validator_name, signature));
+        }
+
+        let chain_id = try_proto_convert!(certificate.chain_id);
+        Ok(HashCertificate::new(
+            bcs::from_bytes(certificate.hash.as_slice())?,
+            chain_id,
+            signatures,
+        ))
+    }
+}
+
+impl TryFrom<HashCertificate> for grpc::HashCertificate {
+    type Error = ProtoConversionError;
+
+    fn try_from(certificate: HashCertificate) -> Result<Self, Self::Error> {
+        let signatures = certificate
+            .signatures
+            .into_iter()
+            .map(|(validator_name, signature)| NameSignaturePair {
+                validator_name: Some(validator_name.into()),
+                signature: Some(signature.into()),
+            })
+            .collect();
+
+        Ok(Self {
+            hash: bcs::to_bytes(&certificate.hash)?,
+            chain_id: Some(certificate.chain_id.into()),
+            signatures,
+        })
     }
 }
 
@@ -848,6 +891,25 @@ pub mod tests {
             request_manager_values: false,
         };
         round_trip_check::<_, grpc::ChainInfoQuery>(chain_info_query_some);
+    }
+
+    #[test]
+    pub fn test_hash_certificate() {
+        #[derive(Serialize, Deserialize)]
+        struct Dummy;
+        impl BcsSignable for Dummy {}
+
+        let key_pair = KeyPair::generate();
+        let certificate_validated = HashCertificate {
+            hash: HashValue::new(&Dummy),
+            chain_id: ChainId::root(0),
+            signatures: vec![(
+                ValidatorName::from(key_pair.public()),
+                Signature::new(&Foo("test".into()), &key_pair),
+            )],
+        };
+
+        round_trip_check::<_, grpc::HashCertificate>(certificate_validated);
     }
 
     #[test]

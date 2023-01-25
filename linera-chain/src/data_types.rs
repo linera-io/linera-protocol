@@ -149,13 +149,23 @@ pub struct Vote {
 pub struct HashCertificate {
     /// Hash of the certified value (used as key for storage).
     pub hash: HashValue,
+    /// The ID of the chain the value belongs to.
+    pub chain_id: ChainId,
     /// Signatures on the value.
     pub signatures: Vec<(ValidatorName, Signature)>,
 }
 
 impl HashCertificate {
-    pub fn new(hash: HashValue, signatures: Vec<(ValidatorName, Signature)>) -> Self {
-        Self { hash, signatures }
+    pub fn new(
+        hash: HashValue,
+        chain_id: ChainId,
+        signatures: Vec<(ValidatorName, Signature)>,
+    ) -> Self {
+        Self {
+            hash,
+            chain_id,
+            signatures,
+        }
     }
 
     /// Verify the certificate.
@@ -182,6 +192,18 @@ impl HashCertificate {
         // All what is left is checking signatures!
         Signature::verify_batch(&self.hash, self.signatures.iter().map(|(v, s)| (&v.0, s)))?;
         Ok(self.hash)
+    }
+
+    /// Returns the `Certificate` with the specified value, if it matches.
+    pub fn with_value(self, value: Value) -> Option<Certificate> {
+        if self.chain_id != value.chain_id() || self.hash != HashValue::new(&value) {
+            return None;
+        }
+        Some(Certificate {
+            value,
+            hash: self.hash,
+            signatures: self.signatures,
+        })
     }
 }
 
@@ -418,6 +440,15 @@ impl Certificate {
             self.signatures.iter().map(|(v, s)| (&v.0, s)),
         )?;
         Ok(&self.value)
+    }
+
+    /// Returns the certificate without the full value.
+    pub fn without_value(&self) -> HashCertificate {
+        HashCertificate {
+            hash: self.hash,
+            chain_id: self.value.chain_id(),
+            signatures: self.signatures.clone(),
+        }
     }
 }
 

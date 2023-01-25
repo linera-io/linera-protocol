@@ -124,7 +124,18 @@ where
     ) -> Result<ChainInfo, NodeError> {
         let mut count = 0;
         loop {
-            match self.client.handle_certificate(certificate.clone()).await {
+            let result = match self
+                .client
+                .handle_hash_certificate(certificate.without_value())
+                .await
+            {
+                Ok(response) => Ok(response),
+                Err(NodeError::MissingCertificateValue) => {
+                    self.client.handle_certificate(certificate.clone()).await
+                }
+                Err(err) => Err(err),
+            };
+            match result {
                 Ok(response) => {
                     response.check(self.name)?;
                     // Succeed

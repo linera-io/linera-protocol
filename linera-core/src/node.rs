@@ -14,7 +14,7 @@ use linera_base::{
     data_types::{ArithmeticError, BlockHeight, ChainId, ValidatorName},
 };
 use linera_chain::{
-    data_types::{Block, BlockProposal, Certificate, Origin, Value},
+    data_types::{Block, BlockProposal, Certificate, HashCertificate, Origin, Value},
     ChainError, ChainManagerInfo,
 };
 use linera_execution::{
@@ -39,6 +39,12 @@ pub trait ValidatorNode {
     async fn handle_block_proposal(
         &mut self,
         proposal: BlockProposal,
+    ) -> Result<ChainInfoResponse, NodeError>;
+
+    /// Process a certificate without a value.
+    async fn handle_hash_certificate(
+        &mut self,
+        certificate: HashCertificate,
     ) -> Result<ChainInfoResponse, NodeError>;
 
     /// Process a certificate.
@@ -160,6 +166,8 @@ pub enum NodeError {
     CannotResolveValidatorAddress { address: String },
     #[error("Subscription error due to incorrect transport. Was expecting gRPC, instead found: {transport}")]
     SubscriptionError { transport: String },
+    #[error("We don't have the value for the certificate.")]
+    MissingCertificateValue,
 }
 
 impl From<ViewError> for NodeError {
@@ -218,6 +226,7 @@ impl From<WorkerError> for NodeError {
     fn from(error: WorkerError) -> Self {
         match error {
             WorkerError::ChainError(error) => (*error).into(),
+            WorkerError::MissingCertificateValue => Self::MissingCertificateValue,
             error => Self::WorkerError {
                 error: error.to_string(),
             },
@@ -249,6 +258,32 @@ where
         let node = self.node.clone();
         let mut node = node.lock().await;
         let response = node.state.handle_block_proposal(proposal).await?;
+        Ok(response)
+    }
+
+    async fn handle_hash_certificate(
+        &mut self,
+        certificate: HashCertificate,
+    ) -> Result<ChainInfoResponse, NodeError> {
+        let node = self.node.clone();
+        let mut node = node.lock().await;
+        let mut notifications = Vec::new();
+        let value = node
+            .state
+            .recent_value(&certificate.hash)
+            .ok_or(NodeError::MissingCertificateValue)?
+            .clone();
+        let full_cert = certificate
+            .with_value(value)
+            .ok_or(WorkerError::InvalidHashCertificate)?;
+        let response = node
+            .state
+            .fully_handle_certificate_with_notifications(full_cert, Some(&mut notifications))
+            .await?;
+        for notification in notifications {
+            self.notifier
+                .notify(&notification.chain_id.clone(), notification);
+        }
         Ok(response)
     }
 

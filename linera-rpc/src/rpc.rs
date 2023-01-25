@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_base::data_types::ChainId;
-use linera_chain::data_types::{BlockProposal, Certificate, Vote};
+use linera_chain::data_types::{BlockProposal, Certificate, HashCertificate, Vote};
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     node::NodeError,
@@ -17,6 +17,7 @@ pub enum RpcMessage {
     // Inbound
     BlockProposal(Box<BlockProposal>),
     Certificate(Box<Certificate>),
+    HashCertificate(Box<HashCertificate>),
     ChainInfoQuery(Box<ChainInfoQuery>),
     // Outbound
     Vote(Box<Vote>),
@@ -33,6 +34,7 @@ impl RpcMessage {
     pub fn target_chain_id(&self) -> Option<ChainId> {
         let chain_id = match self {
             RpcMessage::BlockProposal(proposal) => proposal.content.block.chain_id,
+            RpcMessage::HashCertificate(certificate) => certificate.chain_id,
             RpcMessage::Certificate(certificate) => certificate.value.chain_id(),
             RpcMessage::ChainInfoQuery(query) => query.chain_id,
             RpcMessage::CrossChainRequest(request) => request.target_chain_id(),
@@ -47,6 +49,12 @@ impl RpcMessage {
 impl From<BlockProposal> for RpcMessage {
     fn from(block_proposal: BlockProposal) -> Self {
         RpcMessage::BlockProposal(Box::new(block_proposal))
+    }
+}
+
+impl From<HashCertificate> for RpcMessage {
+    fn from(certificate: HashCertificate) -> Self {
+        RpcMessage::HashCertificate(Box::new(certificate))
     }
 }
 

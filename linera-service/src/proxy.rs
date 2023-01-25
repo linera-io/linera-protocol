@@ -126,6 +126,7 @@ impl SimpleProxy {
     fn select_shard_for(&self, request: &RpcMessage) -> Option<ShardConfig> {
         let chain_id = match request {
             RpcMessage::BlockProposal(proposal) => proposal.content.block.chain_id,
+            RpcMessage::HashCertificate(certificate) => certificate.chain_id,
             RpcMessage::Certificate(certificate) => certificate.value.chain_id(),
             RpcMessage::ChainInfoQuery(query) => query.chain_id,
             RpcMessage::Vote(_) | RpcMessage::ChainInfoResponse(_) | RpcMessage::Error(_) => {

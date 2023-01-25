@@ -19,6 +19,9 @@ service ValidatorWorker {
   // Propose a new block.
   rpc HandleBlockProposal(BlockProposal) returns (ChainInfoResult);
 
+  // Process a certificate without value.
+  rpc HandleHashCertificate(HashCertificate) returns (ChainInfoResult);
+
   // Process a certificate.
   rpc HandleCertificate(Certificate) returns (ChainInfoResult);
 
@@ -33,6 +36,9 @@ service ValidatorWorker {
 service ValidatorNode {
   // Propose a new block.
   rpc HandleBlockProposal(BlockProposal) returns (ChainInfoResult);
+
+  // Process a certificate without value.
+  rpc HandleHashCertificate(HashCertificate) returns (ChainInfoResult);
 
   // Process a certificate.
   rpc HandleCertificate(Certificate) returns (ChainInfoResult);
@@ -155,6 +161,18 @@ message BlockProposal {
 
   // signature value
   Signature signature = 3;
+}
+
+// A certified statement from the committee, without the value.
+message HashCertificate {
+  // The certified value's hash
+  bytes hash = 1;
+
+  // The ID of the chain the value belongs to.
+  ChainId chain_id = 2;
+
+  // Signatures on the value
+  repeated NameSignaturePair signatures = 3;
 }
 
 // A certified statement from the committee.

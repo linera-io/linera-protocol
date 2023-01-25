@@ -9,12 +9,12 @@ use crate::{
     client::{ChainClientState, CommunicateAction, ValidatorNodeProvider},
     data_types::*,
     node::{NodeError, NotificationStream, ValidatorNode},
-    worker::{ValidatorWorker, WorkerState},
+    worker::{ValidatorWorker, WorkerError, WorkerState},
 };
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use linera_base::{committee::Committee, crypto::*, data_types::*};
-use linera_chain::data_types::{Block, BlockProposal, Certificate, Value};
+use linera_chain::data_types::{Block, BlockProposal, Certificate, HashCertificate, Value};
 use linera_execution::{
     system::{Amount, Balance, SystemOperation, UserData},
     ApplicationId, Operation, Query, Response, SystemQuery, SystemResponse,
@@ -56,6 +56,24 @@ where
             let response = validator.state.handle_block_proposal(proposal).await?;
             Ok(response)
         }
+    }
+
+    async fn handle_hash_certificate(
+        &mut self,
+        certificate: HashCertificate,
+    ) -> Result<ChainInfoResponse, NodeError> {
+        let validator = self.0.clone();
+        let mut validator = validator.lock().await;
+        let value = validator
+            .state
+            .recent_value(&certificate.hash)
+            .ok_or(NodeError::MissingCertificateValue)?
+            .clone();
+        let full_cert = certificate
+            .with_value(value)
+            .ok_or(WorkerError::InvalidHashCertificate)?;
+        let response = validator.state.fully_handle_certificate(full_cert).await?;
+        Ok(response)
     }
 
     async fn handle_certificate(
