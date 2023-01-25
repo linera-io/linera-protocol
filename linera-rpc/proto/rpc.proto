@@ -126,6 +126,9 @@ message ChainInfoQuery {
 
   // Query new certificate removed from the chain.
   optional uint64 request_received_certificates_excluding_first_nth = 6;
+
+  // Query values from the chain manager, not just votes.
+  bool request_manager_values = 7;
 }
 
 // The origin of a message, relative to a particular application. Used to identify each inbox.

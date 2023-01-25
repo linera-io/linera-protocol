@@ -5,7 +5,7 @@
 use linera_base::data_types::ChainDescription;
 use linera_chain::{
     data_types::{Medium, Value},
-    ChainManager,
+    ChainManagerInfo,
 };
 use linera_core::{data_types::CrossChainRequest, node::NodeError};
 use linera_execution::{
@@ -38,7 +38,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<ChainDescription>(&samples)?;
     tracer.trace_type::<ApplicationId>(&samples)?;
     tracer.trace_type::<ApplicationDescription>(&samples)?;
-    tracer.trace_type::<ChainManager>(&samples)?;
+    tracer.trace_type::<ChainManagerInfo>(&samples)?;
     tracer.trace_type::<CrossChainRequest>(&samples)?;
     tracer.trace_type::<NodeError>(&samples)?;
     tracer.trace_type::<RpcMessage>(&samples)?;

@@ -15,7 +15,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{Block, BlockProposal, Certificate, Origin, Value},
-    ChainError, ChainManager,
+    ChainError, ChainManagerInfo,
 };
 use linera_execution::{
     ApplicationId, BytecodeLocation, Destination, Effect, ExecutionError, Query, Response,
@@ -489,7 +489,9 @@ where
             start: local_info.next_block_height,
             limit: None,
         };
-        let query = ChainInfoQuery::new(chain_id).with_sent_certificates_in_range(range);
+        let query = ChainInfoQuery::new(chain_id)
+            .with_sent_certificates_in_range(range)
+            .with_manager_values();
         let info = match client.handle_chain_info_query(query).await {
             Ok(response) if response.check(name).is_ok() => response.info,
             Ok(_) => {
@@ -509,8 +511,8 @@ where
         {
             return Ok(());
         };
-        if let ChainManager::Multi(manager) = info.manager {
-            if let Some(proposal) = manager.proposed {
+        if let ChainManagerInfo::Multi(manager) = info.manager {
+            if let Some(proposal) = manager.requested_proposed {
                 if proposal.content.block.chain_id == chain_id {
                     let owner = proposal.owner;
                     if let Err(error) = self.handle_block_proposal(proposal).await {
@@ -518,7 +520,7 @@ where
                     }
                 }
             }
-            if let Some(cert) = manager.locked {
+            if let Some(cert) = manager.requested_locked {
                 if let Value::ValidatedBlock { block, .. } = &cert.value {
                     if block.chain_id == chain_id {
                         let hash = cert.hash;

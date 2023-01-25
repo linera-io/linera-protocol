@@ -710,6 +710,9 @@ where
             let certs = self.storage.read_certificates(keys).await?;
             info.requested_received_certificates = certs;
         }
+        if query.request_manager_values {
+            info.manager.add_values(chain.manager.get());
+        }
         let response = ChainInfoResponse::new(info, self.key_pair());
         log::trace!("{} --> {:?}", self.nickname, response);
         Ok(response)

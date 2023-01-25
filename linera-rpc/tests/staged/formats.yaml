@@ -113,7 +113,7 @@ ChainInfo:
         OPTION:
           TYPENAME: ChainDescription
     - manager:
-        TYPENAME: ChainManager
+        TYPENAME: ChainManagerInfo
     - system_balance:
         TYPENAME: Balance
     - block_hash:
@@ -157,6 +157,7 @@ ChainInfoQuery:
           TYPENAME: BlockHeightRange
     - request_received_certificates_excluding_first_nth:
         OPTION: U64
+    - request_manager_values: BOOL
 ChainInfoResponse:
   STRUCT:
     - info:
@@ -164,18 +165,18 @@ ChainInfoResponse:
     - signature:
         OPTION:
           TYPENAME: Signature
-ChainManager:
+ChainManagerInfo:
   ENUM:
     0:
       None: UNIT
     1:
       Single:
         NEWTYPE:
-          TYPENAME: SingleOwnerManager
+          TYPENAME: SingleOwnerManagerInfo
     2:
       Multi:
         NEWTYPE:
-          TYPENAME: MultiOwnerManager
+          TYPENAME: MultiOwnerManagerInfo
 ChannelId:
   STRUCT:
     - chain_id:
@@ -280,25 +281,27 @@ Message:
         TYPENAME: Origin
     - event:
         TYPENAME: Event
-MultiOwnerManager:
+MultiOwnerManagerInfo:
   STRUCT:
     - owners:
         MAP:
           KEY:
             TYPENAME: Owner
           VALUE: UNIT
-    - proposed:
+    - requested_proposed:
         OPTION:
           TYPENAME: BlockProposal
-    - locked:
+    - requested_locked:
         OPTION:
           TYPENAME: Certificate
-    - pending_vote:
+    - pending:
         OPTION:
           TYPENAME: Vote
-    - pending_value:
+    - requested_pending_value:
         OPTION:
           TYPENAME: Value
+    - round:
+        TYPENAME: RoundNumber
 NodeError:
   ENUM:
     0:
@@ -458,14 +461,14 @@ Signature:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 64
-SingleOwnerManager:
+SingleOwnerManagerInfo:
   STRUCT:
     - owner:
         TYPENAME: Owner
-    - pending_vote:
+    - pending:
         OPTION:
           TYPENAME: Vote
-    - pending_value:
+    - requested_pending_value:
         OPTION:
           TYPENAME: Value
 SystemChannel:

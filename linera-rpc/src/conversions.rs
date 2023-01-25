@@ -388,6 +388,7 @@ impl TryFrom<grpc::ChainInfoQuery> for ChainInfoQuery {
                 usize
             ),
             test_next_block_height: map_into!(chain_info_query.test_next_block_height),
+            request_manager_values: chain_info_query.request_manager_values,
         })
     }
 }
@@ -413,6 +414,7 @@ impl TryFrom<ChainInfoQuery> for grpc::ChainInfoQuery {
             test_next_block_height,
             request_sent_certificates_in_range,
             request_received_certificates_excluding_first_nth,
+            request_manager_values: chain_info_query.request_manager_values,
         })
     }
 }
@@ -843,6 +845,7 @@ pub mod tests {
                 limit: Some(5),
             }),
             request_received_certificates_excluding_first_nth: None,
+            request_manager_values: false,
         };
         round_trip_check::<_, grpc::ChainInfoQuery>(chain_info_query_some);
     }
