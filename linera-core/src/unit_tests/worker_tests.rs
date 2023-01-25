@@ -1311,8 +1311,9 @@ where
         .manager
         .get()
         .pending()
-        .cloned()
-        .unwrap();
+        .unwrap()
+        .0
+        .clone();
     assert_eq!(
         *chain_info_response.info.manager.pending().unwrap(),
         pending_value

@@ -42,6 +42,7 @@ pub use crate::{
         validator_worker_client::ValidatorWorkerClient,
         validator_worker_server::{ValidatorWorker as ValidatorWorkerRpc, ValidatorWorkerServer},
         BlockProposal, Certificate, ChainInfoQuery, ChainInfoResult, CrossChainRequest,
+        HashCertificate,
     },
     mass::{MassClient, MassClientError},
     mass_client_delegate,
@@ -341,6 +342,35 @@ where
         ))
     }
 
+    async fn handle_hash_certificate(
+        &self,
+        request: Request<HashCertificate>,
+    ) -> Result<Response<ChainInfoResult>, Status> {
+        debug!(
+            "server handler [handle_certificate] received delegating request [{:?}] ",
+            request
+        );
+        match self
+            .state
+            .clone()
+            .handle_hash_certificate(request.into_inner().try_into()?)
+            .await
+        {
+            Ok((info, actions)) => {
+                self.handle_network_actions(actions).await;
+                Ok(Response::new(info.try_into()?))
+            }
+            Err(error) => {
+                error!(
+                    "[{}] Failed to handle cross-chain request: {}",
+                    self.state.nickname(),
+                    error
+                );
+                Ok(Response::new(NodeError::from(error).try_into()?))
+            }
+        }
+    }
+
     async fn handle_certificate(
         &self,
         request: Request<Certificate>,
@@ -436,6 +466,13 @@ impl ValidatorNode for GrpcClient {
         proposal: data_types::BlockProposal,
     ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
         client_delegate!(self, handle_block_proposal, proposal)
+    }
+
+    async fn handle_hash_certificate(
+        &mut self,
+        certificate: data_types::HashCertificate,
+    ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
+        client_delegate!(self, handle_hash_certificate, certificate)
     }
 
     async fn handle_certificate(

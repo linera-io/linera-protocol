@@ -11,7 +11,9 @@ use linera_base::{
     ensure,
 };
 use linera_chain::{
-    data_types::{Block, BlockProposal, Certificate, Message, Origin, Target, Value},
+    data_types::{
+        Block, BlockProposal, Certificate, HashCertificate, Message, Origin, Target, Value,
+    },
     ChainManagerOutcome, ChainStateView,
 };
 use linera_execution::{ApplicationId, Destination, Effect, Query, Response};
@@ -20,8 +22,10 @@ use linera_views::{
     log_view::LogView,
     views::{ContainerView, View, ViewError},
 };
+use lru::LruCache;
 use std::{
     collections::{BTreeMap, VecDeque},
+    num::NonZeroUsize,
     sync::Arc,
     time::Duration,
 };
@@ -44,6 +48,12 @@ pub trait ValidatorWorker {
         &mut self,
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, WorkerError>;
+
+    /// Process a certificate, e.g. to extend a chain with a confirmed block.
+    async fn handle_hash_certificate(
+        &mut self,
+        certificate: HashCertificate,
+    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError>;
 
     /// Process a certificate, e.g. to extend a chain with a confirmed block.
     async fn handle_certificate(
@@ -134,6 +144,10 @@ pub enum WorkerError {
     IncorrectEffects,
     #[error("The timestamp of a Tick operation is in the future.")]
     InvalidTimestamp,
+    #[error("We don't have the value for the certificate.")]
+    MissingCertificateValue,
+    #[error("The hash certificate doesn't match its value.")]
+    InvalidHashCertificate,
 }
 
 impl From<linera_chain::ChainError> for WorkerError {
@@ -142,8 +156,9 @@ impl From<linera_chain::ChainError> for WorkerError {
     }
 }
 
+const DEFAULT_VALUE_CACHE_SIZE: usize = 1000;
+
 /// State of a worker in a validator or a local node.
-#[derive(Clone)]
 pub struct WorkerState<StorageClient> {
     /// A name used for logging
     nickname: String,
@@ -159,6 +174,26 @@ pub struct WorkerState<StorageClient> {
     /// Blocks with a timestamp this far in the future will still be accepted, but the validator
     /// will wait until that timestamp before voting.
     grace_period_micros: u64,
+    /// Cached values by hash.
+    recent_values: LruCache<HashValue, Value>,
+}
+
+impl<Client: Clone> Clone for WorkerState<Client> {
+    fn clone(&self) -> Self {
+        let mut recent_values = LruCache::new(self.recent_values.cap());
+        for (k, v) in &self.recent_values {
+            recent_values.push(*k, v.clone());
+        }
+        WorkerState {
+            nickname: self.nickname.clone(),
+            key_pair: self.key_pair.clone(),
+            storage: self.storage.clone(),
+            allow_inactive_chains: self.allow_inactive_chains,
+            allow_messages_from_deprecated_epochs: self.allow_messages_from_deprecated_epochs,
+            grace_period_micros: self.grace_period_micros,
+            recent_values,
+        }
+    }
 }
 
 impl<Client> WorkerState<Client> {
@@ -170,6 +205,7 @@ impl<Client> WorkerState<Client> {
             allow_inactive_chains: false,
             allow_messages_from_deprecated_epochs: false,
             grace_period_micros: 0,
+            recent_values: LruCache::new(NonZeroUsize::try_from(DEFAULT_VALUE_CACHE_SIZE).unwrap()),
         }
     }
 
@@ -180,6 +216,11 @@ impl<Client> WorkerState<Client> {
 
     pub fn with_allow_messages_from_deprecated_epochs(mut self, value: bool) -> Self {
         self.allow_messages_from_deprecated_epochs = value;
+        self
+    }
+
+    pub fn with_value_cache_size(mut self, size: NonZeroUsize) -> Self {
+        self.recent_values.resize(size);
         self
     }
 
@@ -198,6 +239,10 @@ impl<Client> WorkerState<Client> {
 
     pub(crate) fn storage_client(&self) -> &Client {
         &self.storage
+    }
+
+    pub(crate) fn recent_value(&mut self, hash: &HashValue) -> Option<&Value> {
+        self.recent_values.get(hash)
     }
 }
 
@@ -556,6 +601,27 @@ where
             })
         }
     }
+
+    fn cache_recent_value(&mut self, hash: HashValue, value: Value) {
+        if let Value::ValidatedBlock {
+            block,
+            effects,
+            state_hash,
+            ..
+        } = &value
+        {
+            // Cache corresponding confirmed block, too, in case we get a certificate.
+            let conf_value = Value::ConfirmedBlock {
+                block: block.clone(),
+                effects: effects.clone(),
+                state_hash: *state_hash,
+            };
+            let conf_hash = HashValue::new(&conf_value);
+            self.recent_values.push(conf_hash, conf_value);
+        }
+        // Cache the certificate, so that clients don't have to send the value again.
+        self.recent_values.push(hash, value);
+    }
 }
 
 #[async_trait]
@@ -626,13 +692,31 @@ where
             (effects, hash)
         };
         // Create the vote and store it in the chain state.
-        chain
-            .manager
-            .get_mut()
-            .create_vote(proposal, effects, state_hash, self.key_pair());
+        let manager = chain.manager.get_mut();
+        manager.create_vote(proposal, effects, state_hash, self.key_pair());
+        // Cache the value we voted on, so the client doesn't have to send it again.
+        if let Some((vote, value)) = manager.pending() {
+            self.cache_recent_value(vote.hash, value.clone());
+        }
         let info = ChainInfoResponse::new(&chain, self.key_pair());
         chain.save().await?;
         Ok(info)
+    }
+
+    /// Process a certificate, e.g. to extend a chain with a confirmed block.
+    async fn handle_hash_certificate(
+        &mut self,
+        certificate: HashCertificate,
+    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
+        let value = self
+            .recent_values
+            .get(&certificate.hash)
+            .ok_or(WorkerError::MissingCertificateValue)?
+            .clone();
+        let full_cert = certificate
+            .with_value(value)
+            .ok_or(WorkerError::InvalidHashCertificate)?;
+        self.handle_certificate(full_cert).await
     }
 
     /// Process a certificate.
@@ -641,17 +725,23 @@ where
         certificate: Certificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         log::trace!("{} <-- {:?}", self.nickname, certificate);
-        match &certificate.value {
+        let maybe_certificate =
+            (!self.recent_values.contains(&certificate.hash)).then(|| certificate.clone());
+        let (info, actions) = match &certificate.value {
             Value::ValidatedBlock { .. } => {
                 // Confirm the validated block.
-                let info = self.process_validated_block(certificate).await?;
-                Ok((info, NetworkActions::default()))
+                let info = self.process_validated_block(certificate.clone()).await?;
+                (info, NetworkActions::default())
             }
             Value::ConfirmedBlock { .. } => {
                 // Execute the confirmed block.
-                self.process_confirmed_block(certificate).await
+                self.process_confirmed_block(certificate).await?
             }
+        };
+        if let Some(certificate) = maybe_certificate {
+            self.cache_recent_value(certificate.hash, certificate.value);
         }
+        Ok((info, actions))
     }
 
     async fn handle_chain_info_query(

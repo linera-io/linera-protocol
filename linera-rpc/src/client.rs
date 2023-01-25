@@ -4,7 +4,7 @@
 use async_trait::async_trait;
 
 use linera_base::data_types::ChainId;
-use linera_chain::data_types::{BlockProposal, Certificate};
+use linera_chain::data_types::{BlockProposal, Certificate, HashCertificate};
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
     node::{NodeError, NotificationStream, ValidatorNode},
@@ -39,6 +39,18 @@ impl ValidatorNode for Client {
         match self {
             Client::Grpc(grpc_client) => grpc_client.handle_block_proposal(proposal).await,
             Client::Simple(simple_client) => simple_client.handle_block_proposal(proposal).await,
+        }
+    }
+
+    async fn handle_hash_certificate(
+        &mut self,
+        certificate: HashCertificate,
+    ) -> Result<ChainInfoResponse, NodeError> {
+        match self {
+            Client::Grpc(grpc_client) => grpc_client.handle_hash_certificate(certificate).await,
+            Client::Simple(simple_client) => {
+                simple_client.handle_hash_certificate(certificate).await
+            }
         }
     }
 

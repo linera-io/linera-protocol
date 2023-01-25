@@ -136,10 +136,10 @@ impl ChainManager {
         }
     }
 
-    pub fn pending(&self) -> Option<&Vote> {
+    pub fn pending(&self) -> Option<&(Vote, Value)> {
         match self {
-            ChainManager::Single(manager) => manager.pending.as_ref().map(|(vote, _)| vote),
-            ChainManager::Multi(manager) => manager.pending.as_ref().map(|(vote, _)| vote),
+            ChainManager::Single(manager) => manager.pending.as_ref(),
+            ChainManager::Multi(manager) => manager.pending.as_ref(),
             _ => None,
         }
     }

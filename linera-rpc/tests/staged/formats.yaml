@@ -260,6 +260,15 @@ Event:
         TYPENAME: Timestamp
     - effect:
         TYPENAME: Effect
+HashCertificate:
+  STRUCT:
+    - hash:
+        TYPENAME: HashValue
+    - signatures:
+        SEQ:
+          TUPLE:
+            - TYPENAME: ValidatorName
+            - TYPENAME: Signature
 HashValue:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -401,6 +410,8 @@ NodeError:
       SubscriptionError:
         STRUCT:
           - transport: STR
+    22:
+      MissingCertificateValue: UNIT
 Operation:
   ENUM:
     0:
@@ -437,22 +448,26 @@ RpcMessage:
         NEWTYPE:
           TYPENAME: Certificate
     2:
+      HashCertificate:
+        NEWTYPE:
+          TYPENAME: HashCertificate
+    3:
       ChainInfoQuery:
         NEWTYPE:
           TYPENAME: ChainInfoQuery
-    3:
+    4:
       Vote:
         NEWTYPE:
           TYPENAME: Vote
-    4:
+    5:
       ChainInfoResponse:
         NEWTYPE:
           TYPENAME: ChainInfoResponse
-    5:
+    6:
       Error:
         NEWTYPE:
           TYPENAME: NodeError
-    6:
+    7:
       CrossChainRequest:
         NEWTYPE:
           TYPENAME: CrossChainRequest
