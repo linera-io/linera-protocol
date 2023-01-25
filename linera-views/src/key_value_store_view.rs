@@ -3,10 +3,9 @@
 
 use crate::{
     common::{
-        get_interval, get_upper_bound, Batch, Context, ContextFromDb, HashOutput,
-        KeyValueOperations, SimpleTypeIterator, WriteOperation,
+        get_interval, get_upper_bound, Batch, Context, HashOutput, SimpleTypeIterator,
+        WriteOperation,
     },
-    memory::{MemoryContext, MemoryStoreMap},
     views::{HashableView, Hasher, View, ViewError},
 };
 use async_trait::async_trait;
@@ -15,9 +14,15 @@ use std::{
     fmt::Debug,
     mem,
     ops::Bound::Included,
-    sync::Arc,
 };
-use tokio::sync::{OwnedMutexGuard, RwLock};
+
+#[cfg(any(test, feature = "test"))]
+use {
+    crate::common::{ContextFromDb, KeyValueOperations},
+    crate::memory::{MemoryContext, MemoryStoreMap},
+    std::sync::Arc,
+    tokio::sync::{OwnedMutexGuard, RwLock},
+};
 
 /// We actually implement two types:
 /// 1) The first type KeyValueStoreView that implements View and the function of KeyValueOperations
@@ -321,7 +326,7 @@ where
         }
     }
 
-    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
+    pub async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
         if let Some(update) = self.updates.get(key) {
             return Ok(update.clone());
         }
@@ -333,7 +338,7 @@ where
         Ok(val)
     }
 
-    async fn find_stripped_keys_by_prefix(
+    pub async fn find_stripped_keys_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<SimpleTypeIterator<Vec<u8>, ViewError>, ViewError> {
@@ -387,7 +392,7 @@ where
         Ok(SimpleTypeIterator::new(keys))
     }
 
-    async fn find_stripped_key_values_by_prefix(
+    pub async fn find_stripped_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<SimpleTypeIterator<(Vec<u8>, Vec<u8>), ViewError>, ViewError> {
@@ -442,7 +447,7 @@ where
         Ok(SimpleTypeIterator::new(key_values))
     }
 
-    async fn write_batch(&mut self, batch: Batch) -> Result<(), ViewError> {
+    pub async fn write_batch(&mut self, batch: Batch) -> Result<(), ViewError> {
         self.hash = None;
         for op in batch.operations {
             match op {
