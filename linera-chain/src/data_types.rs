@@ -143,6 +143,48 @@ pub struct Vote {
     pub signature: Signature,
 }
 
+/// A certified statement from the committee, without the value.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+pub struct HashCertificate {
+    /// Hash of the certified value (used as key for storage).
+    pub hash: HashValue,
+    /// Signatures on the value.
+    pub signatures: Vec<(ValidatorName, Signature)>,
+}
+
+impl HashCertificate {
+    pub fn new(hash: HashValue, signatures: Vec<(ValidatorName, Signature)>) -> Self {
+        Self { hash, signatures }
+    }
+
+    /// Verify the certificate.
+    pub fn check(self, committee: &Committee) -> Result<HashValue, ChainError> {
+        // Check the quorum.
+        let mut weight = 0;
+        let mut used_validators = HashSet::new();
+        for (validator, _) in self.signatures.iter() {
+            // Check that each validator only appears once.
+            ensure!(
+                !used_validators.contains(validator),
+                ChainError::CertificateValidatorReuse
+            );
+            used_validators.insert(*validator);
+            // Update weight.
+            let voting_rights = committee.weight(validator);
+            ensure!(voting_rights > 0, ChainError::InvalidSigner);
+            weight += voting_rights;
+        }
+        ensure!(
+            weight >= committee.quorum_threshold(),
+            ChainError::CertificateRequiresQuorum
+        );
+        // All what is left is checking signatures!
+        Signature::verify_batch(&self.hash, self.signatures.iter().map(|(v, s)| (&v.0, s)))?;
+        Ok(self.hash)
+    }
+}
+
 /// A certified statement from the committee.
 #[derive(Clone, Debug, Serialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
