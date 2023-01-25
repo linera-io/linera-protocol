@@ -7,7 +7,6 @@ mod interface;
 mod state;
 
 use self::{
-    boilerplate::system_api,
     interface::ApplicationCall,
     state::{ApplicationState, CrowdFunding, Status},
 };
@@ -15,8 +14,8 @@ use async_trait::async_trait;
 use fungible::{AccountOwner, ApplicationTransfer, SignedTransfer, Transfer};
 use futures::{future, stream, StreamExt, TryFutureExt, TryStreamExt};
 use linera_sdk::{
-    ensure, ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
-    FromBcsBytes, OperationContext, Session, SessionCallResult, SessionId,
+    contract::system_api, ensure, ApplicationCallResult, CalleeContext, Contract, EffectContext,
+    ExecutionResult, FromBcsBytes, OperationContext, Session, SessionCallResult, SessionId,
 };
 use serde::{Deserialize, Serialize};
 use std::mem;

@@ -7,7 +7,6 @@ mod interface;
 mod state;
 
 use self::{
-    boilerplate::system_api,
     interface::{
         types::{self, AccountOwner, Nonce},
         ApplicationCall, ApplicationTransfer, SessionCall, SignedTransfer, Transfer,
@@ -16,8 +15,9 @@ use self::{
 };
 use async_trait::async_trait;
 use linera_sdk::{
-    crypto::CryptoError, ensure, ApplicationCallResult, CalleeContext, Contract, EffectContext,
-    ExecutionResult, FromBcsBytes, OperationContext, Session, SessionCallResult, SessionId,
+    contract::system_api, crypto::CryptoError, ensure, ApplicationCallResult, CalleeContext,
+    Contract, EffectContext, ExecutionResult, FromBcsBytes, OperationContext, Session,
+    SessionCallResult, SessionId,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
