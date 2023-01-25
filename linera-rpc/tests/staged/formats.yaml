@@ -264,6 +264,8 @@ HashCertificate:
   STRUCT:
     - hash:
         TYPENAME: HashValue
+    - chain_id:
+        TYPENAME: ChainId
     - signatures:
         SEQ:
           TUPLE:
