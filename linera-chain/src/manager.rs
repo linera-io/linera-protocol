@@ -382,19 +382,23 @@ pub struct MultiOwnerManagerInfo {
 impl From<&ChainManager> for ChainManagerInfo {
     fn from(manager: &ChainManager) -> Self {
         match manager {
-            ChainManager::Single(s) => ChainManagerInfo::Single(Box::new(SingleOwnerManagerInfo {
-                owner: s.owner,
-                pending: s.pending.as_ref().map(|vote| vote.lite()),
-                requested_pending_value: None,
-            })),
-            ChainManager::Multi(m) => ChainManagerInfo::Multi(Box::new(MultiOwnerManagerInfo {
-                owners: m.owners.clone(),
-                requested_proposed: None,
-                requested_locked: None,
-                pending: m.pending.as_ref().map(|vote| vote.lite()),
-                requested_pending_value: None,
-                round: m.round(),
-            })),
+            ChainManager::Single(single) => {
+                ChainManagerInfo::Single(Box::new(SingleOwnerManagerInfo {
+                    owner: single.owner,
+                    pending: single.pending.as_ref().map(|vote| vote.lite()),
+                    requested_pending_value: None,
+                }))
+            }
+            ChainManager::Multi(multi) => {
+                ChainManagerInfo::Multi(Box::new(MultiOwnerManagerInfo {
+                    owners: multi.owners.clone(),
+                    requested_proposed: None,
+                    requested_locked: None,
+                    pending: multi.pending.as_ref().map(|vote| vote.lite()),
+                    requested_pending_value: None,
+                    round: multi.round(),
+                }))
+            }
             ChainManager::None => ChainManagerInfo::None,
         }
     }
@@ -410,13 +414,15 @@ impl ChainManagerInfo {
     pub fn add_values(&mut self, manager: &ChainManager) {
         match (self, manager) {
             (ChainManagerInfo::None, ChainManager::None) => {}
-            (ChainManagerInfo::Single(info), ChainManager::Single(s)) => {
-                info.requested_pending_value = s.pending.as_ref().map(|vote| vote.value.clone());
+            (ChainManagerInfo::Single(info), ChainManager::Single(single)) => {
+                info.requested_pending_value =
+                    single.pending.as_ref().map(|vote| vote.value.clone());
             }
-            (ChainManagerInfo::Multi(info), ChainManager::Multi(m)) => {
-                info.requested_proposed = m.proposed.clone();
-                info.requested_locked = m.locked.clone();
-                info.requested_pending_value = m.pending.as_ref().map(|vote| vote.value.clone());
+            (ChainManagerInfo::Multi(info), ChainManager::Multi(multi)) => {
+                info.requested_proposed = multi.proposed.clone();
+                info.requested_locked = multi.locked.clone();
+                info.requested_pending_value =
+                    multi.pending.as_ref().map(|vote| vote.value.clone());
             }
             (_, _) => error!("cannot assign info from a chain manager of different type"),
         }
@@ -424,15 +430,15 @@ impl ChainManagerInfo {
 
     pub fn pending(&self) -> Option<&LiteVote> {
         match self {
-            ChainManagerInfo::Single(s) => s.pending.as_ref(),
-            ChainManagerInfo::Multi(m) => m.pending.as_ref(),
+            ChainManagerInfo::Single(single) => single.pending.as_ref(),
+            ChainManagerInfo::Multi(multi) => multi.pending.as_ref(),
             _ => None,
         }
     }
 
     pub fn next_round(&self) -> RoundNumber {
         match self {
-            ChainManagerInfo::Multi(m) => m.round.try_add_one().unwrap_or(m.round),
+            ChainManagerInfo::Multi(multi) => multi.round.try_add_one().unwrap_or(multi.round),
             _ => RoundNumber::default(),
         }
     }

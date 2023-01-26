@@ -610,7 +610,7 @@ where
             ..
         } = &value
         {
-            // Cache corresponding confirmed block, too, in case we get a certificate.
+            // Cache the corresponding confirmed block, too, in case we get a certificate.
             let conf_value = Value::ConfirmedBlock {
                 block: block.clone(),
                 effects: effects.clone(),
@@ -619,7 +619,7 @@ where
             let conf_hash = CryptoHash::new(&conf_value);
             self.recent_values.push(conf_hash, conf_value);
         }
-        // Cache the certificate, so that clients don't have to send the value again.
+        // Cache the certificate so that clients don't have to send the value again.
         self.recent_values.push(hash, value);
     }
 }
