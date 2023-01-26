@@ -237,7 +237,7 @@ where
             Destination::Recipient(publisher_chain.into()),
             Effect::System(subscribe_effect.clone()),
         )],
-        state_hash: creator_state.hash_value().await?,
+        state_hash: creator_state.crypto_hash().await?,
     };
     let subscribe_certificate = make_certificate(&committee, &worker, subscribe_block_proposal);
 
@@ -362,7 +362,7 @@ where
     let create_block_proposal = Value::ConfirmedBlock {
         block: create_block,
         effects: vec![],
-        state_hash: creator_state.hash_value().await?,
+        state_hash: creator_state.crypto_hash().await?,
     };
     let create_certificate = make_certificate(&committee, &worker, create_block_proposal);
 
@@ -400,7 +400,7 @@ where
     let run_block_proposal = Value::ConfirmedBlock {
         block: run_block,
         effects: vec![],
-        state_hash: creator_state.hash_value().await?,
+        state_hash: creator_state.crypto_hash().await?,
     };
     let run_certificate = make_certificate(&committee, &worker, run_block_proposal);
 

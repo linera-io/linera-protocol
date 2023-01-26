@@ -4,7 +4,7 @@
 
 use linera_base::{
     committee::{Committee, ValidatorState},
-    crypto::{HashValue, KeyPair},
+    crypto::{CryptoHash, KeyPair},
     data_types::{BlockHeight, ChainDescription, ChainId, Owner, Timestamp, ValidatorName},
 };
 use linera_core::client::{ChainClientState, ValidatorNodeProvider};
@@ -90,7 +90,7 @@ impl CommitteeConfig {
 pub struct UserChain {
     pub chain_id: ChainId,
     pub key_pair: Option<KeyPair>,
-    pub block_hash: Option<HashValue>,
+    pub block_hash: Option<CryptoHash>,
     pub timestamp: Timestamp,
     pub next_block_height: BlockHeight,
 }

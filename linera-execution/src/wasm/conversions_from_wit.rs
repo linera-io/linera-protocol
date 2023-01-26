@@ -12,7 +12,7 @@ use crate::{
     SessionCallResult, SessionId, UserApplicationId,
 };
 use linera_base::{
-    crypto::HashValue,
+    crypto::CryptoHash,
     data_types::{BlockHeight, ChainId, EffectId},
 };
 
@@ -99,8 +99,8 @@ impl From<contract::ChannelName> for ChannelName {
     }
 }
 
-impl From<contract::HashValue> for HashValue {
-    fn from(guest: contract::HashValue) -> Self {
+impl From<contract::CryptoHash> for CryptoHash {
+    fn from(guest: contract::CryptoHash) -> Self {
         let mut bytes = [0u8; 64];
 
         bytes[0..8].copy_from_slice(&guest.part1.to_le_bytes());
@@ -112,7 +112,7 @@ impl From<contract::HashValue> for HashValue {
         bytes[48..56].copy_from_slice(&guest.part7.to_le_bytes());
         bytes[56..64].copy_from_slice(&guest.part8.to_le_bytes());
 
-        HashValue::try_from(&bytes[..]).expect("Incorrect byte count for `HashValue`")
+        CryptoHash::try_from(&bytes[..]).expect("Incorrect byte count for `CryptoHash`")
     }
 }
 
@@ -160,14 +160,14 @@ impl From<writable_system::EffectId> for EffectId {
     }
 }
 
-impl From<writable_system::HashValue> for ChainId {
-    fn from(guest: writable_system::HashValue) -> Self {
+impl From<writable_system::CryptoHash> for ChainId {
+    fn from(guest: writable_system::CryptoHash) -> Self {
         ChainId(guest.into())
     }
 }
 
-impl From<writable_system::HashValue> for HashValue {
-    fn from(guest: writable_system::HashValue) -> Self {
+impl From<writable_system::CryptoHash> for CryptoHash {
+    fn from(guest: writable_system::CryptoHash) -> Self {
         let mut bytes = [0u8; 64];
 
         bytes[0..8].copy_from_slice(&guest.part1.to_le_bytes());
@@ -179,6 +179,6 @@ impl From<writable_system::HashValue> for HashValue {
         bytes[48..56].copy_from_slice(&guest.part7.to_le_bytes());
         bytes[56..64].copy_from_slice(&guest.part8.to_le_bytes());
 
-        HashValue::try_from(&bytes[..]).expect("Incorrect byte count for `HashValue`")
+        CryptoHash::try_from(&bytes[..]).expect("Incorrect byte count for `CryptoHash`")
     }
 }

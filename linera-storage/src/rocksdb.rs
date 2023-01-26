@@ -4,7 +4,7 @@
 use crate::{chain_guards::ChainGuards, ChainRuntimeContext, ChainStateView, Store};
 use async_trait::async_trait;
 use dashmap::DashMap;
-use linera_base::{crypto::HashValue, data_types::ChainId};
+use linera_base::{crypto::CryptoHash, data_types::ChainId};
 use linera_chain::data_types::Certificate;
 use linera_execution::{UserApplicationCode, UserApplicationId};
 use linera_views::{
@@ -50,7 +50,7 @@ impl RocksdbStore {
 #[derive(Debug, Serialize, Deserialize)]
 enum BaseKey {
     ChainState(ChainId),
-    Certificate(HashValue),
+    Certificate(CryptoHash),
 }
 
 #[async_trait]
@@ -73,7 +73,7 @@ impl Store for RocksdbStoreClient {
         ChainStateView::load(db_context).await
     }
 
-    async fn read_certificate(&self, hash: HashValue) -> Result<Certificate, ViewError> {
+    async fn read_certificate(&self, hash: CryptoHash) -> Result<Certificate, ViewError> {
         let key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
         let value = self
             .0

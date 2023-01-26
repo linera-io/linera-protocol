@@ -11,14 +11,14 @@ record query-context {
     chain-id: chain-id,
 }
 
-type chain-id = hash-value
+type chain-id = crypto-hash
 
 variant poll-query {
     pending,
     ready(expected<list<u8>, string>),
 }
 
-record hash-value {
+record crypto-hash {
     part1: u64,
     part2: u64,
     part3: u64,

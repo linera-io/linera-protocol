@@ -16,7 +16,7 @@ use dashmap::{mapref::entry::Entry, DashMap};
 use futures::future;
 use linera_base::{
     committee::Committee,
-    crypto::HashValue,
+    crypto::CryptoHash,
     data_types::{ChainDescription, ChainId, Epoch, Owner, Timestamp},
 };
 use linera_chain::{data_types::Certificate, ChainError, ChainStateView};
@@ -49,7 +49,7 @@ pub trait Store: Sized {
     async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError>;
 
     /// Read the certificate with the given hash.
-    async fn read_certificate(&self, hash: HashValue) -> Result<Certificate, ViewError>;
+    async fn read_certificate(&self, hash: CryptoHash) -> Result<Certificate, ViewError>;
 
     /// Write the given certificate.
     async fn write_certificate(&self, certificate: Certificate) -> Result<(), ViewError>;
@@ -69,7 +69,7 @@ pub trait Store: Sized {
     }
 
     /// Read a number of certificates in parallel.
-    async fn read_certificates<I: IntoIterator<Item = HashValue> + Send>(
+    async fn read_certificates<I: IntoIterator<Item = CryptoHash> + Send>(
         &self,
         keys: I,
     ) -> Result<Vec<Certificate>, ViewError>
@@ -120,7 +120,7 @@ pub trait Store: Sized {
         system_state.ownership.set(ChainOwnership::single(owner));
         system_state.balance.set(balance);
         system_state.timestamp.set(timestamp);
-        let state_hash = chain.execution_state.hash_value().await?;
+        let state_hash = chain.execution_state.crypto_hash().await?;
         chain.execution_state_hash.set(Some(state_hash));
         chain
             .manager

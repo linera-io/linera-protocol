@@ -29,7 +29,7 @@ pub struct PublicKey(pub [u8; dalek::PUBLIC_KEY_LENGTH]);
 
 /// A Sha512 value.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
-pub struct HashValue(generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Digest>::OutputSize>);
+pub struct CryptoHash(generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Digest>::OutputSize>);
 
 /// A signature value.
 #[derive(Eq, PartialEq, Copy, Clone)]
@@ -43,7 +43,7 @@ pub enum CryptoError {
     #[error("String contains non-hexadecimal digits")]
     NonHexDigits(#[from] hex::FromHexError),
     #[error(
-        "Byte slice has length {0} but a `HashValue` requires exactly {expected} bytes",
+        "Byte slice has length {0} but a `CryptoHash` requires exactly {expected} bytes",
         expected = <sha2::Sha512 as sha2::Digest>::OutputSize::to_usize(),
     )]
     IncorrectHashSize(usize),
@@ -118,7 +118,7 @@ impl<'de> Deserialize<'de> for PublicKey {
     }
 }
 
-impl Serialize for HashValue {
+impl Serialize for CryptoHash {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::ser::Serializer,
@@ -126,12 +126,12 @@ impl Serialize for HashValue {
         if serializer.is_human_readable() {
             serializer.serialize_str(&self.to_string())
         } else {
-            serializer.serialize_newtype_struct("HashValue", &self.0)
+            serializer.serialize_newtype_struct("CryptoHash", &self.0)
         }
     }
 }
 
-impl<'de> Deserialize<'de> for HashValue {
+impl<'de> Deserialize<'de> for CryptoHash {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::de::Deserializer<'de>,
@@ -143,7 +143,7 @@ impl<'de> Deserialize<'de> for HashValue {
             Ok(value)
         } else {
             #[derive(Deserialize)]
-            #[serde(rename = "HashValue")]
+            #[serde(rename = "CryptoHash")]
             struct Foo(generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Digest>::OutputSize>);
 
             let value = Foo::deserialize(deserializer)?;
@@ -235,7 +235,7 @@ impl TryFrom<&[u8]> for PublicKey {
     }
 }
 
-impl FromStr for HashValue {
+impl FromStr for CryptoHash {
     type Err = CryptoError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -244,7 +244,7 @@ impl FromStr for HashValue {
     }
 }
 
-impl TryFrom<&[u8]> for HashValue {
+impl TryFrom<&[u8]> for CryptoHash {
     type Error = CryptoError;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
@@ -259,9 +259,9 @@ impl TryFrom<&[u8]> for HashValue {
     }
 }
 
-impl BcsSignable for HashValue {}
+impl BcsSignable for CryptoHash {}
 
-/// Error when attempting to convert a string into a [`HashValue`].
+/// Error when attempting to convert a string into a [`CryptoHash`].
 #[derive(Clone, Copy, Debug, Error)]
 pub enum HashFromStrError {
     #[error("Invalid length for hex-encoded hash value")]
@@ -284,7 +284,7 @@ impl std::fmt::Display for PublicKey {
     }
 }
 
-impl std::fmt::Display for HashValue {
+impl std::fmt::Display for CryptoHash {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", hex::encode(&self.0[..]))
     }
@@ -302,7 +302,7 @@ impl std::fmt::Debug for PublicKey {
     }
 }
 
-impl std::fmt::Debug for HashValue {
+impl std::fmt::Debug for CryptoHash {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         write!(f, "{}", hex::encode(&self.0[..8]))
     }
@@ -355,7 +355,7 @@ where
     }
 }
 
-impl HashValue {
+impl CryptoHash {
     pub fn new<T: ?Sized>(value: &T) -> Self
     where
         T: Hashable<sha2::Sha512>,
@@ -364,7 +364,7 @@ impl HashValue {
 
         let mut hasher = sha2::Sha512::default();
         value.write(&mut hasher);
-        HashValue(hasher.finalize())
+        CryptoHash(hasher.finalize())
     }
 
     pub fn as_bytes(
@@ -439,15 +439,15 @@ impl Signature {
 }
 
 #[cfg(any(test, feature = "test"))]
-impl Arbitrary for HashValue {
+impl Arbitrary for CryptoHash {
     type Parameters = ();
-    type Strategy = strategy::Map<VecStrategy<RangeInclusive<u8>>, fn(Vec<u8>) -> HashValue>;
+    type Strategy = strategy::Map<VecStrategy<RangeInclusive<u8>>, fn(Vec<u8>) -> CryptoHash>;
 
     fn arbitrary_with((): Self::Parameters) -> Self::Strategy {
         vec(u8::MIN..=u8::MAX, 64).prop_map(|vector| {
             let bytes: [u8; 64] = vector.try_into().expect("Incorrect vector size");
 
-            HashValue(generic_array::GenericArray::clone_from_slice(&bytes))
+            CryptoHash(generic_array::GenericArray::clone_from_slice(&bytes))
         })
     }
 }

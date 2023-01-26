@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use linera_base::crypto::{BcsSignable, HashValue};
+use linera_base::crypto::{BcsSignable, CryptoHash};
 use linera_execution::Effect;
 use serde::{Deserialize, Serialize};
 
@@ -16,7 +16,7 @@ impl BcsSignable for Dummy {}
 impl BcsSignable for Dummy2 {}
 
 fn make_event(
-    certificate_hash: HashValue,
+    certificate_hash: CryptoHash,
     height: u64,
     index: usize,
     effect: impl Into<Vec<u8>>,
@@ -32,7 +32,7 @@ fn make_event(
 
 #[tokio::test]
 async fn test_inbox_add_then_remove() {
-    let hash = HashValue::new(&Dummy);
+    let hash = CryptoHash::new(&Dummy);
     let mut view = InboxStateView::new().await;
     // Add one event.
     view.add_event(make_event(hash, 0, 0, [0])).await.unwrap();
@@ -60,7 +60,7 @@ async fn test_inbox_add_then_remove() {
     ));
     // Fail to remove non-matching even (hash).
     assert!(matches!(
-        view.remove_event(&make_event(HashValue::new(&Dummy2), 0, 1, [1]))
+        view.remove_event(&make_event(CryptoHash::new(&Dummy2), 0, 1, [1]))
             .await,
         Err(InboxError::UnexpectedEvent { .. })
     ));
@@ -75,7 +75,7 @@ async fn test_inbox_add_then_remove() {
 
 #[tokio::test]
 async fn test_inbox_remove_then_add() {
-    let hash = HashValue::new(&Dummy);
+    let hash = CryptoHash::new(&Dummy);
     let mut view = InboxStateView::new().await;
     // Remove one event by anticipation.
     view.remove_event(&make_event(hash, 0, 0, [0]))
@@ -107,7 +107,7 @@ async fn test_inbox_remove_then_add() {
     ));
     // Fail to add non-matching event (hash).
     assert!(matches!(
-        view.add_event(make_event(HashValue::new(&Dummy2), 0, 1, [1]))
+        view.add_event(make_event(CryptoHash::new(&Dummy2), 0, 1, [1]))
             .await,
         Err(InboxError::UnexpectedEvent { .. })
     ));

@@ -14,7 +14,7 @@ use crate::{
 };
 use linera_base::{
     committee::Committee,
-    crypto::{BcsSignable, HashValue, *},
+    crypto::{BcsSignable, CryptoHash, *},
     data_types::*,
 };
 use linera_chain::{
@@ -44,10 +44,10 @@ struct Dummy;
 
 impl BcsSignable for Dummy {}
 
-async fn make_state_hash(state: SystemExecutionState) -> HashValue {
+async fn make_state_hash(state: SystemExecutionState) -> CryptoHash {
     ExecutionStateView::from_system_state(state)
         .await
-        .hash_value()
+        .crypto_hash()
         .await
         .expect("hashing from memory should not fail")
 }
@@ -177,7 +177,7 @@ fn make_certificate<S>(
     worker: &WorkerState<S>,
     value: Value,
 ) -> Certificate {
-    let vote = Vote::new(HashValue::new(&value), worker.key_pair.as_ref().unwrap());
+    let vote = Vote::new(CryptoHash::new(&value), worker.key_pair.as_ref().unwrap());
     let mut builder = SignatureAggregator::new(value, committee);
     builder
         .append(vote.validator, vote.signature)
@@ -1387,8 +1387,8 @@ where
     let replay_response = worker.handle_block_proposal(block_proposal).await.unwrap();
     // Workaround lack of equality.
     assert_eq!(
-        HashValue::new(&response.info),
-        HashValue::new(&replay_response.info)
+        CryptoHash::new(&response.info),
+        CryptoHash::new(&replay_response.info)
     );
 }
 
@@ -1569,7 +1569,7 @@ where
             application_id: ApplicationId::System,
             origin: Origin::chain(ChainId::root(3)),
             event: Event {
-                certificate_hash: HashValue::new(&Dummy),
+                certificate_hash: CryptoHash::new(&Dummy),
                 height: BlockHeight::from(0),
                 index: 0,
                 timestamp: Timestamp::from(0),
@@ -1651,7 +1651,7 @@ where
             index: 0,
             timestamp,
             effect: Effect::System(SystemEffect::Credit { amount, .. }),
-        } if certificate_hash == HashValue::new(&Dummy)
+        } if certificate_hash == CryptoHash::new(&Dummy)
             && height == BlockHeight::from(0)
             && timestamp == Timestamp::from(0)
             && amount == Amount::from(995),

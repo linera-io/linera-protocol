@@ -6,7 +6,7 @@ use super::{
     UserApplicationDescription, UserApplicationId,
 };
 use linera_base::{
-    crypto::HashValue,
+    crypto::CryptoHash,
     data_types::{BlockHeight, ChainId, EffectId},
 };
 
@@ -41,7 +41,7 @@ fn app_description(index: usize, deps: Vec<usize>) -> UserApplicationDescription
 
 fn location(operation_index: usize) -> BytecodeLocation {
     BytecodeLocation {
-        certificate_hash: HashValue::new(&[0u8][..]),
+        certificate_hash: CryptoHash::new(&[0u8][..]),
         operation_index,
     }
 }

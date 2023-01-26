@@ -316,7 +316,7 @@ where
         &mut self,
         chain_id: ChainId,
         key_pair: KeyPair,
-        block_hash: Option<HashValue>,
+        block_hash: Option<CryptoHash>,
         block_height: BlockHeight,
     ) -> Result<ChainClientState<NodeProvider<B::Store>, B::Store>, anyhow::Error> {
         // Note that new clients are only given the genesis store: they must figure out

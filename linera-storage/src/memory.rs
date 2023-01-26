@@ -4,7 +4,7 @@
 use crate::{ChainRuntimeContext, ChainStateView, Store};
 use async_trait::async_trait;
 use dashmap::DashMap;
-use linera_base::{crypto::HashValue, data_types::ChainId};
+use linera_base::{crypto::CryptoHash, data_types::ChainId};
 use linera_chain::data_types::Certificate;
 use linera_execution::{UserApplicationCode, UserApplicationId};
 use linera_views::{
@@ -17,7 +17,7 @@ use tokio::sync::Mutex;
 #[derive(Clone, Default)]
 struct MemoryStore {
     chains: DashMap<ChainId, Arc<Mutex<MemoryStoreMap>>>,
-    certificates: DashMap<HashValue, Certificate>,
+    certificates: DashMap<CryptoHash, Certificate>,
     user_applications: Arc<DashMap<UserApplicationId, UserApplicationCode>>,
 }
 
@@ -47,7 +47,7 @@ impl Store for MemoryStoreClient {
         ChainStateView::load(db_context).await
     }
 
-    async fn read_certificate(&self, hash: HashValue) -> Result<Certificate, ViewError> {
+    async fn read_certificate(&self, hash: CryptoHash) -> Result<Certificate, ViewError> {
         let entry = self
             .0
             .certificates

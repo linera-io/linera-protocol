@@ -162,7 +162,7 @@ pub struct EffectId {
 /// The unique identifier (UID) of a chain. This is the hash value of a ChainDescription.
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash)]
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
-pub struct ChainId(pub HashValue);
+pub struct ChainId(pub CryptoHash);
 
 /// The name of a subscription channel.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -177,15 +177,15 @@ pub struct BlockHeight(pub u64);
 /// A Sha512 value.
 #[cfg(not(feature = "serde"))]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
-pub struct HashValue([u8; 64]);
+pub struct CryptoHash([u8; 64]);
 
 /// A Sha512 value.
 #[cfg(feature = "serde")]
 #[serde_as]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord, Deserialize, Serialize)]
-pub struct HashValue(#[serde_as(as = "[_; 64]")] [u8; 64]);
+pub struct CryptoHash(#[serde_as(as = "[_; 64]")] [u8; 64]);
 
-impl From<[u64; 8]> for HashValue {
+impl From<[u64; 8]> for CryptoHash {
     fn from(eight_u64s: [u64; 8]) -> Self {
         let mut bytes = [0u8; 64];
 
@@ -198,13 +198,13 @@ impl From<[u64; 8]> for HashValue {
         bytes[48..56].copy_from_slice(&eight_u64s[6].to_le_bytes());
         bytes[56..64].copy_from_slice(&eight_u64s[7].to_le_bytes());
 
-        HashValue(bytes)
+        CryptoHash(bytes)
     }
 }
 
-impl From<HashValue> for [u64; 8] {
-    fn from(hash_value: HashValue) -> Self {
-        let bytes = hash_value.0;
+impl From<CryptoHash> for [u64; 8] {
+    fn from(crypto_hash: CryptoHash) -> Self {
+        let bytes = crypto_hash.0;
         let mut eight_u64s = [0u64; 8];
 
         eight_u64s[0] = u64::from_le_bytes(bytes[0..8].try_into().expect("incorrect indices"));

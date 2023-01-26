@@ -5,7 +5,7 @@
 use crate::ChainError;
 use linera_base::{
     committee::Committee,
-    crypto::{BcsSignable, HashValue, KeyPair, Signature},
+    crypto::{BcsSignable, CryptoHash, KeyPair, Signature},
     data_types::{BlockHeight, ChainId, Epoch, Owner, RoundNumber, Timestamp, ValidatorName},
     ensure,
 };
@@ -42,7 +42,7 @@ pub struct Block {
     pub timestamp: Timestamp,
     /// Certified hash (see `Certificate` below) of the previous block in the
     /// chain, if any.
-    pub previous_block_hash: Option<HashValue>,
+    pub previous_block_hash: Option<CryptoHash>,
 }
 
 /// A block with a round number.
@@ -69,7 +69,7 @@ pub struct Message {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct Event {
     /// The hash of the certificate that created the event
-    pub certificate_hash: HashValue,
+    pub certificate_hash: CryptoHash,
     /// The height of the block that created the event.
     pub height: BlockHeight,
     /// The index of the effect.
@@ -124,13 +124,13 @@ pub enum Value {
         block: Block,
         round: RoundNumber,
         effects: Vec<(ApplicationId, Destination, Effect)>,
-        state_hash: HashValue,
+        state_hash: CryptoHash,
     },
     /// The block is validated and confirmed (i.e. ready to be published).
     ConfirmedBlock {
         block: Block,
         effects: Vec<(ApplicationId, Destination, Effect)>,
-        state_hash: HashValue,
+        state_hash: CryptoHash,
     },
 }
 
@@ -138,7 +138,7 @@ pub enum Value {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct Vote {
-    pub hash: HashValue,
+    pub hash: CryptoHash,
     pub validator: ValidatorName,
     pub signature: Signature,
 }
@@ -148,7 +148,7 @@ pub struct Vote {
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct HashCertificate {
     /// Hash of the certified value (used as key for storage).
-    pub hash: HashValue,
+    pub hash: CryptoHash,
     /// The ID of the chain the value belongs to.
     pub chain_id: ChainId,
     /// Signatures on the value.
@@ -157,7 +157,7 @@ pub struct HashCertificate {
 
 impl HashCertificate {
     pub fn new(
-        hash: HashValue,
+        hash: CryptoHash,
         chain_id: ChainId,
         signatures: Vec<(ValidatorName, Signature)>,
     ) -> Self {
@@ -169,14 +169,14 @@ impl HashCertificate {
     }
 
     /// Verify the certificate.
-    pub fn check(self, committee: &Committee) -> Result<HashValue, ChainError> {
+    pub fn check(self, committee: &Committee) -> Result<CryptoHash, ChainError> {
         check_signatures(&self.hash, &self.signatures, committee)?;
         Ok(self.hash)
     }
 
     /// Returns the `Certificate` with the specified value, if it matches.
     pub fn with_value(self, value: Value) -> Option<Certificate> {
-        if self.chain_id != value.chain_id() || self.hash != HashValue::new(&value) {
+        if self.chain_id != value.chain_id() || self.hash != CryptoHash::new(&value) {
             return None;
         }
         Some(Certificate {
@@ -195,7 +195,7 @@ pub struct Certificate {
     pub value: Value,
     /// Hash of the certified value (used as key for storage).
     #[serde(skip_serializing)]
-    pub hash: HashValue,
+    pub hash: CryptoHash,
     /// Signatures on the value.
     pub signatures: Vec<(ValidatorName, Signature)>,
 }
@@ -247,14 +247,16 @@ impl Value {
         }
     }
 
-    pub fn state_hash(&self) -> HashValue {
+    pub fn state_hash(&self) -> CryptoHash {
         match self {
             Value::ConfirmedBlock { state_hash, .. } => *state_hash,
             Value::ValidatedBlock { state_hash, .. } => *state_hash,
         }
     }
 
-    pub fn effects_and_state_hash(&self) -> (Vec<(ApplicationId, Destination, Effect)>, HashValue) {
+    pub fn effects_and_state_hash(
+        &self,
+    ) -> (Vec<(ApplicationId, Destination, Effect)>, CryptoHash) {
         match self {
             Value::ConfirmedBlock {
                 effects,
@@ -297,7 +299,7 @@ impl BlockProposal {
 
 impl Vote {
     /// Use signing key to create a signed object.
-    pub fn new(hash: HashValue, key_pair: &KeyPair) -> Self {
+    pub fn new(hash: CryptoHash, key_pair: &KeyPair) -> Self {
         let signature = Signature::new(&hash, key_pair);
         Self {
             hash,
@@ -322,7 +324,7 @@ pub struct SignatureAggregator<'a> {
 impl<'a> SignatureAggregator<'a> {
     /// Start aggregating signatures for the given value into a certificate.
     pub fn new(value: Value, committee: &'a Committee) -> Self {
-        let hash = HashValue::new(&value);
+        let hash = CryptoHash::new(&value);
         Self {
             committee,
             weight: 0,
@@ -343,7 +345,7 @@ impl<'a> SignatureAggregator<'a> {
         validator: ValidatorName,
         signature: Signature,
     ) -> Result<Option<Certificate>, ChainError> {
-        signature.check(&HashValue::new(&self.partial.value), validator.0)?;
+        signature.check(&CryptoHash::new(&self.partial.value), validator.0)?;
         // Check that each validator only appears once.
         ensure!(
             !self.used_validators.contains(&validator),
@@ -385,7 +387,7 @@ impl<'a> Deserialize<'a> for Certificate {
 
 impl Certificate {
     pub fn new(value: Value, signatures: Vec<(ValidatorName, Signature)>) -> Self {
-        let hash = HashValue::new(&value);
+        let hash = CryptoHash::new(&value);
         Self {
             value,
             hash,
@@ -411,7 +413,7 @@ impl Certificate {
 
 /// Verifies certificate signatures.
 fn check_signatures(
-    hash: &HashValue,
+    hash: &CryptoHash,
     signatures: &[(ValidatorName, Signature)],
     committee: &Committee,
 ) -> Result<(), ChainError> {

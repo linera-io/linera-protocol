@@ -74,7 +74,7 @@ record application-id {
     creation: effect-id,
 }
 
-type chain-id = hash-value
+type chain-id = crypto-hash
 type block-height = u64
 type bytecode-id = effect-id
 
@@ -132,7 +132,7 @@ record channel-name {
 
 type effect = list<u8>
 
-record hash-value {
+record crypto-hash {
     part1: u64,
     part2: u64,
     part3: u64,

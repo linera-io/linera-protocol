@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::SystemExecutionError;
-use linera_base::{crypto::HashValue, data_types::EffectId};
+use linera_base::{crypto::CryptoHash, data_types::EffectId};
 use linera_views::{
     common::Context,
     map_view::MapView,
@@ -98,7 +98,7 @@ pub struct BytecodeId(pub EffectId);
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct BytecodeLocation {
     /// The certificate that published the bytecode.
-    pub certificate_hash: HashValue,
+    pub certificate_hash: CryptoHash,
     /// The index in the certificate of the operation that published the bytecode.
     pub operation_index: usize,
 }

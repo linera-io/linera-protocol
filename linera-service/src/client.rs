@@ -9,7 +9,7 @@ use chrono::{DateTime, Utc};
 use futures::StreamExt;
 use linera_base::{
     committee::ValidatorState,
-    crypto::{HashValue, KeyPair},
+    crypto::{CryptoHash, KeyPair},
     data_types::{
         BlockHeight, ChainDescription, ChainId, Epoch, Owner, RoundNumber, Timestamp, ValidatorName,
     },
@@ -765,7 +765,7 @@ where
                             effects,
                             state_hash,
                         };
-                        values.insert(HashValue::new(&value), value);
+                        values.insert(CryptoHash::new(&value), value);
                     }
                 }
 

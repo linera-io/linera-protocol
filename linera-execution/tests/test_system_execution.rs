@@ -4,7 +4,7 @@
 #![allow(clippy::field_reassign_with_default)]
 
 use linera_base::{
-    crypto::{BcsSignable, HashValue},
+    crypto::{BcsSignable, CryptoHash},
     data_types::{BlockHeight, ChainDescription, ChainId, EffectId},
 };
 use linera_execution::{
@@ -70,7 +70,7 @@ async fn test_simple_system_effect() -> anyhow::Result<()> {
     let context = EffectContext {
         chain_id: ChainId::root(0),
         height: BlockHeight(0),
-        certificate_hash: HashValue::new(&Dummy),
+        certificate_hash: CryptoHash::new(&Dummy),
         effect_id: EffectId {
             chain_id: ChainId::root(1),
             height: BlockHeight(0),

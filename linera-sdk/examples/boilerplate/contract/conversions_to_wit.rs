@@ -5,16 +5,16 @@
 
 use super::{contract, writable_system as system};
 use linera_sdk::{
-    ApplicationCallResult, ApplicationId, ChannelName, Destination, EffectId, ExecutionResult,
-    HashValue, Session, SessionCallResult, SessionId,
+    ApplicationCallResult, ApplicationId, ChannelName, CryptoHash, Destination, EffectId,
+    ExecutionResult, Session, SessionCallResult, SessionId,
 };
 use std::task::Poll;
 
-impl From<HashValue> for contract::HashValue {
-    fn from(hash_value: HashValue) -> Self {
-        let parts = <[u64; 8]>::from(hash_value);
+impl From<CryptoHash> for contract::CryptoHash {
+    fn from(crypto_hash: CryptoHash) -> Self {
+        let parts = <[u64; 8]>::from(crypto_hash);
 
-        contract::HashValue {
+        contract::CryptoHash {
             part1: parts[0],
             part2: parts[1],
             part3: parts[2],
@@ -27,11 +27,11 @@ impl From<HashValue> for contract::HashValue {
     }
 }
 
-impl From<HashValue> for system::HashValue {
-    fn from(hash_value: HashValue) -> Self {
-        let parts = <[u64; 8]>::from(hash_value);
+impl From<CryptoHash> for system::CryptoHash {
+    fn from(crypto_hash: CryptoHash) -> Self {
+        let parts = <[u64; 8]>::from(crypto_hash);
 
-        system::HashValue {
+        system::CryptoHash {
             part1: parts[0],
             part2: parts[1],
             part3: parts[2],
