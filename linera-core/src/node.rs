@@ -14,7 +14,7 @@ use linera_base::{
     data_types::{ArithmeticError, BlockHeight, ChainId, ValidatorName},
 };
 use linera_chain::{
-    data_types::{Block, BlockProposal, Certificate, HashCertificate, Origin, Value},
+    data_types::{Block, BlockProposal, Certificate, LiteCertificate, Origin, Value},
     ChainError, ChainManagerInfo,
 };
 use linera_execution::{
@@ -42,9 +42,9 @@ pub trait ValidatorNode {
     ) -> Result<ChainInfoResponse, NodeError>;
 
     /// Process a certificate without a value.
-    async fn handle_hash_certificate(
+    async fn handle_lite_certificate(
         &mut self,
-        certificate: HashCertificate,
+        certificate: LiteCertificate,
     ) -> Result<ChainInfoResponse, NodeError>;
 
     /// Process a certificate.
@@ -261,9 +261,9 @@ where
         Ok(response)
     }
 
-    async fn handle_hash_certificate(
+    async fn handle_lite_certificate(
         &mut self,
-        certificate: HashCertificate,
+        certificate: LiteCertificate,
     ) -> Result<ChainInfoResponse, NodeError> {
         let node = self.node.clone();
         let mut node = node.lock().await;
@@ -275,7 +275,7 @@ where
             .clone();
         let full_cert = certificate
             .with_value(value)
-            .ok_or(WorkerError::InvalidHashCertificate)?;
+            .ok_or(WorkerError::InvalidLiteCertificate)?;
         let response = node
             .state
             .fully_handle_certificate_with_notifications(full_cert, Some(&mut notifications))

@@ -12,7 +12,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockProposal, Certificate, HashCertificate, Message, Origin, Target, Value,
+        Block, BlockProposal, Certificate, LiteCertificate, Message, Origin, Target, Value,
     },
     ChainManagerOutcome, ChainStateView,
 };
@@ -50,9 +50,9 @@ pub trait ValidatorWorker {
     ) -> Result<ChainInfoResponse, WorkerError>;
 
     /// Process a certificate, e.g. to extend a chain with a confirmed block.
-    async fn handle_hash_certificate(
+    async fn handle_lite_certificate(
         &mut self,
-        certificate: HashCertificate,
+        certificate: LiteCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError>;
 
     /// Process a certificate, e.g. to extend a chain with a confirmed block.
@@ -147,7 +147,7 @@ pub enum WorkerError {
     #[error("We don't have the value for the certificate.")]
     MissingCertificateValue,
     #[error("The hash certificate doesn't match its value.")]
-    InvalidHashCertificate,
+    InvalidLiteCertificate,
 }
 
 impl From<linera_chain::ChainError> for WorkerError {
@@ -704,9 +704,9 @@ where
     }
 
     /// Process a certificate, e.g. to extend a chain with a confirmed block.
-    async fn handle_hash_certificate(
+    async fn handle_lite_certificate(
         &mut self,
-        certificate: HashCertificate,
+        certificate: LiteCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let value = self
             .recent_values
@@ -715,7 +715,7 @@ where
             .clone();
         let full_cert = certificate
             .with_value(value)
-            .ok_or(WorkerError::InvalidHashCertificate)?;
+            .ok_or(WorkerError::InvalidLiteCertificate)?;
         self.handle_certificate(full_cert).await
     }
 

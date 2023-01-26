@@ -146,7 +146,7 @@ pub struct Vote {
 /// A certified statement from the committee, without the value.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub struct HashCertificate {
+pub struct LiteCertificate {
     /// Hash of the certified value (used as key for storage).
     pub hash: CryptoHash,
     /// The ID of the chain the value belongs to.
@@ -155,7 +155,7 @@ pub struct HashCertificate {
     pub signatures: Vec<(ValidatorName, Signature)>,
 }
 
-impl HashCertificate {
+impl LiteCertificate {
     pub fn new(
         hash: CryptoHash,
         chain_id: ChainId,
@@ -402,8 +402,8 @@ impl Certificate {
     }
 
     /// Returns the certificate without the full value.
-    pub fn without_value(&self) -> HashCertificate {
-        HashCertificate {
+    pub fn without_value(&self) -> LiteCertificate {
+        LiteCertificate {
             hash: self.hash,
             chain_id: self.value.chain_id(),
             signatures: self.signatures.clone(),

@@ -20,7 +20,7 @@ service ValidatorWorker {
   rpc HandleBlockProposal(BlockProposal) returns (ChainInfoResult);
 
   // Process a certificate without value.
-  rpc HandleHashCertificate(HashCertificate) returns (ChainInfoResult);
+  rpc HandleLiteCertificate(LiteCertificate) returns (ChainInfoResult);
 
   // Process a certificate.
   rpc HandleCertificate(Certificate) returns (ChainInfoResult);
@@ -38,7 +38,7 @@ service ValidatorNode {
   rpc HandleBlockProposal(BlockProposal) returns (ChainInfoResult);
 
   // Process a certificate without value.
-  rpc HandleHashCertificate(HashCertificate) returns (ChainInfoResult);
+  rpc HandleLiteCertificate(LiteCertificate) returns (ChainInfoResult);
 
   // Process a certificate.
   rpc HandleCertificate(Certificate) returns (ChainInfoResult);
@@ -164,7 +164,7 @@ message BlockProposal {
 }
 
 // A certified statement from the committee, without the value.
-message HashCertificate {
+message LiteCertificate {
   // The certified value's hash
   bytes hash = 1;
 

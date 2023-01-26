@@ -126,7 +126,7 @@ where
         loop {
             let result = match self
                 .client
-                .handle_hash_certificate(certificate.without_value())
+                .handle_lite_certificate(certificate.without_value())
                 .await
             {
                 Ok(response) => Ok(response),

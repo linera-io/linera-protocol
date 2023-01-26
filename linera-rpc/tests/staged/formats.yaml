@@ -265,7 +265,7 @@ Event:
         TYPENAME: Timestamp
     - effect:
         TYPENAME: Effect
-HashCertificate:
+LiteCertificate:
   STRUCT:
     - hash:
         TYPENAME: CryptoHash
@@ -450,9 +450,9 @@ RpcMessage:
         NEWTYPE:
           TYPENAME: Certificate
     2:
-      HashCertificate:
+      LiteCertificate:
         NEWTYPE:
-          TYPENAME: HashCertificate
+          TYPENAME: LiteCertificate
     3:
       ChainInfoQuery:
         NEWTYPE:
