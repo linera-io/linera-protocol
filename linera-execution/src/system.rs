@@ -3,9 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    ApplicationRegistryView, Bytecode, BytecodeId, BytecodeLocation, ChainOwnership, ChannelId,
-    ChannelName, Destination, EffectContext, OperationContext, QueryContext, RawExecutionResult,
-    UserApplicationDescription, UserApplicationId,
+    applications::ApplicationRegistry, ApplicationRegistryView, Bytecode, BytecodeId,
+    BytecodeLocation, ChainOwnership, ChannelId, ChannelName, Destination, EffectContext,
+    OperationContext, QueryContext, RawExecutionResult, UserApplicationDescription,
+    UserApplicationId,
 };
 use linera_base::{
     committee::Committee,
@@ -66,7 +67,7 @@ pub struct SystemExecutionState {
     pub ownership: ChainOwnership,
     pub balance: Balance,
     pub timestamp: Timestamp,
-    pub registry: crate::applications::ApplicationRegistry,
+    pub registry: ApplicationRegistry,
 }
 
 /// A system operation.
