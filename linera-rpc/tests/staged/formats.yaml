@@ -524,12 +524,20 @@ SystemEffect:
     5:
       BytecodePublished: UNIT
     6:
+      BytecodeLocations:
+        STRUCT:
+          - locations:
+              SEQ:
+                TUPLE:
+                  - TYPENAME: BytecodeId
+                  - TYPENAME: BytecodeLocation
+    7:
       RegisterApplications:
         STRUCT:
           - applications:
               SEQ:
                 TYPENAME: UserApplicationDescription
-    7:
+    8:
       Notify:
         STRUCT:
           - id:
