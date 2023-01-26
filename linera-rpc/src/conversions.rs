@@ -10,7 +10,7 @@ use linera_base::{
     crypto::{CryptoError, PublicKey, Signature},
     data_types::{BlockHeight, ChainId, EffectId, Owner, ValidatorName},
 };
-use linera_chain::data_types::{BlockProposal, Certificate, HashCertificate, Medium, Origin};
+use linera_chain::data_types::{BlockProposal, Certificate, LiteCertificate, Medium, Origin};
 use linera_core::{
     data_types::{
         BlockHeightRange, ChainInfoQuery, ChainInfoResponse, CrossChainRequest,
@@ -332,10 +332,10 @@ impl TryFrom<CrossChainRequest> for grpc::CrossChainRequest {
     }
 }
 
-impl TryFrom<grpc::HashCertificate> for HashCertificate {
+impl TryFrom<grpc::LiteCertificate> for LiteCertificate {
     type Error = ProtoConversionError;
 
-    fn try_from(certificate: grpc::HashCertificate) -> Result<Self, Self::Error> {
+    fn try_from(certificate: grpc::LiteCertificate) -> Result<Self, Self::Error> {
         let mut signatures = Vec::with_capacity(certificate.signatures.len());
 
         for name_signature_pair in certificate.signatures {
@@ -346,7 +346,7 @@ impl TryFrom<grpc::HashCertificate> for HashCertificate {
         }
 
         let chain_id = try_proto_convert!(certificate.chain_id);
-        Ok(HashCertificate::new(
+        Ok(LiteCertificate::new(
             bcs::from_bytes(certificate.hash.as_slice())?,
             chain_id,
             signatures,
@@ -354,10 +354,10 @@ impl TryFrom<grpc::HashCertificate> for HashCertificate {
     }
 }
 
-impl TryFrom<HashCertificate> for grpc::HashCertificate {
+impl TryFrom<LiteCertificate> for grpc::LiteCertificate {
     type Error = ProtoConversionError;
 
-    fn try_from(certificate: HashCertificate) -> Result<Self, Self::Error> {
+    fn try_from(certificate: LiteCertificate) -> Result<Self, Self::Error> {
         let signatures = certificate
             .signatures
             .into_iter()
@@ -894,13 +894,13 @@ pub mod tests {
     }
 
     #[test]
-    pub fn test_hash_certificate() {
+    pub fn test_lite_certificate() {
         #[derive(Serialize, Deserialize)]
         struct Dummy;
         impl BcsSignable for Dummy {}
 
         let key_pair = KeyPair::generate();
-        let certificate_validated = HashCertificate {
+        let certificate_validated = LiteCertificate {
             hash: CryptoHash::new(&Dummy),
             chain_id: ChainId::root(0),
             signatures: vec![(
@@ -909,7 +909,7 @@ pub mod tests {
             )],
         };
 
-        round_trip_check::<_, grpc::HashCertificate>(certificate_validated);
+        round_trip_check::<_, grpc::LiteCertificate>(certificate_validated);
     }
 
     #[test]

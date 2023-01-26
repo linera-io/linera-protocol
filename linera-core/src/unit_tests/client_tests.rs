@@ -14,7 +14,7 @@ use crate::{
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use linera_base::{committee::Committee, crypto::*, data_types::*};
-use linera_chain::data_types::{Block, BlockProposal, Certificate, HashCertificate, Value};
+use linera_chain::data_types::{Block, BlockProposal, Certificate, LiteCertificate, Value};
 use linera_execution::{
     system::{Amount, Balance, SystemOperation, UserData},
     ApplicationId, Operation, Query, Response, SystemQuery, SystemResponse,
@@ -58,9 +58,9 @@ where
         }
     }
 
-    async fn handle_hash_certificate(
+    async fn handle_lite_certificate(
         &mut self,
-        certificate: HashCertificate,
+        certificate: LiteCertificate,
     ) -> Result<ChainInfoResponse, NodeError> {
         let validator = self.0.clone();
         let mut validator = validator.lock().await;
@@ -71,7 +71,7 @@ where
             .clone();
         let full_cert = certificate
             .with_value(value)
-            .ok_or(WorkerError::InvalidHashCertificate)?;
+            .ok_or(WorkerError::InvalidLiteCertificate)?;
         let response = validator.state.fully_handle_certificate(full_cert).await?;
         Ok(response)
     }
