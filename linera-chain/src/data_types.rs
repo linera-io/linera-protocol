@@ -142,9 +142,16 @@ pub struct LiteValue {
 }
 
 /// A vote on a statement from a validator.
+pub struct Vote {
+    pub value: Value,
+    pub validator: ValidatorName,
+    pub signature: Signature,
+}
+
+/// A vote on a statement from a validator, represented as a `LiteValue`.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub struct Vote {
+pub struct LiteVote {
     pub value: LiteValue,
     pub validator: ValidatorName,
     pub signature: Signature,
@@ -303,7 +310,7 @@ impl BlockProposal {
     }
 }
 
-impl Vote {
+impl LiteVote {
     /// Use signing key to create a signed object.
     pub fn new(value: LiteValue, key_pair: &KeyPair) -> Self {
         let signature = Signature::new(&value, key_pair);

@@ -11,7 +11,7 @@ use linera_base::{
     committee::Committee,
     data_types::{BlockHeight, ChainDescription, ChainId, EffectId, ValidatorName},
 };
-use linera_chain::data_types::{BlockProposal, Certificate, Vote};
+use linera_chain::data_types::{BlockProposal, Certificate, LiteVote};
 use linera_storage::Store;
 use linera_views::views::ViewError;
 use std::{
@@ -325,7 +325,7 @@ where
         &mut self,
         chain_id: ChainId,
         action: CommunicateAction,
-    ) -> Result<Option<Vote>, NodeError> {
+    ) -> Result<Option<LiteVote>, NodeError> {
         let target_block_height = match &action {
             CommunicateAction::SubmitBlockForValidation(proposal)
             | CommunicateAction::SubmitBlockForConfirmation(proposal) => {

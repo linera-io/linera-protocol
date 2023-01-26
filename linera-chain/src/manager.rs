@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    data_types::{Block, BlockAndRound, BlockProposal, Certificate, Value, Vote},
+    data_types::{Block, BlockAndRound, BlockProposal, Certificate, LiteVote, Value},
     ChainError,
 };
 use linera_base::{
@@ -32,7 +32,7 @@ pub struct SingleOwnerManager {
     /// The owner of the chain.
     pub owner: Owner,
     /// Latest proposal that we have voted on last (both to validate and confirm it).
-    pub pending: Option<(Vote, Value)>,
+    pub pending: Option<(LiteVote, Value)>,
 }
 
 /// The specific state of a chain managed by multiple owners.
@@ -46,7 +46,7 @@ pub struct MultiOwnerManager {
     /// Latest validated proposal that we have seen (and voted to confirm).
     pub locked: Option<Certificate>,
     /// Latest proposal that we have voted on (either to validate or to confirm it).
-    pub pending: Option<(Vote, Value)>,
+    pub pending: Option<(LiteVote, Value)>,
 }
 
 /// The result of verifying a (valid) query.
@@ -136,7 +136,7 @@ impl ChainManager {
         }
     }
 
-    pub fn pending(&self) -> Option<&(Vote, Value)> {
+    pub fn pending(&self) -> Option<&(LiteVote, Value)> {
         match self {
             ChainManager::Single(manager) => manager.pending.as_ref(),
             ChainManager::Multi(manager) => manager.pending.as_ref(),
@@ -278,7 +278,7 @@ impl ChainManager {
                         effects,
                         state_hash,
                     };
-                    let vote_value = (Vote::new(value.lite(), key_pair), value);
+                    let vote_value = (LiteVote::new(value.lite(), key_pair), value);
                     manager.pending = Some(vote_value);
                 }
             }
@@ -295,7 +295,7 @@ impl ChainManager {
                         effects,
                         state_hash,
                     };
-                    let vote_value = (Vote::new(value.lite(), key_pair), value);
+                    let vote_value = (LiteVote::new(value.lite(), key_pair), value);
                     manager.pending = Some(vote_value);
                 }
             }
@@ -323,7 +323,7 @@ impl ChainManager {
                         effects,
                         state_hash,
                     };
-                    let vote_value = (Vote::new(value.lite(), key_pair), value);
+                    let vote_value = (LiteVote::new(value.lite(), key_pair), value);
                     // Ok to overwrite validation votes with confirmation votes at equal or
                     // higher round.
                     manager.pending = Some(vote_value);
@@ -354,7 +354,7 @@ pub struct SingleOwnerManagerInfo {
     /// The owner of the chain.
     pub owner: Owner,
     /// Latest vote we cast.
-    pub pending: Option<Vote>,
+    pub pending: Option<LiteVote>,
     /// The value we voted for, if requested.
     pub requested_pending_value: Option<Value>,
 }
@@ -372,7 +372,7 @@ pub struct MultiOwnerManagerInfo {
     /// Latest validated proposal that we have seen (and voted to confirm), if requested.
     pub requested_locked: Option<Certificate>,
     /// Latest vote we cast (either to validate or to confirm a block).
-    pub pending: Option<Vote>,
+    pub pending: Option<LiteVote>,
     /// The value we voted for, if requested.
     pub requested_pending_value: Option<Value>,
     /// The current round.
@@ -422,7 +422,7 @@ impl ChainManagerInfo {
         }
     }
 
-    pub fn pending(&self) -> Option<&Vote> {
+    pub fn pending(&self) -> Option<&LiteVote> {
         match self {
             ChainManagerInfo::Single(s) => s.pending.as_ref(),
             ChainManagerInfo::Multi(m) => m.pending.as_ref(),
