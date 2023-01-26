@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    data_types::{Block, BlockAndRound, BlockProposal, Certificate, LiteVote, Value},
+    data_types::{Block, BlockAndRound, BlockProposal, Certificate, LiteVote, Value, Vote},
     ChainError,
 };
 use linera_base::{
@@ -32,7 +32,7 @@ pub struct SingleOwnerManager {
     /// The owner of the chain.
     pub owner: Owner,
     /// Latest proposal that we have voted on last (both to validate and confirm it).
-    pub pending: Option<(LiteVote, Value)>,
+    pub pending: Option<Vote>,
 }
 
 /// The specific state of a chain managed by multiple owners.
@@ -46,7 +46,7 @@ pub struct MultiOwnerManager {
     /// Latest validated proposal that we have seen (and voted to confirm).
     pub locked: Option<Certificate>,
     /// Latest proposal that we have voted on (either to validate or to confirm it).
-    pub pending: Option<(LiteVote, Value)>,
+    pub pending: Option<Vote>,
 }
 
 /// The result of verifying a (valid) query.
@@ -136,7 +136,7 @@ impl ChainManager {
         }
     }
 
-    pub fn pending(&self) -> Option<&(LiteVote, Value)> {
+    pub fn pending(&self) -> Option<&Vote> {
         match self {
             ChainManager::Single(manager) => manager.pending.as_ref(),
             ChainManager::Multi(manager) => manager.pending.as_ref(),
@@ -173,8 +173,8 @@ impl ChainManager {
                     new_round == RoundNumber::default(),
                     ChainError::InvalidBlockProposal
                 );
-                if let Some((_, value)) = &manager.pending {
-                    match value {
+                if let Some(vote) = &manager.pending {
+                    match &vote.value {
                         Value::ConfirmedBlock { block, .. } if block != new_block => {
                             log::error!("Attempting to sign a different block at the same height:\n{:?}\n{:?}", block, new_block);
                             return Err(ChainError::PreviousBlockMustBeConfirmedFirst);
@@ -232,8 +232,8 @@ impl ChainManager {
         }
         match self {
             ChainManager::Multi(manager) => {
-                if let Some((_, value)) = &manager.pending {
-                    match value {
+                if let Some(vote) = &manager.pending {
+                    match &vote.value {
                         Value::ConfirmedBlock { block, .. } if block == new_block => {
                             return Ok(Outcome::Skip);
                         }
@@ -278,8 +278,8 @@ impl ChainManager {
                         effects,
                         state_hash,
                     };
-                    let vote_value = (LiteVote::new(value.lite(), key_pair), value);
-                    manager.pending = Some(vote_value);
+                    let vote = Vote::new(value, key_pair);
+                    manager.pending = Some(vote);
                 }
             }
             ChainManager::Multi(manager) => {
@@ -295,8 +295,8 @@ impl ChainManager {
                         effects,
                         state_hash,
                     };
-                    let vote_value = (LiteVote::new(value.lite(), key_pair), value);
-                    manager.pending = Some(vote_value);
+                    let vote = Vote::new(value, key_pair);
+                    manager.pending = Some(vote);
                 }
             }
             _ => panic!("unexpected chain manager"),
@@ -323,10 +323,10 @@ impl ChainManager {
                         effects,
                         state_hash,
                     };
-                    let vote_value = (LiteVote::new(value.lite(), key_pair), value);
+                    let vote = Vote::new(value, key_pair);
                     // Ok to overwrite validation votes with confirmation votes at equal or
                     // higher round.
-                    manager.pending = Some(vote_value);
+                    manager.pending = Some(vote);
                 }
             }
             _ => panic!("unexpected chain manager"),
@@ -384,14 +384,14 @@ impl From<&ChainManager> for ChainManagerInfo {
         match manager {
             ChainManager::Single(s) => ChainManagerInfo::Single(SingleOwnerManagerInfo {
                 owner: s.owner,
-                pending: s.pending.as_ref().map(|(vote, _)| vote.clone()),
+                pending: s.pending.as_ref().map(|vote| vote.lite()),
                 requested_pending_value: None,
             }),
             ChainManager::Multi(m) => ChainManagerInfo::Multi(MultiOwnerManagerInfo {
                 owners: m.owners.clone(),
                 requested_proposed: None,
                 requested_locked: None,
-                pending: m.pending.as_ref().map(|(vote, _)| vote.clone()),
+                pending: m.pending.as_ref().map(|vote| vote.lite()),
                 requested_pending_value: None,
                 round: m.round(),
             }),
@@ -411,12 +411,12 @@ impl ChainManagerInfo {
         match (self, manager) {
             (ChainManagerInfo::None, ChainManager::None) => {}
             (ChainManagerInfo::Single(info), ChainManager::Single(s)) => {
-                info.requested_pending_value = s.pending.as_ref().map(|(_, value)| value.clone());
+                info.requested_pending_value = s.pending.as_ref().map(|vote| vote.value.clone());
             }
             (ChainManagerInfo::Multi(info), ChainManager::Multi(m)) => {
                 info.requested_proposed = m.proposed.clone();
                 info.requested_locked = m.locked.clone();
-                info.requested_pending_value = m.pending.as_ref().map(|(_, value)| value.clone());
+                info.requested_pending_value = m.pending.as_ref().map(|vote| vote.value.clone());
             }
             (_, _) => error!("cannot assign info from a chain manager of different type"),
         }

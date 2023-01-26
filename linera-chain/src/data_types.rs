@@ -142,10 +142,32 @@ pub struct LiteValue {
 }
 
 /// A vote on a statement from a validator.
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Vote {
     pub value: Value,
     pub validator: ValidatorName,
     pub signature: Signature,
+}
+
+impl Vote {
+    /// Use signing key to create a signed object.
+    pub fn new(value: Value, key_pair: &KeyPair) -> Self {
+        let signature = Signature::new(&value.lite(), key_pair);
+        Self {
+            value,
+            validator: ValidatorName(key_pair.public()),
+            signature,
+        }
+    }
+
+    /// Returns the vote, with a `LiteValue` instead of the full value.
+    pub fn lite(&self) -> LiteVote {
+        LiteVote {
+            value: self.value.lite(),
+            validator: self.validator,
+            signature: self.signature,
+        }
+    }
 }
 
 /// A vote on a statement from a validator, represented as a `LiteValue`.
@@ -155,6 +177,20 @@ pub struct LiteVote {
     pub value: LiteValue,
     pub validator: ValidatorName,
     pub signature: Signature,
+}
+
+impl LiteVote {
+    /// Returns the full vote, with the value, if it matches.
+    pub fn with_value(self, value: Value) -> Option<Vote> {
+        if self.value != value.lite() {
+            return None;
+        }
+        Some(Vote {
+            value,
+            validator: self.validator,
+            signature: self.signature,
+        })
+    }
 }
 
 /// A certified statement from the committee, without the value.

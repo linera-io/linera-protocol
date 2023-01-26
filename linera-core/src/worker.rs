@@ -695,8 +695,8 @@ where
         let manager = chain.manager.get_mut();
         manager.create_vote(proposal, effects, state_hash, self.key_pair());
         // Cache the value we voted on, so the client doesn't have to send it again.
-        if let Some((vote, value)) = manager.pending() {
-            self.cache_recent_value(vote.value.value_hash, value.clone());
+        if let Some(vote) = manager.pending() {
+            self.cache_recent_value(vote.value.lite().value_hash, vote.value.clone());
         }
         let info = ChainInfoResponse::new(&chain, self.key_pair());
         chain.save().await?;

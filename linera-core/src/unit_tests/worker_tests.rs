@@ -1312,8 +1312,7 @@ where
         .get()
         .pending()
         .unwrap()
-        .0
-        .clone();
+        .lite();
     assert_eq!(
         *chain_info_response.info.manager.pending().unwrap(),
         pending_value

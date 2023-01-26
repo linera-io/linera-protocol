@@ -15,7 +15,7 @@ use linera_base::{
     },
 };
 use linera_chain::data_types::{
-    Block, BlockAndRound, BlockProposal, Certificate, LiteVote, SignatureAggregator, Value,
+    Block, BlockAndRound, BlockProposal, Certificate, SignatureAggregator, Value, Vote,
 };
 use linera_core::{
     client::{ChainClientState, ValidatorNodeProvider},
@@ -189,17 +189,14 @@ impl ClientContext {
     }
 
     /// Try to aggregate votes into certificates.
-    fn make_benchmark_certificates_from_votes(
-        &self,
-        votes: Vec<(LiteVote, Value)>,
-    ) -> Vec<Certificate> {
+    fn make_benchmark_certificates_from_votes(&self, votes: Vec<Vote>) -> Vec<Certificate> {
         let committee = self.genesis_config.committee.clone().into_committee();
         let mut aggregators = HashMap::new();
         let mut certificates = Vec::new();
         let mut done_senders = HashSet::new();
-        for (vote, value) in votes {
+        for vote in votes {
             // We aggregate votes indexed by sender.
-            let chain_id = value.chain_id();
+            let chain_id = vote.value.chain_id();
             if done_senders.contains(&chain_id) {
                 continue;
             }
@@ -209,7 +206,7 @@ impl ClientContext {
             );
             let aggregator = aggregators
                 .entry(chain_id)
-                .or_insert_with(|| SignatureAggregator::new(value, &committee));
+                .or_insert_with(|| SignatureAggregator::new(vote.value, &committee));
             match aggregator.append(vote.validator, vote.signature) {
                 Ok(Some(certificate)) => {
                     debug!("Found certificate: {:?}", certificate);
@@ -777,7 +774,8 @@ where
                     .filter_map(|message| {
                         deserialize_response(message).and_then(|response| {
                             response.info.manager.pending().and_then(|vote| {
-                                Some((vote.clone(), values.get(&vote.value.value_hash)?.clone()))
+                                let value = values.get(&vote.value.value_hash)?.clone();
+                                vote.clone().with_value(value)
                             })
                         })
                     })
