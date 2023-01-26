@@ -26,7 +26,7 @@ pub use {applications::ApplicationRegistry, system::SystemExecutionState};
 use async_trait::async_trait;
 use dashmap::DashMap;
 use linera_base::{
-    crypto::HashValue,
+    crypto::CryptoHash,
     data_types::{BlockHeight, ChainId, EffectId, Timestamp},
 };
 use linera_views::views::ViewError;
@@ -202,7 +202,7 @@ pub struct EffectContext {
     /// The current block height.
     pub height: BlockHeight,
     /// The hash of the remote certificate that created the effect.
-    pub certificate_hash: HashValue,
+    pub certificate_hash: CryptoHash,
     /// The id of the effect (based on the operation height and index in the remote
     /// certificate).
     pub effect_id: EffectId,

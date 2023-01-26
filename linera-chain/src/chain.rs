@@ -8,7 +8,7 @@ use crate::{
     ChainError, ChainManager,
 };
 use linera_base::{
-    crypto::HashValue,
+    crypto::CryptoHash,
     data_types::{BlockHeight, ChainId, EffectId, Timestamp},
     ensure,
 };
@@ -34,7 +34,7 @@ pub struct ChainStateView<C> {
     /// Execution state, including system and user applications.
     pub execution_state: ExecutionStateView<C>,
     /// Hash of the execution state.
-    pub execution_state_hash: RegisterView<C, Option<HashValue>>,
+    pub execution_state_hash: RegisterView<C, Option<CryptoHash>>,
 
     /// Block-chaining state.
     pub tip_state: RegisterView<C, ChainTipState>,
@@ -44,9 +44,9 @@ pub struct ChainStateView<C> {
 
     /// Hashes of all certified blocks for this sender.
     /// This ends with `block_hash` and has length `usize::from(next_block_height)`.
-    pub confirmed_log: LogView<C, HashValue>,
+    pub confirmed_log: LogView<C, CryptoHash>,
     /// Hashes of all certified blocks known as a receiver (local ordering).
-    pub received_log: LogView<C, HashValue>,
+    pub received_log: LogView<C, CryptoHash>,
 
     /// Communication state of applications.
     pub communication_states: CollectionView<C, ApplicationId, CommunicationStateView<C>>,
@@ -56,7 +56,7 @@ pub struct ChainStateView<C> {
 #[derive(Debug, Default, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ChainTipState {
     /// Hash of the latest certified block in this chain, if any.
-    pub block_hash: Option<HashValue>,
+    pub block_hash: Option<CryptoHash>,
     /// Sequence number tracking blocks.
     pub next_block_height: BlockHeight,
 }
@@ -193,7 +193,7 @@ where
         height: BlockHeight,
         timestamp: Timestamp,
         effects: Vec<(ApplicationId, Destination, Effect)>,
-        certificate_hash: HashValue,
+        certificate_hash: CryptoHash,
     ) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
         ensure!(
@@ -303,7 +303,7 @@ where
                     timestamp,
                 );
                 // Recompute the state hash.
-                let hash = self.execution_state.hash_value().await?;
+                let hash = self.execution_state.crypto_hash().await?;
                 self.execution_state_hash.set(Some(hash));
                 // Last, reset the consensus state based on the current ownership.
                 self.manager
@@ -424,7 +424,7 @@ where
             .await?;
         }
         // Recompute the state hash.
-        let hash = self.execution_state.hash_value().await?;
+        let hash = self.execution_state.crypto_hash().await?;
         self.execution_state_hash.set(Some(hash));
         // Last, reset the consensus state based on the current ownership.
         self.manager

@@ -8,8 +8,8 @@ use super::{
     writable_system::{self as system, PollCallResult, PollLoad},
 };
 use linera_sdk::{
-    ApplicationId, BlockHeight, BytecodeId, CalleeContext, ChainId, EffectContext, EffectId,
-    HashValue, OperationContext, Session, SessionId, SystemBalance,
+    ApplicationId, BlockHeight, BytecodeId, CalleeContext, ChainId, CryptoHash, EffectContext,
+    EffectId, OperationContext, Session, SessionId, SystemBalance,
 };
 use std::task::Poll;
 
@@ -101,32 +101,32 @@ impl From<contract::Session> for Session {
     }
 }
 
-impl From<contract::HashValue> for HashValue {
-    fn from(hash_value: contract::HashValue) -> Self {
-        HashValue::from([
-            hash_value.part1,
-            hash_value.part2,
-            hash_value.part3,
-            hash_value.part4,
-            hash_value.part5,
-            hash_value.part6,
-            hash_value.part7,
-            hash_value.part8,
+impl From<contract::CryptoHash> for CryptoHash {
+    fn from(crypto_hash: contract::CryptoHash) -> Self {
+        CryptoHash::from([
+            crypto_hash.part1,
+            crypto_hash.part2,
+            crypto_hash.part3,
+            crypto_hash.part4,
+            crypto_hash.part5,
+            crypto_hash.part6,
+            crypto_hash.part7,
+            crypto_hash.part8,
         ])
     }
 }
 
-impl From<system::HashValue> for HashValue {
-    fn from(hash_value: system::HashValue) -> Self {
-        HashValue::from([
-            hash_value.part1,
-            hash_value.part2,
-            hash_value.part3,
-            hash_value.part4,
-            hash_value.part5,
-            hash_value.part6,
-            hash_value.part7,
-            hash_value.part8,
+impl From<system::CryptoHash> for CryptoHash {
+    fn from(crypto_hash: system::CryptoHash) -> Self {
+        CryptoHash::from([
+            crypto_hash.part1,
+            crypto_hash.part2,
+            crypto_hash.part3,
+            crypto_hash.part4,
+            crypto_hash.part5,
+            crypto_hash.part6,
+            crypto_hash.part7,
+            crypto_hash.part8,
         ])
     }
 }

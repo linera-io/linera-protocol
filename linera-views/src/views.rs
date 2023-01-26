@@ -4,7 +4,7 @@
 extern crate linera_views_macro;
 use crate::common::Batch;
 use async_trait::async_trait;
-use linera_base::crypto::HashValue;
+use linera_base::crypto::CryptoHash;
 pub use linera_views_macro::{ContainerView, HashableContainerView, HashableView, View};
 use serde::Serialize;
 use std::{fmt::Debug, io::Write};
@@ -121,5 +121,5 @@ pub trait ContainerView<C>: View<C> {
 #[async_trait]
 pub trait HashableContainerView<C>: ContainerView<C> + HashableView<C> {
     /// Computing the hash and attributing the type to it.
-    async fn hash_value(&mut self) -> Result<HashValue, ViewError>;
+    async fn crypto_hash(&mut self) -> Result<CryptoHash, ViewError>;
 }

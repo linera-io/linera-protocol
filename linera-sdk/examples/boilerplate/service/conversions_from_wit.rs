@@ -8,7 +8,7 @@ use super::{
     service,
 };
 use linera_sdk::{
-    ApplicationId, BlockHeight, BytecodeId, ChainId, EffectId, HashValue, QueryContext,
+    ApplicationId, BlockHeight, BytecodeId, ChainId, CryptoHash, EffectId, QueryContext,
     SystemBalance,
 };
 use std::task::Poll;
@@ -21,32 +21,32 @@ impl From<service::QueryContext> for QueryContext {
     }
 }
 
-impl From<service::HashValue> for HashValue {
-    fn from(hash_value: service::HashValue) -> Self {
-        HashValue::from([
-            hash_value.part1,
-            hash_value.part2,
-            hash_value.part3,
-            hash_value.part4,
-            hash_value.part5,
-            hash_value.part6,
-            hash_value.part7,
-            hash_value.part8,
+impl From<service::CryptoHash> for CryptoHash {
+    fn from(crypto_hash: service::CryptoHash) -> Self {
+        CryptoHash::from([
+            crypto_hash.part1,
+            crypto_hash.part2,
+            crypto_hash.part3,
+            crypto_hash.part4,
+            crypto_hash.part5,
+            crypto_hash.part6,
+            crypto_hash.part7,
+            crypto_hash.part8,
         ])
     }
 }
 
-impl From<queryable_system::HashValue> for HashValue {
-    fn from(hash_value: queryable_system::HashValue) -> Self {
-        HashValue::from([
-            hash_value.part1,
-            hash_value.part2,
-            hash_value.part3,
-            hash_value.part4,
-            hash_value.part5,
-            hash_value.part6,
-            hash_value.part7,
-            hash_value.part8,
+impl From<queryable_system::CryptoHash> for CryptoHash {
+    fn from(crypto_hash: queryable_system::CryptoHash) -> Self {
+        CryptoHash::from([
+            crypto_hash.part1,
+            crypto_hash.part2,
+            crypto_hash.part3,
+            crypto_hash.part4,
+            crypto_hash.part5,
+            crypto_hash.part6,
+            crypto_hash.part7,
+            crypto_hash.part8,
         ])
     }
 }

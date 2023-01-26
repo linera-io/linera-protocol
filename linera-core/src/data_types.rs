@@ -5,7 +5,7 @@
 use crate::node::NodeError;
 use linera_base::{
     committee::Committee,
-    crypto::{BcsSignable, HashValue, KeyPair, Signature},
+    crypto::{BcsSignable, CryptoHash, KeyPair, Signature},
     data_types::{BlockHeight, ChainDescription, ChainId, Epoch, Timestamp, ValidatorName},
 };
 use linera_chain::{
@@ -109,13 +109,13 @@ pub struct ChainInfo {
     /// The current balance.
     pub system_balance: Balance,
     /// The last block hash, if any.
-    pub block_hash: Option<HashValue>,
+    pub block_hash: Option<CryptoHash>,
     /// The earliest possible timestamp for the next block.
     pub timestamp: Timestamp,
     /// The height after the latest block in the chain.
     pub next_block_height: BlockHeight,
     /// The hash of the current execution state.
-    pub state_hash: Option<HashValue>,
+    pub state_hash: Option<CryptoHash>,
     /// The current committees.
     pub requested_committees: Option<BTreeMap<Epoch, Committee>>,
     /// The received messages that are waiting be picked in the next block (if requested).

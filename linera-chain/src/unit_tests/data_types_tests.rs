@@ -33,13 +33,13 @@ fn test_signed_values() {
     let value = Value::ConfirmedBlock {
         block,
         effects: Vec::new(),
-        state_hash: HashValue::new(&Dummy),
+        state_hash: CryptoHash::new(&Dummy),
     };
 
-    let v = Vote::new(HashValue::new(&value), &key1);
+    let v = Vote::new(CryptoHash::new(&value), &key1);
     assert!(v.check().is_ok());
 
-    let mut v = Vote::new(HashValue::new(&value), &key2);
+    let mut v = Vote::new(CryptoHash::new(&value), &key2);
     v.validator = name1;
     assert!(v.check().is_err());
 }
@@ -73,12 +73,12 @@ fn test_certificates() {
     let value = Value::ConfirmedBlock {
         block,
         effects: Vec::new(),
-        state_hash: HashValue::new(&Dummy),
+        state_hash: CryptoHash::new(&Dummy),
     };
 
-    let v1 = Vote::new(HashValue::new(&value), &key1);
-    let v2 = Vote::new(HashValue::new(&value), &key2);
-    let v3 = Vote::new(HashValue::new(&value), &key3);
+    let v1 = Vote::new(CryptoHash::new(&value), &key1);
+    let v2 = Vote::new(CryptoHash::new(&value), &key2);
+    let v3 = Vote::new(CryptoHash::new(&value), &key3);
 
     let mut builder = SignatureAggregator::new(value.clone(), &committee);
     assert!(builder

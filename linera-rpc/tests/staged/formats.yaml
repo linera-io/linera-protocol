@@ -47,7 +47,7 @@ Block:
         TYPENAME: Timestamp
     - previous_block_hash:
         OPTION:
-          TYPENAME: HashValue
+          TYPENAME: CryptoHash
 BlockAndRound:
   STRUCT:
     - block:
@@ -79,7 +79,7 @@ BytecodeId:
 BytecodeLocation:
   STRUCT:
     - certificate_hash:
-        TYPENAME: HashValue
+        TYPENAME: CryptoHash
     - operation_index: U64
 Certificate:
   STRUCT:
@@ -101,7 +101,7 @@ ChainDescription:
           TYPENAME: EffectId
 ChainId:
   NEWTYPESTRUCT:
-    TYPENAME: HashValue
+    TYPENAME: CryptoHash
 ChainInfo:
   STRUCT:
     - chain_id:
@@ -118,14 +118,14 @@ ChainInfo:
         TYPENAME: Balance
     - block_hash:
         OPTION:
-          TYPENAME: HashValue
+          TYPENAME: CryptoHash
     - timestamp:
         TYPENAME: Timestamp
     - next_block_height:
         TYPENAME: BlockHeight
     - state_hash:
         OPTION:
-          TYPENAME: HashValue
+          TYPENAME: CryptoHash
     - requested_committees:
         OPTION:
           MAP:
@@ -221,6 +221,11 @@ CrossChainRequest:
               TYPENAME: ChainId
           - height:
               TYPENAME: BlockHeight
+CryptoHash:
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 64
 Destination:
   ENUM:
     0:
@@ -252,7 +257,7 @@ Epoch:
 Event:
   STRUCT:
     - certificate_hash:
-        TYPENAME: HashValue
+        TYPENAME: CryptoHash
     - height:
         TYPENAME: BlockHeight
     - index: U64
@@ -263,7 +268,7 @@ Event:
 HashCertificate:
   STRUCT:
     - hash:
-        TYPENAME: HashValue
+        TYPENAME: CryptoHash
     - chain_id:
         TYPENAME: ChainId
     - signatures:
@@ -271,11 +276,6 @@ HashCertificate:
           TUPLE:
             - TYPENAME: ValidatorName
             - TYPENAME: Signature
-HashValue:
-  NEWTYPESTRUCT:
-    TUPLEARRAY:
-      CONTENT: U8
-      SIZE: 64
 Medium:
   ENUM:
     0:
@@ -704,7 +704,7 @@ Value:
                   - TYPENAME: Destination
                   - TYPENAME: Effect
           - state_hash:
-              TYPENAME: HashValue
+              TYPENAME: CryptoHash
     1:
       ConfirmedBlock:
         STRUCT:
@@ -717,11 +717,11 @@ Value:
                   - TYPENAME: Destination
                   - TYPENAME: Effect
           - state_hash:
-              TYPENAME: HashValue
+              TYPENAME: CryptoHash
 Vote:
   STRUCT:
     - hash:
-        TYPENAME: HashValue
+        TYPENAME: CryptoHash
     - validator:
         TYPENAME: ValidatorName
     - signature:

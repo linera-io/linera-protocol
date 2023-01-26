@@ -184,7 +184,7 @@ fn generate_hash_view_code(input: TokenStream) -> TokenStream {
     })
 }
 
-fn generate_hash_value_code(input: TokenStream) -> TokenStream {
+fn generate_crypto_hash_code(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
 
     let struct_name = input.ident;
@@ -202,10 +202,10 @@ fn generate_hash_value_code(input: TokenStream) -> TokenStream {
             #first_generic: Context + Send + Sync + Clone + 'static,
             linera_views::views::ViewError: From<#first_generic::Error>,
         {
-            async fn hash_value(&mut self) -> Result<linera_base::crypto::HashValue, linera_views::views::ViewError> {
+            async fn crypto_hash(&mut self) -> Result<linera_base::crypto::CryptoHash, linera_views::views::ViewError> {
                 use linera_views::generic_array::GenericArray;
                 use linera_views::common::Batch;
-                use linera_base::crypto::{BcsSignable, HashValue};
+                use linera_base::crypto::{BcsSignable, CryptoHash};
                 use linera_views::views::HashableView;
                 use serde::{Serialize, Deserialize};
                 use linera_views::sha2::{Sha512, Digest};
@@ -213,7 +213,7 @@ fn generate_hash_value_code(input: TokenStream) -> TokenStream {
                 struct #hash_type(GenericArray<u8, <Sha512 as Digest>::OutputSize>);
                 impl BcsSignable for #hash_type {}
                 let hash = self.hash().await?;
-                Ok(HashValue::new(&#hash_type(hash)))
+                Ok(CryptoHash::new(&#hash_type(hash)))
             }
         }
     })
@@ -241,6 +241,6 @@ pub fn derive_hash_container_view(input: TokenStream) -> TokenStream {
     let mut stream = generate_view_code(input.clone());
     stream.extend(generate_save_delete_view_code(input.clone()));
     stream.extend(generate_hash_view_code(input.clone()));
-    stream.extend(generate_hash_value_code(input));
+    stream.extend(generate_crypto_hash_code(input));
     stream
 }

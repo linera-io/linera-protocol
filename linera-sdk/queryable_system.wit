@@ -26,11 +26,11 @@ record effect-id {
     index: u64,
 }
 
-type chain-id = hash-value
+type chain-id = crypto-hash
 type block-height = u64
 type timestamp = u64
 
-record hash-value {
+record crypto-hash {
     part1: u64,
     part2: u64,
     part3: u64,

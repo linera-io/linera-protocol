@@ -5,7 +5,7 @@ use crate::{chain_guards::ChainGuards, ChainRuntimeContext, ChainStateView, Stor
 use async_trait::async_trait;
 use dashmap::DashMap;
 use futures::Future;
-use linera_base::{crypto::HashValue, data_types::ChainId};
+use linera_base::{crypto::CryptoHash, data_types::ChainId};
 use linera_chain::data_types::Certificate;
 use linera_execution::{UserApplicationCode, UserApplicationId};
 use linera_views::{
@@ -105,7 +105,7 @@ impl DynamoDbStore {
     /// Obtain a [`MapView`] of certificates.
     async fn certificates(
         &self,
-    ) -> Result<MapView<DynamoDbContext<()>, HashValue, Certificate>, ViewError> {
+    ) -> Result<MapView<DynamoDbContext<()>, CryptoHash, Certificate>, ViewError> {
         MapView::load(
             self.context
                 .clone_with_sub_scope(&BaseKey::Certificate, ())?,
@@ -145,7 +145,7 @@ impl Store for DynamoDbStoreClient {
         ChainStateView::load(db_context).await
     }
 
-    async fn read_certificate(&self, hash: HashValue) -> Result<Certificate, ViewError> {
+    async fn read_certificate(&self, hash: CryptoHash) -> Result<Certificate, ViewError> {
         self.0
             .certificates()
             .await?

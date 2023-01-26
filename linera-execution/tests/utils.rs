@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_base::{
-    crypto::{BcsSignable, HashValue},
+    crypto::{BcsSignable, CryptoHash},
     data_types::{BlockHeight, ChainId, EffectId},
 };
 use linera_execution::{BytecodeLocation, UserApplicationDescription};
@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 pub fn create_dummy_user_application_description() -> UserApplicationDescription {
     let chain_id = ChainId::root(1);
-    let certificate_hash = HashValue::new(&FakeCertificate);
+    let certificate_hash = CryptoHash::new(&FakeCertificate);
     UserApplicationDescription {
         bytecode_id: EffectId {
             chain_id,

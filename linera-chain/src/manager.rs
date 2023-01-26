@@ -6,7 +6,7 @@ use crate::{
     ChainError,
 };
 use linera_base::{
-    crypto::{HashValue, KeyPair},
+    crypto::{CryptoHash, KeyPair},
     data_types::{BlockHeight, Owner, RoundNumber},
     ensure,
 };
@@ -147,7 +147,7 @@ impl ChainManager {
     /// Verify the safety of the block w.r.t. voting rules.
     pub fn check_proposed_block(
         &self,
-        block_hash: Option<HashValue>,
+        block_hash: Option<CryptoHash>,
         next_block_height: BlockHeight,
         new_block: &Block,
         new_round: RoundNumber,
@@ -265,7 +265,7 @@ impl ChainManager {
         &mut self,
         proposal: BlockProposal,
         effects: Vec<(ApplicationId, Destination, Effect)>,
-        state_hash: HashValue,
+        state_hash: CryptoHash,
         key_pair: Option<&KeyPair>,
     ) {
         match self {
@@ -278,7 +278,7 @@ impl ChainManager {
                         effects,
                         state_hash,
                     };
-                    let vote_value = (Vote::new(HashValue::new(&value), key_pair), value);
+                    let vote_value = (Vote::new(CryptoHash::new(&value), key_pair), value);
                     manager.pending = Some(vote_value);
                 }
             }
@@ -295,7 +295,7 @@ impl ChainManager {
                         effects,
                         state_hash,
                     };
-                    let vote_value = (Vote::new(HashValue::new(&value), key_pair), value);
+                    let vote_value = (Vote::new(CryptoHash::new(&value), key_pair), value);
                     manager.pending = Some(vote_value);
                 }
             }
@@ -307,7 +307,7 @@ impl ChainManager {
         &mut self,
         block: Block,
         effects: Vec<(ApplicationId, Destination, Effect)>,
-        state_hash: HashValue,
+        state_hash: CryptoHash,
         certificate: Certificate,
         key_pair: Option<&KeyPair>,
     ) {
@@ -323,7 +323,7 @@ impl ChainManager {
                         effects,
                         state_hash,
                     };
-                    let vote_value = (Vote::new(HashValue::new(&value), key_pair), value);
+                    let vote_value = (Vote::new(CryptoHash::new(&value), key_pair), value);
                     // Ok to overwrite validation votes with confirmation votes at equal or
                     // higher round.
                     manager.pending = Some(vote_value);

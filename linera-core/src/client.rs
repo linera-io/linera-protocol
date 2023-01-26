@@ -13,7 +13,7 @@ use async_trait::async_trait;
 use futures::stream::select_all;
 use linera_base::{
     committee::{Committee, ValidatorState},
-    crypto::{HashValue, KeyPair},
+    crypto::{CryptoHash, KeyPair},
     data_types::{
         BlockHeight, ChainId, EffectId, Epoch, Owner, RoundNumber, Timestamp, ValidatorName,
     },
@@ -49,7 +49,7 @@ pub struct ChainClientState<ValidatorNodeProvider, StorageClient> {
     /// How to talk to the validators.
     validator_node_provider: ValidatorNodeProvider,
     /// Latest block hash, if any.
-    block_hash: Option<HashValue>,
+    block_hash: Option<CryptoHash>,
     /// The earliest possible timestamp for the next block.
     timestamp: Timestamp,
     /// Sequence number that we plan to use for the next block.
@@ -94,7 +94,7 @@ impl<P, S> ChainClientState<P, S> {
         storage_client: S,
         admin_id: ChainId,
         max_pending_messages: usize,
-        block_hash: Option<HashValue>,
+        block_hash: Option<CryptoHash>,
         timestamp: Timestamp,
         next_block_height: BlockHeight,
         cross_chain_delay: Duration,
@@ -130,7 +130,7 @@ impl<P, S> ChainClientState<P, S> {
         self.chain_id
     }
 
-    pub fn block_hash(&self) -> Option<HashValue> {
+    pub fn block_hash(&self) -> Option<CryptoHash> {
         self.block_hash
     }
 

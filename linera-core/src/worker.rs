@@ -6,7 +6,7 @@ use crate::data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChain
 use async_trait::async_trait;
 use linera_base::{
     committee::Committee,
-    crypto::{HashValue, KeyPair},
+    crypto::{CryptoHash, KeyPair},
     data_types::{ArithmeticError, BlockHeight, ChainId, Epoch, Timestamp},
     ensure,
 };
@@ -175,7 +175,7 @@ pub struct WorkerState<StorageClient> {
     /// will wait until that timestamp before voting.
     grace_period_micros: u64,
     /// Cached values by hash.
-    recent_values: LruCache<HashValue, Value>,
+    recent_values: LruCache<CryptoHash, Value>,
 }
 
 impl<Client: Clone> Clone for WorkerState<Client> {
@@ -241,7 +241,7 @@ impl<Client> WorkerState<Client> {
         &self.storage
     }
 
-    pub(crate) fn recent_value(&mut self, hash: &HashValue) -> Option<&Value> {
+    pub(crate) fn recent_value(&mut self, hash: &CryptoHash) -> Option<&Value> {
         self.recent_values.get(hash)
     }
 }
@@ -309,7 +309,7 @@ where
 
     async fn create_cross_chain_request(
         &mut self,
-        confirmed_log: &mut LogView<Client::Context, HashValue>,
+        confirmed_log: &mut LogView<Client::Context, CryptoHash>,
         application_id: ApplicationId,
         origin: Origin,
         recipient: ChainId,
@@ -602,7 +602,7 @@ where
         }
     }
 
-    fn cache_recent_value(&mut self, hash: HashValue, value: Value) {
+    fn cache_recent_value(&mut self, hash: CryptoHash, value: Value) {
         if let Value::ValidatedBlock {
             block,
             effects,
@@ -616,7 +616,7 @@ where
                 effects: effects.clone(),
                 state_hash: *state_hash,
             };
-            let conf_hash = HashValue::new(&conf_value);
+            let conf_hash = CryptoHash::new(&conf_value);
             self.recent_values.push(conf_hash, conf_value);
         }
         // Cache the certificate, so that clients don't have to send the value again.

@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::crypto::{BcsSignable, HashValue, PublicKey};
+use crate::crypto::{BcsSignable, CryptoHash, PublicKey};
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use std::{fmt, str::FromStr, time::SystemTime};
@@ -100,7 +100,7 @@ pub enum ChainDescription {
 /// The unique identifier (UID) of a chain. This is the hash value of a ChainDescription.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Arbitrary))]
-pub struct ChainId(pub HashValue);
+pub struct ChainId(pub CryptoHash);
 
 /// The index of an effect in a chain.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
@@ -305,7 +305,7 @@ impl FromStr for ChainId {
     type Err = CryptoError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(ChainId(HashValue::from_str(s)?))
+        Ok(ChainId(CryptoHash::from_str(s)?))
     }
 }
 
@@ -313,7 +313,7 @@ impl TryFrom<&[u8]> for ChainId {
     type Error = CryptoError;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        Ok(ChainId(HashValue::try_from(value)?))
+        Ok(ChainId(CryptoHash::try_from(value)?))
     }
 }
 
@@ -325,17 +325,17 @@ impl std::fmt::Debug for ChainId {
 
 impl From<ChainDescription> for ChainId {
     fn from(description: ChainDescription) -> Self {
-        Self(HashValue::new(&description))
+        Self(CryptoHash::new(&description))
     }
 }
 
 impl ChainId {
     pub fn root(index: usize) -> Self {
-        Self(HashValue::new(&ChainDescription::Root(index)))
+        Self(CryptoHash::new(&ChainDescription::Root(index)))
     }
 
     pub fn child(id: EffectId) -> Self {
-        Self(HashValue::new(&ChainDescription::Child(id)))
+        Self(CryptoHash::new(&ChainDescription::Child(id)))
     }
 }
 

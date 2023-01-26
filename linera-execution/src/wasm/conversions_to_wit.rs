@@ -11,7 +11,7 @@ use crate::{
     system::Balance, CallResult, CalleeContext, EffectContext, EffectId, OperationContext,
     QueryContext, SessionId, UserApplicationId,
 };
-use linera_base::{crypto::HashValue, data_types::ChainId};
+use linera_base::{crypto::CryptoHash, data_types::ChainId};
 
 impl From<OperationContext> for contract::OperationContext {
     fn from(host: OperationContext) -> Self {
@@ -165,11 +165,11 @@ impl From<ChainId> for service::ChainId {
     }
 }
 
-impl From<HashValue> for contract::HashValue {
-    fn from(hash_value: HashValue) -> Self {
-        let bytes = hash_value.as_bytes();
+impl From<CryptoHash> for contract::CryptoHash {
+    fn from(crypto_hash: CryptoHash) -> Self {
+        let bytes = crypto_hash.as_bytes();
 
-        contract::HashValue {
+        contract::CryptoHash {
             part1: u64::from_le_bytes(bytes[0..8].try_into().expect("incorrect indices")),
             part2: u64::from_le_bytes(bytes[8..16].try_into().expect("incorrect indices")),
             part3: u64::from_le_bytes(bytes[16..24].try_into().expect("incorrect indices")),
@@ -182,11 +182,11 @@ impl From<HashValue> for contract::HashValue {
     }
 }
 
-impl From<HashValue> for service::HashValue {
-    fn from(hash_value: HashValue) -> Self {
-        let bytes = hash_value.as_bytes();
+impl From<CryptoHash> for service::CryptoHash {
+    fn from(crypto_hash: CryptoHash) -> Self {
+        let bytes = crypto_hash.as_bytes();
 
-        service::HashValue {
+        service::CryptoHash {
             part1: u64::from_le_bytes(bytes[0..8].try_into().expect("incorrect indices")),
             part2: u64::from_le_bytes(bytes[8..16].try_into().expect("incorrect indices")),
             part3: u64::from_le_bytes(bytes[16..24].try_into().expect("incorrect indices")),
@@ -199,11 +199,11 @@ impl From<HashValue> for service::HashValue {
     }
 }
 
-impl From<HashValue> for queryable_system::HashValue {
-    fn from(hash_value: HashValue) -> Self {
-        let bytes = hash_value.as_bytes();
+impl From<CryptoHash> for queryable_system::CryptoHash {
+    fn from(crypto_hash: CryptoHash) -> Self {
+        let bytes = crypto_hash.as_bytes();
 
-        queryable_system::HashValue {
+        queryable_system::CryptoHash {
             part1: u64::from_le_bytes(bytes[0..8].try_into().expect("incorrect indices")),
             part2: u64::from_le_bytes(bytes[8..16].try_into().expect("incorrect indices")),
             part3: u64::from_le_bytes(bytes[16..24].try_into().expect("incorrect indices")),
@@ -216,11 +216,11 @@ impl From<HashValue> for queryable_system::HashValue {
     }
 }
 
-impl From<HashValue> for writable_system::HashValue {
-    fn from(hash_value: HashValue) -> Self {
-        let bytes = hash_value.as_bytes();
+impl From<CryptoHash> for writable_system::CryptoHash {
+    fn from(crypto_hash: CryptoHash) -> Self {
+        let bytes = crypto_hash.as_bytes();
 
-        writable_system::HashValue {
+        writable_system::CryptoHash {
             part1: u64::from_le_bytes(bytes[0..8].try_into().expect("incorrect indices")),
             part2: u64::from_le_bytes(bytes[8..16].try_into().expect("incorrect indices")),
             part3: u64::from_le_bytes(bytes[16..24].try_into().expect("incorrect indices")),
