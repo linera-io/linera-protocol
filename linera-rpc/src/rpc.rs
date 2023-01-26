@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_base::data_types::ChainId;
-use linera_chain::data_types::{BlockProposal, Certificate, LiteCertificate, Vote};
+use linera_chain::data_types::{BlockProposal, Certificate, LiteCertificate, LiteVote};
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     node::NodeError,
@@ -20,7 +20,7 @@ pub enum RpcMessage {
     LiteCertificate(Box<LiteCertificate>),
     ChainInfoQuery(Box<ChainInfoQuery>),
     // Outbound
-    Vote(Box<Vote>),
+    Vote(Box<LiteVote>),
     ChainInfoResponse(Box<ChainInfoResponse>),
     Error(Box<NodeError>),
     // Internal to a validator
@@ -70,8 +70,8 @@ impl From<ChainInfoQuery> for RpcMessage {
     }
 }
 
-impl From<Vote> for RpcMessage {
-    fn from(vote: Vote) -> Self {
+impl From<LiteVote> for RpcMessage {
+    fn from(vote: LiteVote) -> Self {
         RpcMessage::Vote(Box::new(vote))
     }
 }

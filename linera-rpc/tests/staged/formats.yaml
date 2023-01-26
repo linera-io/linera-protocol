@@ -280,6 +280,14 @@ LiteValue:
         TYPENAME: CryptoHash
     - chain_id:
         TYPENAME: ChainId
+LiteVote:
+  STRUCT:
+    - value:
+        TYPENAME: LiteValue
+    - validator:
+        TYPENAME: ValidatorName
+    - signature:
+        TYPENAME: Signature
 Medium:
   ENUM:
     0:
@@ -311,7 +319,7 @@ MultiOwnerManagerInfo:
           TYPENAME: Certificate
     - pending:
         OPTION:
-          TYPENAME: Vote
+          TYPENAME: LiteVote
     - requested_pending_value:
         OPTION:
           TYPENAME: Value
@@ -464,7 +472,7 @@ RpcMessage:
     4:
       Vote:
         NEWTYPE:
-          TYPENAME: Vote
+          TYPENAME: LiteVote
     5:
       ChainInfoResponse:
         NEWTYPE:
@@ -488,7 +496,7 @@ SingleOwnerManagerInfo:
         TYPENAME: Owner
     - pending:
         OPTION:
-          TYPENAME: Vote
+          TYPENAME: LiteVote
     - requested_pending_value:
         OPTION:
           TYPENAME: Value
@@ -722,12 +730,4 @@ Value:
                   - TYPENAME: Effect
           - state_hash:
               TYPENAME: CryptoHash
-Vote:
-  STRUCT:
-    - value:
-        TYPENAME: LiteValue
-    - validator:
-        TYPENAME: ValidatorName
-    - signature:
-        TYPENAME: Signature
 

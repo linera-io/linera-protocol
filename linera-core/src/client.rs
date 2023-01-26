@@ -19,7 +19,7 @@ use linera_base::{
     },
 };
 use linera_chain::{
-    data_types::{Block, BlockAndRound, BlockProposal, Certificate, Message, Value, Vote},
+    data_types::{Block, BlockAndRound, BlockProposal, Certificate, LiteVote, Message, Value},
     ChainManagerInfo,
 };
 use linera_execution::{
@@ -386,7 +386,7 @@ where
         let result = communicate_with_quorum(
             &nodes,
             committee,
-            |value: &Option<Vote>| -> Option<_> {
+            |value: &Option<LiteVote>| -> Option<_> {
                 value.as_ref().map(|vote| vote.value.value_hash)
             },
             |name, client| {
