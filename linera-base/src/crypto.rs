@@ -259,8 +259,6 @@ impl TryFrom<&[u8]> for CryptoHash {
     }
 }
 
-impl BcsSignable for CryptoHash {}
-
 /// Error when attempting to convert a string into a [`CryptoHash`].
 #[derive(Clone, Copy, Debug, Error)]
 pub enum HashFromStrError {
@@ -314,22 +312,29 @@ pub trait Hashable<Hasher> {
 }
 
 /// Something that we know how to hash and sign.
-pub trait Signable<Hasher>: Hashable<Hasher> {
+pub trait HasTypeName {
     fn type_name() -> &'static str;
 }
 
+/// Activate the blanket implementation of `Hashable` based on serde and BCS.
+/// * We use `serde_name` to extract a seed from the name of structs and enums.
+/// * We use `BCS` to generate canonical bytes suitable for hashing.
+pub trait BcsHashable: Serialize + serde::de::DeserializeOwned {}
+
 /// Activate the blanket implementation of `Signable` based on serde and BCS.
 /// * We use `serde_name` to extract a seed from the name of structs and enums.
-/// * We use `BCS` to generate canonical bytes suitable for hashing and signing.
+/// * We use `BCS` to generate canonical bytes suitable for signing.
 pub trait BcsSignable: Serialize + serde::de::DeserializeOwned {}
+
+impl<T: BcsSignable> BcsHashable for T {}
 
 impl<T, Hasher> Hashable<Hasher> for T
 where
-    T: BcsSignable,
+    T: BcsHashable,
     Hasher: std::io::Write,
 {
     fn write(&self, hasher: &mut Hasher) {
-        let name = <Self as Signable<Hasher>>::type_name();
+        let name = <Self as HasTypeName>::type_name();
         // Note: This assumes that names never contain the separator `::`.
         write!(hasher, "{}::", name).expect("Hasher should not fail");
         bcs::serialize_into(hasher, &self).expect("Message serialization should not fail");
@@ -345,10 +350,9 @@ where
     }
 }
 
-impl<T, Hasher> Signable<Hasher> for T
+impl<T> HasTypeName for T
 where
-    T: BcsSignable,
-    Hasher: std::io::Write,
+    T: BcsHashable,
 {
     fn type_name() -> &'static str {
         serde_name::trace_name::<Self>().expect("Self must be a struct or an enum")
@@ -358,7 +362,7 @@ where
 impl CryptoHash {
     pub fn new<T: ?Sized>(value: &T) -> Self
     where
-        T: Hashable<sha2::Sha512>,
+        T: BcsHashable,
     {
         use sha2::Digest;
 
@@ -377,7 +381,7 @@ impl CryptoHash {
 impl Signature {
     pub fn new<T>(value: &T, secret: &KeyPair) -> Self
     where
-        T: Signable<Vec<u8>>,
+        T: BcsSignable,
     {
         let mut message = Vec::new();
         value.write(&mut message);
@@ -387,7 +391,7 @@ impl Signature {
 
     fn check_internal<T>(&self, value: &T, author: PublicKey) -> Result<(), dalek::SignatureError>
     where
-        T: Signable<Vec<u8>>,
+        T: BcsSignable,
     {
         let mut message = Vec::new();
         value.write(&mut message);
@@ -397,7 +401,7 @@ impl Signature {
 
     pub fn check<T>(&self, value: &T, author: PublicKey) -> Result<(), CryptoError>
     where
-        T: Signable<Vec<u8>> + std::fmt::Debug,
+        T: BcsSignable + std::fmt::Debug,
     {
         self.check_internal(value, author)
             .map_err(|error| CryptoError::InvalidSignature {
@@ -408,7 +412,7 @@ impl Signature {
 
     fn verify_batch_internal<'a, T, I>(value: &'a T, votes: I) -> Result<(), dalek::SignatureError>
     where
-        T: Signable<Vec<u8>>,
+        T: BcsSignable,
         I: IntoIterator<Item = (&'a PublicKey, &'a Signature)>,
     {
         let mut msg = Vec::new();
@@ -426,7 +430,7 @@ impl Signature {
 
     pub fn verify_batch<'a, T, I>(value: &'a T, votes: I) -> Result<(), CryptoError>
     where
-        T: Signable<Vec<u8>>,
+        T: BcsSignable,
         I: IntoIterator<Item = (&'a PublicKey, &'a Signature)>,
     {
         Signature::verify_batch_internal(value, votes).map_err(|error| {

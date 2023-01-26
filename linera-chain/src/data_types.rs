@@ -5,7 +5,7 @@
 use crate::ChainError;
 use linera_base::{
     committee::Committee,
-    crypto::{BcsSignable, CryptoHash, KeyPair, Signature},
+    crypto::{BcsHashable, BcsSignable, CryptoHash, KeyPair, Signature},
     data_types::{BlockHeight, ChainId, Epoch, Owner, RoundNumber, Timestamp, ValidatorName},
     ensure,
 };
@@ -455,6 +455,6 @@ fn check_signatures(
 
 impl BcsSignable for BlockAndRound {}
 
-impl BcsSignable for Value {}
+impl BcsHashable for Value {}
 
 impl BcsSignable for LiteValue {}

@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::crypto::{BcsSignable, CryptoHash, PublicKey};
+use crate::crypto::{BcsHashable, CryptoHash, PublicKey};
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use std::{fmt, str::FromStr, time::SystemTime};
@@ -339,7 +339,7 @@ impl ChainId {
     }
 }
 
-impl BcsSignable for ChainDescription {}
+impl BcsHashable for ChainDescription {}
 
 #[test]
 fn test_max_block_height() {
