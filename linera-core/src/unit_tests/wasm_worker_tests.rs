@@ -98,7 +98,6 @@ where
         Timestamp::from(1),
     );
     let publish_block_height = publish_block.height;
-    let publish_channel = Destination::Subscribers(SystemChannel::PublishedBytecodes.name());
     let mut publisher_system_state = SystemExecutionState {
         epoch: Some(Epoch::from(0)),
         description: Some(publisher_chain),
@@ -115,8 +114,8 @@ where
         block: publish_block,
         effects: vec![(
             ApplicationId::System,
-            publish_channel,
-            Effect::System(publish_effect),
+            Destination::Recipient(publisher_chain.into()),
+            Effect::System(publish_effect.clone()),
         )],
         state_hash: publisher_state_hash,
     };
@@ -132,6 +131,68 @@ where
     assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert_eq!(Timestamp::from(1), info.timestamp);
     assert_eq!(Some(publish_certificate.hash), info.block_hash);
+    assert!(info.manager.pending().is_none());
+
+    // Produce one more block to broadcast the bytecode ID.
+    let broadcast_message = Message {
+        application_id: ApplicationId::System,
+        origin: Origin::chain(publisher_chain.into()),
+        event: Event {
+            certificate_hash: publish_certificate.hash,
+            height: publish_block_height,
+            index: 0,
+            timestamp: Timestamp::from(1),
+            effect: Effect::System(publish_effect),
+        },
+    };
+    let broadcast_block = make_block(
+        Epoch::from(0),
+        publisher_chain.into(),
+        Vec::<SystemOperation>::new(),
+        vec![broadcast_message],
+        Some(&publish_certificate),
+        Timestamp::from(1),
+    );
+    let bytecode_id = BytecodeId(EffectId {
+        chain_id: publisher_chain.into(),
+        height: publish_block_height,
+        index: 0,
+    });
+    let bytecode_location = BytecodeLocation {
+        certificate_hash: publish_certificate.hash,
+        operation_index: 0,
+    };
+    let broadcast_effect = SystemEffect::BytecodeLocations {
+        locations: vec![(bytecode_id, bytecode_location)],
+    };
+    let broadcast_channel = Destination::Subscribers(SystemChannel::PublishedBytecodes.name());
+    let broadcast_block_height = broadcast_block.height;
+    publisher_system_state
+        .registry
+        .published_bytecodes
+        .insert(bytecode_id, bytecode_location);
+    let publisher_state_hash = make_state_hash(publisher_system_state.clone()).await;
+    let broadcast_block_proposal = Value::ConfirmedBlock {
+        block: broadcast_block,
+        effects: vec![(
+            ApplicationId::System,
+            broadcast_channel,
+            Effect::System(broadcast_effect.clone()),
+        )],
+        state_hash: publisher_state_hash,
+    };
+    let broadcast_certificate = make_certificate(&committee, &worker, broadcast_block_proposal);
+
+    let info = worker
+        .fully_handle_certificate(broadcast_certificate.clone())
+        .await
+        .unwrap()
+        .info;
+    assert_eq!(ChainId::from(publisher_chain), info.chain_id);
+    assert_eq!(Balance::from(0), info.system_balance);
+    assert_eq!(BlockHeight::from(2), info.next_block_height);
+    assert_eq!(Timestamp::from(1), info.timestamp);
+    assert_eq!(Some(broadcast_certificate.hash), info.block_hash);
     assert!(info.manager.pending().is_none());
 
     // Subscribe to get the bytecode ID.
@@ -209,7 +270,7 @@ where
         publisher_chain.into(),
         Vec::<SystemOperation>::new(),
         vec![accept_message],
-        Some(&publish_certificate),
+        Some(&broadcast_certificate),
         Timestamp::from(3),
     );
     publisher_system_state.timestamp = Timestamp::from(3);
@@ -234,21 +295,12 @@ where
         .info;
     assert_eq!(ChainId::from(publisher_chain), info.chain_id);
     assert_eq!(Balance::from(0), info.system_balance);
-    assert_eq!(BlockHeight::from(2), info.next_block_height);
+    assert_eq!(BlockHeight::from(3), info.next_block_height);
     assert_eq!(Timestamp::from(3), info.timestamp);
     assert_eq!(Some(accept_certificate.hash), info.block_hash);
     assert!(info.manager.pending().is_none());
 
     // Create an application.
-    let bytecode_id = BytecodeId(EffectId {
-        chain_id: publisher_chain.into(),
-        height: publish_block_height,
-        index: 0,
-    });
-    let bytecode_location = BytecodeLocation {
-        certificate_hash: publish_certificate.hash,
-        operation_index: 0,
-    };
     let initial_value = 10_u128;
     let initial_value_bytes = bcs::to_bytes(&initial_value)?;
     let create_operation = SystemOperation::CreateApplication {
@@ -282,11 +334,11 @@ where
                 SystemChannel::PublishedBytecodes.name(),
             ),
             event: Event {
-                certificate_hash: publish_certificate.hash,
-                height: publish_block_height,
+                certificate_hash: broadcast_certificate.hash,
+                height: broadcast_block_height,
                 index: 0,
                 timestamp: Timestamp::from(1),
-                effect: Effect::System(SystemEffect::BytecodePublished),
+                effect: Effect::System(broadcast_effect),
             },
         }],
         Some(&subscribe_certificate),

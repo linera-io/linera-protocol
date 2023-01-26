@@ -55,7 +55,7 @@ where
     publisher.receive_certificate(cert).await.unwrap();
     publisher.process_inbox().await.unwrap();
 
-    let (bytecode_id, _) = publisher
+    let (bytecode_id, cert) = publisher
         .publish_bytecode(
             Bytecode::load_from_file(
                 "../target/wasm32-unknown-unknown/release/examples/counter_contract.wasm",
@@ -68,6 +68,9 @@ where
         )
         .await
         .unwrap();
+    // Receive our own cert to broadcast the bytecode location.
+    publisher.receive_certificate(cert).await.unwrap();
+    publisher.process_inbox().await.unwrap();
 
     creator.synchronize_and_recompute_balance().await.unwrap();
     creator.process_inbox().await.unwrap();

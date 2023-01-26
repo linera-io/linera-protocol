@@ -146,6 +146,19 @@ where
         Ok(())
     }
 
+    /// Returns all the known locations of published bytecode.
+    pub async fn bytecode_locations(
+        &mut self,
+    ) -> Result<Vec<(BytecodeId, BytecodeLocation)>, SystemExecutionError> {
+        let mut locations = Vec::new();
+        for id in self.published_bytecodes.indices().await? {
+            if let Some(location) = self.published_bytecodes.get(&id).await? {
+                locations.push((id, location));
+            }
+        }
+        Ok(locations)
+    }
+
     /// Register an existing application.
     ///
     /// Keeps track of an existing application that the current chain is seeing for the first time.

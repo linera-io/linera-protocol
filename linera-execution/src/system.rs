@@ -155,6 +155,10 @@ pub enum SystemEffect {
     Unsubscribe { id: ChainId, channel_id: ChannelId },
     /// Notify that a new application bytecode was published.
     BytecodePublished,
+    /// Share the locations of published bytecodes.
+    BytecodeLocations {
+        locations: Vec<(BytecodeId, BytecodeLocation)>,
+    },
     /// Share information about some applications to help the recipient use them.
     /// Applications must be registered after their dependencies.
     RegisterApplications {
@@ -504,8 +508,10 @@ where
                 ));
             }
             PublishBytecode { .. } => {
+                // Send a `BytecodePublished` effect to ourself so that we can broadcast
+                // the bytecode-id next.
                 result.effects.push((
-                    Destination::Subscribers(SystemChannel::PublishedBytecodes.name()),
+                    Destination::Recipient(context.chain_id),
                     SystemEffect::BytecodePublished,
                 ));
             }
@@ -586,6 +592,16 @@ where
                 };
                 self.registry
                     .register_published_bytecode(bytecode_id, bytecode_location)?;
+                let locations = self.registry.bytecode_locations().await?;
+                result.effects.push((
+                    Destination::Subscribers(SystemChannel::PublishedBytecodes.name()),
+                    SystemEffect::BytecodeLocations { locations },
+                ));
+            }
+            BytecodeLocations { locations } => {
+                for (id, location) in locations {
+                    self.registry.register_published_bytecode(*id, *location)?;
+                }
             }
             Notify { .. } => (),
             OpenChain { .. } => {
