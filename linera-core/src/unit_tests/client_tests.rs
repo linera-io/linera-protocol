@@ -66,7 +66,7 @@ where
         let mut validator = validator.lock().await;
         let value = validator
             .state
-            .recent_value(&certificate.hash)
+            .recent_value(&certificate.value.value_hash)
             .ok_or(NodeError::MissingCertificateValue)?
             .clone();
         let full_cert = certificate

@@ -134,11 +134,18 @@ pub enum Value {
     },
 }
 
+/// The hash and chain ID of a `Value`.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct LiteValue {
+    pub value_hash: CryptoHash,
+    pub chain_id: ChainId,
+}
+
 /// A vote on a statement from a validator.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct Vote {
-    pub hash: CryptoHash,
+    pub value: LiteValue,
     pub validator: ValidatorName,
     pub signature: Signature,
 }
@@ -147,41 +154,33 @@ pub struct Vote {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct LiteCertificate {
-    /// Hash of the certified value (used as key for storage).
-    pub hash: CryptoHash,
-    /// The ID of the chain the value belongs to.
-    pub chain_id: ChainId,
+    /// Hash and chain ID of the certified value (used as key for storage).
+    pub value: LiteValue,
     /// Signatures on the value.
     pub signatures: Vec<(ValidatorName, Signature)>,
 }
 
 impl LiteCertificate {
-    pub fn new(
-        hash: CryptoHash,
-        chain_id: ChainId,
-        signatures: Vec<(ValidatorName, Signature)>,
-    ) -> Self {
-        Self {
-            hash,
-            chain_id,
-            signatures,
-        }
+    pub fn new(value: LiteValue, signatures: Vec<(ValidatorName, Signature)>) -> Self {
+        Self { value, signatures }
     }
 
     /// Verify the certificate.
-    pub fn check(self, committee: &Committee) -> Result<CryptoHash, ChainError> {
-        check_signatures(&self.hash, &self.signatures, committee)?;
-        Ok(self.hash)
+    pub fn check(self, committee: &Committee) -> Result<LiteValue, ChainError> {
+        check_signatures(&self.value, &self.signatures, committee)?;
+        Ok(self.value)
     }
 
     /// Returns the `Certificate` with the specified value, if it matches.
     pub fn with_value(self, value: Value) -> Option<Certificate> {
-        if self.chain_id != value.chain_id() || self.hash != CryptoHash::new(&value) {
+        if self.value.chain_id != value.chain_id()
+            || self.value.value_hash != CryptoHash::new(&value)
+        {
             return None;
         }
         Some(Certificate {
             value,
-            hash: self.hash,
+            hash: self.value.value_hash,
             signatures: self.signatures,
         })
     }
@@ -284,6 +283,13 @@ impl Value {
             _ => None,
         }
     }
+
+    pub fn lite(&self) -> LiteValue {
+        LiteValue {
+            value_hash: CryptoHash::new(self),
+            chain_id: self.chain_id(),
+        }
+    }
 }
 
 impl BlockProposal {
@@ -299,10 +305,10 @@ impl BlockProposal {
 
 impl Vote {
     /// Use signing key to create a signed object.
-    pub fn new(hash: CryptoHash, key_pair: &KeyPair) -> Self {
-        let signature = Signature::new(&hash, key_pair);
+    pub fn new(value: LiteValue, key_pair: &KeyPair) -> Self {
+        let signature = Signature::new(&value, key_pair);
         Self {
-            hash,
+            value,
             validator: ValidatorName(key_pair.public()),
             signature,
         }
@@ -310,7 +316,7 @@ impl Vote {
 
     /// Verify the signature in the vote.
     pub fn check(&self) -> Result<(), ChainError> {
-        Ok(self.signature.check(&self.hash, self.validator.0)?)
+        Ok(self.signature.check(&self.value, self.validator.0)?)
     }
 }
 
@@ -345,7 +351,7 @@ impl<'a> SignatureAggregator<'a> {
         validator: ValidatorName,
         signature: Signature,
     ) -> Result<Option<Certificate>, ChainError> {
-        signature.check(&CryptoHash::new(&self.partial.value), validator.0)?;
+        signature.check(&self.partial.value.lite(), validator.0)?;
         // Check that each validator only appears once.
         ensure!(
             !self.used_validators.contains(&validator),
@@ -397,23 +403,29 @@ impl Certificate {
 
     /// Verify the certificate.
     pub fn check<'a>(&'a self, committee: &Committee) -> Result<&'a Value, ChainError> {
-        check_signatures(&self.hash, &self.signatures, committee)?;
+        check_signatures(&self.lite(), &self.signatures, committee)?;
         Ok(&self.value)
     }
 
     /// Returns the certificate without the full value.
     pub fn without_value(&self) -> LiteCertificate {
         LiteCertificate {
-            hash: self.hash,
-            chain_id: self.value.chain_id(),
+            value: self.lite(),
             signatures: self.signatures.clone(),
+        }
+    }
+
+    pub fn lite(&self) -> LiteValue {
+        LiteValue {
+            value_hash: self.hash,
+            chain_id: self.value.chain_id(),
         }
     }
 }
 
 /// Verifies certificate signatures.
 fn check_signatures(
-    hash: &CryptoHash,
+    value: &LiteValue,
     signatures: &[(ValidatorName, Signature)],
     committee: &Committee,
 ) -> Result<(), ChainError> {
@@ -437,10 +449,12 @@ fn check_signatures(
         ChainError::CertificateRequiresQuorum
     );
     // All that is left is checking signatures!
-    Signature::verify_batch(hash, signatures.iter().map(|(v, s)| (&v.0, s)))?;
+    Signature::verify_batch(value, signatures.iter().map(|(v, s)| (&v.0, s)))?;
     Ok(())
 }
 
 impl BcsSignable for BlockAndRound {}
 
 impl BcsSignable for Value {}
+
+impl BcsSignable for LiteValue {}

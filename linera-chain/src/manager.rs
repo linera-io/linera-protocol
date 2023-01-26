@@ -278,7 +278,7 @@ impl ChainManager {
                         effects,
                         state_hash,
                     };
-                    let vote_value = (Vote::new(CryptoHash::new(&value), key_pair), value);
+                    let vote_value = (Vote::new(value.lite(), key_pair), value);
                     manager.pending = Some(vote_value);
                 }
             }
@@ -295,7 +295,7 @@ impl ChainManager {
                         effects,
                         state_hash,
                     };
-                    let vote_value = (Vote::new(CryptoHash::new(&value), key_pair), value);
+                    let vote_value = (Vote::new(value.lite(), key_pair), value);
                     manager.pending = Some(vote_value);
                 }
             }
@@ -323,7 +323,7 @@ impl ChainManager {
                         effects,
                         state_hash,
                     };
-                    let vote_value = (Vote::new(CryptoHash::new(&value), key_pair), value);
+                    let vote_value = (Vote::new(value.lite(), key_pair), value);
                     // Ok to overwrite validation votes with confirmation votes at equal or
                     // higher round.
                     manager.pending = Some(vote_value);

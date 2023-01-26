@@ -696,7 +696,7 @@ where
         manager.create_vote(proposal, effects, state_hash, self.key_pair());
         // Cache the value we voted on, so the client doesn't have to send it again.
         if let Some((vote, value)) = manager.pending() {
-            self.cache_recent_value(vote.hash, value.clone());
+            self.cache_recent_value(vote.value.value_hash, value.clone());
         }
         let info = ChainInfoResponse::new(&chain, self.key_pair());
         chain.save().await?;
@@ -710,7 +710,7 @@ where
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let value = self
             .recent_values
-            .get(&certificate.hash)
+            .get(&certificate.value.value_hash)
             .ok_or(WorkerError::MissingCertificateValue)?
             .clone();
         let full_cert = certificate
