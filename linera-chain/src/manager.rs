@@ -341,9 +341,9 @@ pub enum ChainManagerInfo {
     /// The chain is not active. (No blocks can be created)
     None,
     /// The chain is managed by a single owner.
-    Single(SingleOwnerManagerInfo),
+    Single(Box<SingleOwnerManagerInfo>),
     /// The chain is managed by multiple owners.
-    Multi(MultiOwnerManagerInfo),
+    Multi(Box<MultiOwnerManagerInfo>),
 }
 
 /// Chain manager information that is included in `ChainInfo` sent to clients, about chains
@@ -382,19 +382,19 @@ pub struct MultiOwnerManagerInfo {
 impl From<&ChainManager> for ChainManagerInfo {
     fn from(manager: &ChainManager) -> Self {
         match manager {
-            ChainManager::Single(s) => ChainManagerInfo::Single(SingleOwnerManagerInfo {
+            ChainManager::Single(s) => ChainManagerInfo::Single(Box::new(SingleOwnerManagerInfo {
                 owner: s.owner,
                 pending: s.pending.as_ref().map(|vote| vote.lite()),
                 requested_pending_value: None,
-            }),
-            ChainManager::Multi(m) => ChainManagerInfo::Multi(MultiOwnerManagerInfo {
+            })),
+            ChainManager::Multi(m) => ChainManagerInfo::Multi(Box::new(MultiOwnerManagerInfo {
                 owners: m.owners.clone(),
                 requested_proposed: None,
                 requested_locked: None,
                 pending: m.pending.as_ref().map(|vote| vote.lite()),
                 requested_pending_value: None,
                 round: m.round(),
-            }),
+            })),
             ChainManager::None => ChainManagerInfo::None,
         }
     }
