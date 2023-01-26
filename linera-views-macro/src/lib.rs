@@ -205,13 +205,13 @@ fn generate_crypto_hash_code(input: TokenStream) -> TokenStream {
             async fn crypto_hash(&mut self) -> Result<linera_base::crypto::CryptoHash, linera_views::views::ViewError> {
                 use linera_views::generic_array::GenericArray;
                 use linera_views::common::Batch;
-                use linera_base::crypto::{BcsSignable, CryptoHash};
+                use linera_base::crypto::{BcsHashable, CryptoHash};
                 use linera_views::views::HashableView;
                 use serde::{Serialize, Deserialize};
                 use linera_views::sha2::{Sha512, Digest};
                 #[derive(Serialize, Deserialize)]
                 struct #hash_type(GenericArray<u8, <Sha512 as Digest>::OutputSize>);
-                impl BcsSignable for #hash_type {}
+                impl BcsHashable for #hash_type {}
                 let hash = self.hash().await?;
                 Ok(CryptoHash::new(&#hash_type(hash)))
             }
