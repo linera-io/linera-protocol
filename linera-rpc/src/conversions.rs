@@ -10,7 +10,9 @@ use linera_base::{
     crypto::{CryptoError, PublicKey, Signature},
     data_types::{BlockHeight, ChainId, EffectId, Owner, ValidatorName},
 };
-use linera_chain::data_types::{BlockProposal, Certificate, LiteCertificate, Medium, Origin};
+use linera_chain::data_types::{
+    BlockProposal, Certificate, LiteCertificate, LiteValue, Medium, Origin,
+};
 use linera_core::{
     data_types::{
         BlockHeightRange, ChainInfoQuery, ChainInfoResponse, CrossChainRequest,
@@ -347,8 +349,10 @@ impl TryFrom<grpc::LiteCertificate> for LiteCertificate {
 
         let chain_id = try_proto_convert!(certificate.chain_id);
         Ok(LiteCertificate::new(
-            bcs::from_bytes(certificate.hash.as_slice())?,
-            chain_id,
+            LiteValue {
+                value_hash: bcs::from_bytes(certificate.hash.as_slice())?,
+                chain_id,
+            },
             signatures,
         ))
     }
@@ -368,8 +372,8 @@ impl TryFrom<LiteCertificate> for grpc::LiteCertificate {
             .collect();
 
         Ok(Self {
-            hash: bcs::to_bytes(&certificate.hash)?,
-            chain_id: Some(certificate.chain_id.into()),
+            hash: bcs::to_bytes(&certificate.value.value_hash)?,
+            chain_id: Some(certificate.value.chain_id.into()),
             signatures,
         })
     }
@@ -901,8 +905,10 @@ pub mod tests {
 
         let key_pair = KeyPair::generate();
         let certificate_validated = LiteCertificate {
-            hash: CryptoHash::new(&Dummy),
-            chain_id: ChainId::root(0),
+            value: LiteValue {
+                value_hash: CryptoHash::new(&Dummy),
+                chain_id: ChainId::root(0),
+            },
             signatures: vec![(
                 ValidatorName::from(key_pair.public()),
                 Signature::new(&Foo("test".into()), &key_pair),

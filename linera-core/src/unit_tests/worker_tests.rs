@@ -177,7 +177,7 @@ fn make_certificate<S>(
     worker: &WorkerState<S>,
     value: Value,
 ) -> Certificate {
-    let vote = Vote::new(CryptoHash::new(&value), worker.key_pair.as_ref().unwrap());
+    let vote = Vote::new(value.lite(), worker.key_pair.as_ref().unwrap());
     let mut builder = SignatureAggregator::new(value, committee);
     builder
         .append(vote.validator, vote.signature)

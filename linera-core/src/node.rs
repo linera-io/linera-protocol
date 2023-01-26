@@ -270,7 +270,7 @@ where
         let mut notifications = Vec::new();
         let value = node
             .state
-            .recent_value(&certificate.hash)
+            .recent_value(&certificate.value.value_hash)
             .ok_or(NodeError::MissingCertificateValue)?
             .clone();
         let full_cert = certificate

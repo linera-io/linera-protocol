@@ -386,7 +386,9 @@ where
         let result = communicate_with_quorum(
             &nodes,
             committee,
-            |value: &Option<Vote>| -> Option<_> { value.as_ref().map(|vote| vote.hash) },
+            |value: &Option<Vote>| -> Option<_> {
+                value.as_ref().map(|vote| vote.value.value_hash)
+            },
             |name, client| {
                 let mut updater = ValidatorUpdater {
                     name,

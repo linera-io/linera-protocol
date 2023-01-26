@@ -36,10 +36,10 @@ fn test_signed_values() {
         state_hash: CryptoHash::new(&Dummy),
     };
 
-    let v = Vote::new(CryptoHash::new(&value), &key1);
+    let v = Vote::new(value.lite(), &key1);
     assert!(v.check().is_ok());
 
-    let mut v = Vote::new(CryptoHash::new(&value), &key2);
+    let mut v = Vote::new(value.lite(), &key2);
     v.validator = name1;
     assert!(v.check().is_err());
 }
@@ -76,9 +76,9 @@ fn test_certificates() {
         state_hash: CryptoHash::new(&Dummy),
     };
 
-    let v1 = Vote::new(CryptoHash::new(&value), &key1);
-    let v2 = Vote::new(CryptoHash::new(&value), &key2);
-    let v3 = Vote::new(CryptoHash::new(&value), &key3);
+    let v1 = Vote::new(value.lite(), &key1);
+    let v2 = Vote::new(value.lite(), &key2);
+    let v3 = Vote::new(value.lite(), &key3);
 
     let mut builder = SignatureAggregator::new(value.clone(), &committee);
     assert!(builder

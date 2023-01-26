@@ -267,15 +267,19 @@ Event:
         TYPENAME: Effect
 LiteCertificate:
   STRUCT:
-    - hash:
-        TYPENAME: CryptoHash
-    - chain_id:
-        TYPENAME: ChainId
+    - value:
+        TYPENAME: LiteValue
     - signatures:
         SEQ:
           TUPLE:
             - TYPENAME: ValidatorName
             - TYPENAME: Signature
+LiteValue:
+  STRUCT:
+    - value_hash:
+        TYPENAME: CryptoHash
+    - chain_id:
+        TYPENAME: ChainId
 Medium:
   ENUM:
     0:
@@ -720,8 +724,8 @@ Value:
               TYPENAME: CryptoHash
 Vote:
   STRUCT:
-    - hash:
-        TYPENAME: CryptoHash
+    - value:
+        TYPENAME: LiteValue
     - validator:
         TYPENAME: ValidatorName
     - signature:

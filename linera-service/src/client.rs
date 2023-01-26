@@ -777,7 +777,7 @@ where
                     .filter_map(|message| {
                         deserialize_response(message).and_then(|response| {
                             response.info.manager.pending().and_then(|vote| {
-                                Some((vote.clone(), values.get(&vote.hash)?.clone()))
+                                Some((vote.clone(), values.get(&vote.value.value_hash)?.clone()))
                             })
                         })
                     })
