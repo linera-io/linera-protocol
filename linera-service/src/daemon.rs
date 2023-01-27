@@ -1,20 +1,19 @@
-use std::net::SocketAddr;
-use std::num::NonZeroU16;
-use std::sync::Arc;
-use async_graphql::{EmptyMutation, EmptySubscription, Schema, Object, Error, Subscription};
-use async_graphql::futures_util::Stream;
-use async_graphql::http::GraphiQLSource;
+use async_graphql::{
+    futures_util::Stream, http::GraphiQLSource, EmptyMutation, EmptySubscription, Error, Object,
+    Schema, Subscription,
+};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
-use axum::{Extension, response, Router, Server};
-use axum::response::IntoResponse;
-use axum::routing::get;
+use axum::{response, response::IntoResponse, routing::get, Extension, Router, Server};
 use futures::lock::Mutex;
-use log::info;
 use linera_base::data_types::ChainId;
-use linera_core::client::{ChainClientState, ValidatorNodeProvider};
-use linera_core::worker::Notification;
+use linera_core::{
+    client::{ChainClientState, ValidatorNodeProvider},
+    worker::Notification,
+};
 use linera_storage::Store;
 use linera_views::views::ViewError;
+use log::info;
+use std::{net::SocketAddr, num::NonZeroU16, sync::Arc};
 
 /// The type of the root GraphQL schema.
 type NodeSchema = Schema<QueryRoot, EmptyMutation, EmptySubscription>;
@@ -48,8 +47,7 @@ where
 }
 
 /// Execute a GraphQL query and generate a response for our `Schema`.
-async fn graphql_handler(schema: Extension<NodeSchema>, req: GraphQLRequest) -> GraphQLResponse
-{
+async fn graphql_handler(schema: Extension<NodeSchema>, req: GraphQLRequest) -> GraphQLResponse {
     schema.execute(req.into_inner()).await.into()
 }
 
