@@ -6,6 +6,7 @@ use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{response, response::IntoResponse, routing::get, Extension, Router, Server};
 use futures::lock::Mutex;
 use linera_base::data_types::ChainId;
+use linera_chain::ChainStateView;
 use linera_core::{
     client::{ChainClientState, ValidatorNodeProvider},
     worker::Notification,
@@ -16,16 +17,10 @@ use log::info;
 use std::{net::SocketAddr, num::NonZeroU16, sync::Arc};
 
 /// The type of the root GraphQL schema.
-type NodeSchema = Schema<QueryRoot, EmptyMutation, EmptySubscription>;
+type NodeSchema<P, S> = Schema<QueryRoot<P, S>, EmptyMutation, EmptySubscription>;
 
-struct QueryRoot;
-
-#[Object]
-impl QueryRoot {
-    async fn echo(&self, str: String) -> String {
-        str
-    }
-}
+/// Our root GraphQL query type.
+struct QueryRoot<P, S>(Arc<Mutex<ChainClientState<P, S>>>);
 
 /// Our root GraphQL subscription type.
 struct SubscriptionRoot<P, S>(Arc<Mutex<ChainClientState<P, S>>>);
@@ -46,8 +41,33 @@ where
     }
 }
 
+#[Object]
+impl<P, S> QueryRoot<P, S>
+where
+    P: ValidatorNodeProvider + Send + Sync + 'static,
+    S: Store + Clone + Send + Sync + 'static,
+    ViewError: From<S::ContextError>,
+{
+    async fn chain(&self, chain_id: String) -> Result<ChainStateView<S::Context>, Error> {
+        Ok(self
+            .0
+            .lock()
+            .await
+            .chain_state_view(chain_id.parse()?)
+            .await?)
+    }
+}
+
 /// Execute a GraphQL query and generate a response for our `Schema`.
-async fn graphql_handler(schema: Extension<NodeSchema>, req: GraphQLRequest) -> GraphQLResponse {
+async fn graphql_handler<P, S>(
+    schema: Extension<NodeSchema<P, S>>,
+    req: GraphQLRequest,
+) -> GraphQLResponse
+where
+    P: ValidatorNodeProvider + Send + Sync + 'static,
+    S: Store + Clone + Send + Sync + 'static,
+    ViewError: From<S::ContextError>,
+{
     schema.execute(req.into_inner()).await.into()
 }
 
@@ -64,7 +84,7 @@ async fn graphiql() -> impl IntoResponse {
 /// The `Daemon` is a server that exposes a web-server to the client.
 /// The daemon is primarily used to explore the state of a chain in GraphQL.
 pub struct Daemon<P, S> {
-    _client: ChainClientState<P, S>,
+    client: ChainClientState<P, S>,
     port: NonZeroU16,
 }
 
@@ -75,15 +95,22 @@ where
     ViewError: From<S::ContextError>,
 {
     /// Create a new instance of the daemon given a client chain and a port.
-    pub fn new(_client: ChainClientState<P, S>, port: NonZeroU16) -> Self {
-        Self { _client, port }
+    pub fn new(client: ChainClientState<P, S>, port: NonZeroU16) -> Self {
+        Self { client, port }
     }
 
     /// Run the daemon.
     pub async fn run(self) -> Result<(), anyhow::Error> {
-        let schema = Schema::build(QueryRoot, EmptyMutation, EmptySubscription).finish();
+        let client = Arc::new(Mutex::new(self.client));
 
-        let graphql_handler = get(graphiql).post(graphql_handler);
+        let schema = Schema::build(
+            QueryRoot(client.clone()),
+            EmptyMutation,
+            SubscriptionRoot(client),
+        )
+        .finish();
+
+        let graphql_handler = get(graphiql).post(graphql_handler::<P, S>);
 
         let app = Router::new()
             .route("/", graphql_handler)
