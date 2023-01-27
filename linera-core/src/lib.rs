@@ -9,3 +9,4 @@ pub mod notifier;
 pub mod worker;
 
 pub(crate) mod updater;
+mod graphql;

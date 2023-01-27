@@ -29,6 +29,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[cfg(test)]
@@ -83,14 +84,14 @@ pub struct NetworkActions {
     pub notifications: Vec<Notification>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 /// Notify that a chain has a new certified block or a new message.
 pub struct Notification {
     pub chain_id: ChainId,
     pub reason: Reason,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[allow(clippy::large_enum_variant)]
 /// Reason for the notification.
 pub enum Reason {

@@ -2009,6 +2009,7 @@ dependencies = [
 name = "linera-base"
 version = "0.1.0"
 dependencies = [
+ "async-graphql",
  "bcs",
  "chrono",
  "ed25519",
@@ -2046,6 +2047,7 @@ name = "linera-core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-graphql",
  "async-trait",
  "bcs",
  "dashmap",

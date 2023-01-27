@@ -12,6 +12,7 @@ test = ["test-strategy", "proptest"]
 [dependencies]
 anyhow = "1.0.57"
 async-trait = "0.1.52"
+async-graphql = "5.0.5"
 dashmap = "5.4.0"
 futures = "0.3.17"
 linera-base = { path = "../linera-base" }

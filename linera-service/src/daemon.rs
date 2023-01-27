@@ -1,13 +1,18 @@
 use std::net::SocketAddr;
 use std::num::NonZeroU16;
-use async_graphql::{EmptyMutation, EmptySubscription, Schema, Object};
+use std::sync::Arc;
+use async_graphql::{EmptyMutation, EmptySubscription, Schema, Object, Error, Subscription};
+use async_graphql::futures_util::Stream;
 use async_graphql::http::GraphiQLSource;
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{Extension, response, Router, Server};
 use axum::response::IntoResponse;
 use axum::routing::get;
+use futures::lock::Mutex;
 use log::info;
+use linera_base::data_types::ChainId;
 use linera_core::client::{ChainClientState, ValidatorNodeProvider};
+use linera_core::worker::Notification;
 use linera_storage::Store;
 use linera_views::views::ViewError;
 
@@ -23,6 +28,26 @@ impl QueryRoot {
     }
 }
 
+/// Our root GraphQL subscription type.
+struct SubscriptionRoot<P, S>(Arc<Mutex<ChainClientState<P, S>>>);
+
+#[Subscription]
+impl<P, S> SubscriptionRoot<P, S>
+where
+    P: ValidatorNodeProvider + Send + Sync + 'static,
+    S: Store + Clone + Send + Sync + 'static,
+    ViewError: From<S::ContextError>,
+{
+    /// Get a subscription to a stream of `Notification`s for a collection of `ChainId`s.
+    async fn notifications(
+        &self,
+        chain_ids: Vec<ChainId>,
+    ) -> Result<impl Stream<Item = Notification>, Error> {
+        Ok(self.0.lock().await.subscribe_all(chain_ids).await?)
+    }
+}
+
+/// Execute a GraphQL query and generate a response for our `Schema`.
 async fn graphql_handler(schema: Extension<NodeSchema>, req: GraphQLRequest) -> GraphQLResponse
 {
     schema.execute(req.into_inner()).await.into()
