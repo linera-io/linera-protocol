@@ -3,6 +3,7 @@
 
 mod applications;
 mod execution;
+mod graphql;
 mod ownership;
 mod runtime;
 pub mod system;
