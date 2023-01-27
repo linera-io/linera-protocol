@@ -6,10 +6,6 @@ use crate::{
 use async_graphql::{scalar, Object};
 use std::collections::BTreeMap;
 
-// Leaves of a GraphQL schema are called `Scalars`.
-// As long as a type is `Serialize`/`Deserialize`, `Scalar` can be derived
-// using a declarative macro.
-
 scalar!(BlockHeight);
 scalar!(ChainDescription);
 scalar!(ChainId);
