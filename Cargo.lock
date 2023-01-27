@@ -2029,6 +2029,7 @@ dependencies = [
 name = "linera-chain"
 version = "0.1.0"
 dependencies = [
+ "async-graphql",
  "async-trait",
  "bcs",
  "futures",

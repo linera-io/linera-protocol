@@ -3,6 +3,7 @@
 
 mod chain;
 pub mod data_types;
+mod graphql;
 mod inbox;
 mod manager;
 mod outbox;

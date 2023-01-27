@@ -9,6 +9,7 @@ test = ["tokio/macros"]
 
 [dependencies]
 async-trait = "0.1.52"
+async-graphql = "5.0.5"
 bcs = "0.1.3"
 futures = "0.3.17"
 linera-base = { path = "../linera-base" }

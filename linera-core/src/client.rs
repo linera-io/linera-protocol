@@ -18,10 +18,7 @@ use linera_base::{
         BlockHeight, ChainId, EffectId, Epoch, Owner, RoundNumber, Timestamp, ValidatorName,
     },
 };
-use linera_chain::{
-    data_types::{Block, BlockAndRound, BlockProposal, Certificate, LiteVote, Message, Value},
-    ChainManagerInfo,
-};
+use linera_chain::{data_types::{Block, BlockAndRound, BlockProposal, Certificate, LiteVote, Message, Value}, ChainManagerInfo, ChainStateView};
 use linera_execution::{
     system::{Address, Amount, Balance, SystemChannel, SystemOperation, UserData},
     ApplicationId, Bytecode, BytecodeId, Operation, Query, Response, UserApplicationId,
@@ -159,6 +156,19 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
+    /// Obtain a `ChainStateView` for a given `ChainId`.
+    pub async fn chain_state_view(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<ChainStateView<S::Context>, NodeError> {
+        Ok(self
+            .node_client
+            .storage_client()
+            .await
+            .load_chain(chain_id)
+            .await?)
+    }
+
     /// Obtain the basic `ChainInfo` data for the local chain.
     async fn chain_info(&mut self) -> Result<ChainInfo, NodeError> {
         let query = ChainInfoQuery::new(self.chain_id);
