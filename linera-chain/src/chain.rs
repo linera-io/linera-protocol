@@ -7,6 +7,7 @@ use crate::{
     outbox::OutboxStateView,
     ChainError, ChainManager,
 };
+use async_graphql::SimpleObject;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{BlockHeight, ChainId, EffectId, Timestamp},
@@ -53,7 +54,7 @@ pub struct ChainStateView<C> {
 }
 
 /// Block-chaining state.
-#[derive(Debug, Default, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Eq, PartialEq, Serialize, Deserialize, SimpleObject)]
 pub struct ChainTipState {
     /// Hash of the latest certified block in this chain, if any.
     pub block_hash: Option<CryptoHash>,

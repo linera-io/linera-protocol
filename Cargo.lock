@@ -2078,6 +2078,7 @@ name = "linera-execution"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-graphql",
  "async-trait",
  "bcs",
  "dashmap",

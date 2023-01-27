@@ -125,6 +125,12 @@ impl std::fmt::Display for BlockHeight {
     }
 }
 
+impl std::fmt::Display for Epoch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        write!(f, "{}", self.0)
+    }
+}
+
 impl std::fmt::Display for Owner {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         write!(f, "{}", self.0)

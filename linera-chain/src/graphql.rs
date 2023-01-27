@@ -1,9 +1,33 @@
-use crate::ChainStateView;
-use async_graphql::Object;
+use crate::{chain::ChainTipState, ChainManager, ChainStateView};
+use async_graphql::scalar;
+use linera_base::crypto::CryptoHash;
+use linera_execution::ExecutionStateView;
 use linera_views::common::Context;
 
-#[Object]
+// Leaves of a GraphQL schema are called `Scalars`.
+// As long as a type is `Serialize`/`Deserialize`, `Scalar` can be derived
+// using a declarative macro.
+
+scalar!(ChainManager);
+
+#[async_graphql::Object]
 impl<C: Sync + Send + Context> ChainStateView<C> {
+    async fn execution_state_view(&self) -> &ExecutionStateView<C> {
+        &self.execution_state
+    }
+
+    async fn tip_state(&self) -> &ChainTipState {
+        self.tip_state.get()
+    }
+
+    async fn execution_state_hash(&self) -> &Option<CryptoHash> {
+        self.execution_state_hash.get()
+    }
+
+    async fn manager(&self) -> &ChainManager {
+        self.manager.get()
+    }
+
     async fn confirmed_log(&self) -> usize {
         self.confirmed_log.count()
     }
