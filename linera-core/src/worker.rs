@@ -23,13 +23,13 @@ use linera_views::{
     views::{ContainerView, View, ViewError},
 };
 use lru::LruCache;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, VecDeque},
     num::NonZeroUsize,
     sync::Arc,
     time::Duration,
 };
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[cfg(test)]

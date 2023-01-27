@@ -350,10 +350,10 @@ where
             assert_eq!(view.x2.get(), &0);
         }
         if config.with_log {
-            assert_eq!(view.log.read(0..10).await.unwrap(), vec![]);
+            assert_eq!(view.log.read(0..10).await.unwrap(), Vec::<u32>::new());
         }
         if config.with_queue {
-            assert_eq!(view.queue.read_front(10).await.unwrap(), vec![]);
+            assert_eq!(view.queue.read_front(10).await.unwrap(), Vec::<u64>::new());
         }
         if config.with_map {
             assert_eq!(view.map.get(&"Hello".to_string()).await.unwrap(), None);
@@ -367,7 +367,7 @@ where
                 .load_entry("hola".to_string())
                 .await
                 .unwrap();
-            assert_eq!(subview.read(0..10).await.unwrap(), vec![]);
+            assert_eq!(subview.read(0..10).await.unwrap(), Vec::<u32>::new());
             let subview = view
                 .collection2
                 .load_entry("ciao".to_string())
@@ -498,7 +498,7 @@ where
                 .try_load_entry("hola".to_string())
                 .await
                 .unwrap();
-            assert_eq!(subview.read_front(10).await.unwrap(), vec![]);
+            assert_eq!(subview.read_front(10).await.unwrap(), Vec::<u64>::new());
             assert!(view
                 .collection4
                 .try_load_entry("hola".to_string())
@@ -521,7 +521,7 @@ where
                 .load_entry("hola".to_string())
                 .await
                 .unwrap();
-            assert_eq!(subview.read(0..10).await.unwrap(), vec![]);
+            assert_eq!(subview.read(0..10).await.unwrap(), Vec::<u32>::new());
         }
         if config.with_queue {
             assert_eq!(view.queue.front().await.unwrap(), Some(13));

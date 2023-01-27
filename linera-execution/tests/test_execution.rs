@@ -90,7 +90,7 @@ impl UserApplication for TestApplication {
         let call_result = storage
             .try_call_application(/* authenticate */ true, app_id, &[], vec![])
             .await?;
-        assert_eq!(call_result.value, vec![]);
+        assert_eq!(call_result.value, Vec::<u8>::new());
         assert_eq!(call_result.sessions.len(), 1);
         if !operation.is_empty() {
             // Call the session to close it.
