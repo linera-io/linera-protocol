@@ -4,10 +4,6 @@ use linera_base::crypto::CryptoHash;
 use linera_execution::ExecutionStateView;
 use linera_views::common::Context;
 
-// Leaves of a GraphQL schema are called `Scalars`.
-// As long as a type is `Serialize`/`Deserialize`, `Scalar` can be derived
-// using a declarative macro.
-
 scalar!(ChainManager);
 
 #[async_graphql::Object]
