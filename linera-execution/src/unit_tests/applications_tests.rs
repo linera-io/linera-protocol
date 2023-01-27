@@ -6,9 +6,10 @@ use super::{
     UserApplicationDescription, UserApplicationId,
 };
 use linera_base::{
-    crypto::CryptoHash,
+    crypto::{BcsSignable, CryptoHash},
     data_types::{BlockHeight, ChainId, EffectId},
 };
+use serde::{Deserialize, Serialize};
 
 fn effect_id(index: usize) -> EffectId {
     EffectId {
@@ -40,8 +41,13 @@ fn app_description(index: usize, deps: Vec<usize>) -> UserApplicationDescription
 }
 
 fn location(operation_index: usize) -> BytecodeLocation {
+    #[derive(Serialize, Deserialize)]
+    struct Dummy;
+
+    impl BcsSignable for Dummy {}
+
     BytecodeLocation {
-        certificate_hash: CryptoHash::new(&[0u8][..]),
+        certificate_hash: CryptoHash::new(&Dummy),
         operation_index,
     }
 }
