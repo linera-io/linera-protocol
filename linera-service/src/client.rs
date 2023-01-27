@@ -41,6 +41,7 @@ use linera_views::views::ViewError;
 use log::{debug, error, info, warn};
 use std::{
     collections::{HashMap, HashSet},
+    num::NonZeroU16,
     path::PathBuf,
     time::{Duration, Instant},
 };
@@ -553,6 +554,17 @@ enum ClientCommand {
         /// The collection of Chain IDs to synchronize for.
         chain_ids: Vec<ChainId>,
     },
+
+    /// Run Client in Daemon mode.
+    #[structopt(name = "daemon")]
+    Daemon {
+        /// Chain id (defaults to admin chain)
+        chain_id: Option<ChainId>,
+
+        /// The port on which to run the server
+        #[structopt(long = "port", default_value = "8080")]
+        port: NonZeroU16,
+    },
 }
 
 struct Job(ClientContext, ClientCommand);
@@ -880,6 +892,14 @@ where
                     }
                 }
                 warn!("Notification stream ended.")
+            }
+
+            Daemon { chain_id, port } => {
+                let chain_id = chain_id.unwrap_or(context.genesis_config.admin_id);
+                let client_state = context.make_chain_client(storage, chain_id);
+                let daemon = linera_service::daemon::Daemon::new(client_state, port);
+
+                daemon.run().await?;
             }
 
             CreateGenesisConfig { .. } => unreachable!(),
