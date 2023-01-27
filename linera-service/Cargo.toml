@@ -6,7 +6,10 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.57"
+async-graphql = "5.0.5"
+async-graphql-axum = "5.0.5"
 async-trait = "0.1.52"
+axum = { version = "0.6.2", features = ["ws", "headers"] }
 aws-sdk-s3 = "0.14.0"
 bcs = "0.1.3"
 bincode = "1.3.3"
