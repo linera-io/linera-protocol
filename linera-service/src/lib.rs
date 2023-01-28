@@ -5,7 +5,7 @@
 #![deny(warnings)]
 
 pub mod config;
-pub mod daemon;
+pub mod node_service;
 pub mod grpc_proxy;
 pub mod storage;
 pub mod tracker;

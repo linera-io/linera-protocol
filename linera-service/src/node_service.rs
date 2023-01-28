@@ -81,25 +81,25 @@ async fn graphiql() -> impl IntoResponse {
     )
 }
 
-/// The `Daemon` is a server that exposes a web-server to the client.
-/// The daemon is primarily used to explore the state of a chain in GraphQL.
-pub struct Daemon<P, S> {
+/// The `NodeService` is a server that exposes a web-server to the client.
+/// The node service is primarily used to explore the state of a chain in GraphQL.
+pub struct NodeService<P, S> {
     client: ChainClientState<P, S>,
     port: NonZeroU16,
 }
 
-impl<P, S> Daemon<P, S>
+impl<P, S> NodeService<P, S>
 where
     P: ValidatorNodeProvider + Send + Sync + 'static,
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
-    /// Create a new instance of the daemon given a client chain and a port.
+    /// Create a new instance of the node service given a client chain and a port.
     pub fn new(client: ChainClientState<P, S>, port: NonZeroU16) -> Self {
         Self { client, port }
     }
 
-    /// Run the daemon.
+    /// Run the node service.
     pub async fn run(self) -> Result<(), anyhow::Error> {
         let client = Arc::new(Mutex::new(self.client));
 
