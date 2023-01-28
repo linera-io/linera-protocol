@@ -555,9 +555,9 @@ enum ClientCommand {
         chain_ids: Vec<ChainId>,
     },
 
-    /// Run Client in Daemon mode.
-    #[structopt(name = "daemon")]
-    Daemon {
+    /// Run Client as a service.
+    #[structopt(name = "service")]
+    Service {
         /// Chain id (defaults to admin chain)
         chain_id: Option<ChainId>,
 
@@ -894,12 +894,12 @@ where
                 warn!("Notification stream ended.")
             }
 
-            Daemon { chain_id, port } => {
+            Service { chain_id, port } => {
                 let chain_id = chain_id.unwrap_or(context.genesis_config.admin_id);
                 let client_state = context.make_chain_client(storage, chain_id);
-                let daemon = linera_service::daemon::Daemon::new(client_state, port);
+                let service = linera_service::node_service::NodeService::new(client_state, port);
 
-                daemon.run().await?;
+                service.run().await?;
             }
 
             CreateGenesisConfig { .. } => unreachable!(),
