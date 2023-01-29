@@ -258,7 +258,7 @@ impl KeyValueOperations for DynamoDbClient {
         }
     }
 
-    async fn find_stripped_keys_by_prefix(
+    async fn find_keys_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::Keys, DynamoDbContextError> {
@@ -269,7 +269,7 @@ impl KeyValueOperations for DynamoDbClient {
         })
     }
 
-    async fn find_stripped_key_values_by_prefix(
+    async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, DynamoDbContextError> {
@@ -301,11 +301,7 @@ impl KeyValueOperations for DynamoDbClient {
                     insert_list.push((key, value));
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
-                    for short_key in self
-                        .find_stripped_keys_by_prefix(&key_prefix)
-                        .await?
-                        .iterate()
-                    {
+                    for short_key in self.find_keys_by_prefix(&key_prefix).await?.iterate() {
                         let short_key = short_key?;
                         let mut key = key_prefix.clone();
                         key.extend_from_slice(short_key);

@@ -175,7 +175,7 @@ where
         if !self.was_cleared {
             for index in self
                 .context
-                .find_stripped_keys_by_prefix(&key_prefix)
+                .find_keys_by_prefix(&key_prefix)
                 .await?
                 .iterate()
             {
@@ -222,7 +222,7 @@ where
         if !self.was_cleared {
             for entry in self
                 .context
-                .find_stripped_key_values_by_prefix(&key_prefix)
+                .find_key_values_by_prefix(&key_prefix)
                 .await?
                 .iterate()
             {
@@ -325,11 +325,8 @@ where
         }
     }
 
-    /// Iterate over all the matching the given prefix, without including the prefix.
-    pub async fn find_stripped_keys_by_prefix(
-        &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<Vec<u8>>, ViewError> {
+    /// Iterate over all the keys matching the given prefix. The prefix is not included in the returned keys.
+    pub async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, ViewError> {
         let len = key_prefix.len();
         let key_prefix_full = self.context.base_tag_index(KeyTag::Index as u8, key_prefix);
         let mut keys = Vec::new();
@@ -342,7 +339,7 @@ where
         if !self.was_cleared {
             for stripped_key in self
                 .context
-                .find_stripped_keys_by_prefix(&key_prefix_full)
+                .find_keys_by_prefix(&key_prefix_full)
                 .await?
                 .iterate()
             {
@@ -359,9 +356,9 @@ where
                             }
                         }
                         _ => {
-                            let mut key = key_prefix.to_vec();
-                            key.extend_from_slice(stripped_key);
-                            if Self::is_index_present(&mut lower_bound, &key) {
+                            let mut key_prefix = key_prefix.to_vec();
+                            key_prefix.extend_from_slice(stripped_key);
+                            if Self::is_index_present(&mut lower_bound, &key_prefix) {
                                 keys.push(stripped_key.to_vec());
                             }
                             break;
@@ -380,9 +377,9 @@ where
         Ok(keys)
     }
 
-    /// Iterate over all the matching the given prefix, without including the prefix, but
-    /// including the corresponding values.
-    pub async fn find_stripped_key_values_by_prefix(
+    /// Iterate over all the key-value pairs, for keys matching the given prefix. The
+    /// prefix is not included in the returned keys.
+    pub async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ViewError> {
@@ -398,7 +395,7 @@ where
         if !self.was_cleared {
             for entry in self
                 .context
-                .find_stripped_key_values_by_prefix(&key_prefix_full)
+                .find_key_values_by_prefix(&key_prefix_full)
                 .await?
                 .iterate()
             {
@@ -514,20 +511,17 @@ where
         kvsv.get(key).await
     }
 
-    async fn find_stripped_keys_by_prefix(
-        &self,
-        key_prefix: &[u8],
-    ) -> Result<Self::Keys, ViewError> {
+    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, ViewError> {
         let kvsv = self.kvsv.read().await;
-        kvsv.find_stripped_keys_by_prefix(key_prefix).await
+        kvsv.find_keys_by_prefix(key_prefix).await
     }
 
-    async fn find_stripped_key_values_by_prefix(
+    async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, ViewError> {
         let kvsv = self.kvsv.read().await;
-        kvsv.find_stripped_key_values_by_prefix(key_prefix).await
+        kvsv.find_key_values_by_prefix(key_prefix).await
     }
 
     async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {

@@ -196,14 +196,11 @@ pub trait KeyValueOperations {
     /// Retrieve a `Vec<u8>` from the database using the provided `key`
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
-    /// Find keys matching the prefix. The stripped keys are returned, that is excluding the prefix.
-    async fn find_stripped_keys_by_prefix(
-        &self,
-        key_prefix: &[u8],
-    ) -> Result<Self::Keys, Self::Error>;
+    /// Find the keys matching the prefix. The prefix is not included in the returned keys.
+    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error>;
 
-    /// Find key/value pairs matching the prefix. The stripped keys are returned, that is excluding the prefix.
-    async fn find_stripped_key_values_by_prefix(
+    /// Find the key-value pairs matching the prefix. The prefix is not included in the returned keys.
+    async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, Self::Error>;
@@ -337,14 +334,11 @@ pub trait Context {
     /// context.
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
-    /// Find keys matching the prefix. The stripped keys are returned, that is excluding the prefix.
-    async fn find_stripped_keys_by_prefix(
-        &self,
-        key_prefix: &[u8],
-    ) -> Result<Self::Keys, Self::Error>;
+    /// Find keys matching the prefix. The prefix is not included in the returned keys.
+    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error>;
 
-    /// Find (key,value) matching the prefix. The stripped keys are returned, that is excluding the prefix.
-    async fn find_stripped_key_values_by_prefix(
+    /// Find the key-value pairs matching the prefix. The prefix is not included in the returned keys.
+    async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, Self::Error>;
@@ -447,18 +441,15 @@ where
         self.db.read_key_bytes(key).await
     }
 
-    async fn find_stripped_keys_by_prefix(
-        &self,
-        key_prefix: &[u8],
-    ) -> Result<Self::Keys, Self::Error> {
-        self.db.find_stripped_keys_by_prefix(key_prefix).await
+    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
+        self.db.find_keys_by_prefix(key_prefix).await
     }
 
-    async fn find_stripped_key_values_by_prefix(
+    async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, Self::Error> {
-        self.db.find_stripped_key_values_by_prefix(key_prefix).await
+        self.db.find_key_values_by_prefix(key_prefix).await
     }
 
     async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error> {

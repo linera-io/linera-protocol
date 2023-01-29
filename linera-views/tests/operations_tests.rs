@@ -29,7 +29,7 @@ async fn test_ordering_keys_key_value_vec<OP: KeyValueOperations + Sync>(
     }
     key_value_operation.write_batch(batch).await.unwrap();
     let keys: Vec<Vec<u8>> = key_value_operation
-        .find_stripped_keys_by_prefix(&key_prefix)
+        .find_keys_by_prefix(&key_prefix)
         .await
         .unwrap()
         .iterate()
@@ -60,7 +60,7 @@ async fn test_ordering_keys_key_value_vec<OP: KeyValueOperations + Sync>(
     }
     for (key_prefix, value) in map {
         let n_ent = key_value_operation
-            .find_stripped_keys_by_prefix(&key_prefix)
+            .find_keys_by_prefix(&key_prefix)
             .await
             .unwrap()
             .iterate()

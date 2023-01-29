@@ -180,12 +180,7 @@ where
         let mut update = updates.next();
         if !self.was_cleared {
             let base = self.context.base_tag(KeyTag::Index as u8);
-            for index in self
-                .context
-                .find_stripped_keys_by_prefix(&base)
-                .await?
-                .iterate()
-            {
+            for index in self.context.find_keys_by_prefix(&base).await?.iterate() {
                 let index = index?;
                 loop {
                     match update {
