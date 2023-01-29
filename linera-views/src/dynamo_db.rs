@@ -24,7 +24,7 @@ use std::{collections::HashMap, str::FromStr};
 use thiserror::Error;
 
 /// The configuration to connect to DynamoDB.
-pub use aws_sdk_dynamodb::Config;
+pub type Config = aws_sdk_dynamodb::Config;
 
 #[cfg(test)]
 #[path = "unit_tests/dynamo_db_context_tests.rs"]
