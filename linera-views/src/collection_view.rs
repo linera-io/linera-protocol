@@ -241,8 +241,8 @@ where
     W: View<C> + Sync,
 {
     /// Execute a function on each index serialization. The order in which the entry
-    /// are passed is not the ones of the entryies I but of their serialization
-    pub async fn for_each_raw_index<F>(&self, mut f: F) -> Result<(), ViewError>
+    /// are passed is not the ones of the entries I but of their serialization
+    async fn for_each_raw_index<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(Vec<u8>) -> Result<(), ViewError> + Send,
     {
@@ -478,7 +478,7 @@ where
 
     /// Execute a function on each index serialization. The order in which the entry
     /// are passed is not the ones of the entries I but of their serialization
-    pub async fn for_each_raw_index<F>(&self, mut f: F) -> Result<(), ViewError>
+    async fn for_each_raw_index<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(Vec<u8>) -> Result<(), ViewError> + Send,
     {
