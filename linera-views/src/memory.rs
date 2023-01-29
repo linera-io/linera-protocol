@@ -41,7 +41,7 @@ impl KeyValueOperations for MemoryClient {
         Ok(map.get(key).cloned())
     }
 
-    async fn find_stripped_keys_by_prefix(
+    async fn find_keys_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::Keys, MemoryContextError> {
@@ -54,7 +54,7 @@ impl KeyValueOperations for MemoryClient {
         Ok(values)
     }
 
-    async fn find_stripped_key_values_by_prefix(
+    async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, MemoryContextError> {

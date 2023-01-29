@@ -30,7 +30,7 @@ impl KeyValueOperations for RocksdbClient {
         Ok(tokio::task::spawn_blocking(move || db.get(&key)).await??)
     }
 
-    async fn find_stripped_keys_by_prefix(
+    async fn find_keys_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::Keys, RocksdbContextError> {
@@ -56,7 +56,7 @@ impl KeyValueOperations for RocksdbClient {
         Ok(keys)
     }
 
-    async fn find_stripped_key_values_by_prefix(
+    async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, RocksdbContextError> {
@@ -96,7 +96,7 @@ impl KeyValueOperations for RocksdbClient {
             let op = batch.operations.get(i).unwrap();
             if let WriteOperation::DeletePrefix { key_prefix } = op {
                 if get_upper_bound(key_prefix) == Bound::Unbounded {
-                    for short_key in self.find_stripped_keys_by_prefix(key_prefix).await? {
+                    for short_key in self.find_keys_by_prefix(key_prefix).await? {
                         let mut key = key_prefix.clone();
                         key.extend_from_slice(&short_key);
                         keys.push(key);
