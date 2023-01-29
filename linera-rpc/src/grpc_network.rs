@@ -361,8 +361,8 @@ where
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                error!(
-                    "[{}] Failed to handle cross-chain request: {}",
+                warn!(
+                    "[{}] Failed to handle lite certificate: {}",
                     self.state.nickname(),
                     error
                 );
@@ -391,7 +391,7 @@ where
             }
             Err(error) => {
                 error!(
-                    "[{}] Failed to handle cross-chain request: {}",
+                    "[{}] Failed to handle certificate: {}",
                     self.state.nickname(),
                     error
                 );
