@@ -170,7 +170,7 @@ where
     /// Execute a function on each index serialization. The order is in which values
     /// are passed is not the one of the index but its serialization. However said
     /// order will always be the same
-    pub async fn for_each_raw_index<F>(&self, mut f: F) -> Result<(), ViewError>
+    async fn for_each_raw_index<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(Vec<u8>) -> Result<(), ViewError> + Send,
     {
