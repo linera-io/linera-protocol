@@ -9,7 +9,7 @@ use linera_chain::data_types::Certificate;
 use linera_execution::{UserApplicationCode, UserApplicationId};
 use linera_views::{
     common::{Batch, KeyValueOperations},
-    rocksdb::{RocksdbContainer, RocksdbContext, RocksdbContextError, DB},
+    rocksdb::{RocksdbClient, RocksdbContext, RocksdbContextError, DB},
     views::{View, ViewError},
 };
 use serde::{Deserialize, Serialize};
@@ -20,7 +20,7 @@ use std::{path::PathBuf, sync::Arc};
 mod tests;
 
 struct RocksdbStore {
-    db: RocksdbContainer,
+    db: RocksdbClient,
     guards: ChainGuards,
     user_applications: Arc<DashMap<UserApplicationId, UserApplicationCode>>,
 }

@@ -47,15 +47,15 @@ const KEY_VALUE_ATTRIBUTE: &str = "item_key, item_value";
 
 /// A DynamoDb client.
 #[derive(Debug, Clone)]
-pub struct DynamoDbContainer {
+pub struct DynamoDbClient {
     client: Client,
     table: TableName,
 }
 
-/// A implementation of [`Context`] based on [`DynamoDbContainer`].
-pub type DynamoDbContext<E> = ContextFromDb<E, DynamoDbContainer>;
+/// A implementation of [`Context`] based on [`DynamoDbClient`].
+pub type DynamoDbContext<E> = ContextFromDb<E, DynamoDbClient>;
 
-impl DynamoDbContainer {
+impl DynamoDbClient {
     /// Build the key attributes for a table item.
     ///
     /// The key is composed of two attributes that are both binary blobs. The first attribute is a
@@ -180,7 +180,7 @@ impl<'a> Iterator for DynamoDbKeyIterator<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         self.iter
             .next()
-            .map(|x| DynamoDbContainer::extract_key(self.prefix_len, x))
+            .map(|x| DynamoDbClient::extract_key(self.prefix_len, x))
     }
 }
 
@@ -216,7 +216,7 @@ impl<'a> Iterator for DynamoDbKeyValueIterator<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         self.iter
             .next()
-            .map(|x| DynamoDbContainer::extract_key_value(self.prefix_len, x))
+            .map(|x| DynamoDbClient::extract_key_value(self.prefix_len, x))
     }
 }
 
@@ -238,7 +238,7 @@ impl KeyValueIterable<DynamoDbContextError> for DynamoDbKeyValues {
 }
 
 #[async_trait]
-impl KeyValueOperations for DynamoDbContainer {
+impl KeyValueOperations for DynamoDbClient {
     type Error = DynamoDbContextError;
     type Keys = DynamoDbKeys;
     type KeyValues = DynamoDbKeyValues;
@@ -350,12 +350,12 @@ impl KeyValueOperations for DynamoDbContainer {
     }
 }
 
-impl DynamoDbContainer {
-    /// Create a new [`DynamoDbContainer`] instance.
+impl DynamoDbClient {
+    /// Create a new [`DynamoDbClient`] instance.
     pub async fn new(table: TableName) -> Result<(Self, TableStatus), CreateTableError> {
         let config = aws_config::load_from_env().await;
 
-        DynamoDbContainer::from_config(&config, table).await
+        DynamoDbClient::from_config(&config, table).await
     }
     /// Create the storage table if it doesn't exist.
     ///
@@ -410,7 +410,7 @@ impl DynamoDbContainer {
         config: impl Into<Config>,
         table: TableName,
     ) -> Result<(Self, TableStatus), CreateTableError> {
-        let db = DynamoDbContainer {
+        let db = DynamoDbClient {
             client: Client::from_conf(config.into()),
             table,
         };
@@ -431,7 +431,7 @@ impl DynamoDbContainer {
             .endpoint_resolver(localstack::get_endpoint()?)
             .build();
 
-        Ok(DynamoDbContainer::from_config(config, table).await?)
+        Ok(DynamoDbClient::from_config(config, table).await?)
     }
 }
 
@@ -440,7 +440,7 @@ where
     E: Clone + Sync + Send,
 {
     fn create_context(
-        db_tablestatus: (DynamoDbContainer, TableStatus),
+        db_tablestatus: (DynamoDbClient, TableStatus),
         base_key: Vec<u8>,
         extra: E,
     ) -> (Self, TableStatus) {
@@ -458,7 +458,7 @@ where
         base_key: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), CreateTableError> {
-        let db_tablestatus = DynamoDbContainer::new(table).await?;
+        let db_tablestatus = DynamoDbClient::new(table).await?;
         Ok(Self::create_context(db_tablestatus, base_key, extra))
     }
 
@@ -469,7 +469,7 @@ where
         base_key: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), CreateTableError> {
-        let db_tablestatus = DynamoDbContainer::from_config(config, table).await?;
+        let db_tablestatus = DynamoDbClient::from_config(config, table).await?;
         Ok(Self::create_context(db_tablestatus, base_key, extra))
     }
 
@@ -483,7 +483,7 @@ where
         base_key: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), LocalStackError> {
-        let db_tablestatus = DynamoDbContainer::with_localstack(table).await?;
+        let db_tablestatus = DynamoDbClient::with_localstack(table).await?;
         Ok(Self::create_context(db_tablestatus, base_key, extra))
     }
 

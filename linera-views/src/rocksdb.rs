@@ -13,13 +13,13 @@ use thiserror::Error;
 pub type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
 
 /// A shared DB client for RocksDB.
-pub type RocksdbContainer = Arc<DB>;
+pub type RocksdbClient = Arc<DB>;
 
 /// An implementation of [`crate::common::Context`] based on Rocksdb
-pub type RocksdbContext<E> = ContextFromDb<E, RocksdbContainer>;
+pub type RocksdbContext<E> = ContextFromDb<E, RocksdbClient>;
 
 #[async_trait]
-impl KeyValueOperations for RocksdbContainer {
+impl KeyValueOperations for RocksdbClient {
     type Error = RocksdbContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -130,7 +130,7 @@ impl KeyValueOperations for RocksdbContainer {
 
 impl<E: Clone + Send + Sync> RocksdbContext<E> {
     /// Create a [`RocksdbContext`]
-    pub fn new(db: RocksdbContainer, base_key: Vec<u8>, extra: E) -> Self {
+    pub fn new(db: RocksdbClient, base_key: Vec<u8>, extra: E) -> Self {
         Self {
             db,
             base_key,
