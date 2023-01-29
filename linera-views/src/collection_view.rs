@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    common::{Batch, Context, HashOutput, Update},
+    common::{Batch, Context, HashOutput, KeyIterable, Update},
     views::{HashableView, Hasher, View, ViewError},
 };
 use async_trait::async_trait;
@@ -244,21 +244,27 @@ where
     /// are passed is not the ones of the entries I but of their serialization
     async fn for_each_raw_index<F>(&self, mut f: F) -> Result<(), ViewError>
     where
-        F: FnMut(Vec<u8>) -> Result<(), ViewError> + Send,
+        F: FnMut(&[u8]) -> Result<(), ViewError> + Send,
     {
         let mut updates = self.updates.iter();
         let mut update = updates.next();
         if !self.was_cleared {
             let base = self.get_index_key(&[]);
-            for index in self.context.find_stripped_keys_by_prefix(&base).await? {
+            for index in self
+                .context
+                .find_stripped_keys_by_prefix(&base)
+                .await?
+                .iterate()
+            {
+                let index = index?;
                 loop {
                     match update {
-                        Some((key, value)) if key <= &index => {
+                        Some((key, value)) if key.as_slice() <= index => {
                             if let Update::Set(_) = value {
-                                f(key.to_vec())?;
+                                f(key)?;
                             }
                             update = updates.next();
-                            if key == &index {
+                            if key == index {
                                 break;
                             }
                         }
@@ -272,7 +278,7 @@ where
         }
         while let Some((key, value)) = update {
             if let Update::Set(_) = value {
-                f(key.to_vec())?;
+                f(key)?;
             }
             update = updates.next();
         }
@@ -285,8 +291,8 @@ where
     where
         F: FnMut(I) -> Result<(), ViewError> + Send,
     {
-        self.for_each_raw_index(|index: Vec<u8>| {
-            let index = C::deserialize_value(&index)?;
+        self.for_each_raw_index(|index| {
+            let index = C::deserialize_value(index)?;
             f(index)?;
             Ok(())
         })
@@ -480,21 +486,27 @@ where
     /// are passed is not the ones of the entries I but of their serialization
     async fn for_each_raw_index<F>(&self, mut f: F) -> Result<(), ViewError>
     where
-        F: FnMut(Vec<u8>) -> Result<(), ViewError> + Send,
+        F: FnMut(&[u8]) -> Result<(), ViewError> + Send,
     {
         let mut updates = self.updates.iter();
         let mut update = updates.next();
         if !self.was_cleared {
             let base = self.get_index_key(&[]);
-            for index in self.context.find_stripped_keys_by_prefix(&base).await? {
+            for index in self
+                .context
+                .find_stripped_keys_by_prefix(&base)
+                .await?
+                .iterate()
+            {
+                let index = index?;
                 loop {
                     match update {
-                        Some((key, value)) if key <= &index => {
+                        Some((key, value)) if key.as_slice() <= index => {
                             if let Update::Set(_) = value {
-                                f(key.to_vec())?;
+                                f(key)?;
                             }
                             update = updates.next();
-                            if key == &index {
+                            if key == index {
                                 break;
                             }
                         }
@@ -508,7 +520,7 @@ where
         }
         while let Some((key, value)) = update {
             if let Update::Set(_) = value {
-                f(key.to_vec())?;
+                f(key)?;
             }
             update = updates.next();
         }
@@ -521,8 +533,8 @@ where
     where
         F: FnMut(I) -> Result<(), ViewError> + Send,
     {
-        self.for_each_raw_index(|index: Vec<u8>| {
-            let index = C::deserialize_value(&index)?;
+        self.for_each_raw_index(|index| {
+            let index = C::deserialize_value(index)?;
             f(index)?;
             Ok(())
         })

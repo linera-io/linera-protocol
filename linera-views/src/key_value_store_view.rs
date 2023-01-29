@@ -3,8 +3,8 @@
 
 use crate::{
     common::{
-        get_interval, get_upper_bound, Batch, Context, HashOutput, SimpleTypeIterator, Update,
-        WriteOperation,
+        get_interval, get_upper_bound, Batch, Context, HashOutput, KeyIterable, KeyValueIterable,
+        Update, WriteOperation,
     },
     views::{HashableView, Hasher, View, ViewError},
 };
@@ -176,7 +176,7 @@ where
 
     pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
     where
-        F: FnMut(Vec<u8>) -> Result<(), ViewError> + Send,
+        F: FnMut(&[u8]) -> Result<(), ViewError> + Send,
     {
         let key_prefix = self.context.base_tag(KeyTag::Index as u8);
         let mut updates = self.updates.iter();
@@ -187,20 +187,22 @@ where
                 .context
                 .find_stripped_keys_by_prefix(&key_prefix)
                 .await?
+                .iterate()
             {
+                let index = index?;
                 loop {
                     match update {
-                        Some((key, value)) if key <= &index => {
+                        Some((key, value)) if key.as_slice() <= index => {
                             if let Update::Set(_) = value {
-                                f(key.clone())?;
+                                f(key)?;
                             }
                             update = updates.next();
-                            if key == &index {
+                            if key == index {
                                 break;
                             }
                         }
                         _ => {
-                            if Self::is_index_present(&mut lower_bound, &index) {
+                            if Self::is_index_present(&mut lower_bound, index) {
                                 f(index)?;
                             }
                             break;
@@ -211,7 +213,7 @@ where
         }
         while let Some((key, value)) = update {
             if let Update::Set(_) = value {
-                f(key.clone())?;
+                f(key)?;
             }
             update = updates.next();
         }
@@ -220,31 +222,33 @@ where
 
     pub async fn for_each_index_value<F>(&self, mut f: F) -> Result<(), ViewError>
     where
-        F: FnMut(Vec<u8>, Vec<u8>) -> Result<(), ViewError> + Send,
+        F: FnMut(&[u8], &[u8]) -> Result<(), ViewError> + Send,
     {
         let key_prefix = self.context.base_tag(KeyTag::Index as u8);
         let mut updates = self.updates.iter();
         let mut update = updates.next();
         let mut lower_bound = NextLowerKeyIterator::new(&self.deleted_prefixes);
         if !self.was_cleared {
-            for (index, index_val) in self
+            for entry in self
                 .context
                 .find_stripped_key_values_by_prefix(&key_prefix)
                 .await?
+                .iterate()
             {
+                let (index, index_val) = entry?;
                 loop {
                     match update {
-                        Some((key, value)) if key <= &index => {
+                        Some((key, value)) if key.as_slice() <= index => {
                             if let Update::Set(value) = value {
-                                f(key.clone(), value.to_vec())?;
+                                f(key, value)?;
                             }
                             update = updates.next();
-                            if key == &index {
+                            if key == index {
                                 break;
                             }
                         }
                         _ => {
-                            if Self::is_index_present(&mut lower_bound, &index) {
+                            if Self::is_index_present(&mut lower_bound, index) {
                                 f(index, index_val)?;
                             }
                             break;
@@ -255,7 +259,7 @@ where
         }
         while let Some((key, value)) = update {
             if let Update::Set(value) = value {
-                f(key.clone(), value.to_vec())?;
+                f(key, value)?;
             }
             update = updates.next();
         }
@@ -264,8 +268,8 @@ where
 
     pub async fn indices(&self) -> Result<Vec<Vec<u8>>, ViewError> {
         let mut indices = Vec::new();
-        self.for_each_index(|index: Vec<u8>| {
-            indices.push(index);
+        self.for_each_index(|index| {
+            indices.push(index.to_vec());
             Ok(())
         })
         .await?;
@@ -347,7 +351,7 @@ where
     pub async fn find_stripped_keys_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<SimpleTypeIterator<Vec<u8>, ViewError>, ViewError> {
+    ) -> Result<Vec<Vec<u8>>, ViewError> {
         let len = key_prefix.len();
         let key_prefix_full = self.context.base_tag_index(KeyTag::Index as u8, key_prefix);
         let mut keys = Vec::new();
@@ -362,23 +366,23 @@ where
                 .context
                 .find_stripped_keys_by_prefix(&key_prefix_full)
                 .await?
+                .iterate()
             {
+                let stripped_key = stripped_key?;
                 loop {
                     match update {
-                        Some((key_update, value_update))
-                            if key_update[len..].to_vec() <= stripped_key =>
-                        {
+                        Some((key_update, value_update)) if &key_update[len..] <= stripped_key => {
                             if let Update::Set(_) = value_update {
                                 keys.push(key_update[len..].to_vec());
                             }
                             update = updates.next();
-                            if key_update[len..].to_vec() == stripped_key {
+                            if key_update[len..] == stripped_key[..] {
                                 break;
                             }
                         }
                         _ => {
                             let mut key = key_prefix.to_vec();
-                            key.extend_from_slice(&stripped_key);
+                            key.extend_from_slice(stripped_key);
                             if Self::is_index_present(&mut lower_bound, &key) {
                                 keys.push(stripped_key.to_vec());
                             }
@@ -395,13 +399,13 @@ where
             }
             update = updates.next();
         }
-        Ok(SimpleTypeIterator::new(keys))
+        Ok(keys)
     }
 
     pub async fn find_stripped_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<SimpleTypeIterator<(Vec<u8>, Vec<u8>), ViewError>, ViewError> {
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ViewError> {
         let len = key_prefix.len();
         let key_prefix_full = self.context.base_tag_index(KeyTag::Index as u8, key_prefix);
         let mut key_values = Vec::new();
@@ -412,30 +416,30 @@ where
         let mut update = updates.next();
         let mut lower_bound = NextLowerKeyIterator::new(&self.deleted_prefixes);
         if !self.was_cleared {
-            for (stripped_key, value) in self
+            for entry in self
                 .context
                 .find_stripped_key_values_by_prefix(&key_prefix_full)
                 .await?
+                .iterate()
             {
+                let (stripped_key, value) = entry?;
                 loop {
                     match update {
-                        Some((key_update, value_update))
-                            if key_update[len..].to_vec() <= stripped_key =>
-                        {
+                        Some((key_update, value_update)) if &key_update[len..] <= stripped_key => {
                             if let Update::Set(value_update) = value_update {
                                 let key_value = (key_update[len..].to_vec(), value_update.to_vec());
                                 key_values.push(key_value);
                             }
                             update = updates.next();
-                            if key_update[len..].to_vec() == stripped_key {
+                            if key_update[len..] == stripped_key[..] {
                                 break;
                             }
                         }
                         _ => {
                             let mut key = key_prefix.to_vec();
-                            key.extend_from_slice(&stripped_key);
+                            key.extend_from_slice(stripped_key);
                             if Self::is_index_present(&mut lower_bound, &key) {
-                                key_values.push((stripped_key.to_vec(), value.clone()));
+                                key_values.push((stripped_key.to_vec(), value.to_vec()));
                             }
                             break;
                         }
@@ -450,7 +454,7 @@ where
             }
             update = updates.next();
         }
-        Ok(SimpleTypeIterator::new(key_values))
+        Ok(key_values)
     }
 
     pub async fn write_batch(&mut self, batch: Batch) -> Result<(), ViewError> {
@@ -490,14 +494,12 @@ where
             None => {
                 let mut hasher = Self::Hasher::default();
                 let mut count = 0;
-                self.for_each_index_value(
-                    |index: Vec<u8>, value: Vec<u8>| -> Result<(), ViewError> {
-                        count += 1;
-                        hasher.update_with_bytes(&index)?;
-                        hasher.update_with_bytes(&value)?;
-                        Ok(())
-                    },
-                )
+                self.for_each_index_value(|index, value| -> Result<(), ViewError> {
+                    count += 1;
+                    hasher.update_with_bytes(index)?;
+                    hasher.update_with_bytes(value)?;
+                    Ok(())
+                })
                 .await?;
                 hasher.update_with_bcs_bytes(&count)?;
                 let hash = hasher.finalize();
@@ -522,8 +524,8 @@ where
     ViewError: From<C::Error>,
 {
     type Error = ViewError;
-    type KeyIterator = SimpleTypeIterator<Vec<u8>, ViewError>;
-    type KeyValueIterator = SimpleTypeIterator<(Vec<u8>, Vec<u8>), ViewError>;
+    type Keys = Vec<Vec<u8>>;
+    type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
         let kvsv = self.kvsv.read().await;
@@ -533,7 +535,7 @@ where
     async fn find_stripped_keys_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::KeyIterator, ViewError> {
+    ) -> Result<Self::Keys, ViewError> {
         let kvsv = self.kvsv.read().await;
         kvsv.find_stripped_keys_by_prefix(key_prefix).await
     }
@@ -541,7 +543,7 @@ where
     async fn find_stripped_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::KeyValueIterator, ViewError> {
+    ) -> Result<Self::KeyValues, ViewError> {
         let kvsv = self.kvsv.read().await;
         kvsv.find_stripped_key_values_by_prefix(key_prefix).await
     }
@@ -583,16 +585,16 @@ where
         loop {
             match &self.prec2 {
                 None => {
-                    return self.prec1.as_ref().cloned();
+                    return self.prec1.clone();
                 }
                 Some(x) => {
                     if x.clone() > val {
-                        return self.prec1.as_ref().cloned();
+                        return self.prec1.clone();
                     }
                 }
             }
-            self.prec1 = self.prec2.clone();
-            self.prec2 = self.iter.next().cloned();
+            let prec2 = self.iter.next().cloned();
+            self.prec1 = std::mem::replace(&mut self.prec2, prec2);
         }
     }
 }

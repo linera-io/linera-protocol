@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_views::{
-    common::{Batch, KeyValueOperations},
+    common::{Batch, KeyIterable, KeyValueOperations},
     dynamo_db::DynamoDbContainer,
     key_value_store_view::ViewContainer,
     memory::MemoryContext,
@@ -29,10 +29,15 @@ async fn test_ordering_keys_key_value_vec<OP: KeyValueOperations + Sync>(
     }
     key_value_operation.write_batch(batch).await.unwrap();
     let keys: Vec<Vec<u8>> = key_value_operation
-        .find_keys_by_prefix(&key_prefix)
+        .find_stripped_keys_by_prefix(&key_prefix)
         .await
         .unwrap()
-        .map(|x| x.expect("Failed to get vector").to_vec())
+        .iterate()
+        .map(|x| {
+            let mut v = key_prefix.clone();
+            v.extend(x.unwrap());
+            v
+        })
         .collect();
     for i in 1..keys.len() {
         let key1 = keys[i - 1].clone();
@@ -55,11 +60,12 @@ async fn test_ordering_keys_key_value_vec<OP: KeyValueOperations + Sync>(
     }
     for (key_prefix, value) in map {
         let n_ent = key_value_operation
-            .find_keys_by_prefix(&key_prefix)
+            .find_stripped_keys_by_prefix(&key_prefix)
             .await
             .unwrap()
+            .iterate()
             .count();
-        assert!(n_ent == value);
+        assert_eq!(n_ent, value);
     }
 }
 
