@@ -30,10 +30,10 @@ impl LocalStackTestContext {
     /// Creates an instance of [`LocalStackTestContext`], loading the necessary LocalStack
     /// configuration.
     ///
-    /// An address to the LocalStack instance must be specified using a [`LOCALSTACK_ENDPOINT`]
+    /// An address to the LocalStack instance must be specified using a `LOCALSTACK_ENDPOINT`
     /// environment variable.
     ///
-    /// This also locks the [`LOCALSTACK_GUARD`] to enforce only one test has access to the
+    /// This also locks the `LOCALSTACK_GUARD` to enforce only one test has access to the
     /// LocalStack instance.
     pub async fn new() -> Result<LocalStackTestContext, Error> {
         let base_config = aws_config::load_from_env().await;
