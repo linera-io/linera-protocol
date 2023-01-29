@@ -240,6 +240,7 @@ where
                 .expect("sinks are never closed so call to `feed` should not fail");
         }
 
+        // TODO(#293): Explain why we need these (without .await) or simplify the code.
         let _ = cross_chain_sender.flush();
         let _ = notification_sender.flush();
     }
