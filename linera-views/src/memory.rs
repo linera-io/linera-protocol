@@ -14,10 +14,10 @@ use tokio::sync::{OwnedMutexGuard, RwLock};
 pub type MemoryStoreMap = BTreeMap<Vec<u8>, Vec<u8>>;
 
 /// A virtual DB client where data are persisted in memory.
-pub type MemoryContainer = Arc<RwLock<OwnedMutexGuard<MemoryStoreMap>>>;
+pub type MemoryClient = Arc<RwLock<OwnedMutexGuard<MemoryStoreMap>>>;
 
 /// An implementation of [`crate::common::Context`] that stores all values in memory.
-pub type MemoryContext<E> = ContextFromDb<E, MemoryContainer>;
+pub type MemoryContext<E> = ContextFromDb<E, MemoryClient>;
 
 impl<E> MemoryContext<E> {
     /// Create a [`MemoryContext`]
@@ -31,7 +31,7 @@ impl<E> MemoryContext<E> {
 }
 
 #[async_trait]
-impl KeyValueOperations for MemoryContainer {
+impl KeyValueOperations for MemoryClient {
     type Error = MemoryContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;

@@ -3,7 +3,7 @@
 
 use linera_views::{
     common::{Batch, KeyIterable, KeyValueOperations},
-    dynamo_db::DynamoDbContainer,
+    dynamo_db::DynamoDbClient,
     key_value_store_view::ViewContainer,
     memory::MemoryContext,
     rocksdb::DB,
@@ -100,7 +100,7 @@ async fn test_ordering_rocksdb() {
 #[ignore]
 async fn test_ordering_dynamodb() {
     let localstack = LocalStackTestContext::new().await.unwrap();
-    let (key_value_operation, _) = DynamoDbContainer::from_config(
+    let (key_value_operation, _) = DynamoDbClient::from_config(
         localstack.dynamo_db_config(),
         "test_table".parse().expect("Invalid table name"),
     )
