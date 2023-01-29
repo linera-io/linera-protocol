@@ -224,26 +224,6 @@ pub trait KeyValueOperations {
             None => Ok(None),
         }
     }
-
-    /// Get the vector of deserialized keys matching a prefix.
-    async fn get_sub_keys<Key: DeserializeOwned + Send>(
-        &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<Key>, Self::Error>
-    where
-        Self::Error: From<bcs::Error>,
-    {
-        let mut keys = Vec::new();
-        for key in self
-            .find_stripped_keys_by_prefix(key_prefix)
-            .await?
-            .iterate()
-        {
-            let key = key?;
-            keys.push(bcs::from_bytes(key)?);
-        }
-        Ok(keys)
-    }
 }
 
 #[doc(hidden)]
@@ -369,12 +349,6 @@ pub trait Context {
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, Self::Error>;
 
-    /// Find the keys matching the prefix. The remainder of the key are parsed back into elements.
-    async fn get_sub_keys<Key: DeserializeOwned + Send>(
-        &mut self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<Key>, Self::Error>;
-
     /// Apply the operations from the `batch`, persisting the changes.
     async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error>;
 
@@ -485,13 +459,6 @@ where
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, Self::Error> {
         self.db.find_stripped_key_values_by_prefix(key_prefix).await
-    }
-
-    async fn get_sub_keys<Key>(&mut self, key_prefix: &[u8]) -> Result<Vec<Key>, Self::Error>
-    where
-        Key: DeserializeOwned + Send,
-    {
-        self.db.get_sub_keys(key_prefix).await
     }
 
     async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error> {
