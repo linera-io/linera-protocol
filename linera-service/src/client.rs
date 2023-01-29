@@ -348,7 +348,6 @@ impl ClientContext {
         ViewError: From<S::ContextError>,
     {
         for chain_id in self.wallet_state.chain_ids() {
-            info!("pushing certificate to {:?}", chain_id);
             let mut client_state = self.make_chain_client(storage.clone(), chain_id);
             client_state
                 .receive_certificate(certificate.clone())
