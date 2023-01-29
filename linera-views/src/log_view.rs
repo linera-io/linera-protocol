@@ -124,6 +124,7 @@ where
         }
     }
 
+    /// Obtain the extra data.
     pub fn extra(&self) -> &C::Extra {
         self.context.extra()
     }

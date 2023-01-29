@@ -46,6 +46,8 @@ pub trait View<C>: Sized {
     fn delete(self, batch: &mut Batch);
 }
 
+/// Main error type for the crate.
+#[allow(missing_docs)]
 #[derive(Error, Debug)]
 pub enum ViewError {
     #[error("the entry with key {0} was removed thus cannot be loaded any more")]
@@ -76,25 +78,35 @@ pub enum ViewError {
     NotFound(String),
 }
 
+/// A view that supports hashing its values.
 #[async_trait]
 pub trait HashableView<C>: View<C> {
     /// How to compute hashes.
     type Hasher: Hasher;
 
     /// Compute the hash of the values.
+    ///
+    /// Implementations do not need to include a type tag. However, the usual precautions
+    /// to enforce collision-resistance must be applied (e.g. including the length of a
+    /// collection of values).
     async fn hash(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError>;
 }
 
+/// The requirement for the hasher type in [`HashableView`].
 pub trait Hasher: Default + Write + Send + Sync + 'static {
+    /// The output type.
     type Output: Debug + Clone + Eq + AsRef<[u8]> + 'static;
 
+    /// Finish the hashing process and return its output.
     fn finalize(self) -> Self::Output;
 
+    /// Serialize a value with BCS and include it in the hash.
     fn update_with_bcs_bytes(&mut self, value: &impl Serialize) -> Result<(), ViewError> {
         bcs::serialize_into(self, value)?;
         Ok(())
     }
 
+    /// Include bytes in the hash.
     fn update_with_bytes(&mut self, value: &[u8]) -> Result<(), ViewError> {
         self.write_all(value)?;
         Ok(())
@@ -109,6 +121,7 @@ impl Hasher for sha2::Sha512 {
     }
 }
 
+/// A [`View`] whose staged modifications can be saved in storage.
 #[async_trait]
 pub trait ContainerView<C>: View<C> {
     /// Save the container view to a file
@@ -118,6 +131,7 @@ pub trait ContainerView<C>: View<C> {
     async fn write_delete(self) -> Result<(), ViewError>;
 }
 
+/// A [`ContainerView`] that also supports hashing.
 #[async_trait]
 pub trait HashableContainerView<C>: ContainerView<C> + HashableView<C> {
     /// Computing the hash and attributing the type to it.

@@ -50,10 +50,15 @@ pub(crate) fn get_interval(key_prefix: Vec<u8>) -> (Bound<Vec<u8>>, Bound<Vec<u8
     (Included(key_prefix), upper_bound)
 }
 
+/// A write operation as requested by a view when it needs to persist staged changes.
 #[derive(Debug)]
+#[allow(missing_docs)]
 pub enum WriteOperation {
+    /// Delete the given key.
     Delete { key: Vec<u8> },
+    /// Delete all the keys matching the given prefix.
     DeletePrefix { key_prefix: Vec<u8> },
+    /// Set the value of the given key.
     Put { key: Vec<u8>, value: Vec<u8> },
 }
 
@@ -156,27 +161,36 @@ impl Batch {
 
 /// How to iterate over the keys returned by a search query.
 pub trait KeyIterable<Error> {
+    /// The iterator returning keys by reference.
     type Iterator<'a>: Iterator<Item = Result<&'a [u8], Error>>
     where
         Self: 'a;
 
+    /// Start an iteration.
     fn iterate(&self) -> Self::Iterator<'_>;
 }
 
 /// How to iterate over the key-value pairs returned by a search query.
 pub trait KeyValueIterable<Error> {
+    /// The iterator returning key-value pairs by reference.
     type Iterator<'a>: Iterator<Item = Result<(&'a [u8], &'a [u8]), Error>>
     where
         Self: 'a;
 
+    /// Start an iteration.
     fn iterate(&self) -> Self::Iterator<'_>;
 }
 
 /// Low-level, asynchronous key-value operations. Useful for storage APIs not based on views.
 #[async_trait]
 pub trait KeyValueOperations {
+    /// The error type.
     type Error: Debug;
+
+    /// Return type for key search operations.
     type Keys: KeyIterable<Self::Error>;
+
+    /// Return type for key-value search operations.
     type KeyValues: KeyValueIterable<Self::Error>;
 
     /// Retrieve a `Vec<u8>` from the database using the provided `key`
@@ -232,8 +246,9 @@ pub trait KeyValueOperations {
     }
 }
 
-// A non-optimized iterator for simple DB implementations.
-// Inspired by https://depth-first.com/articles/2020/06/22/returning-rust-iterators/
+#[doc(hidden)]
+/// Iterates keys by reference in vector of keys.
+/// Inspired by https://depth-first.com/articles/2020/06/22/returning-rust-iterators/
 pub struct SimpleKeyIterator<'a, E> {
     iter: std::slice::Iter<'a, Vec<u8>>,
     _error_type: std::marker::PhantomData<E>,
@@ -258,6 +273,8 @@ impl<E> KeyIterable<E> for Vec<Vec<u8>> {
     }
 }
 
+#[doc(hidden)]
+/// Same as `SimpleKeyIterator` but for key-value pairs.
 pub struct SimpleKeyValueIterator<'a, E> {
     iter: std::slice::Iter<'a, (Vec<u8>, Vec<u8>)>,
     _error_type: std::marker::PhantomData<E>,
@@ -361,13 +378,19 @@ pub trait Context {
     /// Apply the operations from the `batch`, persisting the changes.
     async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error>;
 
+    /// Obtain a similar [`Context`] implementation with a different base key.
     fn clone_with_base_key(&self, base_key: Vec<u8>) -> Self;
 }
 
+/// Implementation of the [`Context`] trait on top of a DB client implementing
+/// [`KeyValueOperations`].
 #[derive(Debug, Clone)]
 pub struct ContextFromDb<E, DB> {
+    /// The DB client, usually shared between views.
     pub db: DB,
+    /// The key prefix for the current view.
     pub base_key: Vec<u8>,
+    /// User-defined data attached to the view.
     pub extra: E,
 }
 

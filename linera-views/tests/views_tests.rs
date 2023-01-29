@@ -90,7 +90,7 @@ impl StateStore for KeyValueStoreTestStore {
         log::trace!("Acquiring lock on {:?}", id);
         let guard = state.clone().lock_owned().await;
         let base_key = bcs::to_bytes(&id)?;
-        let context = KeyValueStoreMemoryContext::new(guard, base_key, id);
+        let context = KeyValueStoreMemoryContext::new(guard, base_key, id).await?;
         StateView::load(context).await
     }
 }
