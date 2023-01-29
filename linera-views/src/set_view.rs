@@ -169,10 +169,10 @@ where
         Ok(indices)
     }
 
-    /// Execute a function on each index serialization. The order is in which values
+    /// Execute a function on each serialized index (aka key). The order is in which values
     /// are passed is not the one of the index but its serialization. However said
     /// order will always be the same
-    async fn for_each_raw_index<F>(&self, mut f: F) -> Result<(), ViewError>
+    async fn for_each_key<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(&[u8]) -> Result<(), ViewError> + Send,
     {
@@ -217,7 +217,7 @@ where
     where
         F: FnMut(I) -> Result<(), ViewError> + Send,
     {
-        self.for_each_raw_index(|index| {
+        self.for_each_key(|index| {
             let index = C::deserialize_value(index)?;
             f(index)?;
             Ok(())
@@ -242,7 +242,7 @@ where
             None => {
                 let mut hasher = Self::Hasher::default();
                 let mut count = 0;
-                self.for_each_raw_index(|index| {
+                self.for_each_key(|index| {
                     count += 1;
                     hasher.update_with_bytes(index)?;
                     Ok(())
