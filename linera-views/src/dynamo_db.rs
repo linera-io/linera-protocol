@@ -1,7 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    common::{Batch, Context, ContextFromDb, KeyValueOperations, WriteOperation},
+    common::{
+        Batch, Context, ContextFromDb, KeyIterable, KeyValueIterable, KeyValueOperations,
+        WriteOperation,
+    },
     localstack,
 };
 use async_trait::async_trait;
@@ -88,20 +91,33 @@ impl DynamoDbContainer {
 
     /// Extract the key attribute from an item.
     fn extract_key(
-        len_prefix: usize,
-        attributes: &mut HashMap<String, AttributeValue>,
-    ) -> Result<Vec<u8>, DynamoDbContextError> {
+        prefix_len: usize,
+        attributes: &HashMap<String, AttributeValue>,
+    ) -> Result<&[u8], DynamoDbContextError> {
         let key = attributes
-            .remove(KEY_ATTRIBUTE)
+            .get(KEY_ATTRIBUTE)
             .ok_or(DynamoDbContextError::MissingKey)?;
         match key {
-            AttributeValue::B(blob) => Ok(blob.as_ref()[len_prefix..].to_vec()),
-            key => Err(DynamoDbContextError::wrong_key_type(&key)),
+            AttributeValue::B(blob) => Ok(&blob.as_ref()[prefix_len..]),
+            key => Err(DynamoDbContextError::wrong_key_type(key)),
         }
     }
 
     /// Extract the value attribute from an item.
     fn extract_value(
+        attributes: &HashMap<String, AttributeValue>,
+    ) -> Result<&[u8], DynamoDbContextError> {
+        let value = attributes
+            .get(VALUE_ATTRIBUTE)
+            .ok_or(DynamoDbContextError::MissingValue)?;
+        match value {
+            AttributeValue::B(blob) => Ok(blob.as_ref()),
+            value => Err(DynamoDbContextError::wrong_value_type(value)),
+        }
+    }
+
+    /// Extract the value attribute from an item.
+    fn extract_value_owned(
         attributes: &mut HashMap<String, AttributeValue>,
     ) -> Result<Vec<u8>, DynamoDbContextError> {
         let value = attributes
@@ -115,11 +131,11 @@ impl DynamoDbContainer {
 
     /// Extract the key attribute from an item.
     fn extract_key_value(
-        len_prefix: usize,
-        mut attributes: HashMap<String, AttributeValue>,
-    ) -> Result<(Vec<u8>, Vec<u8>), DynamoDbContextError> {
-        let key = Self::extract_key(len_prefix, &mut attributes)?;
-        let value = Self::extract_value(&mut attributes)?;
+        prefix_len: usize,
+        attributes: &HashMap<String, AttributeValue>,
+    ) -> Result<(&[u8], &[u8]), DynamoDbContextError> {
+        let key = Self::extract_key(prefix_len, attributes)?;
+        let value = Self::extract_value(attributes)?;
         Ok((key, value))
     }
 
@@ -148,64 +164,78 @@ impl DynamoDbContainer {
 }
 
 // Inspired by https://depth-first.com/articles/2020/06/22/returning-rust-iterators/
-pub struct DynamoDbKeyIterator {
-    len_prefix: usize,
+pub struct DynamoDbKeyIterator<'a> {
+    prefix_len: usize,
     iter: std::iter::Flatten<
-        std::option::IntoIter<Vec<HashMap<std::string::String, AttributeValue>>>,
+        std::option::Iter<'a, Vec<HashMap<std::string::String, AttributeValue>>>,
     >,
 }
 
-impl DynamoDbKeyIterator {
-    fn new(len_prefix: usize, response: aws_sdk_dynamodb::output::QueryOutput) -> Self {
-        Self {
-            len_prefix,
-            iter: response.items.into_iter().flatten(),
-        }
-    }
-}
-
-impl Iterator for DynamoDbKeyIterator {
-    type Item = Result<Vec<u8>, DynamoDbContextError>;
+impl<'a> Iterator for DynamoDbKeyIterator<'a> {
+    type Item = Result<&'a [u8], DynamoDbContextError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.iter
             .next()
-            .map(|mut x| DynamoDbContainer::extract_key(self.len_prefix, &mut x))
+            .map(|x| DynamoDbContainer::extract_key(self.prefix_len, x))
+    }
+}
+
+pub struct DynamoDbKeys {
+    prefix_len: usize,
+    response: QueryOutput,
+}
+
+impl KeyIterable<DynamoDbContextError> for DynamoDbKeys {
+    type Iterator<'a> = DynamoDbKeyIterator<'a> where Self: 'a;
+
+    fn iterate(&self) -> Self::Iterator<'_> {
+        DynamoDbKeyIterator {
+            prefix_len: self.prefix_len,
+            iter: self.response.items.iter().flatten(),
+        }
     }
 }
 
 // Inspired by https://depth-first.com/articles/2020/06/22/returning-rust-iterators/
-pub struct DynamoDbKeyValueIterator {
-    len_prefix: usize,
+pub struct DynamoDbKeyValueIterator<'a> {
+    prefix_len: usize,
     iter: std::iter::Flatten<
-        std::option::IntoIter<Vec<HashMap<std::string::String, AttributeValue>>>,
+        std::option::Iter<'a, Vec<HashMap<std::string::String, AttributeValue>>>,
     >,
 }
 
-impl DynamoDbKeyValueIterator {
-    fn new(len_prefix: usize, response: aws_sdk_dynamodb::output::QueryOutput) -> Self {
-        Self {
-            len_prefix,
-            iter: response.items.into_iter().flatten(),
-        }
-    }
-}
-
-impl Iterator for DynamoDbKeyValueIterator {
-    type Item = Result<(Vec<u8>, Vec<u8>), DynamoDbContextError>;
+impl<'a> Iterator for DynamoDbKeyValueIterator<'a> {
+    type Item = Result<(&'a [u8], &'a [u8]), DynamoDbContextError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.iter
             .next()
-            .map(|x| DynamoDbContainer::extract_key_value(self.len_prefix, x))
+            .map(|x| DynamoDbContainer::extract_key_value(self.prefix_len, x))
+    }
+}
+
+pub struct DynamoDbKeyValues {
+    prefix_len: usize,
+    response: aws_sdk_dynamodb::output::QueryOutput,
+}
+
+impl KeyValueIterable<DynamoDbContextError> for DynamoDbKeyValues {
+    type Iterator<'a> = DynamoDbKeyValueIterator<'a> where Self: 'a;
+
+    fn iterate(&self) -> Self::Iterator<'_> {
+        DynamoDbKeyValueIterator {
+            prefix_len: self.prefix_len,
+            iter: self.response.items.iter().flatten(),
+        }
     }
 }
 
 #[async_trait]
 impl KeyValueOperations for DynamoDbContainer {
     type Error = DynamoDbContextError;
-    type KeyIterator = DynamoDbKeyIterator;
-    type KeyValueIterator = DynamoDbKeyValueIterator;
+    type Keys = DynamoDbKeys;
+    type KeyValues = DynamoDbKeyValues;
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DynamoDbContextError> {
         let response = self
@@ -217,7 +247,7 @@ impl KeyValueOperations for DynamoDbContainer {
             .await?;
 
         match response.item {
-            Some(mut item) => Ok(Some(Self::extract_value(&mut item)?)),
+            Some(mut item) => Ok(Some(Self::extract_value_owned(&mut item)?)),
             None => Ok(None),
         }
     }
@@ -225,19 +255,25 @@ impl KeyValueOperations for DynamoDbContainer {
     async fn find_stripped_keys_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::KeyIterator, DynamoDbContextError> {
+    ) -> Result<Self::Keys, DynamoDbContextError> {
         let response = self.get_query_output(KEY_ATTRIBUTE, key_prefix).await?;
-        Ok(DynamoDbKeyIterator::new(key_prefix.len(), response))
+        Ok(DynamoDbKeys {
+            prefix_len: key_prefix.len(),
+            response,
+        })
     }
 
     async fn find_stripped_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::KeyValueIterator, DynamoDbContextError> {
+    ) -> Result<Self::KeyValues, DynamoDbContextError> {
         let response = self
             .get_query_output(KEY_VALUE_ATTRIBUTE, key_prefix)
             .await?;
-        Ok(DynamoDbKeyValueIterator::new(key_prefix.len(), response))
+        Ok(DynamoDbKeyValues {
+            prefix_len: key_prefix.len(),
+            response,
+        })
     }
 
     /// We put submit the transaction in blocks (called BatchWriteItem in dynamoDb) of at most 25
@@ -259,9 +295,14 @@ impl KeyValueOperations for DynamoDbContainer {
                     insert_list.push((key, value));
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
-                    for short_key in self.find_stripped_keys_by_prefix(&key_prefix).await? {
+                    for short_key in self
+                        .find_stripped_keys_by_prefix(&key_prefix)
+                        .await?
+                        .iterate()
+                    {
+                        let short_key = short_key?;
                         let mut key = key_prefix.clone();
-                        key.extend_from_slice(&short_key?);
+                        key.extend_from_slice(short_key);
                         delete_list.push(key);
                     }
                 }

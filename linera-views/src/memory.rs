@@ -1,9 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    common::{
-        get_interval, Batch, ContextFromDb, KeyValueOperations, SimpleTypeIterator, WriteOperation,
-    },
+    common::{get_interval, Batch, ContextFromDb, KeyValueOperations, WriteOperation},
     views::ViewError,
 };
 use async_trait::async_trait;
@@ -33,8 +31,8 @@ impl<E> MemoryContext<E> {
 #[async_trait]
 impl KeyValueOperations for MemoryContainer {
     type Error = MemoryContextError;
-    type KeyIterator = SimpleTypeIterator<Vec<u8>, MemoryContextError>;
-    type KeyValueIterator = SimpleTypeIterator<(Vec<u8>, Vec<u8>), MemoryContextError>;
+    type Keys = Vec<Vec<u8>>;
+    type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MemoryContextError> {
         let map = self.read().await;
@@ -44,20 +42,20 @@ impl KeyValueOperations for MemoryContainer {
     async fn find_stripped_keys_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::KeyIterator, MemoryContextError> {
+    ) -> Result<Self::Keys, MemoryContextError> {
         let map = self.read().await;
         let mut values = Vec::new();
         let len = key_prefix.len();
         for (key, _value) in map.range(get_interval(key_prefix.to_vec())) {
             values.push(key[len..].to_vec())
         }
-        Ok(Self::KeyIterator::new(values))
+        Ok(values)
     }
 
     async fn find_stripped_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::KeyValueIterator, MemoryContextError> {
+    ) -> Result<Self::KeyValues, MemoryContextError> {
         let map = self.read().await;
         let mut key_values = Vec::new();
         let len = key_prefix.len();
@@ -65,7 +63,7 @@ impl KeyValueOperations for MemoryContainer {
             let key_value = (key[len..].to_vec(), value.to_vec());
             key_values.push(key_value);
         }
-        Ok(Self::KeyValueIterator::new(key_values))
+        Ok(key_values)
     }
 
     async fn write_batch(&self, batch: Batch) -> Result<(), MemoryContextError> {

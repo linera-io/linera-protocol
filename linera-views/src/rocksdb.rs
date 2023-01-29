@@ -1,9 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::common::{
-    get_upper_bound, Batch, ContextFromDb, KeyValueOperations, SimpleTypeIterator, WriteOperation,
-};
+use crate::common::{get_upper_bound, Batch, ContextFromDb, KeyValueOperations, WriteOperation};
 use async_trait::async_trait;
 use std::{
     ops::{Bound, Bound::Excluded},
@@ -20,8 +18,8 @@ pub type RocksdbContext<E> = ContextFromDb<E, RocksdbContainer>;
 #[async_trait]
 impl KeyValueOperations for RocksdbContainer {
     type Error = RocksdbContextError;
-    type KeyIterator = SimpleTypeIterator<Vec<u8>, RocksdbContextError>;
-    type KeyValueIterator = SimpleTypeIterator<(Vec<u8>, Vec<u8>), RocksdbContextError>;
+    type Keys = Vec<Vec<u8>>;
+    type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RocksdbContextError> {
         let db = self.clone();
@@ -32,7 +30,7 @@ impl KeyValueOperations for RocksdbContainer {
     async fn find_stripped_keys_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::KeyIterator, RocksdbContextError> {
+    ) -> Result<Self::Keys, RocksdbContextError> {
         let db = self.clone();
         let prefix = key_prefix.to_vec();
         let len = prefix.len();
@@ -52,13 +50,13 @@ impl KeyValueOperations for RocksdbContainer {
             keys
         })
         .await?;
-        Ok(Self::KeyIterator::new(keys))
+        Ok(keys)
     }
 
     async fn find_stripped_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::KeyValueIterator, RocksdbContextError> {
+    ) -> Result<Self::KeyValues, RocksdbContextError> {
         let db = self.clone();
         let prefix = key_prefix.to_vec();
         let len = prefix.len();
@@ -81,7 +79,7 @@ impl KeyValueOperations for RocksdbContainer {
             key_values
         })
         .await?;
-        Ok(Self::KeyValueIterator::new(key_values))
+        Ok(key_values)
     }
 
     async fn write_batch(&self, mut batch: Batch) -> Result<(), RocksdbContextError> {
@@ -97,7 +95,7 @@ impl KeyValueOperations for RocksdbContainer {
                 if get_upper_bound(key_prefix) == Bound::Unbounded {
                     for short_key in self.find_stripped_keys_by_prefix(key_prefix).await? {
                         let mut key = key_prefix.clone();
-                        key.extend_from_slice(&short_key?);
+                        key.extend_from_slice(&short_key);
                         keys.push(key);
                     }
                 }
