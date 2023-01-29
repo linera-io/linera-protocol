@@ -18,7 +18,10 @@ use linera_base::{
         BlockHeight, ChainId, EffectId, Epoch, Owner, RoundNumber, Timestamp, ValidatorName,
     },
 };
-use linera_chain::{data_types::{Block, BlockAndRound, BlockProposal, Certificate, LiteVote, Message, Value}, ChainManagerInfo, ChainStateView};
+use linera_chain::{
+    data_types::{Block, BlockAndRound, BlockProposal, Certificate, LiteVote, Message, Value},
+    ChainManagerInfo, ChainStateView,
+};
 use linera_execution::{
     system::{Address, Amount, Balance, SystemChannel, SystemOperation, UserData},
     ApplicationId, Bytecode, BytecodeId, Operation, Query, Response, UserApplicationId,
