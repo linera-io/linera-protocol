@@ -13,12 +13,14 @@ use tokio::sync::{OwnedMutexGuard, RwLock};
 /// The analogue of the database is the BTreeMap
 pub type MemoryStoreMap = BTreeMap<Vec<u8>, Vec<u8>>;
 
+/// A virtual DB client where data are persisted in memory.
 pub type MemoryContainer = Arc<RwLock<OwnedMutexGuard<MemoryStoreMap>>>;
 
-/// A context that stores all values in memory.
+/// An implementation of [`crate::common::Context`] that stores all values in memory.
 pub type MemoryContext<E> = ContextFromDb<E, MemoryContainer>;
 
 impl<E> MemoryContext<E> {
+    /// Create a [`MemoryContext`]
     pub fn new(guard: OwnedMutexGuard<MemoryStoreMap>, extra: E) -> Self {
         Self {
             db: Arc::new(RwLock::new(guard)),
@@ -91,7 +93,9 @@ impl KeyValueOperations for MemoryContainer {
     }
 }
 
+/// The error type for [`MemoryContext`]
 #[derive(Error, Debug)]
+#[allow(missing_docs)]
 pub enum MemoryContextError {
     #[error("BCS error: {0}")]
     Bcs(#[from] bcs::Error),

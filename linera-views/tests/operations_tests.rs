@@ -115,7 +115,7 @@ async fn test_ordering_key_value_store_view_memory() {
     let map = Arc::new(Mutex::new(BTreeMap::new()));
     let guard = map.clone().lock_owned().await;
     let context = MemoryContext::new(guard, ());
-    let key_value_operation = ViewContainer::new(context);
+    let key_value_operation = ViewContainer::new(context).await.unwrap();
     test_ordering_keys(key_value_operation).await;
 }
 

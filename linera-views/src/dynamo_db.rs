@@ -405,7 +405,7 @@ impl DynamoDbContainer {
         }
     }
 
-    /// Create a new [`DynamoDbContext`] instance using the provided `config` parameters.
+    /// Create a new [`DynamoDbClient`] instance using the provided `config` parameters.
     pub async fn from_config(
         config: impl Into<Config>,
         table: TableName,
@@ -420,7 +420,7 @@ impl DynamoDbContainer {
         Ok((db, table_status))
     }
 
-    /// Create a new [`DynamoDbContext`] instance using a LocalStack endpoint.
+    /// Create a new [`DynamoDbClient`] instance using a LocalStack endpoint.
     ///
     /// Requires a `LOCALSTACK_ENDPOINT` environment variable with the endpoint address to connect
     /// to the LocalStack instance. Creates the table if it doesn't exist yet, reporting a
@@ -462,6 +462,7 @@ where
         Ok(Self::create_context(db_tablestatus, base_key, extra))
     }
 
+    /// Create a new [`DynamoDbContext`] instance from the given AWS configuration.
     pub async fn from_config(
         config: impl Into<Config>,
         table: TableName,
@@ -548,6 +549,7 @@ impl AsRef<String> for TableName {
 
 /// Error when validating a table name.
 #[derive(Debug, Error)]
+#[allow(missing_docs)]
 pub enum InvalidTableName {
     #[error("Table name must have at least 3 characters")]
     TooShort,
@@ -561,6 +563,7 @@ pub enum InvalidTableName {
 
 /// Errors that occur when using [`DynamoDbContext`].
 #[derive(Debug, Error)]
+#[allow(missing_docs)]
 pub enum DynamoDbContextError {
     #[error(transparent)]
     Put(#[from] Box<SdkError<aws_sdk_dynamodb::error::PutItemError>>),
@@ -662,6 +665,7 @@ impl From<DynamoDbContextError> for crate::views::ViewError {
 
 /// Error when creating a table for a new [`DynamoDbContext`] instance.
 #[derive(Debug, Error)]
+#[allow(missing_docs)]
 pub enum CreateTableError {
     #[error(transparent)]
     CreateTable(#[from] SdkError<aws_sdk_dynamodb::error::CreateTableError>),
@@ -669,6 +673,7 @@ pub enum CreateTableError {
 
 /// Error when creating a [`DynamoDbContext`] instance using a LocalStack instance.
 #[derive(Debug, Error)]
+#[allow(missing_docs)]
 pub enum LocalStackError {
     #[error(transparent)]
     Endpoint(#[from] localstack::EndpointError),

@@ -156,6 +156,7 @@ where
         self.stored_indices.len() - self.front_delete_count + self.new_back_values.len()
     }
 
+    /// Obtain the extra data.
     pub fn extra(&self) -> &C::Extra {
         self.context.extra()
     }

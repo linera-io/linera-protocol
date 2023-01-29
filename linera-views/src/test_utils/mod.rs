@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(missing_docs)]
+
 use crate::common::{
     WriteOperation,
     WriteOperation::{Delete, Put},

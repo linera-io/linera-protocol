@@ -9,7 +9,10 @@ use std::{
 };
 use thiserror::Error;
 
+#[doc(hidden)]
 pub type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
+
+/// A shared DB client for RocksDB.
 pub type RocksdbContainer = Arc<DB>;
 
 /// An implementation of [`crate::common::Context`] based on Rocksdb
@@ -126,6 +129,7 @@ impl KeyValueOperations for RocksdbContainer {
 }
 
 impl<E: Clone + Send + Sync> RocksdbContext<E> {
+    /// Create a [`RocksdbContext`]
     pub fn new(db: RocksdbContainer, base_key: Vec<u8>, extra: E) -> Self {
         Self {
             db,
@@ -135,7 +139,9 @@ impl<E: Clone + Send + Sync> RocksdbContext<E> {
     }
 }
 
+/// The error type for [`RocksdbContext`]
 #[derive(Error, Debug)]
+#[allow(missing_docs)]
 pub enum RocksdbContextError {
     #[error("tokio join error: {0}")]
     TokioJoinError(#[from] tokio::task::JoinError),

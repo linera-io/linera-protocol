@@ -150,17 +150,6 @@ where
     C: Send + Context,
     ViewError: From<C::Error>,
 {
-    pub fn new(context: C) -> Self {
-        Self {
-            context,
-            was_cleared: false,
-            updates: BTreeMap::new(),
-            deleted_prefixes: BTreeSet::new(),
-            stored_hash: None,
-            hash: None,
-        }
-    }
-
     fn is_index_present(lower_bound: &mut NextLowerKeyIterator<'a, Vec<u8>>, index: &[u8]) -> bool {
         let lower_bound = lower_bound.get_lower_bound(index.to_vec());
         match lower_bound {
@@ -174,6 +163,7 @@ where
         }
     }
 
+    /// Iterate over all indices.
     pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(&[u8]) -> Result<(), ViewError> + Send,
@@ -220,6 +210,7 @@ where
         Ok(())
     }
 
+    /// Iterate over all the indices and values.
     pub async fn for_each_index_value<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(&[u8], &[u8]) -> Result<(), ViewError> + Send,
@@ -266,6 +257,7 @@ where
         Ok(())
     }
 
+    /// Return the list of indices. The order is stable, yet not specified.
     pub async fn indices(&self) -> Result<Vec<Vec<u8>>, ViewError> {
         let mut indices = Vec::new();
         self.for_each_index(|index| {
@@ -276,6 +268,7 @@ where
         Ok(indices)
     }
 
+    /// Obtain the value at the given index, if any.
     pub async fn get(&self, index: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
         if let Some(update) = self.updates.get(index) {
             let value = match update {
@@ -332,22 +325,7 @@ where
         }
     }
 
-    pub async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
-        if let Some(update) = self.updates.get(key) {
-            let value = match update {
-                Update::Removed => None,
-                Update::Set(value) => Some(value.clone()),
-            };
-            return Ok(value);
-        }
-        if self.was_cleared {
-            return Ok(None);
-        }
-        let key = self.context.base_tag_index(KeyTag::Index as u8, key);
-        let val = self.context.read_key_bytes(&key).await?;
-        Ok(val)
-    }
-
+    /// Iterate over all the matching the given prefix, without including the prefix.
     pub async fn find_stripped_keys_by_prefix(
         &self,
         key_prefix: &[u8],
@@ -402,6 +380,8 @@ where
         Ok(keys)
     }
 
+    /// Iterate over all the matching the given prefix, without including the prefix, but
+    /// including the corresponding values.
     pub async fn find_stripped_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
@@ -457,6 +437,7 @@ where
         Ok(key_values)
     }
 
+    /// Apply the given batch of `crate::common::WriteOperation`.
     pub async fn write_batch(&mut self, batch: Batch) -> Result<(), ViewError> {
         self.hash = None;
         for op in batch.operations {
@@ -510,6 +491,7 @@ where
     }
 }
 
+/// A virtual DB client using a `KeyValueStoreView` as a backend (testing only).
 #[cfg(any(test, feature = "test"))]
 #[derive(Debug, Clone)]
 pub struct ViewContainer<C> {
@@ -529,7 +511,7 @@ where
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
         let kvsv = self.kvsv.read().await;
-        kvsv.read_key_bytes(key).await
+        kvsv.get(key).await
     }
 
     async fn find_stripped_keys_by_prefix(
@@ -624,11 +606,12 @@ where
     C: Context + Sync + Send + Clone,
     ViewError: From<C::Error>,
 {
-    pub fn new(context: C) -> Self {
-        let kvsv = KeyValueStoreView::new(context);
-        Self {
+    /// Create a [`ViewContainer`].
+    pub async fn new(context: C) -> Result<Self, ViewError> {
+        let kvsv = KeyValueStoreView::load(context).await?;
+        Ok(Self {
             kvsv: Arc::new(RwLock::new(kvsv)),
-        }
+        })
     }
 }
 
@@ -638,13 +621,18 @@ pub type KeyValueStoreMemoryContext<E> = ContextFromDb<E, ViewContainer<MemoryCo
 
 #[cfg(any(test, feature = "test"))]
 impl<E> KeyValueStoreMemoryContext<E> {
-    pub fn new(guard: OwnedMutexGuard<MemoryStoreMap>, base_key: Vec<u8>, extra: E) -> Self {
+    /// Create a [`KeyValueStoreMemoryContext`].
+    pub async fn new(
+        guard: OwnedMutexGuard<MemoryStoreMap>,
+        base_key: Vec<u8>,
+        extra: E,
+    ) -> Result<Self, ViewError> {
         let context = MemoryContext::new(guard, ());
-        let key_value_store_view = ViewContainer::new(context);
-        Self {
+        let key_value_store_view = ViewContainer::new(context).await?;
+        Ok(Self {
             db: key_value_store_view,
             base_key,
             extra,
-        }
+        })
     }
 }
