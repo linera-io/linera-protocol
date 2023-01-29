@@ -9,7 +9,7 @@ use std::{
 };
 use thiserror::Error;
 
-#[doc(hidden)]
+/// The RocksDb client in use.
 pub type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
 
 /// A shared DB client for RocksDB.
