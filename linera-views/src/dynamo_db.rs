@@ -1,5 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 use crate::{
     common::{
         Batch, Context, ContextFromDb, KeyIterable, KeyValueIterable, KeyValueOperations,
@@ -27,7 +28,7 @@ pub use aws_sdk_dynamodb::Config;
 
 #[cfg(test)]
 #[path = "unit_tests/dynamo_db_context_tests.rs"]
-pub mod dynamo_db_context_tests;
+mod dynamo_db_context_tests;
 
 /// The attribute name of the partition key.
 const PARTITION_ATTRIBUTE: &str = "item_partition";
@@ -44,13 +45,14 @@ const VALUE_ATTRIBUTE: &str = "item_value";
 /// The attribute for obtaining the primary key (used as a sort key) with the stored value.
 const KEY_VALUE_ATTRIBUTE: &str = "item_key, item_value";
 
+/// A DynamoDb client.
 #[derive(Debug, Clone)]
 pub struct DynamoDbContainer {
-    pub client: Client,
-    pub table: TableName,
+    client: Client,
+    table: TableName,
 }
 
-/// A implementation of [`Context`] based on DynamoDB.
+/// A implementation of [`Context`] based on [`DynamoDbContainer`].
 pub type DynamoDbContext<E> = ContextFromDb<E, DynamoDbContainer>;
 
 impl DynamoDbContainer {
@@ -164,6 +166,7 @@ impl DynamoDbContainer {
 }
 
 // Inspired by https://depth-first.com/articles/2020/06/22/returning-rust-iterators/
+#[doc(hidden)]
 pub struct DynamoDbKeyIterator<'a> {
     prefix_len: usize,
     iter: std::iter::Flatten<
@@ -181,6 +184,7 @@ impl<'a> Iterator for DynamoDbKeyIterator<'a> {
     }
 }
 
+/// A set of keys returned by a search query on DynamoDb.
 pub struct DynamoDbKeys {
     prefix_len: usize,
     response: QueryOutput,
@@ -198,6 +202,7 @@ impl KeyIterable<DynamoDbContextError> for DynamoDbKeys {
 }
 
 // Inspired by https://depth-first.com/articles/2020/06/22/returning-rust-iterators/
+#[doc(hidden)]
 pub struct DynamoDbKeyValueIterator<'a> {
     prefix_len: usize,
     iter: std::iter::Flatten<
@@ -215,6 +220,7 @@ impl<'a> Iterator for DynamoDbKeyValueIterator<'a> {
     }
 }
 
+/// A set of key-values returned by a search query on DynamoDb.
 pub struct DynamoDbKeyValues {
     prefix_len: usize,
     response: aws_sdk_dynamodb::output::QueryOutput,
@@ -278,7 +284,7 @@ impl KeyValueOperations for DynamoDbContainer {
 
     /// We put submit the transaction in blocks (called BatchWriteItem in dynamoDb) of at most 25
     /// so as to decrease the number of needed transactions. That constant 25 comes from
-    /// https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_BatchWriteItem.html
+    /// <https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_BatchWriteItem.html>
     async fn write_batch(&self, batch: Batch) -> Result<(), DynamoDbContextError> {
         let max_size_batch_write_item = 25;
         // We put the delete in insert in separate lists since the use of `DeletePrefix` forces us
@@ -416,7 +422,7 @@ impl DynamoDbContainer {
 
     /// Create a new [`DynamoDbContext`] instance using a LocalStack endpoint.
     ///
-    /// Requires a [`LOCALSTACK_ENDPOINT`] environment variable with the endpoint address to connect
+    /// Requires a `LOCALSTACK_ENDPOINT` environment variable with the endpoint address to connect
     /// to the LocalStack instance. Creates the table if it doesn't exist yet, reporting a
     /// [`TableStatus`] to indicate if the table was created or if it already exists.
     pub async fn with_localstack(table: TableName) -> Result<(Self, TableStatus), LocalStackError> {
@@ -468,7 +474,7 @@ where
 
     /// Create a new [`DynamoDbContext`] instance using a LocalStack endpoint.
     ///
-    /// Requires a [`LOCALSTACK_ENDPOINT`] environment variable with the endpoint address to connect
+    /// Requires a `LOCALSTACK_ENDPOINT` environment variable with the endpoint address to connect
     /// to the LocalStack instance. Creates the table if it doesn't exist yet, reporting a
     /// [`TableStatus`] to indicate if the table was created or if it already exists.
     pub async fn with_localstack(

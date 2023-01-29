@@ -13,6 +13,10 @@ use std::{
     },
 };
 
+#[cfg(test)]
+#[path = "unit_tests/common_tests.rs"]
+mod common_tests;
+
 pub(crate) type HashOutput =
     generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Digest>::OutputSize>;
 
@@ -28,7 +32,7 @@ pub(crate) enum Update<T> {
 /// is possible with the way the comparison operators for vectors is built.
 ///
 /// The statement is that p is a prefix of v if and only if p <= v < upper_bound(p).
-pub fn get_upper_bound(key_prefix: &[u8]) -> Bound<Vec<u8>> {
+pub(crate) fn get_upper_bound(key_prefix: &[u8]) -> Bound<Vec<u8>> {
     let len = key_prefix.len();
     for i in (0..len).rev() {
         let val = key_prefix[i];
@@ -41,7 +45,7 @@ pub fn get_upper_bound(key_prefix: &[u8]) -> Bound<Vec<u8>> {
     Unbounded
 }
 
-pub fn get_interval(key_prefix: Vec<u8>) -> (Bound<Vec<u8>>, Bound<Vec<u8>>) {
+pub(crate) fn get_interval(key_prefix: Vec<u8>) -> (Bound<Vec<u8>>, Bound<Vec<u8>>) {
     let upper_bound = get_upper_bound(&key_prefix);
     (Included(key_prefix), upper_bound)
 }
@@ -150,6 +154,7 @@ impl Batch {
     }
 }
 
+/// How to iterate over the keys returned by a search query.
 pub trait KeyIterable<Error> {
     type Iterator<'a>: Iterator<Item = Result<&'a [u8], Error>>
     where
@@ -158,6 +163,7 @@ pub trait KeyIterable<Error> {
     fn iterate(&self) -> Self::Iterator<'_>;
 }
 
+/// How to iterate over the key-value pairs returned by a search query.
 pub trait KeyValueIterable<Error> {
     type Iterator<'a>: Iterator<Item = Result<(&'a [u8], &'a [u8]), Error>>
     where
@@ -173,7 +179,7 @@ pub trait KeyValueOperations {
     type Keys: KeyIterable<Self::Error>;
     type KeyValues: KeyValueIterable<Self::Error>;
 
-    /// Retrieve a Vec<u8> from the database using the provided `key`
+    /// Retrieve a `Vec<u8>` from the database using the provided `key`
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
     /// Find keys matching the prefix. The stripped keys are returned, that is excluding the prefix.
@@ -182,7 +188,7 @@ pub trait KeyValueOperations {
         key_prefix: &[u8],
     ) -> Result<Self::Keys, Self::Error>;
 
-    /// Find (key,value) matching the prefix. The stripped keys are returned, that is excluding the prefix.
+    /// Find key/value pairs matching the prefix. The stripped keys are returned, that is excluding the prefix.
     async fn find_stripped_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
@@ -307,16 +313,16 @@ pub trait Context {
     /// Concatenate the base_key, tag and index
     fn base_tag_index(&self, tag: u8, index: &[u8]) -> Vec<u8>;
 
-    /// Obtain the Vec<u8> key from the key by serialization and using the base_key
+    /// Obtain the `Vec<u8>` key from the key by serialization and using the base_key
     fn derive_key<I: Serialize>(&self, index: &I) -> Result<Vec<u8>, Self::Error>;
 
-    /// Obtain the Vec<u8> key from the key by serialization and using the base_key
+    /// Obtain the `Vec<u8>` key from the key by serialization and using the base_key
     fn derive_tag_key<I: Serialize>(&self, tag: u8, index: &I) -> Result<Vec<u8>, Self::Error>;
 
-    /// Obtain the short Vec<u8> key from the key by serialization
+    /// Obtain the short `Vec<u8>` key from the key by serialization
     fn derive_short_key<I: Serialize>(&self, index: &I) -> Result<Vec<u8>, Self::Error>;
 
-    /// Obtain the Vec<u8> key from the key by appending to the base_key
+    /// Obtain the `Vec<u8>` key from the key by appending to the base_key
     fn derive_key_bytes(&self, index: &[u8]) -> Vec<u8>;
 
     /// Deserialize `value_byte`.
@@ -330,7 +336,7 @@ pub trait Context {
         key: &[u8],
     ) -> Result<Option<Item>, Self::Error>;
 
-    /// Retrieve a Vec<u8> from the database using the provided `key` prefixed by the current
+    /// Retrieve a `Vec<u8>` from the database using the provided `key` prefixed by the current
     /// context.
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 

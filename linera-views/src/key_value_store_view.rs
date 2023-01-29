@@ -51,7 +51,7 @@ enum KeyTag {
 /// * If an index is deleted by one in deleted_prefixes then it should not be present
 ///   in updates at al.
 /// * deleted prefix in deleteprefix should not dominate anyone. That is if
-///   we have [0,2] then we should not have [0,2,3] since it would be dominated
+///   we have `[0,2]` then we should not have `[0,2,3]` since it would be dominated
 ///   by the preceding.
 ///
 /// With that we have:

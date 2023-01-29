@@ -12,7 +12,7 @@ use thiserror::Error;
 pub type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
 pub type RocksdbContainer = Arc<DB>;
 
-/// An implementation of [`crate::views::Context`] based on Rocksdb
+/// An implementation of [`crate::common::Context`] based on Rocksdb
 pub type RocksdbContext<E> = ContextFromDb<E, RocksdbContainer>;
 
 #[async_trait]
