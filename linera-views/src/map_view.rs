@@ -110,7 +110,7 @@ where
     /// Set or insert a value.
     pub fn insert(&mut self, index: &I, value: V) -> Result<(), ViewError> {
         self.hash = None;
-        let short_key = self.context.derive_short_key(index)?;
+        let short_key = C::derive_short_key(index)?;
         self.updates.insert(short_key, Update::Set(value));
         Ok(())
     }
@@ -118,7 +118,7 @@ where
     /// Remove a value.
     pub fn remove(&mut self, index: &I) -> Result<(), ViewError> {
         self.hash = None;
-        let short_key = self.context.derive_short_key(index)?;
+        let short_key = C::derive_short_key(index)?;
         if self.was_cleared {
             self.updates.remove(&short_key);
         } else {
@@ -142,7 +142,7 @@ where
 {
     /// Read the value at the given position, if any.
     pub async fn get(&self, index: &I) -> Result<Option<V>, ViewError> {
-        let short_key = self.context.derive_short_key(index)?;
+        let short_key = C::derive_short_key(index)?;
         if let Some(update) = self.updates.get(&short_key) {
             let value = match update {
                 Update::Removed => None,

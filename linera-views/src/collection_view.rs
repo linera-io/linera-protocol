@@ -162,7 +162,7 @@ where
     /// was removed before then a default entry is put on this index.
     pub async fn load_entry(&mut self, index: I) -> Result<&mut W, ViewError> {
         self.hash = None;
-        let short_key = self.context.derive_short_key(&index)?;
+        let short_key = C::derive_short_key(&index)?;
         match self.updates.entry(short_key.clone()) {
             btree_map::Entry::Occupied(entry) => {
                 let entry = entry.into_mut();
@@ -200,7 +200,7 @@ where
     /// Mark the entry so that it is removed in the next flush
     pub fn remove_entry(&mut self, index: I) -> Result<(), ViewError> {
         self.hash = None;
-        let short_key = self.context.derive_short_key(&index)?;
+        let short_key = C::derive_short_key(&index)?;
         if self.was_cleared {
             self.updates.remove(&short_key);
         } else {
@@ -407,7 +407,7 @@ where
     /// was removed before then a default entry is put on this index.
     pub async fn try_load_entry(&mut self, index: I) -> Result<OwnedMutexGuard<W>, ViewError> {
         self.hash = None;
-        let short_key = self.context.derive_short_key(&index)?;
+        let short_key = C::derive_short_key(&index)?;
         match self.updates.entry(short_key.clone()) {
             btree_map::Entry::Occupied(entry) => {
                 let entry = entry.into_mut();
@@ -446,7 +446,7 @@ where
     /// Mark the entry so that it is removed in the next flush
     pub fn remove_entry(&mut self, index: I) -> Result<(), ViewError> {
         self.hash = None;
-        let short_key = self.context.derive_short_key(&index)?;
+        let short_key = C::derive_short_key(&index)?;
         if self.was_cleared {
             self.updates.remove(&short_key);
         } else {
