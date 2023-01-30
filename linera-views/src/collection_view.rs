@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    common::{Batch, Context, HashOutput},
+    common::{Batch, Context, HashOutput, Update},
     views::{HashableView, Hasher, View, ViewError},
 };
 use async_trait::async_trait;
@@ -23,7 +23,7 @@ use tokio::sync::{Mutex, OwnedMutexGuard};
 pub struct CollectionView<C, I, W> {
     context: C,
     was_cleared: bool,
-    updates: BTreeMap<Vec<u8>, Option<W>>,
+    updates: BTreeMap<Vec<u8>, Update<W>>,
     _phantom: PhantomData<I>,
     stored_hash: Option<HashOutput>,
     hash: Option<HashOutput>,
@@ -35,7 +35,7 @@ pub struct CollectionView<C, I, W> {
 pub struct ReentrantCollectionView<C, I, W> {
     context: C,
     was_cleared: bool,
-    updates: BTreeMap<Vec<u8>, Option<Arc<Mutex<W>>>>,
+    updates: BTreeMap<Vec<u8>, Update<Arc<Mutex<W>>>>,
     _phantom: PhantomData<I>,
     stored_hash: Option<HashOutput>,
     hash: Option<HashOutput>,
@@ -94,7 +94,7 @@ where
             self.was_cleared = false;
             batch.delete_key_prefix(self.context.base_key());
             for (index, update) in mem::take(&mut self.updates) {
-                if let Some(mut view) = update {
+                if let Update::Set(mut view) = update {
                     view.flush(batch)?;
                     self.add_index(batch, &index)?;
                 }
@@ -102,11 +102,11 @@ where
         } else {
             for (index, update) in mem::take(&mut self.updates) {
                 match update {
-                    Some(mut view) => {
+                    Update::Set(mut view) => {
                         view.flush(batch)?;
                         self.add_index(batch, &index)?;
                     }
-                    None => {
+                    Update::Removed => {
                         let key_subview = self.get_subview_key(&index);
                         let key_index = self.get_index_key(&index);
                         batch.delete_key(key_index);
@@ -167,8 +167,8 @@ where
             btree_map::Entry::Occupied(entry) => {
                 let entry = entry.into_mut();
                 match entry {
-                    Some(view) => Ok(view),
-                    None => {
+                    Update::Set(view) => Ok(view),
+                    Update::Removed => {
                         let key = self
                             .context
                             .base_tag_index(KeyTag::Subview as u8, &short_key);
@@ -176,8 +176,9 @@ where
                         // Obtain a view and set its pending state to the default (e.g. empty) state
                         let mut view = W::load(context).await?;
                         view.clear();
-                        *entry = Some(view);
-                        Ok(entry.as_mut().unwrap())
+                        *entry = Update::Set(view);
+                        let Update::Set(view) = entry else { unreachable!(); };
+                        Ok(view)
                     }
                 }
             }
@@ -190,7 +191,8 @@ where
                 if self.was_cleared {
                     view.clear();
                 }
-                Ok(entry.insert(Some(view)).as_mut().unwrap())
+                let Update::Set(view) = entry.insert(Update::Set(view)) else { unreachable!(); };
+                Ok(view)
             }
         }
     }
@@ -202,7 +204,7 @@ where
         if self.was_cleared {
             self.updates.remove(&short_key);
         } else {
-            self.updates.insert(short_key, None);
+            self.updates.insert(short_key, Update::Removed);
         }
         Ok(())
     }
@@ -252,7 +254,7 @@ where
                 loop {
                     match update {
                         Some((key, value)) if key <= &index => {
-                            if value.is_some() {
+                            if let Update::Set(_) = value {
                                 f(key.to_vec())?;
                             }
                             update = updates.next();
@@ -269,7 +271,7 @@ where
             }
         }
         while let Some((key, value)) = update {
-            if value.is_some() {
+            if let Update::Set(_) = value {
                 f(key.to_vec())?;
             }
             update = updates.next();
@@ -278,7 +280,7 @@ where
     }
 
     /// Execute a function on each index. The order in which the entry are passed
-    /// is not the ones of the entryies I but of their serialization.
+    /// is not the ones of the entries I but of their serialization.
     pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(I) -> Result<(), ViewError> + Send,
@@ -329,7 +331,7 @@ where
             self.was_cleared = false;
             batch.delete_key_prefix(self.context.base_key());
             for (index, update) in mem::take(&mut self.updates) {
-                if let Some(view) = update {
+                if let Update::Set(view) = update {
                     let mut view = Arc::try_unwrap(view)
                         .map_err(|_| ViewError::CannotAcquireCollectionEntry)?
                         .into_inner();
@@ -340,14 +342,14 @@ where
         } else {
             for (index, update) in mem::take(&mut self.updates) {
                 match update {
-                    Some(view) => {
+                    Update::Set(view) => {
                         let mut view = Arc::try_unwrap(view)
                             .map_err(|_| ViewError::CannotAcquireCollectionEntry)?
                             .into_inner();
                         view.flush(batch)?;
                         self.add_index(batch, &index)?;
                     }
-                    None => {
+                    Update::Removed => {
                         let key_subview = self.get_subview_key(&index);
                         let key_index = self.get_index_key(&index);
                         batch.delete_key(key_index);
@@ -408,8 +410,8 @@ where
             btree_map::Entry::Occupied(entry) => {
                 let entry = entry.into_mut();
                 match entry {
-                    Some(view) => Ok(view.clone().try_lock_owned()?),
-                    None => {
+                    Update::Set(view) => Ok(view.clone().try_lock_owned()?),
+                    Update::Removed => {
                         let key = self
                             .context
                             .base_tag_index(KeyTag::Subview as u8, &short_key);
@@ -418,7 +420,7 @@ where
                         let mut view = W::load(context).await?;
                         view.clear();
                         let wrapped_view = Arc::new(Mutex::new(view));
-                        *entry = Some(wrapped_view.clone());
+                        *entry = Update::Set(wrapped_view.clone());
                         Ok(wrapped_view.try_lock_owned()?)
                     }
                 }
@@ -433,7 +435,7 @@ where
                     view.clear();
                 }
                 let wrapped_view = Arc::new(Mutex::new(view));
-                entry.insert(Some(wrapped_view.clone()));
+                entry.insert(Update::Set(wrapped_view.clone()));
                 Ok(wrapped_view.try_lock_owned()?)
             }
         }
@@ -446,7 +448,7 @@ where
         if self.was_cleared {
             self.updates.remove(&short_key);
         } else {
-            self.updates.insert(short_key, None);
+            self.updates.insert(short_key, Update::Removed);
         }
         Ok(())
     }
@@ -488,7 +490,7 @@ where
                 loop {
                     match update {
                         Some((key, value)) if key <= &index => {
-                            if value.is_some() {
+                            if let Update::Set(_) = value {
                                 f(key.to_vec())?;
                             }
                             update = updates.next();
@@ -505,7 +507,7 @@ where
             }
         }
         while let Some((key, value)) = update {
-            if value.is_some() {
+            if let Update::Set(_) = value {
                 f(key.to_vec())?;
             }
             update = updates.next();
@@ -514,7 +516,7 @@ where
     }
 
     /// Execute a function on each index. The order in which the entry are passed
-    /// is not the ones of the entryies I but of their serialization.
+    /// is not the ones of the entries I but of their serialization.
     pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(I) -> Result<(), ViewError> + Send,

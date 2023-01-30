@@ -13,7 +13,14 @@ use std::{
     },
 };
 
-pub type HashOutput = generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Digest>::OutputSize>;
+pub(crate) type HashOutput =
+    generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Digest>::OutputSize>;
+
+#[derive(Debug)]
+pub(crate) enum Update<T> {
+    Removed,
+    Set(T),
+}
 
 /// When wanting to find the entries in a BTreeMap with a specific prefix,
 /// one option is to iterate over all keys. Another is to select an interval
