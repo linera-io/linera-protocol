@@ -287,8 +287,8 @@ where
     where
         F: FnMut(I) -> Result<(), ViewError> + Send,
     {
-        self.for_each_key(|index| {
-            let index = C::deserialize_value(index)?;
+        self.for_each_key(|key| {
+            let index = C::deserialize_value(key)?;
             f(index)?;
             Ok(())
         })
@@ -525,8 +525,8 @@ where
     where
         F: FnMut(I) -> Result<(), ViewError> + Send,
     {
-        self.for_each_key(|index| {
-            let index = C::deserialize_value(index)?;
+        self.for_each_key(|key| {
+            let index = C::deserialize_value(key)?;
             f(index)?;
             Ok(())
         })

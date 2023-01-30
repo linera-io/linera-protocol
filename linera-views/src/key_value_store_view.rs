@@ -37,7 +37,7 @@ use {
 /// Key tags to create the sub-keys of a KeyValueStoreView on top of the base key.
 #[repr(u8)]
 enum KeyTag {
-    /// Prefix for the indices of the mapview
+    /// Prefix for the indices of the view
     Index = 0,
     /// Prefix for the hash
     Hash = 1,

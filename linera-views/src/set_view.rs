@@ -9,10 +9,10 @@ use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{collections::BTreeMap, fmt::Debug, marker::PhantomData, mem};
 
-/// Key tags to create the sub-keys of a MapView on top of the base key.
+/// Key tags to create the sub-keys of a SetView on top of the base key.
 #[repr(u8)]
 enum KeyTag {
-    /// Prefix for the indices of the mapview
+    /// Prefix for the indices of the setview
     Index = 0,
     /// Prefix for the hash
     Hash = 1,
@@ -158,7 +158,7 @@ where
         }
     }
 
-    /// Return the list of indices in the map.
+    /// Return the list of indices in the set.
     pub async fn indices(&self) -> Result<Vec<I>, ViewError> {
         let mut indices = Vec::<I>::new();
         self.for_each_index(|index: I| {
@@ -217,8 +217,8 @@ where
     where
         F: FnMut(I) -> Result<(), ViewError> + Send,
     {
-        self.for_each_key(|index| {
-            let index = C::deserialize_value(index)?;
+        self.for_each_key(|key| {
+            let index = C::deserialize_value(key)?;
             f(index)?;
             Ok(())
         })
@@ -242,9 +242,9 @@ where
             None => {
                 let mut hasher = Self::Hasher::default();
                 let mut count = 0;
-                self.for_each_key(|index| {
+                self.for_each_key(|key| {
                     count += 1;
-                    hasher.update_with_bytes(index)?;
+                    hasher.update_with_bytes(key)?;
                     Ok(())
                 })
                 .await?;
