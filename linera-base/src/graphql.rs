@@ -9,8 +9,8 @@ use std::collections::BTreeMap;
 scalar!(BlockHeight);
 scalar!(ChainDescription);
 scalar!(ChainId);
-scalar!(Epoch);
 scalar!(CryptoHash);
+scalar!(Epoch);
 scalar!(Owner);
 scalar!(ValidatorName);
 
