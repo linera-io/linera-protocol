@@ -137,19 +137,19 @@ where
     ViewError: From<C::Error>,
     I: Sync + Clone + Send + Serialize + DeserializeOwned,
 {
-    /// Read the value at the given position, if any.
-    pub async fn get(&self, index: &I) -> Result<Option<()>, ViewError> {
+    /// Return true if the given index exists in the set.
+    pub async fn contains(&self, index: &I) -> Result<bool, ViewError> {
         let short_key = self.context.derive_short_key(index)?;
         if let Some(update) = self.updates.get(&short_key) {
-            return Ok(update.as_ref().cloned());
+            return Ok(update.is_some());
         }
         if self.was_cleared {
-            return Ok(None);
+            return Ok(false);
         }
         let key = self.context.derive_tag_key(KeyTag::Index as u8, &index)?;
         match self.context.read_key_bytes(&key).await? {
-            None => Ok(None),
-            Some(_) => Ok(Some(())),
+            None => Ok(false),
+            Some(_) => Ok(true),
         }
     }
 
