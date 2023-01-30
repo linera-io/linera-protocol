@@ -309,7 +309,7 @@ where
             assert_eq!(view.map.get(&"Hello".to_string()).await.unwrap(), Some(5));
         }
         if config.with_set {
-            assert_eq!(view.set.get(&42).await.unwrap(), Some(()));
+            assert!(view.set.contains(&42).await.unwrap());
         }
         if config.with_collection {
             let subview = view
@@ -359,7 +359,7 @@ where
             assert_eq!(view.map.get(&"Hello".to_string()).await.unwrap(), None);
         }
         if config.with_set {
-            assert_eq!(view.set.get(&42).await.unwrap(), None);
+            assert!(!view.set.contains(&42).await.unwrap());
         }
         if config.with_collection {
             let subview = view
@@ -450,8 +450,8 @@ where
             assert_eq!(view.map.get(&"Hi".to_string()).await.unwrap(), None);
         }
         if config.with_set {
-            assert_eq!(view.set.get(&42).await.unwrap(), Some(()));
-            assert_eq!(view.set.get(&59).await.unwrap(), None);
+            assert!(view.set.contains(&42).await.unwrap());
+            assert!(!view.set.contains(&59).await.unwrap());
         }
         if config.with_collection {
             let subview = view

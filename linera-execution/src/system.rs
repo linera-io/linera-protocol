@@ -477,7 +477,7 @@ where
                     name: channel.name(),
                 };
                 ensure!(
-                    self.subscriptions.get(&channel_id).await?.is_none(),
+                    !self.subscriptions.contains(&channel_id).await?,
                     SystemExecutionError::InvalidSubscription(context.chain_id, *channel)
                 );
                 self.subscriptions.insert(&channel_id)?;
@@ -495,7 +495,7 @@ where
                     name: channel.name(),
                 };
                 ensure!(
-                    self.subscriptions.get(&channel_id).await?.is_some(),
+                    self.subscriptions.contains(&channel_id).await?,
                     SystemExecutionError::InvalidUnsubscription(context.chain_id, *channel)
                 );
                 self.subscriptions.remove(&channel_id)?;

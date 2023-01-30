@@ -518,7 +518,7 @@ where
         for (name, id) in application.subscribe {
             let channel = channels.load_entry(name.clone()).await?;
             // Add subscriber.
-            if channel.subscribers.get(&id).await?.is_none() {
+            if !channel.subscribers.contains(&id).await? {
                 // Send the latest message if any.
                 if let Some(latest_height) = channel.block_height.get() {
                     let outbox = outboxes.load_entry(Target::channel(id, name)).await?;
