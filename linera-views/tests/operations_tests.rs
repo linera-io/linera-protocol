@@ -32,7 +32,7 @@ async fn test_ordering_keys_key_value_vec<OP: KeyValueOperations + Sync>(
         .find_keys_by_prefix(&key_prefix)
         .await
         .unwrap()
-        .iterate()
+        .iterator()
         .map(|x| {
             let mut v = key_prefix.clone();
             v.extend(x.unwrap());
@@ -63,7 +63,7 @@ async fn test_ordering_keys_key_value_vec<OP: KeyValueOperations + Sync>(
             .find_keys_by_prefix(&key_prefix)
             .await
             .unwrap()
-            .iterate()
+            .iterator()
             .count();
         assert_eq!(n_ent, value);
     }

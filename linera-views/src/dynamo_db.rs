@@ -301,7 +301,7 @@ impl KeyValueOperations for DynamoDbClient {
                     insert_list.push((key, value));
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
-                    for short_key in self.find_keys_by_prefix(&key_prefix).await?.iterate() {
+                    for short_key in self.find_keys_by_prefix(&key_prefix).await?.iterator() {
                         let short_key = short_key?;
                         let mut key = key_prefix.clone();
                         key.extend_from_slice(short_key);
