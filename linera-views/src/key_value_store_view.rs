@@ -337,29 +337,29 @@ where
         let mut update = updates.next();
         let mut lower_bound = NextLowerKeyIterator::new(&self.deleted_prefixes);
         if !self.was_cleared {
-            for stripped_key in self
+            for key in self
                 .context
                 .find_keys_by_prefix(&key_prefix_full)
                 .await?
                 .iterate()
             {
-                let stripped_key = stripped_key?;
+                let key = key?;
                 loop {
                     match update {
-                        Some((key_update, value_update)) if &key_update[len..] <= stripped_key => {
-                            if let Update::Set(_) = value_update {
-                                keys.push(key_update[len..].to_vec());
+                        Some((update_key, update_value)) if &update_key[len..] <= key => {
+                            if let Update::Set(_) = update_value {
+                                keys.push(update_key[len..].to_vec());
                             }
                             update = updates.next();
-                            if key_update[len..] == stripped_key[..] {
+                            if update_key[len..] == key[..] {
                                 break;
                             }
                         }
                         _ => {
                             let mut key_prefix = key_prefix.to_vec();
-                            key_prefix.extend_from_slice(stripped_key);
+                            key_prefix.extend_from_slice(key);
                             if Self::is_index_present(&mut lower_bound, &key_prefix) {
-                                keys.push(stripped_key.to_vec());
+                                keys.push(key.to_vec());
                             }
                             break;
                         }
@@ -367,10 +367,10 @@ where
                 }
             }
         }
-        while let Some((key_update, value_update)) = update {
-            if let Update::Set(_) = value_update {
-                let stripped_key_update = key_update[len..].to_vec();
-                keys.push(stripped_key_update);
+        while let Some((update_key, update_value)) = update {
+            if let Update::Set(_) = update_value {
+                let update_key = update_key[len..].to_vec();
+                keys.push(update_key);
             }
             update = updates.next();
         }
@@ -399,24 +399,24 @@ where
                 .await?
                 .iterate()
             {
-                let (stripped_key, value) = entry?;
+                let (key, value) = entry?;
                 loop {
                     match update {
-                        Some((key_update, value_update)) if &key_update[len..] <= stripped_key => {
-                            if let Update::Set(value_update) = value_update {
-                                let key_value = (key_update[len..].to_vec(), value_update.to_vec());
+                        Some((update_key, update_value)) if &update_key[len..] <= key => {
+                            if let Update::Set(update_value) = update_value {
+                                let key_value = (update_key[len..].to_vec(), update_value.to_vec());
                                 key_values.push(key_value);
                             }
                             update = updates.next();
-                            if key_update[len..] == stripped_key[..] {
+                            if update_key[len..] == key[..] {
                                 break;
                             }
                         }
                         _ => {
-                            let mut key = key_prefix.to_vec();
-                            key.extend_from_slice(stripped_key);
-                            if Self::is_index_present(&mut lower_bound, &key) {
-                                key_values.push((stripped_key.to_vec(), value.to_vec()));
+                            let mut key_prefix = key_prefix.to_vec();
+                            key_prefix.extend_from_slice(key);
+                            if Self::is_index_present(&mut lower_bound, &key_prefix) {
+                                key_values.push((key.to_vec(), value.to_vec()));
                             }
                             break;
                         }
@@ -424,9 +424,9 @@ where
                 }
             }
         }
-        while let Some((key_update, value_update)) = update {
-            if let Update::Set(value_update) = value_update {
-                let key_value = (key_update[len..].to_vec(), value_update.to_vec());
+        while let Some((update_key, update_value)) = update {
+            if let Update::Set(update_value) = update_value {
+                let key_value = (update_key[len..].to_vec(), update_value.to_vec());
                 key_values.push(key_value);
             }
             update = updates.next();
