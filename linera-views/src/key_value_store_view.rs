@@ -150,19 +150,6 @@ where
     C: Send + Context,
     ViewError: From<C::Error>,
 {
-    fn is_index_present(lower_bound: &mut NextLowerKeyIterator<'a, Vec<u8>>, index: &[u8]) -> bool {
-        let lower_bound = lower_bound.get_lower_bound(index.to_vec());
-        match lower_bound {
-            None => true,
-            Some(key_prefix) => {
-                if key_prefix.len() > index.len() {
-                    return true;
-                }
-                index[0..key_prefix.len()].to_vec() != key_prefix.to_vec()
-            }
-        }
-    }
-
     /// Iterate over all indices.
     pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
     where
@@ -192,7 +179,7 @@ where
                             }
                         }
                         _ => {
-                            if Self::is_index_present(&mut lower_bound, index) {
+                            if lower_bound.is_index_present(index) {
                                 f(index)?;
                             }
                             break;
@@ -239,7 +226,7 @@ where
                             }
                         }
                         _ => {
-                            if Self::is_index_present(&mut lower_bound, index) {
+                            if lower_bound.is_index_present(index) {
                                 f(index, index_val)?;
                             }
                             break;
@@ -356,9 +343,9 @@ where
                             }
                         }
                         _ => {
-                            let mut key_prefix = key_prefix.to_vec();
-                            key_prefix.extend_from_slice(key);
-                            if Self::is_index_present(&mut lower_bound, &key_prefix) {
+                            let mut key_with_prefix = key_prefix.to_vec();
+                            key_with_prefix.extend_from_slice(key);
+                            if lower_bound.is_index_present(&key_with_prefix) {
                                 keys.push(key.to_vec());
                             }
                             break;
@@ -413,9 +400,9 @@ where
                             }
                         }
                         _ => {
-                            let mut key_prefix = key_prefix.to_vec();
-                            key_prefix.extend_from_slice(key);
-                            if Self::is_index_present(&mut lower_bound, &key_prefix) {
+                            let mut key_with_prefix = key_prefix.to_vec();
+                            key_with_prefix.extend_from_slice(key);
+                            if lower_bound.is_index_present(&key_with_prefix) {
                                 key_values.push((key.to_vec(), value.to_vec()));
                             }
                             break;
@@ -550,14 +537,14 @@ impl<'a, T> NextLowerKeyIterator<'a, T>
 where
     T: PartialOrd + Clone,
 {
-    pub fn new(set: &'a BTreeSet<T>) -> Self {
+    fn new(set: &'a BTreeSet<T>) -> Self {
         let mut iter = set.iter();
         let prec1 = None;
         let prec2 = iter.next().cloned();
         Self { prec1, prec2, iter }
     }
 
-    pub fn get_lower_bound(&mut self, val: T) -> Option<T> {
+    fn get_lower_bound(&mut self, val: T) -> Option<T> {
         loop {
             match &self.prec2 {
                 None => {
@@ -571,6 +558,21 @@ where
             }
             let prec2 = self.iter.next().cloned();
             self.prec1 = std::mem::replace(&mut self.prec2, prec2);
+        }
+    }
+}
+
+impl<'a> NextLowerKeyIterator<'a, Vec<u8>> {
+    fn is_index_present(&mut self, index: &[u8]) -> bool {
+        let lower_bound = self.get_lower_bound(index.to_vec());
+        match lower_bound {
+            None => true,
+            Some(key_prefix) => {
+                if key_prefix.len() > index.len() {
+                    return true;
+                }
+                index[0..key_prefix.len()].to_vec() != key_prefix.to_vec()
+            }
         }
     }
 }
