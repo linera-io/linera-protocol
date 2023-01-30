@@ -169,9 +169,8 @@ where
         Ok(indices)
     }
 
-    /// Execute a function on each serialized index (aka key). The order is in which values
-    /// are passed is not the one of the index but its serialization. However said
-    /// order will always be the same
+    /// Execute a function on each serialized index (aka key). Keys are visited in a
+    /// stable, yet unspecified order.
     async fn for_each_key<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(&[u8]) -> Result<(), ViewError> + Send,
@@ -210,9 +209,8 @@ where
         Ok(())
     }
 
-    /// Execute a function on each index. The order is in which values are passed is not
-    /// the one of the index but its serialization. However said order will always be the
-    /// same
+    /// Execute a function on each index. Indices are visited in a stable, yet unspecified
+    /// order.
     pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(I) -> Result<(), ViewError> + Send,

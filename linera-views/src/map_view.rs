@@ -168,9 +168,8 @@ where
         Ok(indices)
     }
 
-    /// Execute a function on each serialized index (aka key). The order is in which values
-    /// are passed is not the one of the index but its serialization. However said
-    /// order will always be the same
+    /// Execute a function on each serialized index (aka key). Keys are visited
+    /// in a stable, yet unspecified order.
     async fn for_each_key<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(&[u8]) -> Result<(), ViewError> + Send,
@@ -209,9 +208,8 @@ where
         Ok(())
     }
 
-    /// Execute a function on each index. The order is in which values are passed is not
-    /// the one of the index but its serialization. However said order will always be the
-    /// same
+    /// Execute a function on each index. Indices are visited in a stable, yet unspecified
+    /// order.
     pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(I) -> Result<(), ViewError> + Send,
@@ -225,10 +223,25 @@ where
         Ok(())
     }
 
-    /// Execute a function on each serialized index (aka key). The order is in which values
-    /// are passed is not the one of the index but its serialization. However said
-    /// order will always be the same
-    async fn for_each_raw_key_value<F>(&self, mut f: F) -> Result<(), ViewError>
+    /// Execute a function on each index and value in the map. Indices and values are
+    /// visited in a stable, yet unspecified order.
+    pub async fn for_each_index_value<F>(&self, mut f: F) -> Result<(), ViewError>
+    where
+        F: FnMut(I, V) -> Result<(), ViewError> + Send,
+    {
+        self.for_each_key_value(|key, bytes| {
+            let index = C::deserialize_value(key)?;
+            let value = C::deserialize_value(bytes)?;
+            f(index, value)?;
+            Ok(())
+        })
+        .await?;
+        Ok(())
+    }
+
+    /// Execute a function on each serialized index (aka key). Keys and values are visited
+    /// in a stable, yet unspecified order.
+    async fn for_each_key_value<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(&[u8], &[u8]) -> Result<(), ViewError> + Send,
     {
@@ -290,7 +303,7 @@ where
             None => {
                 let mut hasher = Self::Hasher::default();
                 let mut count = 0;
-                self.for_each_raw_key_value(|index, value| {
+                self.for_each_key_value(|index, value| {
                     count += 1;
                     hasher.update_with_bytes(index)?;
                     hasher.update_with_bytes(value)?;

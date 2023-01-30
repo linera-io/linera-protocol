@@ -241,8 +241,8 @@ where
     I: Clone + Debug + Sync + Send + Serialize + DeserializeOwned,
     W: View<C> + Sync,
 {
-    /// Execute a function on each serialized index (aka key). The order in which the entry
-    /// are passed is not the ones of the entries I but of their serialization
+    /// Execute a function on each serialized index (aka key). Keys are visited in a
+    /// stable, yet unspecified order.
     async fn for_each_key<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(&[u8]) -> Result<(), ViewError> + Send,
@@ -281,8 +281,8 @@ where
         Ok(())
     }
 
-    /// Execute a function on each index. The order in which the entry are passed
-    /// is not the ones of the entries I but of their serialization.
+    /// Execute a function on each index. Indices are visited in a stable, yet unspecified
+    /// order.
     pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(I) -> Result<(), ViewError> + Send,
@@ -479,8 +479,8 @@ where
         self.context.extra()
     }
 
-    /// Execute a function on each serialized index (aka key). The order in which the entry
-    /// are passed is not the ones of the entries I but of their serialization
+    /// Execute a function on each serialized index (aka key). Keys are visited in a
+    /// stable, yet unspecified order.
     async fn for_each_key<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(&[u8]) -> Result<(), ViewError> + Send,
@@ -519,8 +519,8 @@ where
         Ok(())
     }
 
-    /// Execute a function on each index. The order in which the entry are passed
-    /// is not the ones of the entries I but of their serialization.
+    /// Execute a function on each index. Indices are visited in a stable, yet unspecified
+    /// order.
     pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(I) -> Result<(), ViewError> + Send,
