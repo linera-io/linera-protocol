@@ -384,12 +384,12 @@ where
                 .context
                 .find_key_values_by_prefix(&key_prefix_full)
                 .await?
-                .iterator()
+                .into_iterator_owned()
             {
                 let (key, value) = entry?;
                 loop {
                     match update {
-                        Some((update_key, update_value)) if &update_key[len..] <= key => {
+                        Some((update_key, update_value)) if update_key[len..] <= key[..] => {
                             if let Update::Set(update_value) = update_value {
                                 let key_value = (update_key[len..].to_vec(), update_value.to_vec());
                                 key_values.push(key_value);
@@ -401,9 +401,9 @@ where
                         }
                         _ => {
                             let mut key_with_prefix = key_prefix.to_vec();
-                            key_with_prefix.extend_from_slice(key);
+                            key_with_prefix.extend_from_slice(&key);
                             if lower_bound.is_index_present(&key_with_prefix) {
-                                key_values.push((key.to_vec(), value.to_vec()));
+                                key_values.push((key, value));
                             }
                             break;
                         }

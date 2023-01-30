@@ -166,8 +166,8 @@ pub trait KeyIterable<Error> {
     where
         Self: 'a;
 
-    /// Start an iteration.
-    fn iterate(&self) -> Self::Iterator<'_>;
+    /// Iterate keys by reference.
+    fn iterator(&self) -> Self::Iterator<'_>;
 }
 
 /// How to iterate over the key-value pairs returned by a search query.
@@ -177,8 +177,14 @@ pub trait KeyValueIterable<Error> {
     where
         Self: 'a;
 
-    /// Start an iteration.
-    fn iterate(&self) -> Self::Iterator<'_>;
+    /// The iterator returning key-value pairs by value.
+    type IteratorOwned: Iterator<Item = Result<(Vec<u8>, Vec<u8>), Error>>;
+
+    /// Iterate keys and values by reference.
+    fn iterator(&self) -> Self::Iterator<'_>;
+
+    /// Iterate keys and values by value.
+    fn into_iterator_owned(self) -> Self::IteratorOwned;
 }
 
 /// Low-level, asynchronous key-value operations. Useful for storage APIs not based on views.
@@ -224,7 +230,7 @@ pub trait KeyValueOperations {
 }
 
 #[doc(hidden)]
-/// Iterates keys by reference in vector of keys.
+/// Iterates keys by reference in a vector of keys.
 /// Inspired by https://depth-first.com/articles/2020/06/22/returning-rust-iterators/
 pub struct SimpleKeyIterator<'a, E> {
     iter: std::slice::Iter<'a, Vec<u8>>,
@@ -242,7 +248,7 @@ impl<'a, E> Iterator for SimpleKeyIterator<'a, E> {
 impl<E> KeyIterable<E> for Vec<Vec<u8>> {
     type Iterator<'a> = SimpleKeyIterator<'a, E>;
 
-    fn iterate(&self) -> Self::Iterator<'_> {
+    fn iterator(&self) -> Self::Iterator<'_> {
         SimpleKeyIterator {
             iter: self.iter(),
             _error_type: std::marker::PhantomData,
@@ -267,12 +273,35 @@ impl<'a, E> Iterator for SimpleKeyValueIterator<'a, E> {
     }
 }
 
+#[doc(hidden)]
+/// Same as `SimpleKeyValueIterator` but key-value pairs are passed by value.
+pub struct SimpleKeyValueIteratorOwned<E> {
+    iter: std::vec::IntoIter<(Vec<u8>, Vec<u8>)>,
+    _error_type: std::marker::PhantomData<E>,
+}
+
+impl<E> Iterator for SimpleKeyValueIteratorOwned<E> {
+    type Item = Result<(Vec<u8>, Vec<u8>), E>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().map(Result::Ok)
+    }
+}
+
 impl<E> KeyValueIterable<E> for Vec<(Vec<u8>, Vec<u8>)> {
     type Iterator<'a> = SimpleKeyValueIterator<'a, E>;
+    type IteratorOwned = SimpleKeyValueIteratorOwned<E>;
 
-    fn iterate(&self) -> Self::Iterator<'_> {
+    fn iterator(&self) -> Self::Iterator<'_> {
         SimpleKeyValueIterator {
             iter: self.iter(),
+            _error_type: std::marker::PhantomData,
+        }
+    }
+
+    fn into_iterator_owned(self) -> Self::IteratorOwned {
+        SimpleKeyValueIteratorOwned {
+            iter: self.into_iter(),
             _error_type: std::marker::PhantomData,
         }
     }
