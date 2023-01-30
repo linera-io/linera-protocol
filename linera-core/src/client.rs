@@ -31,6 +31,7 @@ use linera_views::views::ViewError;
 use log::info;
 use std::{
     collections::{BTreeMap, HashMap},
+    sync::Arc,
     time::Duration,
 };
 
@@ -163,13 +164,14 @@ where
     pub async fn chain_state_view(
         &self,
         chain_id: ChainId,
-    ) -> Result<ChainStateView<S::Context>, NodeError> {
-        Ok(self
+    ) -> Result<Arc<ChainStateView<S::Context>>, NodeError> {
+        let chain_state_view = self
             .node_client
             .storage_client()
             .await
             .load_chain(chain_id)
-            .await?)
+            .await?;
+        Ok(Arc::new(chain_state_view))
     }
 
     /// Obtain the basic `ChainInfo` data for the local chain.
