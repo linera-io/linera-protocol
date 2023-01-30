@@ -14,9 +14,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::error::Error;
 
-pub use self::extensions::FromBcsBytes;
-
-pub use crate::exported_future::ExportedFuture;
+pub use self::{exported_future::ExportedFuture, extensions::FromBcsBytes};
 
 /// The public entry points provided by a contract.
 #[async_trait]
