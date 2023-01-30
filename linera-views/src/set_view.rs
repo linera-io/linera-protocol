@@ -109,7 +109,7 @@ where
     /// Set or insert a value.
     pub fn insert(&mut self, index: &I) -> Result<(), ViewError> {
         self.hash = None;
-        let short_key = self.context.derive_short_key(index)?;
+        let short_key = C::derive_short_key(index)?;
         self.updates.insert(short_key, Update::Set(()));
         Ok(())
     }
@@ -117,7 +117,7 @@ where
     /// Remove a value.
     pub fn remove(&mut self, index: &I) -> Result<(), ViewError> {
         self.hash = None;
-        let short_key = self.context.derive_short_key(index)?;
+        let short_key = C::derive_short_key(index)?;
         if self.was_cleared {
             self.updates.remove(&short_key);
         } else {
@@ -140,7 +140,7 @@ where
 {
     /// Return true if the given index exists in the set.
     pub async fn contains(&self, index: &I) -> Result<bool, ViewError> {
-        let short_key = self.context.derive_short_key(index)?;
+        let short_key = C::derive_short_key(index)?;
         if let Some(update) = self.updates.get(&short_key) {
             let value = match update {
                 Update::Removed => false,
