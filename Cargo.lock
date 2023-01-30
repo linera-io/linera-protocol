@@ -2153,6 +2153,7 @@ dependencies = [
  "generic-array",
  "hex",
  "linera-sdk",
+ "log",
  "serde",
  "serde-name",
  "serde_with",

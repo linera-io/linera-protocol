@@ -3,6 +3,16 @@ application-id: func() -> application-id
 read-system-balance: func() -> system-balance
 read-system-timestamp: func() -> timestamp
 
+log: func(message: string, level: log-level)
+
+enum log-level {
+    trace,
+    debug,
+    info,
+    warn,
+    error,
+}
+
 resource load {
     static new: func() -> load
     poll: func() -> poll-load

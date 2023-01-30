@@ -437,6 +437,10 @@ impl<'storage> WritableSystem for SystemApi<&'storage dyn WritableStorage> {
             Poll::Ready(Err(error)) => PollCallResult::Ready(Err(error.to_string())),
         }
     }
+
+    fn log(&mut self, message: &str, level: writable_system::LogLevel) {
+        log::log!(level.into(), "{message}");
+    }
 }
 
 impl<'storage> QueryableSystem for SystemApi<&'storage dyn QueryableStorage> {
@@ -469,5 +473,9 @@ impl<'storage> QueryableSystem for SystemApi<&'storage dyn QueryableStorage> {
             Poll::Ready(Ok(bytes)) => PollLoad::Ready(Ok(bytes)),
             Poll::Ready(Err(error)) => PollLoad::Ready(Err(error.to_string())),
         }
+    }
+
+    fn log(&mut self, message: &str, level: queryable_system::LogLevel) {
+        log::log!(level.into(), "{message}");
     }
 }
