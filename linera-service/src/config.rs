@@ -7,7 +7,7 @@ use linera_base::{
     crypto::{CryptoHash, KeyPair},
     data_types::{BlockHeight, ChainDescription, ChainId, Owner, Timestamp, ValidatorName},
 };
-use linera_core::client::{ChainClientState, ValidatorNodeProvider};
+use linera_core::client::{ChainClient, ValidatorNodeProvider};
 use linera_execution::system::Balance;
 use linera_rpc::config::{ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig};
 use linera_storage::Store;
@@ -137,7 +137,7 @@ impl WalletState {
         self.chains.values_mut()
     }
 
-    pub async fn update_from_state<P, S>(&mut self, state: &mut ChainClientState<P, S>)
+    pub async fn update_from_state<P, S>(&mut self, state: &mut ChainClient<P, S>)
     where
         P: ValidatorNodeProvider + Send + 'static,
         S: Store + Clone + Send + Sync + 'static,

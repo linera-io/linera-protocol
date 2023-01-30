@@ -18,7 +18,7 @@ use linera_chain::data_types::{
     Block, BlockAndRound, BlockProposal, Certificate, SignatureAggregator, Value, Vote,
 };
 use linera_core::{
-    client::{ChainClientState, ValidatorNodeProvider},
+    client::{ChainClient, ValidatorNodeProvider},
     data_types::{ChainInfoQuery, ChainInfoResponse},
     node::{LocalNodeClient, ValidatorNode},
     worker::{Reason, WorkerState},
@@ -111,10 +111,10 @@ impl ClientContext {
         &self,
         storage: S,
         chain_id: ChainId,
-    ) -> ChainClientState<impl ValidatorNodeProvider, S> {
+    ) -> ChainClient<impl ValidatorNodeProvider, S> {
         let chain = self.wallet_state.get(chain_id).expect("Unknown chain");
         let node_provider = NodeProvider::new(self.send_timeout, self.recv_timeout);
-        ChainClientState::new(
+        ChainClient::new(
             chain_id,
             chain
                 .key_pair
@@ -271,7 +271,7 @@ impl ClientContext {
         info!("Saved user chain states");
     }
 
-    async fn update_wallet_from_client<P, S>(&mut self, state: &mut ChainClientState<P, S>)
+    async fn update_wallet_from_client<P, S>(&mut self, state: &mut ChainClient<P, S>)
     where
         P: ValidatorNodeProvider + Send + 'static,
         S: Store + Clone + Send + Sync + 'static,
@@ -330,14 +330,14 @@ impl ClientContext {
     {
         let mut certificates = Vec::new();
         for chain_id in self.wallet_state.chain_ids() {
-            let mut client_state = self.make_chain_client(storage.clone(), chain_id);
-            if let Ok(cert) = client_state.subscribe_to_new_committees().await {
+            let mut chain_client = self.make_chain_client(storage.clone(), chain_id);
+            if let Ok(cert) = chain_client.subscribe_to_new_committees().await {
                 info!(
                     "Subscribed {:?} to the admin chain {:?}",
                     chain_id, self.genesis_config.admin_id,
                 );
                 certificates.push(cert);
-                self.update_wallet_from_client(&mut client_state).await;
+                self.update_wallet_from_client(&mut chain_client).await;
             }
         }
         certificates
@@ -349,15 +349,15 @@ impl ClientContext {
         ViewError: From<S::ContextError>,
     {
         for chain_id in self.wallet_state.chain_ids() {
-            let mut client_state = self.make_chain_client(storage.clone(), chain_id);
-            client_state
+            let mut chain_client = self.make_chain_client(storage.clone(), chain_id);
+            chain_client
                 .receive_certificate(certificate.clone())
                 .await
                 .unwrap();
-            client_state.process_inbox().await.unwrap();
-            let epochs = client_state.epochs().await.unwrap();
+            chain_client.process_inbox().await.unwrap();
+            let epochs = chain_client.epochs().await.unwrap();
             info!("{:?} accepts epochs {:?}", chain_id, epochs);
-            self.update_wallet_from_client(&mut client_state).await;
+            self.update_wallet_from_client(&mut chain_client).await;
         }
     }
 }
@@ -585,22 +585,22 @@ where
                 recipient,
                 amount,
             } => {
-                let mut client_state = context.make_chain_client(storage, sender);
+                let mut chain_client = context.make_chain_client(storage, sender);
                 info!("Starting transfer");
                 let time_start = Instant::now();
-                let certificate = client_state
+                let certificate = chain_client
                     .transfer_to_chain(amount, recipient, UserData::default())
                     .await
                     .unwrap();
                 let time_total = time_start.elapsed().as_micros();
                 info!("Operation confirmed after {} us", time_total);
                 info!("{:?}", certificate);
-                context.update_wallet_from_client(&mut client_state).await;
+                context.update_wallet_from_client(&mut chain_client).await;
                 context.save_chains();
             }
 
             OpenChain { sender, owner } => {
-                let mut client_state = context.make_chain_client(storage, sender);
+                let mut chain_client = context.make_chain_client(storage, sender);
                 let (new_owner, key_pair) = match owner {
                     Some(key) => (key, None),
                     None => {
@@ -610,11 +610,11 @@ where
                 };
                 info!("Starting operation to open a new chain");
                 let time_start = Instant::now();
-                let (id, certificate) = client_state.open_chain(new_owner).await.unwrap();
+                let (id, certificate) = chain_client.open_chain(new_owner).await.unwrap();
                 let time_total = time_start.elapsed().as_micros();
                 info!("Operation confirmed after {} us", time_total);
                 info!("{:?}", certificate);
-                context.update_wallet_from_client(&mut client_state).await;
+                context.update_wallet_from_client(&mut chain_client).await;
                 let timestamp = certificate.value.block().timestamp;
                 context.update_wallet_for_new_chain(id, key_pair, timestamp);
                 // Print the new chain id(s) on stdout for the scripting purposes.
@@ -623,59 +623,59 @@ where
             }
 
             CloseChain { sender } => {
-                let mut client_state = context.make_chain_client(storage, sender);
+                let mut chain_client = context.make_chain_client(storage, sender);
                 info!("Starting operation to close the chain");
                 let time_start = Instant::now();
-                let certificate = client_state.close_chain().await.unwrap();
+                let certificate = chain_client.close_chain().await.unwrap();
                 let time_total = time_start.elapsed().as_micros();
                 info!("Operation confirmed after {} us", time_total);
                 info!("{:?}", certificate);
-                context.update_wallet_from_client(&mut client_state).await;
+                context.update_wallet_from_client(&mut chain_client).await;
                 context.save_chains();
             }
 
             QueryBalance { chain_id } => {
-                let mut client_state = context.make_chain_client(storage, chain_id);
+                let mut chain_client = context.make_chain_client(storage, chain_id);
                 info!("Starting query for the local balance");
                 let time_start = Instant::now();
-                let balance = client_state
+                let balance = chain_client
                     .local_balance()
                     .await
                     .expect("Use sync_balance instead");
                 let time_total = time_start.elapsed().as_micros();
                 info!("Local balance obtained after {} us", time_total);
                 println!("{}", balance);
-                context.update_wallet_from_client(&mut client_state).await;
+                context.update_wallet_from_client(&mut chain_client).await;
                 context.save_chains();
             }
 
             SynchronizeBalance { chain_id } => {
-                let mut client_state = context.make_chain_client(storage, chain_id);
+                let mut chain_client = context.make_chain_client(storage, chain_id);
                 info!("Synchronize chain information");
                 let time_start = Instant::now();
-                let balance = client_state
+                let balance = chain_client
                     .synchronize_and_recompute_balance()
                     .await
                     .unwrap();
                 let time_total = time_start.elapsed().as_micros();
                 info!("Chain balance synchronized after {} us", time_total);
                 println!("{}", balance);
-                context.update_wallet_from_client(&mut client_state).await;
+                context.update_wallet_from_client(&mut chain_client).await;
                 context.save_chains();
             }
 
             QueryValidators { chain_id } => {
-                let mut client_state = context.make_chain_client(
+                let mut chain_client = context.make_chain_client(
                     storage,
                     chain_id.unwrap_or(context.genesis_config.admin_id),
                 );
                 info!("Starting operation to query validators");
                 let time_start = Instant::now();
-                let committee = client_state.local_committee().await.unwrap();
+                let committee = chain_client.local_committee().await.unwrap();
                 let time_total = time_start.elapsed().as_micros();
                 info!("Validators obtained after {} us", time_total);
                 info!("{:?}", committee.validators);
-                context.update_wallet_from_client(&mut client_state).await;
+                context.update_wallet_from_client(&mut chain_client).await;
                 context.save_chains();
             }
 
@@ -839,9 +839,9 @@ where
                     }
                     Some(chain_id) => chain_id,
                 };
-                let mut client_state = context.make_chain_client(storage, *chain_id);
+                let mut chain_client = context.make_chain_client(storage, *chain_id);
                 let mut tracker = NotificationTracker::default();
-                let mut notification_stream = client_state.subscribe_all(chain_ids).await?;
+                let mut notification_stream = chain_client.subscribe_all(chain_ids).await?;
                 while let Some(notification) = notification_stream.next().await {
                     if raw {
                         info!("{:?}", notification);
@@ -895,8 +895,8 @@ where
 
             Service { chain_id, port } => {
                 let chain_id = chain_id.unwrap_or(context.genesis_config.admin_id);
-                let client_state = context.make_chain_client(storage, chain_id);
-                let service = linera_service::node_service::NodeService::new(client_state, port);
+                let chain_client = context.make_chain_client(storage, chain_id);
+                let service = linera_service::node_service::NodeService::new(chain_client, port);
 
                 service.run().await?;
             }

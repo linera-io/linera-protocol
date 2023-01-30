@@ -44,7 +44,7 @@ mod client_tests;
 /// * The chain being operated is called the "local chain" or just the "chain".
 /// * As a rule, operations are considered successful (and communication may stop) when
 /// they succeeded in gathering a quorum of responses.
-pub struct ChainClientState<ValidatorNodeProvider, StorageClient> {
+pub struct ChainClient<ValidatorNodeProvider, StorageClient> {
     /// The off-chain chain id.
     chain_id: ChainId,
     /// How to talk to the validators.
@@ -86,7 +86,7 @@ pub trait ValidatorNodeProvider {
     async fn make_node(&self, address: &str) -> Result<Self::Node, NodeError>;
 }
 
-impl<P, S> ChainClientState<P, S> {
+impl<P, S> ChainClient<P, S> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         chain_id: ChainId,
@@ -154,7 +154,7 @@ enum ReceiveCertificateMode {
     AlreadyChecked,
 }
 
-impl<P, S> ChainClientState<P, S>
+impl<P, S> ChainClient<P, S>
 where
     P: ValidatorNodeProvider,
     S: Store + Clone + Send + Sync + 'static,

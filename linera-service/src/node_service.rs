@@ -8,7 +8,7 @@ use futures::lock::Mutex;
 use linera_base::data_types::ChainId;
 use linera_chain::ChainStateView;
 use linera_core::{
-    client::{ChainClientState, ValidatorNodeProvider},
+    client::{ChainClient, ValidatorNodeProvider},
     worker::Notification,
 };
 use linera_storage::Store;
@@ -20,10 +20,10 @@ use std::{net::SocketAddr, num::NonZeroU16, sync::Arc};
 type NodeSchema<P, S> = Schema<QueryRoot<P, S>, EmptyMutation, EmptySubscription>;
 
 /// Our root GraphQL query type.
-struct QueryRoot<P, S>(Arc<Mutex<ChainClientState<P, S>>>);
+struct QueryRoot<P, S>(Arc<Mutex<ChainClient<P, S>>>);
 
 /// Our root GraphQL subscription type.
-struct SubscriptionRoot<P, S>(Arc<Mutex<ChainClientState<P, S>>>);
+struct SubscriptionRoot<P, S>(Arc<Mutex<ChainClient<P, S>>>);
 
 #[Subscription]
 impl<P, S> SubscriptionRoot<P, S>
@@ -84,7 +84,7 @@ async fn graphiql() -> impl IntoResponse {
 /// The `NodeService` is a server that exposes a web-server to the client.
 /// The node service is primarily used to explore the state of a chain in GraphQL.
 pub struct NodeService<P, S> {
-    client: ChainClientState<P, S>,
+    client: ChainClient<P, S>,
     port: NonZeroU16,
 }
 
@@ -95,7 +95,7 @@ where
     ViewError: From<S::ContextError>,
 {
     /// Create a new instance of the node service given a client chain and a port.
-    pub fn new(client: ChainClientState<P, S>, port: NonZeroU16) -> Self {
+    pub fn new(client: ChainClient<P, S>, port: NonZeroU16) -> Self {
         Self { client, port }
     }
 

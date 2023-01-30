@@ -6,7 +6,7 @@
 mod wasm;
 
 use crate::{
-    client::{ChainClientState, CommunicateAction, ValidatorNodeProvider},
+    client::{ChainClient, CommunicateAction, ValidatorNodeProvider},
     data_types::*,
     node::{NodeError, NotificationStream, ValidatorNode},
     worker::{ValidatorWorker, WorkerError, WorkerState},
@@ -263,7 +263,7 @@ where
         &mut self,
         description: ChainDescription,
         balance: Balance,
-    ) -> Result<ChainClientState<NodeProvider<B::Store>, B::Store>, anyhow::Error> {
+    ) -> Result<ChainClient<NodeProvider<B::Store>, B::Store>, anyhow::Error> {
         let key_pair = KeyPair::generate();
         let owner = Owner(key_pair.public());
         // Remember what's in the genesis store for future clients to join.
@@ -318,7 +318,7 @@ where
         key_pair: KeyPair,
         block_hash: Option<CryptoHash>,
         block_height: BlockHeight,
-    ) -> Result<ChainClientState<NodeProvider<B::Store>, B::Store>, anyhow::Error> {
+    ) -> Result<ChainClient<NodeProvider<B::Store>, B::Store>, anyhow::Error> {
         // Note that new clients are only given the genesis store: they must figure out
         // the rest by asking validators.
         let store = self
@@ -331,7 +331,7 @@ where
             .await;
         self.chain_client_stores.push(store.clone());
         let provider = NodeProvider(self.validator_clients.iter().cloned().collect());
-        Ok(ChainClientState::new(
+        Ok(ChainClient::new(
             chain_id,
             vec![key_pair],
             provider,
