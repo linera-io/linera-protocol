@@ -48,7 +48,7 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
-    async fn chain(&self, chain_id: String) -> Result<ChainStateView<S::Context>, Error> {
+    async fn chain(&self, chain_id: String) -> Result<Arc<ChainStateView<S::Context>>, Error> {
         Ok(self
             .0
             .lock()
