@@ -118,7 +118,7 @@ impl DynamoDbClient {
         }
     }
 
-    /// Extract the value attribute from an item.
+    /// Extract the value attribute from an item (returned by value).
     fn extract_value_owned(
         attributes: &mut HashMap<String, AttributeValue>,
     ) -> Result<Vec<u8>, DynamoDbContextError> {
@@ -131,13 +131,23 @@ impl DynamoDbClient {
         }
     }
 
-    /// Extract the key attribute from an item.
+    /// Extract the key and value attributes from an item.
     fn extract_key_value(
         prefix_len: usize,
         attributes: &HashMap<String, AttributeValue>,
     ) -> Result<(&[u8], &[u8]), DynamoDbContextError> {
         let key = Self::extract_key(prefix_len, attributes)?;
         let value = Self::extract_value(attributes)?;
+        Ok((key, value))
+    }
+
+    /// Extract the key and value attributes from an item (returned by value).
+    fn extract_key_value_owned(
+        prefix_len: usize,
+        attributes: &mut HashMap<String, AttributeValue>,
+    ) -> Result<(Vec<u8>, Vec<u8>), DynamoDbContextError> {
+        let key = Self::extract_key(prefix_len, attributes)?.to_vec();
+        let value = Self::extract_value_owned(attributes)?;
         Ok((key, value))
     }
 
@@ -193,7 +203,7 @@ pub struct DynamoDbKeys {
 impl KeyIterable<DynamoDbContextError> for DynamoDbKeys {
     type Iterator<'a> = DynamoDbKeyIterator<'a> where Self: 'a;
 
-    fn iterate(&self) -> Self::Iterator<'_> {
+    fn iterator(&self) -> Self::Iterator<'_> {
         DynamoDbKeyIterator {
             prefix_len: self.prefix_len,
             iter: self.response.items.iter().flatten(),
@@ -220,6 +230,24 @@ impl<'a> Iterator for DynamoDbKeyValueIterator<'a> {
     }
 }
 
+#[doc(hidden)]
+pub struct DynamoDbKeyValueIteratorOwned {
+    prefix_len: usize,
+    iter: std::iter::Flatten<
+        std::option::IntoIter<Vec<HashMap<std::string::String, AttributeValue>>>,
+    >,
+}
+
+impl Iterator for DynamoDbKeyValueIteratorOwned {
+    type Item = Result<(Vec<u8>, Vec<u8>), DynamoDbContextError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter
+            .next()
+            .map(|mut x| DynamoDbClient::extract_key_value_owned(self.prefix_len, &mut x))
+    }
+}
+
 /// A set of key-values returned by a search query on DynamoDb.
 pub struct DynamoDbKeyValues {
     prefix_len: usize,
@@ -228,11 +256,19 @@ pub struct DynamoDbKeyValues {
 
 impl KeyValueIterable<DynamoDbContextError> for DynamoDbKeyValues {
     type Iterator<'a> = DynamoDbKeyValueIterator<'a> where Self: 'a;
+    type IteratorOwned = DynamoDbKeyValueIteratorOwned;
 
-    fn iterate(&self) -> Self::Iterator<'_> {
+    fn iterator(&self) -> Self::Iterator<'_> {
         DynamoDbKeyValueIterator {
             prefix_len: self.prefix_len,
             iter: self.response.items.iter().flatten(),
+        }
+    }
+
+    fn into_iterator_owned(self) -> Self::IteratorOwned {
+        DynamoDbKeyValueIteratorOwned {
+            prefix_len: self.prefix_len,
+            iter: self.response.items.into_iter().flatten(),
         }
     }
 }
