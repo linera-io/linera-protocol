@@ -12,7 +12,7 @@ use std::{collections::BTreeMap, fmt::Debug, marker::PhantomData, mem};
 /// Key tags to create the sub-keys of a MapView on top of the base key.
 #[repr(u8)]
 enum KeyTag {
-    /// Prefix for the indices of the mapview
+    /// Prefix for the indices of the view
     Index = 0,
     /// Prefix for the hash
     Hash = 1,
@@ -216,8 +216,8 @@ where
     where
         F: FnMut(I) -> Result<(), ViewError> + Send,
     {
-        self.for_each_key(|index| {
-            let index = C::deserialize_value(index)?;
+        self.for_each_key(|key| {
+            let index = C::deserialize_value(key)?;
             f(index)?;
             Ok(())
         })
