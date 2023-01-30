@@ -9,7 +9,8 @@
 
 use super::{super::ApplicationState, contract};
 use linera_sdk::{
-    ApplicationCallResult, Contract, ExecutionResult, ExportedFuture, SessionCallResult, SessionId,
+    ApplicationCallResult, Contract, ContractLogger, ExecutionResult, ExportedFuture,
+    SessionCallResult, SessionId,
 };
 use wit_bindgen_guest_rust::Handle;
 
@@ -19,6 +20,8 @@ pub struct Initialize {
 
 impl contract::Initialize for Initialize {
     fn new(context: contract::OperationContext, argument: Vec<u8>) -> Handle<Self> {
+        ContractLogger::install();
+
         Handle::new(Initialize {
             future: ExportedFuture::new(async move {
                 let mut application = ApplicationState::load_and_lock().await;
@@ -42,6 +45,8 @@ pub struct ExecuteOperation {
 
 impl contract::ExecuteOperation for ExecuteOperation {
     fn new(context: contract::OperationContext, operation: Vec<u8>) -> Handle<Self> {
+        ContractLogger::install();
+
         Handle::new(ExecuteOperation {
             future: ExportedFuture::new(async move {
                 let mut application = ApplicationState::load_and_lock().await;
@@ -67,6 +72,8 @@ pub struct ExecuteEffect {
 
 impl contract::ExecuteEffect for ExecuteEffect {
     fn new(context: contract::EffectContext, effect: Vec<u8>) -> Handle<Self> {
+        ContractLogger::install();
+
         Handle::new(ExecuteEffect {
             future: ExportedFuture::new(async move {
                 let mut application = ApplicationState::load_and_lock().await;
@@ -94,6 +101,8 @@ impl contract::CallApplication for CallApplication {
         argument: Vec<u8>,
         forwarded_sessions: Vec<contract::SessionId>,
     ) -> Handle<Self> {
+        ContractLogger::install();
+
         Handle::new(CallApplication {
             future: ExportedFuture::new(async move {
                 let mut application = ApplicationState::load_and_lock().await;
@@ -130,6 +139,8 @@ impl contract::CallSession for CallSession {
         argument: Vec<u8>,
         forwarded_sessions: Vec<contract::SessionId>,
     ) -> Handle<Self> {
+        ContractLogger::install();
+
         Handle::new(CallSession {
             future: ExportedFuture::new(async move {
                 let mut application = ApplicationState::load_and_lock().await;

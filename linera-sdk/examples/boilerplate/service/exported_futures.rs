@@ -8,7 +8,7 @@
 //! service type that implements [`linera_sdk::Service`].
 
 use super::{super::ApplicationState, service};
-use linera_sdk::{ExportedFuture, Service};
+use linera_sdk::{ExportedFuture, Service, ServiceLogger};
 use wit_bindgen_guest_rust::Handle;
 
 pub struct QueryApplication {
@@ -17,6 +17,8 @@ pub struct QueryApplication {
 
 impl service::QueryApplication for QueryApplication {
     fn new(context: service::QueryContext, argument: Vec<u8>) -> Handle<Self> {
+        ServiceLogger::install();
+
         Handle::new(QueryApplication {
             future: ExportedFuture::new(async move {
                 let application = ApplicationState::load().await;
