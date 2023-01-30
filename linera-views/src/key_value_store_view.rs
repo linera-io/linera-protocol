@@ -164,7 +164,7 @@ where
                 .context
                 .find_keys_by_prefix(&key_prefix)
                 .await?
-                .iterate()
+                .iterator()
             {
                 let index = index?;
                 loop {
@@ -211,7 +211,7 @@ where
                 .context
                 .find_key_values_by_prefix(&key_prefix)
                 .await?
-                .iterate()
+                .iterator()
             {
                 let (index, index_val) = entry?;
                 loop {
@@ -328,7 +328,7 @@ where
                 .context
                 .find_keys_by_prefix(&key_prefix_full)
                 .await?
-                .iterate()
+                .iterator()
             {
                 let key = key?;
                 loop {
@@ -384,7 +384,7 @@ where
                 .context
                 .find_key_values_by_prefix(&key_prefix_full)
                 .await?
-                .iterate()
+                .iterator()
             {
                 let (key, value) = entry?;
                 loop {

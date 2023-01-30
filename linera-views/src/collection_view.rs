@@ -251,7 +251,7 @@ where
         let mut update = updates.next();
         if !self.was_cleared {
             let base = self.get_index_key(&[]);
-            for index in self.context.find_keys_by_prefix(&base).await?.iterate() {
+            for index in self.context.find_keys_by_prefix(&base).await?.iterator() {
                 let index = index?;
                 loop {
                     match update {
@@ -489,7 +489,7 @@ where
         let mut update = updates.next();
         if !self.was_cleared {
             let base = self.get_index_key(&[]);
-            for index in self.context.find_keys_by_prefix(&base).await?.iterate() {
+            for index in self.context.find_keys_by_prefix(&base).await?.iterator() {
                 let index = index?;
                 loop {
                     match update {
