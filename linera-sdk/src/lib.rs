@@ -7,6 +7,7 @@ pub mod crypto;
 mod ensure;
 mod exported_future;
 mod extensions;
+mod log;
 pub mod service;
 
 use async_trait::async_trait;
@@ -14,7 +15,11 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::error::Error;
 
-pub use self::{exported_future::ExportedFuture, extensions::FromBcsBytes};
+pub use self::{
+    exported_future::ExportedFuture,
+    extensions::FromBcsBytes,
+    log::{ContractLogger, ServiceLogger},
+};
 
 /// The public entry points provided by a contract.
 #[async_trait]
