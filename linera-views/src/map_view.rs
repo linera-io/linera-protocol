@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    common::{Batch, Context, HashOutput},
+    common::{Batch, Context, HashOutput, Update},
     views::{HashableView, Hasher, View, ViewError},
 };
 use async_trait::async_trait;
@@ -23,7 +23,7 @@ enum KeyTag {
 pub struct MapView<C, I, V> {
     context: C,
     was_cleared: bool,
-    updates: BTreeMap<Vec<u8>, Option<V>>,
+    updates: BTreeMap<Vec<u8>, Update<V>>,
     _phantom: PhantomData<I>,
     stored_hash: Option<HashOutput>,
     hash: Option<HashOutput>,
@@ -65,7 +65,7 @@ where
             self.was_cleared = false;
             batch.delete_key_prefix(self.context.base_key());
             for (index, update) in mem::take(&mut self.updates) {
-                if let Some(value) = update {
+                if let Update::Set(value) = update {
                     let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
                     batch.put_key_value(key, &value)?;
                 }
@@ -74,8 +74,8 @@ where
             for (index, update) in mem::take(&mut self.updates) {
                 let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
                 match update {
-                    None => batch.delete_key(key),
-                    Some(value) => batch.put_key_value(key, &value)?,
+                    Update::Removed => batch.delete_key(key),
+                    Update::Set(value) => batch.put_key_value(key, &value)?,
                 }
             }
         }
@@ -111,7 +111,7 @@ where
     pub fn insert(&mut self, index: &I, value: V) -> Result<(), ViewError> {
         self.hash = None;
         let short_key = self.context.derive_short_key(index)?;
-        self.updates.insert(short_key, Some(value));
+        self.updates.insert(short_key, Update::Set(value));
         Ok(())
     }
 
@@ -122,7 +122,7 @@ where
         if self.was_cleared {
             self.updates.remove(&short_key);
         } else {
-            self.updates.insert(short_key, None);
+            self.updates.insert(short_key, Update::Removed);
         }
         Ok(())
     }
@@ -143,7 +143,11 @@ where
     pub async fn get(&self, index: &I) -> Result<Option<V>, ViewError> {
         let short_key = self.context.derive_short_key(index)?;
         if let Some(update) = self.updates.get(&short_key) {
-            return Ok(update.as_ref().cloned());
+            let value = match update {
+                Update::Removed => None,
+                Update::Set(value) => Some(value.clone()),
+            };
+            return Ok(value);
         }
         if self.was_cleared {
             return Ok(None);
@@ -178,7 +182,7 @@ where
                 loop {
                     match update {
                         Some((key, value)) if key <= &index => {
-                            if value.is_some() {
+                            if let Update::Set(_) = value {
                                 f(key.to_vec())?;
                             }
                             update = updates.next();
@@ -195,7 +199,7 @@ where
             }
         }
         while let Some((key, value)) = update {
-            if value.is_some() {
+            if let Update::Set(_) = value {
                 f(key.to_vec())?;
             }
             update = updates.next();
@@ -239,7 +243,7 @@ where
                 loop {
                     match update {
                         Some((key, value)) if key <= &index => {
-                            if let Some(value) = value {
+                            if let Update::Set(value) = value {
                                 f(key.to_vec(), value.clone())?;
                             }
                             update = updates.next();
@@ -256,7 +260,7 @@ where
             }
         }
         while let Some((key, value)) = update {
-            if let Some(value) = value {
+            if let Update::Set(value) = value {
                 f(key.clone(), value.clone())?;
             }
             update = updates.next();

@@ -3,7 +3,7 @@
 
 use crate::{
     common::{
-        get_interval, get_upper_bound, Batch, Context, HashOutput, SimpleTypeIterator,
+        get_interval, get_upper_bound, Batch, Context, HashOutput, SimpleTypeIterator, Update,
         WriteOperation,
     },
     views::{HashableView, Hasher, View, ViewError},
@@ -63,7 +63,7 @@ enum KeyTag {
 pub struct KeyValueStoreView<C> {
     context: C,
     was_cleared: bool,
-    updates: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
+    updates: BTreeMap<Vec<u8>, Update<Vec<u8>>>,
     deleted_prefixes: BTreeSet<Vec<u8>>,
     stored_hash: Option<HashOutput>,
     hash: Option<HashOutput>,
@@ -104,7 +104,7 @@ where
             self.was_cleared = false;
             batch.delete_key_prefix(self.context.base_key());
             for (index, update) in mem::take(&mut self.updates) {
-                if let Some(value) = update {
+                if let Update::Set(value) = update {
                     let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
                     batch.put_key_value_bytes(key, value);
                 }
@@ -117,8 +117,8 @@ where
             for (index, update) in mem::take(&mut self.updates) {
                 let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
                 match update {
-                    None => batch.delete_key(key),
-                    Some(value) => batch.put_key_value_bytes(key, value),
+                    Update::Removed => batch.delete_key(key),
+                    Update::Set(value) => batch.put_key_value_bytes(key, value),
                 }
             }
         }
@@ -191,7 +191,7 @@ where
                 loop {
                     match update {
                         Some((key, value)) if key <= &index => {
-                            if value.is_some() {
+                            if let Update::Set(_) = value {
                                 f(key.clone())?;
                             }
                             update = updates.next();
@@ -210,9 +210,8 @@ where
             }
         }
         while let Some((key, value)) = update {
-            let key = key.clone();
-            if value.is_some() {
-                f(key)?;
+            if let Update::Set(_) = value {
+                f(key.clone())?;
             }
             update = updates.next();
         }
@@ -236,7 +235,7 @@ where
                 loop {
                     match update {
                         Some((key, value)) if key <= &index => {
-                            if let Some(value) = value {
+                            if let Update::Set(value) = value {
                                 f(key.clone(), value.to_vec())?;
                             }
                             update = updates.next();
@@ -255,9 +254,8 @@ where
             }
         }
         while let Some((key, value)) = update {
-            let key = key.clone();
-            if let Some(value) = value {
-                f(key, value.to_vec())?;
+            if let Update::Set(value) = value {
+                f(key.clone(), value.to_vec())?;
             }
             update = updates.next();
         }
@@ -276,7 +274,11 @@ where
 
     pub async fn get(&self, index: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
         if let Some(update) = self.updates.get(index) {
-            return Ok(update.as_ref().cloned());
+            let value = match update {
+                Update::Removed => None,
+                Update::Set(value) => Some(value.clone()),
+            };
+            return Ok(value);
         }
         if self.was_cleared {
             return Ok(None);
@@ -288,7 +290,7 @@ where
 
     /// Set or insert a value.
     pub fn insert(&mut self, index: Vec<u8>, value: Vec<u8>) {
-        self.updates.insert(index, Some(value));
+        self.updates.insert(index, Update::Set(value));
         self.hash = None;
     }
 
@@ -298,7 +300,7 @@ where
         if self.was_cleared {
             self.updates.remove(&index);
         } else {
-            self.updates.insert(index, None);
+            self.updates.insert(index, Update::Removed);
         }
     }
 
@@ -328,7 +330,11 @@ where
 
     pub async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
         if let Some(update) = self.updates.get(key) {
-            return Ok(update.clone());
+            let value = match update {
+                Update::Removed => None,
+                Update::Set(value) => Some(value.clone()),
+            };
+            return Ok(value);
         }
         if self.was_cleared {
             return Ok(None);
@@ -362,7 +368,7 @@ where
                         Some((key_update, value_update))
                             if key_update[len..].to_vec() <= stripped_key =>
                         {
-                            if value_update.is_some() {
+                            if let Update::Set(_) = value_update {
                                 keys.push(key_update[len..].to_vec());
                             }
                             update = updates.next();
@@ -383,7 +389,7 @@ where
             }
         }
         while let Some((key_update, value_update)) = update {
-            if value_update.is_some() {
+            if let Update::Set(_) = value_update {
                 let stripped_key_update = key_update[len..].to_vec();
                 keys.push(stripped_key_update);
             }
@@ -416,7 +422,7 @@ where
                         Some((key_update, value_update))
                             if key_update[len..].to_vec() <= stripped_key =>
                         {
-                            if let Some(value_update) = value_update {
+                            if let Update::Set(value_update) = value_update {
                                 let key_value = (key_update[len..].to_vec(), value_update.to_vec());
                                 key_values.push(key_value);
                             }
@@ -438,7 +444,7 @@ where
             }
         }
         while let Some((key_update, value_update)) = update {
-            if let Some(value_update) = value_update {
+            if let Update::Set(value_update) = value_update {
                 let key_value = (key_update[len..].to_vec(), value_update.to_vec());
                 key_values.push(key_value);
             }
@@ -455,11 +461,11 @@ where
                     if self.was_cleared {
                         self.updates.remove(&key);
                     } else {
-                        self.updates.insert(key, None);
+                        self.updates.insert(key, Update::Removed);
                     }
                 }
                 WriteOperation::Put { key, value } => {
-                    self.updates.insert(key, Some(value));
+                    self.updates.insert(key, Update::Set(value));
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
                     self.delete_prefix(key_prefix);

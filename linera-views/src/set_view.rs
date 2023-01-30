@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    common::{Batch, Context, HashOutput},
+    common::{Batch, Context, HashOutput, Update},
     views::{HashableView, Hasher, View, ViewError},
 };
 use async_trait::async_trait;
@@ -23,7 +23,7 @@ enum KeyTag {
 pub struct SetView<C, I> {
     context: C,
     was_cleared: bool,
-    updates: BTreeMap<Vec<u8>, Option<()>>,
+    updates: BTreeMap<Vec<u8>, Update<()>>,
     _phantom: PhantomData<I>,
     stored_hash: Option<HashOutput>,
     hash: Option<HashOutput>,
@@ -64,7 +64,7 @@ where
             self.was_cleared = false;
             batch.delete_key_prefix(self.context.base_key());
             for (index, update) in mem::take(&mut self.updates) {
-                if update.is_some() {
+                if let Update::Set(_) = update {
                     let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
                     batch.put_key_value_bytes(key, Vec::new());
                 }
@@ -73,8 +73,8 @@ where
             for (index, update) in mem::take(&mut self.updates) {
                 let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
                 match update {
-                    None => batch.delete_key(key),
-                    Some(_) => batch.put_key_value_bytes(key, Vec::new()),
+                    Update::Removed => batch.delete_key(key),
+                    Update::Set(_) => batch.put_key_value_bytes(key, Vec::new()),
                 }
             }
         }
@@ -110,7 +110,7 @@ where
     pub fn insert(&mut self, index: &I) -> Result<(), ViewError> {
         self.hash = None;
         let short_key = self.context.derive_short_key(index)?;
-        self.updates.insert(short_key, Some(()));
+        self.updates.insert(short_key, Update::Set(()));
         Ok(())
     }
 
@@ -121,7 +121,7 @@ where
         if self.was_cleared {
             self.updates.remove(&short_key);
         } else {
-            self.updates.insert(short_key, None);
+            self.updates.insert(short_key, Update::Removed);
         }
         Ok(())
     }
@@ -141,7 +141,11 @@ where
     pub async fn contains(&self, index: &I) -> Result<bool, ViewError> {
         let short_key = self.context.derive_short_key(index)?;
         if let Some(update) = self.updates.get(&short_key) {
-            return Ok(update.is_some());
+            let value = match update {
+                Update::Removed => false,
+                Update::Set(()) => true,
+            };
+            return Ok(value);
         }
         if self.was_cleared {
             return Ok(false);
@@ -179,7 +183,7 @@ where
                 loop {
                     match update {
                         Some((key, value)) if key <= &index => {
-                            if value.is_some() {
+                            if let Update::Set(_) = value {
                                 f(key.to_vec())?;
                             }
                             update = updates.next();
@@ -196,7 +200,7 @@ where
             }
         }
         while let Some((key, value)) = update {
-            if value.is_some() {
+            if let Update::Set(_) = value {
                 f(key.to_vec())?;
             }
             update = updates.next();
