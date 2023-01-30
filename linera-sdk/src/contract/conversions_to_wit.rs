@@ -51,3 +51,14 @@ impl From<EffectId> for system::EffectId {
         }
     }
 }
+impl From<log::Level> for system::LogLevel {
+    fn from(level: log::Level) -> Self {
+        match level {
+            log::Level::Trace => system::LogLevel::Trace,
+            log::Level::Debug => system::LogLevel::Debug,
+            log::Level::Info => system::LogLevel::Info,
+            log::Level::Warn => system::LogLevel::Warn,
+            log::Level::Error => system::LogLevel::Error,
+        }
+    }
+}

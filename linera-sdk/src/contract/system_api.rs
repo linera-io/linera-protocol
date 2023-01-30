@@ -5,7 +5,7 @@ use super::writable_system as system;
 use crate::{ApplicationId, ChainId, SessionId, SystemBalance, Timestamp};
 use futures::future;
 use serde::{de::DeserializeOwned, Serialize};
-use std::future::Future;
+use std::{fmt, future::Future};
 
 /// Load the contract state, without locking it for writes.
 pub async fn load<State>() -> State
@@ -104,4 +104,11 @@ pub async fn call_session(
         system::TryCallSession::new(authenticated, session.into(), argument, &forwarded_sessions);
 
     future::poll_fn(|_context| future.poll().into()).await
+}
+
+/// Requests the host to log a message.
+///
+/// Useful for debugging locally, but may be ignored by validators.
+pub fn log(message: &fmt::Arguments<'_>, level: log::Level) {
+    system::log(&message.to_string(), level.into());
 }

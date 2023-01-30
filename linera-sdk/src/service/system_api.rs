@@ -5,7 +5,7 @@ use super::queryable_system as system;
 use crate::{ApplicationId, ChainId, SystemBalance, Timestamp};
 use futures::future;
 use serde::de::DeserializeOwned;
-use std::future::Future;
+use std::{fmt, future::Future};
 
 /// Load the contract state, without locking it for writes.
 pub async fn load<State>() -> State
@@ -47,4 +47,11 @@ pub fn current_system_balance() -> SystemBalance {
 /// Retrieves the current system time.
 pub fn current_system_time() -> Timestamp {
     system::read_system_timestamp().into()
+}
+
+/// Requests the host to log a message.
+///
+/// Useful for debugging locally, but may be ignored by validators.
+pub fn log(message: &fmt::Arguments<'_>, level: log::Level) {
+    system::log(&message.to_string(), level.into());
 }
