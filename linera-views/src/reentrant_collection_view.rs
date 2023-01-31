@@ -13,34 +13,21 @@ use std::{
     io::Write,
     marker::PhantomData,
     mem,
+    sync::Arc,
 };
-use tokio::sync::{RwLock, RwLockReadGuard};
+use tokio::sync::{Mutex, OwnedRwLockReadGuard, OwnedRwLockWriteGuard, RwLock};
 
 /// A view that supports accessing a collection of views of the same kind, indexed by a
-/// key, one subview at a time.
+/// key, possibly several subviews at a time.
 #[derive(Debug)]
-pub struct CollectionView<C, I, W> {
+#[allow(clippy::type_complexity)]
+pub struct ReentrantCollectionView<C, I, W> {
     context: C,
     was_cleared: bool,
-    updates: RwLock<BTreeMap<Vec<u8>, Update<W>>>,
+    updates: Mutex<BTreeMap<Vec<u8>, Update<Arc<RwLock<W>>>>>,
     _phantom: PhantomData<I>,
     stored_hash: Option<HashOutput>,
     hash: Option<HashOutput>,
-}
-
-/// A read-only accessor for a particular subview in a [`CollectionView`].
-pub struct ReadGuardedView<'a, W> {
-    guard: RwLockReadGuard<'a, BTreeMap<Vec<u8>, Update<W>>>,
-    short_key: Vec<u8>,
-}
-
-impl<'a, W> std::ops::Deref for ReadGuardedView<'a, W> {
-    type Target = W;
-
-    fn deref(&self) -> &W {
-        let Update::Set(view) = self.guard.get(&self.short_key).unwrap() else { unreachable!(); };
-        view
-    }
 }
 
 /// We need to find new base keys in order to implement the collection_view.
@@ -61,7 +48,7 @@ enum KeyTag {
 }
 
 #[async_trait]
-impl<C, I, W> View<C> for CollectionView<C, I, W>
+impl<C, I, W> View<C> for ReentrantCollectionView<C, I, W>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
@@ -78,7 +65,7 @@ where
         Ok(Self {
             context,
             was_cleared: false,
-            updates: RwLock::new(BTreeMap::new()),
+            updates: Mutex::new(BTreeMap::new()),
             _phantom: PhantomData,
             stored_hash: hash,
             hash,
@@ -96,7 +83,10 @@ where
             self.was_cleared = false;
             batch.delete_key_prefix(self.context.base_key());
             for (index, update) in mem::take(self.updates.get_mut()) {
-                if let Update::Set(mut view) = update {
+                if let Update::Set(view) = update {
+                    let mut view = Arc::try_unwrap(view)
+                        .map_err(|_| ViewError::CannotAcquireCollectionEntry)?
+                        .into_inner();
                     view.flush(batch)?;
                     self.add_index(batch, &index)?;
                 }
@@ -104,7 +94,10 @@ where
         } else {
             for (index, update) in mem::take(self.updates.get_mut()) {
                 match update {
-                    Update::Set(mut view) => {
+                    Update::Set(view) => {
+                        let mut view = Arc::try_unwrap(view)
+                            .map_err(|_| ViewError::CannotAcquireCollectionEntry)?
+                            .into_inner();
                         view.flush(batch)?;
                         self.add_index(batch, &index)?;
                     }
@@ -139,12 +132,12 @@ where
     }
 }
 
-impl<C, I, W> CollectionView<C, I, W>
+impl<C, I, W> ReentrantCollectionView<C, I, W>
 where
     C: Context + Send,
     ViewError: From<C::Error>,
     I: Sync + Clone + Send + Debug + Serialize + DeserializeOwned,
-    W: View<C> + Sync,
+    W: View<C> + Send + Sync,
 {
     fn get_index_key(&self, index: &[u8]) -> Vec<u8> {
         self.context.base_tag_index(KeyTag::Index as u8, index)
@@ -162,55 +155,18 @@ where
 
     /// Obtain a subview for the data at the given index in the collection. If an entry
     /// was removed before then a default entry is put on this index.
-    pub async fn load_entry_mut(&mut self, index: I) -> Result<&mut W, ViewError> {
+    pub async fn try_load_entry_mut(
+        &mut self,
+        index: I,
+    ) -> Result<OwnedRwLockWriteGuard<W>, ViewError> {
         self.hash = None;
         let short_key = C::derive_short_key(&index)?;
-        match self.updates.get_mut().entry(short_key.clone()) {
-            btree_map::Entry::Occupied(entry) => {
-                let entry = entry.into_mut();
-                match entry {
-                    Update::Set(view) => Ok(view),
-                    Update::Removed => {
-                        let key = self
-                            .context
-                            .base_tag_index(KeyTag::Subview as u8, &short_key);
-                        let context = self.context.clone_with_base_key(key);
-                        // Obtain a view and set its pending state to the default (e.g. empty) state
-                        let mut view = W::load(context).await?;
-                        view.clear();
-                        *entry = Update::Set(view);
-                        let Update::Set(view) = entry else { unreachable!(); };
-                        Ok(view)
-                    }
-                }
-            }
-            btree_map::Entry::Vacant(entry) => {
-                let key = self
-                    .context
-                    .base_tag_index(KeyTag::Subview as u8, &short_key);
-                let context = self.context.clone_with_base_key(key);
-                let mut view = W::load(context).await?;
-                if self.was_cleared {
-                    view.clear();
-                }
-                let Update::Set(view) = entry.insert(Update::Set(view)) else { unreachable!(); };
-                Ok(view)
-            }
-        }
-    }
-
-    /// Same as `load_entry_mut` but for read-only access. May block the current async thread.
-    pub async fn load_entry(&self, index: I) -> Result<ReadGuardedView<W>, ViewError> {
-        let short_key = C::derive_short_key(&index)?;
-        let mut updates = self.updates.write().await;
+        let updates = self.updates.get_mut();
         match updates.entry(short_key.clone()) {
             btree_map::Entry::Occupied(entry) => {
                 let entry = entry.into_mut();
                 match entry {
-                    Update::Set(_) => {
-                        let guard = updates.downgrade();
-                        Ok(ReadGuardedView { guard, short_key })
-                    }
+                    Update::Set(view) => Ok(view.clone().try_write_owned()?),
                     Update::Removed => {
                         let key = self
                             .context
@@ -219,9 +175,9 @@ where
                         // Obtain a view and set its pending state to the default (e.g. empty) state
                         let mut view = W::load(context).await?;
                         view.clear();
-                        *entry = Update::Set(view);
-                        let guard = updates.downgrade();
-                        Ok(ReadGuardedView { guard, short_key })
+                        let wrapped_view = Arc::new(RwLock::new(view));
+                        *entry = Update::Set(wrapped_view.clone());
+                        Ok(wrapped_view.try_write_owned()?)
                     }
                 }
             }
@@ -234,9 +190,49 @@ where
                 if self.was_cleared {
                     view.clear();
                 }
-                entry.insert(Update::Set(view));
-                let guard = updates.downgrade();
-                Ok(ReadGuardedView { guard, short_key })
+                let wrapped_view = Arc::new(RwLock::new(view));
+                entry.insert(Update::Set(wrapped_view.clone()));
+                Ok(wrapped_view.try_write_owned()?)
+            }
+        }
+    }
+
+    /// Obtain a read-only access to a subview for the data at the given index in the collection. If an entry
+    /// was removed before then a default entry is put on this index.
+    pub async fn try_load_entry(&self, index: I) -> Result<OwnedRwLockReadGuard<W>, ViewError> {
+        let short_key = C::derive_short_key(&index)?;
+        let mut updates = self.updates.lock().await;
+        match updates.entry(short_key.clone()) {
+            btree_map::Entry::Occupied(entry) => {
+                let entry = entry.into_mut();
+                match entry {
+                    Update::Set(view) => Ok(view.clone().try_read_owned()?),
+                    Update::Removed => {
+                        let key = self
+                            .context
+                            .base_tag_index(KeyTag::Subview as u8, &short_key);
+                        let context = self.context.clone_with_base_key(key);
+                        // Obtain a view and set its pending state to the default (e.g. empty) state
+                        let mut view = W::load(context).await?;
+                        view.clear();
+                        let wrapped_view = Arc::new(RwLock::new(view));
+                        *entry = Update::Set(wrapped_view.clone());
+                        Ok(wrapped_view.try_read_owned()?)
+                    }
+                }
+            }
+            btree_map::Entry::Vacant(entry) => {
+                let key = self
+                    .context
+                    .base_tag_index(KeyTag::Subview as u8, &short_key);
+                let context = self.context.clone_with_base_key(key);
+                let mut view = W::load(context).await?;
+                if self.was_cleared {
+                    view.clear();
+                }
+                let wrapped_view = Arc::new(RwLock::new(view));
+                entry.insert(Update::Set(wrapped_view.clone()));
+                Ok(wrapped_view.try_read_owned()?)
             }
         }
     }
@@ -254,9 +250,9 @@ where
     }
 
     /// Mark the entry so that it is removed in the next flush
-    pub async fn reset_entry_to_default(&mut self, index: I) -> Result<(), ViewError> {
+    pub async fn try_reset_entry_to_default(&mut self, index: I) -> Result<(), ViewError> {
         self.hash = None;
-        let view = self.load_entry_mut(index).await?;
+        let mut view = self.try_load_entry_mut(index).await?;
         view.clear();
         Ok(())
     }
@@ -276,22 +272,14 @@ where
     pub fn extra(&self) -> &C::Extra {
         self.context.extra()
     }
-}
 
-impl<C, I, W> CollectionView<C, I, W>
-where
-    C: Context + Send,
-    ViewError: From<C::Error>,
-    I: Clone + Debug + Sync + Send + Serialize + DeserializeOwned,
-    W: View<C> + Sync,
-{
     /// Execute a function on each serialized index (aka key). Keys are visited in a
     /// stable, yet unspecified order.
     async fn for_each_key<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(&[u8]) -> Result<(), ViewError> + Send,
     {
-        let updates = self.updates.write().await;
+        let updates = self.updates.lock().await;
         let mut updates = updates.iter();
         let mut update = updates.next();
         if !self.was_cleared {
@@ -343,7 +331,7 @@ where
 }
 
 #[async_trait]
-impl<C, I, W> HashableView<C> for CollectionView<C, I, W>
+impl<C, I, W> HashableView<C> for ReentrantCollectionView<C, I, W>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
@@ -361,7 +349,7 @@ where
                 hasher.update_with_bcs_bytes(&indices.len())?;
                 for index in indices {
                     hasher.update_with_bcs_bytes(&index)?;
-                    let view = self.load_entry_mut(index).await?;
+                    let mut view = self.try_load_entry_mut(index).await?;
                     let hash = view.hash().await?;
                     hasher.write_all(hash.as_ref())?;
                 }

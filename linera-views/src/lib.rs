@@ -31,6 +31,9 @@ pub mod set_view;
 /// The collection_view
 pub mod collection_view;
 
+/// The collection_view
+pub mod reentrant_collection_view;
+
 /// The key value store view
 pub mod key_value_store_view;
 
