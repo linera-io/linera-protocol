@@ -113,10 +113,13 @@ where
         target: Target,
         height: BlockHeight,
     ) -> Result<bool, ChainError> {
-        let communication_state = self.communication_states.load_entry(application_id).await?;
+        let communication_state = self
+            .communication_states
+            .load_entry_mut(application_id)
+            .await?;
         let outbox = communication_state
             .outboxes
-            .load_entry(target.clone())
+            .load_entry_mut(target.clone())
             .await?;
         let updated = outbox.mark_messages_as_received(height).await?;
         if updated && outbox.queue.count() == 0 {
@@ -143,9 +146,9 @@ where
     /// have been properly received by now.
     pub async fn validate_incoming_messages(&mut self) -> Result<(), ChainError> {
         for id in self.communication_states.indices().await? {
-            let state = self.communication_states.load_entry(id).await?;
+            let state = self.communication_states.load_entry_mut(id).await?;
             for origin in state.inboxes.indices().await? {
-                let inbox = state.inboxes.load_entry(origin.clone()).await?;
+                let inbox = state.inboxes.load_entry_mut(origin.clone()).await?;
                 let event = inbox.removed_events.front().await?;
                 ensure!(
                     event.is_none(),
@@ -166,8 +169,11 @@ where
         application_id: ApplicationId,
         origin: Origin,
     ) -> Result<BlockHeight, ChainError> {
-        let communication_state = self.communication_states.load_entry(application_id).await?;
-        let inbox = communication_state.inboxes.load_entry(origin).await?;
+        let communication_state = self
+            .communication_states
+            .load_entry_mut(application_id)
+            .await?;
+        let inbox = communication_state.inboxes.load_entry_mut(origin).await?;
         inbox.next_block_height_to_receive()
     }
 
@@ -176,8 +182,11 @@ where
         application_id: ApplicationId,
         origin: Origin,
     ) -> Result<Option<BlockHeight>, ChainError> {
-        let communication_state = self.communication_states.load_entry(application_id).await?;
-        let inbox = communication_state.inboxes.load_entry(origin).await?;
+        let communication_state = self
+            .communication_states
+            .load_entry_mut(application_id)
+            .await?;
+        let inbox = communication_state.inboxes.load_entry_mut(origin).await?;
         match inbox.removed_events.back().await? {
             Some(event) => Ok(Some(event.height)),
             None => Ok(None),
@@ -260,10 +269,13 @@ where
                 chain_id, origin, height))
         );
         // Process the inbox events and update the inbox state.
-        let communication_state = self.communication_states.load_entry(application_id).await?;
+        let communication_state = self
+            .communication_states
+            .load_entry_mut(application_id)
+            .await?;
         let inbox = communication_state
             .inboxes
-            .load_entry(origin.clone())
+            .load_entry_mut(origin.clone())
             .await?;
         for event in events {
             inbox.add_event(event).await.map_err(|error| match error {
@@ -357,11 +369,11 @@ where
             // Mark the message as processed in the inbox.
             let communication_state = self
                 .communication_states
-                .load_entry(message.application_id)
+                .load_entry_mut(message.application_id)
                 .await?;
             let inbox = communication_state
                 .inboxes
-                .load_entry(message.origin.clone())
+                .load_entry_mut(message.origin.clone())
                 .await?;
             inbox.remove_event(&message.event).await.map_err(|error| {
                 ChainError::from((
@@ -388,7 +400,7 @@ where
                 .await?;
             let communication_state = self
                 .communication_states
-                .load_entry(message.application_id)
+                .load_entry_mut(message.application_id)
                 .await?;
             Self::process_execution_results(
                 &mut communication_state.outboxes,
@@ -408,7 +420,7 @@ where
             };
             let communication_state = self
                 .communication_states
-                .load_entry(*application_id)
+                .load_entry_mut(*application_id)
                 .await?;
             let results = self
                 .execution_state
@@ -496,33 +508,33 @@ where
 
         // Update the (regular) outboxes.
         for recipient in recipients {
-            let outbox = outboxes.load_entry(Target::chain(recipient)).await?;
+            let outbox = outboxes.load_entry_mut(Target::chain(recipient)).await?;
             outbox.schedule_message(height)?;
         }
 
         // Update the channels.
         for (name, id) in application.unsubscribe {
-            let channel = channels.load_entry(name).await?;
+            let channel = channels.load_entry_mut(name).await?;
             // Remove subscriber. Do not remove the channel outbox yet.
             channel.subscribers.remove(&id)?;
         }
         for name in channel_broadcasts {
-            let channel = channels.load_entry(name.clone()).await?;
+            let channel = channels.load_entry_mut(name.clone()).await?;
             for recipient in channel.subscribers.indices().await? {
                 let outbox = outboxes
-                    .load_entry(Target::channel(recipient, name.clone()))
+                    .load_entry_mut(Target::channel(recipient, name.clone()))
                     .await?;
                 outbox.schedule_message(height)?;
             }
             channel.block_height.set(Some(height));
         }
         for (name, id) in application.subscribe {
-            let channel = channels.load_entry(name.clone()).await?;
+            let channel = channels.load_entry_mut(name.clone()).await?;
             // Add subscriber.
             if !channel.subscribers.contains(&id).await? {
                 // Send the latest message if any.
                 if let Some(latest_height) = channel.block_height.get() {
-                    let outbox = outboxes.load_entry(Target::channel(id, name)).await?;
+                    let outbox = outboxes.load_entry_mut(Target::channel(id, name)).await?;
                     outbox.schedule_message(*latest_height)?;
                 }
             }
