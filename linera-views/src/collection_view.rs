@@ -5,6 +5,7 @@ use crate::{
     common::{Batch, Context, HashOutput, KeyIterable, Update},
     views::{HashableView, Hasher, View, ViewError},
 };
+use async_std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
@@ -14,7 +15,6 @@ use std::{
     marker::PhantomData,
     mem,
 };
-use async_std::sync::{RwLock, RwLockWriteGuard, RwLockReadGuard};
 
 /// A view that supports accessing a collection of views of the same kind, indexed by a
 /// key, one subview at a time.
