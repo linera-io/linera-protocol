@@ -19,7 +19,7 @@ use linera_chain::{
 };
 use linera_execution::{
     ApplicationId, BytecodeLocation, Destination, Effect, ExecutionError, Query, Response,
-    UserApplicationId,
+    UserApplicationDescription, UserApplicationId,
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -418,6 +418,20 @@ where
         let response = node
             .state
             .query_application(chain_id, application_id, query)
+            .await?;
+        Ok(response)
+    }
+
+    pub async fn describe_application(
+        &self,
+        chain_id: ChainId,
+        application_id: UserApplicationId,
+    ) -> Result<UserApplicationDescription, NodeError> {
+        let node = self.node.clone();
+        let mut node = node.lock().await;
+        let response = node
+            .state
+            .describe_application(chain_id, application_id)
             .await?;
         Ok(response)
     }

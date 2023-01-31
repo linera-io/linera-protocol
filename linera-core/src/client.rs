@@ -10,7 +10,7 @@ use crate::{
 };
 use anyhow::{anyhow, bail, ensure, Result};
 use async_trait::async_trait;
-use futures::stream::select_all;
+use futures::stream::{select_all, FuturesUnordered, StreamExt};
 use linera_base::{
     committee::{Committee, ValidatorState},
     crypto::{CryptoHash, KeyPair},
@@ -24,7 +24,8 @@ use linera_chain::{
 };
 use linera_execution::{
     system::{Address, Amount, Balance, SystemChannel, SystemOperation, UserData},
-    ApplicationId, Bytecode, BytecodeId, Operation, Query, Response, UserApplicationId,
+    ApplicationId, Bytecode, BytecodeId, Effect, Operation, Query, Response, SystemEffect,
+    UserApplicationId,
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -182,17 +183,40 @@ where
     }
 
     /// Obtain up to `self.max_pending_messages` pending messages for the local chain.
+    ///
+    /// Messages known to be redundant are filtered out: A `RegisterApplications` effect whose
+    /// entries are already known never needs to be included in a block.
     async fn pending_messages(&mut self) -> Result<Vec<Message>, NodeError> {
         let query = ChainInfoQuery::new(self.chain_id).with_pending_messages();
         let response = self.node_client.handle_chain_info_query(query).await?;
-        let mut pending_messages = response.info.requested_pending_messages;
-        if pending_messages.len() > self.max_pending_messages {
-            log::warn!(
-                "Limiting block from {} to {} incoming messages",
-                pending_messages.len(),
-                self.max_pending_messages
-            );
-            pending_messages.truncate(self.max_pending_messages);
+        let mut pending_messages = vec![];
+        for message in response.info.requested_pending_messages {
+            if pending_messages.len() >= self.max_pending_messages {
+                log::warn!(
+                    "Limiting block from {} to {} incoming messages",
+                    pending_messages.len(),
+                    self.max_pending_messages
+                );
+                break;
+            }
+            if let Effect::System(SystemEffect::RegisterApplications { applications }) =
+                &message.event.effect
+            {
+                let chain_id = self.chain_id;
+                if applications
+                    .iter()
+                    .map(|application| {
+                        self.node_client
+                            .describe_application(chain_id, application.into())
+                    })
+                    .collect::<FuturesUnordered<_>>()
+                    .all(|result| async move { result.is_ok() })
+                    .await
+                {
+                    continue; // These applications are already registered; skip register effect.
+                }
+            }
+            pending_messages.push(message);
         }
         Ok(pending_messages)
     }
