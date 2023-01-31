@@ -495,13 +495,13 @@ where
         if config.with_collection {
             let mut subview = view
                 .collection4
-                .try_load_entry("hola".to_string())
+                .try_load_entry_mut("hola".to_string())
                 .await
                 .unwrap();
             assert_eq!(subview.read_front(10).await.unwrap(), Vec::<u64>::new());
             assert!(view
                 .collection4
-                .try_load_entry("hola".to_string())
+                .try_load_entry_mut("hola".to_string())
                 .await
                 .is_err());
             if config.with_queue {

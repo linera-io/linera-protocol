@@ -21,7 +21,7 @@ use std::{
     ops::DerefMut,
     sync::Arc,
 };
-use tokio::sync::{Mutex, MutexGuard, OwnedMutexGuard};
+use tokio::sync::{Mutex, MutexGuard, OwnedMutexGuard, OwnedRwLockWriteGuard};
 
 /// Runtime data tracked during the execution of a transaction.
 #[derive(Debug, Clone)]
@@ -42,7 +42,8 @@ pub(crate) struct ExecutionRuntime<'a, C, const WRITABLE: bool> {
     execution_results: Arc<Mutex<&'a mut Vec<ExecutionResult>>>,
 }
 
-type ActiveUserStates<C> = BTreeMap<UserApplicationId, OwnedMutexGuard<RegisterView<C, Vec<u8>>>>;
+type ActiveUserStates<C> =
+    BTreeMap<UserApplicationId, OwnedRwLockWriteGuard<RegisterView<C, Vec<u8>>>>;
 
 type ActiveSessions = BTreeMap<SessionId, OwnedMutexGuard<SessionState>>;
 
@@ -289,7 +290,7 @@ where
         let state = self
             .execution_state_mut()
             .users
-            .try_load_entry(self.application_id())
+            .try_load_entry_mut(self.application_id())
             .await?
             .get()
             .to_vec();
@@ -336,7 +337,7 @@ where
         let view = self
             .execution_state_mut()
             .users
-            .try_load_entry(self.application_id())
+            .try_load_entry_mut(self.application_id())
             .await?;
         let state = view.get().to_vec();
         // Remember the view. This will prevent reentrancy.
