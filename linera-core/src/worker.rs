@@ -16,7 +16,10 @@ use linera_chain::{
     },
     ChainManagerOutcome, ChainStateView,
 };
-use linera_execution::{ApplicationId, Destination, Effect, Query, Response};
+use linera_execution::{
+    ApplicationId, Destination, Effect, Query, Response, UserApplicationDescription,
+    UserApplicationId,
+};
 use linera_storage::Store;
 use linera_views::{
     log_view::LogView,
@@ -307,6 +310,16 @@ where
     ) -> Result<Response, WorkerError> {
         let mut chain = self.storage.load_active_chain(chain_id).await?;
         let response = chain.query_application(application_id, query).await?;
+        Ok(response)
+    }
+
+    pub(crate) async fn describe_application(
+        &mut self,
+        chain_id: ChainId,
+        application_id: UserApplicationId,
+    ) -> Result<UserApplicationDescription, WorkerError> {
+        let mut chain = self.storage.load_active_chain(chain_id).await?;
+        let response = chain.describe_application(application_id).await?;
         Ok(response)
     }
 

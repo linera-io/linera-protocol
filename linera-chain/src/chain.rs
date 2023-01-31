@@ -16,7 +16,7 @@ use linera_base::{
 use linera_execution::{
     system::SystemEffect, ApplicationId, ChannelName, Destination, Effect, EffectContext,
     ExecutionResult, ExecutionRuntimeContext, ExecutionStateView, OperationContext, Query,
-    QueryContext, RawExecutionResult, Response,
+    QueryContext, RawExecutionResult, Response, UserApplicationDescription, UserApplicationId,
 };
 use linera_views::{
     collection_view::CollectionView,
@@ -105,6 +105,18 @@ where
             .query_application(application_id, &context, query)
             .await?;
         Ok(response)
+    }
+
+    pub async fn describe_application(
+        &mut self,
+        application_id: UserApplicationId,
+    ) -> Result<UserApplicationDescription, ChainError> {
+        self.execution_state
+            .system
+            .registry
+            .describe_application(application_id)
+            .await
+            .map_err(|err| ChainError::ExecutionError(err.into()))
     }
 
     pub async fn mark_messages_as_received(
