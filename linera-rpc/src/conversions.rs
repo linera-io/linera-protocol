@@ -443,6 +443,37 @@ impl TryFrom<Certificate> for grpc::Certificate {
     }
 }
 
+impl TryFrom<grpc::CertificateWithDependencies> for (Certificate, Vec<Certificate>) {
+    type Error = ProtoConversionError;
+
+    fn try_from(cert_with_deps: grpc::CertificateWithDependencies) -> Result<Self, Self::Error> {
+        let mut required_certificates = vec![];
+        for cert in cert_with_deps.required_certificates {
+            required_certificates.push(try_proto_convert!(Some(cert)));
+        }
+        Ok((
+            try_proto_convert!(cert_with_deps.certificate),
+            required_certificates,
+        ))
+    }
+}
+
+impl TryFrom<(Certificate, Vec<Certificate>)> for grpc::CertificateWithDependencies {
+    type Error = ProtoConversionError;
+
+    fn try_from(
+        (certificate, required_certificates): (Certificate, Vec<Certificate>),
+    ) -> Result<Self, Self::Error> {
+        Ok(Self {
+            certificate: Some(certificate.try_into()?),
+            required_certificates: required_certificates
+                .into_iter()
+                .map(grpc::Certificate::try_from)
+                .collect::<Result<_, _>>()?,
+        })
+    }
+}
+
 impl TryFrom<grpc::ChainInfoQuery> for ChainInfoQuery {
     type Error = ProtoConversionError;
 

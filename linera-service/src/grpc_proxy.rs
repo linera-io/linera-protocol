@@ -15,7 +15,8 @@ use linera_rpc::{
             validator_worker_client::ValidatorWorkerClient,
             ChainInfoResult, Notification, SubscriptionRequest,
         },
-        BlockProposal, Certificate, ChainInfoQuery, CrossChainRequest, LiteCertificate,
+        BlockProposal, CertificateWithDependencies, ChainInfoQuery, CrossChainRequest,
+        LiteCertificate,
     },
     pool::ConnectionPool,
 };
@@ -156,7 +157,7 @@ impl ValidatorNode for GrpcProxy {
 
     async fn handle_certificate(
         &self,
-        request: Request<Certificate>,
+        request: Request<CertificateWithDependencies>,
     ) -> Result<Response<ChainInfoResult>, Status> {
         let (mut client, inner) = self.client_for_proxy_worker(request).await?;
         client.handle_certificate(inner).await
@@ -220,9 +221,9 @@ impl Proxyable for LiteCertificate {
     }
 }
 
-impl Proxyable for Certificate {
+impl Proxyable for CertificateWithDependencies {
     fn chain_id(&self) -> Option<ChainId> {
-        match bcs::from_bytes::<Value>(&self.value) {
+        match bcs::from_bytes::<Value>(&self.certificate.as_ref()?.value) {
             Ok(value) => Some(value.chain_id()),
             Err(_) => None,
         }

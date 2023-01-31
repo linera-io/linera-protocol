@@ -75,19 +75,23 @@ where
         let full_cert = certificate
             .with_value(value)
             .ok_or(WorkerError::InvalidLiteCertificate)?;
-        let response = validator.state.fully_handle_certificate(full_cert).await?;
+        let response = validator
+            .state
+            .fully_handle_certificate(full_cert, vec![])
+            .await?;
         Ok(response)
     }
 
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
+        required_certificates: Vec<Certificate>,
     ) -> Result<ChainInfoResponse, NodeError> {
         let validator = self.0.clone();
         let mut validator = validator.lock().await;
         let response = validator
             .state
-            .fully_handle_certificate(certificate)
+            .fully_handle_certificate(certificate, required_certificates)
             .await?;
         Ok(response)
     }

@@ -309,7 +309,10 @@ impl ClientContext {
         let mut node = LocalNodeClient::new(worker);
         // Second replay the certificates locally.
         for certificate in certificates {
-            node.handle_certificate(certificate).await.unwrap();
+            let required_certificates = vec![]; // TODO
+            node.handle_certificate(certificate, required_certificates)
+                .await
+                .unwrap();
         }
         // Last update the wallet.
         for chain in self.wallet_state.chains_mut() {
@@ -804,7 +807,7 @@ where
                 );
                 let messages = certificates
                     .iter()
-                    .map(|certificate| certificate.clone().into())
+                    .map(|certificate| (certificate.clone(), vec![]).into()) // TODO
                     .collect();
                 let responses = context
                     .mass_broadcast("certificates", max_in_flight, messages)
