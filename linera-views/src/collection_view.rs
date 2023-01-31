@@ -13,9 +13,12 @@ use std::{
     io::Write,
     marker::PhantomData,
     mem,
-    sync::Arc,
 };
-use tokio::sync::{Mutex, OwnedMutexGuard};
+#[cfg(not(target_arch = "wasm32"))]
+use {
+    std::sync::Arc,
+    tokio::sync::{Mutex, OwnedMutexGuard},
+};
 
 /// A view that supports accessing a collection of views of the same kind, indexed by a
 /// key, one subview at a time.
@@ -32,6 +35,7 @@ pub struct CollectionView<C, I, W> {
 /// A view that supports accessing a collection of views of the same kind, indexed by a
 /// key, possibly several subviews at a time.
 #[derive(Debug)]
+#[cfg(not(target_arch = "wasm32"))]
 pub struct ReentrantCollectionView<C, I, W> {
     context: C,
     was_cleared: bool,
@@ -297,6 +301,7 @@ where
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[async_trait]
 impl<C, I, W> View<C> for ReentrantCollectionView<C, I, W>
 where
@@ -382,6 +387,7 @@ where
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl<C, I, W> ReentrantCollectionView<C, I, W>
 where
     C: Context + Send,
@@ -566,6 +572,7 @@ where
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[async_trait]
 impl<C, I, W> HashableView<C> for ReentrantCollectionView<C, I, W>
 where

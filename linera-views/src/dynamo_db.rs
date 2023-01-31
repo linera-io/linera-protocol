@@ -18,7 +18,6 @@ use aws_sdk_dynamodb::{
     types::{Blob, SdkError},
     Client,
 };
-use linera_base::ensure;
 use serde::Serialize;
 use std::{collections::HashMap, str::FromStr};
 use thiserror::Error;
@@ -557,18 +556,20 @@ impl FromStr for TableName {
     type Err = InvalidTableName;
 
     fn from_str(string: &str) -> Result<Self, Self::Err> {
-        ensure!(string.len() >= 3, InvalidTableName::TooShort);
-        ensure!(string.len() <= 255, InvalidTableName::TooLong);
-        ensure!(
-            string
-                .chars()
-                .all(|character| character.is_ascii_alphanumeric()
-                    || character == '.'
-                    || character == '-'
-                    || character == '_'),
-            InvalidTableName::InvalidCharacter
-        );
-
+        if string.len() < 3 {
+            return Err(InvalidTableName::TooShort);
+        }
+        if string.len() > 255 {
+            return Err(InvalidTableName::TooLong);
+        }
+        if !string.chars().all(|character| {
+            character.is_ascii_alphanumeric()
+                || character == '.'
+                || character == '-'
+                || character == '_'
+        }) {
+            return Err(InvalidTableName::InvalidCharacter);
+        }
         Ok(TableName(string.to_owned()))
     }
 }
