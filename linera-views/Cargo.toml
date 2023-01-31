@@ -8,6 +8,7 @@ edition = "2021"
 test = ["anyhow", "tokio/macros", "tokio/sync", "tokio/parking_lot"]
 
 [dependencies]
+async-std = "1.12.0"
 async-trait = "0.1.52"
 bcs = "0.1.3"
 futures = "0.3.17"
