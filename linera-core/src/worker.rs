@@ -63,6 +63,7 @@ pub trait ValidatorWorker {
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
+        required_certificates: Vec<Certificate>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError>;
 
     /// Handle information queries on chains.
@@ -267,8 +268,9 @@ where
     pub(crate) async fn fully_handle_certificate(
         &mut self,
         certificate: Certificate,
+        required_certificates: Vec<Certificate>,
     ) -> Result<ChainInfoResponse, WorkerError> {
-        self.fully_handle_certificate_with_notifications(certificate, None)
+        self.fully_handle_certificate_with_notifications(certificate, required_certificates, None)
             .await
     }
 
@@ -276,9 +278,12 @@ where
     pub(crate) async fn fully_handle_certificate_with_notifications(
         &mut self,
         certificate: Certificate,
+        required_certificates: Vec<Certificate>,
         mut notifications: Option<&mut Vec<Notification>>,
     ) -> Result<ChainInfoResponse, WorkerError> {
-        let (response, actions) = self.handle_certificate(certificate).await?;
+        let (response, actions) = self
+            .handle_certificate(certificate, required_certificates)
+            .await?;
         let mut requests = VecDeque::from(actions.cross_chain_requests);
         while let Some(request) = requests.pop_front() {
             let actions = self.handle_cross_chain_request(request).await?;
@@ -747,13 +752,14 @@ where
         let full_cert = certificate
             .with_value(value)
             .ok_or(WorkerError::InvalidLiteCertificate)?;
-        self.handle_certificate(full_cert).await
+        self.handle_certificate(full_cert, vec![]).await
     }
 
     /// Process a certificate.
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
+        required_certificates: Vec<Certificate>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         log::trace!("{} <-- {:?}", self.nickname, certificate);
         let maybe_certificate =

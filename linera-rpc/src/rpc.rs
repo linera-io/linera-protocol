@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 pub enum RpcMessage {
     // Inbound
     BlockProposal(Box<BlockProposal>),
-    Certificate(Box<Certificate>),
+    Certificate(Box<Certificate>, Vec<Certificate>),
     LiteCertificate(Box<LiteCertificate>),
     ChainInfoQuery(Box<ChainInfoQuery>),
     // Outbound
@@ -35,7 +35,7 @@ impl RpcMessage {
         let chain_id = match self {
             RpcMessage::BlockProposal(proposal) => proposal.content.block.chain_id,
             RpcMessage::LiteCertificate(certificate) => certificate.value.chain_id,
-            RpcMessage::Certificate(certificate) => certificate.value.chain_id(),
+            RpcMessage::Certificate(certificate, _) => certificate.value.chain_id(),
             RpcMessage::ChainInfoQuery(query) => query.chain_id,
             RpcMessage::CrossChainRequest(request) => request.target_chain_id(),
             RpcMessage::Vote(_) | RpcMessage::Error(_) | RpcMessage::ChainInfoResponse(_) => {
@@ -58,9 +58,9 @@ impl From<LiteCertificate> for RpcMessage {
     }
 }
 
-impl From<Certificate> for RpcMessage {
-    fn from(certificate: Certificate) -> Self {
-        RpcMessage::Certificate(Box::new(certificate))
+impl From<(Certificate, Vec<Certificate>)> for RpcMessage {
+    fn from((certificate, required_certificates): (Certificate, Vec<Certificate>)) -> Self {
+        RpcMessage::Certificate(Box::new(certificate), required_certificates)
     }
 }
 

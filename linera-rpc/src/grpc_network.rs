@@ -41,8 +41,8 @@ pub use crate::{
         validator_node_client::ValidatorNodeClient,
         validator_worker_client::ValidatorWorkerClient,
         validator_worker_server::{ValidatorWorker as ValidatorWorkerRpc, ValidatorWorkerServer},
-        BlockProposal, Certificate, ChainInfoQuery, ChainInfoResult, CrossChainRequest,
-        LiteCertificate,
+        BlockProposal, Certificate, CertificateWithDependencies, ChainInfoQuery, ChainInfoResult,
+        CrossChainRequest, LiteCertificate,
     },
     mass::{MassClient, MassClientError},
     mass_client_delegate,
@@ -370,16 +370,17 @@ where
 
     async fn handle_certificate(
         &self,
-        request: Request<Certificate>,
+        request: Request<CertificateWithDependencies>,
     ) -> Result<Response<ChainInfoResult>, Status> {
         debug!(
             "server handler [handle_certificate] received delegating request [{:?}] ",
             request
         );
+        let (certificate, required_certificates) = request.into_inner().try_into()?;
         match self
             .state
             .clone()
-            .handle_certificate(request.into_inner().try_into()?)
+            .handle_certificate(certificate, required_certificates)
             .await
         {
             Ok((info, actions)) => {
@@ -475,8 +476,10 @@ impl ValidatorNode for GrpcClient {
     async fn handle_certificate(
         &mut self,
         certificate: data_types::Certificate,
+        required_certificates: Vec<data_types::Certificate>,
     ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
-        client_delegate!(self, handle_certificate, certificate)
+        let cert_with_deps = (certificate, required_certificates);
+        client_delegate!(self, handle_certificate, cert_with_deps)
     }
 
     async fn handle_chain_info_query(
@@ -526,8 +529,9 @@ impl MassClient for GrpcMassClient {
                 RpcMessage::BlockProposal(proposal) => {
                     mass_client_delegate!(client, handle_block_proposal, proposal, responses)
                 }
-                RpcMessage::Certificate(certificate) => {
-                    mass_client_delegate!(client, handle_certificate, certificate, responses)
+                RpcMessage::Certificate(certificate, required_certificates) => {
+                    let cert_with_deps = Box::new((*certificate, required_certificates));
+                    mass_client_delegate!(client, handle_certificate, cert_with_deps, responses)
                 }
                 msg => panic!("attempted to send msg: {:?}", msg),
             }

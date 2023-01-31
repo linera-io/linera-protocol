@@ -197,8 +197,13 @@ where
                         Err(error) => Err(error.into()),
                     }
                 }
-                RpcMessage::Certificate(message) => {
-                    match self.server.state.handle_certificate(*message).await {
+                RpcMessage::Certificate(message, required_certificates) => {
+                    match self
+                        .server
+                        .state
+                        .handle_certificate(*message, required_certificates)
+                        .await
+                    {
                         Ok((info, actions)) => {
                             // Cross-shard requests
                             self.handle_network_actions(actions).await;
@@ -367,8 +372,10 @@ impl ValidatorNode for SimpleClient {
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
+        required_certificates: Vec<Certificate>,
     ) -> Result<ChainInfoResponse, NodeError> {
-        self.send_recv_info(certificate.into()).await
+        self.send_recv_info((certificate, required_certificates).into())
+            .await
     }
 
     /// Handle information queries for this chain.
