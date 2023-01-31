@@ -10,7 +10,7 @@ use crate::{
 };
 use linera_base::{data_types::ChainId, ensure};
 use linera_views::{
-    collection_view::ReentrantCollectionView,
+    reentrant_collection_view::ReentrantCollectionView,
     register_view::RegisterView,
     views::{View, ViewError},
 };
