@@ -14,7 +14,7 @@ use std::{
     marker::PhantomData,
     mem,
 };
-use tokio::sync::{RwLock, RwLockReadGuard};
+use async_std::sync::{RwLock, RwLockWriteGuard, RwLockReadGuard};
 
 /// A view that supports accessing a collection of views of the same kind, indexed by a
 /// key, one subview at a time.
@@ -208,7 +208,7 @@ where
                 let entry = entry.into_mut();
                 match entry {
                     Update::Set(_) => {
-                        let guard = updates.downgrade();
+                        let guard = RwLockWriteGuard::downgrade(updates);
                         Ok(ReadGuardedView { guard, short_key })
                     }
                     Update::Removed => {
@@ -220,7 +220,7 @@ where
                         let mut view = W::load(context).await?;
                         view.clear();
                         *entry = Update::Set(view);
-                        let guard = updates.downgrade();
+                        let guard = RwLockWriteGuard::downgrade(updates);
                         Ok(ReadGuardedView { guard, short_key })
                     }
                 }
@@ -235,7 +235,7 @@ where
                     view.clear();
                 }
                 entry.insert(Update::Set(view));
-                let guard = updates.downgrade();
+                let guard = RwLockWriteGuard::downgrade(updates);
                 Ok(ReadGuardedView { guard, short_key })
             }
         }

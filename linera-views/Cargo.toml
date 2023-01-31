@@ -8,6 +8,7 @@ edition = "2021"
 test = ["anyhow", "tokio/macros", "tokio/sync", "tokio/parking_lot"]
 
 [dependencies]
+async-std = "1.12.0"
 anyhow = { version = "1.0.57", optional = true }
 async-trait = "0.1.52"
 aws-config = "0.14.0"
