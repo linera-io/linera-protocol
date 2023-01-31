@@ -341,10 +341,10 @@ where
         for application_id in chain.communication_states.indices().await? {
             let state = chain
                 .communication_states
-                .load_entry(application_id)
+                .load_entry_mut(application_id)
                 .await?;
             for target in state.outboxes.indices().await? {
-                let outbox = state.outboxes.load_entry(target.clone()).await?;
+                let outbox = state.outboxes.load_entry_mut(target.clone()).await?;
                 let heights = outbox.block_heights().await?;
                 let origin = Origin {
                     sender: chain_id,
@@ -769,10 +769,10 @@ where
             for application_id in chain.communication_states.indices().await? {
                 let state = chain
                     .communication_states
-                    .load_entry(application_id)
+                    .load_entry_mut(application_id)
                     .await?;
                 for origin in state.inboxes.indices().await? {
-                    let inbox = state.inboxes.load_entry(origin.clone()).await?;
+                    let inbox = state.inboxes.load_entry_mut(origin.clone()).await?;
                     let count = inbox.added_events.count();
                     for event in inbox.added_events.read_front(count).await? {
                         messages.push(Message {

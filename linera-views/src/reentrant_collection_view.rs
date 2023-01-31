@@ -15,15 +15,16 @@ use std::{
     mem,
     sync::Arc,
 };
-use tokio::sync::{Mutex, OwnedMutexGuard};
+use tokio::sync::{Mutex, OwnedRwLockReadGuard, OwnedRwLockWriteGuard, RwLock};
 
 /// A view that supports accessing a collection of views of the same kind, indexed by a
 /// key, possibly several subviews at a time.
 #[derive(Debug)]
+#[allow(clippy::type_complexity)]
 pub struct ReentrantCollectionView<C, I, W> {
     context: C,
     was_cleared: bool,
-    updates: BTreeMap<Vec<u8>, Update<Arc<Mutex<W>>>>,
+    updates: Mutex<BTreeMap<Vec<u8>, Update<Arc<RwLock<W>>>>>,
     _phantom: PhantomData<I>,
     stored_hash: Option<HashOutput>,
     hash: Option<HashOutput>,
@@ -64,7 +65,7 @@ where
         Ok(Self {
             context,
             was_cleared: false,
-            updates: BTreeMap::new(),
+            updates: Mutex::new(BTreeMap::new()),
             _phantom: PhantomData,
             stored_hash: hash,
             hash,
@@ -73,7 +74,7 @@ where
 
     fn rollback(&mut self) {
         self.was_cleared = false;
-        self.updates.clear();
+        self.updates.get_mut().clear();
         self.hash = self.stored_hash;
     }
 
@@ -81,7 +82,7 @@ where
         if self.was_cleared {
             self.was_cleared = false;
             batch.delete_key_prefix(self.context.base_key());
-            for (index, update) in mem::take(&mut self.updates) {
+            for (index, update) in mem::take(self.updates.get_mut()) {
                 if let Update::Set(view) = update {
                     let mut view = Arc::try_unwrap(view)
                         .map_err(|_| ViewError::CannotAcquireCollectionEntry)?
@@ -91,7 +92,7 @@ where
                 }
             }
         } else {
-            for (index, update) in mem::take(&mut self.updates) {
+            for (index, update) in mem::take(self.updates.get_mut()) {
                 match update {
                     Update::Set(view) => {
                         let mut view = Arc::try_unwrap(view)
@@ -126,7 +127,7 @@ where
 
     fn clear(&mut self) {
         self.was_cleared = true;
-        self.updates.clear();
+        self.updates.get_mut().clear();
         self.hash = None;
     }
 }
@@ -154,14 +155,18 @@ where
 
     /// Obtain a subview for the data at the given index in the collection. If an entry
     /// was removed before then a default entry is put on this index.
-    pub async fn try_load_entry(&mut self, index: I) -> Result<OwnedMutexGuard<W>, ViewError> {
+    pub async fn try_load_entry_mut(
+        &mut self,
+        index: I,
+    ) -> Result<OwnedRwLockWriteGuard<W>, ViewError> {
         self.hash = None;
         let short_key = C::derive_short_key(&index)?;
-        match self.updates.entry(short_key.clone()) {
+        let updates = self.updates.get_mut();
+        match updates.entry(short_key.clone()) {
             btree_map::Entry::Occupied(entry) => {
                 let entry = entry.into_mut();
                 match entry {
-                    Update::Set(view) => Ok(view.clone().try_lock_owned()?),
+                    Update::Set(view) => Ok(view.clone().try_write_owned()?),
                     Update::Removed => {
                         let key = self
                             .context
@@ -170,9 +175,9 @@ where
                         // Obtain a view and set its pending state to the default (e.g. empty) state
                         let mut view = W::load(context).await?;
                         view.clear();
-                        let wrapped_view = Arc::new(Mutex::new(view));
+                        let wrapped_view = Arc::new(RwLock::new(view));
                         *entry = Update::Set(wrapped_view.clone());
-                        Ok(wrapped_view.try_lock_owned()?)
+                        Ok(wrapped_view.try_write_owned()?)
                     }
                 }
             }
@@ -185,9 +190,49 @@ where
                 if self.was_cleared {
                     view.clear();
                 }
-                let wrapped_view = Arc::new(Mutex::new(view));
+                let wrapped_view = Arc::new(RwLock::new(view));
                 entry.insert(Update::Set(wrapped_view.clone()));
-                Ok(wrapped_view.try_lock_owned()?)
+                Ok(wrapped_view.try_write_owned()?)
+            }
+        }
+    }
+
+    /// Obtain a read-only access to a subview for the data at the given index in the collection. If an entry
+    /// was removed before then a default entry is put on this index.
+    pub async fn try_load_entry(&self, index: I) -> Result<OwnedRwLockReadGuard<W>, ViewError> {
+        let short_key = C::derive_short_key(&index)?;
+        let mut updates = self.updates.lock().await;
+        match updates.entry(short_key.clone()) {
+            btree_map::Entry::Occupied(entry) => {
+                let entry = entry.into_mut();
+                match entry {
+                    Update::Set(view) => Ok(view.clone().try_read_owned()?),
+                    Update::Removed => {
+                        let key = self
+                            .context
+                            .base_tag_index(KeyTag::Subview as u8, &short_key);
+                        let context = self.context.clone_with_base_key(key);
+                        // Obtain a view and set its pending state to the default (e.g. empty) state
+                        let mut view = W::load(context).await?;
+                        view.clear();
+                        let wrapped_view = Arc::new(RwLock::new(view));
+                        *entry = Update::Set(wrapped_view.clone());
+                        Ok(wrapped_view.try_read_owned()?)
+                    }
+                }
+            }
+            btree_map::Entry::Vacant(entry) => {
+                let key = self
+                    .context
+                    .base_tag_index(KeyTag::Subview as u8, &short_key);
+                let context = self.context.clone_with_base_key(key);
+                let mut view = W::load(context).await?;
+                if self.was_cleared {
+                    view.clear();
+                }
+                let wrapped_view = Arc::new(RwLock::new(view));
+                entry.insert(Update::Set(wrapped_view.clone()));
+                Ok(wrapped_view.try_read_owned()?)
             }
         }
     }
@@ -197,9 +242,9 @@ where
         self.hash = None;
         let short_key = C::derive_short_key(&index)?;
         if self.was_cleared {
-            self.updates.remove(&short_key);
+            self.updates.get_mut().remove(&short_key);
         } else {
-            self.updates.insert(short_key, Update::Removed);
+            self.updates.get_mut().insert(short_key, Update::Removed);
         }
         Ok(())
     }
@@ -207,7 +252,7 @@ where
     /// Mark the entry so that it is removed in the next flush
     pub async fn try_reset_entry_to_default(&mut self, index: I) -> Result<(), ViewError> {
         self.hash = None;
-        let mut view = self.try_load_entry(index).await?;
+        let mut view = self.try_load_entry_mut(index).await?;
         view.clear();
         Ok(())
     }
@@ -234,7 +279,8 @@ where
     where
         F: FnMut(&[u8]) -> Result<(), ViewError> + Send,
     {
-        let mut updates = self.updates.iter();
+        let updates = self.updates.lock().await;
+        let mut updates = updates.iter();
         let mut update = updates.next();
         if !self.was_cleared {
             let base = self.get_index_key(&[]);
@@ -303,7 +349,7 @@ where
                 hasher.update_with_bcs_bytes(&indices.len())?;
                 for index in indices {
                     hasher.update_with_bcs_bytes(&index)?;
-                    let mut view = self.try_load_entry(index).await?;
+                    let mut view = self.try_load_entry_mut(index).await?;
                     let hash = view.hash().await?;
                     hasher.write_all(hash.as_ref())?;
                 }

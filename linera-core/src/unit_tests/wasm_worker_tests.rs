@@ -356,7 +356,7 @@ where
     let mut creator_state = ExecutionStateView::from_system_state(creator_system_state).await;
     creator_state
         .users
-        .try_load_entry(application_id)
+        .try_load_entry_mut(application_id)
         .await?
         .set(initial_value_bytes);
     let create_block_proposal = Value::ConfirmedBlock {
@@ -393,7 +393,7 @@ where
     let expected_state_bytes = bcs::to_bytes(&expected_value)?;
     creator_state
         .users
-        .try_load_entry(application_id)
+        .try_load_entry_mut(application_id)
         .await?
         .set(expected_state_bytes);
     creator_state.system.timestamp.set(Timestamp::from(5));

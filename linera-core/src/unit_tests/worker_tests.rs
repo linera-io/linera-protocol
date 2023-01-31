@@ -1605,11 +1605,11 @@ where
         BlockHeight::from(0),
         chain
             .communication_states
-            .load_entry(ApplicationId::System)
+            .load_entry_mut(ApplicationId::System)
             .await
             .unwrap()
             .inboxes
-            .load_entry(Origin::chain(ChainId::root(3)))
+            .load_entry_mut(Origin::chain(ChainId::root(3)))
             .await
             .unwrap()
             .next_block_height_to_receive()
@@ -1618,11 +1618,11 @@ where
     assert_eq!(
         chain
             .communication_states
-            .load_entry(ApplicationId::System)
+            .load_entry_mut(ApplicationId::System)
             .await
             .unwrap()
             .inboxes
-            .load_entry(Origin::chain(ChainId::root(3)))
+            .load_entry_mut(Origin::chain(ChainId::root(3)))
             .await
             .unwrap()
             .added_events
@@ -1632,11 +1632,11 @@ where
     assert!(matches!(
         chain
             .communication_states
-            .load_entry(ApplicationId::System)
+            .load_entry_mut(ApplicationId::System)
             .await
             .unwrap()
             .inboxes
-            .load_entry(Origin::chain(ChainId::root(3)))
+            .load_entry_mut(Origin::chain(ChainId::root(3)))
             .await
             .unwrap()
             .removed_events
@@ -1820,11 +1820,11 @@ where
         BlockHeight::from(1),
         chain
             .communication_states
-            .load_entry(ApplicationId::System)
+            .load_entry_mut(ApplicationId::System)
             .await
             .unwrap()
             .inboxes
-            .load_entry(Origin::chain(ChainId::root(1)))
+            .load_entry_mut(Origin::chain(ChainId::root(1)))
             .await
             .unwrap()
             .next_block_height_to_receive()
@@ -1833,11 +1833,11 @@ where
     assert!(matches!(
         chain
             .communication_states
-            .load_entry(ApplicationId::System)
+            .load_entry_mut(ApplicationId::System)
             .await
             .unwrap()
             .inboxes
-            .load_entry(Origin::chain(ChainId::root(1)))
+            .load_entry_mut(Origin::chain(ChainId::root(1)))
             .await
             .unwrap()
             .added_events
@@ -1941,11 +1941,11 @@ where
         BlockHeight::from(1),
         chain
             .communication_states
-            .load_entry(ApplicationId::System)
+            .load_entry_mut(ApplicationId::System)
             .await
             .unwrap()
             .inboxes
-            .load_entry(Origin::chain(ChainId::root(1)))
+            .load_entry_mut(Origin::chain(ChainId::root(1)))
             .await
             .unwrap()
             .next_block_height_to_receive()
@@ -1954,11 +1954,11 @@ where
     assert!(matches!(
         chain
             .communication_states
-            .load_entry(ApplicationId::System)
+            .load_entry_mut(ApplicationId::System)
             .await
             .unwrap()
             .inboxes
-            .load_entry(Origin::chain(ChainId::root(1)))
+            .load_entry_mut(Origin::chain(ChainId::root(1)))
             .await
             .unwrap()
             .added_events
@@ -2119,7 +2119,7 @@ where
     let mut chain = worker.storage.load_chain(ChainId::root(2)).await.unwrap();
     assert!(!chain
         .communication_states
-        .load_entry(ApplicationId::System)
+        .load_entry_mut(ApplicationId::System)
         .await
         .unwrap()
         .inboxes
@@ -2513,7 +2513,7 @@ where
         );
         assert!(admin_chain
             .communication_states
-            .load_entry(ApplicationId::System)
+            .load_entry_mut(ApplicationId::System)
             .await
             .unwrap()
             .outboxes
@@ -2528,7 +2528,7 @@ where
         // The root chain has no subscribers yet.
         assert!(!admin_chain
             .communication_states
-            .load_entry(ApplicationId::System)
+            .load_entry_mut(ApplicationId::System)
             .await
             .unwrap()
             .channels
@@ -2670,11 +2670,11 @@ where
         assert_eq!(
             admin_chain
                 .communication_states
-                .load_entry(ApplicationId::System)
+                .load_entry_mut(ApplicationId::System)
                 .await
                 .unwrap()
                 .channels
-                .load_entry(SystemChannel::Admin.name())
+                .load_entry_mut(SystemChannel::Admin.name())
                 .await
                 .unwrap()
                 .subscribers
@@ -2711,11 +2711,11 @@ where
         matches!(
             user_chain
                 .communication_states
-                .load_entry(ApplicationId::System)
+                .load_entry_mut(ApplicationId::System)
                 .await
                 .unwrap()
                 .inboxes
-                .load_entry(Origin::chain(admin_id))
+                .load_entry_mut(Origin::chain(admin_id))
                 .await
                 .unwrap()
                 .added_events
@@ -2740,11 +2740,11 @@ where
         matches!(
             user_chain
                 .communication_states
-                .load_entry(ApplicationId::System)
+                .load_entry_mut(ApplicationId::System)
                 .await
                 .unwrap()
                 .inboxes
-                .load_entry(admin_channel_origin.clone())
+                .load_entry_mut(admin_channel_origin.clone())
                 .await
                 .unwrap()
                 .added_events
@@ -2759,11 +2759,11 @@ where
         assert_eq!(
             user_chain
                 .communication_states
-                .load_entry(ApplicationId::System)
+                .load_entry_mut(ApplicationId::System)
                 .await
                 .unwrap()
                 .inboxes
-                .load_entry(admin_channel_origin.clone())
+                .load_entry_mut(admin_channel_origin.clone())
                 .await
                 .unwrap()
                 .removed_events
@@ -2875,11 +2875,11 @@ where
         {
             let inbox = user_chain
                 .communication_states
-                .load_entry(ApplicationId::System)
+                .load_entry_mut(ApplicationId::System)
                 .await
                 .unwrap()
                 .inboxes
-                .load_entry(Origin::chain(admin_id))
+                .load_entry_mut(Origin::chain(admin_id))
                 .await
                 .unwrap();
             assert_eq!(
@@ -2892,11 +2892,11 @@ where
         {
             let inbox = user_chain
                 .communication_states
-                .load_entry(ApplicationId::System)
+                .load_entry_mut(ApplicationId::System)
                 .await
                 .unwrap()
                 .inboxes
-                .load_entry(admin_channel_origin)
+                .load_entry_mut(admin_channel_origin)
                 .await
                 .unwrap();
             assert_eq!(
@@ -3083,7 +3083,7 @@ where
     assert_eq!(
         admin_chain
             .communication_states
-            .load_entry(ApplicationId::System)
+            .load_entry_mut(ApplicationId::System)
             .await
             .unwrap()
             .inboxes
@@ -3096,11 +3096,11 @@ where
     matches!(
         admin_chain
             .communication_states
-            .load_entry(ApplicationId::System)
+            .load_entry_mut(ApplicationId::System)
             .await
             .unwrap()
             .inboxes
-            .load_entry(Origin::chain(user_id))
+            .load_entry_mut(Origin::chain(user_id))
             .await
             .unwrap()
             .added_events
@@ -3309,7 +3309,7 @@ where
         let mut admin_chain = worker.storage.load_active_chain(admin_id).await.unwrap();
         assert!(admin_chain
             .communication_states
-            .load_entry(ApplicationId::System)
+            .load_entry_mut(ApplicationId::System)
             .await
             .unwrap()
             .inboxes
