@@ -131,7 +131,10 @@ where
             {
                 Ok(response) => Ok(response),
                 Err(NodeError::MissingCertificateValue) => {
-                    self.client.handle_certificate(certificate.clone()).await
+                    let required_certificates = vec![]; // TODO
+                    self.client
+                        .handle_certificate(certificate.clone(), required_certificates)
+                        .await
                 }
                 Err(err) => Err(err),
             };

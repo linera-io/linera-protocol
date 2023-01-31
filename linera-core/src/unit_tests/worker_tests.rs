@@ -519,7 +519,7 @@ where
         make_certificate(&committee, &worker, value)
     };
     worker
-        .fully_handle_certificate(certificate.clone())
+        .fully_handle_certificate(certificate.clone(), vec![])
         .await
         .expect("handle certificate with valid tick");
     assert!(Timestamp::now().micros() >= block_0_time);
@@ -700,7 +700,10 @@ where
         .get()
         .pending()
         .is_some());
-    worker.handle_certificate(certificate0).await.unwrap();
+    worker
+        .handle_certificate(certificate0, vec![])
+        .await
+        .unwrap();
     worker.handle_block_proposal(block_proposal1).await.unwrap();
     assert!(worker
         .storage
@@ -872,18 +875,26 @@ where
     );
     // Missing earlier blocks
     assert!(worker
-        .handle_certificate(certificate1.clone())
+        .handle_certificate(certificate1.clone(), vec![])
         .await
         .is_err());
 
     // Run transfers
     let mut notifications = Vec::new();
     worker
-        .fully_handle_certificate_with_notifications(certificate0.clone(), Some(&mut notifications))
+        .fully_handle_certificate_with_notifications(
+            certificate0.clone(),
+            vec![],
+            Some(&mut notifications),
+        )
         .await
         .unwrap();
     worker
-        .fully_handle_certificate_with_notifications(certificate1.clone(), Some(&mut notifications))
+        .fully_handle_certificate_with_notifications(
+            certificate1.clone(),
+            vec![],
+            Some(&mut notifications),
+        )
         .await
         .unwrap();
     assert_eq!(
@@ -1151,7 +1162,7 @@ where
             },
         );
         worker
-            .handle_certificate(certificate.clone())
+            .handle_certificate(certificate.clone(), vec![])
             .await
             .unwrap();
         // Then skip the second message and receive the last one.
@@ -1442,7 +1453,10 @@ where
         None,
     )
     .await;
-    assert!(worker.fully_handle_certificate(certificate).await.is_err());
+    assert!(worker
+        .fully_handle_certificate(certificate, vec![])
+        .await
+        .is_err());
 }
 
 #[test(tokio::test)]
@@ -1505,10 +1519,13 @@ where
     .await;
     // Replays are ignored.
     worker
-        .fully_handle_certificate(certificate.clone())
+        .fully_handle_certificate(certificate.clone(), vec![])
         .await
         .unwrap();
-    worker.fully_handle_certificate(certificate).await.unwrap();
+    worker
+        .fully_handle_certificate(certificate, vec![])
+        .await
+        .unwrap();
 }
 
 #[test(tokio::test)]
@@ -1585,7 +1602,7 @@ where
     )
     .await;
     worker
-        .fully_handle_certificate(certificate.clone())
+        .fully_handle_certificate(certificate.clone(), vec![])
         .await
         .unwrap();
     let mut chain = worker
@@ -1725,7 +1742,7 @@ where
     )
     .await;
     worker
-        .fully_handle_certificate(certificate.clone())
+        .fully_handle_certificate(certificate.clone(), vec![])
         .await
         .unwrap();
     let new_sender_chain = worker
@@ -1804,7 +1821,7 @@ where
     )
     .await;
     worker
-        .fully_handle_certificate(certificate.clone())
+        .fully_handle_certificate(certificate.clone(), vec![])
         .await
         .unwrap();
     let mut chain = worker
@@ -2231,7 +2248,7 @@ where
     .await;
 
     let info = worker
-        .fully_handle_certificate(certificate.clone())
+        .fully_handle_certificate(certificate.clone(), vec![])
         .await
         .unwrap()
         .info;
@@ -2282,7 +2299,7 @@ where
     )
     .await;
     worker
-        .fully_handle_certificate(certificate.clone())
+        .fully_handle_certificate(certificate.clone(), vec![])
         .await
         .unwrap();
 
@@ -2386,7 +2403,7 @@ where
     .await;
 
     let info = worker
-        .fully_handle_certificate(certificate.clone())
+        .fully_handle_certificate(certificate.clone(), vec![])
         .await
         .unwrap()
         .info;
@@ -2513,7 +2530,7 @@ where
         },
     );
     worker
-        .fully_handle_certificate(certificate0.clone())
+        .fully_handle_certificate(certificate0.clone(), vec![])
         .await
         .unwrap();
     {
@@ -2620,7 +2637,7 @@ where
         },
     );
     worker
-        .fully_handle_certificate(certificate1.clone())
+        .fully_handle_certificate(certificate1.clone(), vec![])
         .await
         .unwrap();
 
@@ -2672,7 +2689,7 @@ where
         },
     );
     worker
-        .fully_handle_certificate(certificate2.clone())
+        .fully_handle_certificate(certificate2.clone(), vec![])
         .await
         .unwrap();
     {
@@ -2860,7 +2877,10 @@ where
             .await,
         },
     );
-    worker.fully_handle_certificate(certificate3).await.unwrap();
+    worker
+        .fully_handle_certificate(certificate3, vec![])
+        .await
+        .unwrap();
     {
         let mut user_chain = worker.storage.load_active_chain(user_id).await.unwrap();
         assert_eq!(
@@ -3065,13 +3085,13 @@ where
         },
     );
     worker
-        .fully_handle_certificate(certificate1.clone())
+        .fully_handle_certificate(certificate1.clone(), vec![])
         .await
         .unwrap();
 
     // Try to execute the transfer.
     worker
-        .fully_handle_certificate(certificate0.clone())
+        .fully_handle_certificate(certificate0.clone(), vec![])
         .await
         .unwrap();
 
@@ -3291,13 +3311,13 @@ where
         },
     );
     worker
-        .fully_handle_certificate(certificate1.clone())
+        .fully_handle_certificate(certificate1.clone(), vec![])
         .await
         .unwrap();
 
     // Try to execute the transfer from the user chain to the admin chain.
     worker
-        .fully_handle_certificate(certificate0.clone())
+        .fully_handle_certificate(certificate0.clone(), vec![])
         .await
         .unwrap();
 
@@ -3374,7 +3394,7 @@ where
         },
     );
     worker
-        .fully_handle_certificate(certificate2.clone())
+        .fully_handle_certificate(certificate2.clone(), vec![])
         .await
         .unwrap();
 
@@ -3387,7 +3407,7 @@ where
     // Try again to execute the transfer from the user chain to the admin chain.
     // This time, the epoch verification should be overruled.
     worker
-        .fully_handle_certificate(certificate0.clone())
+        .fully_handle_certificate(certificate0.clone(), vec![])
         .await
         .unwrap();
 

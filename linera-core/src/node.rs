@@ -51,6 +51,7 @@ pub trait ValidatorNode {
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
+        required_certificates: Vec<Certificate>,
     ) -> Result<ChainInfoResponse, NodeError>;
 
     /// Handle information queries for this chain.
@@ -278,7 +279,11 @@ where
             .ok_or(WorkerError::InvalidLiteCertificate)?;
         let response = node
             .state
-            .fully_handle_certificate_with_notifications(full_cert, Some(&mut notifications))
+            .fully_handle_certificate_with_notifications(
+                full_cert,
+                vec![],
+                Some(&mut notifications),
+            )
             .await?;
         for notification in notifications {
             self.notifier
@@ -290,13 +295,18 @@ where
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
+        required_certificates: Vec<Certificate>,
     ) -> Result<ChainInfoResponse, NodeError> {
         let node = self.node.clone();
         let mut node = node.lock().await;
         let mut notifications = Vec::new();
         let response = node
             .state
-            .fully_handle_certificate_with_notifications(certificate, Some(&mut notifications))
+            .fully_handle_certificate_with_notifications(
+                certificate,
+                required_certificates,
+                Some(&mut notifications),
+            )
             .await?;
         for notification in notifications {
             self.notifier
@@ -376,7 +386,11 @@ where
         for certificate in certificates {
             if let Value::ConfirmedBlock { block, .. } = &certificate.value {
                 if block.chain_id == chain_id {
-                    match self.handle_certificate(certificate.clone()).await {
+                    let required_certificates = vec![]; // TODO
+                    match self
+                        .handle_certificate(certificate.clone(), required_certificates)
+                        .await
+                    {
                         Ok(response) => {
                             info = Some(response.info);
                             // Continue with the next certificate.
@@ -573,7 +587,10 @@ where
                 if let Value::ValidatedBlock { block, .. } = &cert.value {
                     if block.chain_id == chain_id {
                         let hash = cert.hash;
-                        if let Err(error) = self.handle_certificate(cert).await {
+                        let required_certificates = vec![]; // TODO
+                        if let Err(error) =
+                            self.handle_certificate(cert, required_certificates).await
+                        {
                             log::warn!("Skipping certificate {}: {}", hash, error);
                         }
                     }

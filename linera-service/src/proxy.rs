@@ -127,7 +127,7 @@ impl SimpleProxy {
         let chain_id = match request {
             RpcMessage::BlockProposal(proposal) => proposal.content.block.chain_id,
             RpcMessage::LiteCertificate(certificate) => certificate.value.chain_id,
-            RpcMessage::Certificate(certificate) => certificate.value.chain_id(),
+            RpcMessage::Certificate(certificate, _) => certificate.value.chain_id(),
             RpcMessage::ChainInfoQuery(query) => query.chain_id,
             RpcMessage::Vote(_) | RpcMessage::ChainInfoResponse(_) | RpcMessage::Error(_) => {
                 log::debug!("Can't proxy an incoming response message");

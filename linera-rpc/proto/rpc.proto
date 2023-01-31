@@ -23,7 +23,7 @@ service ValidatorWorker {
   rpc HandleLiteCertificate(LiteCertificate) returns (ChainInfoResult);
 
   // Process a certificate.
-  rpc HandleCertificate(Certificate) returns (ChainInfoResult);
+  rpc HandleCertificate(CertificateWithDependencies) returns (ChainInfoResult);
 
   // Handle information queries for this chain.
   rpc HandleChainInfoQuery(ChainInfoQuery) returns (ChainInfoResult);
@@ -41,7 +41,7 @@ service ValidatorNode {
   rpc HandleLiteCertificate(LiteCertificate) returns (ChainInfoResult);
 
   // Process a certificate.
-  rpc HandleCertificate(Certificate) returns (ChainInfoResult);
+  rpc HandleCertificate(CertificateWithDependencies) returns (ChainInfoResult);
 
   // Handle information queries for this chain.
   rpc HandleChainInfoQuery(ChainInfoQuery) returns (ChainInfoResult);
@@ -190,6 +190,16 @@ message Certificate {
 
   // Signatures on the value
   repeated NameSignaturePair signatures = 2;
+}
+
+// A certified statement from the committee, together with other certificates
+// required for execution.
+message CertificateWithDependencies {
+  // The certificate
+  Certificate certificate = 1;
+
+  // Other certificates containing bytecode required by the first one
+  repeated Certificate required_certificates = 2;
 }
 
 // A range of block heights as used in ChainInfoQuery.

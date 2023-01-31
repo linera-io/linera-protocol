@@ -118,7 +118,7 @@ where
     let publish_certificate = make_certificate(&committee, &worker, publish_block_proposal);
 
     let info = worker
-        .fully_handle_certificate(publish_certificate.clone())
+        .fully_handle_certificate(publish_certificate.clone(), vec![])
         .await
         .unwrap()
         .info;
@@ -180,7 +180,7 @@ where
     let broadcast_certificate = make_certificate(&committee, &worker, broadcast_block_proposal);
 
     let info = worker
-        .fully_handle_certificate(broadcast_certificate.clone())
+        .fully_handle_certificate(broadcast_certificate.clone(), vec![])
         .await
         .unwrap()
         .info;
@@ -237,7 +237,7 @@ where
     let subscribe_certificate = make_certificate(&committee, &worker, subscribe_block_proposal);
 
     let info = worker
-        .fully_handle_certificate(subscribe_certificate.clone())
+        .fully_handle_certificate(subscribe_certificate.clone(), vec![])
         .await
         .unwrap()
         .info;
@@ -284,7 +284,7 @@ where
     let accept_certificate = make_certificate(&committee, &worker, accept_block_proposal);
 
     let info = worker
-        .fully_handle_certificate(accept_certificate.clone())
+        .fully_handle_certificate(accept_certificate.clone(), vec![])
         .await
         .unwrap()
         .info;
@@ -362,7 +362,7 @@ where
     let create_certificate = make_certificate(&committee, &worker, create_block_proposal);
 
     let info = worker
-        .fully_handle_certificate(create_certificate.clone())
+        .fully_handle_certificate(create_certificate.clone(), vec![])
         .await
         .unwrap()
         .info;
@@ -400,7 +400,7 @@ where
     let run_certificate = make_certificate(&committee, &worker, run_block_proposal);
 
     let info = worker
-        .fully_handle_certificate(run_certificate.clone())
+        .fully_handle_certificate(run_certificate.clone(), vec![])
         .await
         .unwrap()
         .info;

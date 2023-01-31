@@ -464,8 +464,10 @@ RpcMessage:
           TYPENAME: BlockProposal
     1:
       Certificate:
-        NEWTYPE:
-          TYPENAME: Certificate
+        TUPLE:
+          - TYPENAME: Certificate
+          - SEQ:
+              TYPENAME: Certificate
     2:
       LiteCertificate:
         NEWTYPE:

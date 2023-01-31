@@ -556,8 +556,10 @@ where
         self.node_client
             .download_certificates(nodes, block.chain_id, block.height)
             .await?;
-        // Process the received operation.
-        self.process_certificate(certificate).await?;
+        let required_certificates = vec![]; // TODO
+                                            // Process the received operation.
+        self.process_certificate(certificate, required_certificates)
+            .await?;
         // Make sure a quorum of validators (according to our new local committee) are up-to-date
         // for data availability.
         let local_committee = self.local_committee().await?;
@@ -722,8 +724,16 @@ where
         .await
     }
 
-    async fn process_certificate(&mut self, certificate: Certificate) -> Result<(), NodeError> {
-        let info = self.node_client.handle_certificate(certificate).await?.info;
+    async fn process_certificate(
+        &mut self,
+        certificate: Certificate,
+        required_certificates: Vec<Certificate>,
+    ) -> Result<(), NodeError> {
+        let info = self
+            .node_client
+            .handle_certificate(certificate, required_certificates)
+            .await?
+            .info;
         if info.chain_id == self.chain_id
             && (info.next_block_height, info.manager.next_round())
                 > (self.next_block_height, self.next_round)
@@ -810,7 +820,9 @@ where
             final_certificate.value.confirmed_block() == Some(&proposal.content.block),
             "A different operation was executed in parallel (consider retrying the operation)"
         );
-        self.process_certificate(final_certificate.clone()).await?;
+        let required_certificates = vec![]; // TODO
+        self.process_certificate(final_certificate.clone(), required_certificates)
+            .await?;
         self.pending_block = None;
         // Communicate the new certificate now.
         self.communicate_chain_updates(
