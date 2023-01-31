@@ -28,6 +28,8 @@ jobs:
       uses: arduino/setup-protoc@v1
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Compiling he linera-views under WebAssembly
+      run: cargo build --target wasm32-unknown-unknown -p linera-views
     - name: Build example contract
       run: |
         RUSTFLAGS="-C opt-level=z -C debuginfo=0" cargo build --release --target wasm32-unknown-unknown -p linera-sdk --examples

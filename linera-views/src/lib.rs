@@ -32,24 +32,30 @@ pub mod set_view;
 pub mod collection_view;
 
 /// The key value store view
+#[cfg(not(target_arch = "wasm32"))]
 pub mod key_value_store_view;
 
 /// Helper definitions for in-memory storage.
+#[cfg(not(target_arch = "wasm32"))]
 pub mod memory;
 
 /// Helper definitions for Rocksdb storage.
+#[cfg(not(target_arch = "wasm32"))]
 pub mod rocksdb;
 
 /// Helper definitions for DynamoDB storage.
+#[cfg(not(target_arch = "wasm32"))]
 pub mod dynamo_db;
 
 /// Helper types for interfacing with a LocalStack instance.
+#[cfg(not(target_arch = "wasm32"))]
 pub mod localstack;
 
 /// Helper types for tests.
 #[cfg(any(test, feature = "test"))]
+#[cfg(not(target_arch = "wasm32"))]
 pub mod test_utils;
 
 /// For macros.
 #[doc(hidden)]
-pub use {async_trait::async_trait, generic_array, linera_base::crypto, paste::paste, serde, sha2};
+pub use {async_trait::async_trait, generic_array, linera_base::crypto, serde, sha2};

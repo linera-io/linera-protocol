@@ -2241,7 +2241,6 @@ dependencies = [
  "linera-views",
  "linera-views-macro",
  "log",
- "paste",
  "rand 0.8.5",
  "rocksdb",
  "serde",
