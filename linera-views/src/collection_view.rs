@@ -16,8 +16,8 @@ use std::{
 };
 #[cfg(not(target_arch = "wasm32"))]
 use {
-    tokio::sync::{Mutex, OwnedMutexGuard},
     std::sync::Arc,
+    tokio::sync::{Mutex, OwnedMutexGuard},
 };
 
 /// A view that supports accessing a collection of views of the same kind, indexed by a
