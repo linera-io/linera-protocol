@@ -382,6 +382,9 @@ pub enum Destination {
     Recipient(ChainId),
     /// Broadcast to the current subscribers of our channel.
     Subscribers(ChannelName),
+    /// Concerns everybody who is about to execute an effect for this application. Does
+    /// not create a message in any outbox.
+    ApplicationUser(UserApplicationId),
 }
 
 /// Externally visible results of an execution, tagged by their application.

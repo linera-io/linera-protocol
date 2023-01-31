@@ -4,9 +4,9 @@
 use crate::{
     runtime::{ExecutionRuntime, SessionManager},
     system::SystemExecutionStateView,
-    ApplicationId, Effect, EffectContext, ExecutionError, ExecutionResult, ExecutionRuntimeContext,
-    Operation, OperationContext, Query, QueryContext, RawExecutionResult, Response, SystemEffect,
-    UserApplicationId,
+    ApplicationId, Destination, Effect, EffectContext, ExecutionError, ExecutionResult,
+    ExecutionRuntimeContext, Operation, OperationContext, Query, QueryContext, RawExecutionResult,
+    Response, SystemEffect, UserApplicationId,
 };
 use linera_base::{data_types::ChainId, ensure};
 use linera_views::{
@@ -151,21 +151,17 @@ where
         assert_eq!(application_ids, vec![application_id]);
         // Make sure to declare the application first for all recipients of the user
         // execution result.
-        let mut system_result = RawExecutionResult::default();
-        let applications = self
-            .system
-            .registry
-            .describe_application_with_dependencies(application_id)
-            .await?;
-        for effect in &result.effects {
+        if !result.effects.is_empty() {
+            let mut system_result = RawExecutionResult::default();
+            let applications = self
+                .system
+                .registry
+                .describe_application_with_dependencies(application_id)
+                .await?;
             system_result.effects.push((
-                effect.0.clone(),
-                SystemEffect::RegisterApplications {
-                    applications: applications.clone(),
-                },
+                Destination::ApplicationUser(application_id),
+                SystemEffect::RegisterApplications { applications },
             ));
-        }
-        if !system_result.effects.is_empty() {
             results.push(ExecutionResult::System(system_result));
         }
         // Update externally-visible results.

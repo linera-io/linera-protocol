@@ -220,17 +220,15 @@ where
             }
             // Skip events that do not belong to this origin OR have no effect on this
             // recipient.
-            match destination {
-                Destination::Recipient(id) => {
-                    if origin.medium != Medium::Direct || id != chain_id {
-                        continue;
-                    }
-                }
+            let is_destination_matching = match destination {
+                Destination::ApplicationUser(id) => ApplicationId::User(id) == app_id,
+                Destination::Recipient(id) => origin.medium == Medium::Direct && id == chain_id,
                 Destination::Subscribers(name) => {
-                    if !matches!(&origin.medium, Medium::Channel(n) if n == &name) {
-                        continue;
-                    }
+                    matches!(&origin.medium, Medium::Channel(n) if n == &name)
                 }
+            };
+            if !is_destination_matching {
+                continue;
             }
             if let ApplicationId::System = app_id {
                 // Handle special effects to be executed immediately.
@@ -489,6 +487,9 @@ where
                 }
                 Destination::Subscribers(name) => {
                     channel_broadcasts.insert(name.clone());
+                }
+                Destination::ApplicationUser(_) => {
+                    // Does not schedule a new message.
                 }
             }
             effects.push((application_id, destination, effect.into()));

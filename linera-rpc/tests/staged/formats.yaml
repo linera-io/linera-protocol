@@ -236,6 +236,10 @@ Destination:
       Subscribers:
         NEWTYPE:
           TYPENAME: ChannelName
+    2:
+      ApplicationUser:
+        NEWTYPE:
+          TYPENAME: UserApplicationId
 Effect:
   ENUM:
     0:
