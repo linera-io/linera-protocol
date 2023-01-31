@@ -3,7 +3,7 @@
 
 use async_trait::async_trait;
 use linera_views::{
-    collection_view::{CollectionView, ReentrantCollectionView},
+    collection_view::CollectionView,
     common::{
         Batch, Context, WriteOperation,
         WriteOperation::{Delete, DeletePrefix, Put},
@@ -14,6 +14,7 @@ use linera_views::{
     map_view::MapView,
     memory::{MemoryContext, MemoryStoreMap},
     queue_view::QueueView,
+    reentrant_collection_view::ReentrantCollectionView,
     register_view::RegisterView,
     rocksdb::{RocksdbContext, DB},
     set_view::SetView,

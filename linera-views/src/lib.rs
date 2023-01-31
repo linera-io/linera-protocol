@@ -31,6 +31,10 @@ pub mod set_view;
 /// The collection_view
 pub mod collection_view;
 
+/// The reentrant_collection_view
+#[cfg(not(target_arch = "wasm32"))]
+pub mod reentrant_collection_view;
+
 /// The key value store view
 #[cfg(not(target_arch = "wasm32"))]
 pub mod key_value_store_view;
