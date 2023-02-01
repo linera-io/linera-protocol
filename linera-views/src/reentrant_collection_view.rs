@@ -342,9 +342,7 @@ where
     type Hasher = sha2::Sha512;
 
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        let mut hash = self
-            .hash
-            .try_write()?;
+        let mut hash = self.hash.try_write()?;
         match *hash {
             Some(hash) => Ok(hash),
             None => {

@@ -5,8 +5,8 @@ use crate::{
     common::{Batch, Context, HashOutput},
     views::{HashableView, Hasher, View, ViewError},
 };
-use async_trait::async_trait;
 use async_std::sync::RwLock;
+use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{collections::VecDeque, fmt::Debug, ops::Range};
 
@@ -235,10 +235,7 @@ where
     type Hasher = sha2::Sha512;
 
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        let mut hash = self
-            .hash
-            .try_write()
-            .ok_or(ViewError::CannotAcquireHash)?;
+        let mut hash = self.hash.try_write().ok_or(ViewError::CannotAcquireHash)?;
         match *hash {
             Some(hash) => Ok(hash),
             None => {
