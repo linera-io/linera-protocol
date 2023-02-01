@@ -27,7 +27,7 @@ use linera_views::{
     views::{HashableContainerView, View, ViewError},
 };
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 /// A view accessing the state of a chain.
 #[derive(Debug, HashableContainerView)]
@@ -445,6 +445,48 @@ where
             .get_mut()
             .reset(self.execution_state.system.ownership.get());
         Ok(effects)
+    }
+
+    pub async fn applications_for_block(
+        &mut self,
+        block: &Block,
+    ) -> Result<Vec<UserApplicationDescription>, ChainError> {
+        let mut new_apps = HashMap::<UserApplicationId, UserApplicationDescription>::new();
+        let mut applications_for_block = Vec::new();
+        let mut app_ids = Vec::new();
+        for message in &block.incoming_messages {
+            if let Effect::System(SystemEffect::RegisterApplications { applications }) =
+                &message.event.effect
+            {
+                for app in applications {
+                    new_apps.insert(app.into(), app.clone());
+                }
+            }
+            if let ApplicationId::User(app_id) = message.application_id {
+                app_ids.push(app_id);
+            }
+        }
+        let mut added_app_ids = HashSet::new();
+        while let Some(app_id) = app_ids.pop() {
+            if !added_app_ids.insert(app_id) {
+                continue;
+            }
+            let app = if let Some(app) = new_apps.get(&app_id) {
+                app.clone()
+            } else {
+                self.execution_state
+                    .system
+                    .registry
+                    .describe_application(app_id)
+                    .await
+                    .map_err(|err| ChainError::ExecutionError(err.into()))?
+            };
+            for app_id in &app.required_application_ids {
+                app_ids.push(*app_id);
+            }
+            applications_for_block.push(app);
+        }
+        Ok(applications_for_block)
     }
 
     async fn process_execution_results(

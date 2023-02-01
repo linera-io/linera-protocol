@@ -805,7 +805,7 @@ where
                 );
                 let messages = certificates
                     .iter()
-                    .map(|certificate| (certificate.clone(), vec![]).into()) // TODO
+                    .map(|certificate| (certificate.clone(), vec![]).into())
                     .collect();
                 let responses = context
                     .mass_broadcast("certificates", max_in_flight, messages)

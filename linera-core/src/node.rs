@@ -587,10 +587,7 @@ where
                 if let Value::ValidatedBlock { block, .. } = &cert.value {
                     if block.chain_id == chain_id {
                         let hash = cert.hash;
-                        let required_certificates = vec![]; // TODO
-                        if let Err(error) =
-                            self.handle_certificate(cert, required_certificates).await
-                        {
+                        if let Err(error) = self.handle_certificate(cert, vec![]).await {
                             log::warn!("Skipping certificate {}: {}", hash, error);
                         }
                     }
