@@ -5,9 +5,94 @@
 
 use super::writable_system::{self as system, PollCallResult, PollLoad};
 use crate::{
-    ApplicationId, BlockHeight, BytecodeId, ChainId, CryptoHash, EffectId, SessionId, SystemBalance,
+    ApplicationId, BlockHeight, BytecodeId, CalleeContext, ChainId, CryptoHash, EffectContext,
+    EffectId, OperationContext, Session, SessionId, SystemBalance,
 };
 use std::task::Poll;
+
+impl From<super::OperationContext> for OperationContext {
+    fn from(application_context: super::OperationContext) -> Self {
+        OperationContext {
+            chain_id: ChainId(application_context.chain_id.into()),
+            height: BlockHeight(application_context.height),
+            index: application_context.index,
+        }
+    }
+}
+
+impl From<super::EffectContext> for EffectContext {
+    fn from(application_context: super::EffectContext) -> Self {
+        EffectContext {
+            chain_id: ChainId(application_context.chain_id.into()),
+            height: BlockHeight(application_context.height),
+            effect_id: application_context.effect_id.into(),
+        }
+    }
+}
+
+impl From<super::EffectId> for EffectId {
+    fn from(effect_id: super::EffectId) -> Self {
+        EffectId {
+            chain_id: ChainId(effect_id.chain_id.into()),
+            height: BlockHeight(effect_id.height),
+            index: effect_id.index,
+        }
+    }
+}
+
+impl From<super::CalleeContext> for CalleeContext {
+    fn from(application_context: super::CalleeContext) -> Self {
+        CalleeContext {
+            chain_id: ChainId(application_context.chain_id.into()),
+            authenticated_caller_id: application_context
+                .authenticated_caller_id
+                .map(ApplicationId::from),
+        }
+    }
+}
+
+impl From<super::ApplicationId> for ApplicationId {
+    fn from(application_id: super::ApplicationId) -> Self {
+        ApplicationId {
+            bytecode: BytecodeId(application_id.bytecode_id.into()),
+            creation: application_id.creation.into(),
+        }
+    }
+}
+
+impl From<super::SessionId> for SessionId {
+    fn from(session_id: super::SessionId) -> Self {
+        SessionId {
+            application_id: session_id.application_id.into(),
+            kind: session_id.kind,
+            index: session_id.index,
+        }
+    }
+}
+
+impl From<super::Session> for Session {
+    fn from(session: super::Session) -> Self {
+        Session {
+            kind: session.kind,
+            data: session.data,
+        }
+    }
+}
+
+impl From<super::CryptoHash> for CryptoHash {
+    fn from(crypto_hash: super::CryptoHash) -> Self {
+        CryptoHash::from([
+            crypto_hash.part1,
+            crypto_hash.part2,
+            crypto_hash.part3,
+            crypto_hash.part4,
+            crypto_hash.part5,
+            crypto_hash.part6,
+            crypto_hash.part7,
+            crypto_hash.part8,
+        ])
+    }
+}
 
 impl From<system::EffectId> for EffectId {
     fn from(effect_id: system::EffectId) -> Self {
