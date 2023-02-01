@@ -1,6 +1,5 @@
 use async_graphql::{
-    futures_util::Stream, http::GraphiQLSource, EmptyMutation, EmptySubscription, Error, Object,
-    Schema, Subscription,
+    futures_util::Stream, http::GraphiQLSource, EmptyMutation, Error, Object, Schema, Subscription,
 };
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{response, response::IntoResponse, routing::get, Extension, Router, Server};
@@ -17,7 +16,7 @@ use log::info;
 use std::{net::SocketAddr, num::NonZeroU16, sync::Arc};
 
 /// The type of the root GraphQL schema.
-type NodeSchema<P, S> = Schema<QueryRoot<P, S>, EmptyMutation, EmptySubscription>;
+type NodeSchema<P, S> = Schema<QueryRoot<P, S>, EmptyMutation, SubscriptionRoot<P, S>>;
 
 /// Our root GraphQL query type.
 struct QueryRoot<P, S>(Arc<Mutex<ChainClient<P, S>>>);

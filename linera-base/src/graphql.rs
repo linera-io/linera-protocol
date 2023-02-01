@@ -1,7 +1,7 @@
 use crate::{
     committee::{Committee, ValidatorState},
     crypto::CryptoHash,
-    data_types::{BlockHeight, ChainDescription, ChainId, Epoch, Owner, ValidatorName},
+    data_types::{BlockHeight, ChainDescription, ChainId, Epoch, Owner, Timestamp, ValidatorName},
 };
 use async_graphql::{scalar, Object};
 use std::collections::BTreeMap;
@@ -12,6 +12,7 @@ scalar!(ChainId);
 scalar!(Epoch);
 scalar!(CryptoHash);
 scalar!(Owner);
+scalar!(Timestamp);
 scalar!(ValidatorName);
 
 #[Object]
