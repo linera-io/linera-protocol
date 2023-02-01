@@ -157,6 +157,32 @@ where
         Ok(self.context.read_key(&key).await?)
     }
 
+
+    async fn load_value(&mut self, short_key: &[u8]) -> Result<(), ViewError> {
+        if !self.was_cleared && !self.updates.contains_key(short_key) {
+            let key : Vec<u8> = self.context.base_tag_index(KeyTag::Index as u8, short_key);
+            let value : Option<V> = self.context.read_key(&key).await?;
+            if let Some(value) = value {
+                self.updates.insert(short_key.to_vec(), Update::Set(value));
+            }
+        }
+        Ok(())
+    }
+
+    /// Obtain a mutable reference to a value at a given position if available
+    pub async fn get_mut(&mut self, index: &I) -> Result<Option<&mut V>, ViewError> {
+        let short_key = C::derive_short_key(index)?;
+        self.load_value(&short_key).await?;
+        if let Some(update) = self.updates.get_mut(&short_key.clone()) {
+            let value = match update {
+                Update::Removed => None,
+                Update::Set(value) => Some(value),
+            };
+            return Ok(value);
+        }
+        return Ok(None);
+    }
+
     /// Return the list of indices in the map.
     pub async fn indices(&self) -> Result<Vec<I>, ViewError> {
         let mut indices = Vec::<I>::new();
