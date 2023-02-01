@@ -160,8 +160,8 @@ where
 
     async fn load_value(&mut self, short_key: &[u8]) -> Result<(), ViewError> {
         if !self.was_cleared && !self.updates.contains_key(short_key) {
-            let key : Vec<u8> = self.context.base_tag_index(KeyTag::Index as u8, short_key);
-            let value : Option<V> = self.context.read_key(&key).await?;
+            let key = self.context.base_tag_index(KeyTag::Index as u8, short_key);
+            let value = self.context.read_key(&key).await?;
             if let Some(value) = value {
                 self.updates.insert(short_key.to_vec(), Update::Set(value));
             }
