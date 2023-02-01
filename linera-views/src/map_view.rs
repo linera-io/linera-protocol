@@ -157,7 +157,6 @@ where
         Ok(self.context.read_key(&key).await?)
     }
 
-
     async fn load_value(&mut self, short_key: &[u8]) -> Result<(), ViewError> {
         if !self.was_cleared && !self.updates.contains_key(short_key) {
             let key = self.context.base_tag_index(KeyTag::Index as u8, short_key);
@@ -180,7 +179,7 @@ where
             };
             return Ok(value);
         }
-        return Ok(None);
+        Ok(None)
     }
 
     /// Return the list of indices in the map.
