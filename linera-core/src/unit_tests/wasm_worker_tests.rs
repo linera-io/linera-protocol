@@ -228,8 +228,7 @@ where
         timestamp: Timestamp::from(2),
         registry: ApplicationRegistry::default(),
     };
-    let creator_state =
-        ExecutionStateView::from_system_state(creator_system_state.clone()).await;
+    let creator_state = ExecutionStateView::from_system_state(creator_system_state.clone()).await;
     let subscribe_block_proposal = Value::ConfirmedBlock {
         block: subscribe_block,
         effects: vec![(
