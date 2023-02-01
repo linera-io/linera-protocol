@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{data_types::Event, ChainError, Origin};
+use async_graphql::SimpleObject;
 use linera_base::{
     data_types::{ArithmeticError, BlockHeight, ChainId},
     ensure,
@@ -44,7 +45,19 @@ pub struct InboxStateView<C> {
     pub removed_events: QueueView<C, Event>,
 }
 
-#[derive(Debug, Default, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Default,
+    Clone,
+    Copy,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Serialize,
+    Deserialize,
+    SimpleObject,
+)]
 pub struct Cursor {
     height: BlockHeight,
     index: usize,

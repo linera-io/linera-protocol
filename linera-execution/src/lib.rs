@@ -24,6 +24,7 @@ pub use wasm::{WasmApplication, WasmExecutionError};
 #[cfg(any(test, feature = "test"))]
 pub use {applications::ApplicationRegistry, system::SystemExecutionState};
 
+use async_graphql::SimpleObject;
 use async_trait::async_trait;
 use dashmap::DashMap;
 use linera_base::{
@@ -369,7 +370,9 @@ impl AsRef<[u8]> for ChannelName {
 }
 
 /// The identifier of a channel, relative to a particular application.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Hash, Serialize, Deserialize)]
+#[derive(
+    Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Hash, Serialize, Deserialize, SimpleObject,
+)]
 pub struct ChannelId {
     pub chain_id: ChainId,
     pub name: ChannelName,
