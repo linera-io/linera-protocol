@@ -532,6 +532,27 @@ where
             }
         }
     }
+    if config.with_map {
+        {
+            let mut view = store.load(1).await.unwrap();
+            view.map.insert(&"Konnichiwa".to_string(), 5).unwrap();
+            let value = view
+                .map
+                .get_mut(&"Konnichiwa".to_string())
+                .await
+                .unwrap()
+                .unwrap();
+            *value = 6;
+            view.save().await.unwrap();
+        }
+        {
+            let view = store.load(1).await.unwrap();
+            assert_eq!(
+                view.map.get(&"Konnichiwa".to_string()).await.unwrap(),
+                Some(6)
+            );
+        }
+    }
     {
         let mut view = store.load(1).await.unwrap();
         if config.with_collection {
