@@ -199,10 +199,14 @@ where
         }
     }
 
-    /// Same as `load_entry_mut` but for read-only access. May block the current async thread.
-    pub async fn load_entry(&self, index: I) -> Result<ReadGuardedView<W>, ViewError> {
+    /// Same as `load_entry_mut` but for read-only access. May fail if one subview is
+    /// already being visited.
+    pub async fn try_load_entry(&self, index: I) -> Result<ReadGuardedView<W>, ViewError> {
         let short_key = C::derive_short_key(&index)?;
-        let mut updates = self.updates.write().await;
+        let mut updates = self
+            .updates
+            .try_write()
+            .ok_or(ViewError::CannotAcquireCollectionEntry)?;
         match updates.entry(short_key.clone()) {
             btree_map::Entry::Occupied(entry) => {
                 let entry = entry.into_mut();

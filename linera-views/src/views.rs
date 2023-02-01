@@ -56,9 +56,7 @@ pub enum ViewError {
     #[error("failed to serialize value to calculate its hash")]
     Serialization(#[from] bcs::Error),
 
-    #[error(
-        "trying to flush or delete a collection view while some entries are still being accessed"
-    )]
+    #[error("trying to access a collection view while some entries are still being accessed")]
     CannotAcquireCollectionEntry,
 
     #[error("IO error")]

@@ -313,29 +313,31 @@ where
             assert!(view.set.contains(&42).await.unwrap());
         }
         if config.with_collection {
+            {
+                let subview = view
+                    .collection
+                    .load_entry_mut("hola".to_string())
+                    .await
+                    .unwrap();
+                subview.push(17);
+                subview.push(18);
+                assert_eq!(
+                    view.collection.indices().await.unwrap(),
+                    vec!["hola".to_string()]
+                );
+                let mut count = 0;
+                view.collection
+                    .for_each_index(|_index| {
+                        count += 1;
+                        Ok(())
+                    })
+                    .await
+                    .unwrap();
+                assert_eq!(count, 1);
+            }
             let subview = view
                 .collection
-                .load_entry_mut("hola".to_string())
-                .await
-                .unwrap();
-            subview.push(17);
-            subview.push(18);
-            assert_eq!(
-                view.collection.indices().await.unwrap(),
-                vec!["hola".to_string()]
-            );
-            let mut count = 0;
-            view.collection
-                .for_each_index(|_index| {
-                    count += 1;
-                    Ok(())
-                })
-                .await
-                .unwrap();
-            assert_eq!(count, 1);
-            let subview = view
-                .collection
-                .load_entry_mut("hola".to_string())
+                .try_load_entry("hola".to_string())
                 .await
                 .unwrap();
             assert_eq!(subview.read(0..10).await.unwrap(), vec![17, 18]);
@@ -365,7 +367,7 @@ where
         if config.with_collection {
             let subview = view
                 .collection
-                .load_entry_mut("hola".to_string())
+                .try_load_entry("hola".to_string())
                 .await
                 .unwrap();
             assert_eq!(subview.read(0..10).await.unwrap(), Vec::<u32>::new());
@@ -457,7 +459,7 @@ where
         if config.with_collection {
             let subview = view
                 .collection
-                .load_entry_mut("hola".to_string())
+                .try_load_entry("hola".to_string())
                 .await
                 .unwrap();
             assert_eq!(subview.read(0..10).await.unwrap(), vec![17, 18]);
@@ -471,7 +473,8 @@ where
                 .load_entry_mut("ciao".to_string())
                 .await
                 .unwrap();
-            let subsubview = subview.load_entry_mut("!".to_string()).await.unwrap();
+            let subsubview = subview.try_load_entry("!".to_string()).await.unwrap();
+            assert!(subview.try_load_entry("!".to_string()).await.is_err());
             assert_eq!(subsubview.get(), &3);
             assert_eq!(
                 view.collection.indices().await.unwrap(),
@@ -494,23 +497,38 @@ where
     {
         let mut view = store.load(1).await.unwrap();
         if config.with_collection {
-            let mut subview = view
-                .collection4
-                .try_load_entry_mut("hola".to_string())
-                .await
-                .unwrap();
-            assert_eq!(subview.read_front(10).await.unwrap(), Vec::<u64>::new());
-            assert!(view
-                .collection4
-                .try_load_entry_mut("hola".to_string())
-                .await
-                .is_err());
-            if config.with_queue {
-                subview.push_back(13);
-                assert_eq!(subview.front().await.unwrap(), Some(13));
-                subview.delete_front();
-                assert_eq!(subview.front().await.unwrap(), None);
+            {
+                let mut subview = view
+                    .collection4
+                    .try_load_entry_mut("hola".to_string())
+                    .await
+                    .unwrap();
+                assert_eq!(subview.read_front(10).await.unwrap(), Vec::<u64>::new());
+                assert!(view
+                    .collection4
+                    .try_load_entry_mut("hola".to_string())
+                    .await
+                    .is_err());
+                if config.with_queue {
+                    subview.push_back(13);
+                    assert_eq!(subview.front().await.unwrap(), Some(13));
+                    subview.delete_front();
+                    assert_eq!(subview.front().await.unwrap(), None);
+                    assert_eq!(subview.count(), 0);
+                }
+            }
+            {
+                let subview = view
+                    .collection4
+                    .try_load_entry("hola".to_string())
+                    .await
+                    .unwrap();
                 assert_eq!(subview.count(), 0);
+                assert!(view
+                    .collection4
+                    .try_load_entry("hola".to_string())
+                    .await
+                    .is_ok());
             }
         }
     }
@@ -519,7 +537,7 @@ where
         if config.with_collection {
             let subview = view
                 .collection
-                .load_entry_mut("hola".to_string())
+                .try_load_entry("hola".to_string())
                 .await
                 .unwrap();
             assert_eq!(subview.read(0..10).await.unwrap(), Vec::<u32>::new());
