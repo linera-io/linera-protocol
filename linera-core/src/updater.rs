@@ -131,10 +131,36 @@ where
             {
                 Ok(response) => Ok(response),
                 Err(NodeError::MissingCertificateValue) => {
-                    let required_certificates = vec![]; // TODO
-                    self.client
-                        .handle_certificate(certificate.clone(), required_certificates)
+                    match self
+                        .client
+                        .handle_certificate(certificate.clone(), vec![])
                         .await
+                    {
+                        Ok(response) => Ok(response),
+                        Err(NodeError::ApplicationBytecodeNotFound { .. }) => {
+                            let mut chain =
+                                self.store.load_chain(certificate.value.chain_id()).await?;
+                            let apps = chain
+                                .applications_for_block(certificate.value.block())
+                                .await?;
+                            let mut required_certificates = vec![];
+                            for app in apps {
+                                match self
+                                    .store
+                                    .read_certificate(app.bytecode_location.certificate_hash)
+                                    .await
+                                {
+                                    Ok(cert) => required_certificates.push(cert),
+                                    Err(ViewError::NotFound(_)) => {}
+                                    Err(err) => return Err(err.into()),
+                                }
+                            }
+                            self.client
+                                .handle_certificate(certificate.clone(), vec![])
+                                .await
+                        }
+                        Err(err) => Err(err),
+                    }
                 }
                 Err(err) => Err(err),
             };
@@ -290,6 +316,7 @@ where
                 let chain = self.store.load_chain(chain_id).await?;
                 // Send the requested certificates in order.
                 let keys = chain.confirmed_log.read(range).await?;
+                drop(chain);
                 let certs = self.store.read_certificates(keys.into_iter()).await?;
                 for cert in certs {
                     self.send_certificate(cert, retryable).await?;

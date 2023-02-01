@@ -391,6 +391,7 @@ where
         for certificate in certificates {
             if let Value::ConfirmedBlock { block, .. } = &certificate.value {
                 if block.chain_id == chain_id {
+                    // TODO: Add required certificates to chain info?
                     let error = match self.handle_certificate(certificate.clone(), vec![]).await {
                         Ok(response) => {
                             info = Some(response.info);
@@ -652,10 +653,7 @@ where
                 if let Value::ValidatedBlock { block, .. } = &cert.value {
                     if block.chain_id == chain_id {
                         let hash = cert.hash;
-                        let required_certificates = vec![]; // TODO
-                        if let Err(error) =
-                            self.handle_certificate(cert, required_certificates).await
-                        {
+                        if let Err(error) = self.handle_certificate(cert, vec![]).await {
                             log::warn!("Skipping certificate {}: {}", hash, error);
                         }
                     }

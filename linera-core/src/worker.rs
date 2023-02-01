@@ -28,7 +28,8 @@ use linera_views::{
 use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{BTreeMap, BTreeSet, VecDeque},
+    collections::{BTreeMap, BTreeSet, HashMap, VecDeque},
+    iter,
     num::NonZeroUsize,
     sync::Arc,
     time::Duration,
@@ -160,6 +161,15 @@ pub enum WorkerError {
     MissingCertificateValue,
     #[error("The hash certificate doesn't match its value.")]
     InvalidLiteCertificate,
+    #[error("An additional certificate was provided that is not required: {certificate_hash}.")]
+    UnneededCertificate { certificate_hash: CryptoHash },
+    #[error(
+        "Could not check signatures for additional certificate: {certificate_hash}, epoch {epoch}."
+    )]
+    MissingEpochForRequiredCertificate {
+        certificate_hash: CryptoHash,
+        epoch: Epoch,
+    },
 }
 
 impl From<linera_chain::ChainError> for WorkerError {
@@ -427,7 +437,6 @@ where
             let actions = self.create_network_actions(&mut chain).await?;
             return Ok((info, actions));
         }
-        // Verify the certificate. Returns a catch-all error to make client code more robust.
         let epoch = chain
             .execution_state
             .system
@@ -441,14 +450,6 @@ where
                 epoch: block.epoch,
             }
         );
-        let committee = chain
-            .execution_state
-            .system
-            .committees
-            .get()
-            .get(&epoch)
-            .expect("chain is active");
-        certificate.check(committee)?;
         // This should always be true for valid certificates.
         ensure!(
             tip.block_hash == block.previous_block_hash,
@@ -498,7 +499,6 @@ where
         };
         // Check that the chain is active and ready for this confirmation.
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
-        // Verify the certificate. Returns a catch-all error to make client code more robust.
         let epoch = chain
             .execution_state
             .system
@@ -512,14 +512,6 @@ where
                 epoch: block.epoch,
             }
         );
-        let committee = chain
-            .execution_state
-            .system
-            .committees
-            .get()
-            .get(&epoch)
-            .expect("chain is active");
-        certificate.check(committee)?;
         if chain.manager.get_mut().check_validated_block(
             chain.tip_state.get().next_block_height,
             block,
@@ -762,8 +754,62 @@ where
         required_certificates: Vec<Certificate>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         log::trace!("{} <-- {:?}", self.nickname, certificate);
-        let maybe_certificate =
-            (!self.recent_values.contains(&certificate.hash)).then(|| certificate.clone());
+        let block = certificate.value.block();
+        let mut chain = self.storage.load_active_chain(block.chain_id).await?;
+        // Verify the certificate. Returns a catch-all error to make client code more robust.
+        let committee = chain
+            .execution_state
+            .system
+            .committees
+            .get()
+            .get(&block.epoch)
+            .ok_or(WorkerError::InvalidEpoch {
+                chain_id: block.chain_id,
+                epoch: block.epoch,
+            })?;
+        certificate.check(committee)?;
+        // Find all certificates containing bytecode used when executing this block.
+        let apps = match &certificate.value {
+            Value::ValidatedBlock { .. } => HashMap::new(),
+            Value::ConfirmedBlock { .. } => chain
+                .applications_for_block(certificate.value.block())
+                .await?
+                .into_iter()
+                .map(|app| (app.bytecode_location.certificate_hash, app))
+                .collect(),
+        };
+        for cert in &required_certificates {
+            ensure!(
+                apps.contains_key(&cert.hash),
+                WorkerError::UnneededCertificate {
+                    certificate_hash: cert.hash
+                }
+            );
+        }
+        // Write the certificates so that the bytecode is available during execution.
+        for cert in &required_certificates {
+            if self.storage.read_certificate(cert.hash).await.is_err() {
+                let committee = chain
+                    .execution_state
+                    .system
+                    .committees
+                    .get()
+                    .get(&cert.value.block().epoch)
+                    .ok_or_else(|| WorkerError::MissingEpochForRequiredCertificate {
+                        certificate_hash: cert.hash,
+                        epoch: cert.value.block().epoch,
+                    })?;
+                certificate.check(committee)?;
+                self.storage.write_certificate(cert.clone()).await?;
+            }
+        }
+        drop(chain);
+        let certificates_to_cache: Vec<_> = required_certificates
+            .iter()
+            .chain(iter::once(&certificate))
+            .filter(|cert| !self.recent_values.contains(&cert.hash))
+            .cloned()
+            .collect();
         let (info, actions) = match &certificate.value {
             Value::ValidatedBlock { .. } => {
                 // Confirm the validated block.
@@ -775,8 +821,8 @@ where
                 self.process_confirmed_block(certificate).await?
             }
         };
-        if let Some(certificate) = maybe_certificate {
-            self.cache_recent_value(certificate.hash, certificate.value);
+        for cert in certificates_to_cache {
+            self.cache_recent_value(cert.hash, cert.value);
         }
         Ok((info, actions))
     }

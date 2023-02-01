@@ -556,8 +556,9 @@ where
         self.node_client
             .download_certificates(nodes, block.chain_id, block.height)
             .await?;
-        let required_certificates = vec![]; // TODO
-                                            // Process the received operation.
+        // TODO: Add required certificates to chain info.
+        let required_certificates = vec![];
+        // Process the received operation.
         self.process_certificate(certificate, required_certificates)
             .await?;
         // Make sure a quorum of validators (according to our new local committee) are up-to-date
@@ -820,8 +821,9 @@ where
             final_certificate.value.confirmed_block() == Some(&proposal.content.block),
             "A different operation was executed in parallel (consider retrying the operation)"
         );
-        let required_certificates = vec![]; // TODO
-        self.process_certificate(final_certificate.clone(), required_certificates)
+        // Since the validators all executed and voted for the block, they have the needed
+        // bytecode. Leaving required_certificates empty.
+        self.process_certificate(final_certificate.clone(), vec![])
             .await?;
         self.pending_block = None;
         // Communicate the new certificate now.
