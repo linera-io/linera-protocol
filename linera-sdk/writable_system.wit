@@ -25,7 +25,7 @@ resource load-and-lock {
 
 variant poll-load {
     pending,
-    ready(expected<list<u8>, string>),
+    ready(result<list<u8>, string>),
 }
 
 store-and-unlock: func(value: list<u8>) -> bool
@@ -54,7 +54,7 @@ resource try-call-session {
 
 variant poll-call-result {
     pending,
-    ready(expected<call-result, string>),
+    ready(result<call-result, string>),
 }
 
 record call-result {

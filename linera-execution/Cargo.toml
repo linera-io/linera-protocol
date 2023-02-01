@@ -25,9 +25,9 @@ serde_bytes = "0.11.8"
 thiserror = "1.0.31"
 tokio = { version = "1.12.0", features = ["fs"] }
 wasmer = { version = "3.0.0-rc.2", optional = true }
-wasmtime = { version = "0.39.1", optional = true }
-wit-bindgen-host-wasmer-rust = { git = "https://github.com/jvff/wit-bindgen", rev = "4a9e7cc6899a9736e2a2d23dcfc4f8744b6107a1", optional = true }
-wit-bindgen-host-wasmtime-rust = { git = "https://github.com/jvff/wit-bindgen", rev = "4a9e7cc6899a9736e2a2d23dcfc4f8744b6107a1", optional = true }
+wasmtime = { version = "1.0", optional = true }
+wit-bindgen-host-wasmer-rust = { git = "https://github.com/jvff/wit-bindgen", rev = "0dbc957c5f8e3a107f4ffdcddf023a5b46ead51b", optional = true }
+wit-bindgen-host-wasmtime-rust = { git = "https://github.com/jvff/wit-bindgen", rev = "0dbc957c5f8e3a107f4ffdcddf023a5b46ead51b", optional = true }
 
 [dev-dependencies]
 anyhow = "1.0.57"

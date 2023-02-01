@@ -20,7 +20,7 @@ resource load {
 
 variant poll-load {
     pending,
-    ready(expected<list<u8>, string>),
+    ready(result<list<u8>, string>),
 }
 
 record application-id {

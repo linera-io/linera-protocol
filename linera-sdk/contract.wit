@@ -80,17 +80,17 @@ type bytecode-id = effect-id
 
 variant poll-execution-result {
     pending,
-    ready(expected<execution-result, string>),
+    ready(result<execution-result, string>),
 }
 
 variant poll-call-application {
     pending,
-    ready(expected<application-call-result, string>),
+    ready(result<application-call-result, string>),
 }
 
 variant poll-call-session {
     pending,
-    ready(expected<session-call-result, string>),
+    ready(result<session-call-result, string>),
 }
 
 record application-call-result {

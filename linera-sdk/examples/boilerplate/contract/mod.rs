@@ -26,4 +26,10 @@ use self::exported_futures::{
 use super::ApplicationState as Contract;
 
 /// Mark the contract type to be exported.
-impl contract::Contract for Contract {}
+impl contract::Contract for Contract {
+    type CallApplication = CallApplication;
+    type CallSession = CallSession;
+    type ExecuteEffect = ExecuteEffect;
+    type ExecuteOperation = ExecuteOperation;
+    type Initialize = Initialize;
+}
