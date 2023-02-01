@@ -59,6 +59,9 @@ pub enum ViewError {
     #[error("trying to access a collection view while some entries are still being accessed")]
     CannotAcquireCollectionEntry,
 
+    #[error("trying to access a hash while still being accessed")]
+    CannotAcquireHash,
+
     #[error("IO error")]
     Io(#[from] std::io::Error),
 
@@ -89,7 +92,7 @@ pub trait HashableView<C>: View<C> {
     /// Implementations do not need to include a type tag. However, the usual precautions
     /// to enforce collision-resistance must be applied (e.g. including the length of a
     /// collection of values).
-    async fn hash(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError>;
+    async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError>;
 }
 
 /// The requirement for the hasher type in [`HashableView`].
@@ -135,5 +138,5 @@ pub trait ContainerView<C>: View<C> {
 #[async_trait]
 pub trait HashableContainerView<C>: ContainerView<C> + HashableView<C> {
     /// Computing the hash and attributing the type to it.
-    async fn crypto_hash(&mut self) -> Result<CryptoHash, ViewError>;
+    async fn crypto_hash(&self) -> Result<CryptoHash, ViewError>;
 }

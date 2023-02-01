@@ -237,7 +237,7 @@ where
     ViewError: From<<<S as StateStore>::Context as Context>::Error>,
 {
     let default_hash = {
-        let mut view = store.load(1).await.unwrap();
+        let view = store.load(1).await.unwrap();
         view.hash().await.unwrap()
     };
     {
@@ -961,7 +961,7 @@ async fn check_hash_memoization_persistence<S>(
     ViewError: From<<<S as StateStore>::Context as Context>::Error>,
 {
     let mut hash = {
-        let mut view = store.load(1).await.unwrap();
+        let view = store.load(1).await.unwrap();
         view.hash().await.unwrap()
     };
     for pair in key_value_vector {
@@ -995,7 +995,7 @@ async fn check_hash_memoization_persistence<S>(
             }
         }
         if thr == 3 {
-            let mut view = store.load(1).await.unwrap();
+            let view = store.load(1).await.unwrap();
             let hash_new = view.hash().await.unwrap();
             assert_eq!(hash, hash_new);
         }

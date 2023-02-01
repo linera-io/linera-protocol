@@ -66,7 +66,7 @@ pub struct KeyValueStoreView<C> {
     updates: BTreeMap<Vec<u8>, Update<Vec<u8>>>,
     deleted_prefixes: BTreeSet<Vec<u8>>,
     stored_hash: Option<HashOutput>,
-    hash: Option<HashOutput>,
+    hash: async_std::sync::RwLock<Option<HashOutput>>,
 }
 
 #[async_trait]
@@ -88,7 +88,7 @@ where
             updates: BTreeMap::new(),
             deleted_prefixes: BTreeSet::new(),
             stored_hash: hash,
-            hash,
+            hash: async_std::sync::RwLock::new(hash),
         })
     }
 
@@ -96,7 +96,7 @@ where
         self.was_cleared = false;
         self.updates.clear();
         self.deleted_prefixes.clear();
-        self.hash = self.stored_hash;
+        *self.hash.get_mut() = self.stored_hash;
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
@@ -122,13 +122,14 @@ where
                 }
             }
         }
-        if self.stored_hash != self.hash {
+        let hash = *self.hash.get_mut();
+        if self.stored_hash != hash {
             let key = self.context.base_tag(KeyTag::Hash as u8);
-            match self.hash {
+            match hash {
                 None => batch.delete_key(key),
                 Some(hash) => batch.put_key_value(key, &hash)?,
             }
-            self.stored_hash = self.hash;
+            self.stored_hash = hash;
         }
         Ok(())
     }
@@ -141,7 +142,7 @@ where
         self.was_cleared = true;
         self.updates.clear();
         self.deleted_prefixes.clear();
-        self.hash = None;
+        *self.hash.get_mut() = None;
     }
 }
 
@@ -275,12 +276,12 @@ where
     /// Set or insert a value.
     pub fn insert(&mut self, index: Vec<u8>, value: Vec<u8>) {
         self.updates.insert(index, Update::Set(value));
-        self.hash = None;
+        *self.hash.get_mut() = None;
     }
 
     /// Remove a value.
     pub fn remove(&mut self, index: Vec<u8>) {
-        self.hash = None;
+        *self.hash.get_mut() = None;
         if self.was_cleared {
             self.updates.remove(&index);
         } else {
@@ -290,7 +291,7 @@ where
 
     /// Delete a key_prefix
     pub fn delete_prefix(&mut self, key_prefix: Vec<u8>) {
-        self.hash = None;
+        *self.hash.get_mut() = None;
         let key_list: Vec<Vec<u8>> = self
             .updates
             .range(get_interval(key_prefix.clone()))
@@ -423,7 +424,7 @@ where
 
     /// Apply the given batch of `crate::common::WriteOperation`.
     pub async fn write_batch(&mut self, batch: Batch) -> Result<(), ViewError> {
-        self.hash = None;
+        *self.hash.get_mut() = None;
         for op in batch.operations {
             match op {
                 WriteOperation::Delete { key } => {
@@ -453,8 +454,12 @@ where
 {
     type Hasher = sha2::Sha512;
 
-    async fn hash(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        match self.hash {
+    async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
+        let mut hash = self
+            .hash
+            .try_write()
+            .ok_or(ViewError::CannotAcquireHash)?;
+        match *hash {
             Some(hash) => Ok(hash),
             None => {
                 let mut hasher = Self::Hasher::default();
@@ -467,9 +472,9 @@ where
                 })
                 .await?;
                 hasher.update_with_bcs_bytes(&count)?;
-                let hash = hasher.finalize();
-                self.hash = Some(hash);
-                Ok(hash)
+                let new_hash = hasher.finalize();
+                *hash = Some(new_hash);
+                Ok(new_hash)
             }
         }
     }

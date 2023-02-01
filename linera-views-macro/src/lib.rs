@@ -173,7 +173,7 @@ fn generate_hash_view_code(input: TokenStream) -> TokenStream {
         {
             type Hasher = linera_views::sha2::Sha512;
 
-            async fn hash(&mut self) -> Result<<Self::Hasher as linera_views::views::Hasher>::Output, linera_views::views::ViewError> {
+            async fn hash(&self) -> Result<<Self::Hasher as linera_views::views::Hasher>::Output, linera_views::views::ViewError> {
                 use linera_views::views::{Hasher, HashableView};
                 use std::io::Write;
                 let mut hasher = Self::Hasher::default();
@@ -202,7 +202,7 @@ fn generate_crypto_hash_code(input: TokenStream) -> TokenStream {
             #first_generic: Context + Send + Sync + Clone + 'static,
             linera_views::views::ViewError: From<#first_generic::Error>,
         {
-            async fn crypto_hash(&mut self) -> Result<linera_base::crypto::CryptoHash, linera_views::views::ViewError> {
+            async fn crypto_hash(&self) -> Result<linera_base::crypto::CryptoHash, linera_views::views::ViewError> {
                 use linera_views::generic_array::GenericArray;
                 use linera_views::common::Batch;
                 use linera_base::crypto::{BcsHashable, CryptoHash};

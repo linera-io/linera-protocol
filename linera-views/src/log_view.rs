@@ -8,6 +8,7 @@ use crate::{
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{fmt::Debug, ops::Range};
+use async_std::sync::RwLock;
 
 /// Key tags to create the sub-keys of a LogView on top of the base key.
 #[repr(u8)]
@@ -28,7 +29,7 @@ pub struct LogView<C, T> {
     stored_count: usize,
     new_values: Vec<T>,
     stored_hash: Option<HashOutput>,
-    hash: Option<HashOutput>,
+    hash: RwLock<Option<HashOutput>>,
 }
 
 #[async_trait]
@@ -53,14 +54,14 @@ where
             stored_count,
             new_values: Vec::new(),
             stored_hash: hash,
-            hash,
+            hash: RwLock::new(hash),
         })
     }
 
     fn rollback(&mut self) {
         self.was_cleared = false;
         self.new_values.clear();
-        self.hash = self.stored_hash;
+        *self.hash.get_mut() = self.stored_hash;
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
@@ -83,13 +84,14 @@ where
             batch.put_key_value(key, &self.stored_count)?;
             self.new_values.clear();
         }
-        if self.stored_hash != self.hash {
+        let hash = *self.hash.get_mut();
+        if self.stored_hash != hash {
             let key = self.context.base_tag(KeyTag::Hash as u8);
-            match self.hash {
+            match hash {
                 None => batch.delete_key(key),
                 Some(hash) => batch.put_key_value(key, &hash)?,
             }
-            self.stored_hash = self.hash;
+            self.stored_hash = hash;
         }
         Ok(())
     }
@@ -101,7 +103,7 @@ where
     fn clear(&mut self) {
         self.was_cleared = true;
         self.new_values.clear();
-        self.hash = None;
+        *self.hash.get_mut() = None;
     }
 }
 
@@ -112,7 +114,7 @@ where
     /// Push a value to the end of the log.
     pub fn push(&mut self, value: T) {
         self.new_values.push(value);
-        self.hash = None;
+        *self.hash.get_mut() = None;
     }
 
     /// Read the size of the log.
@@ -205,17 +207,21 @@ where
 {
     type Hasher = sha2::Sha512;
 
-    async fn hash(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        match self.hash {
+    async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
+        let mut hash = self
+            .hash
+            .try_write()
+            .ok_or(ViewError::CannotAcquireHash)?;
+        match *hash {
             Some(hash) => Ok(hash),
             None => {
                 let count = self.count();
                 let elements = self.read(0..count).await?;
                 let mut hasher = Self::Hasher::default();
                 hasher.update_with_bcs_bytes(&elements)?;
-                let hash = hasher.finalize();
-                self.hash = Some(hash);
-                Ok(hash)
+                let new_hash = hasher.finalize();
+                *hash = Some(new_hash);
+                Ok(new_hash)
             }
         }
     }
