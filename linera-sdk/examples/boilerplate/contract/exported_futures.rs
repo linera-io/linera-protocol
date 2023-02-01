@@ -7,9 +7,9 @@
 //! WASM module's respective endpoint. This module contains the code to forward the call to the
 //! contract type that implements [`linera_sdk::Contract`].
 
-use super::{super::ApplicationState, contract};
+use super::super::ApplicationState;
 use linera_sdk::{
-    ApplicationCallResult, Contract, ContractLogger, ExecutionResult, ExportedFuture,
+    contract, ApplicationCallResult, Contract, ContractLogger, ExecutionResult, ExportedFuture,
     SessionCallResult, SessionId,
 };
 use wit_bindgen_guest_rust::Handle;

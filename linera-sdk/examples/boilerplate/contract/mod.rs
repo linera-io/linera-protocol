@@ -13,10 +13,8 @@
 //! contracts.
 
 // Export the contract interface.
-wit_bindgen_guest_rust::export!("contract.wit");
+linera_sdk::export_contract!(Contract);
 
-mod conversions_from_wit;
-mod conversions_to_wit;
 mod exported_futures;
 mod system_api;
 
@@ -26,7 +24,7 @@ use self::exported_futures::{
 use super::ApplicationState as Contract;
 
 /// Mark the contract type to be exported.
-impl contract::Contract for Contract {
+impl linera_sdk::contract::Contract for Contract {
     type CallApplication = CallApplication;
     type CallSession = CallSession;
     type ExecuteEffect = ExecuteEffect;
