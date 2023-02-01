@@ -5,19 +5,15 @@ use crate::{
     outbox::OutboxStateView,
     ChainManager, ChainStateView,
 };
-use async_graphql::{scalar, Error, Object, OutputType};
+use async_graphql::{scalar, Error, Object};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{BlockHeight, ChainId},
 };
 use linera_execution::{ApplicationId, ChannelName, ExecutionStateView};
-use linera_views::{
-    collection_view::ReadGuardedView,
-    common::Context,
-    views::{View, ViewError},
-};
+use linera_views::{collection_view::ReadGuardedView, common::Context, views::ViewError};
 use serde::{Deserialize, Serialize};
-use std::{marker::PhantomData, ops::Deref};
+use std::ops::Deref;
 
 scalar!(ChainManager);
 scalar!(Event);
@@ -36,35 +32,6 @@ impl From<Range> for std::ops::Range<usize> {
             start: range.start,
             end: range.end,
         }
-    }
-}
-
-// TODO move to `linera_views`.
-struct CollectionElement<'a, C: Sync + Send + Context + 'static, I, W>
-where
-    ViewError: From<C::Error>,
-    W: View<C> + Sync,
-    I: Send + Sync,
-{
-    index: I,
-    guard: ReadGuardedView<'a, W>,
-    _phantom: PhantomData<C>,
-}
-
-// TODO move to `linera_views`.
-#[Object]
-impl<'a, C: Sync + Send + Context + 'static, I, W> CollectionElement<'a, C, I, W>
-where
-    ViewError: From<C::Error>,
-    W: View<C> + Sync + OutputType + 'a,
-    I: Send + Sync + OutputType,
-{
-    async fn index(&self) -> &I {
-        &self.index
-    }
-
-    async fn view(&self) -> &W {
-        self.guard.deref()
     }
 }
 
@@ -105,21 +72,42 @@ where
         Ok(self.received_log.read(range.into()).await?)
     }
 
-    async fn communication_states(
-        &self,
-    ) -> Result<Vec<CollectionElement<C, ApplicationId, CommunicationStateView<C>>>, Error> {
+    async fn communication_states(&self) -> Result<Vec<CommunicationStateElement<C>>, Error> {
         let mut communication_states = vec![];
         for application_id in self.communication_states.indices().await? {
-            communication_states.push(CollectionElement {
-                index: application_id,
+            communication_states.push(CommunicationStateElement {
+                application_id,
                 guard: self
                     .communication_states
                     .try_load_entry(application_id)
                     .await?,
-                _phantom: Default::default(),
             });
         }
         Ok(communication_states)
+    }
+}
+
+struct CommunicationStateElement<'a, C>
+where
+    C: Sync + Send + Context + 'static,
+    ViewError: From<C::Error>,
+{
+    application_id: ApplicationId,
+    guard: ReadGuardedView<'a, CommunicationStateView<C>>,
+}
+
+#[Object]
+impl<'a, C> CommunicationStateElement<'a, C>
+where
+    C: Sync + Send + Context + 'static + Clone,
+    ViewError: From<C::Error>,
+{
+    async fn application_id(&self) -> &ApplicationId {
+        &self.application_id
+    }
+
+    async fn communication_state_view(&self) -> &CommunicationStateView<C> {
+        self.guard.deref()
     }
 }
 
@@ -128,44 +116,61 @@ impl<C: Sync + Send + Context + Clone + 'static> CommunicationStateView<C>
 where
     ViewError: From<C::Error>,
 {
-    async fn inboxes(&self) -> Result<Vec<CollectionElement<C, Origin, InboxStateView<C>>>, Error> {
+    async fn inboxes(&self) -> Result<Vec<InboxStateElement<C>>, Error> {
         let mut inbox_states = vec![];
         for origin in self.inboxes.indices().await? {
-            inbox_states.push(CollectionElement {
-                index: origin.clone(),
+            inbox_states.push(InboxStateElement {
+                origin: origin.clone(),
                 guard: self.inboxes.try_load_entry(origin).await?,
-                _phantom: Default::default(),
             });
         }
         Ok(inbox_states)
     }
 
-    async fn outboxes(
-        &self,
-    ) -> Result<Vec<CollectionElement<C, Target, OutboxStateView<C>>>, Error> {
+    async fn outboxes(&self) -> Result<Vec<OutboxStateElement<C>>, Error> {
         let mut outbox_states = vec![];
         for target in self.outboxes.indices().await? {
-            outbox_states.push(CollectionElement {
-                index: target.clone(),
+            outbox_states.push(OutboxStateElement {
+                target: target.clone(),
                 guard: self.outboxes.try_load_entry(target).await?,
-                _phantom: Default::default(),
             });
         }
         Ok(outbox_states)
     }
 
-    async fn channels(
-        &self,
-    ) -> Result<Vec<CollectionElement<C, ChannelName, ChannelStateView<C>>>, Error> {
+    async fn channels(&self) -> Result<Vec<ChannelStateElement<C>>, Error> {
         let mut channel_states = vec![];
         for channel_name in self.channels.indices().await? {
-            channel_states.push(CollectionElement {
-                index: channel_name.clone(),
+            channel_states.push(ChannelStateElement {
+                channel_name: channel_name.clone(),
                 guard: self.channels.try_load_entry(channel_name).await?,
-                _phantom: Default::default(),
             });
         }
         Ok(channel_states)
+    }
+}
+
+struct InboxStateElement<'a, C>
+where
+    C: Sync + Send + Context + 'static,
+    ViewError: From<C::Error>,
+{
+    origin: Origin,
+    guard: ReadGuardedView<'a, InboxStateView<C>>,
+}
+
+#[Object]
+impl<'a, C> InboxStateElement<'a, C>
+where
+    C: Sync + Send + Context + 'static + Clone,
+    ViewError: From<C::Error>,
+{
+    async fn origin(&self) -> &Origin {
+        &self.origin
+    }
+
+    async fn inbox_state_view(&self) -> &InboxStateView<C> {
+        self.guard.deref()
     }
 }
 
@@ -193,6 +198,30 @@ where
     }
 }
 
+struct OutboxStateElement<'a, C>
+where
+    C: Sync + Send + Context + 'static,
+    ViewError: From<C::Error>,
+{
+    target: Target,
+    guard: ReadGuardedView<'a, OutboxStateView<C>>,
+}
+
+#[Object]
+impl<'a, C> OutboxStateElement<'a, C>
+where
+    C: Sync + Send + Context + 'static + Clone,
+    ViewError: From<C::Error>,
+{
+    async fn target(&self) -> &Target {
+        &self.target
+    }
+
+    async fn outbox_state_view(&self) -> &OutboxStateView<C> {
+        self.guard.deref()
+    }
+}
+
 #[Object]
 impl<C: Sync + Send + Context + Clone + 'static> OutboxStateView<C>
 where
@@ -205,6 +234,30 @@ where
     async fn queue(&self, count: Option<usize>) -> Result<Vec<BlockHeight>, Error> {
         let count = count.unwrap_or_else(|| self.queue.count());
         Ok(self.queue.read_front(count).await?)
+    }
+}
+
+struct ChannelStateElement<'a, C>
+where
+    C: Sync + Send + Context + 'static,
+    ViewError: From<C::Error>,
+{
+    channel_name: ChannelName,
+    guard: ReadGuardedView<'a, ChannelStateView<C>>,
+}
+
+#[Object]
+impl<'a, C> ChannelStateElement<'a, C>
+where
+    C: Sync + Send + Context + 'static + Clone,
+    ViewError: From<C::Error>,
+{
+    async fn channel_name(&self) -> &ChannelName {
+        &self.channel_name
+    }
+
+    async fn channel_state_view(&self) -> &ChannelStateView<C> {
+        self.guard.deref()
     }
 }
 
