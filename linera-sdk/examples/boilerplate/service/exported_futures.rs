@@ -7,8 +7,8 @@
 //! WASM module's respective endpoint. This module contains the code to forward the call to the
 //! service type that implements [`linera_sdk::Service`].
 
-use super::{super::ApplicationState, service};
-use linera_sdk::{ExportedFuture, Service, ServiceLogger};
+use super::super::ApplicationState;
+use linera_sdk::{service, ExportedFuture, Service, ServiceLogger};
 use wit_bindgen_guest_rust::Handle;
 
 pub struct QueryApplication {

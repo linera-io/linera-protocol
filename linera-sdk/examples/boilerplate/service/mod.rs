@@ -13,10 +13,8 @@
 //! services.
 
 // Export the service interface.
-wit_bindgen_guest_rust::export!("service.wit");
+linera_sdk::export_service!(Service);
 
-mod conversions_from_wit;
-mod conversions_to_wit;
 mod exported_futures;
 mod system_api;
 
@@ -24,6 +22,6 @@ use self::exported_futures::QueryApplication;
 use super::ApplicationState as Service;
 
 /// Mark the service type to be exported.
-impl service::Service for Service {
+impl linera_sdk::service::Service for Service {
     type QueryApplication = QueryApplication;
 }
