@@ -12,3 +12,7 @@ proc-macro = true
 syn = { version = "1.0.107", features = ["full"] }
 quote = "1.0"
 proc-macro2 = "1.0"
+
+[dev-dependencies]
+linera-views = {path ="../linera-views"}
+async-trait = "0.1.64"
