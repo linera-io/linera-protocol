@@ -253,7 +253,7 @@ pub mod tests {
 
     #[test]
     #[rustfmt::skip]
-    fn test_derive_view() {
+    fn test_generate_view_code() {
         let input: ItemStruct = parse_quote!(
             struct TestView<C> {
                 register: RegisterView<C, usize>,
@@ -305,6 +305,43 @@ pub mod tests {
                 fn clear(&mut self) {
                     self.register.clear();
                     self.collection.clear();
+                }
+            }
+        );
+
+        assert_eq!(output.to_string(), expected.to_string());
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn test_generate_hash_view_code() {
+        let input: ItemStruct = parse_quote!(
+            struct TestView<C> {
+                register: RegisterView<C, usize>,
+                collection: CollectionView<C, usize, RegisterView<C, usize>>,
+            }
+        );
+        let output = generate_hash_view_code(input);
+
+        let expected = quote!(
+            #[async_trait::async_trait]
+            impl<C> linera_views::views::HashableView<C> for TestView<C>
+            where
+                C: Context + Send + Sync + Clone + 'static,
+                linera_views::views::ViewError: From<C::Error>,
+            {
+                type Hasher = linera_views::sha2::Sha512;
+                async fn hash(
+                    &mut self
+                ) -> Result<<Self::Hasher as linera_views::views::Hasher>::Output,
+                    linera_views::views::ViewError
+                > {
+                    use linera_views::views::{Hasher, HashableView};
+                    use std::io::Write;
+                    let mut hasher = Self::Hasher::default();
+                    hasher.write_all(self.register.hash().await?.as_ref())?;
+                    hasher.write_all(self.collection.hash().await?.as_ref())?;
+                    Ok(hasher.finalize())
                 }
             }
         );
