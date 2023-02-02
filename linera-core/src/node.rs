@@ -386,7 +386,8 @@ where
         for certificate in certificates {
             if let Value::ConfirmedBlock { block, .. } = &certificate.value {
                 if block.chain_id == chain_id {
-                    let required_certificates = vec![]; // TODO
+                    // TODO: Add required certificates to chain info.
+                    let required_certificates = vec![];
                     match self
                         .handle_certificate(certificate.clone(), required_certificates)
                         .await

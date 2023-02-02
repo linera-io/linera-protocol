@@ -311,10 +311,8 @@ impl ClientContext {
         let mut node = LocalNodeClient::new(worker);
         // Second replay the certificates locally.
         for certificate in certificates {
-            let required_certificates = vec![]; // TODO
-            node.handle_certificate(certificate, required_certificates)
-                .await
-                .unwrap();
+            // No required certificates from other chains: This is only used with benchmark.
+            node.handle_certificate(certificate, vec![]).await.unwrap();
         }
         // Last update the wallet.
         for chain in self.wallet_state.chains_mut() {
