@@ -425,36 +425,6 @@ where
         };
         // Check that the chain is active and ready for this confirmation.
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
-        let tip = chain.tip_state.get();
-        if tip.next_block_height < block.height {
-            return Err(WorkerError::MissingEarlierBlocks {
-                current_block_height: tip.next_block_height,
-            });
-        }
-        if tip.next_block_height > block.height {
-            // Block was already confirmed.
-            let info = ChainInfoResponse::new(&chain, self.key_pair());
-            let actions = self.create_network_actions(&mut chain).await?;
-            return Ok((info, actions));
-        }
-        let epoch = chain
-            .execution_state
-            .system
-            .epoch
-            .get()
-            .expect("chain is active");
-        ensure!(
-            block.epoch == epoch,
-            WorkerError::InvalidEpoch {
-                chain_id: block.chain_id,
-                epoch: block.epoch,
-            }
-        );
-        // This should always be true for valid certificates.
-        ensure!(
-            tip.block_hash == block.previous_block_hash,
-            WorkerError::InvalidBlockChaining
-        );
         // Persist certificate.
         self.storage.write_certificate(certificate.clone()).await?;
         // Execute the block.
@@ -499,19 +469,6 @@ where
         };
         // Check that the chain is active and ready for this confirmation.
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
-        let epoch = chain
-            .execution_state
-            .system
-            .epoch
-            .get()
-            .expect("chain is active");
-        ensure!(
-            block.epoch == epoch,
-            WorkerError::InvalidEpoch {
-                chain_id: block.chain_id,
-                epoch: block.epoch,
-            }
-        );
         if chain.manager.get_mut().check_validated_block(
             chain.tip_state.get().next_block_height,
             block,
@@ -756,6 +713,38 @@ where
         log::trace!("{} <-- {:?}", self.nickname, certificate);
         let block = certificate.value.block();
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
+        if matches!(certificate.value, Value::ConfirmedBlock { .. }) {
+            let tip = chain.tip_state.get();
+            if tip.next_block_height < block.height {
+                return Err(WorkerError::MissingEarlierBlocks {
+                    current_block_height: tip.next_block_height,
+                });
+            }
+            if tip.next_block_height > block.height {
+                // Block was already confirmed.
+                let info = ChainInfoResponse::new(&chain, self.key_pair());
+                let actions = self.create_network_actions(&mut chain).await?;
+                return Ok((info, actions));
+            }
+            // This should always be true for valid certificates.
+            ensure!(
+                tip.block_hash == block.previous_block_hash,
+                WorkerError::InvalidBlockChaining
+            );
+        }
+        let epoch = chain
+            .execution_state
+            .system
+            .epoch
+            .get()
+            .expect("chain is active");
+        ensure!(
+            block.epoch == epoch,
+            WorkerError::InvalidEpoch {
+                chain_id: block.chain_id,
+                epoch: block.epoch,
+            }
+        );
         // Verify the certificate. Returns a catch-all error to make client code more robust.
         let committee = chain
             .execution_state
