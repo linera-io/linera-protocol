@@ -156,7 +156,7 @@ where
                                 }
                             }
                             self.client
-                                .handle_certificate(certificate.clone(), required_certificates)
+                                .handle_certificate(certificate.clone(), vec![])
                                 .await
                         }
                         Err(err) => Err(err),
@@ -316,6 +316,7 @@ where
                 let chain = self.store.load_chain(chain_id).await?;
                 // Send the requested certificates in order.
                 let keys = chain.confirmed_log.read(range).await?;
+                drop(chain);
                 let certs = self.store.read_certificates(keys.into_iter()).await?;
                 for cert in certs {
                     self.send_certificate(cert, retryable).await?;
