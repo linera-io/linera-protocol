@@ -348,4 +348,49 @@ pub mod tests {
 
         assert_eq!(output.to_string(), expected.to_string());
     }
+
+    #[test]
+    fn test_generate_save_delete_view_code() {
+        let input: ItemStruct = parse_quote!(
+            struct TestView<C> {
+                register: RegisterView<C, usize>,
+                collection: CollectionView<C, usize, RegisterView<C, usize>>,
+            }
+        );
+        let output = generate_save_delete_view_code(input);
+
+        let expected = quote!(
+            #[async_trait::async_trait]
+            impl<C> linera_views::views::ContainerView<C> for TestView<C>
+            where
+                C: Context + Send + Sync + Clone + 'static,
+                linera_views::views::ViewError: From<C::Error>,
+            {
+                async fn save(&mut self) -> Result<(), linera_views::views::ViewError> {
+                    use linera_views::common::Batch;
+                    let mut batch = Batch::default();
+                    self.register.flush(&mut batch)?;
+                    self.collection.flush(&mut batch)?;
+                    self.context().write_batch(batch).await?;
+                    Ok(())
+                }
+                async fn write_delete(self) -> Result<(), linera_views::views::ViewError> {
+                    use linera_views::common::Batch;
+                    let context = self.context().clone();
+                    let batch = Batch::build(move |batch| {
+                        Box::pin(async move {
+                            self.register.delete(batch);
+                            self.collection.delete(batch);
+                            Ok(())
+                        })
+                    })
+                    .await?;
+                    context.write_batch(batch).await?;
+                    Ok(())
+                }
+            }
+        );
+
+        assert_eq!(output.to_string(), expected.to_string());
+    }
 }
