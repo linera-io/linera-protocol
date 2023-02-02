@@ -16,7 +16,6 @@
 linera_sdk::export_service!(Service);
 
 mod exported_futures;
-mod system_api;
 
 use self::exported_futures::QueryApplication;
 use super::ApplicationState as Service;

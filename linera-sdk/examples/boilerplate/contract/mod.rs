@@ -16,7 +16,6 @@
 linera_sdk::export_contract!(Contract);
 
 mod exported_futures;
-mod system_api;
 
 use self::exported_futures::{
     CallApplication, CallSession, ExecuteEffect, ExecuteOperation, Initialize,
