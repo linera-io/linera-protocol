@@ -5,7 +5,7 @@ use crate::{
     common::{Batch, Context, HashOutput, KeyIterable, Update},
     views::{HashableView, Hasher, View, ViewError},
 };
-use async_std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+use async_std::sync::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
@@ -25,7 +25,7 @@ pub struct CollectionView<C, I, W> {
     updates: RwLock<BTreeMap<Vec<u8>, Update<W>>>,
     _phantom: PhantomData<I>,
     stored_hash: Option<HashOutput>,
-    hash: RwLock<Option<HashOutput>>,
+    hash: Mutex<Option<HashOutput>>,
 }
 
 /// A read-only accessor for a particular subview in a [`CollectionView`].
@@ -81,7 +81,7 @@ where
             updates: RwLock::new(BTreeMap::new()),
             _phantom: PhantomData,
             stored_hash: hash,
-            hash: RwLock::new(hash),
+            hash: Mutex::new(hash),
         })
     }
 
@@ -358,7 +358,7 @@ where
     type Hasher = sha2::Sha512;
 
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        let mut hash = self.hash.try_write().ok_or(ViewError::CannotAcquireHash)?;
+        let mut hash = self.hash.try_lock().ok_or(ViewError::CannotAcquireHash)?;
         match *hash {
             Some(hash) => Ok(hash),
             None => {

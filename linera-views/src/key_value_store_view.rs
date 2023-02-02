@@ -66,7 +66,7 @@ pub struct KeyValueStoreView<C> {
     updates: BTreeMap<Vec<u8>, Update<Vec<u8>>>,
     deleted_prefixes: BTreeSet<Vec<u8>>,
     stored_hash: Option<HashOutput>,
-    hash: async_std::sync::RwLock<Option<HashOutput>>,
+    hash: async_std::sync::Mutex<Option<HashOutput>>,
 }
 
 #[async_trait]
@@ -88,7 +88,7 @@ where
             updates: BTreeMap::new(),
             deleted_prefixes: BTreeSet::new(),
             stored_hash: hash,
-            hash: async_std::sync::RwLock::new(hash),
+            hash: async_std::sync::Mutex::new(hash),
         })
     }
 
@@ -455,7 +455,7 @@ where
     type Hasher = sha2::Sha512;
 
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        let mut hash = self.hash.try_write().ok_or(ViewError::CannotAcquireHash)?;
+        let mut hash = self.hash.try_lock().ok_or(ViewError::CannotAcquireHash)?;
         match *hash {
             Some(hash) => Ok(hash),
             None => {

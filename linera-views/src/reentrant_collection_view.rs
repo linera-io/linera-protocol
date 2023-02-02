@@ -27,7 +27,7 @@ pub struct ReentrantCollectionView<C, I, W> {
     updates: Mutex<BTreeMap<Vec<u8>, Update<Arc<RwLock<W>>>>>,
     _phantom: PhantomData<I>,
     stored_hash: Option<HashOutput>,
-    hash: RwLock<Option<HashOutput>>,
+    hash: Mutex<Option<HashOutput>>,
 }
 
 /// We need to find new base keys in order to implement the collection_view.
@@ -68,7 +68,7 @@ where
             updates: Mutex::new(BTreeMap::new()),
             _phantom: PhantomData,
             stored_hash: hash,
-            hash: RwLock::new(hash),
+            hash: Mutex::new(hash),
         })
     }
 
@@ -342,7 +342,7 @@ where
     type Hasher = sha2::Sha512;
 
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        let mut hash = self.hash.try_write()?;
+        let mut hash = self.hash.try_lock()?;
         match *hash {
             Some(hash) => Ok(hash),
             None => {

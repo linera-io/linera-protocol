@@ -5,7 +5,7 @@ use crate::{
     common::{Batch, Context, HashOutput},
     views::{HashableView, Hasher, View, ViewError},
 };
-use async_std::sync::RwLock;
+use async_std::sync::Mutex;
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{collections::VecDeque, fmt::Debug, ops::Range};
@@ -29,7 +29,7 @@ pub struct QueueView<C, T> {
     front_delete_count: usize,
     new_back_values: VecDeque<T>,
     stored_hash: Option<HashOutput>,
-    hash: RwLock<Option<HashOutput>>,
+    hash: Mutex<Option<HashOutput>>,
 }
 
 #[async_trait]
@@ -54,7 +54,7 @@ where
             front_delete_count: 0,
             new_back_values: VecDeque::new(),
             stored_hash: hash,
-            hash: RwLock::new(hash),
+            hash: Mutex::new(hash),
         })
     }
 
@@ -235,7 +235,7 @@ where
     type Hasher = sha2::Sha512;
 
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        let mut hash = self.hash.try_write().ok_or(ViewError::CannotAcquireHash)?;
+        let mut hash = self.hash.try_lock().ok_or(ViewError::CannotAcquireHash)?;
         match *hash {
             Some(hash) => Ok(hash),
             None => {
