@@ -1,5 +1,6 @@
 mod conversions_from_wit;
 mod conversions_to_wit;
+pub mod exported_futures;
 pub mod system_api;
 
 // Import the system interface.
