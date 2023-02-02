@@ -78,12 +78,12 @@ fn generate_view_code(input: ItemStruct) -> TokenStream2 {
                 #(#rollbackes)*
             }
 
-            fn flush(&mut self, batch: &mut linera_views::common::Batch) -> Result<(), linera_views::views::ViewError> {
+            fn flush(&mut self, batch: &mut linera_views::common::Batch,) -> Result<(), linera_views::views::ViewError> {
                 #(#flushes)*
                 Ok(())
             }
 
-            fn delete(self, batch: &mut linera_views::common::Batch) {
+            fn delete(self, batch: &mut linera_views::common::Batch,) {
                 #(#deletes)*
             }
 
@@ -239,4 +239,76 @@ pub fn derive_hash_container_view(input: TokenStream) -> TokenStream {
     stream.extend(generate_hash_view_code(input.clone()));
     stream.extend(generate_crypto_hash_code(input));
     stream.into()
+}
+
+#[cfg(test)]
+pub mod tests {
+
+    use crate::*;
+    use linera_views::{
+        collection_view::CollectionView, common::Context, register_view::RegisterView,
+    };
+    use quote::quote;
+    use syn::{parse_quote, token::Struct};
+
+    #[test]
+    #[rustfmt::skip]
+    fn test_derive_view() {
+        let input: ItemStruct = parse_quote!(
+            struct TestView<C> {
+                register: RegisterView<C, usize>,
+                collection: CollectionView<C, usize, RegisterView<C, usize>>,
+            }
+        );
+        let output = generate_view_code(input);
+
+        let expected = quote!(
+            #[async_trait::async_trait]
+            impl<C> linera_views::views::View<C> for TestView<C>
+            where
+                C: Context + Send + Sync + Clone + 'static,
+                linera_views::views::ViewError: From<C::Error>,
+            {
+                fn context(&self) -> &C {
+                    self.register.context()
+                }
+                async fn load(context: C) -> Result<Self, linera_views::views::ViewError> {
+                    let index = 0;
+                    let base_key = context.derive_key(&index)?;
+                    let register =
+                        RegisterView::load(context.clone_with_base_key(base_key)).await?;
+                    let index = 1;
+                    let base_key = context.derive_key(&index)?;
+                    let collection =
+                        CollectionView::load(context.clone_with_base_key(base_key)).await?;
+                    Ok(Self {
+                        register,
+                        collection
+                    })
+                }
+                fn rollback(&mut self) {
+                    self.register.rollback();
+                    self.collection.rollback();
+                }
+                fn flush(
+                    &mut self,
+                    batch: &mut linera_views::common::Batch,
+                ) -> Result<(), linera_views::views::ViewError> {
+                    self.register.flush(batch)?;
+                    self.collection.flush(batch)?;
+                    Ok(())
+                }
+                fn delete(self, batch: &mut linera_views::common::Batch,) {
+                    self.register.delete(batch);
+                    self.collection.delete(batch);
+                }
+                fn clear(&mut self) {
+                    self.register.clear();
+                    self.collection.clear();
+                }
+            }
+        );
+
+        assert_eq!(output.to_string(), expected.to_string());
+    }
 }
