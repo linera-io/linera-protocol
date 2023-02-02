@@ -161,10 +161,15 @@ pub enum WorkerError {
     MissingCertificateValue,
     #[error("The hash certificate doesn't match its value.")]
     InvalidLiteCertificate,
-    #[error("Additional certificates were provided that are not required.")]
-    UnneededCertificates,
-    #[error("Could not check signatures for additional certificate.")]
-    MissingEpochForRequiredCertificate,
+    #[error("An additional certificate was provided that is not required: {certificate_hash}.")]
+    UnneededCertificate { certificate_hash: CryptoHash },
+    #[error(
+        "Could not check signatures for additional certificate: {certificate_hash}, epoch {epoch}."
+    )]
+    MissingEpochForRequiredCertificate {
+        certificate_hash: CryptoHash,
+        epoch: Epoch,
+    },
 }
 
 impl From<linera_chain::ChainError> for WorkerError {
@@ -776,7 +781,9 @@ where
         for cert in &required_certificates {
             ensure!(
                 apps.contains_key(&cert.hash),
-                WorkerError::UnneededCertificates
+                WorkerError::UnneededCertificate {
+                    certificate_hash: cert.hash
+                }
             );
         }
         // Write the certificates so that the bytecode is available during execution.
@@ -788,7 +795,10 @@ where
                     .committees
                     .get()
                     .get(&cert.value.block().epoch)
-                    .ok_or(WorkerError::MissingEpochForRequiredCertificate)?;
+                    .ok_or_else(|| WorkerError::MissingEpochForRequiredCertificate {
+                        certificate_hash: cert.hash,
+                        epoch: cert.value.block().epoch,
+                    })?;
                 certificate.check(committee)?;
                 self.storage.write_certificate(cert.clone()).await?;
             }
