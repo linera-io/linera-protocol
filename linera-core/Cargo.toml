@@ -6,8 +6,8 @@ edition = "2021"
 
 [features]
 default = ["wasmtime"]
-wasmer = ["linera-execution/wasmer"]
-wasmtime = ["linera-execution/wasmtime"]
+wasmer = ["linera-execution/wasmer", "linera-storage/wasmer"]
+wasmtime = ["linera-execution/wasmtime", "linera-storage/wasmtime"]
 test = ["test-strategy", "proptest"]
 
 [dependencies]
