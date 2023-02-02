@@ -8,29 +8,19 @@
 //! service type that implements [`linera_sdk::Service`].
 
 use super::super::ApplicationState;
-use linera_sdk::{service, ExportedFuture, Service, ServiceLogger};
+use linera_sdk::service::{self, exported_futures};
 use wit_bindgen_guest_rust::Handle;
 
-pub struct QueryApplication {
-    future: ExportedFuture<Result<Vec<u8>, String>>,
-}
+pub struct QueryApplication(exported_futures::QueryApplication<ApplicationState>);
 
 impl service::QueryApplication for QueryApplication {
     fn new(context: service::QueryContext, argument: Vec<u8>) -> Handle<Self> {
-        ServiceLogger::install();
-
-        Handle::new(QueryApplication {
-            future: ExportedFuture::new(async move {
-                let application = ApplicationState::load().await;
-                application
-                    .query_application(&context.into(), &argument)
-                    .await
-                    .map_err(|error| error.to_string())
-            }),
-        })
+        Handle::new(QueryApplication(exported_futures::QueryApplication::new(
+            context, argument,
+        )))
     }
 
     fn poll(&self) -> service::PollQuery {
-        self.future.poll()
+        self.0.poll()
     }
 }
