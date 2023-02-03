@@ -8,6 +8,3 @@ use serde::{Deserialize, Serialize};
 pub struct Counter {
     pub value: u128,
 }
-
-/// Alias to the application type, so that the boilerplate module can reference it.
-pub type ApplicationState = Counter;

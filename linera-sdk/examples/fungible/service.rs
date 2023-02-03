@@ -6,7 +6,7 @@
 mod state;
 mod types;
 
-use self::state::{ApplicationState, FungibleToken};
+use self::state::FungibleToken;
 use async_trait::async_trait;
 use linera_sdk::{QueryContext, Service};
 use thiserror::Error;

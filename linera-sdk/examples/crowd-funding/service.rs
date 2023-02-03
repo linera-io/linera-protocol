@@ -5,7 +5,7 @@
 
 mod state;
 
-use self::state::{ApplicationState, CrowdFunding};
+use self::state::CrowdFunding;
 use async_trait::async_trait;
 use linera_sdk::{QueryContext, Service};
 use serde::Deserialize;

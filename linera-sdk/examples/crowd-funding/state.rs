@@ -59,9 +59,6 @@ impl CrowdFunding {
     }
 }
 
-/// Alias to the application type, so that the boilerplate module can reference it.
-pub type ApplicationState = CrowdFunding;
-
 // Work-around to pretend that `fungible` is an external crate, exposing the Fungible Token
 // application's interface.
 use super::fungible;

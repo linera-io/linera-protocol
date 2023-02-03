@@ -8,7 +8,7 @@ mod state;
 
 use self::{
     interface::ApplicationCall,
-    state::{ApplicationState, CrowdFunding, Status},
+    state::{CrowdFunding, Status},
 };
 use async_trait::async_trait;
 use fungible::{AccountOwner, ApplicationTransfer, SignedTransfer, Transfer};

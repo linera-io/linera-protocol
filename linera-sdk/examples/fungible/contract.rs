@@ -11,7 +11,7 @@ use self::{
         types::{self, AccountOwner, Nonce},
         ApplicationCall, ApplicationTransfer, SessionCall, SignedTransfer, Transfer,
     },
-    state::{ApplicationState, FungibleToken},
+    state::FungibleToken,
 };
 use async_trait::async_trait;
 use linera_sdk::{

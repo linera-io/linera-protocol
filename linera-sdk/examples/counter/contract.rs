@@ -5,7 +5,7 @@
 
 mod state;
 
-use self::state::{ApplicationState, Counter};
+use self::state::Counter;
 use async_trait::async_trait;
 use linera_sdk::{
     ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,

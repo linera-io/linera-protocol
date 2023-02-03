@@ -77,6 +77,3 @@ impl FungibleToken {
 #[derive(Clone, Copy, Debug, Error)]
 #[error("Insufficient balance for transfer")]
 pub struct InsufficientBalanceError;
-
-/// Alias to the application type, so that the boilerplate module can reference it.
-pub type ApplicationState = FungibleToken;
