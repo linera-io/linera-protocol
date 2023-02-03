@@ -10,5 +10,6 @@ wit_bindgen_guest_rust::import!("queryable_system.wit");
 wit_bindgen_guest_rust::export!(
     export_macro = "export_service"
     types_path = "service"
+    reexported_crate_path = "wit_bindgen_guest_rust"
     "service.wit"
 );

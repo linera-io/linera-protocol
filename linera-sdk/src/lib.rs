@@ -20,6 +20,8 @@ pub use self::{
     extensions::FromBcsBytes,
     log::{ContractLogger, ServiceLogger},
 };
+#[doc(hidden)]
+pub use wit_bindgen_guest_rust;
 
 /// The public entry points provided by a contract.
 #[async_trait]

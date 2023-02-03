@@ -10,5 +10,6 @@ wit_bindgen_guest_rust::import!("writable_system.wit");
 wit_bindgen_guest_rust::export!(
     export_macro = "export_contract"
     types_path = "contract"
+    reexported_crate_path = "wit_bindgen_guest_rust"
     "contract.wit"
 );

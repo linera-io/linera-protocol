@@ -5223,7 +5223,7 @@ checksum = "f40009d85759725a34da6d89a94e63d7bdc50a862acf0dbc7c8e488f1edcb6f5"
 [[package]]
 name = "wit-bindgen-core"
 version = "0.2.0"
-source = "git+https://github.com/jvff/wit-bindgen?rev=0dbc957c5f8e3a107f4ffdcddf023a5b46ead51b#0dbc957c5f8e3a107f4ffdcddf023a5b46ead51b"
+source = "git+https://github.com/jvff/wit-bindgen?rev=081e2839303345c96a4ebd1eee259683593de1a0#081e2839303345c96a4ebd1eee259683593de1a0"
 dependencies = [
  "anyhow",
  "wit-parser",
@@ -5232,7 +5232,7 @@ dependencies = [
 [[package]]
 name = "wit-bindgen-gen-guest-rust"
 version = "0.2.0"
-source = "git+https://github.com/jvff/wit-bindgen?rev=0dbc957c5f8e3a107f4ffdcddf023a5b46ead51b#0dbc957c5f8e3a107f4ffdcddf023a5b46ead51b"
+source = "git+https://github.com/jvff/wit-bindgen?rev=081e2839303345c96a4ebd1eee259683593de1a0#081e2839303345c96a4ebd1eee259683593de1a0"
 dependencies = [
  "heck 0.3.3",
  "wit-bindgen-core",
@@ -5242,7 +5242,7 @@ dependencies = [
 [[package]]
 name = "wit-bindgen-gen-host-wasmer-rust"
 version = "0.2.0"
-source = "git+https://github.com/jvff/wit-bindgen?rev=0dbc957c5f8e3a107f4ffdcddf023a5b46ead51b#0dbc957c5f8e3a107f4ffdcddf023a5b46ead51b"
+source = "git+https://github.com/jvff/wit-bindgen?rev=081e2839303345c96a4ebd1eee259683593de1a0#081e2839303345c96a4ebd1eee259683593de1a0"
 dependencies = [
  "heck 0.3.3",
  "wit-bindgen-core",
@@ -5252,7 +5252,7 @@ dependencies = [
 [[package]]
 name = "wit-bindgen-gen-host-wasmtime-rust"
 version = "0.2.0"
-source = "git+https://github.com/jvff/wit-bindgen?rev=0dbc957c5f8e3a107f4ffdcddf023a5b46ead51b#0dbc957c5f8e3a107f4ffdcddf023a5b46ead51b"
+source = "git+https://github.com/jvff/wit-bindgen?rev=081e2839303345c96a4ebd1eee259683593de1a0#081e2839303345c96a4ebd1eee259683593de1a0"
 dependencies = [
  "heck 0.3.3",
  "wit-bindgen-core",
@@ -5262,7 +5262,7 @@ dependencies = [
 [[package]]
 name = "wit-bindgen-gen-rust-lib"
 version = "0.2.0"
-source = "git+https://github.com/jvff/wit-bindgen?rev=0dbc957c5f8e3a107f4ffdcddf023a5b46ead51b#0dbc957c5f8e3a107f4ffdcddf023a5b46ead51b"
+source = "git+https://github.com/jvff/wit-bindgen?rev=081e2839303345c96a4ebd1eee259683593de1a0#081e2839303345c96a4ebd1eee259683593de1a0"
 dependencies = [
  "heck 0.3.3",
  "wit-bindgen-core",
@@ -5271,7 +5271,7 @@ dependencies = [
 [[package]]
 name = "wit-bindgen-guest-rust"
 version = "0.2.0"
-source = "git+https://github.com/jvff/wit-bindgen?rev=0dbc957c5f8e3a107f4ffdcddf023a5b46ead51b#0dbc957c5f8e3a107f4ffdcddf023a5b46ead51b"
+source = "git+https://github.com/jvff/wit-bindgen?rev=081e2839303345c96a4ebd1eee259683593de1a0#081e2839303345c96a4ebd1eee259683593de1a0"
 dependencies = [
  "bitflags",
  "wit-bindgen-guest-rust-macro",
@@ -5280,7 +5280,7 @@ dependencies = [
 [[package]]
 name = "wit-bindgen-guest-rust-macro"
 version = "0.2.0"
-source = "git+https://github.com/jvff/wit-bindgen?rev=0dbc957c5f8e3a107f4ffdcddf023a5b46ead51b#0dbc957c5f8e3a107f4ffdcddf023a5b46ead51b"
+source = "git+https://github.com/jvff/wit-bindgen?rev=081e2839303345c96a4ebd1eee259683593de1a0#081e2839303345c96a4ebd1eee259683593de1a0"
 dependencies = [
  "proc-macro2",
  "syn",
@@ -5291,7 +5291,7 @@ dependencies = [
 [[package]]
 name = "wit-bindgen-host-wasmer-rust"
 version = "0.2.0"
-source = "git+https://github.com/jvff/wit-bindgen?rev=0dbc957c5f8e3a107f4ffdcddf023a5b46ead51b#0dbc957c5f8e3a107f4ffdcddf023a5b46ead51b"
+source = "git+https://github.com/jvff/wit-bindgen?rev=081e2839303345c96a4ebd1eee259683593de1a0#081e2839303345c96a4ebd1eee259683593de1a0"
 dependencies = [
  "anyhow",
  "bitflags",
@@ -5304,7 +5304,7 @@ dependencies = [
 [[package]]
 name = "wit-bindgen-host-wasmer-rust-macro"
 version = "0.2.0"
-source = "git+https://github.com/jvff/wit-bindgen?rev=0dbc957c5f8e3a107f4ffdcddf023a5b46ead51b#0dbc957c5f8e3a107f4ffdcddf023a5b46ead51b"
+source = "git+https://github.com/jvff/wit-bindgen?rev=081e2839303345c96a4ebd1eee259683593de1a0#081e2839303345c96a4ebd1eee259683593de1a0"
 dependencies = [
  "proc-macro2",
  "syn",
@@ -5315,7 +5315,7 @@ dependencies = [
 [[package]]
 name = "wit-bindgen-host-wasmtime-rust"
 version = "0.2.0"
-source = "git+https://github.com/jvff/wit-bindgen?rev=0dbc957c5f8e3a107f4ffdcddf023a5b46ead51b#0dbc957c5f8e3a107f4ffdcddf023a5b46ead51b"
+source = "git+https://github.com/jvff/wit-bindgen?rev=081e2839303345c96a4ebd1eee259683593de1a0#081e2839303345c96a4ebd1eee259683593de1a0"
 dependencies = [
  "anyhow",
  "bitflags",
@@ -5327,7 +5327,7 @@ dependencies = [
 [[package]]
 name = "wit-bindgen-host-wasmtime-rust-macro"
 version = "0.2.0"
-source = "git+https://github.com/jvff/wit-bindgen?rev=0dbc957c5f8e3a107f4ffdcddf023a5b46ead51b#0dbc957c5f8e3a107f4ffdcddf023a5b46ead51b"
+source = "git+https://github.com/jvff/wit-bindgen?rev=081e2839303345c96a4ebd1eee259683593de1a0#081e2839303345c96a4ebd1eee259683593de1a0"
 dependencies = [
  "proc-macro2",
  "syn",
@@ -5338,7 +5338,7 @@ dependencies = [
 [[package]]
 name = "wit-parser"
 version = "0.2.0"
-source = "git+https://github.com/jvff/wit-bindgen?rev=0dbc957c5f8e3a107f4ffdcddf023a5b46ead51b#0dbc957c5f8e3a107f4ffdcddf023a5b46ead51b"
+source = "git+https://github.com/jvff/wit-bindgen?rev=081e2839303345c96a4ebd1eee259683593de1a0#081e2839303345c96a4ebd1eee259683593de1a0"
 dependencies = [
  "anyhow",
  "id-arena",
