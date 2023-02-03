@@ -78,12 +78,12 @@ fn generate_view_code(input: ItemStruct) -> TokenStream2 {
                 #(#rollbackes)*
             }
 
-            fn flush(&mut self, batch: &mut linera_views::common::Batch,) -> Result<(), linera_views::views::ViewError> {
+            fn flush(&mut self, batch: &mut linera_views::common::Batch) -> Result<(), linera_views::views::ViewError> {
                 #(#flushes)*
                 Ok(())
             }
 
-            fn delete(self, batch: &mut linera_views::common::Batch,) {
+            fn delete(self, batch: &mut linera_views::common::Batch) {
                 #(#deletes)*
             }
 
@@ -289,13 +289,13 @@ pub mod tests {
                 }
                 fn flush(
                     &mut self,
-                    batch: &mut linera_views::common::Batch,
+                    batch: &mut linera_views::common::Batch
                 ) -> Result<(), linera_views::views::ViewError> {
                     self.register.flush(batch)?;
                     self.collection.flush(batch)?;
                     Ok(())
                 }
-                fn delete(self, batch: &mut linera_views::common::Batch,) {
+                fn delete(self, batch: &mut linera_views::common::Batch) {
                     self.register.delete(batch);
                     self.collection.delete(batch);
                 }
