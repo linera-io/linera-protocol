@@ -1330,6 +1330,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "crowd-funding"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bcs",
+ "fungible",
+ "futures",
+ "linera-sdk",
+ "log",
+ "serde",
+ "serde_with",
+ "thiserror",
+]
+
+[[package]]
 name = "crypto-common"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2437,11 +2452,9 @@ dependencies = [
  "async-trait",
  "bcs",
  "ed25519-dalek",
- "fungible",
  "futures",
  "generic-array",
  "hex",
- "linera-sdk",
  "log",
  "serde",
  "serde-name",
@@ -2449,7 +2462,6 @@ dependencies = [
  "sha2 0.9.9",
  "thiserror",
  "wasmtime",
- "webassembly-test",
  "wit-bindgen-guest-rust",
 ]
 
