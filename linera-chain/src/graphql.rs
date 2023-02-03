@@ -74,23 +74,15 @@ where
 
     async fn communication_states(
         &self,
-        application_ids: Option<Vec<ApplicationId>>,
-    ) -> Result<Vec<CommunicationStateElement<C>>, Error> {
-        let mut communication_states = vec![];
-        let application_ids = match application_ids {
-            None => self.communication_states.indices().await?,
-            Some(application_ids) => application_ids,
-        };
-        for application_id in application_ids {
-            communication_states.push(CommunicationStateElement {
-                application_id,
-                guard: self
-                    .communication_states
-                    .try_load_entry(application_id)
-                    .await?,
-            });
-        }
-        Ok(communication_states)
+        application_id: ApplicationId,
+    ) -> Result<CommunicationStateElement<C>, Error> {
+        Ok(CommunicationStateElement {
+            application_id,
+            guard: self
+                .communication_states
+                .try_load_entry(application_id)
+                .await?,
+        })
     }
 }
 
