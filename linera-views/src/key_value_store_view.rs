@@ -9,6 +9,7 @@ use crate::{
     views::{HashableView, Hasher, View, ViewError},
 };
 use async_trait::async_trait;
+use async_std::sync::Mutex;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt::Debug,
@@ -66,7 +67,7 @@ pub struct KeyValueStoreView<C> {
     updates: BTreeMap<Vec<u8>, Update<Vec<u8>>>,
     deleted_prefixes: BTreeSet<Vec<u8>>,
     stored_hash: Option<HashOutput>,
-    hash: async_std::sync::Mutex<Option<HashOutput>>,
+    hash: Mutex<Option<HashOutput>>,
 }
 
 #[async_trait]
@@ -88,7 +89,7 @@ where
             updates: BTreeMap::new(),
             deleted_prefixes: BTreeSet::new(),
             stored_hash: hash,
-            hash: async_std::sync::Mutex::new(hash),
+            hash: Mutex::new(hash),
         })
     }
 
@@ -444,6 +445,21 @@ where
         }
         Ok(())
     }
+
+    async fn compute_hash(&self) -> Result<<sha2::Sha512 as Hasher>::Output, ViewError> {
+        let mut hasher = sha2::Sha512::default();
+        let mut count = 0;
+        self.for_each_index_value(|index, value| -> Result<(), ViewError> {
+            count += 1;
+            hasher.update_with_bytes(index)?;
+            hasher.update_with_bytes(value)?;
+            Ok(())
+        })
+            .await?;
+        hasher.update_with_bcs_bytes(&count)?;
+        Ok(hasher.finalize())
+    }
+
 }
 
 #[async_trait]
@@ -459,17 +475,7 @@ where
         match *hash {
             Some(hash) => Ok(hash),
             None => {
-                let mut hasher = Self::Hasher::default();
-                let mut count = 0;
-                self.for_each_index_value(|index, value| -> Result<(), ViewError> {
-                    count += 1;
-                    hasher.update_with_bytes(index)?;
-                    hasher.update_with_bytes(value)?;
-                    Ok(())
-                })
-                .await?;
-                hasher.update_with_bcs_bytes(&count)?;
-                let new_hash = hasher.finalize();
+                let new_hash = self.compute_hash().await?;
                 *hash = Some(new_hash);
                 Ok(new_hash)
             }

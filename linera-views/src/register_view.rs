@@ -114,7 +114,7 @@ where
 impl<C, T> RegisterView<C, T>
 where
     C: Context,
-    T: Clone,
+    T: Clone + Serialize,
 {
     /// Obtain a mutable reference to the value in the register.
     pub fn get_mut(&mut self) -> &mut T {
@@ -127,6 +127,13 @@ where
             }
         }
     }
+
+    async fn compute_hash(&self) -> Result<<sha2::Sha512 as Hasher>::Output, ViewError> {
+        let mut hasher = sha2::Sha512::default();
+        hasher.update_with_bcs_bytes(self.get())?;
+        Ok(hasher.finalize())
+    }
+
 }
 
 #[async_trait]
@@ -134,7 +141,7 @@ impl<C, T> HashableView<C> for RegisterView<C, T>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    T: Default + Send + Sync + Serialize + DeserializeOwned,
+    T: Clone + Default + Send + Sync + Serialize + DeserializeOwned,
 {
     type Hasher = sha2::Sha512;
 
@@ -143,9 +150,7 @@ where
         match *hash {
             Some(hash) => Ok(hash),
             None => {
-                let mut hasher = Self::Hasher::default();
-                hasher.update_with_bcs_bytes(self.get())?;
-                let new_hash = hasher.finalize();
+                let new_hash = self.compute_hash().await?;
                 *hash = Some(new_hash);
                 Ok(new_hash)
             }

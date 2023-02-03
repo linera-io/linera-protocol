@@ -223,6 +223,14 @@ where
         }
         Ok(values)
     }
+
+    async fn compute_hash(&self) -> Result<<sha2::Sha512 as Hasher>::Output, ViewError> {
+        let count = self.count();
+        let elements = self.read_front(count).await?;
+        let mut hasher = sha2::Sha512::default();
+        hasher.update_with_bcs_bytes(&elements)?;
+        Ok(hasher.finalize())
+    }
 }
 
 #[async_trait]
@@ -239,11 +247,7 @@ where
         match *hash {
             Some(hash) => Ok(hash),
             None => {
-                let count = self.count();
-                let elements = self.read_front(count).await?;
-                let mut hasher = Self::Hasher::default();
-                hasher.update_with_bcs_bytes(&elements)?;
-                let new_hash = hasher.finalize();
+                let new_hash = self.compute_hash().await?;
                 *hash = Some(new_hash);
                 Ok(new_hash)
             }
