@@ -1,7 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[path = "./types.rs"]
 pub mod types;
 
 pub use self::types::AccountOwner;
