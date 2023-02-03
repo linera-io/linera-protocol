@@ -13,3 +13,28 @@ wit_bindgen_guest_rust::export!(
     reexported_crate_path = "wit_bindgen_guest_rust"
     "service.wit"
 );
+
+/// Declares an implementation of the [`Service`][`crate::Service`] trait, exporting it from the
+/// WASM module.
+///
+/// Generates the necessary boilerplate for implementing the service WIT interface, exporting the
+/// necessary resource types and functions so that the host can call the service application.
+#[macro_export]
+macro_rules! service {
+    ($application:ident) => {
+        // Export the service interface.
+        $crate::export_service!($application);
+
+        /// Mark the service type to be exported.
+        impl $crate::service::Service for $application {
+            type QueryApplication = QueryApplication;
+        }
+
+        $crate::instance_exported_future! {
+            service::QueryApplication<$application>(
+                context: $crate::service::QueryContext,
+                argument: Vec<u8>,
+            ) -> PollQuery
+        }
+    };
+}
