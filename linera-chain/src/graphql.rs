@@ -84,6 +84,10 @@ where
                 .await?,
         })
     }
+
+    async fn communication_state_indices(&self) -> Result<Vec<ApplicationId>, Error> {
+        Ok(self.communication_states.indices().await?)
+    }
 }
 
 struct CommunicationStateElement<'a, C>
@@ -130,6 +134,10 @@ where
         })
     }
 
+    async fn inboxes_indices(&self) -> Result<Vec<Origin>, Error> {
+        Ok(self.inboxes.indices().await?)
+    }
+
     async fn outboxes(
         &self,
         chain_id: ChainId,
@@ -145,11 +153,19 @@ where
         })
     }
 
+    async fn outboxes_indices(&self) -> Result<Vec<Target>, Error> {
+        Ok(self.outboxes.indices().await?)
+    }
+
     async fn channels(&self, channel_name: ChannelName) -> Result<ChannelStateElement<C>, Error> {
         Ok(ChannelStateElement {
             channel_name: channel_name.clone(),
             guard: self.channels.try_load_entry(channel_name).await?,
         })
+    }
+
+    async fn channels_indices(&self) -> Result<Vec<ChannelName>, Error> {
+        Ok(self.channels.indices().await?)
     }
 }
 
