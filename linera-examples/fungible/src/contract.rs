@@ -2,18 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![cfg(target_arch = "wasm32")]
+#![no_main]
 
-mod interface;
 mod state;
 
-use self::{
-    interface::{
-        types::{self, AccountOwner, Nonce},
-        ApplicationCall, ApplicationTransfer, SessionCall, SignedTransfer, Transfer,
-    },
-    state::FungibleToken,
-};
+use self::state::FungibleToken;
 use async_trait::async_trait;
+use fungible::{
+    types::{AccountOwner, Nonce},
+    ApplicationCall, ApplicationTransfer, SessionCall, SignedTransfer, Transfer,
+};
 use linera_sdk::{
     contract::system_api, crypto::CryptoError, ensure, ApplicationCallResult, CalleeContext,
     Contract, EffectContext, ExecutionResult, FromBcsBytes, OperationContext, Session,

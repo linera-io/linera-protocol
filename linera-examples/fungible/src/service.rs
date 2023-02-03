@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![cfg(target_arch = "wasm32")]
+#![no_main]
 
 mod state;
-mod types;
 
 use self::state::FungibleToken;
 use async_trait::async_trait;
