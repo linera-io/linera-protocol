@@ -10,6 +10,7 @@ members = [
         "linera-storage",
         "linera-views",
         "linera-views-derive",
+        "linera-examples/counter",
 ]
 
 [profile.release]
