@@ -38,7 +38,7 @@ jobs:
       run: cargo build --target wasm32-unknown-unknown -p linera-views
     - name: Build example contract
       run: |
-        RUSTFLAGS="-C opt-level=z -C debuginfo=0" cargo build --release --target wasm32-unknown-unknown -p linera-sdk --examples
+        RUSTFLAGS="-C opt-level=z -C debuginfo=0" cargo build --release --target wasm32-unknown-unknown -p counter
     - name: Test using Wasmer
       run: cargo test --features wasmer wasm
     - name: Test using Wasmtime
@@ -48,4 +48,4 @@ jobs:
     - name: Run WASM application unit tests
       env:
         CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER: ./target/debug/test-runner
-      run: cargo test -p linera-sdk --examples --features test --target wasm32-unknown-unknown
+      run: cargo test -p counter --target wasm32-unknown-unknown
