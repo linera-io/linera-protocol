@@ -1081,6 +1081,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "counter"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bcs",
+ "futures",
+ "linera-sdk",
+ "log",
+ "serde",
+ "serde_with",
+ "thiserror",
+ "webassembly-test",
+]
+
+[[package]]
 name = "cpp_demangle"
 version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"

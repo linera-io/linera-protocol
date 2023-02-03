@@ -36,16 +36,6 @@ thiserror = "1.0.31"
 webassembly-test = "0.1.0"
 
 [[example]]
-name = "counter_contract"
-path = "examples/counter/contract.rs"
-crate-type = ["cdylib"]
-
-[[example]]
-name = "counter_service"
-path = "examples/counter/service.rs"
-crate-type = ["cdylib"]
-
-[[example]]
 name = "crowd_funding_contract"
 path = "examples/crowd-funding/contract.rs"
 crate-type = ["cdylib"]
