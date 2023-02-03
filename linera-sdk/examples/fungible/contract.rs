@@ -22,6 +22,8 @@ use linera_sdk::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+linera_sdk::contract!(FungibleToken);
+
 #[async_trait]
 impl Contract for FungibleToken {
     type Error = Error;
@@ -320,6 +322,3 @@ pub enum Error {
     #[error("Application doesn't support any cross-application sessions")]
     SessionsNotSupported,
 }
-
-#[path = "../boilerplate/contract/mod.rs"]
-mod boilerplate;

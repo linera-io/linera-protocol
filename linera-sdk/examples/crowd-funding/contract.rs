@@ -21,6 +21,8 @@ use serde::{Deserialize, Serialize};
 use std::mem;
 use thiserror::Error;
 
+linera_sdk::contract!(CrowdFunding);
+
 #[async_trait]
 impl Contract for CrowdFunding {
     type Error = Error;
@@ -395,9 +397,6 @@ pub enum Error {
     #[error("Crowd-funding campaign has been cancelled")]
     Cancelled,
 }
-
-#[path = "../boilerplate/contract/mod.rs"]
-mod boilerplate;
 
 // Work-around to pretend that `fungible` is an external crate, exposing the Fungible Token
 // application's interface.

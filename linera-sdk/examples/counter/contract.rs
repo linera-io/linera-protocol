@@ -13,6 +13,8 @@ use linera_sdk::{
 };
 use thiserror::Error;
 
+linera_sdk::contract!(Counter);
+
 #[async_trait]
 impl Contract for Counter {
     type Error = Error;
@@ -84,9 +86,6 @@ pub enum Error {
     #[error("Invalid serialized increment value")]
     InvalidIncrement(#[from] bcs::Error),
 }
-
-#[path = "../boilerplate/contract/mod.rs"]
-mod boilerplate;
 
 #[cfg(test)]
 mod tests {
