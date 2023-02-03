@@ -2437,6 +2437,7 @@ dependencies = [
  "async-trait",
  "bcs",
  "ed25519-dalek",
+ "fungible",
  "futures",
  "generic-array",
  "hex",

@@ -9,7 +9,3 @@ pub enum ApplicationCall {
     Collect,
     Cancel,
 }
-
-// Work-around to pretend that `fungible` is an external crate, exposing the Fungible Token
-// application's interface.
-use crate::fungible;

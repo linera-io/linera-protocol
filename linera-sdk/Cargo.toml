@@ -31,6 +31,7 @@ anyhow = "1.0.57"
 wasmtime = "1.0"
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+fungible = { path = "../linera-examples/fungible" }
 linera-sdk = { path = ".", features = ["test"] }
 thiserror = "1.0.31"
 webassembly-test = "0.1.0"
