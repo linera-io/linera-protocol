@@ -397,9 +397,3 @@ pub enum Error {
     #[error("Crowd-funding campaign has been cancelled")]
     Cancelled,
 }
-
-// Work-around to pretend that `fungible` is an external crate, exposing the Fungible Token
-// application's interface.
-#[path = "../fungible/interface.rs"]
-#[allow(dead_code)]
-mod fungible;
