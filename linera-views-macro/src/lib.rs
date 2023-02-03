@@ -1,9 +1,9 @@
 extern crate proc_macro;
 extern crate syn;
 use proc_macro::TokenStream;
-use proc_macro2::Span;
+use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
-use syn::{parse_macro_input, ItemStruct, __private::TokenStream2};
+use syn::{parse_macro_input, ItemStruct};
 
 fn get_seq_parameter(generics: syn::Generics) -> Vec<syn::Ident> {
     let mut generic_vect = Vec::new();
