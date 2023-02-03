@@ -2,15 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![cfg(target_arch = "wasm32")]
+#![no_main]
 
-mod interface;
 mod state;
 
-use self::{
-    interface::ApplicationCall,
-    state::{CrowdFunding, Status},
-};
+use self::state::{CrowdFunding, Status};
 use async_trait::async_trait;
+use crowd_funding::ApplicationCall;
 use fungible::{AccountOwner, ApplicationTransfer, SignedTransfer, Transfer};
 use futures::{future, stream, StreamExt, TryFutureExt, TryStreamExt};
 use linera_sdk::{
