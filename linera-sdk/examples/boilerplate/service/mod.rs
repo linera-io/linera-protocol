@@ -15,12 +15,16 @@
 // Export the service interface.
 linera_sdk::export_service!(Service);
 
-mod exported_futures;
-
-use self::exported_futures::QueryApplication;
 use super::ApplicationState as Service;
 
 /// Mark the service type to be exported.
 impl linera_sdk::service::Service for Service {
     type QueryApplication = QueryApplication;
+}
+
+linera_sdk::instance_exported_future! {
+    service::QueryApplication<Service>(
+        context: linera_sdk::service::QueryContext,
+        argument: Vec<u8>,
+    ) -> PollQuery
 }
