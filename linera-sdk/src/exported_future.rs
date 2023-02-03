@@ -126,3 +126,46 @@ unsafe fn wake_by_ref(internal_waker: *const ()) {
 unsafe fn drop(internal_waker: *const ()) {
     let _ = ShouldWake::unwrap_from(internal_waker);
 }
+
+/// Declares a type exporting a future declared as a WIT type.
+///
+/// Used internally to generate the boilerplate to export the asynchronous endpoints from the
+/// guest.
+///
+/// # Parameters
+///
+/// - `module`: specifies which WIT interface the future is declared in (either `service` or
+///   `contract`
+/// - `future`: the name of the exported future type
+/// - `application`: the type that implements the WIT interface trait
+/// - `parameters`: the names of the parameters necessary for creating the exported future resource
+/// - `parameter_types`: the types of the parameters necessary for creating the exported future
+///   resource
+/// - `return_type`: the WIT poll type returned by the exported future's `poll` method (must be in
+///   the previously specified `module`)
+#[macro_export]
+macro_rules! instance_exported_future {
+    (
+        $module:ident :: $future:ident < $application:ty > (
+            $( $parameters:ident : $parameter_types:ty ),* $(,)*
+        ) -> $return_type:ident
+    ) => {
+        pub struct $future($crate::$module::exported_futures::$future<$application>);
+
+        impl $crate::$module::$future for $future {
+            fn new(
+                $( $parameters: $parameter_types ),*
+            ) -> $crate::wit_bindgen_guest_rust::Handle<Self> {
+                $crate::wit_bindgen_guest_rust::Handle::new(
+                    $future($crate::$module::exported_futures::$future::new(
+                        $( $parameters ),*
+                    ))
+                )
+            }
+
+            fn poll(&self) -> $crate::$module::$return_type {
+                self.0.poll()
+            }
+        }
+    };
+}
