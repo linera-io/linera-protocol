@@ -29,21 +29,3 @@ wit-bindgen-guest-rust = { git = "https://github.com/jvff/wit-bindgen", rev = "0
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 anyhow = "1.0.57"
 wasmtime = "1.0"
-
-[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
-fungible = { path = "../linera-examples/fungible" }
-linera-sdk = { path = ".", features = ["test"] }
-thiserror = "1.0.31"
-webassembly-test = "0.1.0"
-
-[[example]]
-name = "crowd_funding_contract"
-path = "examples/crowd-funding/contract.rs"
-crate-type = ["cdylib"]
-required-features = ["crypto"]
-
-[[example]]
-name = "crowd_funding_service"
-path = "examples/crowd-funding/service.rs"
-crate-type = ["cdylib"]
-required-features = ["crypto"]
