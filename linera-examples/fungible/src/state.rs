@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::types::{AccountOwner, Nonce};
+use fungible::types::{AccountOwner, Nonce};
 use linera_sdk::ensure;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;

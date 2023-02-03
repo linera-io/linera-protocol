@@ -11,6 +11,7 @@ members = [
         "linera-views",
         "linera-views-derive",
         "linera-examples/counter",
+        "linera-examples/fungible",
 ]
 
 [profile.release]
