@@ -11,6 +11,8 @@ use async_trait::async_trait;
 use linera_sdk::{QueryContext, Service};
 use thiserror::Error;
 
+linera_sdk::service!(FungibleToken);
+
 #[async_trait]
 impl Service for FungibleToken {
     type Error = Error;
@@ -36,6 +38,3 @@ pub enum Error {
     #[error("Invalid account specified in query parameter")]
     InvalidAccount(#[from] bcs::Error),
 }
-
-#[path = "../boilerplate/service/mod.rs"]
-mod boilerplate;

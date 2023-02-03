@@ -10,6 +10,8 @@ use async_trait::async_trait;
 use linera_sdk::{QueryContext, Service};
 use thiserror::Error;
 
+linera_sdk::service!(Counter);
+
 #[async_trait]
 impl Service for Counter {
     type Error = Error;
@@ -33,9 +35,6 @@ pub enum Error {
     #[error("Invalid query argument; Counter application only supports a single (empty) query")]
     InvalidQuery,
 }
-
-#[path = "../boilerplate/service/mod.rs"]
-mod boilerplate;
 
 #[cfg(test)]
 mod tests {

@@ -11,6 +11,8 @@ use linera_sdk::{QueryContext, Service};
 use serde::Deserialize;
 use thiserror::Error;
 
+linera_sdk::service!(CrowdFunding);
+
 #[async_trait]
 impl Service for CrowdFunding {
     type Error = Error;
@@ -63,9 +65,6 @@ pub enum Error {
     #[error("Invalid account specified in query parameter")]
     InvalidQuery(#[from] bcs::Error),
 }
-
-#[path = "../boilerplate/service/mod.rs"]
-mod boilerplate;
 
 // Work-around to pretend that `fungible` is an external crate, exposing the Fungible Token
 // application's interface.
