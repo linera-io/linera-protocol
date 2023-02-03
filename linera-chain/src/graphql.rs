@@ -72,9 +72,16 @@ where
         Ok(self.received_log.read(range.into()).await?)
     }
 
-    async fn communication_states(&self) -> Result<Vec<CommunicationStateElement<C>>, Error> {
+    async fn communication_states(
+        &self,
+        application_ids: Option<Vec<ApplicationId>>,
+    ) -> Result<Vec<CommunicationStateElement<C>>, Error> {
         let mut communication_states = vec![];
-        for application_id in self.communication_states.indices().await? {
+        let application_ids = match application_ids {
+            None => self.communication_states.indices().await?,
+            Some(application_ids) => application_ids,
+        };
+        for application_id in application_ids {
             communication_states.push(CommunicationStateElement {
                 application_id,
                 guard: self
@@ -116,37 +123,41 @@ impl<C: Sync + Send + Context + Clone + 'static> CommunicationStateView<C>
 where
     ViewError: From<C::Error>,
 {
-    async fn inboxes(&self) -> Result<Vec<InboxStateElement<C>>, Error> {
-        let mut inbox_states = vec![];
-        for origin in self.inboxes.indices().await? {
-            inbox_states.push(InboxStateElement {
-                origin: origin.clone(),
-                guard: self.inboxes.try_load_entry(origin).await?,
-            });
-        }
-        Ok(inbox_states)
+    async fn inboxes(
+        &self,
+        chain_id: ChainId,
+        channel_name: Option<ChannelName>,
+    ) -> Result<InboxStateElement<C>, Error> {
+        let origin = match channel_name {
+            None => Origin::chain(chain_id),
+            Some(channel_name) => Origin::channel(chain_id, channel_name),
+        };
+        Ok(InboxStateElement {
+            origin: origin.clone(),
+            guard: self.inboxes.try_load_entry(origin).await?,
+        })
     }
 
-    async fn outboxes(&self) -> Result<Vec<OutboxStateElement<C>>, Error> {
-        let mut outbox_states = vec![];
-        for target in self.outboxes.indices().await? {
-            outbox_states.push(OutboxStateElement {
-                target: target.clone(),
-                guard: self.outboxes.try_load_entry(target).await?,
-            });
-        }
-        Ok(outbox_states)
+    async fn outboxes(
+        &self,
+        chain_id: ChainId,
+        channel_name: Option<ChannelName>,
+    ) -> Result<OutboxStateElement<C>, Error> {
+        let target = match channel_name {
+            None => Target::chain(chain_id),
+            Some(channel_name) => Target::channel(chain_id, channel_name),
+        };
+        Ok(OutboxStateElement {
+            target: target.clone(),
+            guard: self.outboxes.try_load_entry(target).await?,
+        })
     }
 
-    async fn channels(&self) -> Result<Vec<ChannelStateElement<C>>, Error> {
-        let mut channel_states = vec![];
-        for channel_name in self.channels.indices().await? {
-            channel_states.push(ChannelStateElement {
-                channel_name: channel_name.clone(),
-                guard: self.channels.try_load_entry(channel_name).await?,
-            });
-        }
-        Ok(channel_states)
+    async fn channels(&self, channel_name: ChannelName) -> Result<ChannelStateElement<C>, Error> {
+        Ok(ChannelStateElement {
+            channel_name: channel_name.clone(),
+            guard: self.channels.try_load_entry(channel_name).await?,
+        })
     }
 }
 
