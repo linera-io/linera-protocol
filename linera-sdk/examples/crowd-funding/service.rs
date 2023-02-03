@@ -65,9 +65,3 @@ pub enum Error {
     #[error("Invalid account specified in query parameter")]
     InvalidQuery(#[from] bcs::Error),
 }
-
-// Work-around to pretend that `fungible` is an external crate, exposing the Fungible Token
-// application's interface.
-#[path = "../fungible/interface.rs"]
-#[allow(dead_code)]
-mod fungible;

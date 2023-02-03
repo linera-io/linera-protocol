@@ -58,7 +58,3 @@ impl CrowdFunding {
             .expect("Application was not initialized")
     }
 }
-
-// Work-around to pretend that `fungible` is an external crate, exposing the Fungible Token
-// application's interface.
-use super::fungible;
