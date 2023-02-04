@@ -341,6 +341,28 @@ where
 {
     type Hasher = sha2::Sha512;
 
+    async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
+        let hash = *self.hash.get_mut();
+        match hash {
+            Some(hash) => Ok(hash),
+            None => {
+                let mut hasher = Self::Hasher::default();
+                let indices = self.indices().await?;
+                hasher.update_with_bcs_bytes(&indices.len())?;
+                for index in indices {
+                    hasher.update_with_bcs_bytes(&index)?;
+                    let view = self.try_load_entry_mut(index).await?;
+                    let hash = view.hash().await?;
+                    hasher.write_all(hash.as_ref())?;
+                }
+                let new_hash = hasher.finalize();
+                let hash = self.hash.get_mut();
+                *hash = Some(new_hash);
+                Ok(new_hash)
+            }
+        }
+    }
+
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         let mut hash = self.hash.try_lock()?;
         match *hash {

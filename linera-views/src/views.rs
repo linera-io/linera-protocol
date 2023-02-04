@@ -92,6 +92,13 @@ pub trait HashableView<C>: View<C> {
     /// Implementations do not need to include a type tag. However, the usual precautions
     /// to enforce collision-resistance must be applied (e.g. including the length of a
     /// collection of values).
+    async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError>;
+
+    /// Compute the hash of the values.
+    ///
+    /// Implementations do not need to include a type tag. However, the usual precautions
+    /// to enforce collision-resistance must be applied (e.g. including the length of a
+    /// collection of values).
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError>;
 }
 

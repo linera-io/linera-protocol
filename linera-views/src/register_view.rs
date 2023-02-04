@@ -133,7 +133,6 @@ where
         hasher.update_with_bcs_bytes(self.get())?;
         Ok(hasher.finalize())
     }
-
 }
 
 #[async_trait]
@@ -144,6 +143,19 @@ where
     T: Clone + Default + Send + Sync + Serialize + DeserializeOwned,
 {
     type Hasher = sha2::Sha512;
+
+    async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
+        let hash = *self.hash.get_mut();
+        match hash {
+            Some(hash) => Ok(hash),
+            None => {
+                let new_hash = self.compute_hash().await?;
+                let hash = self.hash.get_mut();
+                *hash = Some(new_hash);
+                Ok(new_hash)
+            }
+        }
+    }
 
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         let mut hash = self.hash.try_lock().ok_or(ViewError::CannotAcquireHash)?;
