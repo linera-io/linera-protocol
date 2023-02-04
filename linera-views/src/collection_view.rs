@@ -5,7 +5,7 @@ use crate::{
     common::{Batch, Context, HashOutput, KeyIterable, Update},
     views::{HashableView, Hasher, View, ViewError},
 };
-use async_std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+use async_std::sync::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
@@ -25,7 +25,7 @@ pub struct CollectionView<C, I, W> {
     updates: RwLock<BTreeMap<Vec<u8>, Update<W>>>,
     _phantom: PhantomData<I>,
     stored_hash: Option<HashOutput>,
-    hash: Option<HashOutput>,
+    hash: Mutex<Option<HashOutput>>,
 }
 
 /// A read-only accessor for a particular subview in a [`CollectionView`].
@@ -81,14 +81,14 @@ where
             updates: RwLock::new(BTreeMap::new()),
             _phantom: PhantomData,
             stored_hash: hash,
-            hash,
+            hash: Mutex::new(hash),
         })
     }
 
     fn rollback(&mut self) {
         self.was_cleared = false;
         self.updates.get_mut().clear();
-        self.hash = self.stored_hash;
+        *self.hash.get_mut() = self.stored_hash;
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
@@ -117,13 +117,14 @@ where
                 }
             }
         }
-        if self.stored_hash != self.hash {
+        let hash = *self.hash.get_mut();
+        if self.stored_hash != hash {
             let key = self.context.base_tag(KeyTag::Hash as u8);
-            match self.hash {
+            match hash {
                 None => batch.delete_key(key),
                 Some(hash) => batch.put_key_value(key, &hash)?,
             }
-            self.stored_hash = self.hash;
+            self.stored_hash = hash;
         }
         Ok(())
     }
@@ -135,7 +136,7 @@ where
     fn clear(&mut self) {
         self.was_cleared = true;
         self.updates.get_mut().clear();
-        self.hash = None;
+        *self.hash.get_mut() = None;
     }
 }
 
@@ -163,7 +164,7 @@ where
     /// Obtain a subview for the data at the given index in the collection. If an entry
     /// was removed before then a default entry is put on this index.
     pub async fn load_entry_mut(&mut self, index: I) -> Result<&mut W, ViewError> {
-        self.hash = None;
+        *self.hash.get_mut() = None;
         let short_key = C::derive_short_key(&index)?;
         match self.updates.get_mut().entry(short_key.clone()) {
             btree_map::Entry::Occupied(entry) => {
@@ -247,7 +248,7 @@ where
 
     /// Mark the entry so that it is removed in the next flush
     pub fn remove_entry(&mut self, index: I) -> Result<(), ViewError> {
-        self.hash = None;
+        *self.hash.get_mut() = None;
         let short_key = C::derive_short_key(&index)?;
         if self.was_cleared {
             self.updates.get_mut().remove(&short_key);
@@ -259,7 +260,7 @@ where
 
     /// Mark the entry so that it is removed in the next flush
     pub async fn reset_entry_to_default(&mut self, index: I) -> Result<(), ViewError> {
-        self.hash = None;
+        *self.hash.get_mut() = None;
         let view = self.load_entry_mut(index).await?;
         view.clear();
         Ok(())
@@ -356,8 +357,9 @@ where
 {
     type Hasher = sha2::Sha512;
 
-    async fn hash(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        match self.hash {
+    async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
+        let hash = *self.hash.get_mut();
+        match hash {
             Some(hash) => Ok(hash),
             None => {
                 let mut hasher = Self::Hasher::default();
@@ -369,9 +371,31 @@ where
                     let hash = view.hash().await?;
                     hasher.write_all(hash.as_ref())?;
                 }
-                let hash = hasher.finalize();
-                self.hash = Some(hash);
-                Ok(hash)
+                let new_hash = hasher.finalize();
+                let hash = self.hash.get_mut();
+                *hash = Some(new_hash);
+                Ok(new_hash)
+            }
+        }
+    }
+
+    async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
+        let mut hash = self.hash.lock().await;
+        match *hash {
+            Some(hash) => Ok(hash),
+            None => {
+                let mut hasher = Self::Hasher::default();
+                let indices = self.indices().await?;
+                hasher.update_with_bcs_bytes(&indices.len())?;
+                for index in indices {
+                    hasher.update_with_bcs_bytes(&index)?;
+                    let view = self.try_load_entry(index).await?;
+                    let hash = view.hash().await?;
+                    hasher.write_all(hash.as_ref())?;
+                }
+                let new_hash = hasher.finalize();
+                *hash = Some(new_hash);
+                Ok(new_hash)
             }
         }
     }

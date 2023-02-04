@@ -5,6 +5,7 @@ use crate::{
     common::{Batch, Context, HashOutput, KeyIterable, KeyValueIterable, Update},
     views::{HashableView, Hasher, View, ViewError},
 };
+use async_std::sync::Mutex;
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{collections::BTreeMap, fmt::Debug, marker::PhantomData, mem};
@@ -26,7 +27,7 @@ pub struct MapView<C, I, V> {
     updates: BTreeMap<Vec<u8>, Update<V>>,
     _phantom: PhantomData<I>,
     stored_hash: Option<HashOutput>,
-    hash: Option<HashOutput>,
+    hash: Mutex<Option<HashOutput>>,
 }
 
 #[async_trait]
@@ -50,14 +51,14 @@ where
             updates: BTreeMap::new(),
             _phantom: PhantomData,
             stored_hash: hash,
-            hash,
+            hash: Mutex::new(hash),
         })
     }
 
     fn rollback(&mut self) {
         self.was_cleared = false;
         self.updates.clear();
-        self.hash = self.stored_hash;
+        *self.hash.get_mut() = self.stored_hash;
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
@@ -79,13 +80,14 @@ where
                 }
             }
         }
-        if self.stored_hash != self.hash {
+        let hash = *self.hash.get_mut();
+        if self.stored_hash != hash {
             let key = self.context.base_tag(KeyTag::Hash as u8);
-            match self.hash {
+            match hash {
                 None => batch.delete_key(key),
                 Some(hash) => batch.put_key_value(key, &hash)?,
             }
-            self.stored_hash = self.hash;
+            self.stored_hash = hash;
         }
         Ok(())
     }
@@ -97,7 +99,7 @@ where
     fn clear(&mut self) {
         self.was_cleared = true;
         self.updates.clear();
-        self.hash = None;
+        *self.hash.get_mut() = None;
     }
 }
 
@@ -109,7 +111,7 @@ where
 {
     /// Set or insert a value.
     pub fn insert(&mut self, index: &I, value: V) -> Result<(), ViewError> {
-        self.hash = None;
+        *self.hash.get_mut() = None;
         let short_key = C::derive_short_key(index)?;
         self.updates.insert(short_key, Update::Set(value));
         Ok(())
@@ -117,7 +119,7 @@ where
 
     /// Remove a value.
     pub fn remove(&mut self, index: &I) -> Result<(), ViewError> {
-        self.hash = None;
+        *self.hash.get_mut() = None;
         let short_key = C::derive_short_key(index)?;
         if self.was_cleared {
             self.updates.remove(&short_key);
@@ -310,6 +312,20 @@ where
         }
         Ok(())
     }
+
+    async fn compute_hash(&self) -> Result<<sha2::Sha512 as Hasher>::Output, ViewError> {
+        let mut hasher = sha2::Sha512::default();
+        let mut count = 0;
+        self.for_each_key_value(|index, value| {
+            count += 1;
+            hasher.update_with_bytes(index)?;
+            hasher.update_with_bytes(value)?;
+            Ok(())
+        })
+        .await?;
+        hasher.update_with_bcs_bytes(&count)?;
+        Ok(hasher.finalize())
+    }
 }
 
 #[async_trait]
@@ -322,23 +338,27 @@ where
 {
     type Hasher = sha2::Sha512;
 
-    async fn hash(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        match self.hash {
+    async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
+        let hash = *self.hash.get_mut();
+        match hash {
             Some(hash) => Ok(hash),
             None => {
-                let mut hasher = Self::Hasher::default();
-                let mut count = 0;
-                self.for_each_key_value(|index, value| {
-                    count += 1;
-                    hasher.update_with_bytes(index)?;
-                    hasher.update_with_bytes(value)?;
-                    Ok(())
-                })
-                .await?;
-                hasher.update_with_bcs_bytes(&count)?;
-                let hash = hasher.finalize();
-                self.hash = Some(hash);
-                Ok(hash)
+                let new_hash = self.compute_hash().await?;
+                let hash = self.hash.get_mut();
+                *hash = Some(new_hash);
+                Ok(new_hash)
+            }
+        }
+    }
+
+    async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
+        let mut hash = self.hash.lock().await;
+        match *hash {
+            Some(hash) => Ok(hash),
+            None => {
+                let new_hash = self.compute_hash().await?;
+                *hash = Some(new_hash);
+                Ok(new_hash)
             }
         }
     }

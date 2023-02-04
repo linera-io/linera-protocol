@@ -27,7 +27,7 @@ pub struct ReentrantCollectionView<C, I, W> {
     updates: Mutex<BTreeMap<Vec<u8>, Update<Arc<RwLock<W>>>>>,
     _phantom: PhantomData<I>,
     stored_hash: Option<HashOutput>,
-    hash: Option<HashOutput>,
+    hash: Mutex<Option<HashOutput>>,
 }
 
 /// We need to find new base keys in order to implement the collection_view.
@@ -68,14 +68,14 @@ where
             updates: Mutex::new(BTreeMap::new()),
             _phantom: PhantomData,
             stored_hash: hash,
-            hash,
+            hash: Mutex::new(hash),
         })
     }
 
     fn rollback(&mut self) {
         self.was_cleared = false;
         self.updates.get_mut().clear();
-        self.hash = self.stored_hash;
+        *self.hash.get_mut() = self.stored_hash;
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
@@ -110,13 +110,14 @@ where
                 }
             }
         }
-        if self.stored_hash != self.hash {
+        let hash = *self.hash.get_mut();
+        if self.stored_hash != hash {
             let key = self.context.base_tag(KeyTag::Hash as u8);
-            match self.hash {
+            match hash {
                 None => batch.delete_key(key),
                 Some(hash) => batch.put_key_value(key, &hash)?,
             }
-            self.stored_hash = self.hash;
+            self.stored_hash = hash;
         }
         Ok(())
     }
@@ -128,7 +129,7 @@ where
     fn clear(&mut self) {
         self.was_cleared = true;
         self.updates.get_mut().clear();
-        self.hash = None;
+        *self.hash.get_mut() = None;
     }
 }
 
@@ -159,7 +160,7 @@ where
         &mut self,
         index: I,
     ) -> Result<OwnedRwLockWriteGuard<W>, ViewError> {
-        self.hash = None;
+        *self.hash.get_mut() = None;
         let short_key = C::derive_short_key(&index)?;
         let updates = self.updates.get_mut();
         match updates.entry(short_key.clone()) {
@@ -239,7 +240,7 @@ where
 
     /// Mark the entry so that it is removed in the next flush
     pub fn remove_entry(&mut self, index: I) -> Result<(), ViewError> {
-        self.hash = None;
+        *self.hash.get_mut() = None;
         let short_key = C::derive_short_key(&index)?;
         if self.was_cleared {
             self.updates.get_mut().remove(&short_key);
@@ -251,7 +252,7 @@ where
 
     /// Mark the entry so that it is removed in the next flush
     pub async fn try_reset_entry_to_default(&mut self, index: I) -> Result<(), ViewError> {
-        self.hash = None;
+        *self.hash.get_mut() = None;
         let mut view = self.try_load_entry_mut(index).await?;
         view.clear();
         Ok(())
@@ -340,8 +341,9 @@ where
 {
     type Hasher = sha2::Sha512;
 
-    async fn hash(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        match self.hash {
+    async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
+        let hash = *self.hash.get_mut();
+        match hash {
             Some(hash) => Ok(hash),
             None => {
                 let mut hasher = Self::Hasher::default();
@@ -349,13 +351,35 @@ where
                 hasher.update_with_bcs_bytes(&indices.len())?;
                 for index in indices {
                     hasher.update_with_bcs_bytes(&index)?;
-                    let mut view = self.try_load_entry_mut(index).await?;
+                    let view = self.try_load_entry_mut(index).await?;
                     let hash = view.hash().await?;
                     hasher.write_all(hash.as_ref())?;
                 }
-                let hash = hasher.finalize();
-                self.hash = Some(hash);
-                Ok(hash)
+                let new_hash = hasher.finalize();
+                let hash = self.hash.get_mut();
+                *hash = Some(new_hash);
+                Ok(new_hash)
+            }
+        }
+    }
+
+    async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
+        let mut hash = self.hash.try_lock()?;
+        match *hash {
+            Some(hash) => Ok(hash),
+            None => {
+                let mut hasher = Self::Hasher::default();
+                let indices = self.indices().await?;
+                hasher.update_with_bcs_bytes(&indices.len())?;
+                for index in indices {
+                    hasher.update_with_bcs_bytes(&index)?;
+                    let view = self.try_load_entry(index).await?;
+                    let hash = view.hash().await?;
+                    hasher.write_all(hash.as_ref())?;
+                }
+                let new_hash = hasher.finalize();
+                *hash = Some(new_hash);
+                Ok(new_hash)
             }
         }
     }

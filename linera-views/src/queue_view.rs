@@ -5,6 +5,7 @@ use crate::{
     common::{Batch, Context, HashOutput},
     views::{HashableView, Hasher, View, ViewError},
 };
+use async_std::sync::Mutex;
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{collections::VecDeque, fmt::Debug, ops::Range};
@@ -28,7 +29,7 @@ pub struct QueueView<C, T> {
     front_delete_count: usize,
     new_back_values: VecDeque<T>,
     stored_hash: Option<HashOutput>,
-    hash: Option<HashOutput>,
+    hash: Mutex<Option<HashOutput>>,
 }
 
 #[async_trait]
@@ -53,14 +54,14 @@ where
             front_delete_count: 0,
             new_back_values: VecDeque::new(),
             stored_hash: hash,
-            hash,
+            hash: Mutex::new(hash),
         })
     }
 
     fn rollback(&mut self) {
         self.front_delete_count = 0;
         self.new_back_values.clear();
-        self.hash = self.stored_hash;
+        *self.hash.get_mut() = self.stored_hash;
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
@@ -97,7 +98,7 @@ where
     fn clear(&mut self) {
         self.front_delete_count = self.stored_indices.len();
         self.new_back_values.clear();
-        self.hash = None;
+        *self.hash.get_mut() = None;
     }
 }
 
@@ -137,7 +138,7 @@ where
 
     /// Delete the front value, if any.
     pub fn delete_front(&mut self) {
-        self.hash = None;
+        *self.hash.get_mut() = None;
         if self.front_delete_count < self.stored_indices.len() {
             self.front_delete_count += 1;
         } else {
@@ -147,7 +148,7 @@ where
 
     /// Push a value to the end of the queue.
     pub fn push_back(&mut self, value: T) {
-        self.hash = None;
+        *self.hash.get_mut() = None;
         self.new_back_values.push_back(value);
     }
 
@@ -222,6 +223,14 @@ where
         }
         Ok(values)
     }
+
+    async fn compute_hash(&self) -> Result<<sha2::Sha512 as Hasher>::Output, ViewError> {
+        let count = self.count();
+        let elements = self.read_front(count).await?;
+        let mut hasher = sha2::Sha512::default();
+        hasher.update_with_bcs_bytes(&elements)?;
+        Ok(hasher.finalize())
+    }
 }
 
 #[async_trait]
@@ -233,17 +242,27 @@ where
 {
     type Hasher = sha2::Sha512;
 
-    async fn hash(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        match self.hash {
+    async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
+        let hash = *self.hash.get_mut();
+        match hash {
             Some(hash) => Ok(hash),
             None => {
-                let count = self.count();
-                let elements = self.read_front(count).await?;
-                let mut hasher = Self::Hasher::default();
-                hasher.update_with_bcs_bytes(&elements)?;
-                let hash = hasher.finalize();
-                self.hash = Some(hash);
-                Ok(hash)
+                let new_hash = self.compute_hash().await?;
+                let hash = self.hash.get_mut();
+                *hash = Some(new_hash);
+                Ok(new_hash)
+            }
+        }
+    }
+
+    async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
+        let mut hash = self.hash.lock().await;
+        match *hash {
+            Some(hash) => Ok(hash),
+            None => {
+                let new_hash = self.compute_hash().await?;
+                *hash = Some(new_hash);
+                Ok(new_hash)
             }
         }
     }

@@ -5,6 +5,7 @@ use crate::{
     common::{Batch, Context, HashOutput},
     views::{HashableView, Hasher, View, ViewError},
 };
+use async_std::sync::Mutex;
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{fmt::Debug, ops::Range};
@@ -28,7 +29,7 @@ pub struct LogView<C, T> {
     stored_count: usize,
     new_values: Vec<T>,
     stored_hash: Option<HashOutput>,
-    hash: Option<HashOutput>,
+    hash: Mutex<Option<HashOutput>>,
 }
 
 #[async_trait]
@@ -53,14 +54,14 @@ where
             stored_count,
             new_values: Vec::new(),
             stored_hash: hash,
-            hash,
+            hash: Mutex::new(hash),
         })
     }
 
     fn rollback(&mut self) {
         self.was_cleared = false;
         self.new_values.clear();
-        self.hash = self.stored_hash;
+        *self.hash.get_mut() = self.stored_hash;
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
@@ -83,13 +84,14 @@ where
             batch.put_key_value(key, &self.stored_count)?;
             self.new_values.clear();
         }
-        if self.stored_hash != self.hash {
+        let hash = *self.hash.get_mut();
+        if self.stored_hash != hash {
             let key = self.context.base_tag(KeyTag::Hash as u8);
-            match self.hash {
+            match hash {
                 None => batch.delete_key(key),
                 Some(hash) => batch.put_key_value(key, &hash)?,
             }
-            self.stored_hash = self.hash;
+            self.stored_hash = hash;
         }
         Ok(())
     }
@@ -101,7 +103,7 @@ where
     fn clear(&mut self) {
         self.was_cleared = true;
         self.new_values.clear();
-        self.hash = None;
+        *self.hash.get_mut() = None;
     }
 }
 
@@ -112,7 +114,7 @@ where
     /// Push a value to the end of the log.
     pub fn push(&mut self, value: T) {
         self.new_values.push(value);
-        self.hash = None;
+        *self.hash.get_mut() = None;
     }
 
     /// Read the size of the log.
@@ -134,7 +136,7 @@ impl<C, T> LogView<C, T>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    T: Send + Sync + Clone + DeserializeOwned,
+    T: Send + Sync + Clone + DeserializeOwned + Serialize,
 {
     /// Read the logged values in the given range (including staged ones).
     pub async fn get(&self, index: usize) -> Result<Option<T>, ViewError> {
@@ -194,6 +196,14 @@ where
         }
         Ok(values)
     }
+
+    async fn compute_hash(&self) -> Result<<sha2::Sha512 as Hasher>::Output, ViewError> {
+        let count = self.count();
+        let elements = self.read(0..count).await?;
+        let mut hasher = sha2::Sha512::default();
+        hasher.update_with_bcs_bytes(&elements)?;
+        Ok(hasher.finalize())
+    }
 }
 
 #[async_trait]
@@ -205,17 +215,27 @@ where
 {
     type Hasher = sha2::Sha512;
 
-    async fn hash(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        match self.hash {
+    async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
+        let hash = *self.hash.get_mut();
+        match hash {
             Some(hash) => Ok(hash),
             None => {
-                let count = self.count();
-                let elements = self.read(0..count).await?;
-                let mut hasher = Self::Hasher::default();
-                hasher.update_with_bcs_bytes(&elements)?;
-                let hash = hasher.finalize();
-                self.hash = Some(hash);
-                Ok(hash)
+                let new_hash = self.compute_hash().await?;
+                let hash = self.hash.get_mut();
+                *hash = Some(new_hash);
+                Ok(new_hash)
+            }
+        }
+    }
+
+    async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
+        let mut hash = self.hash.lock().await;
+        match *hash {
+            Some(hash) => Ok(hash),
+            None => {
+                let new_hash = self.compute_hash().await?;
+                *hash = Some(new_hash);
+                Ok(new_hash)
             }
         }
     }

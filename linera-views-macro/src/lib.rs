@@ -149,14 +149,13 @@ fn generate_hash_view_code(input: ItemStruct) -> TokenStream2 {
         .get(0)
         .expect("failed to find the first generic parameter");
 
-    let field_hash = input
-        .fields
-        .into_iter()
-        .map(|e| {
-            let name = e.ident.unwrap();
-            quote! { hasher.write_all(self.#name.hash().await?.as_ref())?; }
-        })
-        .collect::<Vec<_>>();
+    let mut field_hashes_mut = Vec::new();
+    let mut field_hashes = Vec::new();
+    for e in input.fields {
+        let name = e.clone().ident.unwrap();
+        field_hashes_mut.push(quote! { hasher.write_all(self.#name.hash_mut().await?.as_ref())?; });
+        field_hashes.push(quote! { hasher.write_all(self.#name.hash().await?.as_ref())?; });
+    }
 
     quote! {
         #[async_trait::async_trait]
@@ -167,11 +166,19 @@ fn generate_hash_view_code(input: ItemStruct) -> TokenStream2 {
         {
             type Hasher = linera_views::sha2::Sha512;
 
-            async fn hash(&mut self) -> Result<<Self::Hasher as linera_views::views::Hasher>::Output, linera_views::views::ViewError> {
+            async fn hash_mut(&mut self) -> Result<<Self::Hasher as linera_views::views::Hasher>::Output, linera_views::views::ViewError> {
                 use linera_views::views::{Hasher, HashableView};
                 use std::io::Write;
                 let mut hasher = Self::Hasher::default();
-                #(#field_hash)*
+                #(#field_hashes_mut)*
+                Ok(hasher.finalize())
+            }
+
+            async fn hash(&self) -> Result<<Self::Hasher as linera_views::views::Hasher>::Output, linera_views::views::ViewError> {
+                use linera_views::views::{Hasher, HashableView};
+                use std::io::Write;
+                let mut hasher = Self::Hasher::default();
+                #(#field_hashes)*
                 Ok(hasher.finalize())
             }
         }
@@ -194,7 +201,7 @@ fn generate_crypto_hash_code(input: ItemStruct) -> TokenStream2 {
             #first_generic: Context + Send + Sync + Clone + 'static,
             linera_views::views::ViewError: From<#first_generic::Error>,
         {
-            async fn crypto_hash(&mut self) -> Result<linera_base::crypto::CryptoHash, linera_views::views::ViewError> {
+            async fn crypto_hash(&self) -> Result<linera_base::crypto::CryptoHash, linera_views::views::ViewError> {
                 use linera_views::generic_array::GenericArray;
                 use linera_views::common::Batch;
                 use linera_base::crypto::{BcsHashable, CryptoHash};
