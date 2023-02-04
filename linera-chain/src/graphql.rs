@@ -72,7 +72,7 @@ where
         Ok(self.received_log.read(range.into()).await?)
     }
 
-    async fn communication_states(
+    async fn communication_state(
         &self,
         application_id: ApplicationId,
     ) -> Result<CommunicationStateElement<C>, Error> {
@@ -119,7 +119,7 @@ impl<C: Sync + Send + Context + Clone + 'static> CommunicationStateView<C>
 where
     ViewError: From<C::Error>,
 {
-    async fn inboxes(
+    async fn inbox(
         &self,
         chain_id: ChainId,
         channel_name: Option<ChannelName>,
@@ -134,11 +134,11 @@ where
         })
     }
 
-    async fn inboxes_indices(&self) -> Result<Vec<Origin>, Error> {
+    async fn inbox_indices(&self) -> Result<Vec<Origin>, Error> {
         Ok(self.inboxes.indices().await?)
     }
 
-    async fn outboxes(
+    async fn outbox(
         &self,
         chain_id: ChainId,
         channel_name: Option<ChannelName>,
@@ -153,18 +153,18 @@ where
         })
     }
 
-    async fn outboxes_indices(&self) -> Result<Vec<Target>, Error> {
+    async fn outbox_indices(&self) -> Result<Vec<Target>, Error> {
         Ok(self.outboxes.indices().await?)
     }
 
-    async fn channels(&self, channel_name: ChannelName) -> Result<ChannelStateElement<C>, Error> {
+    async fn channel(&self, channel_name: ChannelName) -> Result<ChannelStateElement<C>, Error> {
         Ok(ChannelStateElement {
             channel_name: channel_name.clone(),
             guard: self.channels.try_load_entry(channel_name).await?,
         })
     }
 
-    async fn channels_indices(&self) -> Result<Vec<ChannelName>, Error> {
+    async fn channel_indices(&self) -> Result<Vec<ChannelName>, Error> {
         Ok(self.channels.indices().await?)
     }
 }
