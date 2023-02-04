@@ -335,8 +335,20 @@ pub mod tests {
                 linera_views::views::ViewError: From<C::Error>,
             {
                 type Hasher = linera_views::sha2::Sha512;
-                async fn hash(
+                async fn hash_mut(
                     &mut self
+                ) -> Result<<Self::Hasher as linera_views::views::Hasher>::Output,
+                    linera_views::views::ViewError
+                > {
+                    use linera_views::views::{Hasher, HashableView};
+                    use std::io::Write;
+                    let mut hasher = Self::Hasher::default();
+                    hasher.write_all(self.register.hash_mut().await?.as_ref())?;
+                    hasher.write_all(self.collection.hash_mut().await?.as_ref())?;
+                    Ok(hasher.finalize())
+                }
+                async fn hash(
+                    &self
                 ) -> Result<<Self::Hasher as linera_views::views::Hasher>::Output,
                     linera_views::views::ViewError
                 > {
@@ -418,7 +430,7 @@ pub mod tests {
                 linera_views::views::ViewError: From<C::Error>,
             {
                 async fn crypto_hash(
-                    &mut self
+                    &self
                 ) -> Result<linera_base::crypto::CryptoHash, linera_views::views::ViewError>
                 {
                     use linera_views::generic_array::GenericArray;
