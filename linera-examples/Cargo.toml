@@ -1,0 +1,12 @@
+[workspace]
+members = [
+        "counter",
+        "crowd-funding",
+        "fungible",
+]
+
+[profile.release]
+debug = true
+
+[profile.bench]
+debug = true

@@ -36,8 +36,8 @@ async fn test_counter_wasm_application() -> anyhow::Result<()> {
         app_id,
         Arc::new(
             WasmApplication::from_files(
-                "../target/wasm32-unknown-unknown/release/counter_contract.wasm",
-                "../target/wasm32-unknown-unknown/release/counter_service.wasm",
+                "../linera-examples/target/wasm32-unknown-unknown/release/counter_contract.wasm",
+                "../linera-examples/target/wasm32-unknown-unknown/release/counter_service.wasm",
             )
             .await?,
         ),
