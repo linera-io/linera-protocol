@@ -59,9 +59,6 @@ pub enum ViewError {
     #[error("trying to access a collection view while some entries are still being accessed")]
     CannotAcquireCollectionEntry,
 
-    #[error("trying to access a hash while still being accessed")]
-    CannotAcquireHash,
-
     #[error("IO error")]
     Io(#[from] std::io::Error),
 

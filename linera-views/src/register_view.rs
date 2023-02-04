@@ -158,7 +158,7 @@ where
     }
 
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        let mut hash = self.hash.try_lock().ok_or(ViewError::CannotAcquireHash)?;
+        let mut hash = self.hash.lock().await;
         match *hash {
             Some(hash) => Ok(hash),
             None => {
