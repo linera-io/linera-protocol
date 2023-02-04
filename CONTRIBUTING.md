@@ -83,11 +83,12 @@ See https://github.com/zefchain/serde-reflection for more context.
 WebAssembly support is currently not compiled in by default. It must be enabled using either the
 `wasmer` or the `wasmtime` features.
 
-Some tests require the Counter application example from `linera-sdk/examples/counter` to be
+Some tests require the Counter application example from `linera-examples/counter` to be
 compiled, and that can be done with:
 
 ```
-cargo build -p linera-sdk --release --target wasm32-unknown-unknown --examples
+cd linera-examples
+cargo build --release --target wasm32-unknown-unknown
 ```
 
 Testing the WASM application examples requires configuring a custom test runner included with
@@ -108,7 +109,8 @@ runner = "/path/to/repository/target/release/test-runner"
 After that, the WASM tests can be executed with:
 
 ```
-cargo test -p linera-sdk --target wasm32-unknown-unknown --examples
+cd linera-examples
+cargo test --target wasm32-unknown-unknown
 ```
 
 ## Adding dependencies to third-party crates

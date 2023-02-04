@@ -36,16 +36,17 @@ jobs:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Compiling the linera-views under WebAssembly
       run: cargo build --target wasm32-unknown-unknown -p linera-views
-    - name: Build example contract
+    - name: Build WASM test runner
+      run: cargo build -p linera-sdk --release --bin test-runner
+    - name: Run WASM application unit tests
       run: |
-        RUSTFLAGS="-C opt-level=z -C debuginfo=0" cargo build --release --target wasm32-unknown-unknown -p counter
+        cd linera-examples
+        cargo test --target wasm32-unknown-unknown
+    - name: Build example applications
+      run: |
+        cd linera-examples
+        RUSTFLAGS="-C opt-level=z -C debuginfo=0" cargo build --release --target wasm32-unknown-unknown
     - name: Test using Wasmer
       run: cargo test --features wasmer wasm
     - name: Test using Wasmtime
       run: cargo test --features wasmtime wasm
-    - name: Build WASM test runner
-      run: cargo build -p linera-sdk --bin test-runner
-    - name: Run WASM application unit tests
-      env:
-        CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER: ./target/debug/test-runner
-      run: cargo test -p counter --target wasm32-unknown-unknown
