@@ -24,35 +24,21 @@ jobs:
     - name: Report warnings as errors
       run: echo 'RUSTFLAGS=-D warnings' >> $GITHUB_ENV
     - uses: Swatinem/rust-cache@v2
+    - name: Install cargo-machete
+      run: cargo install cargo-machete --locked
     - name: Install Protoc
       uses: arduino/setup-protoc@v1
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
-    - name: Rustfmt
+    - name: Check formatting
       run: cargo fmt -- --check --config unstable_features=true --config imports_granularity=Crate
-    - name: Clippy using Wasmer
-      run: cargo clippy --all-targets --features crypto,wasmer
-    - name: Clippy using Wasmtime
-      run: cargo clippy --all-targets --features crypto,wasmtime
+    - name: Check for unused dependencies
+      run: cargo machete
+    - name: Run clippy using Wasmer
+      run: cargo clippy --all-targets --features crypto,wasmer --tests
+    - name: Run clippy using Wasmtime
+      run: cargo clippy --all-targets --features crypto,wasmtime --tests
     - name: Build
       run: cargo build --locked
     - name: Run tests
       run: cargo test --locked
-
-  check-for-unused-dependencies:
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v2
-    - uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: nightly
-    - name: Install Protoc
-      uses: arduino/setup-protoc@v1
-      with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
-    - name: Install cargo-udeps
-      run: cargo install cargo-udeps --locked
-    - name: Check for unused dependencies
-      run: cargo +nightly udeps --all-targets
