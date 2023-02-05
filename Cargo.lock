@@ -2345,7 +2345,7 @@ dependencies = [
  "linera-base",
  "linera-execution",
  "linera-views",
- "linera-views-macro",
+ "linera-views-derive",
  "log",
  "once_cell",
  "serde",
@@ -2500,7 +2500,7 @@ dependencies = [
  "http",
  "linera-base",
  "linera-views",
- "linera-views-macro",
+ "linera-views-derive",
  "log",
  "rand 0.8.5",
  "rocksdb",
@@ -2512,7 +2512,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "linera-views-macro"
+name = "linera-views-derive"
 version = "0.1.0"
 dependencies = [
  "proc-macro2",
