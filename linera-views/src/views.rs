@@ -1,11 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-extern crate linera_views_macro;
+extern crate linera_views_derive;
 use crate::common::Batch;
 use async_trait::async_trait;
 use linera_base::crypto::CryptoHash;
-pub use linera_views_macro::{ContainerView, HashableContainerView, HashableView, View};
+pub use linera_views_derive::{ContainerView, HashableContainerView, HashableView, View};
 use serde::Serialize;
 use std::{fmt::Debug, io::Write};
 use thiserror::Error;

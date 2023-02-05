@@ -9,7 +9,7 @@ members = [
         "linera-service",
         "linera-storage",
         "linera-views",
-        "linera-views-macro",
+        "linera-views-derive",
 ]
 
 [profile.release]

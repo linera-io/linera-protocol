@@ -14,7 +14,7 @@ use linera_views::{
     register_view::RegisterView,
     views::{View, ViewError},
 };
-use linera_views_macro::HashableContainerView;
+use linera_views_derive::HashableContainerView;
 
 #[cfg(any(test, feature = "test"))]
 use {
