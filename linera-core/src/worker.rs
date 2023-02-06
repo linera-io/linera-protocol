@@ -414,6 +414,7 @@ where
     async fn process_confirmed_block(
         &mut self,
         certificate: Certificate,
+        mut chain: ChainStateView<Client::Context>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let (block, effects, state_hash) = match &certificate.value {
             Value::ConfirmedBlock {
@@ -424,7 +425,45 @@ where
             _ => panic!("Expecting a confirmation certificate"),
         };
         // Check that the chain is active and ready for this confirmation.
-        let mut chain = self.storage.load_active_chain(block.chain_id).await?;
+        let tip = chain.tip_state.get();
+        if tip.next_block_height < block.height {
+            return Err(WorkerError::MissingEarlierBlocks {
+                current_block_height: tip.next_block_height,
+            });
+        }
+        if tip.next_block_height > block.height {
+            // Block was already confirmed.
+            let info = ChainInfoResponse::new(&chain, self.key_pair());
+            let actions = self.create_network_actions(&mut chain).await?;
+            return Ok((info, actions));
+        }
+        // Verify the certificate. Returns a catch-all error to make client code more robust.
+        let epoch = chain
+            .execution_state
+            .system
+            .epoch
+            .get()
+            .expect("chain is active");
+        ensure!(
+            block.epoch == epoch,
+            WorkerError::InvalidEpoch {
+                chain_id: block.chain_id,
+                epoch: block.epoch,
+            }
+        );
+        let committee = chain
+            .execution_state
+            .system
+            .committees
+            .get()
+            .get(&epoch)
+            .expect("chain is active");
+        certificate.check(committee)?;
+        // This should always be true for valid certificates.
+        ensure!(
+            tip.block_hash == block.previous_block_hash,
+            WorkerError::InvalidBlockChaining
+        );
         // Persist certificate.
         self.storage.write_certificate(certificate.clone()).await?;
         // Execute the block.
@@ -457,6 +496,7 @@ where
     async fn process_validated_block(
         &mut self,
         certificate: Certificate,
+        mut chain: ChainStateView<Client::Context>,
     ) -> Result<ChainInfoResponse, WorkerError> {
         let (block, round, effects, state_hash) = match &certificate.value {
             Value::ValidatedBlock {
@@ -468,7 +508,28 @@ where
             _ => panic!("Expecting a validation certificate"),
         };
         // Check that the chain is active and ready for this confirmation.
-        let mut chain = self.storage.load_active_chain(block.chain_id).await?;
+        // Verify the certificate. Returns a catch-all error to make client code more robust.
+        let epoch = chain
+            .execution_state
+            .system
+            .epoch
+            .get()
+            .expect("chain is active");
+        ensure!(
+            block.epoch == epoch,
+            WorkerError::InvalidEpoch {
+                chain_id: block.chain_id,
+                epoch: block.epoch,
+            }
+        );
+        let committee = chain
+            .execution_state
+            .system
+            .committees
+            .get()
+            .get(&epoch)
+            .expect("chain is active");
+        certificate.check(committee)?;
         if chain.manager.get_mut().check_validated_block(
             chain.tip_state.get().next_block_height,
             block,
@@ -713,50 +774,6 @@ where
         log::trace!("{} <-- {:?}", self.nickname, certificate);
         let block = certificate.value.block();
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
-        if matches!(certificate.value, Value::ConfirmedBlock { .. }) {
-            let tip = chain.tip_state.get();
-            if tip.next_block_height < block.height {
-                return Err(WorkerError::MissingEarlierBlocks {
-                    current_block_height: tip.next_block_height,
-                });
-            }
-            if tip.next_block_height > block.height {
-                // Block was already confirmed.
-                let info = ChainInfoResponse::new(&chain, self.key_pair());
-                let actions = self.create_network_actions(&mut chain).await?;
-                return Ok((info, actions));
-            }
-            // This should always be true for valid certificates.
-            ensure!(
-                tip.block_hash == block.previous_block_hash,
-                WorkerError::InvalidBlockChaining
-            );
-        }
-        let epoch = chain
-            .execution_state
-            .system
-            .epoch
-            .get()
-            .expect("chain is active");
-        ensure!(
-            block.epoch == epoch,
-            WorkerError::InvalidEpoch {
-                chain_id: block.chain_id,
-                epoch: block.epoch,
-            }
-        );
-        // Verify the certificate. Returns a catch-all error to make client code more robust.
-        let committee = chain
-            .execution_state
-            .system
-            .committees
-            .get()
-            .get(&block.epoch)
-            .ok_or(WorkerError::InvalidEpoch {
-                chain_id: block.chain_id,
-                epoch: block.epoch,
-            })?;
-        certificate.check(committee)?;
         // Find all certificates containing bytecode used when executing this block.
         let apps = match &certificate.value {
             Value::ValidatedBlock { .. } => HashMap::new(),
@@ -792,7 +809,6 @@ where
                 self.storage.write_certificate(cert.clone()).await?;
             }
         }
-        drop(chain);
         let certificates_to_cache: Vec<_> = blob_certificates
             .iter()
             .chain(iter::once(&certificate))
@@ -802,12 +818,14 @@ where
         let (info, actions) = match &certificate.value {
             Value::ValidatedBlock { .. } => {
                 // Confirm the validated block.
-                let info = self.process_validated_block(certificate.clone()).await?;
+                let info = self
+                    .process_validated_block(certificate.clone(), chain)
+                    .await?;
                 (info, NetworkActions::default())
             }
             Value::ConfirmedBlock { .. } => {
                 // Execute the confirmed block.
-                self.process_confirmed_block(certificate).await?
+                self.process_confirmed_block(certificate, chain).await?
             }
         };
         for cert in certificates_to_cache {
