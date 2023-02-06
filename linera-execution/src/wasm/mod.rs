@@ -59,12 +59,9 @@ impl WasmApplication {
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 #[derive(Debug, Error)]
 pub enum WasmExecutionError {
-    #[cfg(feature = "wasmer")]
+    #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
     #[error("Failed to load WASM module")]
-    LoadModule(#[from] wit_bindgen_host_wasmer_rust::anyhow::Error),
-    #[cfg(feature = "wasmtime")]
-    #[error("Failed to load WASM module")]
-    LoadModule(#[from] wit_bindgen_host_wasmtime_rust::anyhow::Error),
+    LoadModule(#[from] anyhow::Error),
     #[cfg(feature = "wasmer")]
     #[error("Failed to execute WASM module")]
     ExecuteModule(#[from] wasmer::RuntimeError),

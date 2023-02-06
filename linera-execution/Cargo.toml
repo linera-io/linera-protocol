@@ -11,6 +11,7 @@ wasmer = ["dep:wasmer", "wit-bindgen-host-wasmer-rust"]
 wasmtime = ["dep:wasmtime", "wit-bindgen-host-wasmtime-rust"]
 
 [dependencies]
+anyhow = "1.0.57"
 async-trait = "0.1.52"
 async-graphql = "5.0.5"
 bcs = "0.1.3"
