@@ -11,7 +11,8 @@ use linera_base::{
     data_types::{BlockHeight, ChainId, EffectId, Owner, ValidatorName},
 };
 use linera_chain::data_types::{
-    BlockProposal, Certificate, LiteCertificate, LiteValue, Medium, Origin,
+    BlockProposal, Certificate, CertificateWithDependencies, LiteCertificate, LiteValue, Medium,
+    Origin,
 };
 use linera_core::{
     data_types::{
@@ -443,7 +444,7 @@ impl TryFrom<Certificate> for grpc::Certificate {
     }
 }
 
-impl TryFrom<grpc::CertificateWithDependencies> for (Certificate, Vec<Certificate>) {
+impl TryFrom<grpc::CertificateWithDependencies> for CertificateWithDependencies {
     type Error = ProtoConversionError;
 
     fn try_from(cert_with_deps: grpc::CertificateWithDependencies) -> Result<Self, Self::Error> {
@@ -451,22 +452,21 @@ impl TryFrom<grpc::CertificateWithDependencies> for (Certificate, Vec<Certificat
         for cert in cert_with_deps.blob_certificates {
             blob_certificates.push(try_proto_convert!(Some(cert)));
         }
-        Ok((
-            try_proto_convert!(cert_with_deps.certificate),
+        Ok(CertificateWithDependencies {
+            certificate: try_proto_convert!(cert_with_deps.certificate),
             blob_certificates,
-        ))
+        })
     }
 }
 
-impl TryFrom<(Certificate, Vec<Certificate>)> for grpc::CertificateWithDependencies {
+impl TryFrom<CertificateWithDependencies> for grpc::CertificateWithDependencies {
     type Error = ProtoConversionError;
 
-    fn try_from(
-        (certificate, blob_certificates): (Certificate, Vec<Certificate>),
-    ) -> Result<Self, Self::Error> {
+    fn try_from(cert_with_deps: CertificateWithDependencies) -> Result<Self, Self::Error> {
         Ok(Self {
-            certificate: Some(certificate.try_into()?),
-            blob_certificates: blob_certificates
+            certificate: Some(cert_with_deps.certificate.try_into()?),
+            blob_certificates: cert_with_deps
+                .blob_certificates
                 .into_iter()
                 .map(grpc::Certificate::try_from)
                 .collect::<Result<_, _>>()?,
