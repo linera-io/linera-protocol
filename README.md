@@ -19,7 +19,7 @@ The Linera protocol repository is broken down into the following crates: (from l
 6. [`linera-core`](./linera-core) The Linera core protocol. Contains client / server logic, node synchronization etc.
 7. [`linera-rpc`](./linera-rpc)  Defines the data-type for RPC messages (currently all client<->proxy<->chain<->chain interactions), and track the corresponding data schemas.
 8. [`linera-service`](./linera-service) Executable for clients (aka CLI wallets), proxy (aka validator frontend) and servers.
-
+9. [`linera-sdk`](./linera-sdk) The library to develop WASM applications in Linera.
 
 ## Quickstart with the Linera service CLI
 

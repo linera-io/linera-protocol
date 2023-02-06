@@ -7,25 +7,28 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  RUST_BACKTRACE: short
+  RUSTFLAGS: "-D warnings"
+  RUSTUP_MAX_RETRIES: 10
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - uses: actions-rs/toolchain@v1
       with:
         profile: minimal
-        toolchain: 1.66.1
-    - name: Report warnings as errors
-      run: echo 'RUSTFLAGS=-D warnings' >> $GITHUB_ENV
     - uses: Swatinem/rust-cache@v2
     - name: Install Protoc
       uses: arduino/setup-protoc@v1
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Build
-      run: cargo build --locked --no-default-features
+      run: |
+        cargo build --locked --no-default-features
     - name: Setup local DynamoDB instance
       run: |
         docker run --rm -d --name local-dynamodb -p 8000:8000/tcp amazon/dynamodb-local
@@ -35,4 +38,5 @@ jobs:
         AWS_ACCESS_KEY_ID: test
         AWS_SECRET_ACCESS_KEY: test
         LOCALSTACK_ENDPOINT: http://localhost:8000
-      run: cargo test --locked --no-default-features -- --ignored dynamo
+      run: |
+        cargo test --locked --no-default-features -- --ignored dynamo

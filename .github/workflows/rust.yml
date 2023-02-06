@@ -5,40 +5,104 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  RUST_BACKTRACE: short
+  RUSTFLAGS: "-D warnings"
+  RUSTUP_MAX_RETRIES: 10
 
 jobs:
-  build:
 
+  test:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - uses: actions-rs/toolchain@v1
       with:
         profile: minimal
-        toolchain: 1.66.1
+        target: wasm32-unknown-unknown
         components: clippy, rustfmt
-    - name: Report warnings as errors
-      run: echo 'RUSTFLAGS=-D warnings' >> $GITHUB_ENV
     - uses: Swatinem/rust-cache@v2
+    - name: Clear up some space
+      run: |
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /opt/ghc
+        sudo rm -rf "/usr/local/share/boost"
+        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v1
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Compile `linera-views` with WASM
+      run: |
+        cargo build --locked --target wasm32-unknown-unknown -p linera-views
+    - name: Build WASM test runner
+      run: |
+        cargo build --locked --release --bin test-runner
+    - name: Run WASM application tests
+      run: |
+        cd linera-examples
+        cargo test --target wasm32-unknown-unknown
+    - name: Build example applications
+      run: |
+        cd linera-examples
+        RUSTFLAGS="-C opt-level=z -C debuginfo=0" cargo build --release --target wasm32-unknown-unknown
+    - name: Compile the workspace with the default features (test)
+      run: |
+        cargo test --locked --no-run
+    - name: Compile the workspace with the default features (build)
+      run: |
+        cargo build --locked
+    - name: Run all tests using the default features (currently Wasmtime)
+      run: |
+        cargo test --locked
+    - name: Re-run WASM tests using Wasmer
+      run: |
+        cargo test --locked --no-default-features --features wasmer wasm
+
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        target: wasm32-unknown-unknown
+        components: clippy, rustfmt
+    - uses: Swatinem/rust-cache@v2
+    - name: Clear up some space
+      run: |
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /opt/ghc
+        sudo rm -rf "/usr/local/share/boost"
+        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
     - name: Install cargo-machete
-      run: cargo install cargo-machete --locked
+      run: |
+        cargo install cargo-machete --locked
     - name: Install Protoc
       uses: arduino/setup-protoc@v1
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Check formatting
-      run: cargo fmt -- --check --config unstable_features=true --config imports_granularity=Crate
+      run: |
+        cargo fmt -- --check --config unstable_features=true --config imports_granularity=Crate
     - name: Check for unused dependencies
-      run: cargo machete
+      run: |
+        cargo machete
+    - name: Run WASM application lints
+      run: |
+        cd linera-examples
+        cargo fmt -- --check --config unstable_features=true --config imports_granularity=Crate
+        cargo clippy --all-targets --all-features --target wasm32-unknown-unknown
     - name: Run clippy using Wasmer
-      run: cargo clippy --all-targets --no-default-features --features crypto,wasmer --tests
+      run: |
+        cargo clippy --all-targets --no-default-features --features crypto,wasmer --tests
     - name: Run clippy using Wasmtime
-      run: cargo clippy --all-targets --no-default-features --features crypto,wasmtime --tests
-    - name: Build
-      run: cargo build --no-default-features --locked
-    - name: Run tests
-      run: cargo test --no-default-features --locked
+      run: |
+        cargo clippy --all-targets --no-default-features --features crypto,wasmtime --tests

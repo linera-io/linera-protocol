@@ -5,26 +5,32 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  RUST_BACKTRACE: short
+  RUSTFLAGS: "-D warnings"
+  RUSTUP_MAX_RETRIES: 10
+
 jobs:
   integration-test-with-kind:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           fetch-depth: 0
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.66.1
-      - name: Report warnings as errors
-        run: echo 'RUSTFLAGS=-D warnings' >> $GITHUB_ENV
       - uses: Swatinem/rust-cache@v2
       - name: Install Protoc
         uses: arduino/setup-protoc@v1
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Build binaries
-        run: cargo build --release --locked --no-default-features --bin client --bin proxy --bin server
+        run: |
+          cargo build --release --locked --no-default-features --bin client --bin proxy --bin server
       - name: Install Kind
         run: |
           curl -sL -o /tmp/kind https://kind.sigs.k8s.io/dl/v0.14.0/kind-linux-amd64
@@ -36,13 +42,12 @@ jobs:
           chmod +x /tmp/kubectl
           mv /tmp/kubectl /usr/local/bin/
       - name: Create cluster
-        run: kind create cluster
+        run: |
+          kind create cluster
       - name: Build and Load Docker images
         run: |
           cd docker
-
           cp ../target/release/{client,proxy,server} .
-
           for image in client proxy server setup; do
               docker build -t "zefchain-test-$image" --target "$image" .
               kind load docker-image "zefchain-test-$image"
@@ -65,4 +70,5 @@ jobs:
           kubectl delete -f docker/zefchain-k8s.yml
       - name: Delete cluster
         if: always()
-        run: kind delete cluster
+        run: |
+          kind delete cluster
