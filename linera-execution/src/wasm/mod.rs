@@ -167,3 +167,34 @@ impl UserApplication for WasmApplication {
         Ok(result)
     }
 }
+
+/// This assumes that the current directory is one of the crates.
+#[cfg(any(test, feature = "test"))]
+pub mod test {
+
+    use crate::WasmApplication;
+
+    fn build_applications() -> Result<(), std::io::Error> {
+        log::info!("Building example applications with cargo");
+        let status = std::process::Command::new("cargo")
+            .current_dir("../linera-examples")
+            .env("RUSTFLAGS", "-C opt-level=z -C debuginfo=0")
+            .args(["build", "--release", "--target", "wasm32-unknown-unknown"])
+            .status()?;
+        assert!(status.success());
+        Ok(())
+    }
+
+    pub fn get_counter_bytecode_paths() -> Result<(&'static str, &'static str), std::io::Error> {
+        build_applications()?;
+        Ok((
+            "../linera-examples/target/wasm32-unknown-unknown/release/examples/counter_contract.wasm",
+            "../linera-examples/target/wasm32-unknown-unknown/release/examples/counter_service.wasm",
+        ))
+    }
+
+    pub async fn build_counter_application() -> Result<WasmApplication, std::io::Error> {
+        let (contract, service) = get_counter_bytecode_paths()?;
+        WasmApplication::from_files(contract, service).await
+    }
+}

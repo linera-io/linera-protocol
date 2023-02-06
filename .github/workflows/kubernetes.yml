@@ -24,7 +24,7 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Build binaries
-        run: cargo build --release --locked --bin client --bin proxy --bin server
+        run: cargo build --release --locked --no-default-features --bin client --bin proxy --bin server
       - name: Install Kind
         run: |
           curl -sL -o /tmp/kind https://kind.sigs.k8s.io/dl/v0.14.0/kind-linux-amd64

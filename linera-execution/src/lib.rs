@@ -22,7 +22,9 @@ pub use system::{
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 pub use wasm::{WasmApplication, WasmExecutionError};
 #[cfg(any(test, feature = "test"))]
-pub use {applications::ApplicationRegistry, system::SystemExecutionState};
+pub use {
+    applications::ApplicationRegistry, system::SystemExecutionState, wasm::test as wasm_test,
+};
 
 use async_graphql::SimpleObject;
 use async_trait::async_trait;

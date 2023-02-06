@@ -5,6 +5,7 @@ authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 
 [features]
+default = ["wasmtime"]
 wasmer = ["linera-execution/wasmer"]
 wasmtime = ["linera-execution/wasmtime"]
 test = ["test-strategy", "proptest"]
@@ -17,8 +18,8 @@ dashmap = "5.4.0"
 futures = "0.3.17"
 linera-base = { path = "../linera-base" }
 linera-chain = { path = "../linera-chain" }
-linera-execution = { path = "../linera-execution" }
-linera-storage = { path = "../linera-storage" }
+linera-execution = { path = "../linera-execution", default-features = false }
+linera-storage = { path = "../linera-storage", default-features = false }
 linera-views = { path = "../linera-views" }
 log = "0.4.14"
 lru = "0.9.0"
@@ -35,8 +36,8 @@ bcs = "0.1.3"
 env_logger = "0.9.0"
 linera-base = { path = "../linera-base", features = ["test"] }
 linera-chain = { path = "../linera-chain", features = ["test"] }
-linera-execution = { path = "../linera-execution", features = ["test"] }
-linera-storage = { path = "../linera-storage", features = ["test"] }
+linera-execution = { path = "../linera-execution", default-features = false, features = ["test"] }
+linera-storage = { path = "../linera-storage", default-features = false, features = ["test"] }
 linera-views = { path = "../linera-views", features = ["test"] }
 proptest = "1.0.0"
 tempfile = "3.2.0"

@@ -55,16 +55,11 @@ where
     publisher.receive_certificate(cert).await.unwrap();
     publisher.process_inbox().await.unwrap();
 
+    let (contract_path, service_path) = linera_execution::wasm_test::get_counter_bytecode_paths()?;
     let (bytecode_id, cert) = publisher
         .publish_bytecode(
-            Bytecode::load_from_file(
-                "../linera-examples/target/wasm32-unknown-unknown/release/counter_contract.wasm",
-            )
-            .await?,
-            Bytecode::load_from_file(
-                "../linera-examples/target/wasm32-unknown-unknown/release/counter_service.wasm",
-            )
-            .await?,
+            Bytecode::load_from_file(contract_path).await?,
+            Bytecode::load_from_file(service_path).await?,
         )
         .await
         .unwrap();
