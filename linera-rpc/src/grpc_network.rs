@@ -376,11 +376,12 @@ where
             "server handler [handle_certificate] received delegating request [{:?}] ",
             request
         );
-        let (certificate, blob_certificates) = request.into_inner().try_into()?;
+        let cert_with_deps: data_types::CertificateWithDependencies =
+            request.into_inner().try_into()?;
         match self
             .state
             .clone()
-            .handle_certificate(certificate, blob_certificates)
+            .handle_certificate(cert_with_deps.certificate, cert_with_deps.blob_certificates)
             .await
         {
             Ok((info, actions)) => {
@@ -478,7 +479,10 @@ impl ValidatorNode for GrpcClient {
         certificate: data_types::Certificate,
         blob_certificates: Vec<data_types::Certificate>,
     ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
-        let cert_with_deps = (certificate, blob_certificates);
+        let cert_with_deps = data_types::CertificateWithDependencies {
+            certificate,
+            blob_certificates,
+        };
         client_delegate!(self, handle_certificate, cert_with_deps)
     }
 
@@ -530,7 +534,10 @@ impl MassClient for GrpcMassClient {
                     mass_client_delegate!(client, handle_block_proposal, proposal, responses)
                 }
                 RpcMessage::Certificate(certificate, blob_certificates) => {
-                    let cert_with_deps = Box::new((*certificate, blob_certificates));
+                    let cert_with_deps = Box::new(data_types::CertificateWithDependencies {
+                        certificate: *certificate,
+                        blob_certificates,
+                    });
                     mass_client_delegate!(client, handle_certificate, cert_with_deps, responses)
                 }
                 msg => panic!("attempted to send msg: {:?}", msg),
