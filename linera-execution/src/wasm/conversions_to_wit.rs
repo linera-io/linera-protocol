@@ -6,7 +6,9 @@
 //! Allows converting types used in `linera-execution` to types that can be sent to the guest WASM
 //! module.
 
-use super::runtime::{contract, queryable_system, service, writable_system};
+#![allow(clippy::duplicate_mod)]
+
+use super::{contract, queryable_system, service, writable_system};
 use crate::{
     system::Balance, CallResult, CalleeContext, EffectContext, EffectId, OperationContext,
     QueryContext, SessionId, UserApplicationId,
@@ -243,22 +245,6 @@ impl From<CallResult> for writable_system::CallResult {
                 .map(writable_system::SessionId::from)
                 .collect(),
         }
-    }
-}
-
-impl Balance {
-    /// Helper function to obtain the 64 most significant bits of the balance.
-    fn upper_half(self) -> u64 {
-        (u128::from(self) >> 64)
-            .try_into()
-            .expect("Insufficient shift right for u128 -> u64 conversion")
-    }
-
-    /// Helper function to obtain the 64 least significant bits of the balance.
-    fn lower_half(self) -> u64 {
-        (u128::from(self) & 0xFFFF_FFFF_FFFF_FFFF)
-            .try_into()
-            .expect("Incorrect mask for u128 -> u64 conversion")
     }
 }
 

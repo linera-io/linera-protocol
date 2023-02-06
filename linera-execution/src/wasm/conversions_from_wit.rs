@@ -6,7 +6,9 @@
 //! Allows converting types returned from a WASM module into types that can be used with the rest
 //! of the crate.
 
-use super::runtime::{contract, queryable_system, writable_system};
+#![allow(clippy::duplicate_mod)]
+
+use super::{contract, queryable_system, writable_system};
 use crate::{
     ApplicationCallResult, BytecodeId, ChannelName, Destination, NewSession, RawExecutionResult,
     SessionCallResult, SessionId, UserApplicationId,

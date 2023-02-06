@@ -15,8 +15,8 @@ use super::{
     WasmExecutionError,
 };
 use crate::{
-    ApplicationCallResult, CalleeContext, EffectContext, OperationContext, QueryContext,
-    RawExecutionResult, SessionCallResult, SessionId,
+    system::Balance, ApplicationCallResult, CalleeContext, EffectContext, OperationContext,
+    QueryContext, RawExecutionResult, SessionCallResult, SessionId,
 };
 use std::{future::Future, task::Poll};
 
@@ -394,4 +394,20 @@ impl_guest_future_interface! {
     CallApplication: call_application_poll -> PollCallApplication -> Contract => ApplicationCallResult,
     CallSession: call_session_poll -> PollCallSession -> Contract => (SessionCallResult, Vec<u8>),
     QueryApplication: query_application_poll -> PollQuery -> Service => Vec<u8>,
+}
+
+impl Balance {
+    /// Helper function to obtain the 64 most significant bits of the balance.
+    pub(super) fn upper_half(self) -> u64 {
+        (u128::from(self) >> 64)
+            .try_into()
+            .expect("Insufficient shift right for u128 -> u64 conversion")
+    }
+
+    /// Helper function to obtain the 64 least significant bits of the balance.
+    pub(super) fn lower_half(self) -> u64 {
+        (u128::from(self) & 0xFFFF_FFFF_FFFF_FFFF)
+            .try_into()
+            .expect("Incorrect mask for u128 -> u64 conversion")
+    }
 }

@@ -15,6 +15,11 @@ wit_bindgen_host_wasmtime_rust::import!("../linera-sdk/contract.wit");
 // Import the interface implemented by a user service.
 wit_bindgen_host_wasmtime_rust::import!("../linera-sdk/service.wit");
 
+#[path = "conversions_from_wit.rs"]
+mod conversions_from_wit;
+#[path = "conversions_to_wit.rs"]
+mod conversions_to_wit;
+
 use self::{
     contract::{Contract, ContractData},
     queryable_system::{QueryableSystem, QueryableSystemTables},
