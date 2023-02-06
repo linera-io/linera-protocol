@@ -50,6 +50,6 @@ jobs:
         cd linera-examples
         RUSTFLAGS="-C opt-level=z -C debuginfo=0" cargo build --release --target wasm32-unknown-unknown
     - name: Test using Wasmer
-      run: cargo test --features wasmer wasm
+      run: cargo test --no-default-features --features wasmer wasm
     - name: Test using Wasmtime
-      run: cargo test --features wasmtime wasm
+      run: cargo test --no-default-features --features wasmtime wasm

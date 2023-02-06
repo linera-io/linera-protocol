@@ -35,10 +35,10 @@ jobs:
     - name: Check for unused dependencies
       run: cargo machete
     - name: Run clippy using Wasmer
-      run: cargo clippy --all-targets --features crypto,wasmer --tests
+      run: cargo clippy --all-targets --no-default-features --features crypto,wasmer --tests
     - name: Run clippy using Wasmtime
-      run: cargo clippy --all-targets --features crypto,wasmtime --tests
+      run: cargo clippy --all-targets --no-default-features --features crypto,wasmtime --tests
     - name: Build
-      run: cargo build --locked
+      run: cargo build --no-default-features --locked
     - name: Run tests
-      run: cargo test --locked
+      run: cargo test --no-default-features --locked

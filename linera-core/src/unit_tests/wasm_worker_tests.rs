@@ -78,15 +78,10 @@ where
     .await;
 
     // Publish some bytecode.
+    let (contract_path, service_path) = linera_execution::wasm_test::get_counter_bytecode_paths()?;
     let publish_operation = SystemOperation::PublishBytecode {
-        contract: Bytecode::load_from_file(
-            "../linera-examples/target/wasm32-unknown-unknown/release/counter_contract.wasm",
-        )
-        .await?,
-        service: Bytecode::load_from_file(
-            "../linera-examples/target/wasm32-unknown-unknown/release/counter_service.wasm",
-        )
-        .await?,
+        contract: Bytecode::load_from_file(contract_path).await?,
+        service: Bytecode::load_from_file(service_path).await?,
     };
     let publish_effect = SystemEffect::BytecodePublished;
     let publish_block = make_block(

@@ -5,6 +5,7 @@ authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 
 [features]
+default = ["wasmtime"]
 test = ["tokio/macros"]
 wasmer = ["dep:wasmer", "wit-bindgen-host-wasmer-rust"]
 wasmtime = ["dep:wasmtime", "wit-bindgen-host-wasmtime-rust"]
@@ -31,7 +32,7 @@ wit-bindgen-host-wasmtime-rust = { git = "https://github.com/jvff/wit-bindgen", 
 [dev-dependencies]
 anyhow = "1.0.57"
 bcs = "0.1.3"
-linera-execution = { path = ".", features = ["test"] }
+linera-execution = { path = ".", default-features = false, features = ["test"] }
 tokio = { version = "1.12.0", features = ["full", "test-util"] }
 
 [package.metadata.cargo-machete]

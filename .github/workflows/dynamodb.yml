@@ -25,7 +25,7 @@ jobs:
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Build
-      run: cargo build --locked
+      run: cargo build --locked --no-default-features
     - name: Setup local DynamoDB instance
       run: |
         docker run --rm -d --name local-dynamodb -p 8000:8000/tcp amazon/dynamodb-local
@@ -35,4 +35,4 @@ jobs:
         AWS_ACCESS_KEY_ID: test
         AWS_SECRET_ACCESS_KEY: test
         LOCALSTACK_ENDPOINT: http://localhost:8000
-      run: cargo test --locked -- --ignored dynamo
+      run: cargo test --locked --no-default-features -- --ignored dynamo
