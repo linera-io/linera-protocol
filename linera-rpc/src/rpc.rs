@@ -59,8 +59,8 @@ impl From<LiteCertificate> for RpcMessage {
 }
 
 impl From<(Certificate, Vec<Certificate>)> for RpcMessage {
-    fn from((certificate, required_certificates): (Certificate, Vec<Certificate>)) -> Self {
-        RpcMessage::Certificate(Box::new(certificate), required_certificates)
+    fn from((certificate, blob_certificates): (Certificate, Vec<Certificate>)) -> Self {
+        RpcMessage::Certificate(Box::new(certificate), blob_certificates)
     }
 }
 

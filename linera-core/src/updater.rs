@@ -143,14 +143,14 @@ where
                             let apps = chain
                                 .applications_for_block(certificate.value.block())
                                 .await?;
-                            let mut required_certificates = vec![];
+                            let mut blob_certificates = vec![];
                             for app in apps {
                                 match self
                                     .store
                                     .read_certificate(app.bytecode_location.certificate_hash)
                                     .await
                                 {
-                                    Ok(cert) => required_certificates.push(cert),
+                                    Ok(cert) => blob_certificates.push(cert),
                                     Err(ViewError::NotFound(_)) => {}
                                     Err(err) => return Err(err.into()),
                                 }

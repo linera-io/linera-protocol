@@ -57,17 +57,17 @@ impl ValidatorNode for Client {
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-        required_certificates: Vec<Certificate>,
+        blob_certificates: Vec<Certificate>,
     ) -> Result<ChainInfoResponse, NodeError> {
         match self {
             Client::Grpc(grpc_client) => {
                 grpc_client
-                    .handle_certificate(certificate, required_certificates)
+                    .handle_certificate(certificate, blob_certificates)
                     .await
             }
             Client::Simple(simple_client) => {
                 simple_client
-                    .handle_certificate(certificate, required_certificates)
+                    .handle_certificate(certificate, blob_certificates)
                     .await
             }
         }
