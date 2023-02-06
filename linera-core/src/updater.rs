@@ -124,41 +124,40 @@ where
     ) -> Result<ChainInfo, NodeError> {
         let mut count = 0;
         loop {
-            let result = match self
+            let mut result = match self
                 .client
                 .handle_lite_certificate(certificate.without_value())
                 .await
             {
                 Ok(response) => Ok(response),
                 Err(NodeError::MissingCertificateValue) => {
-                    match self
-                        .client
+                    self.client
                         .handle_certificate(certificate.clone(), vec![])
                         .await
-                    {
-                        Ok(response) => Ok(response),
-                        Err(NodeError::ApplicationBytecodeNotFound { .. }) => {
-                            let mut chain =
-                                self.store.load_chain(certificate.value.chain_id()).await?;
-                            let apps = chain
-                                .applications_for_block(certificate.value.block())
-                                .await?;
-                            let blob_certificates = self
-                                .store
-                                .read_certificates(
-                                    apps.iter()
-                                        .map(|app| app.bytecode_location.certificate_hash),
-                                )
-                                .await?;
-                            self.client
-                                .handle_certificate(certificate.clone(), blob_certificates)
-                                .await
-                        }
-                        Err(err) => Err(err),
-                    }
                 }
                 Err(err) => Err(err),
             };
+            if let Err(NodeError::ApplicationBytecodeNotFound { .. }) = &result {
+                let mut chain = self.store.load_chain(certificate.value.chain_id()).await?;
+                if let Ok(apps) = chain
+                    .applications_for_block(certificate.value.block())
+                    .await
+                {
+                    if let Ok(blob_certificates) = self
+                        .store
+                        .read_certificates(
+                            apps.iter()
+                                .map(|app| app.bytecode_location.certificate_hash),
+                        )
+                        .await
+                    {
+                        result = self
+                            .client
+                            .handle_certificate(certificate.clone(), blob_certificates)
+                            .await;
+                    }
+                }
+            }
             match result {
                 Ok(response) => {
                     response.check(self.name)?;
