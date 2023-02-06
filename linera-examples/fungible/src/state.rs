@@ -23,7 +23,7 @@ impl FungibleToken {
 
     /// Obtain the balance for an `account`.
     pub(crate) fn balance(&self, account: &AccountOwner) -> u128 {
-        self.accounts.get(&account).copied().unwrap_or(0)
+        self.accounts.get(account).copied().unwrap_or(0)
     }
 
     /// Credit an `account` with the provided `amount`.
@@ -59,7 +59,7 @@ impl FungibleToken {
         self.nonces
             .get(account)
             .map(Nonce::next)
-            .unwrap_or(Some(Nonce::default()))
+            .unwrap_or_else(|| Some(Nonce::default()))
     }
 
     /// Mark the provided [`Nonce`] as used for the `account`.

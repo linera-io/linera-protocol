@@ -21,6 +21,7 @@ jobs:
         profile: minimal
         toolchain: 1.66.1
         target: wasm32-unknown-unknown
+        components: clippy, rustfmt
     - name: Report warnings as errors
       run: echo 'RUSTFLAGS=-D warnings' >> $GITHUB_ENV
     - uses: Swatinem/rust-cache@v2
@@ -38,9 +39,11 @@ jobs:
       run: cargo build --target wasm32-unknown-unknown -p linera-views
     - name: Build WASM test runner
       run: cargo build -p linera-sdk --release --bin test-runner
-    - name: Run WASM application unit tests
+    - name: Run WASM application lint and unit tests
       run: |
         cd linera-examples
+        cargo fmt -- --check --config unstable_features=true --config imports_granularity=Crate
+        cargo clippy --all-targets
         cargo test --target wasm32-unknown-unknown
     - name: Build example applications
       run: |

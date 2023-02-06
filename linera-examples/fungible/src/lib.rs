@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 
 /// A cross-application call.
 #[derive(Deserialize, Serialize)]
+#[allow(clippy::large_enum_variant)]
 pub enum ApplicationCall {
     /// A request for the application's account balance.
     Balance,
@@ -25,6 +26,7 @@ pub enum ApplicationCall {
 
 /// A cross-application call into a session.
 #[derive(Deserialize, Serialize)]
+#[allow(clippy::large_enum_variant)]
 pub enum SessionCall {
     /// A request for the session's balance.
     Balance,
@@ -34,6 +36,7 @@ pub enum SessionCall {
 
 /// A cross-application transfer request.
 #[derive(Deserialize, Serialize)]
+#[allow(clippy::large_enum_variant)]
 pub enum ApplicationTransfer {
     /// A static transfer to a specific destination.
     Static(Transfer),
