@@ -82,13 +82,13 @@ where
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-        required_certificates: Vec<Certificate>,
+        blob_certificates: Vec<Certificate>,
     ) -> Result<ChainInfoResponse, NodeError> {
         let validator = self.0.clone();
         let mut validator = validator.lock().await;
         let response = validator
             .state
-            .fully_handle_certificate(certificate, required_certificates)
+            .fully_handle_certificate(certificate, blob_certificates)
             .await?;
         Ok(response)
     }
