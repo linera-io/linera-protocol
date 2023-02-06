@@ -78,32 +78,16 @@ outdated. In the most case (but not always sadly), this can be fixed by running
 
 See https://github.com/zefchain/serde-reflection for more context.
 
-## WebAssembly support
+## WASM support
 
-WebAssembly support is currently not compiled in by default. It must be enabled using either the
-`wasmer` or the `wasmtime` features.
-
-Some tests require the Counter application example from `linera-examples/counter` to be
-compiled, and that can be done with:
-
-```
-cd linera-examples
-cargo build --release --target wasm32-unknown-unknown
-```
+The support of WASM is controlled by the features `wasmer` and the `wasmtime`, and
+currently defaults to `wasmtime`.
 
 Testing the WASM application examples requires configuring a custom test runner included with
 `linera-sdk`. First it has to be built:
 
 ```
-cargo build -p linera-sdk --release --bin test-runner
-```
-
-Then Cargo has to be configured to use it, by adding the following lines to one of its
-[configuration files](https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure):
-
-```
-[target.wasm32-unknown-unknown]
-runner = "/path/to/repository/target/release/test-runner"
+cargo build --release --bin test-runner
 ```
 
 After that, the WASM tests can be executed with:
@@ -112,6 +96,21 @@ After that, the WASM tests can be executed with:
 cd linera-examples
 cargo test --target wasm32-unknown-unknown
 ```
+
+Note that this works because we declared the test-runner in `.cargo/config.toml` with
+```
+[target.wasm32-unknown-unknown]
+runner = "/path/to/repository/target/release/test-runner"
+```
+(See the [documentation of Cargo](https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure) for more context.)
+
+Some tests require the application examples from `linera-examples` to be compiled. If needed, this
+can be done manually with
+```
+cd linera-examples
+RUSTFLAGS="-C opt-level=z -C debuginfo=0" cargo build --release --target wasm32-unknown-unknown
+```
+The Rust flags are suggested to reduce the size of the WASM bytecodes.
 
 ## Adding dependencies to third-party crates
 

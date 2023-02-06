@@ -171,7 +171,6 @@ impl UserApplication for WasmApplication {
 /// This assumes that the current directory is one of the crates.
 #[cfg(any(test, feature = "test"))]
 pub mod test {
-
     use crate::WasmApplication;
 
     fn build_applications() -> Result<(), std::io::Error> {
@@ -188,8 +187,8 @@ pub mod test {
     pub fn get_counter_bytecode_paths() -> Result<(&'static str, &'static str), std::io::Error> {
         build_applications()?;
         Ok((
-            "../linera-examples/target/wasm32-unknown-unknown/release/examples/counter_contract.wasm",
-            "../linera-examples/target/wasm32-unknown-unknown/release/examples/counter_service.wasm",
+            "../linera-examples/target/wasm32-unknown-unknown/release/counter_contract.wasm",
+            "../linera-examples/target/wasm32-unknown-unknown/release/counter_service.wasm",
         ))
     }
 
