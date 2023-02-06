@@ -146,15 +146,14 @@ impl FungibleToken {
     /// Handles a session balance request sent by an application.
     fn handle_session_balance(&self, session_data: Vec<u8>) -> Result<SessionCallResult, Error> {
         let balance_bytes = session_data.clone();
-        let mut application_call_result = ApplicationCallResult::default();
-
-        application_call_result.value = balance_bytes;
-
+        let application_call_result = ApplicationCallResult {
+            value: balance_bytes,
+            ..Default::default()
+        };
         let session_call_result = SessionCallResult {
             inner: application_call_result,
             data: Some(session_data),
         };
-
         Ok(session_call_result)
     }
 

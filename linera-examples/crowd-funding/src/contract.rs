@@ -265,7 +265,7 @@ impl CrowdFunding {
                 .await
                 .map_err(Error::Balance)?;
 
-        Ok(bcs::from_bytes(&response).map_err(Error::InvalidBalance)?)
+        bcs::from_bytes(&response).map_err(Error::InvalidBalance)
     }
 
     /// Transfers `amount` tokens from the funds in custody to the `destination`.
@@ -294,6 +294,7 @@ impl CrowdFunding {
 
 /// Operations that can be sent to the application.
 #[derive(Deserialize, Serialize)]
+#[allow(clippy::large_enum_variant)]
 pub enum Operation {
     /// Pledge some tokens to the campaign.
     Pledge { transfer: SignedTransfer },
