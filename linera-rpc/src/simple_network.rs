@@ -197,11 +197,11 @@ where
                         Err(error) => Err(error.into()),
                     }
                 }
-                RpcMessage::Certificate(message, required_certificates) => {
+                RpcMessage::Certificate(message, blob_certificates) => {
                     match self
                         .server
                         .state
-                        .handle_certificate(*message, required_certificates)
+                        .handle_certificate(*message, blob_certificates)
                         .await
                     {
                         Ok((info, actions)) => {
@@ -372,9 +372,9 @@ impl ValidatorNode for SimpleClient {
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-        required_certificates: Vec<Certificate>,
+        blob_certificates: Vec<Certificate>,
     ) -> Result<ChainInfoResponse, NodeError> {
-        self.send_recv_info((certificate, required_certificates).into())
+        self.send_recv_info((certificate, blob_certificates).into())
             .await
     }
 

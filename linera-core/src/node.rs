@@ -51,7 +51,7 @@ pub trait ValidatorNode {
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-        required_certificates: Vec<Certificate>,
+        blob_certificates: Vec<Certificate>,
     ) -> Result<ChainInfoResponse, NodeError>;
 
     /// Handle information queries for this chain.
@@ -295,7 +295,7 @@ where
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-        required_certificates: Vec<Certificate>,
+        blob_certificates: Vec<Certificate>,
     ) -> Result<ChainInfoResponse, NodeError> {
         let node = self.node.clone();
         let mut node = node.lock().await;
@@ -304,7 +304,7 @@ where
             .state
             .fully_handle_certificate_with_notifications(
                 certificate,
-                required_certificates,
+                blob_certificates,
                 Some(&mut notifications),
             )
             .await?;

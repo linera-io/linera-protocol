@@ -64,7 +64,7 @@ pub trait ValidatorWorker {
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-        required_certificates: Vec<Certificate>,
+        blob_certificates: Vec<Certificate>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError>;
 
     /// Handle information queries on chains.
@@ -278,9 +278,9 @@ where
     pub(crate) async fn fully_handle_certificate(
         &mut self,
         certificate: Certificate,
-        required_certificates: Vec<Certificate>,
+        blob_certificates: Vec<Certificate>,
     ) -> Result<ChainInfoResponse, WorkerError> {
-        self.fully_handle_certificate_with_notifications(certificate, required_certificates, None)
+        self.fully_handle_certificate_with_notifications(certificate, blob_certificates, None)
             .await
     }
 
@@ -288,11 +288,11 @@ where
     pub(crate) async fn fully_handle_certificate_with_notifications(
         &mut self,
         certificate: Certificate,
-        required_certificates: Vec<Certificate>,
+        blob_certificates: Vec<Certificate>,
         mut notifications: Option<&mut Vec<Notification>>,
     ) -> Result<ChainInfoResponse, WorkerError> {
         let (response, actions) = self
-            .handle_certificate(certificate, required_certificates)
+            .handle_certificate(certificate, blob_certificates)
             .await?;
         let mut requests = VecDeque::from(actions.cross_chain_requests);
         while let Some(request) = requests.pop_front() {
@@ -708,7 +708,7 @@ where
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-        required_certificates: Vec<Certificate>,
+        blob_certificates: Vec<Certificate>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         log::trace!("{} <-- {:?}", self.nickname, certificate);
         let block = certificate.value.block();
@@ -767,7 +767,7 @@ where
                 .map(|app| (app.bytecode_location.certificate_hash, app))
                 .collect(),
         };
-        for cert in &required_certificates {
+        for cert in &blob_certificates {
             ensure!(
                 apps.contains_key(&cert.hash),
                 WorkerError::UnneededCertificate {
@@ -776,7 +776,7 @@ where
             );
         }
         // Write the certificates so that the bytecode is available during execution.
-        for cert in &required_certificates {
+        for cert in &blob_certificates {
             if self.storage.read_certificate(cert.hash).await.is_err() {
                 let committee = chain
                     .execution_state
@@ -793,7 +793,7 @@ where
             }
         }
         drop(chain);
-        let certificates_to_cache: Vec<_> = required_certificates
+        let certificates_to_cache: Vec<_> = blob_certificates
             .iter()
             .chain(iter::once(&certificate))
             .filter(|cert| !self.recent_values.contains(&cert.hash))

@@ -199,7 +199,7 @@ message CertificateWithDependencies {
   Certificate certificate = 1;
 
   // Other certificates containing bytecode required by the first one
-  repeated Certificate required_certificates = 2;
+  repeated Certificate blob_certificates = 2;
 }
 
 // A range of block heights as used in ChainInfoQuery.

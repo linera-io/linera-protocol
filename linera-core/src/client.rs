@@ -557,9 +557,9 @@ where
             .download_certificates(nodes, block.chain_id, block.height)
             .await?;
         // TODO: Add required certificates to chain info.
-        let required_certificates = vec![];
+        let blob_certificates = vec![];
         // Process the received operation.
-        self.process_certificate(certificate, required_certificates)
+        self.process_certificate(certificate, blob_certificates)
             .await?;
         // Make sure a quorum of validators (according to our new local committee) are up-to-date
         // for data availability.
@@ -728,11 +728,11 @@ where
     async fn process_certificate(
         &mut self,
         certificate: Certificate,
-        required_certificates: Vec<Certificate>,
+        blob_certificates: Vec<Certificate>,
     ) -> Result<(), NodeError> {
         let info = self
             .node_client
-            .handle_certificate(certificate, required_certificates)
+            .handle_certificate(certificate, blob_certificates)
             .await?
             .info;
         if info.chain_id == self.chain_id
@@ -822,7 +822,7 @@ where
             "A different operation was executed in parallel (consider retrying the operation)"
         );
         // Since the validators all executed and voted for the block, they have the needed
-        // bytecode. Leaving required_certificates empty.
+        // bytecode. Leaving blob_certificates empty.
         self.process_certificate(final_certificate.clone(), vec![])
             .await?;
         self.pending_block = None;
