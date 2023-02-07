@@ -36,7 +36,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{BlockHeight, ChainId, EffectId, Timestamp},
 };
-use linera_views::views::ViewError;
+use linera_views::{common::Batch, views::ViewError};
 use serde::{Deserialize, Serialize};
 use std::{io, path::Path, sync::Arc};
 use thiserror::Error;
@@ -74,6 +74,8 @@ pub enum ExecutionError {
     InvalidSessionOwner,
     #[error("Attempted to call an application while the state is locked")]
     ApplicationIsInUse,
+    #[error("Attempted to get an entry that is not locked")]
+    ApplicationStateNotLocked,
 
     #[error("Bytecode ID {0:?} is invalid")]
     InvalidBytecodeId(BytecodeId),
@@ -246,6 +248,30 @@ pub trait ReadableStorage: Send + Sync {
 
     /// Read the application state.
     async fn try_read_my_state(&self) -> Result<Vec<u8>, ExecutionError>;
+
+    /// Lock the userkv stat and prevent further reading/loading
+    async fn lock_userkv_state(&self) -> Result<(), ExecutionError>;
+
+    /// Unlock the userkv stat and prevent further reading/loading
+    async fn unlock_userkv_state(&self) -> Result<(), ExecutionError>;
+
+    /// Pass the reading of one key
+    async fn pass_userkv_read_key_bytes(
+        &self,
+        key: Vec<u8>,
+    ) -> Result<Option<Vec<u8>>, ExecutionError>;
+
+    /// Reads the data from the keys having a specific prefix.
+    async fn pass_userkv_find_keys_by_prefix(
+        &self,
+        key_prefix: Vec<u8>,
+    ) -> Result<Vec<Vec<u8>>, ExecutionError>;
+
+    /// Reads the data from the key/values having a specific prefix.
+    async fn pass_userkv_find_key_values_by_prefix(
+        &self,
+        key_prefix: Vec<u8>,
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError>;
 }
 
 #[async_trait]
@@ -283,10 +309,13 @@ pub trait WritableStorage: ReadableStorage {
     async fn try_read_and_lock_my_state(&self) -> Result<Vec<u8>, ExecutionError>;
 
     /// Save the application state and allow reading/loading the state again.
-    fn save_and_unlock_my_state(&self, state: Vec<u8>) -> Result<(), ApplicationStateNotLocked>;
+    fn save_and_unlock_my_state(&self, state: Vec<u8>) -> Result<(), ExecutionError>;
 
     /// Allow reading/loading the state again (without saving anything).
     fn unlock_my_state(&self);
+
+    /// Write the batch and then unlock
+    async fn write_batch_and_unlock(&self, batch: Batch) -> Result<(), ExecutionError>;
 
     /// Call another application. Forwarded sessions will now be visible to
     /// `callee_id` (but not to the caller any more).
@@ -511,10 +540,6 @@ impl From<Vec<u8>> for Response {
         Response::User(response)
     }
 }
-
-#[derive(Clone, Copy, Debug, Error)]
-#[error("The application state can not be saved because it was not locked for writing")]
-pub struct ApplicationStateNotLocked;
 
 /// A WebAssembly module's bytecode.
 #[derive(Clone, Deserialize, Eq, Hash, PartialEq, Serialize)]

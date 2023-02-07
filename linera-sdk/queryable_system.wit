@@ -23,6 +23,56 @@ variant poll-load {
     ready(result<list<u8>, string>),
 }
 
+resource lock {
+    static new: func() -> lock
+    poll: func() -> poll-lock
+}
+
+variant poll-lock {
+    pending,
+    ready(result<unit, string>),
+}
+
+resource unlock {
+    static new: func() -> unlock
+    poll: func() -> poll-unlock
+}
+
+variant poll-unlock {
+    pending,
+    ready(result<unit, string>),
+}
+
+resource read-key-bytes {
+    static new: func(key: list<u8>) -> read-key-bytes
+    poll: func() -> poll-read-key-bytes
+}
+
+variant poll-read-key-bytes {
+    pending,
+    ready(result<option<list<u8>>, string>),
+}
+
+resource find-keys {
+    static new: func(prefix: list<u8>) -> find-keys
+    poll: func() -> poll-find-keys
+}
+
+variant poll-find-keys {
+    pending,
+    ready(result<list<list<u8>>, string>),
+}
+
+resource find-key-values {
+    static new: func(prefix: list<u8>) -> find-key-values
+    poll: func() -> poll-find-key-values
+}
+
+variant poll-find-key-values {
+    pending,
+    ready(result<list<tuple<list<u8>,list<u8>>>, string>),
+}
+
 record application-id {
     bytecode-id: bytecode-id,
     creation: effect-id,
