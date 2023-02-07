@@ -5,6 +5,7 @@
 use ed25519_dalek as dalek;
 use ed25519_dalek::{Signer, Verifier};
 use generic_array::typenum::Unsigned;
+#[cfg(not(target_arch = "wasm32"))]
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
@@ -64,6 +65,7 @@ impl PublicKey {
 
 impl KeyPair {
     /// Generate a new key-pair.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn generate() -> Self {
         let mut csprng = OsRng;
         let keypair = dalek::Keypair::generate(&mut csprng);
