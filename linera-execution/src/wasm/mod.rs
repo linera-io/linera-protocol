@@ -64,10 +64,10 @@ pub enum WasmExecutionError {
     LoadModule(#[from] anyhow::Error),
     #[cfg(feature = "wasmer")]
     #[error("Failed to execute WASM module")]
-    ExecuteModule(#[from] wasmer::RuntimeError),
+    ExecuteModuleInWasmer(#[from] wasmer::RuntimeError),
     #[cfg(feature = "wasmtime")]
     #[error("Failed to execute WASM module")]
-    ExecuteModule(#[from] wasmtime::Trap),
+    ExecuteModuleInWasmtime(#[from] wasmtime::Trap),
     #[error("Error reported from user application: {0}")]
     UserApplication(String),
 }
