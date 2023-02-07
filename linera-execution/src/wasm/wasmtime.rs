@@ -28,7 +28,7 @@ use self::{
 };
 use super::{
     async_boundary::{ContextForwarder, HostFuture, HostFutureQueue},
-    common::{self, Runtime, WasmRuntimeContext},
+    common::{self, ApplicationRuntimeContext, WasmRuntimeContext},
     WasmApplication, WasmExecutionError,
 };
 use crate::{CallResult, ExecutionError, QueryableStorage, SessionId, WritableStorage};
@@ -44,8 +44,7 @@ pub struct Contract<'storage> {
     contract: contract::Contract<ContractState<'storage>>,
 }
 
-impl<'storage> Runtime for Contract<'storage> {
-    type Application = Self;
+impl<'storage> ApplicationRuntimeContext for Contract<'storage> {
     type Store = Store<ContractState<'storage>>;
     type StorageGuard = ();
     type Error = Trap;
@@ -56,8 +55,7 @@ pub struct Service<'storage> {
     service: service::Service<ServiceState<'storage>>,
 }
 
-impl<'storage> Runtime for Service<'storage> {
-    type Application = Self;
+impl<'storage> ApplicationRuntimeContext for Service<'storage> {
     type Store = Store<ServiceState<'storage>>;
     type StorageGuard = ();
     type Error = Trap;
@@ -189,7 +187,7 @@ impl<'storage> ServiceState<'storage> {
     }
 }
 
-impl<'storage> common::Contract<Self> for Contract<'storage> {
+impl<'storage> common::Contract for Contract<'storage> {
     fn initialize_new(
         &self,
         store: &mut Store<ContractState<'storage>>,
@@ -292,7 +290,7 @@ impl<'storage> common::Contract<Self> for Contract<'storage> {
     }
 }
 
-impl<'storage> common::Service<Self> for Service<'storage> {
+impl<'storage> common::Service for Service<'storage> {
     fn query_application_new(
         &self,
         store: &mut Store<ServiceState<'storage>>,

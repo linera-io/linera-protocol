@@ -5,7 +5,7 @@
 //! modules.
 
 use super::{
-    common::{self, WasmRuntimeContext},
+    common::{ApplicationRuntimeContext, WasmRuntimeContext},
     WasmExecutionError,
 };
 use futures::future::BoxFuture;
@@ -127,14 +127,14 @@ impl<'future, Output> HostFuture<'future, Output> {
 }
 
 /// A future implemented in a WASM module.
-pub enum GuestFuture<Future, Runtime>
+pub enum GuestFuture<Future, Application>
 where
-    Runtime: common::Runtime,
+    Application: ApplicationRuntimeContext,
 {
     /// The WASM module failed to create an instance of the future.
     ///
     /// The error will be returned when this [`GuestFuture`] is polled.
-    FailedToCreate(Option<Runtime::Error>),
+    FailedToCreate(Option<Application::Error>),
 
     /// The WASM future type and the runtime context to poll it.
     Active {
@@ -142,21 +142,21 @@ where
         future: Future,
 
         /// Types necessary to call the guest WASM module in order to poll the future.
-        context: WasmRuntimeContext<Runtime>,
+        context: WasmRuntimeContext<Application>,
     },
 }
 
-impl<Future, Runtime> GuestFuture<Future, Runtime>
+impl<Future, Application> GuestFuture<Future, Application>
 where
-    Runtime: common::Runtime,
+    Application: ApplicationRuntimeContext,
 {
     /// Create a [`GuestFuture`] instance with `creation_result` of a future resource type.
     ///
     /// If the guest resource type could not be created by the WASM module, the error is stored so
     /// that it can be returned when the [`GuestFuture`] is polled.
     pub fn new(
-        creation_result: Result<Future, Runtime::Error>,
-        context: WasmRuntimeContext<Runtime>,
+        creation_result: Result<Future, Application::Error>,
+        context: WasmRuntimeContext<Application>,
     ) -> Self {
         match creation_result {
             Ok(future) => GuestFuture::Active { future, context },
@@ -165,14 +165,13 @@ where
     }
 }
 
-impl<InnerFuture, Runtime> Future for GuestFuture<InnerFuture, Runtime>
+impl<InnerFuture, Application> Future for GuestFuture<InnerFuture, Application>
 where
-    InnerFuture: GuestFutureInterface<Runtime> + Unpin,
-    Runtime: common::Runtime,
-    Runtime::Application: Unpin,
-    Runtime::Store: Unpin,
-    Runtime::StorageGuard: Unpin,
-    Runtime::Error: Unpin,
+    InnerFuture: GuestFutureInterface<Application> + Unpin,
+    Application: ApplicationRuntimeContext + Unpin,
+    Application::Store: Unpin,
+    Application::StorageGuard: Unpin,
+    Application::Error: Unpin,
 {
     type Output = Result<InnerFuture::Output, WasmExecutionError>;
 
@@ -197,9 +196,9 @@ where
 }
 
 /// Interface to poll a future implemented in a WASM module.
-pub trait GuestFutureInterface<Runtime>
+pub trait GuestFutureInterface<Application>
 where
-    Runtime: common::Runtime,
+    Application: ApplicationRuntimeContext,
 {
     /// The output of the guest future.
     type Output;
@@ -209,8 +208,8 @@ where
     /// May return an [`WasmExecutionError`] if the guest WASM module panics, for example.
     fn poll(
         &self,
-        application: &Runtime::Application,
-        store: &mut Runtime::Store,
+        application: &Application,
+        store: &mut Application::Store,
     ) -> Poll<Result<Self::Output, WasmExecutionError>>;
 }
 

@@ -24,7 +24,7 @@ mod conversions_to_wit;
 
 use super::{
     async_boundary::{ContextForwarder, HostFuture, HostFutureQueue},
-    common::{self, Runtime, WasmRuntimeContext},
+    common::{self, ApplicationRuntimeContext, WasmRuntimeContext},
     WasmApplication, WasmExecutionError,
 };
 use crate::{CallResult, ExecutionError, QueryableStorage, SessionId, WritableStorage};
@@ -42,8 +42,7 @@ pub struct Contract<'storage> {
     _lifetime: PhantomData<&'storage ()>,
 }
 
-impl<'storage> Runtime for Contract<'storage> {
-    type Application = Self;
+impl<'storage> ApplicationRuntimeContext for Contract<'storage> {
     type Store = Store;
     type StorageGuard = StorageGuard<'storage, &'static dyn WritableStorage>;
     type Error = RuntimeError;
@@ -55,8 +54,7 @@ pub struct Service<'storage> {
     _lifetime: PhantomData<&'storage ()>,
 }
 
-impl<'storage> Runtime for Service<'storage> {
-    type Application = Self;
+impl<'storage> ApplicationRuntimeContext for Service<'storage> {
     type Store = Store;
     type StorageGuard = StorageGuard<'storage, &'static dyn QueryableStorage>;
     type Error = RuntimeError;
@@ -125,7 +123,7 @@ impl WasmApplication {
     }
 }
 
-impl<'storage> common::Contract<Self> for Contract<'storage> {
+impl<'storage> common::Contract for Contract<'storage> {
     fn initialize_new(
         &self,
         store: &mut Store,
@@ -228,7 +226,7 @@ impl<'storage> common::Contract<Self> for Contract<'storage> {
     }
 }
 
-impl<'storage> common::Service<Self> for Service<'storage> {
+impl<'storage> common::Service for Service<'storage> {
     fn query_application_new(
         &self,
         store: &mut Store,

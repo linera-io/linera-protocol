@@ -20,143 +20,140 @@ use crate::{
 };
 use std::{future::Future, task::Poll};
 
-/// Types that are specific to a WebAssembly runtime.
-pub trait Runtime {
-    /// How to call the application interface.
-    type Application;
+/// Types that are specific to the context of an application ready to be executedy by a WebAssembly
+/// runtime.
+pub trait ApplicationRuntimeContext {
+    /// The error emitted by the runtime when the application traps (panics).
+    type Error: Into<WasmExecutionError>;
 
     /// How to store the application's in-memory state.
     type Store;
 
     /// How to clean up the system storage interface after the application has executed.
     type StorageGuard;
-
-    /// The error emitted by the runtime when the application traps (panics).
-    type Error: Into<WasmExecutionError>;
 }
 
 /// Common interface to calling a user contract in a WebAssembly module.
-pub trait Contract<R: Runtime> {
+pub trait Contract: ApplicationRuntimeContext {
     /// Create a new future for the user application to initialize itself on the owner chain.
     fn initialize_new(
         &self,
-        store: &mut R::Store,
+        store: &mut Self::Store,
         context: contract::OperationContext,
         argument: &[u8],
-    ) -> Result<contract::Initialize, R::Error>;
+    ) -> Result<contract::Initialize, Self::Error>;
 
     /// Poll a user contract future that's initializing the application.
     fn initialize_poll(
         &self,
-        store: &mut R::Store,
+        store: &mut Self::Store,
         future: &contract::Initialize,
-    ) -> Result<contract::PollExecutionResult, R::Error>;
+    ) -> Result<contract::PollExecutionResult, Self::Error>;
 
     /// Create a new future for the user application to execute an operation.
     fn execute_operation_new(
         &self,
-        store: &mut R::Store,
+        store: &mut Self::Store,
         context: contract::OperationContext,
         operation: &[u8],
-    ) -> Result<contract::ExecuteOperation, R::Error>;
+    ) -> Result<contract::ExecuteOperation, Self::Error>;
 
     /// Poll a user contract future that's executing an operation.
     fn execute_operation_poll(
         &self,
-        store: &mut R::Store,
+        store: &mut Self::Store,
         future: &contract::ExecuteOperation,
-    ) -> Result<contract::PollExecutionResult, R::Error>;
+    ) -> Result<contract::PollExecutionResult, Self::Error>;
 
     /// Create a new future for the user contract to execute an effect.
     fn execute_effect_new(
         &self,
-        store: &mut R::Store,
+        store: &mut Self::Store,
         context: contract::EffectContext,
         effect: &[u8],
-    ) -> Result<contract::ExecuteEffect, R::Error>;
+    ) -> Result<contract::ExecuteEffect, Self::Error>;
 
     /// Poll a user contract future that's executing an effect.
     fn execute_effect_poll(
         &self,
-        store: &mut R::Store,
+        store: &mut Self::Store,
         future: &contract::ExecuteEffect,
-    ) -> Result<contract::PollExecutionResult, R::Error>;
+    ) -> Result<contract::PollExecutionResult, Self::Error>;
 
     /// Create a new future for the user contract to handle a call from another contract.
     fn call_application_new(
         &self,
-        store: &mut R::Store,
+        store: &mut Self::Store,
         context: contract::CalleeContext,
         argument: &[u8],
         forwarded_sessions: &[contract::SessionId],
-    ) -> Result<contract::CallApplication, R::Error>;
+    ) -> Result<contract::CallApplication, Self::Error>;
 
     /// Poll a user contract future that's handling a call from another contract.
     fn call_application_poll(
         &self,
-        store: &mut R::Store,
+        store: &mut Self::Store,
         future: &contract::CallApplication,
-    ) -> Result<contract::PollCallApplication, R::Error>;
+    ) -> Result<contract::PollCallApplication, Self::Error>;
 
     /// Create a new future for the user contract to handle a session call from another
     /// contract.
     fn call_session_new(
         &self,
-        store: &mut R::Store,
+        store: &mut Self::Store,
         context: contract::CalleeContext,
         session: contract::SessionParam,
         argument: &[u8],
         forwarded_sessions: &[contract::SessionId],
-    ) -> Result<contract::CallSession, R::Error>;
+    ) -> Result<contract::CallSession, Self::Error>;
 
     /// Poll a user contract future that's handling a session call from another contract.
     fn call_session_poll(
         &self,
-        store: &mut R::Store,
+        store: &mut Self::Store,
         future: &contract::CallSession,
-    ) -> Result<contract::PollCallSession, R::Error>;
+    ) -> Result<contract::PollCallSession, Self::Error>;
 }
 
-pub trait Service<R: Runtime> {
+pub trait Service: ApplicationRuntimeContext {
     /// Create a new future for the user application to handle a query.
     fn query_application_new(
         &self,
-        store: &mut R::Store,
+        store: &mut Self::Store,
         context: service::QueryContext,
         argument: &[u8],
-    ) -> Result<service::QueryApplication, R::Error>;
+    ) -> Result<service::QueryApplication, Self::Error>;
 
     /// Poll a user service future that's handling a query.
     fn query_application_poll(
         &self,
-        store: &mut R::Store,
+        store: &mut Self::Store,
         future: &service::QueryApplication,
-    ) -> Result<service::PollQuery, R::Error>;
+    ) -> Result<service::PollQuery, Self::Error>;
 }
 
 /// Wrapper around all types necessary to call an asynchronous method of a WASM application.
-pub struct WasmRuntimeContext<R>
+pub struct WasmRuntimeContext<A>
 where
-    R: Runtime,
+    A: ApplicationRuntimeContext,
 {
     /// Where to store the async task context to later be reused in async calls from the guest WASM
     /// module.
     pub(crate) context_forwarder: ContextForwarder,
 
     /// The application type.
-    pub(crate) application: R::Application,
+    pub(crate) application: A,
 
     /// The application's memory state.
-    pub(crate) store: R::Store,
+    pub(crate) store: A::Store,
 
     /// Guard type to clean up any host state after the call to the WASM application finishes.
-    pub(crate) _storage_guard: R::StorageGuard,
+    pub(crate) _storage_guard: A::StorageGuard,
 }
 
-impl<R> WasmRuntimeContext<R>
+impl<A> WasmRuntimeContext<A>
 where
-    R: Runtime,
-    R::Application: Contract<R>,
+    A: Contract,
 {
     /// Call the guest WASM module's implementation of
     /// [`UserApplication::initialize`][`linera_execution::UserApplication::initialize`].
@@ -174,7 +171,7 @@ where
         mut self,
         context: &OperationContext,
         argument: &[u8],
-    ) -> GuestFuture<Initialize, R> {
+    ) -> GuestFuture<Initialize, A> {
         let future = self
             .application
             .initialize_new(&mut self.store, (*context).into(), argument);
@@ -198,7 +195,7 @@ where
         mut self,
         context: &OperationContext,
         operation: &[u8],
-    ) -> GuestFuture<ExecuteOperation, R> {
+    ) -> GuestFuture<ExecuteOperation, A> {
         let future =
             self.application
                 .execute_operation_new(&mut self.store, (*context).into(), operation);
@@ -222,7 +219,7 @@ where
         mut self,
         context: &EffectContext,
         effect: &[u8],
-    ) -> GuestFuture<ExecuteEffect, R> {
+    ) -> GuestFuture<ExecuteEffect, A> {
         let future =
             self.application
                 .execute_effect_new(&mut self.store, (*context).into(), effect);
@@ -248,7 +245,7 @@ where
         context: &CalleeContext,
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
-    ) -> GuestFuture<CallApplication, R> {
+    ) -> GuestFuture<CallApplication, A> {
         let forwarded_sessions: Vec<_> = forwarded_sessions
             .into_iter()
             .map(contract::SessionId::from)
@@ -288,12 +285,11 @@ where
         forwarded_sessions: Vec<SessionId>,
     ) -> impl Future<Output = Result<SessionCallResult, WasmExecutionError>> + 'session_data
     where
-        R: 'session_data,
-        R::Application: Unpin,
-        R::Store: Unpin,
-        R::StorageGuard: Unpin,
-        R::Error: Unpin,
-        WasmExecutionError: From<R::Error>,
+        A: Unpin + 'session_data,
+        A::Store: Unpin,
+        A::StorageGuard: Unpin,
+        A::Error: Unpin,
+        WasmExecutionError: From<A::Error>,
     {
         let forwarded_sessions: Vec<_> = forwarded_sessions
             .into_iter()
@@ -323,10 +319,9 @@ where
     }
 }
 
-impl<R> WasmRuntimeContext<R>
+impl<A> WasmRuntimeContext<A>
 where
-    R: Runtime,
-    R::Application: Service<R>,
+    A: Service,
 {
     /// Call the guest WASM module's implementation of
     /// [`UserApplication::query_application`][`linera_execution::UserApplication::query_application`].
@@ -344,7 +339,7 @@ where
         mut self,
         context: &QueryContext,
         argument: &[u8],
-    ) -> GuestFuture<QueryApplication, R> {
+    ) -> GuestFuture<QueryApplication, A> {
         let future =
             self.application
                 .query_application_new(&mut self.store, (*context).into(), argument);
@@ -361,18 +356,17 @@ where
 macro_rules! impl_guest_future_interface {
     ( $( $future:ident : $poll_func:ident -> $poll_type:ident -> $trait:ident => $output:ty ),* $(,)* ) => {
         $(
-            impl<'storage, R> GuestFutureInterface<R> for $future
+            impl<'storage, A> GuestFutureInterface<A> for $future
             where
-                R: Runtime,
-                R::Application: $trait<R>,
-                WasmExecutionError: From<R::Error>,
+                A: $trait,
+                WasmExecutionError: From<A::Error>,
             {
                 type Output = $output;
 
                 fn poll(
                     &self,
-                    application: &R::Application,
-                    store: &mut R::Store,
+                    application: &A,
+                    store: &mut A::Store,
                 ) -> Poll<Result<Self::Output, WasmExecutionError>> {
                     match application.$poll_func(store, self)? {
                         $poll_type::Ready(Ok(result)) => Poll::Ready(Ok(result.into())),
