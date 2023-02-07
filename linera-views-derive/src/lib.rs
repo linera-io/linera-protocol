@@ -185,6 +185,7 @@ fn generate_hash_view_code(input: ItemStruct) -> TokenStream2 {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn generate_crypto_hash_code(input: ItemStruct) -> TokenStream2 {
     let struct_name = input.ident;
     let generics = input.generics;
@@ -239,6 +240,7 @@ pub fn derive_container_view(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_derive(HashableContainerView)]
+#[cfg(not(target_arch = "wasm32"))]
 pub fn derive_hash_container_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
     let mut stream = generate_view_code(input.clone());
@@ -413,6 +415,7 @@ pub mod tests {
 
     #[test]
     #[rustfmt::skip]
+    #[cfg(not(target_arch = "wasm32"))]
     fn test_generate_crypto_hash_code() {
         let input: ItemStruct = parse_quote!(
             struct TestView<C> {
