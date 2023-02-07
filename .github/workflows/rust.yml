@@ -105,9 +105,6 @@ jobs:
         cd linera-examples
         cargo fmt -- --check --config unstable_features=true --config imports_granularity=Crate
         cargo clippy --all-targets --all-features --target wasm32-unknown-unknown
-    - name: Run clippy using Wasmer
+    - name: Run clippy
       run: |
-        cargo clippy --all-targets --no-default-features --features crypto,wasmer --tests
-    - name: Run clippy using Wasmtime
-      run: |
-        cargo clippy --all-targets --no-default-features --features crypto,wasmtime --tests
+        cargo clippy --all-targets --all-features --tests
