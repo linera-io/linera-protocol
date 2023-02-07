@@ -5,6 +5,7 @@
 use ed25519_dalek as dalek;
 use ed25519_dalek::{Signer, Verifier};
 use generic_array::typenum::Unsigned;
+pub use linera_sdk::crypto::BcsSignable;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
@@ -320,11 +321,6 @@ pub trait HasTypeName {
 /// * We use `serde_name` to extract a seed from the name of structs and enums.
 /// * We use `BCS` to generate canonical bytes suitable for hashing.
 pub trait BcsHashable: Serialize + serde::de::DeserializeOwned {}
-
-/// Activate the blanket implementation of `Signable` based on serde and BCS.
-/// * We use `serde_name` to extract a seed from the name of structs and enums.
-/// * We use `BCS` to generate canonical bytes suitable for signing.
-pub trait BcsSignable: Serialize + serde::de::DeserializeOwned {}
 
 impl<T: BcsSignable> BcsHashable for T {}
 

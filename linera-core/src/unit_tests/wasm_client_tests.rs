@@ -12,10 +12,12 @@ use crate::client::client_tests::{
     MakeDynamoDbStoreClient, MakeMemoryStoreClient, MakeRocksdbStoreClient, StoreBuilder,
     TestBuilder, GUARD,
 };
+use fungible::{AccountOwner, SignedTransfer, SignedTransferPayload, Transfer};
 use linera_base::data_types::*;
 use linera_execution::{system::Balance, ApplicationId, Bytecode, Operation, Query, Response};
 use linera_storage::Store;
 use linera_views::views::ViewError;
+use std::{collections::BTreeMap, iter};
 use test_log::test;
 
 #[test(tokio::test)]
@@ -94,5 +96,92 @@ where
     let expected = 15_u128;
     let expected_bytes = bcs::to_bytes(&expected)?;
     assert!(matches!(response, Response::User(bytes) if bytes == expected_bytes));
+    Ok(())
+}
+
+#[test(tokio::test)]
+async fn test_memory_cross_chain_message() -> Result<(), anyhow::Error> {
+    run_test_cross_chain_message(MakeMemoryStoreClient).await
+}
+
+#[test(tokio::test)]
+async fn test_rocksdb_cross_chain_message() -> Result<(), anyhow::Error> {
+    let _lock = GUARD.lock().await;
+    run_test_cross_chain_message(MakeRocksdbStoreClient::default()).await
+}
+
+#[test(tokio::test)]
+#[ignore]
+async fn test_dynamo_db_cross_chain_message() -> Result<(), anyhow::Error> {
+    run_test_cross_chain_message(MakeDynamoDbStoreClient::default()).await
+}
+
+async fn run_test_cross_chain_message<B>(store_builder: B) -> Result<(), anyhow::Error>
+where
+    B: StoreBuilder,
+    ViewError: From<<B::Store as Store>::ContextError>,
+{
+    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
+    let mut sender = builder
+        .add_initial_chain(ChainDescription::Root(0), Balance::from(3))
+        .await?;
+    let mut receiver = builder
+        .add_initial_chain(ChainDescription::Root(1), Balance::from(0))
+        .await?;
+
+    let (contract_path, service_path) = linera_execution::wasm_test::get_fungible_bytecode_paths()?;
+    let (bytecode_id, cert) = sender
+        .publish_bytecode(
+            Bytecode::load_from_file(contract_path).await?,
+            Bytecode::load_from_file(service_path).await?,
+        )
+        .await?;
+
+    // Receive our own cert to broadcast the bytecode location.
+    sender.receive_certificate(cert).await?;
+    sender.process_inbox().await?;
+
+    let sender_kp = linera_base::crypto::KeyPair::generate();
+    let receiver_kp = linera_base::crypto::KeyPair::generate();
+
+    let accounts: BTreeMap<AccountOwner, u128> = iter::once((
+        AccountOwner::Key(bcs::from_bytes(&bcs::to_bytes(&sender_kp.public())?)?),
+        1_000_000,
+    ))
+    .collect();
+    let initial_value_bytes = bcs::to_bytes(&accounts)?;
+    let (application_id, _) = sender
+        .create_application(bytecode_id, initial_value_bytes, vec![])
+        .await?;
+
+    let payload = SignedTransferPayload {
+        token_id: bcs::from_bytes(&bcs::to_bytes(&application_id)?)?,
+        source_chain: bcs::from_bytes(&bcs::to_bytes(&sender.chain_id())?)?,
+        nonce: Default::default(),
+        transfer: Transfer {
+            destination_account: AccountOwner::Key(bcs::from_bytes(&bcs::to_bytes(
+                &receiver_kp.public(),
+            )?)?),
+            destination_chain: bcs::from_bytes(&bcs::to_bytes(&receiver.chain_id())?)?,
+            amount: 100,
+        },
+    };
+    let transfer = SignedTransfer {
+        source: bcs::from_bytes(&bcs::to_bytes(&sender_kp.public())?)?,
+        signature: bcs::from_bytes(&bcs::to_bytes(&linera_base::crypto::Signature::new(
+            &payload, &sender_kp,
+        ))?)?,
+        payload,
+    };
+    let user_operation = bcs::to_bytes(&transfer)?;
+    let cert = sender
+        .execute_operation(
+            ApplicationId::User(application_id),
+            Operation::User(user_operation),
+        )
+        .await?;
+
+    receiver.receive_certificate(cert).await?;
+
     Ok(())
 }

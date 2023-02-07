@@ -220,6 +220,14 @@ pub mod test {
         ))
     }
 
+    pub fn get_fungible_bytecode_paths() -> Result<(&'static str, &'static str), std::io::Error> {
+        build_applications()?;
+        Ok((
+            "../linera-examples/target/wasm32-unknown-unknown/release/fungible_contract.wasm",
+            "../linera-examples/target/wasm32-unknown-unknown/release/fungible_service.wasm",
+        ))
+    }
+
     pub async fn build_counter_application() -> Result<WasmApplication, std::io::Error> {
         let (contract, service) = get_counter_bytecode_paths()?;
         WasmApplication::from_files(contract, service).await

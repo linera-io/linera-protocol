@@ -1672,6 +1672,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fungible"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bcs",
+ "linera-sdk",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
 name = "futures"
 version = "0.3.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2274,6 +2285,7 @@ dependencies = [
  "ed25519-dalek",
  "generic-array",
  "hex",
+ "linera-sdk",
  "proptest",
  "rand 0.7.3",
  "serde",
@@ -2308,10 +2320,12 @@ dependencies = [
  "bcs",
  "dashmap",
  "env_logger",
+ "fungible",
  "futures",
  "linera-base",
  "linera-chain",
  "linera-execution",
+ "linera-sdk",
  "linera-storage",
  "linera-views",
  "log",
