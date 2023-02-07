@@ -331,7 +331,9 @@ where
     let certs = receiver.process_inbox().await?;
     assert_eq!(certs.len(), 1);
     let messages = &certs[0].value.block().incoming_messages;
-    assert!(messages.iter().any(|msg| matches!(
+    // The new block should _not_ contain another `RegisterApplications` effect, because the
+    // application is already registered.
+    assert!(!messages.iter().any(|msg| matches!(
         &msg.event.effect,
         Effect::System(SystemEffect::RegisterApplications { applications })
         if applications.iter().any(|app| app.bytecode_location.certificate_hash == pub_cert.hash)
