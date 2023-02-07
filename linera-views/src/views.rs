@@ -74,6 +74,9 @@ pub enum ViewError {
     #[error("Storage operation error in {backend}: {error}")]
     ContextError { backend: String, error: String },
 
+    #[error("Following error occurs in wasm code: {0}")]
+    WasmHostGuestError(String),
+
     /// FIXME(#148): This belongs to a future `linera_storage::StoreError`.
     #[error("Entry does not exist in memory: {0}")]
     NotFound(String),

@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    execution::ExecutionStateView, ApplicationStateNotLocked, CallResult, ExecutionError,
-    ExecutionResult, ExecutionRuntimeContext, NewSession, QueryableStorage, ReadableStorage,
-    SessionId, UserApplicationCode, UserApplicationId, WritableStorage,
+    execution::ExecutionStateView, CallResult, ExecutionError, ExecutionResult,
+    ExecutionRuntimeContext, NewSession, QueryableStorage, ReadableStorage, SessionId,
+    UserApplicationCode, UserApplicationId, WritableStorage,
 };
 use async_trait::async_trait;
 use linera_base::{
@@ -12,7 +12,8 @@ use linera_base::{
     ensure,
 };
 use linera_views::{
-    common::Context,
+    common::{Batch, Context},
+    key_value_store_view::KeyValueStoreView,
     register_view::RegisterView,
     views::{View, ViewError},
 };
@@ -36,6 +37,8 @@ pub(crate) struct ExecutionRuntime<'a, C, const WRITABLE: bool> {
     session_manager: Arc<Mutex<&'a mut SessionManager>>,
     /// Track active (i.e. locked) applications for which re-entrancy is disallowed.
     active_user_states: Arc<Mutex<ActiveUserStates<C>>>,
+    /// Track active (i.e. locked) applications for which re-entrancy is disallowed.
+    active_userkv_states: Arc<Mutex<ActiveUserkvStates<C>>>,
     /// Track active (i.e. locked) sessions for which re-entrancy is disallowed.
     active_sessions: Arc<Mutex<ActiveSessions>>,
     /// Accumulate the externally visible results (e.g. cross-chain messages) of applications.
@@ -44,6 +47,9 @@ pub(crate) struct ExecutionRuntime<'a, C, const WRITABLE: bool> {
 
 type ActiveUserStates<C> =
     BTreeMap<UserApplicationId, OwnedRwLockWriteGuard<RegisterView<C, Vec<u8>>>>;
+
+type ActiveUserkvStates<C> =
+    BTreeMap<UserApplicationId, OwnedRwLockWriteGuard<KeyValueStoreView<C>>>;
 
 type ActiveSessions = BTreeMap<SessionId, OwnedMutexGuard<SessionState>>;
 
@@ -83,6 +89,7 @@ where
             execution_state: Arc::new(Mutex::new(execution_state)),
             session_manager: Arc::new(Mutex::new(session_manager)),
             active_user_states: Arc::default(),
+            active_userkv_states: Arc::default(),
             active_sessions: Arc::default(),
             execution_results: Arc::new(Mutex::new(execution_results)),
         }
@@ -110,6 +117,12 @@ where
         self.active_user_states
             .try_lock()
             .expect("single-threaded execution should not lock `active_user_states`")
+    }
+
+    fn active_userkv_states_mut(&self) -> MutexGuard<'_, ActiveUserkvStates<C>> {
+        self.active_userkv_states
+            .try_lock()
+            .expect("single-threaded execution should not lock `active_userkv_states`")
     }
 
     fn active_sessions_mut(&self) -> MutexGuard<'_, ActiveSessions> {
@@ -296,6 +309,61 @@ where
             .to_vec();
         Ok(state)
     }
+
+    async fn lock_userkv_state(&self) -> Result<(), ExecutionError> {
+        let view = self
+            .execution_state_mut()
+            .users_kv
+            .try_load_entry_mut(self.application_id())
+            .await?;
+        self.active_userkv_states_mut()
+            .insert(self.application_id(), view);
+        Ok(())
+    }
+
+    async fn unlock_userkv_state(&self) -> Result<(), ExecutionError> {
+        // Make the view available again.
+        match self
+            .active_userkv_states_mut()
+            .remove(&self.application_id())
+        {
+            Some(_) => Ok(()),
+            None => Err(ExecutionError::ApplicationStateNotLocked),
+        }
+    }
+
+    async fn pass_userkv_read_key_bytes(
+        &self,
+        key: Vec<u8>,
+    ) -> Result<Option<Vec<u8>>, ExecutionError> {
+        // read a key from the KV store
+        match self.active_userkv_states_mut().get(&self.application_id()) {
+            Some(view) => Ok(view.get(&key).await?),
+            None => Err(ExecutionError::ApplicationStateNotLocked),
+        }
+    }
+
+    async fn pass_userkv_find_keys_by_prefix(
+        &self,
+        key_prefix: Vec<u8>,
+    ) -> Result<Vec<Vec<u8>>, ExecutionError> {
+        // Read keys matching a prefix. We have to collect since iterators do not pass the wit barrier
+        match self.active_userkv_states_mut().get(&self.application_id()) {
+            Some(view) => Ok(view.find_keys_by_prefix(&key_prefix).await?),
+            None => Err(ExecutionError::ApplicationStateNotLocked),
+        }
+    }
+
+    async fn pass_userkv_find_key_values_by_prefix(
+        &self,
+        key_prefix: Vec<u8>,
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError> {
+        // Read key/values matching a prefix. We have to collect since iterators do not pass the wit barrier
+        match self.active_userkv_states_mut().get(&self.application_id()) {
+            Some(view) => Ok(view.find_key_values_by_prefix(&key_prefix).await?),
+            None => Err(ExecutionError::ApplicationStateNotLocked),
+        }
+    }
 }
 
 #[async_trait]
@@ -346,7 +414,7 @@ where
         Ok(state)
     }
 
-    fn save_and_unlock_my_state(&self, state: Vec<u8>) -> Result<(), ApplicationStateNotLocked> {
+    fn save_and_unlock_my_state(&self, state: Vec<u8>) -> Result<(), ExecutionError> {
         // Make the view available again.
         match self.active_user_states_mut().remove(&self.application_id()) {
             Some(mut view) => {
@@ -354,12 +422,27 @@ where
                 view.set(state);
                 Ok(())
             }
-            None => Err(ApplicationStateNotLocked),
+            None => Err(ExecutionError::ApplicationStateNotLocked),
         }
     }
 
     fn unlock_my_state(&self) {
         self.active_user_states_mut().remove(&self.application_id());
+    }
+
+    async fn write_batch_and_unlock(&self, batch: Batch) -> Result<(), ExecutionError> {
+        // Make the view available again.
+        match self
+            .active_userkv_states_mut()
+            .remove(&self.application_id())
+        {
+            Some(mut view) => {
+                // Write the batch in the view
+                view.write_batch(batch).await?;
+                Ok(())
+            }
+            None => Err(ExecutionError::ApplicationStateNotLocked),
+        }
     }
 
     async fn try_call_application(

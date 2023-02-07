@@ -10,6 +10,7 @@ use crate::{
 };
 use linera_base::{data_types::ChainId, ensure};
 use linera_views::{
+    key_value_store_view::KeyValueStoreView,
     reentrant_collection_view::ReentrantCollectionView,
     register_view::RegisterView,
     views::{View, ViewError},
@@ -32,6 +33,8 @@ pub struct ExecutionStateView<C> {
     pub system: SystemExecutionStateView<C>,
     /// User applications.
     pub users: ReentrantCollectionView<C, UserApplicationId, RegisterView<C, Vec<u8>>>,
+    /// User applications (KV system).
+    pub users_kv: ReentrantCollectionView<C, UserApplicationId, KeyValueStoreView<C>>,
 }
 
 #[cfg(any(test, feature = "test"))]
