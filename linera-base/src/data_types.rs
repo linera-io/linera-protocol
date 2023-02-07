@@ -3,14 +3,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::crypto::{BcsHashable, CryptoHash, PublicKey};
-use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
-use std::{fmt, str::FromStr, time::SystemTime};
+use std::{str::FromStr, time::SystemTime};
 use thiserror::Error;
 
 use crate::crypto::CryptoError;
+#[cfg(not(target_arch = "wasm32"))]
+use std::fmt;
 #[cfg(any(test, feature = "test"))]
 use test_strategy::Arbitrary;
+
+#[cfg(not(target_arch = "wasm32"))]
+use chrono::NaiveDateTime;
 
 /// A block height to identify blocks in a chain.
 #[derive(
@@ -62,6 +66,7 @@ impl From<u64> for Timestamp {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl fmt::Display for Timestamp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(date_time) = NaiveDateTime::from_timestamp_opt(
