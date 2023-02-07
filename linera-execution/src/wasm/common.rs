@@ -4,21 +4,18 @@
 //! Runtime independent code for interfacing with user applications in WebAssembly modules.
 
 use super::{
-    async_boundary::{ContextForwarder, GuestFuture, GuestFutureInterface},
+    async_boundary::{ContextForwarder, GuestFuture},
     runtime::{
-        contract::{
-            self, CallApplication, CallSession, ExecuteEffect, ExecuteOperation, Initialize,
-            PollCallApplication, PollCallSession, PollExecutionResult,
-        },
-        service::{self, PollQuery, QueryApplication},
+        contract::{self, CallApplication, ExecuteEffect, ExecuteOperation, Initialize},
+        service::{self, QueryApplication},
     },
     WasmExecutionError,
 };
 use crate::{
-    system::Balance, ApplicationCallResult, CalleeContext, EffectContext, OperationContext,
-    QueryContext, RawExecutionResult, SessionCallResult, SessionId,
+    system::Balance, CalleeContext, EffectContext, OperationContext, QueryContext,
+    SessionCallResult, SessionId,
 };
-use std::{future::Future, task::Poll};
+use std::future::Future;
 
 /// Types that are specific to the context of an application ready to be executedy by a WebAssembly
 /// runtime.
@@ -346,48 +343,6 @@ where
 
         GuestFuture::new(future, self)
     }
-}
-
-/// Implement [`GuestFutureInterface`] for a `future` type implemented by a guest WASM module.
-///
-/// The future is then polled by calling the guest `poll_func`. The return type of that function is
-/// a `poll_type` that must be convertible into the `output` type wrapped in a
-/// `Poll<Result<_, _>>`.
-macro_rules! impl_guest_future_interface {
-    ( $( $future:ident : $poll_func:ident -> $poll_type:ident -> $trait:ident => $output:ty ),* $(,)* ) => {
-        $(
-            impl<'storage, A> GuestFutureInterface<A> for $future
-            where
-                A: $trait,
-                WasmExecutionError: From<A::Error>,
-            {
-                type Output = $output;
-
-                fn poll(
-                    &self,
-                    application: &A,
-                    store: &mut A::Store,
-                ) -> Poll<Result<Self::Output, WasmExecutionError>> {
-                    match application.$poll_func(store, self)? {
-                        $poll_type::Ready(Ok(result)) => Poll::Ready(Ok(result.into())),
-                        $poll_type::Ready(Err(message)) => {
-                            Poll::Ready(Err(WasmExecutionError::UserApplication(message)))
-                        }
-                        $poll_type::Pending => Poll::Pending,
-                    }
-                }
-            }
-        )*
-    }
-}
-
-impl_guest_future_interface! {
-    Initialize: initialize_poll -> PollExecutionResult -> Contract => RawExecutionResult<Vec<u8>>,
-    ExecuteOperation: execute_operation_poll -> PollExecutionResult -> Contract => RawExecutionResult<Vec<u8>>,
-    ExecuteEffect: execute_effect_poll -> PollExecutionResult -> Contract => RawExecutionResult<Vec<u8>>,
-    CallApplication: call_application_poll -> PollCallApplication -> Contract => ApplicationCallResult,
-    CallSession: call_session_poll -> PollCallSession -> Contract => (SessionCallResult, Vec<u8>),
-    QueryApplication: query_application_poll -> PollQuery -> Service => Vec<u8>,
 }
 
 impl Balance {

@@ -19,6 +19,8 @@ wit_bindgen_host_wasmtime_rust::import!("../linera-sdk/service.wit");
 mod conversions_from_wit;
 #[path = "conversions_to_wit.rs"]
 mod conversions_to_wit;
+#[path = "guest_futures.rs"]
+mod guest_futures;
 
 use self::{
     contract::ContractData,
