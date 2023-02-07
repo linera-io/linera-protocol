@@ -19,6 +19,7 @@ mod runtime;
 #[path = "wasmtime.rs"]
 mod runtime;
 
+use self::common::WasmRuntimeContext;
 use crate::{
     ApplicationCallResult, Bytecode, CalleeContext, EffectContext, ExecutionError,
     OperationContext, QueryContext, QueryableStorage, RawExecutionResult, SessionCallResult,
@@ -52,6 +53,38 @@ impl WasmApplication {
             contract_bytecode: Bytecode::load_from_file(contract_bytecode_file).await?,
             service_bytecode: Bytecode::load_from_file(service_bytecode_file).await?,
         })
+    }
+
+    /// Prepare a runtime instance to call into the WASM contract.
+    fn prepare_contract_runtime<'storage>(
+        &self,
+        storage: &'storage dyn WritableStorage,
+    ) -> Result<WasmRuntimeContext<impl common::Contract + Unpin + 'storage>, WasmExecutionError>
+    {
+        #[cfg(feature = "wasmtime")]
+        {
+            self.prepare_contract_runtime_with_wasmtime(storage)
+        }
+        #[cfg(all(feature = "wasmer", not(feature = "wasmtime")))]
+        {
+            self.prepare_contract_runtime_with_wasmer(storage)
+        }
+    }
+
+    /// Prepare a runtime instance to call into the WASM service.
+    fn prepare_service_runtime<'storage>(
+        &self,
+        storage: &'storage dyn QueryableStorage,
+    ) -> Result<WasmRuntimeContext<impl common::Service + Unpin + 'storage>, WasmExecutionError>
+    {
+        #[cfg(feature = "wasmtime")]
+        {
+            self.prepare_service_runtime_with_wasmtime(storage)
+        }
+        #[cfg(all(feature = "wasmer", not(feature = "wasmtime")))]
+        {
+            self.prepare_service_runtime_with_wasmer(storage)
+        }
     }
 }
 

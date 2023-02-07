@@ -64,7 +64,7 @@ impl<'storage> ApplicationRuntimeContext for Service<'storage> {
 
 impl WasmApplication {
     /// Prepare a runtime instance to call into the WASM contract.
-    pub fn prepare_contract_runtime<'storage>(
+    pub fn prepare_contract_runtime_with_wasmer<'storage>(
         &self,
         storage: &'storage dyn WritableStorage,
     ) -> Result<WasmRuntimeContext<Contract<'storage>>, WasmExecutionError> {
@@ -95,7 +95,7 @@ impl WasmApplication {
     }
 
     /// Prepare a runtime instance to call into the WASM service.
-    pub fn prepare_service_runtime<'storage>(
+    pub fn prepare_service_runtime_with_wasmer<'storage>(
         &self,
         storage: &'storage dyn QueryableStorage,
     ) -> Result<WasmRuntimeContext<Service<'storage>>, WasmExecutionError> {
