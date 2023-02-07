@@ -3,7 +3,12 @@
 
 use super::writable_system as system;
 use crate::{ApplicationId, ChainId, SessionId, SystemBalance, Timestamp};
+use async_trait::async_trait;
 use futures::future;
+use linera_views::{
+    common::{Batch, ContextFromDb, KeyValueOperations, WriteOperation},
+    views::{ContainerView, View, ViewError},
+};
 use serde::{de::DeserializeOwned, Serialize};
 use std::{fmt, future::Future};
 
@@ -44,6 +49,109 @@ where
     State: Serialize,
 {
     system::store_and_unlock(&bcs::to_bytes(&state).expect("State serialization failed"));
+}
+
+#[derive(Default, Clone)]
+pub struct WasmClient;
+
+impl WasmClient {
+    async fn find_keys_by_prefix_load(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, ViewError> {
+        let future = system::FindKeys::new(key_prefix);
+        future::poll_fn(|_context| future.poll().into()).await
+    }
+
+    async fn find_key_values_by_prefix_load(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ViewError> {
+        let future = system::FindKeyValues::new(key_prefix);
+        future::poll_fn(|_context| future.poll().into()).await
+    }
+}
+
+#[async_trait]
+impl KeyValueOperations for WasmClient {
+    type Error = ViewError;
+    type Keys = Vec<Vec<u8>>;
+    type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
+
+    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+        let future = system::ReadKeyBytes::new(key);
+        let r = future::poll_fn(|_context| future.poll().into()).await;
+        r
+    }
+
+    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, ViewError> {
+        let keys = self.find_keys_by_prefix_load(key_prefix).await?;
+        Ok(keys)
+    }
+
+    async fn find_key_values_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::KeyValues, ViewError> {
+        let key_values = self.find_key_values_by_prefix_load(key_prefix).await?;
+        Ok(key_values)
+    }
+
+    async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
+        let mut list_oper = Vec::new();
+        for op in &batch.operations {
+            match op {
+                WriteOperation::Delete { key } => {
+                    list_oper.push(system::WriteOperation::Delete(key));
+                }
+                WriteOperation::Put { key, value } => {
+                    list_oper.push(system::WriteOperation::Put((key, value)))
+                }
+                WriteOperation::DeletePrefix { key_prefix } => {
+                    list_oper.push(system::WriteOperation::Deleteprefix(key_prefix))
+                }
+            }
+        }
+        let future = system::WriteBatch::new(&list_oper);
+        future::poll_fn(|_context| future.poll().into()).await
+    }
+}
+
+pub type WasmContext = ContextFromDb<(), WasmClient>;
+
+pub trait WasmContextExt {
+    fn new() -> Self;
+}
+
+impl WasmContextExt for WasmContext {
+    fn new() -> Self {
+        Self {
+            db: WasmClient::default(),
+            base_key: Vec::new(),
+            extra: (),
+        }
+    }
+}
+
+/// Load the contract state and lock it for writes.
+pub async fn load_and_lock_view<State: View<WasmContext>>() -> State {
+    let future = system::Lock::new();
+    future::poll_fn(|_context| {
+        let r2: std::task::Poll<Result<(), ViewError>> = future.poll().into();
+        r2
+    })
+    .await
+    .expect("error happens in the into operation");
+    load_view_using::<State>().await
+}
+
+/// Helper function to load the contract state or create a new one if it doesn't exist.
+pub async fn load_view_using<State: View<WasmContext>>() -> State {
+    let context = WasmContext::new();
+    let r = State::load(context).await;
+    r.expect("Failed to load contract state")
+}
+
+/// Save the contract state and unlock it.
+pub async fn store_and_unlock_view<State: ContainerView<WasmContext>>(mut state: State) {
+    state.save().await.expect("save operation failed");
 }
 
 /// Retrieve the current chain ID.
