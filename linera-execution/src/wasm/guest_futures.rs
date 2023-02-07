@@ -31,8 +31,7 @@ macro_rules! impl_guest_future_interface {
         $(
             impl<'storage, A> GuestFutureInterface<A> for $future
             where
-                A: $trait,
-                WasmExecutionError: From<A::Error>,
+                A: $trait<$poll_type = $poll_type, $future = Self>,
             {
                 type Output = $output;
 
@@ -41,12 +40,13 @@ macro_rules! impl_guest_future_interface {
                     application: &A,
                     store: &mut A::Store,
                 ) -> Poll<Result<Self::Output, WasmExecutionError>> {
-                    match application.$poll_func(store, self)? {
-                        $poll_type::Ready(Ok(result)) => Poll::Ready(Ok(result.into())),
-                        $poll_type::Ready(Err(message)) => {
+                    match application.$poll_func(store, self) {
+                        Ok($poll_type::Ready(Ok(result))) => Poll::Ready(Ok(result.into())),
+                        Ok($poll_type::Ready(Err(message))) => {
                             Poll::Ready(Err(WasmExecutionError::UserApplication(message)))
                         }
-                        $poll_type::Pending => Poll::Pending,
+                        Ok($poll_type::Pending) => Poll::Pending,
+                        Err(error) => Poll::Ready(Err(error.into())),
                     }
                 }
             }

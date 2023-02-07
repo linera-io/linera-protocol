@@ -190,6 +190,20 @@ impl<'storage> ServiceState<'storage> {
 }
 
 impl<'storage> common::Contract for Contract<'storage> {
+    type Initialize = contract::Initialize;
+    type ExecuteOperation = contract::ExecuteOperation;
+    type ExecuteEffect = contract::ExecuteEffect;
+    type CallApplication = contract::CallApplication;
+    type CallSession = contract::CallSession;
+    type OperationContext = contract::OperationContext;
+    type EffectContext = contract::EffectContext;
+    type CalleeContext = contract::CalleeContext;
+    type SessionParam<'param> = contract::SessionParam<'param>;
+    type SessionId = contract::SessionId;
+    type PollExecutionResult = contract::PollExecutionResult;
+    type PollCallApplication = contract::PollCallApplication;
+    type PollCallSession = contract::PollCallSession;
+
     fn initialize_new(
         &self,
         store: &mut Store<ContractState<'storage>>,
@@ -293,6 +307,10 @@ impl<'storage> common::Contract for Contract<'storage> {
 }
 
 impl<'storage> common::Service for Service<'storage> {
+    type QueryApplication = service::QueryApplication;
+    type QueryContext = service::QueryContext;
+    type PollQuery = service::PollQuery;
+
     fn query_application_new(
         &self,
         store: &mut Store<ServiceState<'storage>>,

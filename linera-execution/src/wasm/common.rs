@@ -4,129 +4,189 @@
 //! Runtime independent code for interfacing with user applications in WebAssembly modules.
 
 use super::{
-    async_boundary::{ContextForwarder, GuestFuture},
-    runtime::{
-        contract::{self, CallApplication, ExecuteEffect, ExecuteOperation, Initialize},
-        service::{self, QueryApplication},
-    },
+    async_boundary::{ContextForwarder, GuestFuture, GuestFutureInterface},
     WasmExecutionError,
 };
 use crate::{
-    system::Balance, CalleeContext, EffectContext, OperationContext, QueryContext,
-    SessionCallResult, SessionId,
+    system::Balance, ApplicationCallResult, CalleeContext, EffectContext, OperationContext,
+    QueryContext, RawExecutionResult, SessionCallResult, SessionId,
 };
 use std::future::Future;
 
 /// Types that are specific to the context of an application ready to be executedy by a WebAssembly
 /// runtime.
-pub trait ApplicationRuntimeContext {
+pub trait ApplicationRuntimeContext: Sized {
     /// The error emitted by the runtime when the application traps (panics).
-    type Error: Into<WasmExecutionError>;
+    type Error: Into<WasmExecutionError> + Send + Unpin;
 
     /// How to store the application's in-memory state.
-    type Store;
+    type Store: Send + Unpin;
 
     /// How to clean up the system storage interface after the application has executed.
-    type StorageGuard;
+    type StorageGuard: Send + Unpin;
 }
 
 /// Common interface to calling a user contract in a WebAssembly module.
 pub trait Contract: ApplicationRuntimeContext {
+    /// The WIT type for the resource representing the guest future
+    /// [`initialize`][crate::Contract::initialize] method.
+    type Initialize: GuestFutureInterface<Self, Output = RawExecutionResult<Vec<u8>>> + Send + Unpin;
+
+    /// The WIT type for the resource representing the guest future
+    /// [`execute_operation`][crate::Contract::execute_operation] method.
+    type ExecuteOperation: GuestFutureInterface<Self, Output = RawExecutionResult<Vec<u8>>>
+        + Send
+        + Unpin;
+
+    /// The WIT type for the resource representing the guest future
+    /// [`execute_effect`][crate::Contract::execute_effect] method.
+    type ExecuteEffect: GuestFutureInterface<Self, Output = RawExecutionResult<Vec<u8>>>
+        + Send
+        + Unpin;
+
+    /// The WIT type for the resource representing the guest future
+    /// [`call_application`][crate::Contract::call_application] method.
+    type CallApplication: GuestFutureInterface<Self, Output = ApplicationCallResult> + Send + Unpin;
+
+    /// The WIT type for the resource representing the guest future
+    /// [`call_session`][crate::Contract::call_session] method.
+    type CallSession: GuestFutureInterface<Self, Output = (SessionCallResult, Vec<u8>)>
+        + Send
+        + Unpin;
+
+    /// The WIT type equivalent for the [`OperationContext`].
+    type OperationContext: From<OperationContext>;
+
+    /// The WIT type equivalent for the [`EffectContext`].
+    type EffectContext: From<EffectContext>;
+
+    /// The WIT type equivalent for the [`CalleeContext`].
+    type CalleeContext: From<CalleeContext>;
+
+    /// The WIT type equivalent for the [`Session`], used as a parameter for calling guest methods.
+    ///
+    /// This type is created from a tuple rather than a [`Session`] instance so that allocation of a
+    /// [`Vec`] is avoided when passing the session as a parameter to the WASM guest module.
+    type SessionParam<'param>: From<(u64, &'param [u8])>;
+
+    /// The WIT type equivalent for the [`SessionId`].
+    type SessionId: From<SessionId>;
+
+    /// The WIT type eqivalent for [`Poll<Result<RawExecutionResult<Vec<u8>>, String>>`].
+    type PollExecutionResult;
+
+    /// The WIT type eqivalent for [`Poll<Result<ApplicationCallResult, String>>`].
+    type PollCallApplication;
+
+    /// The WIT type eqivalent for [`Poll<Result<SessionCallResult, String>>`].
+    type PollCallSession;
+
     /// Create a new future for the user application to initialize itself on the owner chain.
     fn initialize_new(
         &self,
         store: &mut Self::Store,
-        context: contract::OperationContext,
+        context: Self::OperationContext,
         argument: &[u8],
-    ) -> Result<contract::Initialize, Self::Error>;
+    ) -> Result<Self::Initialize, Self::Error>;
 
     /// Poll a user contract future that's initializing the application.
     fn initialize_poll(
         &self,
         store: &mut Self::Store,
-        future: &contract::Initialize,
-    ) -> Result<contract::PollExecutionResult, Self::Error>;
+        future: &Self::Initialize,
+    ) -> Result<Self::PollExecutionResult, Self::Error>;
 
     /// Create a new future for the user application to execute an operation.
     fn execute_operation_new(
         &self,
         store: &mut Self::Store,
-        context: contract::OperationContext,
+        context: Self::OperationContext,
         operation: &[u8],
-    ) -> Result<contract::ExecuteOperation, Self::Error>;
+    ) -> Result<Self::ExecuteOperation, Self::Error>;
 
     /// Poll a user contract future that's executing an operation.
     fn execute_operation_poll(
         &self,
         store: &mut Self::Store,
-        future: &contract::ExecuteOperation,
-    ) -> Result<contract::PollExecutionResult, Self::Error>;
+        future: &Self::ExecuteOperation,
+    ) -> Result<Self::PollExecutionResult, Self::Error>;
 
     /// Create a new future for the user contract to execute an effect.
     fn execute_effect_new(
         &self,
         store: &mut Self::Store,
-        context: contract::EffectContext,
+        context: Self::EffectContext,
         effect: &[u8],
-    ) -> Result<contract::ExecuteEffect, Self::Error>;
+    ) -> Result<Self::ExecuteEffect, Self::Error>;
 
     /// Poll a user contract future that's executing an effect.
     fn execute_effect_poll(
         &self,
         store: &mut Self::Store,
-        future: &contract::ExecuteEffect,
-    ) -> Result<contract::PollExecutionResult, Self::Error>;
+        future: &Self::ExecuteEffect,
+    ) -> Result<Self::PollExecutionResult, Self::Error>;
 
     /// Create a new future for the user contract to handle a call from another contract.
     fn call_application_new(
         &self,
         store: &mut Self::Store,
-        context: contract::CalleeContext,
+        context: Self::CalleeContext,
         argument: &[u8],
-        forwarded_sessions: &[contract::SessionId],
-    ) -> Result<contract::CallApplication, Self::Error>;
+        forwarded_sessions: &[Self::SessionId],
+    ) -> Result<Self::CallApplication, Self::Error>;
 
     /// Poll a user contract future that's handling a call from another contract.
     fn call_application_poll(
         &self,
         store: &mut Self::Store,
-        future: &contract::CallApplication,
-    ) -> Result<contract::PollCallApplication, Self::Error>;
+        future: &Self::CallApplication,
+    ) -> Result<Self::PollCallApplication, Self::Error>;
 
     /// Create a new future for the user contract to handle a session call from another
     /// contract.
     fn call_session_new(
         &self,
         store: &mut Self::Store,
-        context: contract::CalleeContext,
-        session: contract::SessionParam,
+        context: Self::CalleeContext,
+        session: Self::SessionParam<'_>,
         argument: &[u8],
-        forwarded_sessions: &[contract::SessionId],
-    ) -> Result<contract::CallSession, Self::Error>;
+        forwarded_sessions: &[Self::SessionId],
+    ) -> Result<Self::CallSession, Self::Error>;
 
     /// Poll a user contract future that's handling a session call from another contract.
     fn call_session_poll(
         &self,
         store: &mut Self::Store,
-        future: &contract::CallSession,
-    ) -> Result<contract::PollCallSession, Self::Error>;
+        future: &Self::CallSession,
+    ) -> Result<Self::PollCallSession, Self::Error>;
 }
 
+/// Common interface to calling a user service in a WebAssembly module.
 pub trait Service: ApplicationRuntimeContext {
+    /// The WIT type for the resource representing the guest future
+    /// [`query_application`][crate::Service::query_application] method.
+    type QueryApplication: GuestFutureInterface<Self, Output = Vec<u8>> + Send + Unpin;
+
+    /// The WIT type equivalent for the [`QueryContext`].
+    type QueryContext: From<QueryContext>;
+
+    /// The WIT type eqivalent for [`Poll<Result<Vec<u8>, String>>`].
+    type PollQuery;
+
     /// Create a new future for the user application to handle a query.
     fn query_application_new(
         &self,
         store: &mut Self::Store,
-        context: service::QueryContext,
+        context: Self::QueryContext,
         argument: &[u8],
-    ) -> Result<service::QueryApplication, Self::Error>;
+    ) -> Result<Self::QueryApplication, Self::Error>;
 
     /// Poll a user service future that's handling a query.
     fn query_application_poll(
         &self,
         store: &mut Self::Store,
-        future: &service::QueryApplication,
-    ) -> Result<service::PollQuery, Self::Error>;
+        future: &Self::QueryApplication,
+    ) -> Result<Self::PollQuery, Self::Error>;
 }
 
 /// Wrapper around all types necessary to call an asynchronous method of a WASM application.
@@ -168,7 +228,7 @@ where
         mut self,
         context: &OperationContext,
         argument: &[u8],
-    ) -> GuestFuture<Initialize, A> {
+    ) -> GuestFuture<A::Initialize, A> {
         let future = self
             .application
             .initialize_new(&mut self.store, (*context).into(), argument);
@@ -192,7 +252,7 @@ where
         mut self,
         context: &OperationContext,
         operation: &[u8],
-    ) -> GuestFuture<ExecuteOperation, A> {
+    ) -> GuestFuture<A::ExecuteOperation, A> {
         let future =
             self.application
                 .execute_operation_new(&mut self.store, (*context).into(), operation);
@@ -216,7 +276,7 @@ where
         mut self,
         context: &EffectContext,
         effect: &[u8],
-    ) -> GuestFuture<ExecuteEffect, A> {
+    ) -> GuestFuture<A::ExecuteEffect, A> {
         let future =
             self.application
                 .execute_effect_new(&mut self.store, (*context).into(), effect);
@@ -242,10 +302,10 @@ where
         context: &CalleeContext,
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
-    ) -> GuestFuture<CallApplication, A> {
+    ) -> GuestFuture<A::CallApplication, A> {
         let forwarded_sessions: Vec<_> = forwarded_sessions
             .into_iter()
-            .map(contract::SessionId::from)
+            .map(A::SessionId::from)
             .collect();
 
         let future = self.application.call_application_new(
@@ -271,7 +331,7 @@ where
     ///     session_data: &mut Vec<u8>,
     ///     argument: &[u8],
     ///     forwarded_sessions: Vec<SessionId>,
-    /// ) -> Result<SessionCallResult, WasmExecutionError>
+    /// ) -> Result<A::SessionCallResult, WasmExecutionError>
     /// ```
     pub fn call_session<'session_data>(
         mut self,
@@ -286,14 +346,13 @@ where
         A::Store: Unpin,
         A::StorageGuard: Unpin,
         A::Error: Unpin,
-        WasmExecutionError: From<A::Error>,
     {
         let forwarded_sessions: Vec<_> = forwarded_sessions
             .into_iter()
-            .map(contract::SessionId::from)
+            .map(A::SessionId::from)
             .collect();
 
-        let session = contract::SessionParam::from((session_kind, &*session_data));
+        let session = A::SessionParam::from((session_kind, &*session_data));
 
         let future = self.application.call_session_new(
             &mut self.store,
@@ -333,7 +392,7 @@ where
         mut self,
         context: &QueryContext,
         argument: &[u8],
-    ) -> GuestFuture<QueryApplication, A> {
+    ) -> GuestFuture<A::QueryApplication, A> {
         let future =
             self.application
                 .query_application_new(&mut self.store, (*context).into(), argument);
