@@ -38,6 +38,7 @@ fungible = { path = "../linera-examples/fungible" }
 linera-base = { path = "../linera-base", features = ["test"] }
 linera-chain = { path = "../linera-chain", features = ["test"] }
 linera-execution = { path = "../linera-execution", default-features = false, features = ["test"] }
+linera-sdk = { path = "../linera-sdk", default-features = false, features = ["test"] }
 linera-storage = { path = "../linera-storage", default-features = false, features = ["test"] }
 linera-views = { path = "../linera-views", features = ["test"] }
 proptest = "1.0.0"

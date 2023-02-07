@@ -2184,6 +2184,7 @@ dependencies = [
  "linera-base",
  "linera-chain",
  "linera-execution",
+ "linera-sdk",
  "linera-storage",
  "linera-views",
  "log",
