@@ -21,9 +21,9 @@ mod conversions_from_wit;
 mod conversions_to_wit;
 
 use self::{
-    contract::{Contract, ContractData},
+    contract::ContractData,
     queryable_system::{QueryableSystem, QueryableSystemTables},
-    service::{Service, ServiceData},
+    service::ServiceData,
     writable_system::{WritableSystem, WritableSystemTables},
 };
 use super::{
@@ -32,7 +32,7 @@ use super::{
     WasmApplication, WasmExecutionError,
 };
 use crate::{CallResult, ExecutionError, QueryableStorage, SessionId, WritableStorage};
-use std::{marker::PhantomData, task::Poll};
+use std::task::Poll;
 use wasmtime::{Engine, Linker, Module, Store, Trap};
 use wit_bindgen_host_wasmtime_rust::Le;
 
@@ -40,24 +40,24 @@ use wit_bindgen_host_wasmtime_rust::Le;
 ///
 /// The runtime has a lifetime so that it does not outlive the trait object used to export the
 /// system API.
-pub struct ContractWasmtime<'storage> {
-    _lifetime: PhantomData<&'storage ()>,
+pub struct Contract<'storage> {
+    contract: contract::Contract<ContractState<'storage>>,
 }
 
-impl<'storage> Runtime for ContractWasmtime<'storage> {
-    type Application = Contract<ContractState<'storage>>;
+impl<'storage> Runtime for Contract<'storage> {
+    type Application = Self;
     type Store = Store<ContractState<'storage>>;
     type StorageGuard = ();
     type Error = Trap;
 }
 
 /// Type representing the [Wasmtime](https://wasmtime.dev/) runtime for services.
-pub struct ServiceWasmtime<'storage> {
-    _lifetime: PhantomData<&'storage ()>,
+pub struct Service<'storage> {
+    service: service::Service<ServiceState<'storage>>,
 }
 
-impl<'storage> Runtime for ServiceWasmtime<'storage> {
-    type Application = Service<ServiceState<'storage>>;
+impl<'storage> Runtime for Service<'storage> {
+    type Application = Self;
     type Store = Store<ServiceState<'storage>>;
     type StorageGuard = ();
     type Error = Trap;
@@ -68,7 +68,7 @@ impl WasmApplication {
     pub fn prepare_contract_runtime<'storage>(
         &self,
         storage: &'storage dyn WritableStorage,
-    ) -> Result<WasmRuntimeContext<ContractWasmtime<'storage>>, WasmExecutionError> {
+    ) -> Result<WasmRuntimeContext<Contract<'storage>>, WasmExecutionError> {
         let engine = Engine::default();
         let mut linker = Linker::new(&engine);
 
@@ -78,8 +78,9 @@ impl WasmApplication {
         let context_forwarder = ContextForwarder::default();
         let state = ContractState::new(storage, context_forwarder.clone());
         let mut store = Store::new(&engine, state);
-        let (application, _instance) =
-            Contract::instantiate(&mut store, &module, &mut linker, ContractState::data)?;
+        let (contract, _instance) =
+            contract::Contract::instantiate(&mut store, &module, &mut linker, ContractState::data)?;
+        let application = Contract { contract };
 
         Ok(WasmRuntimeContext {
             context_forwarder,
@@ -93,7 +94,7 @@ impl WasmApplication {
     pub fn prepare_service_runtime<'storage>(
         &self,
         storage: &'storage dyn QueryableStorage,
-    ) -> Result<WasmRuntimeContext<ServiceWasmtime<'storage>>, WasmExecutionError> {
+    ) -> Result<WasmRuntimeContext<Service<'storage>>, WasmExecutionError> {
         let engine = Engine::default();
         let mut linker = Linker::new(&engine);
 
@@ -103,8 +104,9 @@ impl WasmApplication {
         let context_forwarder = ContextForwarder::default();
         let state = ServiceState::new(storage, context_forwarder.clone());
         let mut store = Store::new(&engine, state);
-        let (application, _instance) =
-            Service::instantiate(&mut store, &module, &mut linker, ServiceState::data)?;
+        let (service, _instance) =
+            service::Service::instantiate(&mut store, &module, &mut linker, ServiceState::data)?;
+        let application = Service { service };
 
         Ok(WasmRuntimeContext {
             context_forwarder,
@@ -187,14 +189,14 @@ impl<'storage> ServiceState<'storage> {
     }
 }
 
-impl<'storage> common::Contract<ContractWasmtime<'storage>> for Contract<ContractState<'storage>> {
+impl<'storage> common::Contract<Self> for Contract<'storage> {
     fn initialize_new(
         &self,
         store: &mut Store<ContractState<'storage>>,
         context: contract::OperationContext,
         argument: &[u8],
     ) -> Result<contract::Initialize, Trap> {
-        Contract::initialize_new(self, store, context, argument)
+        contract::Contract::initialize_new(&self.contract, store, context, argument)
     }
 
     fn initialize_poll(
@@ -202,7 +204,7 @@ impl<'storage> common::Contract<ContractWasmtime<'storage>> for Contract<Contrac
         store: &mut Store<ContractState<'storage>>,
         future: &contract::Initialize,
     ) -> Result<contract::PollExecutionResult, Trap> {
-        Contract::initialize_poll(self, store, future)
+        contract::Contract::initialize_poll(&self.contract, store, future)
     }
 
     fn execute_operation_new(
@@ -211,7 +213,7 @@ impl<'storage> common::Contract<ContractWasmtime<'storage>> for Contract<Contrac
         context: contract::OperationContext,
         operation: &[u8],
     ) -> Result<contract::ExecuteOperation, Trap> {
-        Contract::execute_operation_new(self, store, context, operation)
+        contract::Contract::execute_operation_new(&self.contract, store, context, operation)
     }
 
     fn execute_operation_poll(
@@ -219,7 +221,7 @@ impl<'storage> common::Contract<ContractWasmtime<'storage>> for Contract<Contrac
         store: &mut Store<ContractState<'storage>>,
         future: &contract::ExecuteOperation,
     ) -> Result<contract::PollExecutionResult, Trap> {
-        Contract::execute_operation_poll(self, store, future)
+        contract::Contract::execute_operation_poll(&self.contract, store, future)
     }
 
     fn execute_effect_new(
@@ -228,7 +230,7 @@ impl<'storage> common::Contract<ContractWasmtime<'storage>> for Contract<Contrac
         context: contract::EffectContext,
         effect: &[u8],
     ) -> Result<contract::ExecuteEffect, Trap> {
-        Contract::execute_effect_new(self, store, context, effect)
+        contract::Contract::execute_effect_new(&self.contract, store, context, effect)
     }
 
     fn execute_effect_poll(
@@ -236,7 +238,7 @@ impl<'storage> common::Contract<ContractWasmtime<'storage>> for Contract<Contrac
         store: &mut Store<ContractState<'storage>>,
         future: &contract::ExecuteEffect,
     ) -> Result<contract::PollExecutionResult, Trap> {
-        Contract::execute_effect_poll(self, store, future)
+        contract::Contract::execute_effect_poll(&self.contract, store, future)
     }
 
     fn call_application_new(
@@ -246,7 +248,13 @@ impl<'storage> common::Contract<ContractWasmtime<'storage>> for Contract<Contrac
         argument: &[u8],
         forwarded_sessions: &[contract::SessionId],
     ) -> Result<contract::CallApplication, Trap> {
-        Contract::call_application_new(self, store, context, argument, forwarded_sessions)
+        contract::Contract::call_application_new(
+            &self.contract,
+            store,
+            context,
+            argument,
+            forwarded_sessions,
+        )
     }
 
     fn call_application_poll(
@@ -254,7 +262,7 @@ impl<'storage> common::Contract<ContractWasmtime<'storage>> for Contract<Contrac
         store: &mut Store<ContractState<'storage>>,
         future: &contract::CallApplication,
     ) -> Result<contract::PollCallApplication, Trap> {
-        Contract::call_application_poll(self, store, future)
+        contract::Contract::call_application_poll(&self.contract, store, future)
     }
 
     fn call_session_new(
@@ -265,7 +273,14 @@ impl<'storage> common::Contract<ContractWasmtime<'storage>> for Contract<Contrac
         argument: &[u8],
         forwarded_sessions: &[contract::SessionId],
     ) -> Result<contract::CallSession, Trap> {
-        Contract::call_session_new(self, store, context, session, argument, forwarded_sessions)
+        contract::Contract::call_session_new(
+            &self.contract,
+            store,
+            context,
+            session,
+            argument,
+            forwarded_sessions,
+        )
     }
 
     fn call_session_poll(
@@ -273,18 +288,18 @@ impl<'storage> common::Contract<ContractWasmtime<'storage>> for Contract<Contrac
         store: &mut Store<ContractState<'storage>>,
         future: &contract::CallSession,
     ) -> Result<contract::PollCallSession, Trap> {
-        Contract::call_session_poll(self, store, future)
+        contract::Contract::call_session_poll(&self.contract, store, future)
     }
 }
 
-impl<'storage> common::Service<ServiceWasmtime<'storage>> for Service<ServiceState<'storage>> {
+impl<'storage> common::Service<Self> for Service<'storage> {
     fn query_application_new(
         &self,
         store: &mut Store<ServiceState<'storage>>,
         context: service::QueryContext,
         argument: &[u8],
     ) -> Result<service::QueryApplication, Trap> {
-        Service::query_application_new(self, store, context, argument)
+        service::Service::query_application_new(&self.service, store, context, argument)
     }
 
     fn query_application_poll(
@@ -292,7 +307,7 @@ impl<'storage> common::Service<ServiceWasmtime<'storage>> for Service<ServiceSta
         store: &mut Store<ServiceState<'storage>>,
         future: &service::QueryApplication,
     ) -> Result<service::PollQuery, Trap> {
-        Service::query_application_poll(self, store, future)
+        service::Service::query_application_poll(&self.service, store, future)
     }
 }
 
