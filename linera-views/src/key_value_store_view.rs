@@ -8,7 +8,7 @@ use crate::{
     },
     views::{HashableView, Hasher, View, ViewError},
 };
-use async_std::sync::Mutex;
+use async_lock::Mutex;
 use async_trait::async_trait;
 use std::{
     collections::{BTreeMap, BTreeSet},

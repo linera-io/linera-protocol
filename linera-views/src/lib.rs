@@ -62,4 +62,8 @@ pub mod test_utils;
 
 /// For macros.
 #[doc(hidden)]
-pub use {async_trait::async_trait, generic_array, linera_base::crypto, serde, sha2};
+pub use {async_trait::async_trait, generic_array, serde, sha2};
+
+#[doc(hidden)]
+#[cfg(not(target_arch = "wasm32"))]
+pub use linera_base::crypto;

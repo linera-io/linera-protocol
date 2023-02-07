@@ -4,6 +4,7 @@
 extern crate linera_views_derive;
 use crate::common::Batch;
 use async_trait::async_trait;
+#[cfg(not(target_arch = "wasm32"))]
 use linera_base::crypto::CryptoHash;
 pub use linera_views_derive::{ContainerView, HashableContainerView, HashableView, View};
 use serde::Serialize;
@@ -140,6 +141,7 @@ pub trait ContainerView<C>: View<C> {
 
 /// A [`ContainerView`] that also supports hashing.
 #[async_trait]
+#[cfg(not(target_arch = "wasm32"))]
 pub trait HashableContainerView<C>: ContainerView<C> + HashableView<C> {
     /// Computing the hash and attributing the type to it.
     async fn crypto_hash(&self) -> Result<CryptoHash, ViewError>;

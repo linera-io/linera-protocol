@@ -5,7 +5,7 @@ use crate::{
     common::{Batch, Context, HashOutput, KeyIterable, KeyValueIterable, Update},
     views::{HashableView, Hasher, View, ViewError},
 };
-use async_std::sync::Mutex;
+use async_lock::Mutex;
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{collections::BTreeMap, fmt::Debug, marker::PhantomData, mem};

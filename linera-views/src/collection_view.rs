@@ -5,7 +5,7 @@ use crate::{
     common::{Batch, Context, HashOutput, KeyIterable, Update},
     views::{HashableView, Hasher, View, ViewError},
 };
-use async_std::sync::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use async_lock::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
