@@ -55,7 +55,8 @@ where
     publisher.receive_certificate(cert).await.unwrap();
     publisher.process_inbox().await.unwrap();
 
-    let (contract_path, service_path) = linera_execution::wasm_test::get_counter_bytecode_paths()?;
+    let (contract_path, service_path) =
+        linera_execution::wasm_test::get_example_bytecode_paths("counter")?;
     let (bytecode_id, cert) = publisher
         .publish_bytecode(
             Bytecode::load_from_file(contract_path).await?,
