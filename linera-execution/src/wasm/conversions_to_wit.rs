@@ -265,3 +265,9 @@ impl From<Balance> for writable_system::SystemBalance {
         }
     }
 }
+
+impl<'data> From<(u64, &'data [u8])> for contract::SessionParam<'data> {
+    fn from((kind, data): (u64, &'data [u8])) -> Self {
+        contract::SessionParam { kind, data }
+    }
+}

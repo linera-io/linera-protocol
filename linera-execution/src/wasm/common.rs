@@ -293,10 +293,7 @@ where
             .map(contract::SessionId::from)
             .collect();
 
-        let session = contract::SessionParam {
-            kind: session_kind,
-            data: &*session_data,
-        };
+        let session = contract::SessionParam::from((session_kind, &*session_data));
 
         let future = self.application.call_session_new(
             &mut self.store,
