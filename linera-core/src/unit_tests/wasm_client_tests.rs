@@ -177,14 +177,12 @@ where
         signature: convert(&linera_base::crypto::Signature::new(&payload, &sender_kp))?,
         payload: payload.clone(),
     };
-    let cert = dbg!(
-        sender
-            .execute_operation(
-                ApplicationId::User(application_id),
-                Operation::User(bcs::to_bytes(&transfer)?),
-            )
-            .await?
-    );
+    let cert = sender
+        .execute_operation(
+            ApplicationId::User(application_id),
+            Operation::User(bcs::to_bytes(&transfer)?),
+        )
+        .await?;
 
     assert!(cert
         .value
