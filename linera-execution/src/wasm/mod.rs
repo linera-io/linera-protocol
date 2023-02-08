@@ -12,6 +12,7 @@
 
 mod async_boundary;
 mod common;
+mod runtime;
 #[cfg(feature = "wasmer")]
 #[path = "wasmer.rs"]
 mod wasmer;
