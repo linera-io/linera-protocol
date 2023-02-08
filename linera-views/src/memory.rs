@@ -4,24 +4,24 @@ use crate::{
     common::{get_interval, Batch, ContextFromDb, KeyValueOperations, WriteOperation},
     views::ViewError,
 };
+use async_lock::{MutexGuardArc, RwLock};
 use async_trait::async_trait;
 use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
 use thiserror::Error;
-use tokio::sync::{OwnedMutexGuard, RwLock};
 
 /// The data is serialized in memory just like for rocksdb / dynamodb
 /// The analogue of the database is the BTreeMap
 pub type MemoryStoreMap = BTreeMap<Vec<u8>, Vec<u8>>;
 
 /// A virtual DB client where data are persisted in memory.
-pub type MemoryClient = Arc<RwLock<OwnedMutexGuard<MemoryStoreMap>>>;
+pub type MemoryClient = Arc<RwLock<MutexGuardArc<MemoryStoreMap>>>;
 
 /// An implementation of [`crate::common::Context`] that stores all values in memory.
 pub type MemoryContext<E> = ContextFromDb<E, MemoryClient>;
 
 impl<E> MemoryContext<E> {
     /// Create a [`MemoryContext`]
-    pub fn new(guard: OwnedMutexGuard<MemoryStoreMap>, extra: E) -> Self {
+    pub fn new(guard: MutexGuardArc<MemoryStoreMap>, extra: E) -> Self {
         Self {
             db: Arc::new(RwLock::new(guard)),
             base_key: Vec::new(),

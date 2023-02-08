@@ -21,8 +21,8 @@ use std::{
 use {
     crate::common::{ContextFromDb, KeyValueOperations},
     crate::memory::{MemoryContext, MemoryStoreMap},
+    async_lock::{MutexGuardArc, RwLock},
     std::sync::Arc,
-    tokio::sync::{OwnedMutexGuard, RwLock},
 };
 
 /// We actually implement two types:
@@ -639,7 +639,7 @@ pub type KeyValueStoreMemoryContext<E> = ContextFromDb<E, ViewContainer<MemoryCo
 impl<E> KeyValueStoreMemoryContext<E> {
     /// Create a [`KeyValueStoreMemoryContext`].
     pub async fn new(
-        guard: OwnedMutexGuard<MemoryStoreMap>,
+        guard: MutexGuardArc<MemoryStoreMap>,
         base_key: Vec<u8>,
         extra: E,
     ) -> Result<Self, ViewError> {

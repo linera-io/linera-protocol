@@ -1,6 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use async_lock::Mutex;
 use async_trait::async_trait;
 use linera_views::{
     collection_view::CollectionView,
@@ -29,7 +30,6 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     sync::Arc,
 };
-use tokio::sync::Mutex;
 
 #[allow(clippy::type_complexity)]
 #[derive(HashableContainerView)]
@@ -69,7 +69,7 @@ impl StateStore for MemoryTestStore {
             .entry(id)
             .or_insert_with(|| Arc::new(Mutex::new(BTreeMap::new())));
         log::trace!("Acquiring lock on {:?}", id);
-        let context = MemoryContext::new(state.clone().lock_owned().await, id);
+        let context = MemoryContext::new(state.clone().lock_arc().await, id);
         StateView::load(context).await
     }
 }
@@ -89,7 +89,7 @@ impl StateStore for KeyValueStoreTestStore {
             .entry(id)
             .or_insert_with(|| Arc::new(Mutex::new(BTreeMap::new())));
         log::trace!("Acquiring lock on {:?}", id);
-        let guard = state.clone().lock_owned().await;
+        let guard = state.clone().lock_arc().await;
         let base_key = bcs::to_bytes(&id)?;
         let context = KeyValueStoreMemoryContext::new(guard, base_key, id).await?;
         StateView::load(context).await
@@ -717,7 +717,7 @@ async fn test_collection_removal() -> anyhow::Result<()> {
     type CollectionViewType = CollectionView<MemoryContext<()>, u8, EntryType>;
 
     let state = Arc::new(Mutex::new(BTreeMap::new()));
-    let context = MemoryContext::new(state.lock_owned().await, ());
+    let context = MemoryContext::new(state.lock_arc().await, ());
 
     // Write a dummy entry into the collection.
     let mut collection = CollectionViewType::load(context.clone()).await?;
@@ -749,7 +749,7 @@ async fn test_removal_api_first_second_condition(
     type CollectionViewType = CollectionView<MemoryContext<()>, u8, EntryType>;
 
     let state = Arc::new(Mutex::new(BTreeMap::new()));
-    let context = MemoryContext::new(state.lock_owned().await, ());
+    let context = MemoryContext::new(state.lock_arc().await, ());
 
     // First add an entry `1` with value `100` and commit
     let mut collection: CollectionViewType = CollectionView::load(context.clone()).await?;

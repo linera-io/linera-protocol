@@ -6,12 +6,13 @@ edition = "2021"
 
 [features]
 default = ["wasmtime"]
-test = ["tokio/macros"]
+test = ["tokio/macros", "async-lock"]
 wasmer = ["dep:wasmer", "wit-bindgen-host-wasmer-rust"]
 wasmtime = ["dep:wasmtime", "wit-bindgen-host-wasmtime-rust"]
 
 [dependencies]
 anyhow = "1.0.57"
+async-lock = { version = "2.6.0", optional = true }
 async-trait = "0.1.52"
 async-graphql = "5.0.5"
 bcs = "0.1.3"
