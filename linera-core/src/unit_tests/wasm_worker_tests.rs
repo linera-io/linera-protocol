@@ -78,7 +78,8 @@ where
     .await;
 
     // Publish some bytecode.
-    let (contract_path, service_path) = linera_execution::wasm_test::get_counter_bytecode_paths()?;
+    let (contract_path, service_path) =
+        linera_execution::wasm_test::get_example_bytecode_paths("counter")?;
     let publish_operation = SystemOperation::PublishBytecode {
         contract: Bytecode::load_from_file(contract_path).await?,
         service: Bytecode::load_from_file(service_path).await?,

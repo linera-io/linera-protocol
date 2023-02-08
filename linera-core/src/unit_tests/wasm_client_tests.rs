@@ -61,7 +61,8 @@ where
     publisher.receive_certificate(cert).await.unwrap();
     publisher.process_inbox().await.unwrap();
 
-    let (contract_path, service_path) = linera_execution::wasm_test::get_counter_bytecode_paths()?;
+    let (contract_path, service_path) =
+        linera_execution::wasm_test::get_example_bytecode_paths("counter").unwrap();
     let (bytecode_id, cert) = publisher
         .publish_bytecode(
             Bytecode::load_from_file(contract_path).await?,
@@ -137,7 +138,8 @@ where
         .add_initial_chain(ChainDescription::Root(1), Balance::from(0))
         .await?;
 
-    let (contract_path, service_path) = linera_execution::wasm_test::get_fungible_bytecode_paths()?;
+    let (contract_path, service_path) =
+        linera_execution::wasm_test::get_example_bytecode_paths("fungible")?;
     let (bytecode_id, pub_cert) = sender
         .publish_bytecode(
             Bytecode::load_from_file(contract_path).await?,

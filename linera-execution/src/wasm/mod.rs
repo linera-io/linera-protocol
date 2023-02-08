@@ -212,24 +212,18 @@ pub mod test {
         Ok(())
     }
 
-    pub fn get_counter_bytecode_paths() -> Result<(&'static str, &'static str), std::io::Error> {
+    pub fn get_example_bytecode_paths(name: &str) -> Result<(String, String), std::io::Error> {
         build_applications()?;
         Ok((
-            "../linera-examples/target/wasm32-unknown-unknown/release/counter_contract.wasm",
-            "../linera-examples/target/wasm32-unknown-unknown/release/counter_service.wasm",
+            format!(
+                "../linera-examples/target/wasm32-unknown-unknown/release/{name}_contract.wasm"
+            ),
+            format!("../linera-examples/target/wasm32-unknown-unknown/release/{name}_service.wasm"),
         ))
     }
 
-    pub fn get_fungible_bytecode_paths() -> Result<(&'static str, &'static str), std::io::Error> {
-        build_applications()?;
-        Ok((
-            "../linera-examples/target/wasm32-unknown-unknown/release/fungible_contract.wasm",
-            "../linera-examples/target/wasm32-unknown-unknown/release/fungible_service.wasm",
-        ))
-    }
-
-    pub async fn build_counter_application() -> Result<WasmApplication, std::io::Error> {
-        let (contract, service) = get_counter_bytecode_paths()?;
-        WasmApplication::from_files(contract, service).await
+    pub async fn build_example_application(name: &str) -> Result<WasmApplication, std::io::Error> {
+        let (contract, service) = get_example_bytecode_paths(name)?;
+        WasmApplication::from_files(&contract, &service).await
     }
 }
