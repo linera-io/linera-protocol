@@ -27,7 +27,7 @@ mod guest_futures;
 use super::{
     async_boundary::{ContextForwarder, HostFuture, HostFutureQueue},
     common::{self, ApplicationRuntimeContext, WasmRuntimeContext},
-    WasmApplication, WasmExecutionError,
+    runtime, WasmApplication, WasmExecutionError,
 };
 use crate::{CallResult, ExecutionError, QueryableStorage, SessionId, WritableStorage};
 use linera_views::common::Batch;
@@ -68,7 +68,7 @@ impl WasmApplication {
     pub fn prepare_contract_runtime_with_wasmer<'storage>(
         &self,
         storage: &'storage dyn WritableStorage,
-    ) -> Result<WasmRuntimeContext<Contract<'storage>>, WasmExecutionError> {
+    ) -> Result<WasmRuntimeContext<runtime::Contract<'storage>>, WasmExecutionError> {
         let mut store = Store::default();
         let module = Module::new(&store, &self.contract_bytecode)
             .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)?;
@@ -89,9 +89,9 @@ impl WasmApplication {
 
         Ok(WasmRuntimeContext {
             context_forwarder,
-            application,
-            store,
-            _storage_guard: storage_guard,
+            application: application.into(),
+            store: store.into(),
+            _storage_guard: storage_guard.into(),
         })
     }
 
@@ -99,7 +99,7 @@ impl WasmApplication {
     pub fn prepare_service_runtime_with_wasmer<'storage>(
         &self,
         storage: &'storage dyn QueryableStorage,
-    ) -> Result<WasmRuntimeContext<Service<'storage>>, WasmExecutionError> {
+    ) -> Result<WasmRuntimeContext<runtime::Service<'storage>>, WasmExecutionError> {
         let mut store = Store::default();
         let module = Module::new(&store, &self.service_bytecode)
             .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)?;
@@ -119,9 +119,9 @@ impl WasmApplication {
 
         Ok(WasmRuntimeContext {
             context_forwarder,
-            application,
-            store,
-            _storage_guard: storage_guard,
+            application: application.into(),
+            store: store.into(),
+            _storage_guard: storage_guard.into(),
         })
     }
 }

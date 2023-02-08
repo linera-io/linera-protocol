@@ -20,7 +20,10 @@ mod wasmer;
 #[path = "wasmtime.rs"]
 mod wasmtime;
 
-use self::common::WasmRuntimeContext;
+use self::{
+    common::WasmRuntimeContext,
+    runtime::{Contract, Service},
+};
 use crate::{
     ApplicationCallResult, Bytecode, CalleeContext, EffectContext, ExecutionError,
     OperationContext, QueryContext, QueryableStorage, RawExecutionResult, SessionCallResult,
@@ -60,8 +63,7 @@ impl WasmApplication {
     fn prepare_contract_runtime<'storage>(
         &self,
         storage: &'storage dyn WritableStorage,
-    ) -> Result<WasmRuntimeContext<impl common::Contract + Unpin + 'storage>, WasmExecutionError>
-    {
+    ) -> Result<WasmRuntimeContext<Contract<'storage>>, WasmExecutionError> {
         #[cfg(feature = "wasmtime")]
         {
             self.prepare_contract_runtime_with_wasmtime(storage)
@@ -76,8 +78,7 @@ impl WasmApplication {
     fn prepare_service_runtime<'storage>(
         &self,
         storage: &'storage dyn QueryableStorage,
-    ) -> Result<WasmRuntimeContext<impl common::Service + Unpin + 'storage>, WasmExecutionError>
-    {
+    ) -> Result<WasmRuntimeContext<Service<'storage>>, WasmExecutionError> {
         #[cfg(feature = "wasmtime")]
         {
             self.prepare_service_runtime_with_wasmtime(storage)
