@@ -7,7 +7,7 @@ mod state;
 
 use self::state::FungibleToken;
 use async_trait::async_trait;
-use linera_sdk::{QueryContext, Service};
+use linera_sdk::{QueryContext, Service, SimpleStateStorage};
 use thiserror::Error;
 
 linera_sdk::service!(FungibleToken);
@@ -15,6 +15,7 @@ linera_sdk::service!(FungibleToken);
 #[async_trait]
 impl Service for FungibleToken {
     type Error = Error;
+    type Storage = SimpleStateStorage<Self>;
 
     async fn query_application(
         &self,

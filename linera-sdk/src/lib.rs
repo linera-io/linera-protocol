@@ -23,11 +23,16 @@ pub use self::{
 #[doc(hidden)]
 pub use wit_bindgen_guest_rust;
 
+/// A simple state management runtime using a single byte array.
+pub struct SimpleStateStorage<A>(std::marker::PhantomData<A>);
+
 /// The public entry points provided by a contract.
 #[async_trait]
 pub trait Contract {
     /// Message reports for application execution errors.
     type Error: Error;
+    /// Tag the contract with the desired state management runtime.
+    type Storage;
 
     /// Initialize the application on the chain that created it.
     async fn initialize(
@@ -75,6 +80,8 @@ pub trait Contract {
 pub trait Service {
     /// Message reports for service execution errors.
     type Error: Error;
+    /// Mark the contract with the desired state management runtime.
+    type Storage;
 
     /// Allow an end user to execute read-only queries on the state of this application.
     /// NOTE: This is not meant to be metered and may not be exposed by validators.

@@ -14,7 +14,7 @@ use fungible::{
 use linera_sdk::{
     contract::system_api, crypto::CryptoError, ensure, ApplicationCallResult, CalleeContext,
     Contract, EffectContext, ExecutionResult, FromBcsBytes, OperationContext, Session,
-    SessionCallResult, SessionId,
+    SessionCallResult, SessionId, SimpleStateStorage,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -24,6 +24,7 @@ linera_sdk::contract!(FungibleToken);
 #[async_trait]
 impl Contract for FungibleToken {
     type Error = Error;
+    type Storage = SimpleStateStorage<Self>;
 
     async fn initialize(
         &mut self,
