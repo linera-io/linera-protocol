@@ -27,7 +27,7 @@ use self::{
 use crate::{
     ApplicationCallResult, Bytecode, CalleeContext, EffectContext, ExecutionError,
     OperationContext, QueryContext, QueryableStorage, RawExecutionResult, SessionCallResult,
-    SessionId, UserApplication, WritableStorage,
+    SessionId, UserApplication, WasmRuntime, WritableStorage,
 };
 use async_trait::async_trait;
 use std::{io, path::Path};
@@ -37,14 +37,20 @@ use thiserror::Error;
 pub struct WasmApplication {
     contract_bytecode: Bytecode,
     service_bytecode: Bytecode,
+    runtime: WasmRuntime,
 }
 
 impl WasmApplication {
     /// Create a new [`WasmApplication`] using the WebAssembly module with the provided bytecodes.
-    pub fn new(contract_bytecode: Bytecode, service_bytecode: Bytecode) -> Self {
+    pub fn new(
+        contract_bytecode: Bytecode,
+        service_bytecode: Bytecode,
+        runtime: WasmRuntime,
+    ) -> Self {
         WasmApplication {
             contract_bytecode,
             service_bytecode,
+            runtime,
         }
     }
 
@@ -52,10 +58,12 @@ impl WasmApplication {
     pub async fn from_files(
         contract_bytecode_file: impl AsRef<Path>,
         service_bytecode_file: impl AsRef<Path>,
+        runtime: WasmRuntime,
     ) -> Result<Self, io::Error> {
         Ok(WasmApplication {
             contract_bytecode: Bytecode::load_from_file(contract_bytecode_file).await?,
             service_bytecode: Bytecode::load_from_file(service_bytecode_file).await?,
+            runtime,
         })
     }
 
@@ -64,13 +72,11 @@ impl WasmApplication {
         &self,
         storage: &'storage dyn WritableStorage,
     ) -> Result<WasmRuntimeContext<Contract<'storage>>, WasmExecutionError> {
-        #[cfg(feature = "wasmtime")]
-        {
-            self.prepare_contract_runtime_with_wasmtime(storage)
-        }
-        #[cfg(all(feature = "wasmer", not(feature = "wasmtime")))]
-        {
-            self.prepare_contract_runtime_with_wasmer(storage)
+        match self.runtime {
+            #[cfg(feature = "wasmtime")]
+            WasmRuntime::Wasmtime => self.prepare_contract_runtime_with_wasmtime(storage),
+            #[cfg(feature = "wasmer")]
+            WasmRuntime::Wasmer => self.prepare_contract_runtime_with_wasmer(storage),
         }
     }
 
@@ -79,13 +85,11 @@ impl WasmApplication {
         &self,
         storage: &'storage dyn QueryableStorage,
     ) -> Result<WasmRuntimeContext<Service<'storage>>, WasmExecutionError> {
-        #[cfg(feature = "wasmtime")]
-        {
-            self.prepare_service_runtime_with_wasmtime(storage)
-        }
-        #[cfg(all(feature = "wasmer", not(feature = "wasmtime")))]
-        {
-            self.prepare_service_runtime_with_wasmer(storage)
+        match self.runtime {
+            #[cfg(feature = "wasmtime")]
+            WasmRuntime::Wasmtime => self.prepare_service_runtime_with_wasmtime(storage),
+            #[cfg(feature = "wasmer")]
+            WasmRuntime::Wasmer => self.prepare_service_runtime_with_wasmer(storage),
         }
     }
 }
@@ -201,7 +205,7 @@ impl UserApplication for WasmApplication {
 /// This assumes that the current directory is one of the crates.
 #[cfg(any(test, feature = "test"))]
 pub mod test {
-    use crate::WasmApplication;
+    use crate::{WasmApplication, WasmRuntime};
 
     fn build_applications() -> Result<(), std::io::Error> {
         log::info!("Building example applications with cargo");
@@ -226,6 +230,6 @@ pub mod test {
 
     pub async fn build_example_application(name: &str) -> Result<WasmApplication, std::io::Error> {
         let (contract, service) = get_example_bytecode_paths(name)?;
-        WasmApplication::from_files(&contract, &service).await
+        WasmApplication::from_files(&contract, &service, WasmRuntime::default()).await
     }
 }

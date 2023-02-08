@@ -25,7 +25,7 @@ use linera_execution::{
     UserApplicationDescription, UserApplicationId,
 };
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
-use linera_execution::{ApplicationId, Operation, SystemOperation, WasmApplication};
+use linera_execution::{ApplicationId, Operation, SystemOperation, WasmApplication, WasmRuntime};
 use linera_views::{
     common::Context,
     views::{ContainerView, HashableContainerView, ViewError},
@@ -159,6 +159,7 @@ pub trait Store: Sized {
             )) => Ok(Arc::new(WasmApplication::new(
                 contract.clone(),
                 service.clone(),
+                WasmRuntime::default(),
             ))),
             _ => Err(ExecutionError::InvalidBytecodeId(*bytecode_id)),
         }
