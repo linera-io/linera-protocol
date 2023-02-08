@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{ChainRuntimeContext, ChainStateView, Store};
+use async_lock::Mutex;
 use async_trait::async_trait;
 use dashmap::DashMap;
 use linera_base::{crypto::CryptoHash, data_types::ChainId};
@@ -12,7 +13,6 @@ use linera_views::{
     views::{View, ViewError},
 };
 use std::{collections::BTreeMap, sync::Arc};
-use tokio::sync::Mutex;
 
 #[derive(Clone, Default)]
 struct MemoryStore {
@@ -43,7 +43,7 @@ impl Store for MemoryStoreClient {
             user_applications: self.0.user_applications.clone(),
             chain_guard: None,
         };
-        let db_context = MemoryContext::new(state.lock_owned().await, runtime_context);
+        let db_context = MemoryContext::new(state.lock_arc().await, runtime_context);
         ChainStateView::load(db_context).await
     }
 

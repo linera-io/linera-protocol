@@ -20,10 +20,10 @@ use linera_views_derive::HashableContainerView;
 #[cfg(any(test, feature = "test"))]
 use {
     crate::{system::SystemExecutionState, TestExecutionRuntimeContext},
+    async_lock::Mutex,
     linera_views::{common::Context, memory::MemoryContext},
     std::collections::BTreeMap,
     std::sync::Arc,
-    tokio::sync::Mutex,
 };
 
 /// A view accessing the execution state of a chain.
@@ -59,7 +59,7 @@ where
             timestamp,
             registry,
         } = state;
-        let guard = Arc::new(Mutex::new(BTreeMap::new())).lock_owned().await;
+        let guard = Arc::new(Mutex::new(BTreeMap::new())).lock_arc().await;
         let extra = TestExecutionRuntimeContext::new(
             description.expect("Chain description should be set").into(),
         );

@@ -10,13 +10,13 @@ use crate::{
     test_utils::LocalStackTestContext,
     views::{View, ViewError},
 };
+use async_lock::Mutex;
 use async_trait::async_trait;
 use std::{
     collections::{BTreeMap, VecDeque},
     sync::Arc,
 };
 use tempfile::TempDir;
-use tokio::sync::Mutex;
 
 #[tokio::test]
 async fn test_queue_operations_with_memory_context() -> Result<(), anyhow::Error> {
@@ -186,7 +186,7 @@ impl TestContextFactory for MemoryContextFactory {
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
         let dummy_lock = Arc::new(Mutex::new(BTreeMap::new()));
-        Ok(MemoryContext::new(dummy_lock.lock_owned().await, ()))
+        Ok(MemoryContext::new(dummy_lock.lock_arc().await, ()))
     }
 }
 

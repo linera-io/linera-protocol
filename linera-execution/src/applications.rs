@@ -13,8 +13,8 @@ use std::collections::HashSet;
 
 #[cfg(any(test, feature = "test"))]
 use {
-    linera_views::memory::MemoryContext, std::collections::BTreeMap, std::sync::Arc,
-    tokio::sync::Mutex,
+    async_lock::Mutex, linera_views::memory::MemoryContext, std::collections::BTreeMap,
+    std::sync::Arc,
 };
 
 #[cfg(test)]
@@ -290,7 +290,7 @@ where
     ViewError: From<<MemoryContext<()> as linera_views::common::Context>::Error>,
 {
     pub async fn new() -> Self {
-        let guard = Arc::new(Mutex::new(BTreeMap::new())).lock_owned().await;
+        let guard = Arc::new(Mutex::new(BTreeMap::new())).lock_arc().await;
         let context = MemoryContext::new(guard, ());
         Self::load(context)
             .await

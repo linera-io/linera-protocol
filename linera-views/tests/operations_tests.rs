@@ -1,6 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use async_lock::{Mutex, RwLock};
 use linera_views::{
     common::{Batch, KeyIterable, KeyValueOperations},
     dynamo_db::DynamoDbClient,
@@ -14,7 +15,6 @@ use std::{
     collections::{BTreeMap, HashMap},
     sync::Arc,
 };
-use tokio::sync::{Mutex, RwLock};
 
 #[cfg(test)]
 async fn test_ordering_keys_key_value_vec<OP: KeyValueOperations + Sync>(
@@ -81,7 +81,7 @@ async fn test_ordering_keys<OP: KeyValueOperations + Sync>(key_value_operation: 
 #[tokio::test]
 async fn test_ordering_memory() {
     let map = Arc::new(Mutex::new(BTreeMap::new()));
-    let guard = map.clone().lock_owned().await;
+    let guard = map.clone().lock_arc().await;
     let key_value_operation = Arc::new(RwLock::new(guard));
     test_ordering_keys(key_value_operation).await;
 }
@@ -113,7 +113,7 @@ async fn test_ordering_dynamodb() {
 #[tokio::test]
 async fn test_ordering_key_value_store_view_memory() {
     let map = Arc::new(Mutex::new(BTreeMap::new()));
-    let guard = map.clone().lock_owned().await;
+    let guard = map.clone().lock_arc().await;
     let context = MemoryContext::new(guard, ());
     let key_value_operation = ViewContainer::new(context).await.unwrap();
     test_ordering_keys(key_value_operation).await;
@@ -122,7 +122,7 @@ async fn test_ordering_key_value_store_view_memory() {
 #[tokio::test]
 async fn test_ordering_memory_specific() {
     let map = Arc::new(Mutex::new(BTreeMap::new()));
-    let guard = map.clone().lock_owned().await;
+    let guard = map.clone().lock_arc().await;
     let key_value_operation = Arc::new(RwLock::new(guard));
     let key_value_vec = vec![
         (vec![0, 1, 255], Vec::new()),

@@ -11,6 +11,7 @@ wasmer = ["linera-execution/wasmer"]
 wasmtime = ["linera-execution/wasmtime"]
 
 [dependencies]
+async-lock = "2.6.0"
 async-trait = "0.1.52"
 bcs = "0.1.3"
 dashmap = "5.3.4"
