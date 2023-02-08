@@ -766,6 +766,7 @@ where
         }
         if query.request_pending_messages {
             let mut messages = Vec::new();
+            // TODO: Always prioritize system messages.
             for application_id in chain.communication_states.indices().await? {
                 let state = chain
                     .communication_states

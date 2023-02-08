@@ -14,7 +14,7 @@ pub enum AccountOwner {
 }
 
 /// A single-use number to prevent replay attacks.
-#[derive(Debug, Default, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(Debug, Copy, Clone, Default, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct Nonce(u64);
 
 impl Nonce {

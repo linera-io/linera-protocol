@@ -71,7 +71,7 @@ pub struct SystemExecutionState {
 }
 
 /// A system operation.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum SystemOperation {
     /// Transfer `amount` units of value to the recipient.
     Transfer {
@@ -128,6 +128,89 @@ pub enum SystemOperation {
         initialization_argument: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
     },
+}
+
+impl fmt::Debug for SystemOperation {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Transfer {
+                recipient,
+                amount,
+                user_data,
+            } => f
+                .debug_struct("Transfer")
+                .field("recipient", recipient)
+                .field("amount", amount)
+                .field("user_data", user_data)
+                .finish(),
+            Self::OpenChain {
+                id,
+                owner,
+                admin_id,
+                epoch,
+                committees,
+            } => f
+                .debug_struct("OpenChain")
+                .field("id", id)
+                .field("owner", owner)
+                .field("admin_id", admin_id)
+                .field("epoch", epoch)
+                .field("committees", committees)
+                .finish(),
+            Self::CloseChain => write!(f, "CloseChain"),
+            Self::ChangeOwner { new_owner } => f
+                .debug_struct("ChangeOwner")
+                .field("new_owner", new_owner)
+                .finish(),
+            Self::ChangeMultipleOwners { new_owners } => f
+                .debug_struct("ChangeMultipleOwners")
+                .field("new_owners", new_owners)
+                .finish(),
+            Self::CreateCommittee {
+                admin_id,
+                epoch,
+                committee,
+            } => f
+                .debug_struct("CreateCommittee")
+                .field("admin_id", admin_id)
+                .field("epoch", epoch)
+                .field("committee", committee)
+                .finish(),
+            Self::Subscribe { chain_id, channel } => f
+                .debug_struct("Subscribe")
+                .field("chain_id", chain_id)
+                .field("channel", channel)
+                .finish(),
+            Self::Unsubscribe { chain_id, channel } => f
+                .debug_struct("Unsubscribe")
+                .field("chain_id", chain_id)
+                .field("channel", channel)
+                .finish(),
+            Self::RemoveCommittee { admin_id, epoch } => f
+                .debug_struct("RemoveCommittee")
+                .field("admin_id", admin_id)
+                .field("epoch", epoch)
+                .finish(),
+            Self::PublishBytecode { contract, service } => f
+                .debug_struct("PublishBytecode")
+                .field("contract", contract)
+                .field("service", service)
+                .finish(),
+            Self::CreateApplication {
+                bytecode_id,
+                initialization_argument,
+                required_application_ids,
+            } => f
+                .debug_struct("CreateApplication")
+                .field("bytecode_id", bytecode_id)
+                .field(
+                    "initialization_argument",
+                    &hex::encode(initialization_argument),
+                )
+                .field("required_application_ids", required_application_ids)
+                .finish(),
+        }
+    }
 }
 
 /// The effect of a system operation to be performed on a remote chain.

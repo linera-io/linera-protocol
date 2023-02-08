@@ -318,6 +318,14 @@ impl Value {
         }
     }
 
+    pub fn effects(&self) -> &Vec<(ApplicationId, Destination, Effect)> {
+        match self {
+            Value::ConfirmedBlock { effects, .. } | Value::ValidatedBlock { effects, .. } => {
+                effects
+            }
+        }
+    }
+
     pub fn confirmed_block(&self) -> Option<&Block> {
         match self {
             Value::ConfirmedBlock { block, .. } => Some(block),

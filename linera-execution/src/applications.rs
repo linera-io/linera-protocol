@@ -9,7 +9,7 @@ use linera_views::{
     views::{HashableContainerView, View, ViewError},
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::{collections::HashSet, fmt};
 
 #[cfg(any(test, feature = "test"))]
 use {
@@ -51,7 +51,7 @@ pub enum ApplicationDescription {
 
 /// Description of the necessary information to run a user application.
 #[allow(clippy::large_enum_variant)]
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Hash, Serialize)]
+#[derive(Clone, Deserialize, Eq, PartialEq, Hash, Serialize)]
 pub struct UserApplicationDescription {
     /// The unique ID of the bytecode to use for the application.
     pub bytecode_id: BytecodeId,
@@ -64,6 +64,21 @@ pub struct UserApplicationDescription {
     pub initialization_argument: Vec<u8>,
     /// Required dependencies.
     pub required_application_ids: Vec<UserApplicationId>,
+}
+
+impl fmt::Debug for UserApplicationDescription {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("UserApplicationDescription")
+            .field("bytecode_id", &self.bytecode_id)
+            .field("bytecode_location", &self.bytecode_location)
+            .field("creation", &self.creation)
+            .field(
+                "initialization_argument",
+                &hex::encode(&self.initialization_argument),
+            )
+            .field("required_application_ids", &self.required_application_ids)
+            .finish()
+    }
 }
 
 impl From<EffectId> for BytecodeId {

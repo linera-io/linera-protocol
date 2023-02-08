@@ -38,7 +38,7 @@ use linera_base::{
 };
 use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
-use std::{io, path::Path, sync::Arc};
+use std::{fmt, io, path::Path, sync::Arc};
 use thiserror::Error;
 
 /// An implementation of [`UserApplication`]
@@ -310,7 +310,7 @@ pub trait WritableStorage: ReadableStorage {
 }
 
 /// An operation to be executed in a block.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Operation {
     /// A system operation.
     System(SystemOperation),
@@ -318,8 +318,17 @@ pub enum Operation {
     User(#[serde(with = "serde_bytes")] Vec<u8>),
 }
 
+impl fmt::Debug for Operation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::System(sys_op) => f.debug_tuple("System").field(sys_op).finish(),
+            Self::User(user_op) => write!(f, "User({})", hex::encode(user_op)),
+        }
+    }
+}
+
 /// An effect to be sent and possibly executed in the receiver's block.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Effect {
     /// A system effect.
     System(SystemEffect),
@@ -327,8 +336,17 @@ pub enum Effect {
     User(#[serde(with = "serde_bytes")] Vec<u8>),
 }
 
+impl fmt::Debug for Effect {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::System(sys_eff) => f.debug_tuple("System").field(sys_eff).finish(),
+            Self::User(user_eff) => write!(f, "User({})", hex::encode(user_eff)),
+        }
+    }
+}
+
 /// An query to be sent and possibly executed in the receiver's block.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Query {
     /// A system query.
     System(SystemQuery),
@@ -336,13 +354,31 @@ pub enum Query {
     User(#[serde(with = "serde_bytes")] Vec<u8>),
 }
 
+impl fmt::Debug for Query {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::System(sys_q) => f.debug_tuple("System").field(sys_q).finish(),
+            Self::User(user_q) => write!(f, "User({})", hex::encode(user_q)),
+        }
+    }
+}
+
 /// The response to a query.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Response {
     /// A system response.
     System(SystemResponse),
     /// A user response (in serialized form).
     User(#[serde(with = "serde_bytes")] Vec<u8>),
+}
+
+impl fmt::Debug for Response {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::System(sys_r) => f.debug_tuple("System").field(sys_r).finish(),
+            Self::User(user_r) => write!(f, "User({})", hex::encode(user_r)),
+        }
+    }
 }
 
 /// Externally visible results of an execution. These results are meant in the context of

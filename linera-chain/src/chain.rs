@@ -222,11 +222,8 @@ where
         );
         // Process immediate effects and create inbox events.
         let mut events = Vec::new();
+        let mut sys_events = Vec::new();
         for (index, (app_id, destination, effect)) in effects.into_iter().enumerate() {
-            // Skip events that do not belong to this application.
-            if app_id != application_id {
-                continue;
-            }
             // Skip events that do not belong to this origin OR have no effect on this
             // recipient.
             match destination {
@@ -250,24 +247,52 @@ where
                 };
                 self.execute_immediate_effect(effect_id, &effect, chain_id, timestamp)
                     .await?;
+                sys_events.push(Event {
+                    certificate_hash,
+                    height,
+                    index,
+                    timestamp,
+                    effect,
+                });
+            } else if app_id != application_id {
+                // Skip events that do not belong to this application.
+                continue;
+            } else {
+                // Record the inbox event to process it below.
+                events.push(Event {
+                    certificate_hash,
+                    height,
+                    index,
+                    timestamp,
+                    effect,
+                });
             }
-            // Record the inbox event to process it below.
-            events.push(Event {
-                certificate_hash,
-                height,
-                index,
-                timestamp,
-                effect,
-            });
         }
         // There should be inbox events. Otherwise, this means the cross-chain request was
         // not routed correctly.
         ensure!(
-            !events.is_empty(),
+            !events.is_empty() || !sys_events.is_empty(),
             ChainError::InternalError(format!(
                 "The block received by {:?} from {:?} at height {:?} was entirely ignored. This should not happen",
                 chain_id, origin, height))
         );
+        // Process the inbox events and update the inbox state.
+        let communication_state = self
+            .communication_states
+            .load_entry_mut(ApplicationId::System)
+            .await?;
+        let inbox = communication_state
+            .inboxes
+            .load_entry_mut(origin.clone())
+            .await?;
+        for event in sys_events {
+            inbox.add_event(event).await.map_err(|error| match error {
+                InboxError::ViewError(error) => ChainError::ViewError(error),
+                error => ChainError::InternalError(format!(
+                    "while processing effects in certified block: {error}"
+                )),
+            })?;
+        }
         // Process the inbox events and update the inbox state.
         let communication_state = self
             .communication_states
