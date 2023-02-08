@@ -13,6 +13,7 @@ use futures::{future, stream, StreamExt, TryFutureExt, TryStreamExt};
 use linera_sdk::{
     contract::system_api, ensure, ApplicationCallResult, CalleeContext, Contract, EffectContext,
     ExecutionResult, FromBcsBytes, OperationContext, Session, SessionCallResult, SessionId,
+    SimpleStateStorage,
 };
 use serde::{Deserialize, Serialize};
 use std::mem;
@@ -23,6 +24,7 @@ linera_sdk::contract!(CrowdFunding);
 #[async_trait]
 impl Contract for CrowdFunding {
     type Error = Error;
+    type Storage = SimpleStateStorage<Self>;
 
     async fn initialize(
         &mut self,

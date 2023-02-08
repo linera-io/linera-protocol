@@ -9,7 +9,7 @@ use self::state::Counter;
 use async_trait::async_trait;
 use linera_sdk::{
     ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
-    OperationContext, Session, SessionCallResult, SessionId,
+    OperationContext, Session, SessionCallResult, SessionId, SimpleStateStorage,
 };
 use thiserror::Error;
 
@@ -18,6 +18,7 @@ linera_sdk::contract!(Counter);
 #[async_trait]
 impl Contract for Counter {
     type Error = Error;
+    type Storage = SimpleStateStorage<Self>;
 
     async fn initialize(
         &mut self,

@@ -7,7 +7,7 @@ mod state;
 
 use self::state::CrowdFunding;
 use async_trait::async_trait;
-use linera_sdk::{QueryContext, Service};
+use linera_sdk::{QueryContext, Service, SimpleStateStorage};
 use serde::Deserialize;
 use thiserror::Error;
 
@@ -16,6 +16,7 @@ linera_sdk::service!(CrowdFunding);
 #[async_trait]
 impl Service for CrowdFunding {
     type Error = Error;
+    type Storage = SimpleStateStorage<Self>;
 
     async fn query_application(
         &self,

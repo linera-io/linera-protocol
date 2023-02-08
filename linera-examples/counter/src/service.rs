@@ -7,7 +7,7 @@ mod state;
 
 use self::state::Counter;
 use async_trait::async_trait;
-use linera_sdk::{QueryContext, Service};
+use linera_sdk::{QueryContext, Service, SimpleStateStorage};
 use thiserror::Error;
 
 linera_sdk::service!(Counter);
@@ -15,6 +15,7 @@ linera_sdk::service!(Counter);
 #[async_trait]
 impl Service for Counter {
     type Error = Error;
+    type Storage = SimpleStateStorage<Self>;
 
     async fn query_application(
         &self,
