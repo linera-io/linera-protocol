@@ -8,10 +8,14 @@
 //! contract type that implements [`linera_sdk::Contract`].
 
 use crate::{
-    contract::{self, system_api},
+    contract::{
+        self,
+        system_api::{self, WasmContext},
+    },
     ApplicationCallResult, Contract, ContractLogger, ExecutionResult, ExportedFuture,
-    SessionCallResult, SessionId, SimpleStateStorage,
+    SessionCallResult, SessionId, SimpleStateStorage, ViewStateStorage,
 };
+use linera_views::views::ContainerView;
 use serde::{de::DeserializeOwned, Serialize};
 use std::marker::PhantomData;
 
@@ -147,6 +151,107 @@ where
                 .await;
             if result.is_ok() {
                 system_api::store_and_unlock(application).await;
+            }
+            result.map_err(|error| error.to_string())
+        })
+    }
+}
+
+impl<Application> ContractStateStorage for ViewStateStorage<Application>
+where
+    Application: Contract + ContainerView<WasmContext>,
+{
+    fn initialize(
+        context: contract::OperationContext,
+        argument: Vec<u8>,
+    ) -> ExportedFuture<Result<ExecutionResult, String>> {
+        ExportedFuture::new(async move {
+            let mut application: Application = system_api::load_and_lock_view().await;
+            let result = application.initialize(&context.into(), &argument).await;
+            if result.is_ok() {
+                system_api::store_and_unlock_view(application).await;
+            }
+            result.map_err(|error| error.to_string())
+        })
+    }
+
+    fn execute_operation(
+        context: contract::OperationContext,
+        operation: Vec<u8>,
+    ) -> ExportedFuture<Result<ExecutionResult, String>> {
+        ExportedFuture::new(async move {
+            let mut application: Application = system_api::load_and_lock_view().await;
+            let result = application
+                .execute_operation(&context.into(), &operation)
+                .await;
+            if result.is_ok() {
+                system_api::store_and_unlock_view(application).await;
+            }
+            result.map_err(|error| error.to_string())
+        })
+    }
+
+    fn execute_effect(
+        context: contract::EffectContext,
+        effect: Vec<u8>,
+    ) -> ExportedFuture<Result<ExecutionResult, String>> {
+        ExportedFuture::new(async move {
+            let mut application: Application = system_api::load_and_lock_view().await;
+            let result = application.execute_effect(&context.into(), &effect).await;
+            if result.is_ok() {
+                system_api::store_and_unlock_view(application).await;
+            }
+            result.map_err(|error| error.to_string())
+        })
+    }
+
+    fn call_application(
+        context: contract::CalleeContext,
+        argument: Vec<u8>,
+        forwarded_sessions: Vec<contract::SessionId>,
+    ) -> ExportedFuture<Result<ApplicationCallResult, String>> {
+        ExportedFuture::new(async move {
+            let mut application: Application = system_api::load_and_lock_view().await;
+
+            let forwarded_sessions = forwarded_sessions
+                .into_iter()
+                .map(SessionId::from)
+                .collect();
+
+            let result = application
+                .call_application(&context.into(), &argument, forwarded_sessions)
+                .await;
+            if result.is_ok() {
+                system_api::store_and_unlock_view(application).await;
+            }
+            result.map_err(|error| error.to_string())
+        })
+    }
+
+    fn call_session(
+        context: contract::CalleeContext,
+        session: contract::Session,
+        argument: Vec<u8>,
+        forwarded_sessions: Vec<contract::SessionId>,
+    ) -> ExportedFuture<Result<SessionCallResult, String>> {
+        ExportedFuture::new(async move {
+            let mut application: Application = system_api::load_and_lock_view().await;
+
+            let forwarded_sessions = forwarded_sessions
+                .into_iter()
+                .map(SessionId::from)
+                .collect();
+
+            let result = application
+                .call_session(
+                    &context.into(),
+                    session.into(),
+                    &argument,
+                    forwarded_sessions,
+                )
+                .await;
+            if result.is_ok() {
+                system_api::store_and_unlock_view(application).await;
             }
             result.map_err(|error| error.to_string())
         })
