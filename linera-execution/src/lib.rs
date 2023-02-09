@@ -41,7 +41,7 @@ use linera_base::{
 };
 use linera_views::{common::Batch, views::ViewError};
 use serde::{Deserialize, Serialize};
-use std::{io, path::Path, sync::Arc};
+use std::{io, path::Path, str::FromStr, sync::Arc};
 use thiserror::Error;
 
 /// An implementation of [`UserApplication`]
@@ -609,3 +609,22 @@ pub enum WasmRuntime {
     #[display(fmt = "wasmtime")]
     Wasmtime,
 }
+
+impl FromStr for WasmRuntime {
+    type Err = InvalidWasmRuntime;
+
+    fn from_str(string: &str) -> Result<Self, Self::Err> {
+        match string {
+            #[cfg(feature = "wasmer")]
+            "wasmer" => Ok(WasmRuntime::Wasmer),
+            #[cfg(feature = "wasmtime")]
+            "wasmtime" => Ok(WasmRuntime::Wasmtime),
+            unknown => Err(InvalidWasmRuntime(unknown.to_owned())),
+        }
+    }
+}
+
+/// Attempt to create an invalid [`WasmRuntime`] instance from a string.
+#[derive(Clone, Debug, Error)]
+#[error("{0:?} is not a valid WebAssembly runtime")]
+pub struct InvalidWasmRuntime(String);
