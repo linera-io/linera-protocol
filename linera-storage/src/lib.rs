@@ -130,6 +130,12 @@ pub trait Store: Sized {
         Ok(())
     }
 
+    /// Selects the WebAssembly runtime to use for applications.
+    #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
+    fn wasm_runtime(&self) -> WasmRuntime {
+        WasmRuntime::default()
+    }
+
     /// Create a [`UserApplication`] instance using the bytecode in storage referenced by the
     /// `application_description`.
     #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
@@ -159,7 +165,7 @@ pub trait Store: Sized {
             )) => Ok(Arc::new(WasmApplication::new(
                 contract.clone(),
                 service.clone(),
-                WasmRuntime::default(),
+                self.wasm_runtime(),
             ))),
             _ => Err(ExecutionError::InvalidBytecodeId(*bytecode_id)),
         }
