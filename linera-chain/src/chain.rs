@@ -418,23 +418,25 @@ where
                 height: block.height,
                 index,
             };
-            let communication_state = self
-                .communication_states
-                .load_entry_mut(*application_id)
-                .await?;
             let results = self
                 .execution_state
                 .execute_operation(*application_id, &context, operation)
                 .await?;
 
-            Self::process_execution_results(
-                &mut communication_state.outboxes,
-                &mut communication_state.channels,
-                &mut effects,
-                context.height,
-                results,
-            )
-            .await?;
+            for result in results {
+                let communication_state = self
+                    .communication_states
+                    .load_entry_mut(result.application_id())
+                    .await?;
+                Self::process_execution_results(
+                    &mut communication_state.outboxes,
+                    &mut communication_state.channels,
+                    &mut effects,
+                    context.height,
+                    vec![result],
+                )
+                .await?;
+            }
         }
         // Recompute the state hash.
         let hash = self.execution_state.crypto_hash().await?;

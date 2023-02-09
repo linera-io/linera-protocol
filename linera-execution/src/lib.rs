@@ -448,6 +448,15 @@ pub enum ExecutionResult {
     User(UserApplicationId, RawExecutionResult<Vec<u8>>),
 }
 
+impl ExecutionResult {
+    pub fn application_id(&self) -> ApplicationId {
+        match self {
+            ExecutionResult::System(_) => ApplicationId::System,
+            ExecutionResult::User(app_id, _) => ApplicationId::User(*app_id),
+        }
+    }
+}
+
 impl<Effect> Default for RawExecutionResult<Effect> {
     fn default() -> Self {
         Self {
