@@ -1,9 +1,12 @@
+pub(crate) mod util;
+
 extern crate proc_macro;
 extern crate syn;
+use crate::util::{create_element_name, snakify};
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
-use quote::quote;
-use syn::{parse_macro_input, ItemStruct};
+use quote::{__private::ext::RepToTokensExt, quote};
+use syn::{parse_macro_input, Field, GenericArgument, ItemStruct, PathArguments, Type, TypePath};
 
 fn get_seq_parameter(generics: syn::Generics) -> Vec<syn::Ident> {
     let mut generic_vect = Vec::new();
@@ -219,6 +222,204 @@ fn generate_crypto_hash_code(input: ItemStruct) -> TokenStream2 {
     }
 }
 
+fn generic_argument_from_type_path(type_path: &TypePath) -> Vec<&Type> {
+    let arguments = &type_path
+        .path
+        .segments
+        .iter()
+        .next()
+        .expect("type path should have at least one segment")
+        .arguments;
+
+    let set_type = arguments
+        .next()
+        .expect("type path segment should have at least one argument");
+
+    let angle = match set_type {
+        PathArguments::AngleBracketed(angle) => angle,
+        _ => {
+            unreachable!("")
+        }
+    };
+
+    angle
+        .args
+        .pairs()
+        .map(|pair| *pair.value())
+        .map(|value| match value {
+            GenericArgument::Type(r#type) => r#type,
+            _ => panic!("Only types are supported as generic arguments in views."),
+        })
+        .collect()
+}
+
+fn generate_graphql_code_for_field(field: Field) -> (TokenStream2, Option<TokenStream2>) {
+    let field_name = field
+        .ident
+        .clone()
+        .expect("anonymous fields not supported.");
+    let view_type = get_type_field(field.clone()).expect("could not get view type.");
+    let type_path = match field.ty {
+        Type::Path(type_path) => type_path,
+        _ => panic!(),
+    };
+
+    match view_type.to_string().as_str() {
+        "RegisterView" => {
+            let generic_arguments = generic_argument_from_type_path(&type_path);
+            let generic_ident = generic_arguments
+                .get(1)
+                .expect("no generic specified for 'RegisterView'");
+            let r#impl = quote! {
+                async fn #field_name(&self) -> &#generic_ident {
+                    self.#field_name.get()
+                }
+            };
+            (r#impl, None)
+        }
+        "CollectionView" => {
+            let generic_arguments = generic_argument_from_type_path(&type_path);
+            let index_ident = generic_arguments
+                .get(1)
+                .expect("no index specified for 'CollectionView'");
+            let generic_ident = generic_arguments
+                .get(2)
+                .expect("no generic type specified for 'CollectionView'");
+
+            let index_name = snakify(index_ident);
+
+            let r#impl = quote! {
+                async fn #field_name(&self, #index_name: #index_ident) -> Result<ChannelStateElement<C>, Error> {
+                    Ok(ChannelStateElement {
+                        #index_name: #index_name.clone(),
+                        guard: self.#field_name.try_load_entry(#index_name).await?,
+                    })
+                }
+            };
+
+            let element_name = create_element_name(generic_ident);
+            let generic_method_name = snakify(generic_ident);
+
+            let r#struct = quote! {
+                struct #element_name<'a, C>
+                where
+                    C: Sync + Send + Context + 'static,
+                    ViewError: From<C::Error>,
+                {
+                    #index_name: #index_ident,
+                    guard: ReadGuardedView<'a, #generic_ident>,
+                }
+
+                #[async_graphql::Object]
+                impl<'a, C> #element_name<'a, C>
+                where
+                    C: Sync + Send + Context + 'static + Clone,
+                    ViewError: From<C::Error>,
+                {
+                    async fn #index_name(&self) -> &#index_ident {
+                        &self.#index_name
+                    }
+
+                    async fn #generic_method_name(&self) -> &#generic_ident {
+                        self.guard.deref()
+                    }
+                }
+            };
+
+            (r#impl, Some(r#struct))
+        }
+        "SetView" => {
+            let generic_arguments = generic_argument_from_type_path(&type_path);
+            let generic_ident = generic_arguments
+                .get(1)
+                .expect("no generic type specified for 'SetView'");
+
+            let r#impl = quote! {
+                async fn #field_name(&self) -> Result<Vec<#generic_ident>, Error> {
+                    Ok(self.#field_name.indices().await?)
+                }
+            };
+            (r#impl, None)
+        }
+        "LogView" => {
+            let generic_arguments = generic_argument_from_type_path(&type_path);
+            let generic_ident = generic_arguments
+                .get(1)
+                .expect("no generic type specified for 'LogView'");
+
+            let r#impl = quote! {
+                async fn #field_name(&self, range: Option<Range>) -> Result<Vec<#generic_ident>, Error> {
+                    let range = range.unwrap_or(Range {
+                        start: 0,
+                        end: self.#field_name.count(),
+                    });
+                    Ok(self.#field_name.read(range.into()).await?)
+                }
+            };
+            (r#impl, None)
+        }
+        "QueueView" => {
+            let generic_arguments = generic_argument_from_type_path(&type_path);
+            let generic_ident = generic_arguments
+                .get(1)
+                .expect("no generic type specified for 'QueueView'");
+
+            let r#impl = quote! {
+                async fn #field_name(&self, count: Option<usize>) -> Result<Vec<#generic_ident>, Error> {
+                    let count = count.unwrap_or_else(|| self.#field_name.count());
+                    Ok(self.#field_name.read_front(count).await?)
+                }
+            };
+            (r#impl, None)
+        }
+        _ => {
+            let r#impl = quote! {
+                async fn #field_name(&self) -> &#type_path {
+                    &self.#field_name
+                }
+            };
+            (r#impl, None)
+        }
+    }
+}
+
+fn generate_graphql_code(input: ItemStruct) -> TokenStream2 {
+    let struct_name = input.ident;
+    let generics = input.generics;
+    let template_vect = get_seq_parameter(generics.clone());
+    let first_generic = template_vect
+        .get(0)
+        .expect("failed to find the first generic parameter");
+
+    let mut impls = vec![];
+    let mut structs = vec![];
+
+    for field in input.fields {
+        let (r#impl, r#struct) = generate_graphql_code_for_field(field);
+        impls.push(r#impl);
+        if let Some(r#struct) = r#struct {
+            structs.push(r#struct);
+        }
+    }
+
+    quote! {
+        #(#structs)*
+
+        #[async_graphql::Object]
+        impl #generics #struct_name #generics
+        where
+            #first_generic: Context + Send + Sync + Clone + 'static,
+            linera_views::views::ViewError: From<#first_generic::Error>,
+        {
+            #
+
+            (#impls)
+
+            *
+        }
+    }
+}
+
 #[proc_macro_derive(View)]
 pub fn derive_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
@@ -250,12 +451,28 @@ pub fn derive_hash_container_view(input: TokenStream) -> TokenStream {
     stream.into()
 }
 
+#[proc_macro_derive(GraphQLView)]
+pub fn derive_graphql_view(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as ItemStruct);
+    generate_graphql_code(input).into()
+}
+
 #[cfg(test)]
 pub mod tests {
 
     use crate::*;
     use quote::quote;
     use syn::parse_quote;
+
+    fn assert_eq_no_whitespace(mut actual: String, mut expected: String) {
+        // Intentionally left here for debugging purposes
+        println!("{}", actual);
+
+        actual.retain(|c| !c.is_whitespace());
+        expected.retain(|c| !c.is_whitespace());
+
+        assert_eq!(actual, expected);
+    }
 
     #[test]
     #[rustfmt::skip]
@@ -452,5 +669,82 @@ pub mod tests {
         );
 
         assert_eq!(output.to_string(), expected.to_string());
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn test_generate_graphql_code() {
+        let input: ItemStruct = parse_quote!(
+            struct TestView<C> {
+                raw: String,
+                register: RegisterView<C, Option<usize>>,
+                collection: CollectionView<C, String, SomeOtherView<C>>,
+                set: SetView<C, HashSet<usize>>,
+                log: LogView<C, usize>,
+                queue: QueueView<C, usize>,
+            }
+        );
+
+        let output = generate_graphql_code(input);
+
+        let expected = quote!(
+            struct SomeOtherViewElement<'a, C>
+                where
+                    C: Sync + Send + Context + 'static,
+                    ViewError: From<C::Error>,
+            {
+                string: String,
+                guard: ReadGuardedView<'a, SomeOtherView<C>>,
+            }
+
+            #[async_graphql::Object]
+            impl<'a, C> SomeOtherViewElement<'a, C>
+                where
+                    C: Sync + Send + Context + 'static + Clone,
+                    ViewError: From<C::Error>,
+            {
+                async fn string(&self) -> &String {
+                    &self.string
+                }
+                async fn some_other_view(&self) -> &SomeOtherView<C> {
+                    self.guard.deref()
+                }
+            }
+            #[async_graphql::Object]
+            impl<C> TestView<C>
+                where
+                    C: Context + Send + Sync + Clone + 'static,
+                    linera_views::views::ViewError: From<C::Error>,
+            {
+                async fn raw(&self) -> &String {
+                    &self.raw
+                }
+                async fn register(&self) -> &Option<usize> {
+                    self.register.get()
+                }
+                async fn collection(&self, string: String) -> Result<ChannelStateElement<C>, Error> {
+                    Ok(ChannelStateElement {
+                        string: string.clone(),
+                        guard: self.collection.try_load_entry(string).await?,
+                    })
+                }
+                async fn set(&self) -> Result<Vec<HashSet<usize>>, Error> {
+                    Ok(self.set.indices().await?)
+                }
+                async fn log(&self, range: Option<Range>) -> Result<Vec<usize>, Error> {
+                    let range = range.unwrap_or(Range {
+                        start: 0,
+                        end: self.log.count(),
+                    });
+                    Ok(self.log.read(range.into()).await?)
+                }
+                async fn queue(&self, count: Option<usize>) -> Result<Vec<usize>, Error> {
+                    let count = count.unwrap_or_else(|| self.queue.count());
+                    Ok(self.queue.read_front(count).await?)
+                }
+            }
+        );
+
+        assert_eq_no_whitespace(output.to_string(), expected.to_string())
     }
 }
