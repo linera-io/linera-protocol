@@ -31,10 +31,12 @@ pub use {applications::ApplicationRegistry, system::SystemExecutionState};
 
 use async_graphql::SimpleObject;
 use async_trait::async_trait;
+use custom_debug_derive::Debug;
 use dashmap::DashMap;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{BlockHeight, ChainId, EffectId, Timestamp},
+    hex_debug,
 };
 use linera_views::{common::Batch, views::ViewError};
 use serde::{Deserialize, Serialize};
@@ -344,7 +346,11 @@ pub enum Operation {
     /// A system operation.
     System(SystemOperation),
     /// A user operation (in serialized form).
-    User(#[serde(with = "serde_bytes")] Vec<u8>),
+    User(
+        #[serde(with = "serde_bytes")]
+        #[debug(with = "hex_debug")]
+        Vec<u8>,
+    ),
 }
 
 /// An effect to be sent and possibly executed in the receiver's block.
@@ -353,7 +359,11 @@ pub enum Effect {
     /// A system effect.
     System(SystemEffect),
     /// A user effect (in serialized form).
-    User(#[serde(with = "serde_bytes")] Vec<u8>),
+    User(
+        #[serde(with = "serde_bytes")]
+        #[debug(with = "hex_debug")]
+        Vec<u8>,
+    ),
 }
 
 /// An query to be sent and possibly executed in the receiver's block.
@@ -362,7 +372,11 @@ pub enum Query {
     /// A system query.
     System(SystemQuery),
     /// A user query (in serialized form).
-    User(#[serde(with = "serde_bytes")] Vec<u8>),
+    User(
+        #[serde(with = "serde_bytes")]
+        #[debug(with = "hex_debug")]
+        Vec<u8>,
+    ),
 }
 
 /// The response to a query.
@@ -371,7 +385,11 @@ pub enum Response {
     /// A system response.
     System(SystemResponse),
     /// A user response (in serialized form).
-    User(#[serde(with = "serde_bytes")] Vec<u8>),
+    User(
+        #[serde(with = "serde_bytes")]
+        #[debug(with = "hex_debug")]
+        Vec<u8>,
+    ),
 }
 
 /// Externally visible results of an execution. These results are meant in the context of

@@ -8,10 +8,11 @@ use crate::{
     OperationContext, QueryContext, RawExecutionResult, UserApplicationDescription,
     UserApplicationId,
 };
+use custom_debug_derive::Debug;
 use linera_base::{
     committee::Committee,
     data_types::{ArithmeticError, ChainDescription, ChainId, EffectId, Epoch, Owner, Timestamp},
-    ensure,
+    ensure, hex_debug,
 };
 use linera_views::{
     common::Context,
@@ -125,6 +126,7 @@ pub enum SystemOperation {
     CreateApplication {
         bytecode_id: BytecodeId,
         #[serde(with = "serde_bytes")]
+        #[debug(with = "hex_debug")]
         initialization_argument: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
     },

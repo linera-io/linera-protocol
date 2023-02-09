@@ -1226,6 +1226,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "custom_debug_derive"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b35d34eb004bf2d33c093f1c55ee77829e8654644288d3b6afd8c2d99d23729"
+dependencies = [
+ "proc-macro2",
+ "syn",
+ "synstructure",
+]
+
+[[package]]
 name = "cxx"
 version = "1.0.83"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2185,6 +2196,7 @@ dependencies = [
  "async-lock",
  "async-trait",
  "bcs",
+ "custom_debug_derive",
  "dashmap",
  "futures",
  "linera-base",
@@ -2245,6 +2257,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bcs",
+ "custom_debug_derive",
  "ed25519-dalek",
  "futures",
  "generic-array",
