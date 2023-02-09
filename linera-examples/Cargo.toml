@@ -4,6 +4,7 @@ members = [
         "counter2",
         "crowd-funding",
         "fungible",
+        "meta-counter",
 ]
 
 [profile.release]
