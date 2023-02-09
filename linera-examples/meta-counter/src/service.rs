@@ -7,10 +7,17 @@ mod state;
 
 use self::state::MetaCounter;
 use async_trait::async_trait;
-use linera_sdk::{service::system_api, QueryContext, Service, SimpleStateStorage};
+use linera_sdk::{service::system_api, ApplicationId, QueryContext, Service, SimpleStateStorage};
 use thiserror::Error;
 
 linera_sdk::service!(MetaCounter);
+
+impl MetaCounter {
+    fn counter_id() -> Result<ApplicationId, Error> {
+        let parameters = system_api::current_application_parameters();
+        bcs::from_bytes(&parameters).map_err(|_| Error::Parameters)
+    }
+}
 
 #[async_trait]
 impl Service for MetaCounter {
@@ -22,7 +29,7 @@ impl Service for MetaCounter {
         _context: &QueryContext,
         argument: &[u8],
     ) -> Result<Vec<u8>, Self::Error> {
-        let value = system_api::query_application(self.counter_id.unwrap(), argument)
+        let value = system_api::query_application(Self::counter_id()?, argument)
             .await
             .map_err(|_| Error::InternalQuery)?;
         Ok(value)
@@ -34,4 +41,7 @@ impl Service for MetaCounter {
 pub enum Error {
     #[error("Internal query failed")]
     InternalQuery,
+
+    #[error("Invalid application parameters")]
+    Parameters,
 }

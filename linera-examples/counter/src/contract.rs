@@ -53,7 +53,9 @@ impl Contract for Counter {
         argument: &[u8],
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, Self::Error> {
+        log::error!("received {:?}", argument);
         let increment: u128 = bcs::from_bytes(argument)?;
+        log::error!("incrementing by {:?}", increment);
         self.value += increment;
         Ok(ApplicationCallResult {
             value: bcs::to_bytes(&self.value).expect("Serialization should not fail"),
