@@ -215,7 +215,9 @@ pub mod test {
     pub fn get_example_bytecode_paths(name: &str) -> Result<(String, String), std::io::Error> {
         build_applications()?;
         Ok((
-            format!("../linera-examples/target/wasm32-unknown-unknown/release/{name}_contract.wasm"),
+            format!(
+                "../linera-examples/target/wasm32-unknown-unknown/release/{name}_contract.wasm"
+            ),
             format!("../linera-examples/target/wasm32-unknown-unknown/release/{name}_service.wasm"),
         ))
     }
