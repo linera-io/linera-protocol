@@ -197,6 +197,57 @@ impl From<writable_system::LogLevel> for log::Level {
     }
 }
 
+impl From<queryable_system::ApplicationId> for UserApplicationId {
+    fn from(guest: queryable_system::ApplicationId) -> Self {
+        UserApplicationId {
+            bytecode_id: guest.bytecode_id.into(),
+            creation: guest.creation.into(),
+        }
+    }
+}
+
+impl From<queryable_system::EffectId> for BytecodeId {
+    fn from(guest: queryable_system::EffectId) -> Self {
+        BytecodeId(guest.into())
+    }
+}
+
+impl From<queryable_system::EffectId> for EffectId {
+    fn from(guest: queryable_system::EffectId) -> Self {
+        EffectId {
+            chain_id: guest.chain_id.into(),
+            height: BlockHeight(guest.height),
+            index: guest
+                .index
+                .try_into()
+                .expect("Incorrect assumption that `usize` is 64-bits"),
+        }
+    }
+}
+
+impl From<queryable_system::CryptoHash> for ChainId {
+    fn from(guest: queryable_system::CryptoHash) -> Self {
+        ChainId(guest.into())
+    }
+}
+
+impl From<queryable_system::CryptoHash> for CryptoHash {
+    fn from(guest: queryable_system::CryptoHash) -> Self {
+        let mut bytes = [0u8; 64];
+
+        bytes[0..8].copy_from_slice(&guest.part1.to_le_bytes());
+        bytes[8..16].copy_from_slice(&guest.part2.to_le_bytes());
+        bytes[16..24].copy_from_slice(&guest.part3.to_le_bytes());
+        bytes[24..32].copy_from_slice(&guest.part4.to_le_bytes());
+        bytes[32..40].copy_from_slice(&guest.part5.to_le_bytes());
+        bytes[40..48].copy_from_slice(&guest.part6.to_le_bytes());
+        bytes[48..56].copy_from_slice(&guest.part7.to_le_bytes());
+        bytes[56..64].copy_from_slice(&guest.part8.to_le_bytes());
+
+        CryptoHash::try_from(&bytes[..]).expect("Incorrect byte count for `CryptoHash`")
+    }
+}
+
 impl From<queryable_system::LogLevel> for log::Level {
     fn from(level: queryable_system::LogLevel) -> Self {
         match level {

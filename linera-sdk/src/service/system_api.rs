@@ -140,6 +140,16 @@ pub fn current_system_time() -> Timestamp {
     system::read_system_timestamp().into()
 }
 
+/// Queries another application.
+pub async fn query_application(
+    application: ApplicationId,
+    argument: &[u8],
+) -> Result<Vec<u8>, String> {
+    let future = system::TryQueryApplication::new(application.into(), argument);
+
+    future::poll_fn(|_context| future.poll().into()).await
+}
+
 /// Requests the host to log a message.
 ///
 /// Useful for debugging locally, but may be ignored by validators.
