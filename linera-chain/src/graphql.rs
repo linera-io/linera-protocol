@@ -1,15 +1,12 @@
 use crate::{
     chain::{ChainTipState, ChannelStateView, CommunicationStateView},
     data_types::{Event, Medium, Origin, Target},
-    inbox::{Cursor, InboxStateView},
+    inbox::InboxStateView,
     outbox::OutboxStateView,
     ChainManager, ChainStateView,
 };
 use async_graphql::{scalar, Error, Object};
-use linera_base::{
-    crypto::CryptoHash,
-    data_types::{BlockHeight, ChainId},
-};
+use linera_base::{crypto::CryptoHash, data_types::ChainId};
 use linera_execution::{ApplicationId, ChannelName, ExecutionStateView};
 use linera_views::{collection_view::ReadGuardedView, common::Context, views::ViewError};
 use serde::{Deserialize, Serialize};
@@ -193,30 +190,6 @@ where
     }
 }
 
-#[Object]
-impl<C: Sync + Send + Context + Clone + 'static> InboxStateView<C>
-where
-    ViewError: From<C::Error>,
-{
-    async fn next_cursor_to_add(&self) -> &Cursor {
-        self.next_cursor_to_add.get()
-    }
-
-    async fn next_cursor_to_remove(&self) -> &Cursor {
-        self.next_cursor_to_remove.get()
-    }
-
-    async fn added_events(&self, count: Option<usize>) -> Result<Vec<Event>, Error> {
-        let count = count.unwrap_or_else(|| self.added_events.count());
-        Ok(self.added_events.read_front(count).await?)
-    }
-
-    async fn removed_events(&self, count: Option<usize>) -> Result<Vec<Event>, Error> {
-        let count = count.unwrap_or_else(|| self.removed_events.count());
-        Ok(self.removed_events.read_front(count).await?)
-    }
-}
-
 struct OutboxStateElement<'a, C>
 where
     C: Sync + Send + Context + 'static,
@@ -241,21 +214,6 @@ where
     }
 }
 
-#[Object]
-impl<C: Sync + Send + Context + Clone + 'static> OutboxStateView<C>
-where
-    ViewError: From<C::Error>,
-{
-    async fn next_height_to_schedule(&self) -> &BlockHeight {
-        self.next_height_to_schedule.get()
-    }
-
-    async fn queue(&self, count: Option<usize>) -> Result<Vec<BlockHeight>, Error> {
-        let count = count.unwrap_or_else(|| self.queue.count());
-        Ok(self.queue.read_front(count).await?)
-    }
-}
-
 struct ChannelStateElement<'a, C>
 where
     C: Sync + Send + Context + 'static,
@@ -277,19 +235,5 @@ where
 
     async fn channel_state_view(&self) -> &ChannelStateView<C> {
         self.guard.deref()
-    }
-}
-
-#[Object]
-impl<C: Sync + Send + Context + Clone + 'static> ChannelStateView<C>
-where
-    ViewError: From<C::Error>,
-{
-    async fn subscribers(&self) -> Result<Vec<ChainId>, Error> {
-        Ok(self.subscribers.indices().await?)
-    }
-
-    async fn block_height(&self) -> &Option<BlockHeight> {
-        self.block_height.get()
     }
 }
