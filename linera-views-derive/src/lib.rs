@@ -2,7 +2,7 @@ pub(crate) mod util;
 
 extern crate proc_macro;
 extern crate syn;
-use crate::util::{create_element_name, snakify};
+use crate::util::{create_entry_name, snakify};
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{__private::ext::RepToTokensExt, quote};
@@ -289,32 +289,32 @@ fn generate_graphql_code_for_field(field: Field) -> (TokenStream2, Option<TokenS
             let index_name = snakify(index_ident);
 
             let r#impl = quote! {
-                async fn #field_name(&self, #index_name: #index_ident) -> Result<ChannelStateElement<C>, Error> {
-                    Ok(ChannelStateElement {
+                async fn #field_name(&self, #index_name: #index_ident) -> Result<ChannelStateEntry<C>, async_graphql::Error> {
+                    Ok(ChannelStateEntry {
                         #index_name: #index_name.clone(),
                         guard: self.#field_name.try_load_entry(#index_name).await?,
                     })
                 }
             };
 
-            let element_name = create_element_name(generic_ident);
+            let entry_name = create_entry_name(generic_ident);
             let generic_method_name = snakify(generic_ident);
 
             let r#struct = quote! {
-                struct #element_name<'a, C>
+                pub struct #entry_name<'a, C>
                 where
-                    C: Sync + Send + Context + 'static,
-                    ViewError: From<C::Error>,
+                    C: Sync + Send + linera_views::Context + 'static,
+                    linera_views::ViewError: From<C::Error>,
                 {
                     #index_name: #index_ident,
-                    guard: ReadGuardedView<'a, #generic_ident>,
+                    guard: linera_views::ReadGuardedView<'a, #generic_ident>,
                 }
 
                 #[async_graphql::Object]
-                impl<'a, C> #element_name<'a, C>
+                impl<'a, C> #entry_name<'a, C>
                 where
-                    C: Sync + Send + Context + 'static + Clone,
-                    ViewError: From<C::Error>,
+                    C: Sync + Send + linera_views::Context + 'static + Clone,
+                    linera_views::ViewError: From<C::Error>,
                 {
                     async fn #index_name(&self) -> &#index_ident {
                         &self.#index_name
@@ -335,7 +335,7 @@ fn generate_graphql_code_for_field(field: Field) -> (TokenStream2, Option<TokenS
                 .expect("no generic type specified for 'SetView'");
 
             let r#impl = quote! {
-                async fn #field_name(&self) -> Result<Vec<#generic_ident>, Error> {
+                async fn #field_name(&self) -> Result<Vec<#generic_ident>, async_graphql::Error> {
                     Ok(self.#field_name.indices().await?)
                 }
             };
@@ -348,7 +348,7 @@ fn generate_graphql_code_for_field(field: Field) -> (TokenStream2, Option<TokenS
                 .expect("no generic type specified for 'LogView'");
 
             let r#impl = quote! {
-                async fn #field_name(&self, range: Option<Range>) -> Result<Vec<#generic_ident>, Error> {
+                async fn #field_name(&self, range: Option<Range>) -> Result<Vec<#generic_ident>, async_graphql::Error> {
                     let range = range.unwrap_or(Range {
                         start: 0,
                         end: self.#field_name.count(),
@@ -365,7 +365,7 @@ fn generate_graphql_code_for_field(field: Field) -> (TokenStream2, Option<TokenS
                 .expect("no generic type specified for 'QueueView'");
 
             let r#impl = quote! {
-                async fn #field_name(&self, count: Option<usize>) -> Result<Vec<#generic_ident>, Error> {
+                async fn #field_name(&self, count: Option<usize>) -> Result<Vec<#generic_ident>, async_graphql::Error> {
                     let count = count.unwrap_or_else(|| self.#field_name.count());
                     Ok(self.#field_name.read_front(count).await?)
                 }
@@ -688,20 +688,19 @@ pub mod tests {
         let output = generate_graphql_code(input);
 
         let expected = quote!(
-            struct SomeOtherViewElement<'a, C>
-                where
-                    C: Sync + Send + Context + 'static,
-                    ViewError: From<C::Error>,
+            pub struct SomeOtherViewEntry<'a, C>
+            where
+                C: Sync + Send + linera_views::Context + 'static,
+                linera_views::ViewError: From<C::Error>,
             {
                 string: String,
-                guard: ReadGuardedView<'a, SomeOtherView<C>>,
+                guard: linera_views::ReadGuardedView<'a, SomeOtherView<C>>,
             }
-
             #[async_graphql::Object]
-            impl<'a, C> SomeOtherViewElement<'a, C>
-                where
-                    C: Sync + Send + Context + 'static + Clone,
-                    ViewError: From<C::Error>,
+            impl<'a, C> SomeOtherViewEntry<'a, C>
+            where
+                C: Sync + Send + linera_views::Context + 'static + Clone,
+                linera_views::ViewError: From<C::Error>,
             {
                 async fn string(&self) -> &String {
                     &self.string
@@ -712,9 +711,9 @@ pub mod tests {
             }
             #[async_graphql::Object]
             impl<C> TestView<C>
-                where
-                    C: Context + Send + Sync + Clone + 'static,
-                    linera_views::views::ViewError: From<C::Error>,
+            where
+                C: Context + Send + Sync + Clone + 'static,
+                linera_views::views::ViewError: From<C::Error>,
             {
                 async fn raw(&self) -> &String {
                     &self.raw
@@ -722,23 +721,26 @@ pub mod tests {
                 async fn register(&self) -> &Option<usize> {
                     self.register.get()
                 }
-                async fn collection(&self, string: String) -> Result<ChannelStateElement<C>, Error> {
-                    Ok(ChannelStateElement {
+                async fn collection(
+                    &self,
+                    string: String
+                ) -> Result<ChannelStateEntry<C>, async_graphql::Error> {
+                    Ok(ChannelStateEntry {
                         string: string.clone(),
                         guard: self.collection.try_load_entry(string).await?,
                     })
                 }
-                async fn set(&self) -> Result<Vec<HashSet<usize>>, Error> {
+                async fn set(&self) -> Result<Vec<HashSet<usize>>, async_graphql::Error> {
                     Ok(self.set.indices().await?)
                 }
-                async fn log(&self, range: Option<Range>) -> Result<Vec<usize>, Error> {
+                async fn log(&self, range: Option<Range>) -> Result<Vec<usize>, async_graphql::Error> {
                     let range = range.unwrap_or(Range {
                         start: 0,
                         end: self.log.count(),
                     });
                     Ok(self.log.read(range.into()).await?)
                 }
-                async fn queue(&self, count: Option<usize>) -> Result<Vec<usize>, Error> {
+                async fn queue(&self, count: Option<usize>) -> Result<Vec<usize>, async_graphql::Error> {
                     let count = count.unwrap_or_else(|| self.queue.count());
                     Ok(self.queue.read_front(count).await?)
                 }

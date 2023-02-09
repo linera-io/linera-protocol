@@ -8,8 +8,8 @@ pub fn snakify(r#type: &Type) -> Ident {
 }
 
 /// Extract the first `Ident` in a type and append the string 'Element' to the end.
-pub fn create_element_name(r#type: &Type) -> Ident {
-    transform_type_to_ident(r#type, |s: String| format!("{}{}", s, "Element"))
+pub fn create_entry_name(r#type: &Type) -> Ident {
+    transform_type_to_ident(r#type, |s: String| format!("{}{}", s, "Entry"))
 }
 
 /// Apply a string transformation (`transform`) to the input `Type`
