@@ -4,6 +4,11 @@ version = "0.1.0"
 authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 
+[features]
+default = ["wasmtime"]
+wasmer = ["linera-execution/wasmer", "linera-storage/wasmer"]
+wasmtime = ["linera-execution/wasmtime", "linera-storage/wasmtime"]
+
 [dependencies]
 anyhow = "1.0.57"
 async-graphql = "5.0.5"
