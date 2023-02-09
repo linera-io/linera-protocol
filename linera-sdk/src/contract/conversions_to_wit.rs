@@ -72,6 +72,7 @@ impl From<EffectId> for system::EffectId {
         }
     }
 }
+
 impl From<log::Level> for system::LogLevel {
     fn from(level: log::Level) -> Self {
         match level {

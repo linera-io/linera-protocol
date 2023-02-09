@@ -590,6 +590,7 @@ impl queryable_system::QueryableSystem for SystemApi<&'static dyn QueryableStora
     type ReadKeyBytes = HostFuture<'static, Result<Option<Vec<u8>>, ExecutionError>>;
     type FindKeys = HostFuture<'static, Result<Vec<Vec<u8>>, ExecutionError>>;
     type FindKeyValues = HostFuture<'static, Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError>>;
+    type TryQueryApplication = HostFuture<'static, Result<Vec<u8>, ExecutionError>>;
 
     fn chain_id(&mut self) -> queryable_system::ChainId {
         self.storage().chain_id().into()
@@ -694,6 +695,33 @@ impl queryable_system::QueryableSystem for SystemApi<&'static dyn QueryableStora
             Poll::Pending => PollFindKeyValues::Pending,
             Poll::Ready(Ok(key_values)) => PollFindKeyValues::Ready(Ok(key_values)),
             Poll::Ready(Err(error)) => PollFindKeyValues::Ready(Err(error.to_string())),
+        }
+    }
+
+    fn try_query_application_new(
+        &mut self,
+        application: queryable_system::ApplicationId,
+        argument: &[u8],
+    ) -> Self::TryQueryApplication {
+        let storage = self.storage();
+        let argument = Vec::from(argument);
+
+        self.future_queue.add(async move {
+            storage
+                .try_query_application(application.into(), &argument)
+                .await
+        })
+    }
+
+    fn try_query_application_poll(
+        &mut self,
+        future: &Self::TryQueryApplication,
+    ) -> queryable_system::PollLoad {
+        use queryable_system::PollLoad;
+        match future.poll(&mut self.context) {
+            Poll::Pending => PollLoad::Pending,
+            Poll::Ready(Ok(result)) => PollLoad::Ready(Ok(result)),
+            Poll::Ready(Err(error)) => PollLoad::Ready(Err(error.to_string())),
         }
     }
 

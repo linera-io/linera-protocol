@@ -73,6 +73,15 @@ variant poll-find-key-values {
     ready(result<list<tuple<list<u8>,list<u8>>>, string>),
 }
 
+resource try-query-application {
+    static new: func(
+        application: application-id,
+        argument: list<u8>,
+    ) -> try-query-application
+
+    poll: func() -> poll-load
+}
+
 record application-id {
     bytecode-id: bytecode-id,
     creation: effect-id,
