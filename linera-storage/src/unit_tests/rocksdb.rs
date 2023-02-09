@@ -11,7 +11,7 @@ use tempfile::TempDir;
 #[tokio::test]
 async fn guards_dont_leak() -> Result<(), anyhow::Error> {
     let directory = TempDir::new()?;
-    let store = RocksdbStoreClient::new(directory.path().to_owned());
+    let store = RocksdbStoreClient::new(directory.path().to_owned(), None);
     let chain_id = ChainId::root(1);
     // There should be no active guards when initialized
     assert_eq!(store.0.guards.active_guards(), 0);

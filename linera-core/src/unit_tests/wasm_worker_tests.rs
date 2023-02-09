@@ -19,7 +19,7 @@ use linera_execution::{
     system::{Balance, SystemChannel, SystemEffect, SystemOperation},
     ApplicationId, ApplicationRegistry, Bytecode, BytecodeId, BytecodeLocation, ChainOwnership,
     ChannelId, Destination, Effect, ExecutionStateView, SystemExecutionState,
-    UserApplicationDescription, UserApplicationId,
+    UserApplicationDescription, UserApplicationId, WasmRuntime,
 };
 use linera_storage::{DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient, Store};
 use linera_views::{
@@ -53,7 +53,7 @@ async fn test_rocksdb_handle_certificates_to_create_application(
     use_view: bool,
 ) -> Result<(), anyhow::Error> {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksdbStoreClient::new(dir.path().to_path_buf());
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), Some(WasmRuntime::default()));
     run_test_handle_certificates_to_create_application(client, use_view).await
 }
 

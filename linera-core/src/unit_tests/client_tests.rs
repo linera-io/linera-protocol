@@ -411,7 +411,7 @@ impl StoreBuilder for MakeRocksdbStoreClient {
         let dir = tempfile::TempDir::new()?;
         let path = dir.path().to_path_buf();
         self.temp_dirs.push(dir);
-        Ok(RocksdbStoreClient::new(path))
+        Ok(RocksdbStoreClient::new(path, None))
     }
 }
 

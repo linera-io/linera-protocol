@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use dashmap::DashMap;
 use linera_base::{crypto::CryptoHash, data_types::ChainId};
 use linera_chain::data_types::Certificate;
-use linera_execution::{UserApplicationCode, UserApplicationId};
+use linera_execution::{UserApplicationCode, UserApplicationId, WasmRuntime};
 use linera_views::{
     common::{Batch, KeyValueOperations},
     rocksdb::{RocksdbClient, RocksdbContext, RocksdbContextError, DB},
@@ -23,19 +23,21 @@ struct RocksdbStore {
     db: RocksdbClient,
     guards: ChainGuards,
     user_applications: Arc<DashMap<UserApplicationId, UserApplicationCode>>,
+    #[cfg_attr(not(any(feature = "wasmer", feature = "wasmtime")), allow(dead_code))]
+    wasm_runtime: Option<WasmRuntime>,
 }
 
 #[derive(Clone)]
 pub struct RocksdbStoreClient(Arc<RocksdbStore>);
 
 impl RocksdbStoreClient {
-    pub fn new(path: PathBuf) -> Self {
-        RocksdbStoreClient(Arc::new(RocksdbStore::new(path)))
+    pub fn new(path: PathBuf, wasm_runtime: Option<WasmRuntime>) -> Self {
+        RocksdbStoreClient(Arc::new(RocksdbStore::new(path, wasm_runtime)))
     }
 }
 
 impl RocksdbStore {
-    pub fn new(dir: PathBuf) -> Self {
+    pub fn new(dir: PathBuf, wasm_runtime: Option<WasmRuntime>) -> Self {
         let mut options = rocksdb::Options::default();
         options.create_if_missing(true);
         let db = DB::open(&options, dir).unwrap();
@@ -43,6 +45,7 @@ impl RocksdbStore {
             db: Arc::new(db),
             guards: ChainGuards::default(),
             user_applications: Arc::default(),
+            wasm_runtime,
         }
     }
 }
@@ -90,5 +93,10 @@ impl Store for RocksdbStoreClient {
         batch.put_key_value(key.to_vec(), &certificate)?;
         self.0.db.write_batch(batch).await?;
         Ok(())
+    }
+
+    #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
+    fn wasm_runtime(&self) -> WasmRuntime {
+        self.0.wasm_runtime.unwrap_or_default()
     }
 }

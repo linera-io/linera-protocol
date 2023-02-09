@@ -49,12 +49,12 @@ impl StorageConfig {
             }
             Rocksdb { path } if path.is_dir() => {
                 log::warn!("Using existing database {:?}", path);
-                let client = RocksdbStoreClient::new(path.clone());
+                let client = RocksdbStoreClient::new(path.clone(), None);
                 job.run(client).await
             }
             Rocksdb { path } => {
                 std::fs::create_dir_all(path)?;
-                let mut client = RocksdbStoreClient::new(path.clone());
+                let mut client = RocksdbStoreClient::new(path.clone(), None);
                 config.initialize_store(&mut client).await?;
                 job.run(client).await
             }
