@@ -42,15 +42,11 @@ impl DynamoDbStoreClient {
         config: impl Into<Config>,
         table: TableName,
     ) -> Result<(Self, TableStatus), CreateTableError> {
-        let (store, table_status) = DynamoDbStore::from_config(config.into(), table).await?;
-        let client = DynamoDbStoreClient(Arc::new(store));
-        Ok((client, table_status))
+        Self::with_store(DynamoDbStore::from_config(config.into(), table)).await
     }
 
     pub async fn with_localstack(table: TableName) -> Result<(Self, TableStatus), LocalStackError> {
-        let (store, table_status) = DynamoDbStore::with_localstack(table).await?;
-        let client = DynamoDbStoreClient(Arc::new(store));
-        Ok((client, table_status))
+        Self::with_store(DynamoDbStore::with_localstack(table)).await
     }
 
     async fn with_store<E>(
