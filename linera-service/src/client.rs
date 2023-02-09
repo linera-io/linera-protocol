@@ -23,7 +23,7 @@ use linera_core::{
 };
 use linera_execution::{
     system::{Address, Amount, Balance, SystemOperation, UserData},
-    ApplicationId, Operation,
+    ApplicationId, Operation, WasmRuntime,
 };
 use linera_rpc::{
     config::NetworkProtocol, grpc_network::GrpcMassClient, mass::MassClient,
@@ -409,6 +409,10 @@ struct ClientOptions {
 
     #[structopt(long, default_value = "10")]
     max_pending_messages: usize,
+
+    /// The WebAssembly runtime to use.
+    #[structopt(long)]
+    wasm_runtime: Option<WasmRuntime>,
 
     /// Subcommand.
     #[structopt(subcommand)]
@@ -944,9 +948,10 @@ async fn main() {
         }
         command => {
             let genesis_config = context.genesis_config.clone();
+            let wasm_runtime = options.wasm_runtime;
             options
                 .storage_config
-                .run_with_storage(&genesis_config, Job(context, command))
+                .run_with_storage(&genesis_config, wasm_runtime, Job(context, command))
                 .await
                 .unwrap()
         }

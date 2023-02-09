@@ -4,6 +4,7 @@
 use crate::config::GenesisConfig;
 use anyhow::format_err;
 use async_trait::async_trait;
+use linera_execution::WasmRuntime;
 use linera_storage::{DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient};
 use linera_views::dynamo_db::{TableName, TableStatus};
 use std::{path::PathBuf, str::FromStr};
@@ -33,6 +34,7 @@ impl StorageConfig {
     pub async fn run_with_storage<Job, Output>(
         &self,
         config: &GenesisConfig,
+        wasm_runtime: Option<WasmRuntime>,
         job: Job,
     ) -> Result<Output, anyhow::Error>
     where
@@ -49,12 +51,12 @@ impl StorageConfig {
             }
             Rocksdb { path } if path.is_dir() => {
                 log::warn!("Using existing database {:?}", path);
-                let client = RocksdbStoreClient::new(path.clone(), None);
+                let client = RocksdbStoreClient::new(path.clone(), wasm_runtime);
                 job.run(client).await
             }
             Rocksdb { path } => {
                 std::fs::create_dir_all(path)?;
-                let mut client = RocksdbStoreClient::new(path.clone(), None);
+                let mut client = RocksdbStoreClient::new(path.clone(), wasm_runtime);
                 config.initialize_store(&mut client).await?;
                 job.run(client).await
             }
@@ -63,8 +65,10 @@ impl StorageConfig {
                 use_localstack,
             } => {
                 let (mut client, table_status) = match use_localstack {
-                    true => DynamoDbStoreClient::with_localstack(table.clone(), None).await?,
-                    false => DynamoDbStoreClient::new(table.clone(), None).await?,
+                    true => {
+                        DynamoDbStoreClient::with_localstack(table.clone(), wasm_runtime).await?
+                    }
+                    false => DynamoDbStoreClient::new(table.clone(), wasm_runtime).await?,
                 };
                 if table_status == TableStatus::New {
                     config.initialize_store(&mut client).await?;
