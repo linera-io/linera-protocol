@@ -80,7 +80,7 @@ where
     let initial_value = 10_u128;
     let initial_value_bytes = bcs::to_bytes(&initial_value)?;
     let (application_id, _) = creator
-        .create_application(bytecode_id, initial_value_bytes, vec![], vec![])
+        .create_application(bytecode_id, vec![], initial_value_bytes, vec![])
         .await
         .unwrap();
 
@@ -127,12 +127,19 @@ where
     ViewError: From<<B::Store as Store>::ContextError>,
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
+    // Will publish the bytecodes.
     let mut publisher = builder
         .add_initial_chain(ChainDescription::Root(0), Balance::from(3))
         .await?;
+    // Will create the apps and use them to send a message.
     let mut creator = builder
         .add_initial_chain(ChainDescription::Root(1), Balance::from(0))
         .await?;
+    // Will receive the message.
+    let mut receiver = builder
+        .add_initial_chain(ChainDescription::Root(2), Balance::from(0))
+        .await?;
+    let receiver_id = ChainId::root(2);
 
     let cert = creator
         .subscribe_to_published_bytecodes(publisher.chain_id)
@@ -168,12 +175,12 @@ where
     publisher.receive_certificate(cert2).await.unwrap();
     publisher.process_inbox().await.unwrap();
 
+    // Creator receives the bytecodes then creates the app.
     creator.synchronize_and_recompute_balance().await.unwrap();
     creator.process_inbox().await.unwrap();
-
     let initial_value = 10_u128;
     let (application_id1, _) = creator
-        .create_application(bytecode_id1, bcs::to_bytes(&initial_value)?, vec![], vec![])
+        .create_application(bytecode_id1, vec![], bcs::to_bytes(&initial_value)?, vec![])
         .await
         .unwrap();
     let (application_id2, _) = creator
@@ -181,26 +188,29 @@ where
             bytecode_id2,
             bcs::to_bytes(&application_id1)?,
             vec![],
-            vec![],
+            vec![application_id1],
         )
         .await
         .unwrap();
 
     let increment = 5_u128;
-    let user_operation = bcs::to_bytes(&increment)?;
-    creator
+    let user_operation = bcs::to_bytes(&(receiver_id, increment))?;
+    let cert = creator
         .execute_operation(
             ApplicationId::User(application_id2),
             Operation::User(user_operation),
         )
         .await
         .unwrap();
-    let response = creator
+
+    receiver.receive_certificate(cert).await.unwrap();
+    receiver.process_inbox().await.unwrap();
+    let response = receiver
         .query_application(ApplicationId::User(application_id2), &Query::User(vec![]))
         .await
         .unwrap();
 
-    let expected = 15_u128;
+    let expected = 5_u128;
     let expected_bytes = bcs::to_bytes(&expected)?;
     assert!(matches!(response, Response::User(bytes) if bytes == expected_bytes));
     Ok(())

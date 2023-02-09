@@ -9,6 +9,7 @@ async-trait = "0.1.52"
 bcs = "0.1.3"
 futures = "0.3.17"
 linera-sdk = { path = "../../linera-sdk" }
+log = "0.4.17"
 serde = { version = "1.0.130", features = ["derive"] }
 thiserror = "1.0.31"
 
