@@ -21,7 +21,7 @@ mod outbox_tests;
 /// we just send the certified blocks over and let the receivers figure out what were the
 /// messages for them.
 /// * When marking block heights as received, messages at lower heights are also marked (ie. dequeued).
-#[derive(Debug, HashableContainerView)]
+#[derive(Debug, HashableContainerView, GraphQLView)]
 pub struct OutboxStateView<C> {
     /// The minimum block height accepted in the future.
     pub next_height_to_schedule: RegisterView<C, BlockHeight>,
@@ -73,6 +73,7 @@ where
     }
 }
 
+use linera_views::views::GraphQLView;
 #[cfg(any(test, feature = "test"))]
 use {
     async_lock::Mutex, linera_views::memory::MemoryContext, linera_views::views::View,

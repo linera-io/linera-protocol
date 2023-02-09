@@ -24,7 +24,7 @@ use linera_views::{
     log_view::LogView,
     register_view::RegisterView,
     set_view::SetView,
-    views::{HashableContainerView, View, ViewError},
+    views::{GraphQLView, HashableContainerView, View, ViewError},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
@@ -74,7 +74,7 @@ pub struct CommunicationStateView<C> {
 }
 
 /// The state of a channel followed by subscribers.
-#[derive(Debug, HashableContainerView)]
+#[derive(Debug, HashableContainerView, GraphQLView)]
 pub struct ChannelStateView<C> {
     /// The current subscribers.
     pub subscribers: SetView<C, ChainId>,

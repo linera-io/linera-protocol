@@ -32,7 +32,7 @@ mod inbox_tests;
 /// * The cursors of added events (resp. removed events) must be increasing over time.
 /// * Reconciliation of added and removed events is allowed to skip some added events.
 /// However, the opposite is not true: every removed event must be eventually added.
-#[derive(Debug, HashableContainerView)]
+#[derive(Debug, HashableContainerView, GraphQLView)]
 pub struct InboxStateView<C> {
     /// We have already added all the messages below this height and index.
     pub next_cursor_to_add: RegisterView<C, Cursor>,
@@ -235,6 +235,7 @@ where
     }
 }
 
+use linera_views::views::GraphQLView;
 #[cfg(any(test, feature = "test"))]
 use {
     async_lock::Mutex, linera_views::memory::MemoryContext, linera_views::views::View,
