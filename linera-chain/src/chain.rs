@@ -27,7 +27,7 @@ use linera_views::{
     views::{HashableContainerView, View, ViewError},
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 
 /// A view accessing the state of a chain.
 #[derive(Debug, HashableContainerView)]
@@ -398,13 +398,8 @@ where
                 .execution_state
                 .execute_effect(message.application_id, &context, &message.event.effect)
                 .await?;
-            let communication_state = self
-                .communication_states
-                .load_entry_mut(message.application_id)
-                .await?;
             Self::process_execution_results(
-                &mut communication_state.outboxes,
-                &mut communication_state.channels,
+                &mut self.communication_states,
                 &mut effects,
                 context.height,
                 results,
@@ -422,21 +417,13 @@ where
                 .execution_state
                 .execute_operation(*application_id, &context, operation)
                 .await?;
-
-            for result in results {
-                let communication_state = self
-                    .communication_states
-                    .load_entry_mut(result.application_id())
-                    .await?;
-                Self::process_execution_results(
-                    &mut communication_state.outboxes,
-                    &mut communication_state.channels,
-                    &mut effects,
-                    context.height,
-                    vec![result],
-                )
-                .await?;
-            }
+            Self::process_execution_results(
+                &mut self.communication_states,
+                &mut effects,
+                context.height,
+                results,
+            )
+            .await?;
         }
         // Recompute the state hash.
         let hash = self.execution_state.crypto_hash().await?;
@@ -449,37 +436,52 @@ where
     }
 
     async fn process_execution_results(
-        outboxes: &mut CollectionView<C, Target, OutboxStateView<C>>,
-        channels: &mut CollectionView<C, ChannelName, ChannelStateView<C>>,
+        communication_states: &mut CollectionView<C, ApplicationId, CommunicationStateView<C>>,
         effects: &mut Vec<(ApplicationId, Destination, Effect)>,
         height: BlockHeight,
         results: Vec<ExecutionResult>,
     ) -> Result<(), ChainError> {
+        let mut sys_results = Vec::new();
+        let mut result_map = BTreeMap::new();
         for result in results {
             match result {
                 ExecutionResult::System(result) => {
-                    Self::process_raw_execution_result(
-                        ApplicationId::System,
-                        outboxes,
-                        channels,
-                        effects,
-                        height,
-                        result,
-                    )
-                    .await?;
+                    sys_results.push(result);
                 }
                 ExecutionResult::User(application_id, result) => {
-                    Self::process_raw_execution_result(
-                        ApplicationId::User(application_id),
-                        outboxes,
-                        channels,
-                        effects,
-                        height,
-                        result,
-                    )
-                    .await?;
+                    result_map.insert(application_id, result);
                 }
             }
+        }
+        if !sys_results.is_empty() {
+            let communication_state = communication_states
+                .load_entry_mut(ApplicationId::System)
+                .await?;
+            for result in sys_results {
+                Self::process_raw_execution_result(
+                    ApplicationId::System,
+                    &mut communication_state.outboxes,
+                    &mut communication_state.channels,
+                    effects,
+                    height,
+                    result,
+                )
+                .await?;
+            }
+        }
+        for (application_id, result) in result_map {
+            let communication_state = communication_states
+                .load_entry_mut(ApplicationId::User(application_id))
+                .await?;
+            Self::process_raw_execution_result(
+                ApplicationId::User(application_id),
+                &mut communication_state.outboxes,
+                &mut communication_state.channels,
+                effects,
+                height,
+                result,
+            )
+            .await?;
         }
         Ok(())
     }
