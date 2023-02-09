@@ -6,7 +6,9 @@ use crate::common::Batch;
 use async_trait::async_trait;
 #[cfg(not(target_arch = "wasm32"))]
 use linera_base::crypto::CryptoHash;
-pub use linera_views_derive::{ContainerView, HashableContainerView, HashableView, View};
+pub use linera_views_derive::{
+    ContainerView, GraphQLView, HashableContainerView, HashableView, View,
+};
 use serde::Serialize;
 use std::{fmt::Debug, io::Write};
 use thiserror::Error;
