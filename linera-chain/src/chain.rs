@@ -442,14 +442,14 @@ where
         results: Vec<ExecutionResult>,
     ) -> Result<(), ChainError> {
         let mut sys_results = Vec::new();
-        let mut result_map = BTreeMap::new();
+        let mut result_map: BTreeMap<_, Vec<_>> = Default::default();
         for result in results {
             match result {
                 ExecutionResult::System(result) => {
                     sys_results.push(result);
                 }
                 ExecutionResult::User(application_id, result) => {
-                    result_map.insert(application_id, result);
+                    result_map.entry(application_id).or_default().push(result);
                 }
             }
         }
@@ -469,19 +469,21 @@ where
                 .await?;
             }
         }
-        for (application_id, result) in result_map {
+        for (application_id, results) in result_map {
             let communication_state = communication_states
                 .load_entry_mut(ApplicationId::User(application_id))
                 .await?;
-            Self::process_raw_execution_result(
-                ApplicationId::User(application_id),
-                &mut communication_state.outboxes,
-                &mut communication_state.channels,
-                effects,
-                height,
-                result,
-            )
-            .await?;
+            for result in results {
+                Self::process_raw_execution_result(
+                    ApplicationId::User(application_id),
+                    &mut communication_state.outboxes,
+                    &mut communication_state.channels,
+                    effects,
+                    height,
+                    result,
+                )
+                .await?;
+            }
         }
         Ok(())
     }
