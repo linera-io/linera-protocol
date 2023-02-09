@@ -9,6 +9,8 @@ use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use thiserror::Error;
 
+pub use super::BcsSignable;
+
 /// A signature key-pair.
 pub struct KeyPair(dalek::Keypair);
 
@@ -286,11 +288,6 @@ pub trait Signable<Hasher> {
 
     fn type_name() -> &'static str;
 }
-
-/// Activate the blanket implementation of `Signable` based on serde and BCS.
-/// * We use `serde_name` to extract a seed from the name of structs and enums.
-/// * We use `BCS` to generate canonical bytes suitable for hashing and signing.
-pub trait BcsSignable: Serialize + serde::de::DeserializeOwned {}
 
 impl<T, Hasher> Signable<Hasher> for T
 where

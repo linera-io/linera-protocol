@@ -24,6 +24,15 @@ pub use self::{
 #[doc(hidden)]
 pub use wit_bindgen_guest_rust;
 
+#[cfg(not(target_arch = "wasm32"))]
+pub use linera_base::crypto::BcsSignable;
+
+/// Activate the blanket implementation of `Signable` based on serde and BCS.
+/// * We use `serde_name` to extract a seed from the name of structs and enums.
+/// * We use `BCS` to generate canonical bytes suitable for hashing and signing.
+#[cfg(target_arch = "wasm32")]
+pub trait BcsSignable: Serialize + serde::de::DeserializeOwned {}
+
 /// A simple state management runtime using a single byte array.
 pub struct SimpleStateStorage<A>(std::marker::PhantomData<A>);
 

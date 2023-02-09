@@ -30,4 +30,5 @@ wit-bindgen-guest-rust = { git = "https://github.com/jvff/wit-bindgen", rev = "0
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 anyhow = "1.0.57"
+linera-base = { path = "../linera-base" }
 wasmtime = "1.0"

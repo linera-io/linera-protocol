@@ -34,6 +34,7 @@ tokio-stream = "0.1.11"
 [dev-dependencies]
 bcs = "0.1.3"
 env_logger = "0.9.0"
+fungible = { path = "../linera-examples/fungible" }
 linera-base = { path = "../linera-base", features = ["test"] }
 linera-chain = { path = "../linera-chain", features = ["test"] }
 linera-execution = { path = "../linera-execution", default-features = false, features = ["test"] }

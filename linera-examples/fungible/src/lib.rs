@@ -70,7 +70,7 @@ pub struct SignedTransfer {
 /// - on the same chain
 /// - on different chains
 /// - on different tokens
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SignedTransferPayload {
     pub token_id: ApplicationId,
     pub source_chain: ChainId,
@@ -79,7 +79,7 @@ pub struct SignedTransferPayload {
 }
 
 /// A transfer payload.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Transfer {
     pub destination_account: AccountOwner,
     pub destination_chain: ChainId,
