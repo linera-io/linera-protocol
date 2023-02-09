@@ -70,8 +70,12 @@ async fn test_dynamo_db_handle_certificates_to_create_application(
 ) -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
-    let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table).await?;
+    let (client, _) = DynamoDbStoreClient::from_config(
+        localstack.dynamo_db_config(),
+        table,
+        Some(WasmRuntime::default()),
+    )
+    .await?;
     run_test_handle_certificates_to_create_application(client, use_view).await
 }
 

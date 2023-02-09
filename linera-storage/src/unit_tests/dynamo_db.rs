@@ -13,7 +13,8 @@ use std::mem;
 async fn guards_dont_leak() -> Result<(), anyhow::Error> {
     let localstack = LocalStackTestContext::new().await?;
     let table = "linera".parse()?;
-    let (store, _) = DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table).await?;
+    let (store, _) =
+        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, None).await?;
     let chain_id = ChainId::root(1);
     // There should be no active guards when initialized
     assert_eq!(store.0.guards.active_guards(), 0);
