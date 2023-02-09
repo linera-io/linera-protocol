@@ -11,9 +11,10 @@ mod log;
 pub mod service;
 
 use async_trait::async_trait;
+use custom_debug_derive::Debug;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use std::error::Error;
+use std::{error::Error, fmt};
 
 pub use self::{
     exported_future::ExportedFuture,
@@ -265,6 +266,7 @@ pub struct Session {
     /// A kind provided by the creator (meant to be visible to other applications).
     pub kind: u64,
     /// The data associated to the session.
+    #[debug(with = "hex_debug")]
     pub data: Vec<u8>,
 }
 
@@ -273,6 +275,7 @@ pub struct Session {
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct ApplicationCallResult {
     /// The return value.
+    #[debug(with = "hex_debug")]
     pub value: Vec<u8>,
     /// The externally-visible result.
     pub execution_result: ExecutionResult,
@@ -310,4 +313,12 @@ impl From<u64> for Timestamp {
     fn from(t: u64) -> Timestamp {
         Timestamp(t)
     }
+}
+
+/// Prints a vector of bytes in hexadecimal.
+pub fn hex_debug<T: AsRef<[u8]>>(bytes: &T, f: &mut fmt::Formatter) -> fmt::Result {
+    for byte in bytes.as_ref() {
+        write!(f, "{:02x}", byte)?;
+    }
+    Ok(())
 }

@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::SystemExecutionError;
-use linera_base::{crypto::CryptoHash, data_types::EffectId};
+use custom_debug_derive::Debug;
+use linera_base::{crypto::CryptoHash, data_types::EffectId, hex_debug};
 use linera_views::{
     common::Context,
     map_view::MapView,
@@ -61,6 +62,7 @@ pub struct UserApplicationDescription {
     pub creation: EffectId,
     /// The argument used during application initialization.
     #[serde(with = "serde_bytes")]
+    #[debug(with = "hex_debug")]
     pub initialization_argument: Vec<u8>,
     /// Required dependencies.
     pub required_application_ids: Vec<UserApplicationId>,

@@ -7,9 +7,10 @@ use crate::{
     UserApplicationCode, UserApplicationId, WritableStorage,
 };
 use async_trait::async_trait;
+use custom_debug_derive::Debug;
 use linera_base::{
     data_types::{ChainId, Timestamp},
-    ensure,
+    ensure, hex_debug,
 };
 use linera_views::{
     common::{Batch, Context},
@@ -66,6 +67,7 @@ pub(crate) struct SessionState {
     /// Track which application can call into the session.
     owner: UserApplicationId,
     /// The internal state of the session.
+    #[debug(with = "hex_debug")]
     data: Vec<u8>,
 }
 
