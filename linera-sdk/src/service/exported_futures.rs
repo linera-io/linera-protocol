@@ -8,9 +8,13 @@
 //! service type that implements [`linera_sdk::Service`].
 
 use crate::{
-    service::{self, system_api},
-    ExportedFuture, Service, ServiceLogger, SimpleStateStorage,
+    service::{
+        self,
+        system_api::{self, ReadableWasmContext},
+    },
+    ExportedFuture, Service, ServiceLogger, SimpleStateStorage, ViewStateStorage,
 };
+use linera_views::views::ContainerView;
 use serde::{de::DeserializeOwned, Serialize};
 use std::marker::PhantomData;
 
@@ -37,6 +41,27 @@ where
                 .query_application(&context.into(), &argument)
                 .await
                 .map_err(|error| error.to_string())
+        })
+    }
+}
+
+impl<Application> ServiceStateStorage for ViewStateStorage<Application>
+where
+    Application: Service + ContainerView<ReadableWasmContext>,
+{
+    fn query_application(
+        context: service::QueryContext,
+        argument: Vec<u8>,
+    ) -> ExportedFuture<Result<Vec<u8>, String>> {
+        ExportedFuture::new(async move {
+            let application: Application = system_api::lock_and_load_view().await;
+            let result = application
+                .query_application(&context.into(), &argument)
+                .await;
+            if result.is_ok() {
+                system_api::unlock_view(application).await;
+            }
+            result.map_err(|error| error.to_string())
         })
     }
 }

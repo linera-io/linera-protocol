@@ -26,6 +26,9 @@ pub use wit_bindgen_guest_rust;
 /// A simple state management runtime using a single byte array.
 pub struct SimpleStateStorage<A>(std::marker::PhantomData<A>);
 
+/// A state management runtime based on `linera-views`.
+pub struct ViewStateStorage<A>(std::marker::PhantomData<A>);
+
 /// The public entry points provided by a contract.
 #[async_trait]
 pub trait Contract {
