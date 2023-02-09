@@ -9,7 +9,7 @@ use linera_base::{
     data_types::{BlockHeight, ChainDescription, ChainId, Epoch, Timestamp, ValidatorName},
 };
 use linera_chain::{
-    data_types::{Certificate, Message, Origin},
+    data_types::{Certificate, Medium, Message, Origin},
     ChainManagerInfo, ChainStateView,
 };
 use linera_execution::{system::Balance, ApplicationId, ExecutionRuntimeContext};
@@ -143,8 +143,8 @@ pub enum CrossChainRequest {
     /// Communicate a number of confirmed blocks from the sender to the recipient.
     /// Blocks must be given by increasing heights.
     UpdateRecipient {
-        application_id: ApplicationId,
-        origin: Origin,
+        height_map: Vec<(ApplicationId, Medium, Vec<BlockHeight>)>,
+        sender: ChainId,
         recipient: ChainId,
         certificates: Vec<Certificate>,
     },

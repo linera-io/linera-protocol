@@ -201,10 +201,15 @@ CrossChainRequest:
     0:
       UpdateRecipient:
         STRUCT:
-          - application_id:
-              TYPENAME: ApplicationId
-          - origin:
-              TYPENAME: Origin
+          - height_map:
+              SEQ:
+                TUPLE:
+                  - TYPENAME: ApplicationId
+                  - TYPENAME: Medium
+                  - SEQ:
+                      TYPENAME: BlockHeight
+          - sender:
+              TYPENAME: ChainId
           - recipient:
               TYPENAME: ChainId
           - certificates:

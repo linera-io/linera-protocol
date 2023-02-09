@@ -19,7 +19,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockAndRound, BlockProposal, Certificate, Event, LiteVote, Message, Origin,
+        Block, BlockAndRound, BlockProposal, Certificate, Event, LiteVote, Medium, Message, Origin,
         SignatureAggregator, Value,
     },
     ChainError,
@@ -1917,8 +1917,12 @@ where
     .await;
     worker
         .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
-            application_id: ApplicationId::System,
-            origin: Origin::chain(ChainId::root(1)),
+            height_map: vec![(
+                ApplicationId::System,
+                Medium::Direct,
+                vec![certificate.value.block().height],
+            )],
+            sender: ChainId::root(1),
             recipient: ChainId::root(2),
             certificates: vec![certificate.clone()],
         })
@@ -2028,8 +2032,12 @@ where
     .await;
     assert!(worker
         .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
-            application_id: ApplicationId::System,
-            origin: Origin::chain(ChainId::root(1)),
+            height_map: vec![(
+                ApplicationId::System,
+                Medium::Direct,
+                vec![certificate.value.block().height],
+            )],
+            sender: ChainId::root(1),
             recipient: ChainId::root(2),
             certificates: vec![certificate],
         })
@@ -2094,8 +2102,12 @@ where
     // An inactive target chain is created and it acknowledges the message.
     let actions = worker
         .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
-            application_id: ApplicationId::System,
-            origin: Origin::chain(ChainId::root(1)),
+            height_map: vec![(
+                ApplicationId::System,
+                Medium::Direct,
+                vec![certificate.value.block().height],
+            )],
+            sender: ChainId::root(1),
             recipient: ChainId::root(2),
             certificates: vec![certificate],
         })

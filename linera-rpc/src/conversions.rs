@@ -276,16 +276,31 @@ impl TryFrom<grpc::CrossChainRequest> for CrossChainRequest {
             .ok_or(ProtoConversionError::MissingField)?
         {
             Inner::UpdateRecipient(grpc::UpdateRecipient {
-                application_id,
-                origin,
+                height_map: grpc_height_map,
+                sender,
                 recipient,
                 certificates,
-            }) => UpdateRecipient {
-                application_id: try_proto_convert!(application_id),
-                origin: try_proto_convert!(origin),
-                recipient: try_proto_convert!(recipient),
-                certificates: try_proto_convert_vec!(certificates, Certificate),
-            },
+            }) => {
+                let mut height_map = Vec::new();
+                for grpc::UpdateRecipientEntry {
+                    application_id,
+                    medium,
+                    heights,
+                } in grpc_height_map
+                {
+                    height_map.push((
+                        try_proto_convert!(application_id),
+                        proto_convert!(medium),
+                        heights.into_iter().map(BlockHeight::from).collect(),
+                    ));
+                }
+                UpdateRecipient {
+                    height_map,
+                    sender: try_proto_convert!(sender),
+                    recipient: try_proto_convert!(recipient),
+                    certificates: try_proto_convert_vec!(certificates, Certificate),
+                }
+            }
             Inner::ConfirmUpdatedRecipient(grpc::ConfirmUpdatedRecipient {
                 application_id,
                 origin,
@@ -308,13 +323,22 @@ impl TryFrom<CrossChainRequest> for grpc::CrossChainRequest {
     fn try_from(cross_chain_request: CrossChainRequest) -> Result<Self, Self::Error> {
         let inner = match cross_chain_request {
             UpdateRecipient {
-                application_id,
-                origin,
+                height_map,
+                sender,
                 recipient,
                 certificates,
             } => Inner::UpdateRecipient(grpc::UpdateRecipient {
-                application_id: Some(application_id.into()),
-                origin: Some(origin.into()),
+                height_map: height_map
+                    .into_iter()
+                    .map(
+                        |(application_id, medium, heights)| grpc::UpdateRecipientEntry {
+                            application_id: Some(application_id.into()),
+                            medium: Some(medium.into()),
+                            heights: heights.into_iter().map(|height| height.into()).collect(),
+                        },
+                    )
+                    .collect(),
+                sender: Some(sender.into()),
                 recipient: Some(recipient.into()),
                 certificates: try_proto_convert_vec!(certificates, grpc::Certificate),
             }),
@@ -940,8 +964,8 @@ pub mod tests {
     #[test]
     pub fn test_cross_chain_request() {
         let cross_chain_request_update_recipient = UpdateRecipient {
-            application_id: ApplicationId::System,
-            origin: Origin::chain(ChainId::root(0)),
+            height_map: vec![(ApplicationId::System, Medium::Direct, vec![])],
+            sender: ChainId::root(0),
             recipient: ChainId::root(0),
             certificates: vec![],
         };

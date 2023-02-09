@@ -99,10 +99,18 @@ message CrossChainRequest {
 // Communicate a number of confirmed blocks from the sender to the recipient.
 // Blocks must be given by increasing heights.
 message UpdateRecipient {
-  ApplicationId application_id = 1;
-  Origin origin = 2;
+  repeated UpdateRecipientEntry height_map = 1;
+  ChainId sender = 2;
   ChainId recipient = 3;
   repeated Certificate certificates = 4;
+}
+
+// An entry of UpdateRecipient, specifying which blocks are relevant for which application
+// and medium.
+message UpdateRecipientEntry {
+  ApplicationId application_id = 1;
+  Medium medium = 2;
+  repeated BlockHeight heights = 3;
 }
 
 // Acknowledge the height of the highest confirmed block communicated with `UpdateRecipient`.

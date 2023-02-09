@@ -12,7 +12,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockProposal, Certificate, LiteCertificate, Message, Origin, Target, Value,
+        Block, BlockProposal, Certificate, LiteCertificate, Medium, Message, Origin, Target, Value,
     },
     ChainManagerOutcome, ChainStateView,
 };
@@ -25,7 +25,7 @@ use linera_views::{
 use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{BTreeMap, VecDeque},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     num::NonZeroUsize,
     sync::Arc,
     time::Duration,
@@ -82,6 +82,13 @@ pub struct NetworkActions {
     pub cross_chain_requests: Vec<CrossChainRequest>,
     /// The push notifications.
     pub notifications: Vec<Notification>,
+}
+
+impl NetworkActions {
+    fn merge(&mut self, other: NetworkActions) {
+        self.cross_chain_requests.extend(other.cross_chain_requests);
+        self.notifications.extend(other.notifications);
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -311,21 +318,27 @@ where
     async fn create_cross_chain_request(
         &mut self,
         confirmed_log: &mut LogView<Client::Context, CryptoHash>,
-        application_id: ApplicationId,
-        origin: Origin,
+        height_map: Vec<(ApplicationId, Medium, Vec<BlockHeight>)>,
+        sender: ChainId,
         recipient: ChainId,
-        heights: &[BlockHeight],
     ) -> Result<CrossChainRequest, WorkerError> {
+        let heights: BTreeSet<_> = height_map
+            .iter()
+            .flat_map(|(_, _, heights)| heights)
+            .cloned()
+            .collect();
         let mut keys = Vec::new();
         for height in heights {
-            if let Some(key) = confirmed_log.get(usize::from(*height)).await? {
+            if let Some(key) = confirmed_log.get(usize::from(height)).await? {
                 keys.push(key);
+            } else {
+                break; // The confirmed_log is contiguous and won't contain higher blocks.
             }
         }
         let certificates = self.storage.read_certificates(keys).await?;
         Ok(CrossChainRequest::UpdateRecipient {
-            application_id,
-            origin,
+            height_map,
+            sender,
             recipient,
             certificates,
         })
@@ -336,8 +349,7 @@ where
         &mut self,
         chain: &mut ChainStateView<Client::Context>,
     ) -> Result<NetworkActions, WorkerError> {
-        let mut actions = NetworkActions::default();
-        let chain_id = chain.chain_id();
+        let mut heights_by_app: BTreeMap<_, BTreeMap<_, _>> = Default::default();
         for application_id in chain.communication_states.indices().await? {
             let state = chain
                 .communication_states
@@ -346,21 +358,27 @@ where
             for target in state.outboxes.indices().await? {
                 let outbox = state.outboxes.load_entry_mut(target.clone()).await?;
                 let heights = outbox.block_heights().await?;
-                let origin = Origin {
-                    sender: chain_id,
-                    medium: target.medium,
-                };
-                let request = self
-                    .create_cross_chain_request(
-                        &mut chain.confirmed_log,
-                        application_id,
-                        origin,
-                        target.recipient,
-                        &heights,
-                    )
-                    .await?;
-                actions.cross_chain_requests.push(request);
+                heights_by_app
+                    .entry(target.recipient)
+                    .or_default()
+                    .insert((application_id, target.medium), heights);
             }
+        }
+        let mut actions = NetworkActions::default();
+        let chain_id = chain.chain_id();
+        for (recipient, height_map) in heights_by_app {
+            let request = self
+                .create_cross_chain_request(
+                    &mut chain.confirmed_log,
+                    height_map
+                        .into_iter()
+                        .map(|((app_id, medium), heights)| (app_id, medium, heights))
+                        .collect(),
+                    chain_id,
+                    recipient,
+                )
+                .await?;
+            actions.cross_chain_requests.push(request);
         }
         Ok(actions)
     }
@@ -816,13 +834,30 @@ where
         log::trace!("{} <-- {:?}", self.nickname, request);
         match request {
             CrossChainRequest::UpdateRecipient {
-                application_id,
-                origin,
+                height_map,
+                sender,
                 recipient,
                 certificates,
             } => {
-                self.process_cross_chain_update(application_id, origin, recipient, certificates)
-                    .await
+                let mut actions = NetworkActions::default();
+                for (application_id, medium, heights) in height_map {
+                    let origin = Origin { sender, medium };
+                    let app_certificates = certificates
+                        .iter()
+                        .filter(|cert| heights.contains(&cert.value.block().height))
+                        .cloned()
+                        .collect();
+                    actions.merge(
+                        self.process_cross_chain_update(
+                            application_id,
+                            origin.clone(),
+                            recipient,
+                            app_certificates,
+                        )
+                        .await?,
+                    );
+                }
+                Ok(actions)
             }
             CrossChainRequest::ConfirmUpdatedRecipient {
                 application_id,
