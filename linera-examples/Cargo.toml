@@ -1,7 +1,6 @@
 [workspace]
 members = [
         "counter",
-        "counter2",
         "crowd-funding",
         "fungible",
         "meta-counter",

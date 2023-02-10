@@ -11,7 +11,7 @@ use self::state::ViewFungibleToken;
 use async_trait::async_trait;
 use linera_sdk::{
     service::system_api::HostServiceWasmContext,
-    QueryContext, Service,
+    QueryContext, Service, ViewStateStorage,
 };
 use linera_views::views::ViewError;
 use thiserror::Error;
@@ -27,6 +27,7 @@ where
     ViewError: From<<C as linera_views::common::Context>::Error>,
 {
     type Error = Error;
+    type Storage = ViewStateStorage<Self>;
 
     async fn query_application(
         &self,

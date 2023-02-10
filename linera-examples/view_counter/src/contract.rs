@@ -13,7 +13,6 @@ use linera_sdk::{
     ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
     OperationContext, Session, SessionCallResult, SessionId, SimpleStateStorage,
 };
-use linera_sdk::Contract;
 use linera_views::views::ViewError;
 use thiserror::Error;
 use linera_views::memory::MemoryContext;
