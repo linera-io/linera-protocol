@@ -167,7 +167,7 @@ where
             let mut application: Application = system_api::load_and_lock_view().await;
             let result = application.initialize(&context.into(), &argument).await;
             if result.is_ok() {
-                system_api::store_and_unlock_view(application).await;
+                system_api::view_store_and_unlock_view(application).await;
             }
             result.map_err(|error| error.to_string())
         })
@@ -183,7 +183,7 @@ where
                 .execute_operation(&context.into(), &operation)
                 .await;
             if result.is_ok() {
-                system_api::store_and_unlock_view(application).await;
+                system_api::view_store_and_unlock_view(application).await;
             }
             result.map_err(|error| error.to_string())
         })
@@ -197,7 +197,7 @@ where
             let mut application: Application = system_api::load_and_lock_view().await;
             let result = application.execute_effect(&context.into(), &effect).await;
             if result.is_ok() {
-                system_api::store_and_unlock_view(application).await;
+                system_api::view_store_and_unlock_view(application).await;
             }
             result.map_err(|error| error.to_string())
         })
@@ -220,7 +220,7 @@ where
                 .call_application(&context.into(), &argument, forwarded_sessions)
                 .await;
             if result.is_ok() {
-                system_api::store_and_unlock_view(application).await;
+                system_api::view_store_and_unlock_view(application).await;
             }
             result.map_err(|error| error.to_string())
         })
@@ -249,7 +249,7 @@ where
                 )
                 .await;
             if result.is_ok() {
-                system_api::store_and_unlock_view(application).await;
+                system_api::view_store_and_unlock_view(application).await;
             }
             result.map_err(|error| error.to_string())
         })

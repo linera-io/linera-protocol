@@ -8,6 +8,7 @@ use crate::{
     Operation, OperationContext, Query, QueryContext, RawExecutionResult, Response, SystemEffect,
     UserApplicationId,
 };
+use linera_views::register_view::RegisterView;
 use linera_base::{data_types::ChainId, ensure};
 use linera_views::{
     key_value_store_view::KeyValueStoreView,

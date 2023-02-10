@@ -57,7 +57,7 @@ where
                 .query_application(&context.into(), &argument)
                 .await;
             if result.is_ok() {
-                system_api::unlock_view(application).await;
+                system_api::view_unlock(application).await;
             }
             result.map_err(|error| error.to_string())
         })

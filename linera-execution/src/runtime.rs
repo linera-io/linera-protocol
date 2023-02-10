@@ -46,12 +46,8 @@ pub(crate) struct ExecutionRuntime<'a, C, const WRITABLE: bool> {
     execution_results: Arc<Mutex<&'a mut Vec<ExecutionResult>>>,
 }
 
-type ActiveUserkvStates<C> =
-    BTreeMap<UserApplicationId, OwnedRwLockWriteGuard<KeyValueStoreView<C>>>;
-
-type ActiveUserkvStates<C> =
-    BTreeMap<UserApplicationId, OwnedRwLockWriteGuard<KeyValueStoreView<C>>>;
-
+type ActiveUserkvStates<C> = BTreeMap<UserApplicationId, OwnedRwLockWriteGuard<KeyValueStoreView<C>>>;
+type ActiveUserStates<C> = BTreeMap<UserApplicationId, OwnedRwLockWriteGuard<RegisterView<C, Vec<u8>>>>;
 type ActiveSessions = BTreeMap<SessionId, OwnedMutexGuard<SessionState>>;
 
 #[derive(Debug, Clone, Default)]
