@@ -90,6 +90,28 @@ pub async fn view_unlock<State: View<HostServiceWasmContext>>(_state: State) {
     future::poll_fn(|_context| future.poll().into()).await;
 }
 
+/// Load the contract state, without locking it for writes.
+pub async fn simple_load<State>() -> State
+where
+    State: Default + DeserializeOwned,
+{
+    let future = system::SimpleLoad::new();
+    simple_load_using(future::poll_fn(|_context| future.poll().into())).await
+}
+
+/// Helper function to load the contract state or create a new one if it doesn't exist.
+async fn simple_load_using<State>(future: impl Future<Output = Result<Vec<u8>, String>>) -> State
+where
+    State: Default + DeserializeOwned,
+{
+    let bytes = future.await.expect("Failed to load contract state");
+    if bytes.is_empty() {
+        State::default()
+    } else {
+        bcs::from_bytes(&bytes).expect("Invalid contract state")
+    }
+}
+
 /// Helper function to load the service state or create a new one if it doesn't exist.
 pub async fn view_load_using<State: View<HostServiceWasmContext>>() -> State {
     let context = HostServiceWasmContext::new();

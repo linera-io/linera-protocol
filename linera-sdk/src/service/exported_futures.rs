@@ -34,7 +34,7 @@ where
         argument: Vec<u8>,
     ) -> ExportedFuture<Result<Vec<u8>, String>> {
         ExportedFuture::new(async move {
-            let application: Application = system_api::load().await;
+            let application: Application = system_api::simple_load().await;
             application
                 .query_application(&context.into(), &argument)
                 .await
@@ -52,7 +52,7 @@ where
         argument: Vec<u8>,
     ) -> ExportedFuture<Result<Vec<u8>, String>> {
         ExportedFuture::new(async move {
-            let application: Application = system_api::lock_and_load_view().await;
+            let application: Application = system_api::view_lock().await;
             let result = application
                 .query_application(&context.into(), &argument)
                 .await;

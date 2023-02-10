@@ -395,7 +395,7 @@ impl<'storage> WritableSystem for SystemApi<&'storage dyn WritableStorage> {
     }
 
     fn simple_load_and_lock_poll(&mut self, future: &Self::SimpleLoadAndLock) -> writable_system::PollSimpleLoad {
-        use writable_system::PollLoad;
+        use writable_system::PollSimpleLoad;
         match future.poll(&mut self.context) {
             Poll::Pending => PollSimpleLoad::Pending,
             Poll::Ready(Ok(bytes)) => PollSimpleLoad::Ready(Ok(bytes)),
@@ -745,12 +745,12 @@ impl<'storage> QueryableSystem for SystemApi<&'storage dyn QueryableStorage> {
     fn try_query_application_poll(
         &mut self,
         future: &Self::TryQueryApplication,
-    ) -> queryable_system::PollLoad {
-        use queryable_system::PollLoad;
+    ) -> queryable_system::PollSimpleLoad {
+        use queryable_system::PollSimpleLoad;
         match future.poll(&mut self.context) {
-            Poll::Pending => PollLoad::Pending,
-            Poll::Ready(Ok(result)) => PollLoad::Ready(Ok(result)),
-            Poll::Ready(Err(error)) => PollLoad::Ready(Err(error.to_string())),
+            Poll::Pending => PollSimpleLoad::Pending,
+            Poll::Ready(Ok(result)) => PollSimpleLoad::Ready(Ok(result)),
+            Poll::Ready(Err(error)) => PollSimpleLoad::Ready(Err(error.to_string())),
         }
     }
 

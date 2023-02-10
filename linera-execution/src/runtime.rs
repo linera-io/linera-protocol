@@ -117,12 +117,6 @@ where
             .expect("single-threaded execution should not lock `active_userkv_states`")
     }
 
-    fn active_userkv_states_mut(&self) -> MutexGuard<'_, ActiveUserkvStates<C>> {
-        self.active_userkv_states
-            .try_lock()
-            .expect("single-threaded execution should not lock `active_userkv_states`")
-    }
-
     fn active_sessions_mut(&self) -> MutexGuard<'_, ActiveSessions> {
         self.active_sessions
             .try_lock()
@@ -342,61 +336,6 @@ where
     }
 
     async fn view_find_key_values_by_prefix(
-        &self,
-        key_prefix: Vec<u8>,
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError> {
-        // Read key/values matching a prefix. We have to collect since iterators do not pass the wit barrier
-        match self.active_userkv_states_mut().get(&self.application_id()) {
-            Some(view) => Ok(view.find_key_values_by_prefix(&key_prefix).await?),
-            None => Err(ExecutionError::ApplicationStateNotLocked),
-        }
-    }
-
-    async fn lock_userkv_state(&self) -> Result<(), ExecutionError> {
-        let view = self
-            .execution_state_mut()
-            .users_kv
-            .try_load_entry_mut(self.application_id())
-            .await?;
-        self.active_userkv_states_mut()
-            .insert(self.application_id(), view);
-        Ok(())
-    }
-
-    async fn unlock_userkv_state(&self) -> Result<(), ExecutionError> {
-        // Make the view available again.
-        match self
-            .active_userkv_states_mut()
-            .remove(&self.application_id())
-        {
-            Some(_) => Ok(()),
-            None => Err(ExecutionError::ApplicationStateNotLocked),
-        }
-    }
-
-    async fn pass_userkv_read_key_bytes(
-        &self,
-        key: Vec<u8>,
-    ) -> Result<Option<Vec<u8>>, ExecutionError> {
-        // read a key from the KV store
-        match self.active_userkv_states_mut().get(&self.application_id()) {
-            Some(view) => Ok(view.get(&key).await?),
-            None => Err(ExecutionError::ApplicationStateNotLocked),
-        }
-    }
-
-    async fn pass_userkv_find_keys_by_prefix(
-        &self,
-        key_prefix: Vec<u8>,
-    ) -> Result<Vec<Vec<u8>>, ExecutionError> {
-        // Read keys matching a prefix. We have to collect since iterators do not pass the wit barrier
-        match self.active_userkv_states_mut().get(&self.application_id()) {
-            Some(view) => Ok(view.find_keys_by_prefix(&key_prefix).await?),
-            None => Err(ExecutionError::ApplicationStateNotLocked),
-        }
-    }
-
-    async fn pass_userkv_find_key_values_by_prefix(
         &self,
         key_prefix: Vec<u8>,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError> {
