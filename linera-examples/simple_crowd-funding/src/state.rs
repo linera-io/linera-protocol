@@ -1,9 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use simple_fungible::AccountOwner;
 use linera_sdk::{ApplicationId, Timestamp};
 use serde::{Deserialize, Serialize};
+use simple_fungible::AccountOwner;
 use std::collections::BTreeMap;
 
 /// The parameters required to create a simple_crowd-funding campaign.

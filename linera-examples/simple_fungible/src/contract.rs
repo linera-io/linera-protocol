@@ -7,16 +7,16 @@ mod state;
 
 use self::state::SimpleFungibleToken;
 use async_trait::async_trait;
-use simple_fungible::{
-    types::{AccountOwner, Nonce},
-    ApplicationCall, ApplicationTransfer, SessionCall, SignedTransfer, Transfer,
-};
 use linera_sdk::{
     contract::system_api, crypto::CryptoError, ensure, ApplicationCallResult, CalleeContext,
     Contract, EffectContext, ExecutionResult, FromBcsBytes, OperationContext, Session,
     SessionCallResult, SessionId, SimpleStateStorage,
 };
 use serde::{Deserialize, Serialize};
+use simple_fungible::{
+    types::{AccountOwner, Nonce},
+    ApplicationCall, ApplicationTransfer, SessionCall, SignedTransfer, Transfer,
+};
 use thiserror::Error;
 
 linera_sdk::contract!(SimpleFungibleToken);

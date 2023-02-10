@@ -90,7 +90,7 @@ pub enum Error {
 
 #[cfg(test)]
 mod tests {
-    use super::{SimpleCounter, Error};
+    use super::{Error, SimpleCounter};
     use futures::FutureExt;
     use linera_sdk::{
         ApplicationCallResult, BlockHeight, CalleeContext, ChainId, Contract, EffectContext,

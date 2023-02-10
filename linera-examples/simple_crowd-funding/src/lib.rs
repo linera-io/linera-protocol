@@ -1,5 +1,5 @@
-use simple_fungible::SignedTransfer;
 use serde::{Deserialize, Serialize};
+use simple_fungible::SignedTransfer;
 
 /// A cross-application call.
 #[derive(Deserialize, Serialize)]

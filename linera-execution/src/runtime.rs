@@ -334,7 +334,10 @@ where
 
     async fn view_read_key_bytes(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, ExecutionError> {
         // read a key from the KV store
-        match self.active_view_user_states_mut().get(&self.application_id()) {
+        match self
+            .active_view_user_states_mut()
+            .get(&self.application_id())
+        {
             Some(view) => Ok(view.get(&key).await?),
             None => Err(ExecutionError::ApplicationStateNotLocked),
         }
@@ -345,7 +348,10 @@ where
         key_prefix: Vec<u8>,
     ) -> Result<Vec<Vec<u8>>, ExecutionError> {
         // Read keys matching a prefix. We have to collect since iterators do not pass the wit barrier
-        match self.active_view_user_states_mut().get(&self.application_id()) {
+        match self
+            .active_view_user_states_mut()
+            .get(&self.application_id())
+        {
             Some(view) => Ok(view.find_keys_by_prefix(&key_prefix).await?),
             None => Err(ExecutionError::ApplicationStateNotLocked),
         }
@@ -356,7 +362,10 @@ where
         key_prefix: Vec<u8>,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError> {
         // Read key/values matching a prefix. We have to collect since iterators do not pass the wit barrier
-        match self.active_view_user_states_mut().get(&self.application_id()) {
+        match self
+            .active_view_user_states_mut()
+            .get(&self.application_id())
+        {
             Some(view) => Ok(view.find_key_values_by_prefix(&key_prefix).await?),
             None => Err(ExecutionError::ApplicationStateNotLocked),
         }
@@ -413,7 +422,10 @@ where
 
     fn save_and_unlock_my_state(&self, state: Vec<u8>) -> Result<(), ExecutionError> {
         // Make the view available again.
-        match self.active_simple_user_states_mut().remove(&self.application_id()) {
+        match self
+            .active_simple_user_states_mut()
+            .remove(&self.application_id())
+        {
             Some(mut view) => {
                 // Set the state.
                 view.set(state);
@@ -424,7 +436,8 @@ where
     }
 
     fn unlock_my_state(&self) {
-        self.active_simple_user_states_mut().remove(&self.application_id());
+        self.active_simple_user_states_mut()
+            .remove(&self.application_id());
     }
 
     async fn view_write_batch_and_unlock(&self, batch: Batch) -> Result<(), ExecutionError> {

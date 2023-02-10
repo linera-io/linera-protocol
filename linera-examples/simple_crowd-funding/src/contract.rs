@@ -7,8 +7,6 @@ mod state;
 
 use self::state::{SimpleCrowdFunding, Status};
 use async_trait::async_trait;
-use simple_crowd_funding::ApplicationCall;
-use simple_fungible::{AccountOwner, ApplicationTransfer, SignedTransfer, Transfer};
 use futures::{future, stream, StreamExt, TryFutureExt, TryStreamExt};
 use linera_sdk::{
     contract::system_api, ensure, ApplicationCallResult, CalleeContext, Contract, EffectContext,
@@ -16,6 +14,8 @@ use linera_sdk::{
     SimpleStateStorage,
 };
 use serde::{Deserialize, Serialize};
+use simple_crowd_funding::ApplicationCall;
+use simple_fungible::{AccountOwner, ApplicationTransfer, SignedTransfer, Transfer};
 use std::mem;
 use thiserror::Error;
 

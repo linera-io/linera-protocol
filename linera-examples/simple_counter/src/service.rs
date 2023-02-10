@@ -33,13 +33,15 @@ impl Service for SimpleCounter {
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum Error {
     /// Invalid query argument; SimpleCounter application only supports a single (empty) query.
-    #[error("Invalid query argument; SimpleCounter application only supports a single (empty) query")]
+    #[error(
+        "Invalid query argument; SimpleCounter application only supports a single (empty) query"
+    )]
     InvalidQuery,
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{SimpleCounter, Error};
+    use super::{Error, SimpleCounter};
     use futures::FutureExt;
     use linera_sdk::{ChainId, QueryContext, Service};
     use webassembly_test::webassembly_test;
