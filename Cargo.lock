@@ -2268,7 +2268,6 @@ name = "linera-sdk"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-lock",
  "async-trait",
  "bcs",
  "custom_debug_derive",
