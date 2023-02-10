@@ -45,7 +45,7 @@ where
 
 impl<Application> ServiceStateStorage for ViewStateStorage<Application>
 where
-    Application: Service + ContainerView<ReadableWasmContext>,
+    Application: Service + ContainerView<HostServiceWasmContext>,
 {
     fn query_application(
         context: service::QueryContext,

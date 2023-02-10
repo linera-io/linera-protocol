@@ -9,13 +9,13 @@ use self::state::Counter;
 
 use async_trait::async_trait;
 use linera_sdk::{
-    service::system_api::ReadableWasmContext, QueryContext, Service, ViewStateStorage,
+    service::system_api::HostServiceWasmContext, QueryContext, Service, ViewStateStorage,
 };
 use linera_views::{common::Context, views::ViewError};
 use thiserror::Error;
 
 /// TODO(#434): Remove the type alias
-type ReadableCounter = Counter<ReadableWasmContext>;
+type ReadableCounter = Counter<HostServiceWasmContext>;
 linera_sdk::service!(ReadableCounter);
 
 #[async_trait]

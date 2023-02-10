@@ -115,6 +115,21 @@ pub async fn view_store_and_unlock<State: ContainerView<HostContractWasmContext>
     state.save().await.expect("save operation failed");
 }
 
+/// Save the contract state and unlock it.
+pub async fn simple_store_and_unlock<State: Serialize>(state: State)
+{
+    system::simple_store_and_unlock(&bcs::to_bytes(&state).expect("State serialization failed"));
+}
+
+/// Load the contract state and lock it for writes.
+pub async fn simple_load_and_lock<State>() -> State
+where
+    State: Default + DeserializeOwned,
+{
+    let future = system::SimpleLoadAndLock::new();
+    load_using(future::poll_fn(|_context| future.poll().into())).await
+}
+
 /// Retrieve the current chain ID.
 pub fn current_chain_id() -> ChainId {
     ChainId(system::chain_id().into())

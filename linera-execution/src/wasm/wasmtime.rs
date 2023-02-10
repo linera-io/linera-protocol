@@ -350,8 +350,8 @@ impl<S> SystemApi<S> {
 }
 
 impl<'storage> WritableSystem for SystemApi<&'storage dyn WritableStorage> {
-    type Load = HostFuture<'storage, Result<Vec<u8>, ExecutionError>>;
-    type LoadAndLock = HostFuture<'storage, Result<Vec<u8>, ExecutionError>>;
+    type SimpleLoad = HostFuture<'storage, Result<Vec<u8>, ExecutionError>>;
+    type SimpleLoadAndLock = HostFuture<'storage, Result<Vec<u8>, ExecutionError>>;
     type ViewLock = HostFuture<'storage, Result<(), ExecutionError>>;
     type ViewReadKeyBytes = HostFuture<'storage, Result<Option<Vec<u8>>, ExecutionError>>;
     type ViewFindKeys = HostFuture<'storage, Result<Vec<Vec<u8>>, ExecutionError>>;
@@ -374,6 +374,33 @@ impl<'storage> WritableSystem for SystemApi<&'storage dyn WritableStorage> {
 
     fn read_system_timestamp(&mut self) -> writable_system::Timestamp {
         self.storage.read_system_timestamp().micros()
+    }
+
+    fn simple_load_new(&mut self) -> Self::SimpleLoad {
+        self.future_queue.add(self.storage.try_read_my_state())
+    }
+
+    fn simple_load_poll(&mut self, future: &Self::SimpleLoad) -> writable_system::PollSimpleLoad {
+        use writable_system::PollSimpleLoad;
+        match future.poll(&mut self.context) {
+            Poll::Pending => PollSimpleLoad::Pending,
+            Poll::Ready(Ok(bytes)) => PollSimpleLoad::Ready(Ok(bytes)),
+            Poll::Ready(Err(error)) => PollSimpleLoad::Ready(Err(error.to_string())),
+        }
+    }
+
+    fn simple_load_and_lock_new(&mut self) -> Self::SimpleLoadAndLock {
+        self.future_queue
+            .add(self.storage.try_read_and_lock_my_state())
+    }
+
+    fn simple_load_and_lock_poll(&mut self, future: &Self::SimpleLoadAndLock) -> writable_system::PollSimpleLoad {
+        use writable_system::PollLoad;
+        match future.poll(&mut self.context) {
+            Poll::Pending => PollSimpleLoad::Pending,
+            Poll::Ready(Ok(bytes)) => PollSimpleLoad::Ready(Ok(bytes)),
+            Poll::Ready(Err(error)) => PollSimpleLoad::Ready(Err(error.to_string())),
+        }
     }
 
     fn view_lock_new(&mut self) -> Self::ViewLock {
@@ -468,16 +495,16 @@ impl<'storage> WritableSystem for SystemApi<&'storage dyn WritableStorage> {
         }
     }
 
-    fn lock_new(&mut self) -> Self::Lock {
+    fn simple_lock_new(&mut self) -> Self::SimpleLock {
         HostFuture::new(self.storage.lock_userkv_state())
     }
 
-    fn lock_poll(&mut self, future: &Self::Lock) -> writable_system::PollLock {
-        use writable_system::PollLock;
+    fn simple_lock_poll(&mut self, future: &Self::SimpleLock) -> writable_system::PollSimpleLock {
+        use writable_system::PollSimpleLock;
         match future.poll(&mut self.context) {
-            Poll::Pending => PollLock::Pending,
-            Poll::Ready(Ok(())) => PollLock::Ready(Ok(())),
-            Poll::Ready(Err(error)) => PollLock::Ready(Err(error.to_string())),
+            Poll::Pending => PollSimpleLock::Pending,
+            Poll::Ready(Ok(())) => PollSimpleLock::Ready(Ok(())),
+            Poll::Ready(Err(error)) => PollSimpleLock::Ready(Err(error.to_string())),
         }
     }
 
@@ -560,9 +587,7 @@ impl<'storage> WritableSystem for SystemApi<&'storage dyn WritableStorage> {
 }
 
 impl<'storage> QueryableSystem for SystemApi<&'storage dyn QueryableStorage> {
-    type Load = HostFuture<'storage, Result<Vec<u8>, ExecutionError>>;
-    type Lock = HostFuture<'storage, Result<(), ExecutionError>>;
-    type Unlock = HostFuture<'storage, Result<(), ExecutionError>>;
+    type SimpleLoad = HostFuture<'storage, Result<Vec<u8>, ExecutionError>>;
     type TryQueryApplication = HostFuture<'storage, Result<Vec<u8>, ExecutionError>>;
     type ViewLock = HostFuture<'storage, Result<(), ExecutionError>>;
     type ViewUnlock = HostFuture<'storage, Result<(), ExecutionError>>;
@@ -584,6 +609,19 @@ impl<'storage> QueryableSystem for SystemApi<&'storage dyn QueryableStorage> {
 
     fn read_system_timestamp(&mut self) -> queryable_system::Timestamp {
         self.storage.read_system_timestamp().micros()
+    }
+
+    fn simple_load_new(&mut self) -> Self::SimpleLoad {
+        self.future_queue.add(self.storage.try_read_my_state())
+    }
+
+    fn simple_load_poll(&mut self, future: &Self::SimpleLoad) -> queryable_system::PollSimpleLoad {
+        use queryable_system::PollSimpleLoad;
+        match future.poll(&mut self.context) {
+            Poll::Pending => PollSimpleLoad::Pending,
+            Poll::Ready(Ok(bytes)) => PollSimpleLoad::Ready(Ok(bytes)),
+            Poll::Ready(Err(error)) => PollSimpleLoad::Ready(Err(error.to_string())),
+        }
     }
 
     fn view_lock_new(&mut self) -> Self::ViewLock {
@@ -663,29 +701,29 @@ impl<'storage> QueryableSystem for SystemApi<&'storage dyn QueryableStorage> {
         }
     }
 
-    fn lock_new(&mut self) -> Self::Lock {
+    fn simple_lock_new(&mut self) -> Self::SimpleLock {
         HostFuture::new(self.storage.lock_userkv_state())
     }
 
-    fn lock_poll(&mut self, future: &Self::Lock) -> queryable_system::PollLock {
-        use queryable_system::PollLock;
+    fn simple_lock_poll(&mut self, future: &Self::SimpleLock) -> queryable_system::PollSimpleLock {
+        use queryable_system::PollSimpleLock;
         match future.poll(&mut self.context) {
-            Poll::Pending => PollLock::Pending,
-            Poll::Ready(Ok(())) => PollLock::Ready(Ok(())),
-            Poll::Ready(Err(error)) => PollLock::Ready(Err(error.to_string())),
+            Poll::Pending => PollSimpleLock::Pending,
+            Poll::Ready(Ok(())) => PollSimpleLock::Ready(Ok(())),
+            Poll::Ready(Err(error)) => PollSimpleLock::Ready(Err(error.to_string())),
         }
     }
 
-    fn unlock_new(&mut self) -> Self::Unlock {
+    fn simple_unlock_new(&mut self) -> Self::SimpleUnlock {
         HostFuture::new(self.storage.unlock_userkv_state())
     }
 
-    fn unlock_poll(&mut self, future: &Self::Lock) -> queryable_system::PollUnlock {
-        use queryable_system::PollUnlock;
+    fn simple_unlock_poll(&mut self, future: &Self::SimpleLock) -> queryable_system::PollSimpleUnlock {
+        use queryable_system::PollSimpleUnlock;
         match future.poll(&mut self.context) {
-            Poll::Pending => PollUnlock::Pending,
-            Poll::Ready(Ok(())) => PollUnlock::Ready(Ok(())),
-            Poll::Ready(Err(error)) => PollUnlock::Ready(Err(error.to_string())),
+            Poll::Pending => PollSimpleUnlock::Pending,
+            Poll::Ready(Ok(())) => PollSimpleUnlock::Ready(Ok(())),
+            Poll::Ready(Err(error)) => PollSimpleUnlock::Ready(Err(error.to_string())),
         }
     }
 

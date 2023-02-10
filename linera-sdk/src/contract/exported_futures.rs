@@ -63,10 +63,10 @@ where
         argument: Vec<u8>,
     ) -> ExportedFuture<Result<ExecutionResult, String>> {
         ExportedFuture::new(async move {
-            let mut application: Application = system_api::load_and_lock().await;
+            let mut application: Application = system_api::simple_load_and_lock().await;
             let result = application.initialize(&context.into(), &argument).await;
             if result.is_ok() {
-                system_api::store_and_unlock(application).await;
+                system_api::simple_store_and_unlock(application).await;
             }
             result.map_err(|error| error.to_string())
         })
@@ -77,12 +77,12 @@ where
         operation: Vec<u8>,
     ) -> ExportedFuture<Result<ExecutionResult, String>> {
         ExportedFuture::new(async move {
-            let mut application: Application = system_api::load_and_lock().await;
+            let mut application: Application = system_api::simple_load_and_lock().await;
             let result = application
                 .execute_operation(&context.into(), &operation)
                 .await;
             if result.is_ok() {
-                system_api::store_and_unlock(application).await;
+                system_api::simple_store_and_unlock(application).await;
             }
             result.map_err(|error| error.to_string())
         })
@@ -93,10 +93,10 @@ where
         effect: Vec<u8>,
     ) -> ExportedFuture<Result<ExecutionResult, String>> {
         ExportedFuture::new(async move {
-            let mut application: Application = system_api::load_and_lock().await;
+            let mut application: Application = system_api::simple_load_and_lock().await;
             let result = application.execute_effect(&context.into(), &effect).await;
             if result.is_ok() {
-                system_api::store_and_unlock(application).await;
+                system_api::simple_store_and_unlock(application).await;
             }
             result.map_err(|error| error.to_string())
         })
@@ -108,7 +108,7 @@ where
         forwarded_sessions: Vec<contract::SessionId>,
     ) -> ExportedFuture<Result<ApplicationCallResult, String>> {
         ExportedFuture::new(async move {
-            let mut application: Application = system_api::load_and_lock().await;
+            let mut application: Application = system_api::simple_load_and_lock().await;
 
             let forwarded_sessions = forwarded_sessions
                 .into_iter()
@@ -119,7 +119,7 @@ where
                 .call_application(&context.into(), &argument, forwarded_sessions)
                 .await;
             if result.is_ok() {
-                system_api::store_and_unlock(application).await;
+                system_api::simple_store_and_unlock(application).await;
             }
             result.map_err(|error| error.to_string())
         })
@@ -132,7 +132,7 @@ where
         forwarded_sessions: Vec<contract::SessionId>,
     ) -> ExportedFuture<Result<SessionCallResult, String>> {
         ExportedFuture::new(async move {
-            let mut application: Application = system_api::load_and_lock().await;
+            let mut application: Application = system_api::simple_load_and_lock().await;
 
             let forwarded_sessions = forwarded_sessions
                 .into_iter()
@@ -148,7 +148,7 @@ where
                 )
                 .await;
             if result.is_ok() {
-                system_api::store_and_unlock(application).await;
+                system_api::simple_store_and_unlock(application).await;
             }
             result.map_err(|error| error.to_string())
         })
@@ -157,17 +157,17 @@ where
 
 impl<Application> ContractStateStorage for ViewStateStorage<Application>
 where
-    Application: Contract + ContainerView<WasmContext>,
+    Application: Contract + ContainerView<HostContractWasmContext>,
 {
     fn initialize(
         context: contract::OperationContext,
         argument: Vec<u8>,
     ) -> ExportedFuture<Result<ExecutionResult, String>> {
         ExportedFuture::new(async move {
-            let mut application: Application = system_api::load_and_lock_view().await;
+            let mut application: Application = system_api::view_lock().await;
             let result = application.initialize(&context.into(), &argument).await;
             if result.is_ok() {
-                system_api::view_store_and_unlock_view(application).await;
+                system_api::view_store_and_unlock(application).await;
             }
             result.map_err(|error| error.to_string())
         })
@@ -178,12 +178,12 @@ where
         operation: Vec<u8>,
     ) -> ExportedFuture<Result<ExecutionResult, String>> {
         ExportedFuture::new(async move {
-            let mut application: Application = system_api::load_and_lock_view().await;
+            let mut application: Application = system_api::view_lock().await;
             let result = application
                 .execute_operation(&context.into(), &operation)
                 .await;
             if result.is_ok() {
-                system_api::view_store_and_unlock_view(application).await;
+                system_api::view_store_and_unlock(application).await;
             }
             result.map_err(|error| error.to_string())
         })
@@ -194,10 +194,10 @@ where
         effect: Vec<u8>,
     ) -> ExportedFuture<Result<ExecutionResult, String>> {
         ExportedFuture::new(async move {
-            let mut application: Application = system_api::load_and_lock_view().await;
+            let mut application: Application = system_api::view_lock().await;
             let result = application.execute_effect(&context.into(), &effect).await;
             if result.is_ok() {
-                system_api::view_store_and_unlock_view(application).await;
+                system_api::view_store_and_unlock(application).await;
             }
             result.map_err(|error| error.to_string())
         })
@@ -209,7 +209,7 @@ where
         forwarded_sessions: Vec<contract::SessionId>,
     ) -> ExportedFuture<Result<ApplicationCallResult, String>> {
         ExportedFuture::new(async move {
-            let mut application: Application = system_api::load_and_lock_view().await;
+            let mut application: Application = system_api::view_lock().await;
 
             let forwarded_sessions = forwarded_sessions
                 .into_iter()
@@ -220,7 +220,7 @@ where
                 .call_application(&context.into(), &argument, forwarded_sessions)
                 .await;
             if result.is_ok() {
-                system_api::view_store_and_unlock_view(application).await;
+                system_api::view_store_and_unlock(application).await;
             }
             result.map_err(|error| error.to_string())
         })
@@ -233,7 +233,7 @@ where
         forwarded_sessions: Vec<contract::SessionId>,
     ) -> ExportedFuture<Result<SessionCallResult, String>> {
         ExportedFuture::new(async move {
-            let mut application: Application = system_api::load_and_lock_view().await;
+            let mut application: Application = system_api::view_lock().await;
 
             let forwarded_sessions = forwarded_sessions
                 .into_iter()
@@ -249,7 +249,7 @@ where
                 )
                 .await;
             if result.is_ok() {
-                system_api::view_store_and_unlock_view(application).await;
+                system_api::view_store_and_unlock(application).await;
             }
             result.map_err(|error| error.to_string())
         })

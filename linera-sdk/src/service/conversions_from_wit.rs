@@ -88,7 +88,7 @@ impl From<PollViewLock> for Poll<Result<(), ViewError>> {
 
 impl From<PollSimpleLoad> for Poll<Result<Vec<u8>, String>> {
     fn from(poll_simple_load: PollSimpleLoad) -> Poll<Result<Vec<u8>, String>> {
-        match poll_get {
+        match poll_simple_load {
             PollSimpleLoad::Ready(bytes) => Poll::Ready(bytes),
             PollSimpleLoad::Pending => Poll::Pending,
         }
