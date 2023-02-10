@@ -291,6 +291,17 @@ where
         *self.execution_state_mut().system.timestamp.get()
     }
 
+    async fn try_read_my_state(&self) -> Result<Vec<u8>, ExecutionError> {
+        let state = self
+            .execution_state_mut()
+            .users
+            .try_load_entry_mut(self.application_id())
+            .await?
+            .get()
+            .to_vec();
+        Ok(state)
+    }
+
     async fn view_lock_user_state(&self) -> Result<(), ExecutionError> {
         let view = self
             .execution_state_mut()

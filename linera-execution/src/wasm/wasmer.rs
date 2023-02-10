@@ -505,19 +505,6 @@ impl writable_system::WritableSystem for SystemApi<&'static dyn WritableStorage>
         }
     }
 
-    fn simple_lock_new(&mut self) -> Self::SimpleLock {
-        HostFuture::new(self.storage().lock_userkv_state())
-    }
-
-    fn simple_lock_poll(&mut self, future: &Self::SimpleLock) -> writable_system::PollSimpleLock {
-        use writable_system::PollSimpleLock;
-        match future.poll(&mut self.context) {
-            Poll::Pending => PollSimpleLock::Pending,
-            Poll::Ready(Ok(())) => PollSimpleLock::Ready(Ok(())),
-            Poll::Ready(Err(error)) => PollSimpleLock::Ready(Err(error.to_string())),
-        }
-    }
-
     fn try_call_application_new(
         &mut self,
         authenticated: bool,

@@ -495,19 +495,6 @@ impl<'storage> WritableSystem for SystemApi<&'storage dyn WritableStorage> {
         }
     }
 
-    fn simple_lock_new(&mut self) -> Self::SimpleLock {
-        HostFuture::new(self.storage.lock_userkv_state())
-    }
-
-    fn simple_lock_poll(&mut self, future: &Self::SimpleLock) -> writable_system::PollSimpleLock {
-        use writable_system::PollSimpleLock;
-        match future.poll(&mut self.context) {
-            Poll::Pending => PollSimpleLock::Pending,
-            Poll::Ready(Ok(())) => PollSimpleLock::Ready(Ok(())),
-            Poll::Ready(Err(error)) => PollSimpleLock::Ready(Err(error.to_string())),
-        }
-    }
-
     fn try_call_application_new(
         &mut self,
         authenticated: bool,
@@ -698,32 +685,6 @@ impl<'storage> QueryableSystem for SystemApi<&'storage dyn QueryableStorage> {
             Poll::Pending => PollViewFindKeyValues::Pending,
             Poll::Ready(Ok(key_values)) => PollViewFindKeyValues::Ready(Ok(key_values)),
             Poll::Ready(Err(error)) => PollViewFindKeyValues::Ready(Err(error.to_string())),
-        }
-    }
-
-    fn simple_lock_new(&mut self) -> Self::SimpleLock {
-        HostFuture::new(self.storage.lock_userkv_state())
-    }
-
-    fn simple_lock_poll(&mut self, future: &Self::SimpleLock) -> queryable_system::PollSimpleLock {
-        use queryable_system::PollSimpleLock;
-        match future.poll(&mut self.context) {
-            Poll::Pending => PollSimpleLock::Pending,
-            Poll::Ready(Ok(())) => PollSimpleLock::Ready(Ok(())),
-            Poll::Ready(Err(error)) => PollSimpleLock::Ready(Err(error.to_string())),
-        }
-    }
-
-    fn simple_unlock_new(&mut self) -> Self::SimpleUnlock {
-        HostFuture::new(self.storage.unlock_userkv_state())
-    }
-
-    fn simple_unlock_poll(&mut self, future: &Self::SimpleLock) -> queryable_system::PollSimpleUnlock {
-        use queryable_system::PollSimpleUnlock;
-        match future.poll(&mut self.context) {
-            Poll::Pending => PollSimpleUnlock::Pending,
-            Poll::Ready(Ok(())) => PollSimpleUnlock::Ready(Ok(())),
-            Poll::Ready(Err(error)) => PollSimpleUnlock::Ready(Err(error.to_string())),
         }
     }
 

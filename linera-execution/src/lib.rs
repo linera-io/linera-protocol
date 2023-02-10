@@ -319,9 +319,6 @@ pub trait WritableStorage: ReadableStorage {
     /// Write the batch and then unlock
     async fn view_write_batch_and_unlock(&self, batch: Batch) -> Result<(), ExecutionError>;
 
-    /// Write the batch and then unlock
-    async fn write_batch_and_unlock(&self, batch: Batch) -> Result<(), ExecutionError>;
-
     /// Call another application. Forwarded sessions will now be visible to
     /// `callee_id` (but not to the caller any more).
     async fn try_call_application(

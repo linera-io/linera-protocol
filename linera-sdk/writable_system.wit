@@ -86,16 +86,6 @@ variant poll-view-write-batch {
     ready(result<unit, string>),
 }
 
-resource simple-lock {
-    static new: func() -> simple-lock
-    poll: func() -> poll-simple-lock
-}
-
-variant poll-simple-lock {
-    pending,
-    ready(result<unit, string>),
-}
-
 resource try-call-application {
     static new: func(
         authenticated: bool,

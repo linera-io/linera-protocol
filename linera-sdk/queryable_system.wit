@@ -73,26 +73,6 @@ variant poll-simple-load {
     ready(result<list<u8>, string>),
 }
 
-resource simple-lock {
-    static new: func() -> simple-lock
-    poll: func() -> poll-simple-lock
-}
-
-variant poll-simple-lock {
-    pending,
-    ready(result<unit, string>),
-}
-
-resource simple-unlock {
-    static new: func() -> simple-unlock
-    poll: func() -> poll-simple-unlock
-}
-
-variant poll-simple-unlock {
-    pending,
-    ready(result<unit, string>),
-}
-
 resource try-query-application {
     static new: func(
         application: application-id,
