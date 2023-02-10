@@ -5,7 +5,7 @@
 
 mod state;
 
-use self::state::MetaCounter;
+use self::state::SimpleMetaCounter;
 use async_trait::async_trait;
 use linera_sdk::{
     contract::system_api, ApplicationCallResult, CalleeContext, Contract, EffectContext,
@@ -13,10 +13,10 @@ use linera_sdk::{
 };
 use thiserror::Error;
 
-linera_sdk::contract!(MetaCounter);
+linera_sdk::contract!(SimpleMetaCounter);
 
 #[async_trait]
-impl Contract for MetaCounter {
+impl Contract for SimpleMetaCounter {
     type Error = Error;
     type Storage = SimpleStateStorage<Self>;
 
@@ -71,13 +71,13 @@ impl Contract for MetaCounter {
 /// An error that can occur during the contract execution.
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("MetaCounter application doesn't support any cross-chain effects")]
+    #[error("SimpleMetaCounter application doesn't support any cross-chain effects")]
     EffectsNotSupported,
 
-    #[error("MetaCounter application doesn't support any cross-application calls")]
+    #[error("SimpleMetaCounter application doesn't support any cross-application calls")]
     CallsNotSupported,
 
-    #[error("MetaCounter application doesn't support any cross-application sessions")]
+    #[error("SimpleMetaCounter application doesn't support any cross-application sessions")]
     SessionsNotSupported,
 
     #[error("Error with the internal call to Counter")]

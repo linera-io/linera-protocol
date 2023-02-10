@@ -3,7 +3,7 @@ members = [
         "counter",
         "crowd-funding",
         "fungible",
-        "meta-counter",
+        "simple_meta-counter",
         "view_counter",
         "view_crowd-funding",
         "view_fungible",

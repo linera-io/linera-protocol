@@ -1,5 +1,5 @@
 [package]
-name = "meta-counter"
+name = "simple_meta-counter"
 version = "0.1.0"
 authors = ["Linera <contact@linera.io>"]
 edition = "2021"
@@ -16,9 +16,9 @@ linera-sdk = { path = "../../linera-sdk", features = ["test"] }
 webassembly-test = "0.1.0"
 
 [[bin]]
-name = "meta_counter_contract"
+name = "simple_meta_counter_contract"
 path = "src/contract.rs"
 
 [[bin]]
-name = "meta_counter_service"
+name = "simple_meta_counter_service"
 path = "src/service.rs"

@@ -5,15 +5,15 @@
 
 mod state;
 
-use self::state::MetaCounter;
+use self::state::SimpleMetaCounter;
 use async_trait::async_trait;
 use linera_sdk::{service::system_api, QueryContext, Service, SimpleStateStorage};
 use thiserror::Error;
 
-linera_sdk::service!(MetaCounter);
+linera_sdk::service!(SimpleMetaCounter);
 
 #[async_trait]
-impl Service for MetaCounter {
+impl Service for SimpleMetaCounter {
     type Error = Error;
     type Storage = SimpleStateStorage<Self>;
 
