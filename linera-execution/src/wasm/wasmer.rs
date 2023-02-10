@@ -599,6 +599,7 @@ impl queryable_system::QueryableSystem for SystemApi<&'static dyn QueryableStora
     type ViewReadKeyBytes = HostFuture<'static, Result<Option<Vec<u8>>, ExecutionError>>;
     type ViewFindKeys = HostFuture<'static, Result<Vec<Vec<u8>>, ExecutionError>>;
     type ViewFindKeyValues = HostFuture<'static, Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError>>;
+    type TryQueryApplication = HostFuture<'static, Result<Vec<u8>, ExecutionError>>;
 
     fn chain_id(&mut self) -> queryable_system::ChainId {
         self.storage().chain_id().into()
