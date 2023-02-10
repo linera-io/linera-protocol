@@ -322,17 +322,16 @@ where
         sender: ChainId,
         recipient: ChainId,
     ) -> Result<CrossChainRequest, WorkerError> {
-        let heights: BTreeSet<_> = height_map
-            .iter()
-            .flat_map(|(_, _, heights)| heights)
-            .cloned()
-            .collect();
+        let heights = BTreeSet::from_iter(
+            height_map
+                .iter()
+                .flat_map(|(_, _, heights)| heights)
+                .copied(),
+        );
         let mut keys = Vec::new();
         for height in heights {
             if let Some(key) = confirmed_log.get(usize::from(height)).await? {
                 keys.push(key);
-            } else {
-                break; // The confirmed_log is contiguous and won't contain higher blocks.
             }
         }
         let certificates = self.storage.read_certificates(keys).await?;
@@ -349,7 +348,7 @@ where
         &mut self,
         chain: &mut ChainStateView<Client::Context>,
     ) -> Result<NetworkActions, WorkerError> {
-        let mut heights_by_app: BTreeMap<_, BTreeMap<_, _>> = Default::default();
+        let mut heights_by_recipient: BTreeMap<_, BTreeMap<_, _>> = Default::default();
         for application_id in chain.communication_states.indices().await? {
             let state = chain
                 .communication_states
@@ -358,7 +357,7 @@ where
             for target in state.outboxes.indices().await? {
                 let outbox = state.outboxes.load_entry_mut(target.clone()).await?;
                 let heights = outbox.block_heights().await?;
-                heights_by_app
+                heights_by_recipient
                     .entry(target.recipient)
                     .or_default()
                     .insert((application_id, target.medium), heights);
@@ -366,7 +365,7 @@ where
         }
         let mut actions = NetworkActions::default();
         let chain_id = chain.chain_id();
-        for (recipient, height_map) in heights_by_app {
+        for (recipient, height_map) in heights_by_recipient {
             let request = self
                 .create_cross_chain_request(
                     &mut chain.confirmed_log,
@@ -844,7 +843,7 @@ where
                     let origin = Origin { sender, medium };
                     let app_certificates = certificates
                         .iter()
-                        .filter(|cert| heights.contains(&cert.value.block().height))
+                        .filter(|cert| heights.binary_search(&cert.value.block().height).is_ok())
                         .cloned()
                         .collect();
                     actions.merge(
