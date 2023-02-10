@@ -350,13 +350,14 @@ fn generate_graphql_code_for_field(field: Field) -> (TokenStream2, Option<TokenS
 
             let r#impl = quote! {
                 async fn #field_name(&self,
-                    range: Option<linera_views::graphql::Range>
+                    start: Option<usize>,
+                    end: Option<usize>
                 ) -> Result<Vec<#generic_ident>, async_graphql::Error> {
-                    let range = range.unwrap_or(linera_views::graphql::Range {
-                        start: 0,
-                        end: self.#field_name.count(),
-                    });
-                    Ok(self.#field_name.read(range.into()).await?)
+                    let range = std::ops::Range {
+                        start: start.unwrap_or(0),
+                        end: end.unwrap_or(self.#field_name.count()),
+                    };
+                    Ok(self.#field_name.read(range).await?)
                 }
             };
             (r#impl, None)
@@ -699,7 +700,6 @@ pub mod tests {
                 string: String,
                 guard: linera_views::collection_view::ReadGuardedView<'a, SomeOtherView<C>>,
             }
-
             #[async_graphql::Object]
             impl<'a, C> SomeOtherViewEntry<'a, C>
                 where
@@ -714,7 +714,6 @@ pub mod tests {
                     self.guard.deref()
                 }
             }
-
             #[async_graphql::Object]
             impl<C> TestView<C>
                 where
@@ -724,11 +723,9 @@ pub mod tests {
                 async fn raw(&self) -> &String {
                     &self.raw
                 }
-
                 async fn register(&self) -> &Option<usize> {
                     self.register.get()
                 }
-
                 async fn collection(
                     &self,
                     string: String
@@ -738,27 +735,26 @@ pub mod tests {
                         guard: self.collection.try_load_entry(string).await?,
                     })
                 }
-
                 async fn set(&self) -> Result<Vec<HashSet<usize>>, async_graphql::Error> {
                     Ok(self.set.indices().await?)
                 }
-
                 async fn log(
                     &self,
-                    range: Option<linera_views::graphql::Range>
+                    start: Option<usize>,
+                    end: Option<usize>
                 ) -> Result<Vec<usize>, async_graphql::Error> {
-                    let range = range.unwrap_or(linera_views::graphql::Range {
-                        start: 0,
-                        end: self.log.count(),
-                    });
-                    Ok(self.log.read(range.into()).await?)
+                    let range = std::ops::Range {
+                        start: start.unwrap_or(0),
+                        end: end.unwrap_or(self.log.count()),
+                    };
+                    Ok(self.log.read(range).await?)
                 }
-
                 async fn queue(&self, count: Option<usize>) -> Result<Vec<usize>, async_graphql::Error> {
                     let count = count.unwrap_or_else(|| self.queue.count());
                     Ok(self.queue.read_front(count).await?)
                 }
             }
+
         );
 
         assert_eq_no_whitespace(output.to_string(), expected.to_string())
