@@ -5,6 +5,6 @@ use serde::{Deserialize, Serialize};
 
 /// The application state.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
-pub struct Counter {
+pub struct SimpleCounter {
     pub value: u128,
 }

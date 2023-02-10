@@ -5,15 +5,15 @@
 
 mod state;
 
-use self::state::Counter;
+use self::state::SimpleCounter;
 use async_trait::async_trait;
 use linera_sdk::{QueryContext, Service, SimpleStateStorage};
 use thiserror::Error;
 
-linera_sdk::service!(Counter);
+linera_sdk::service!(SimpleCounter);
 
 #[async_trait]
-impl Service for Counter {
+impl Service for SimpleCounter {
     type Error = Error;
     type Storage = SimpleStateStorage<Self>;
 
@@ -32,14 +32,14 @@ impl Service for Counter {
 /// An error that can occur during the contract execution.
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum Error {
-    /// Invalid query argument; Counter application only supports a single (empty) query.
-    #[error("Invalid query argument; Counter application only supports a single (empty) query")]
+    /// Invalid query argument; SimpleCounter application only supports a single (empty) query.
+    #[error("Invalid query argument; SimpleCounter application only supports a single (empty) query")]
     InvalidQuery,
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Counter, Error};
+    use super::{SimpleCounter, Error};
     use futures::FutureExt;
     use linera_sdk::{ChainId, QueryContext, Service};
     use webassembly_test::webassembly_test;
@@ -47,15 +47,15 @@ mod tests {
     #[webassembly_test]
     fn query() {
         let value = 61_098_721_u128;
-        let counter = Counter { value };
+        let simple_counter = SimpleCounter { value };
 
-        let result = counter
+        let result = simple_counter
             .query_application(&dummy_query_context(), &[])
             .now_or_never()
             .expect("Query should not await anything");
 
         let expected_response =
-            bcs::to_bytes(&value).expect("Counter value could not be serialized");
+            bcs::to_bytes(&value).expect("SimpleCounter value could not be serialized");
 
         assert_eq!(result, Ok(expected_response));
     }
@@ -63,10 +63,10 @@ mod tests {
     #[webassembly_test]
     fn invalid_query() {
         let value = 4_u128;
-        let counter = Counter { value };
+        let simple_counter = SimpleCounter { value };
 
         let dummy_argument = [2];
-        let result = counter
+        let result = simple_counter
             .query_application(&dummy_query_context(), &dummy_argument)
             .now_or_never()
             .expect("Query should not await anything");

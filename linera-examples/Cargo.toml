@@ -1,6 +1,6 @@
 [workspace]
 members = [
-        "counter",
+        "simple_counter",
         "crowd-funding",
         "fungible",
         "simple_meta-counter",
