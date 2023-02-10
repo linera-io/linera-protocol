@@ -384,7 +384,7 @@ impl writable_system::WritableSystem for SystemApi<&'static dyn WritableStorage>
         self.future_queue.add(self.storage().try_read_my_state())
     }
 
-    fn simple_load_poll(&mut self, future: &Self::Load) -> writable_system::PollSimpleLoad {
+    fn simple_load_poll(&mut self, future: &Self::SimpleLoad) -> writable_system::PollSimpleLoad {
         use writable_system::PollSimpleLoad;
         match future.poll(&mut self.context) {
             Poll::Pending => PollSimpleLoad::Pending,
@@ -727,12 +727,12 @@ impl queryable_system::QueryableSystem for SystemApi<&'static dyn QueryableStora
     fn try_query_application_poll(
         &mut self,
         future: &Self::TryQueryApplication,
-    ) -> queryable_system::PollLoad {
-        use queryable_system::PollLoad;
+    ) -> queryable_system::PollSimpleLoad {
+        use queryable_system::PollSimpleLoad;
         match future.poll(&mut self.context) {
-            Poll::Pending => PollLoad::Pending,
-            Poll::Ready(Ok(result)) => PollLoad::Ready(Ok(result)),
-            Poll::Ready(Err(error)) => PollLoad::Ready(Err(error.to_string())),
+            Poll::Pending => PollSimpleLoad::Pending,
+            Poll::Ready(Ok(result)) => PollSimpleLoad::Ready(Ok(result)),
+            Poll::Ready(Err(error)) => PollSimpleLoad::Ready(Err(error.to_string())),
         }
     }
 
