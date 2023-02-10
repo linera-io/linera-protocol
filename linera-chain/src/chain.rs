@@ -30,7 +30,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 
 /// A view accessing the state of a chain.
-#[derive(Debug, HashableContainerView)]
+#[derive(Debug, HashableContainerView, GraphQLView)]
 pub struct ChainStateView<C> {
     /// Execution state, including system and user applications.
     pub execution_state: ExecutionStateView<C>,

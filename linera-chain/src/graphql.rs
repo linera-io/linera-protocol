@@ -1,13 +1,13 @@
 use crate::{
-    chain::{ChainTipState, ChannelStateView, CommunicationStateView},
+    chain::{ChannelStateView, CommunicationStateView},
     data_types::{Event, Medium, Origin, Target},
     inbox::InboxStateView,
     outbox::OutboxStateView,
-    ChainManager, ChainStateView,
+    ChainManager,
 };
 use async_graphql::{scalar, Error, Object};
-use linera_base::{crypto::CryptoHash, data_types::ChainId};
-use linera_execution::{ApplicationId, ChannelName, ExecutionStateView};
+use linera_base::data_types::ChainId;
+use linera_execution::{ApplicationId, ChannelName};
 use linera_views::{collection_view::ReadGuardedView, common::Context, views::ViewError};
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
@@ -29,61 +29,6 @@ impl From<Range> for std::ops::Range<usize> {
             start: range.start,
             end: range.end,
         }
-    }
-}
-
-#[Object]
-impl<C: Context + Send + Sync + Clone + 'static> ChainStateView<C>
-where
-    ViewError: From<C::Error>,
-{
-    async fn execution_state_view(&self) -> &ExecutionStateView<C> {
-        &self.execution_state
-    }
-
-    async fn tip_state(&self) -> &ChainTipState {
-        self.tip_state.get()
-    }
-
-    async fn execution_state_hash(&self) -> &Option<CryptoHash> {
-        self.execution_state_hash.get()
-    }
-
-    async fn manager(&self) -> &ChainManager {
-        self.manager.get()
-    }
-
-    async fn confirmed_log(&self, range: Option<Range>) -> Result<Vec<CryptoHash>, Error> {
-        let range = range.unwrap_or(Range {
-            start: 0,
-            end: self.confirmed_log.count(),
-        });
-        Ok(self.confirmed_log.read(range.into()).await?)
-    }
-
-    async fn received_log(&self, range: Option<Range>) -> Result<Vec<CryptoHash>, Error> {
-        let range = range.unwrap_or(Range {
-            start: 0,
-            end: self.received_log.count(),
-        });
-        Ok(self.received_log.read(range.into()).await?)
-    }
-
-    async fn communication_state(
-        &self,
-        application_id: ApplicationId,
-    ) -> Result<CommunicationStateElement<C>, Error> {
-        Ok(CommunicationStateElement {
-            application_id,
-            guard: self
-                .communication_states
-                .try_load_entry(application_id)
-                .await?,
-        })
-    }
-
-    async fn communication_state_indices(&self) -> Result<Vec<ApplicationId>, Error> {
-        Ok(self.communication_states.indices().await?)
     }
 }
 
@@ -154,8 +99,8 @@ where
         Ok(self.outboxes.indices().await?)
     }
 
-    async fn channel(&self, channel_name: ChannelName) -> Result<ChannelStateElement<C>, Error> {
-        Ok(ChannelStateElement {
+    async fn channel(&self, channel_name: ChannelName) -> Result<ChannelStateEntry<C>, Error> {
+        Ok(ChannelStateEntry {
             channel_name: channel_name.clone(),
             guard: self.channels.try_load_entry(channel_name).await?,
         })
@@ -214,7 +159,7 @@ where
     }
 }
 
-struct ChannelStateElement<'a, C>
+pub struct ChannelStateEntry<'a, C>
 where
     C: Sync + Send + Context + 'static,
     ViewError: From<C::Error>,
@@ -224,7 +169,7 @@ where
 }
 
 #[Object]
-impl<'a, C> ChannelStateElement<'a, C>
+impl<'a, C> ChannelStateEntry<'a, C>
 where
     C: Sync + Send + Context + 'static + Clone,
     ViewError: From<C::Error>,
