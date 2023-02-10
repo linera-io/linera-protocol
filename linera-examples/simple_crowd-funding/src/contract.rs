@@ -5,9 +5,9 @@
 
 mod state;
 
-use self::state::{CrowdFunding, Status};
+use self::state::{SimpleCrowdFunding, Status};
 use async_trait::async_trait;
-use crowd_funding::ApplicationCall;
+use simple_crowd_funding::ApplicationCall;
 use fungible::{AccountOwner, ApplicationTransfer, SignedTransfer, Transfer};
 use futures::{future, stream, StreamExt, TryFutureExt, TryStreamExt};
 use linera_sdk::{
@@ -19,10 +19,10 @@ use serde::{Deserialize, Serialize};
 use std::mem;
 use thiserror::Error;
 
-linera_sdk::contract!(CrowdFunding);
+linera_sdk::contract!(SimpleCrowdFunding);
 
 #[async_trait]
-impl Contract for CrowdFunding {
+impl Contract for SimpleCrowdFunding {
     type Error = Error;
     type Storage = SimpleStateStorage<Self>;
 
@@ -96,7 +96,7 @@ impl Contract for CrowdFunding {
     }
 }
 
-impl CrowdFunding {
+impl SimpleCrowdFunding {
     /// Adds a pledge from a [`SignedTransfer`].
     async fn signed_pledge(&mut self, transfer: SignedTransfer) -> Result<(), Error> {
         let amount = transfer.payload.transfer.amount;
@@ -309,20 +309,20 @@ pub enum Operation {
 /// An error that can occur during the contract execution.
 #[derive(Debug, Error)]
 pub enum Error {
-    /// Crowd-funding application doesn't support any cross-chain effects.
-    #[error("Crowd-funding application doesn't support any cross-chain effects")]
+    /// SimpleCrowd-funding application doesn't support any cross-chain effects.
+    #[error("SimpleCrowd-funding application doesn't support any cross-chain effects")]
     EffectsNotSupported,
 
-    /// Crowd-funding application doesn't support any cross-application sessions.
-    #[error("Crowd-funding application doesn't support any cross-application sessions")]
+    /// SimpleCrowd-funding application doesn't support any cross-application sessions.
+    #[error("SimpleCrowd-funding application doesn't support any cross-application sessions")]
     SessionsNotSupported,
 
     /// Failure to deserialize the initialization parameters.
-    #[error("Crowd-funding campaign parameters are invalid")]
+    #[error("SimpleCrowd-funding campaign parameters are invalid")]
     InvalidParameters(bcs::Error),
 
-    /// Crowd-funding campaigns can't start after its deadline.
-    #[error("Crowd-funding campaign can not start after its deadline")]
+    /// SimpleCrowd-funding campaigns can't start after its deadline.
+    #[error("SimpleCrowd-funding campaign can not start after its deadline")]
     DeadlineInThePast,
 
     /// Operation bytes does not deserialize into an [`Operation`].
@@ -382,18 +382,18 @@ pub enum Error {
     InvalidSessionBalance(bcs::Error),
 
     /// Can't collect pledges before the campaign target has been reached.
-    #[error("Crowd-funding campaign has not reached its target yet")]
+    #[error("SimpleCrowd-funding campaign has not reached its target yet")]
     TargetNotReached,
 
     /// Can't cancel a campaign before its deadline.
-    #[error("Crowd-funding campaign has not reached its deadline yet")]
+    #[error("SimpleCrowd-funding campaign has not reached its deadline yet")]
     DeadlineNotReached,
 
     /// Can't cancel a campaign after it has been completed.
-    #[error("Crowd-funding campaign has already been completed")]
+    #[error("SimpleCrowd-funding campaign has already been completed")]
     Completed,
 
     /// Can't pledge to or collect pledges from a cancelled campaign.
-    #[error("Crowd-funding campaign has been cancelled")]
+    #[error("SimpleCrowd-funding campaign has been cancelled")]
     Cancelled,
 }

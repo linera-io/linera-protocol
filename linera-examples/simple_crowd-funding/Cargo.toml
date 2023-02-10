@@ -1,5 +1,5 @@
 [package]
-name = "crowd-funding"
+name = "simple_crowd-funding"
 version = "0.1.0"
 authors = ["Linera <contact@linera.io>"]
 edition = "2021"
@@ -14,9 +14,9 @@ serde = { version = "1.0.130", features = ["derive"] }
 thiserror = "1.0.31"
 
 [[bin]]
-name = "crowd-funding_contract"
+name = "simple_crowd-funding_contract"
 path = "src/contract.rs"
 
 [[bin]]
-name = "crowd-funding_service"
+name = "simple_crowd-funding_service"
 path = "src/service.rs"

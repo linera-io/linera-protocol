@@ -6,7 +6,7 @@ use linera_sdk::{ApplicationId, Timestamp};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-/// The parameters required to create a crowd-funding campaign.
+/// The parameters required to create a simple_crowd-funding campaign.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 pub struct Parameters {
     /// The receiver of the pledges of a successful campaign.
@@ -19,7 +19,7 @@ pub struct Parameters {
     pub target: u128,
 }
 
-/// The status of a crowd-funding campaign.
+/// The status of a simple_crowd-funding campaign.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
 pub enum Status {
     /// The campaign is active and can receive pledges.
@@ -31,9 +31,9 @@ pub enum Status {
     Cancelled,
 }
 
-/// The crowd-funding campaign's state.
+/// The simple_crowd-funding campaign's state.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct CrowdFunding {
+pub struct SimpleCrowdFunding {
     /// The status of the campaign.
     pub status: Status,
     /// The map of pledges that will be collected if the campaign succeeds.
@@ -50,7 +50,7 @@ impl Status {
     }
 }
 
-impl CrowdFunding {
+impl SimpleCrowdFunding {
     /// Retrieves the campaign [`Parameters`] stored in the application's state.
     pub fn parameters(&self) -> &Parameters {
         self.parameters

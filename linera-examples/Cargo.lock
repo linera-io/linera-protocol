@@ -890,19 +890,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "crowd-funding"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "bcs",
- "fungible",
- "futures",
- "linera-sdk",
- "serde",
- "thiserror",
-]
-
-[[package]]
 name = "crypto-common"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2599,6 +2586,19 @@ name = "signature"
 version = "1.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "74233d3b3b2f6d4b006dc19dee745e73e2a6bfb6f93607cd3b02bd5b00797d7c"
+
+[[package]]
+name = "simple_crowd-funding"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bcs",
+ "fungible",
+ "futures",
+ "linera-sdk",
+ "serde",
+ "thiserror",
+]
 
 [[package]]
 name = "simple_meta-counter"

@@ -5,16 +5,16 @@
 
 mod state;
 
-use self::state::CrowdFunding;
+use self::state::SimpleCrowdFunding;
 use async_trait::async_trait;
 use linera_sdk::{QueryContext, Service, SimpleStateStorage};
 use serde::Deserialize;
 use thiserror::Error;
 
-linera_sdk::service!(CrowdFunding);
+linera_sdk::service!(SimpleCrowdFunding);
 
 #[async_trait]
-impl Service for CrowdFunding {
+impl Service for SimpleCrowdFunding {
     type Error = Error;
     type Storage = SimpleStateStorage<Self>;
 
@@ -37,23 +37,23 @@ impl Service for CrowdFunding {
     }
 }
 
-impl CrowdFunding {
+impl SimpleCrowdFunding {
     /// Returns the total amount of tokens pledged to this campaign.
     fn pledged(&self) -> u128 {
         self.pledges.values().sum()
     }
 }
 
-/// Queries that can be made to the [`CrowdFunding`] application service.
+/// Queries that can be made to the [`SimpleCrowdFunding`] application service.
 #[derive(Clone, Copy, Debug, Deserialize)]
 pub enum Query {
-    /// The current [`Status`] of the crowd-funding campaign.
+    /// The current [`Status`] of the simple_crowd-funding campaign.
     Status,
-    /// The total amount pledged to the crowd-funding campaign.
+    /// The total amount pledged to the simple_crowd-funding campaign.
     Pledged,
-    /// The crowd-funding campaign's target.
+    /// The simple_crowd-funding campaign's target.
     Target,
-    /// The crowd-funding campaign's deadline.
+    /// The simple_crowd-funding campaign's deadline.
     Deadline,
     /// The recipient of the pledged amount.
     Owner,
