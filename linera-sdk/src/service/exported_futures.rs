@@ -11,9 +11,8 @@ use crate::{
     service::{self, system_api, system_api::HostServiceWasmContext},
     ExportedFuture, Service, ServiceLogger, SimpleStateStorage, ViewStateStorage,
 };
-use linera_views::views::ContainerView;
+use linera_views::views::{ContainerView, View};
 use serde::{de::DeserializeOwned, Serialize};
-use linera_views::views::View;
 use std::marker::PhantomData;
 
 /// The storage APIs used by a service.

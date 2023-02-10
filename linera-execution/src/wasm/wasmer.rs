@@ -398,7 +398,10 @@ impl writable_system::WritableSystem for SystemApi<&'static dyn WritableStorage>
             .add(self.storage().try_read_and_lock_my_state())
     }
 
-    fn simple_load_and_lock_poll(&mut self, future: &Self::SimpleLoadAndLock) -> writable_system::PollSimpleLoad {
+    fn simple_load_and_lock_poll(
+        &mut self,
+        future: &Self::SimpleLoadAndLock,
+    ) -> writable_system::PollSimpleLoad {
         use writable_system::PollSimpleLoad;
         match future.poll(&mut self.context) {
             Poll::Pending => PollSimpleLoad::Pending,
@@ -449,7 +452,10 @@ impl writable_system::WritableSystem for SystemApi<&'static dyn WritableStorage>
         )
     }
 
-    fn view_find_keys_poll(&mut self, future: &Self::ViewFindKeys) -> writable_system::PollViewFindKeys {
+    fn view_find_keys_poll(
+        &mut self,
+        future: &Self::ViewFindKeys,
+    ) -> writable_system::PollViewFindKeys {
         use writable_system::PollViewFindKeys;
         match future.poll(&mut self.context) {
             Poll::Pending => PollViewFindKeys::Pending,
@@ -496,7 +502,10 @@ impl writable_system::WritableSystem for SystemApi<&'static dyn WritableStorage>
         HostFuture::new(self.storage().view_write_batch_and_unlock(batch))
     }
 
-    fn view_write_batch_poll(&mut self, future: &Self::ViewWriteBatch) -> writable_system::PollViewWriteBatch {
+    fn view_write_batch_poll(
+        &mut self,
+        future: &Self::ViewWriteBatch,
+    ) -> writable_system::PollViewWriteBatch {
         use writable_system::PollViewWriteBatch;
         match future.poll(&mut self.context) {
             Poll::Pending => PollViewWriteBatch::Pending,
@@ -669,7 +678,10 @@ impl queryable_system::QueryableSystem for SystemApi<&'static dyn QueryableStora
         )
     }
 
-    fn view_find_keys_poll(&mut self, future: &Self::ViewFindKeys) -> queryable_system::PollViewFindKeys {
+    fn view_find_keys_poll(
+        &mut self,
+        future: &Self::ViewFindKeys,
+    ) -> queryable_system::PollViewFindKeys {
         use queryable_system::PollViewFindKeys;
         match future.poll(&mut self.context) {
             Poll::Pending => PollViewFindKeys::Pending,

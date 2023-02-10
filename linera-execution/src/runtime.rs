@@ -46,8 +46,10 @@ pub(crate) struct ExecutionRuntime<'a, C, const WRITABLE: bool> {
     execution_results: Arc<Mutex<&'a mut Vec<ExecutionResult>>>,
 }
 
-type ActiveUserkvStates<C> = BTreeMap<UserApplicationId, OwnedRwLockWriteGuard<KeyValueStoreView<C>>>;
-type ActiveUserStates<C> = BTreeMap<UserApplicationId, OwnedRwLockWriteGuard<RegisterView<C, Vec<u8>>>>;
+type ActiveUserkvStates<C> =
+    BTreeMap<UserApplicationId, OwnedRwLockWriteGuard<KeyValueStoreView<C>>>;
+type ActiveUserStates<C> =
+    BTreeMap<UserApplicationId, OwnedRwLockWriteGuard<RegisterView<C, Vec<u8>>>>;
 type ActiveSessions = BTreeMap<SessionId, OwnedMutexGuard<SessionState>>;
 
 #[derive(Debug, Clone, Default)]
@@ -109,6 +111,12 @@ where
         self.session_manager
             .try_lock()
             .expect("single-threaded execution should not lock `session_manager`")
+    }
+
+    fn active_user_states_mut(&self) -> MutexGuard<'_, ActiveUserStates<C>> {
+        self.active_user_states
+            .try_lock()
+            .expect("single-threaded execution should not lock `active_user_states`")
     }
 
     fn active_userkv_states_mut(&self) -> MutexGuard<'_, ActiveUserkvStates<C>> {
@@ -324,10 +332,7 @@ where
         }
     }
 
-    async fn view_read_key_bytes(
-        &self,
-        key: Vec<u8>,
-    ) -> Result<Option<Vec<u8>>, ExecutionError> {
+    async fn view_read_key_bytes(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, ExecutionError> {
         // read a key from the KV store
         match self.active_userkv_states_mut().get(&self.application_id()) {
             Some(view) => Ok(view.get(&key).await?),

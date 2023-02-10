@@ -87,9 +87,7 @@ impl UserApplication for TestApplication {
         // Modify our state.
         let chosen_key = vec![0];
         storage.view_lock_user_state().await?;
-        let state = storage
-            .view_read_key_bytes(chosen_key.clone())
-            .await?;
+        let state = storage.view_read_key_bytes(chosen_key.clone()).await?;
         let mut state = state.unwrap_or_default();
         state.extend(operation);
         let mut batch = Batch::default();

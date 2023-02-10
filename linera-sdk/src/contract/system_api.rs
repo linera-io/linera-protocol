@@ -111,13 +111,14 @@ pub async fn view_load_using<State: View<HostContractWasmContext>>() -> State {
 }
 
 /// Save the contract state and unlock it.
-pub async fn view_store_and_unlock<State: ContainerView<HostContractWasmContext>>(mut state: State) {
+pub async fn view_store_and_unlock<State: ContainerView<HostContractWasmContext>>(
+    mut state: State,
+) {
     state.save().await.expect("save operation failed");
 }
 
 /// Save the contract state and unlock it.
-pub async fn simple_store_and_unlock<State: Serialize>(state: State)
-{
+pub async fn simple_store_and_unlock<State: Serialize>(state: State) {
     system::simple_store_and_unlock(&bcs::to_bytes(&state).expect("State serialization failed"));
 }
 

@@ -394,13 +394,22 @@ impl<'storage> WritableSystem for SystemApi<&'storage dyn WritableStorage> {
             .add(self.storage.try_read_and_lock_my_state())
     }
 
-    fn simple_load_and_lock_poll(&mut self, future: &Self::SimpleLoadAndLock) -> writable_system::PollSimpleLoad {
+    fn simple_load_and_lock_poll(
+        &mut self,
+        future: &Self::SimpleLoadAndLock,
+    ) -> writable_system::PollSimpleLoad {
         use writable_system::PollSimpleLoad;
         match future.poll(&mut self.context) {
             Poll::Pending => PollSimpleLoad::Pending,
             Poll::Ready(Ok(bytes)) => PollSimpleLoad::Ready(Ok(bytes)),
             Poll::Ready(Err(error)) => PollSimpleLoad::Ready(Err(error.to_string())),
         }
+    }
+
+    fn simple_store_and_unlock(&mut self, state: &[u8]) -> bool {
+        self.storage
+            .save_and_unlock_my_state(state.to_owned())
+            .is_ok()
     }
 
     fn view_lock_new(&mut self) -> Self::ViewLock {
@@ -433,13 +442,13 @@ impl<'storage> WritableSystem for SystemApi<&'storage dyn WritableStorage> {
     }
 
     fn view_find_keys_new(&mut self, key_prefix: &[u8]) -> Self::ViewFindKeys {
-        HostFuture::new(
-            self.storage
-                .view_find_keys_by_prefix(key_prefix.to_owned()),
-        )
+        HostFuture::new(self.storage.view_find_keys_by_prefix(key_prefix.to_owned()))
     }
 
-    fn view_find_keys_poll(&mut self, future: &Self::ViewFindKeys) -> writable_system::PollViewFindKeys {
+    fn view_find_keys_poll(
+        &mut self,
+        future: &Self::ViewFindKeys,
+    ) -> writable_system::PollViewFindKeys {
         use writable_system::PollViewFindKeys;
         match future.poll(&mut self.context) {
             Poll::Pending => PollViewFindKeys::Pending,
@@ -486,7 +495,10 @@ impl<'storage> WritableSystem for SystemApi<&'storage dyn WritableStorage> {
         HostFuture::new(self.storage.view_write_batch_and_unlock(batch))
     }
 
-    fn view_write_batch_poll(&mut self, future: &Self::ViewWriteBatch) -> writable_system::PollViewWriteBatch {
+    fn view_write_batch_poll(
+        &mut self,
+        future: &Self::ViewWriteBatch,
+    ) -> writable_system::PollViewWriteBatch {
         use writable_system::PollViewWriteBatch;
         match future.poll(&mut self.context) {
             Poll::Pending => PollViewWriteBatch::Pending,
@@ -654,13 +666,13 @@ impl<'storage> QueryableSystem for SystemApi<&'storage dyn QueryableStorage> {
     }
 
     fn view_find_keys_new(&mut self, key_prefix: &[u8]) -> Self::ViewFindKeys {
-        HostFuture::new(
-            self.storage
-                .view_find_keys_by_prefix(key_prefix.to_owned()),
-        )
+        HostFuture::new(self.storage.view_find_keys_by_prefix(key_prefix.to_owned()))
     }
 
-    fn view_find_keys_poll(&mut self, future: &Self::ViewFindKeys) -> queryable_system::PollViewFindKeys {
+    fn view_find_keys_poll(
+        &mut self,
+        future: &Self::ViewFindKeys,
+    ) -> queryable_system::PollViewFindKeys {
         use queryable_system::PollViewFindKeys;
         match future.poll(&mut self.context) {
             Poll::Pending => PollViewFindKeys::Pending,

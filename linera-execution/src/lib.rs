@@ -258,10 +258,7 @@ pub trait ReadableStorage: Send + Sync {
     async fn view_unlock_user_state(&self) -> Result<(), ExecutionError>;
 
     /// Read the key from the KV store
-    async fn view_read_key_bytes(
-        &self,
-        key: Vec<u8>,
-    ) -> Result<Option<Vec<u8>>, ExecutionError>;
+    async fn view_read_key_bytes(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, ExecutionError>;
 
     /// Reads the data from the keys having a specific prefix.
     async fn view_find_keys_by_prefix(
