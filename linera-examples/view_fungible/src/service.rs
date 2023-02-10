@@ -5,13 +5,12 @@
 
 mod state;
 
-use linera_views::common::Context;
 use self::state::ViewFungibleToken;
+use linera_views::common::Context;
 
 use async_trait::async_trait;
 use linera_sdk::{
-    service::system_api::HostServiceWasmContext,
-    QueryContext, Service, ViewStateStorage,
+    service::system_api::HostServiceWasmContext, QueryContext, Service, ViewStateStorage,
 };
 use linera_views::views::ViewError;
 use thiserror::Error;

@@ -5,22 +5,21 @@
 
 mod state;
 
-use linera_views::common::Context;
 use self::state::ViewFungibleToken;
 use async_trait::async_trait;
+use linera_sdk::{
+    contract::{system_api, system_api::HostContractWasmContext},
+    crypto::CryptoError,
+    ensure, ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
+    FromBcsBytes, OperationContext, Session, SessionCallResult, SessionId, ViewStateStorage,
+};
+use linera_views::{common::Context, views::ViewError};
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
 use view_fungible::{
     types::{AccountOwner, Nonce},
     ApplicationCall, ApplicationTransfer, SessionCall, SignedTransfer, Transfer,
 };
-use linera_sdk::{
-    contract::{system_api, system_api::HostContractWasmContext},
-    crypto::CryptoError, ensure, ApplicationCallResult, CalleeContext,
-    Contract, EffectContext, ExecutionResult, FromBcsBytes, OperationContext, Session,
-    SessionCallResult, SessionId, ViewStateStorage,
-};
-use linera_views::views::ViewError;
-use serde::{Deserialize, Serialize};
-use thiserror::Error;
 
 /// Alias to the application type, so that the boilerplate module can reference it.
 pub type ApplicationState = ViewFungibleToken<HostContractWasmContext>;

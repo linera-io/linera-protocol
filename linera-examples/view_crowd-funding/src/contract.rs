@@ -5,21 +5,23 @@
 
 mod state;
 
-use self::state::{ViewCrowdFunding, Status};
+use self::state::{Status, ViewCrowdFunding};
 use crate::system_api::HostContractWasmContext;
-use linera_views::common::Context;
 use async_trait::async_trait;
-use view_crowd_funding::ApplicationCall;
-use view_fungible::{AccountOwner, ApplicationTransfer, SignedTransfer, Transfer};
 use futures::{future, stream, StreamExt, TryFutureExt, TryStreamExt};
 use linera_sdk::{
     contract::system_api, ensure, ApplicationCallResult, CalleeContext, Contract, EffectContext,
     ExecutionResult, FromBcsBytes, OperationContext, Session, SessionCallResult, SessionId,
     ViewStateStorage,
 };
-use linera_views::views::{View, ViewError};
+use linera_views::{
+    common::Context,
+    views::{View, ViewError},
+};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use view_crowd_funding::ApplicationCall;
+use view_fungible::{AccountOwner, ApplicationTransfer, SignedTransfer, Transfer};
 
 /// Alias to the application type, so that the boilerplate module can reference it.
 pub type ApplicationState = ViewCrowdFunding<HostContractWasmContext>;

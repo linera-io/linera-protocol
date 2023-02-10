@@ -1,5 +1,5 @@
-use view_fungible::SignedTransfer;
 use serde::{Deserialize, Serialize};
+use view_fungible::SignedTransfer;
 
 /// A cross-application call.
 #[derive(Deserialize, Serialize)]

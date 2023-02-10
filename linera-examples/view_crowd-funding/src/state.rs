@@ -1,7 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use view_fungible::AccountOwner;
 use linera_sdk::{ApplicationId, Timestamp};
 use linera_views::{
     common::Context,
@@ -10,6 +9,7 @@ use linera_views::{
     views::{ContainerView, View},
 };
 use serde::{Deserialize, Serialize};
+use view_fungible::AccountOwner;
 
 /// The parameters required to create a view_crowd-funding campaign.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]

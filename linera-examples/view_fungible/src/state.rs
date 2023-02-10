@@ -1,7 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use view_fungible::types::{AccountOwner, Nonce};
 use linera_sdk::ensure;
 use linera_views::{
     common::Context,
@@ -10,6 +9,7 @@ use linera_views::{
 };
 use std::collections::BTreeMap;
 use thiserror::Error;
+use view_fungible::types::{AccountOwner, Nonce};
 
 /// The application state.
 #[derive(ContainerView)]

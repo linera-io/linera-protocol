@@ -7,15 +7,13 @@ mod state;
 
 use self::state::ViewCounter;
 use async_trait::async_trait;
-use linera_views::common::Context;
 use linera_sdk::{
-    contract::system_api::HostContractWasmContext,
-    ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
-    OperationContext, Session, SessionCallResult, SessionId, ViewStateStorage,
+    contract::system_api::HostContractWasmContext, ApplicationCallResult, CalleeContext, Contract,
+    EffectContext, ExecutionResult, OperationContext, Session, SessionCallResult, SessionId,
+    ViewStateStorage,
 };
-use linera_views::views::ViewError;
+use linera_views::{common::Context, memory::MemoryContext, views::ViewError};
 use thiserror::Error;
-use linera_views::memory::MemoryContext;
 
 /// Alias to the application type, so that the boilerplate module can reference it.
 pub type ApplicationState = ViewCounter<HostContractWasmContext>;
@@ -110,9 +108,8 @@ mod tests {
         ApplicationCallResult, BlockHeight, CalleeContext, ChainId, Contract, EffectContext,
         EffectId, ExecutionResult, OperationContext, Session,
     };
-    use linera_views::views::View;
+    use linera_views::{memory::get_memory_context, views::View};
     use webassembly_test::webassembly_test;
-    use linera_views::memory::get_memory_context;
 
     #[webassembly_test]
     fn operation() {
@@ -186,7 +183,9 @@ mod tests {
     }
 
     fn create_and_initialize_view_counter(initial_value: u128) -> ApplicationStateTest {
-        let context = get_memory_context().now_or_never().expect("Failed to acquire the guard");
+        let context = get_memory_context()
+            .now_or_never()
+            .expect("Failed to acquire the guard");
         let mut view_counter = ApplicationStateTest::load(context)
             .now_or_never()
             .unwrap()

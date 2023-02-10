@@ -7,15 +7,13 @@ mod state;
 
 use self::state::ViewCrowdFunding;
 use async_trait::async_trait;
-use linera_views::common::Context;
-use view_fungible::AccountOwner;
 use linera_sdk::{
-    service::system_api::HostServiceWasmContext,
-    QueryContext, Service, ViewStateStorage,
+    service::system_api::HostServiceWasmContext, QueryContext, Service, ViewStateStorage,
 };
-use linera_views::views::ViewError;
+use linera_views::{common::Context, views::ViewError};
 use serde::Deserialize;
 use thiserror::Error;
+use view_fungible::AccountOwner;
 
 /// Alias to the application type, so that the boilerplate module can reference it.
 pub type ApplicationState = ViewCrowdFunding<HostServiceWasmContext>;

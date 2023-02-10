@@ -9,15 +9,10 @@ use self::state::ViewCounter;
 
 use async_trait::async_trait;
 use linera_sdk::{
-    service::system_api::{
-        HostServiceWasmContext,
-    },
-    QueryContext, Service, ViewStateStorage,
+    service::system_api::HostServiceWasmContext, QueryContext, Service, ViewStateStorage,
 };
-use linera_views::views::ViewError;
+use linera_views::{common::Context, memory::MemoryContext, views::ViewError};
 use thiserror::Error;
-use linera_views::memory::MemoryContext;
-use linera_views::common::Context;
 
 /// Alias to the application type, so that the boilerplate module can reference it.
 pub type ApplicationState = ViewCounter<HostServiceWasmContext>;
@@ -49,7 +44,9 @@ where
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum Error {
     /// Invalid query argument; ViewCounter application only supports a single (empty) query.
-    #[error("Invalid query argument; ViewCounter application only supports a single (empty) query")]
+    #[error(
+        "Invalid query argument; ViewCounter application only supports a single (empty) query"
+    )]
     InvalidQuery,
 }
 
@@ -58,18 +55,16 @@ mod tests {
     use super::Error;
     use crate::ApplicationStateTest;
     use futures_util::FutureExt;
-    use linera_sdk::{
-        ChainId, QueryContext, Service,
-    };
-    use linera_views::views::View;
+    use linera_sdk::{ChainId, QueryContext, Service};
+    use linera_views::{memory::get_memory_context, views::View};
     use webassembly_test::webassembly_test;
-    use linera_views::memory::get_memory_context;
-
 
     #[webassembly_test]
     fn query() {
         let value = 61_098_721_u128;
-        let context = get_memory_context().now_or_never().expect("Failed to acquire the guard");
+        let context = get_memory_context()
+            .now_or_never()
+            .expect("Failed to acquire the guard");
         let mut view_counter = ApplicationStateTest::load(context)
             .now_or_never()
             .unwrap()
@@ -89,7 +84,9 @@ mod tests {
     #[webassembly_test]
     fn invalid_query() {
         let value = 4_u128;
-        let context = get_memory_context().now_or_never().expect("Failed to acquire the guard");
+        let context = get_memory_context()
+            .now_or_never()
+            .expect("Failed to acquire the guard");
         let mut view_counter = ApplicationStateTest::load(context)
             .now_or_never()
             .unwrap()
