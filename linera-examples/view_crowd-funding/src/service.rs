@@ -11,7 +11,7 @@ use linera_views::common::Context;
 use view_fungible::AccountOwner;
 use linera_sdk::{
     service::system_api::HostServiceWasmContext,
-    QueryContext, Service,
+    QueryContext, Service, ViewStateStorage,
 };
 use linera_views::views::ViewError;
 use serde::Deserialize;
@@ -28,6 +28,7 @@ where
     ViewError: From<<C as linera_views::common::Context>::Error>,
 {
     type Error = Error;
+    type Storage = ViewStateStorage<Self>;
 
     async fn query_application(
         &self,

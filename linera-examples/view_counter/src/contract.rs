@@ -11,7 +11,7 @@ use linera_views::common::Context;
 use linera_sdk::{
     contract::system_api::HostContractWasmContext,
     ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
-    OperationContext, Session, SessionCallResult, SessionId, SimpleStateStorage,
+    OperationContext, Session, SessionCallResult, SessionId, ViewStateStorage,
 };
 use linera_views::views::ViewError;
 use thiserror::Error;
@@ -28,7 +28,7 @@ where
     ViewError: From<<C as linera_views::common::Context>::Error>,
 {
     type Error = Error;
-    type Storage = SimpleStateStorage<Self>;
+    type Storage = ViewStateStorage<Self>;
 
     async fn initialize(
         &mut self,

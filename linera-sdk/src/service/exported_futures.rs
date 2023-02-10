@@ -11,7 +11,7 @@ use crate::{
     service::{self, system_api, system_api::HostServiceWasmContext},
     ExportedFuture, Service, ServiceLogger, SimpleStateStorage, ViewStateStorage,
 };
-use linera_views::views::{ContainerView, View};
+use linera_views::views::ContainerView;
 use serde::{de::DeserializeOwned, Serialize};
 use std::marker::PhantomData;
 
@@ -75,7 +75,7 @@ pub struct QueryApplication<Application> {
 
 impl<Application> QueryApplication<Application>
 where
-    Application: Service + View<HostServiceWasmContext>,
+    Application: Service,
     Application::Storage: ServiceStateStorage,
 {
     /// Creates the exported future that the host can poll.
