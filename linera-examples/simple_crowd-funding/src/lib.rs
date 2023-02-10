@@ -1,4 +1,4 @@
-use fungible::SignedTransfer;
+use simple_fungible::SignedTransfer;
 use serde::{Deserialize, Serialize};
 
 /// A cross-application call.

@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fungible::types::{AccountOwner, Nonce};
+use simple_fungible::types::{AccountOwner, Nonce};
 use linera_sdk::ensure;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -9,13 +9,13 @@ use thiserror::Error;
 
 /// The application state.
 #[derive(Debug, Default, Deserialize, Serialize)]
-pub struct FungibleToken {
+pub struct SimpleFungibleToken {
     accounts: BTreeMap<AccountOwner, u128>,
     nonces: BTreeMap<AccountOwner, Nonce>,
 }
 
 #[allow(dead_code)]
-impl FungibleToken {
+impl SimpleFungibleToken {
     /// Initialize the application state with some accounts with initial balances.
     pub(crate) fn initialize_accounts(&mut self, accounts: BTreeMap<AccountOwner, u128>) {
         self.accounts = accounts;

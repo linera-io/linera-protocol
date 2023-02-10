@@ -5,9 +5,9 @@
 
 mod state;
 
-use self::state::FungibleToken;
+use self::state::SimpleFungibleToken;
 use async_trait::async_trait;
-use fungible::{
+use simple_fungible::{
     types::{AccountOwner, Nonce},
     ApplicationCall, ApplicationTransfer, SessionCall, SignedTransfer, Transfer,
 };
@@ -19,10 +19,10 @@ use linera_sdk::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-linera_sdk::contract!(FungibleToken);
+linera_sdk::contract!(SimpleFungibleToken);
 
 #[async_trait]
-impl Contract for FungibleToken {
+impl Contract for SimpleFungibleToken {
     type Error = Error;
     type Storage = SimpleStateStorage<Self>;
 
@@ -99,7 +99,7 @@ impl Contract for FungibleToken {
     }
 }
 
-impl FungibleToken {
+impl SimpleFungibleToken {
     /// Handles a signed transfer.
     ///
     /// A signed transfer is either requested through an operation or a delegated application call.

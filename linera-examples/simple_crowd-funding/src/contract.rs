@@ -8,7 +8,7 @@ mod state;
 use self::state::{SimpleCrowdFunding, Status};
 use async_trait::async_trait;
 use simple_crowd_funding::ApplicationCall;
-use fungible::{AccountOwner, ApplicationTransfer, SignedTransfer, Transfer};
+use simple_fungible::{AccountOwner, ApplicationTransfer, SignedTransfer, Transfer};
 use futures::{future, stream, StreamExt, TryFutureExt, TryStreamExt};
 use linera_sdk::{
     contract::system_api, ensure, ApplicationCallResult, CalleeContext, Contract, EffectContext,
@@ -117,7 +117,7 @@ impl SimpleCrowdFunding {
             Error::IncorrectDestination
         );
 
-        self.transfer(fungible::ApplicationCall::Delegated(transfer))
+        self.transfer(simple_fungible::ApplicationCall::Delegated(transfer))
             .await?;
 
         self.finish_pledge(source, amount).await
@@ -160,7 +160,7 @@ impl SimpleCrowdFunding {
 
     /// Gathers the balances in all the pledged sessions.
     async fn query_session_balances(sessions: &[SessionId]) -> Result<Vec<u128>, Error> {
-        let balance_query = bcs::to_bytes(&fungible::SessionCall::Balance)
+        let balance_query = bcs::to_bytes(&simple_fungible::SessionCall::Balance)
             .map_err(Error::InvalidSessionBalanceQuery)?;
 
         stream::iter(sessions)
@@ -259,7 +259,7 @@ impl SimpleCrowdFunding {
 
     /// Queries the token application to determine the total amount of tokens in custody.
     async fn balance(&self) -> Result<u128, Error> {
-        let query_bytes = bcs::to_bytes(&fungible::ApplicationCall::Balance)
+        let query_bytes = bcs::to_bytes(&simple_fungible::ApplicationCall::Balance)
             .map_err(Error::InvalidBalanceQuery)?;
 
         let (response, _sessions) =
@@ -278,12 +278,12 @@ impl SimpleCrowdFunding {
             amount,
         });
 
-        self.transfer(fungible::ApplicationCall::Transfer(transfer))
+        self.transfer(simple_fungible::ApplicationCall::Transfer(transfer))
             .await
     }
 
-    /// Calls into the Fungible Token application to execute the `transfer`.
-    async fn transfer(&self, transfer: fungible::ApplicationCall) -> Result<(), Error> {
+    /// Calls into the Simple Fungible Token application to execute the `transfer`.
+    async fn transfer(&self, transfer: simple_fungible::ApplicationCall) -> Result<(), Error> {
         let transfer_bytes = bcs::to_bytes(&transfer).map_err(Error::InvalidTransfer)?;
 
         system_api::call_application(true, self.parameters().token, &transfer_bytes, vec![])
@@ -349,7 +349,7 @@ pub enum Error {
     #[error("Applications must identify themselves to perform transfers")]
     MissingSourceApplication,
 
-    /// Fungible Token application did not execute the requested transfer.
+    /// Simple Fungible Token application did not execute the requested transfer.
     #[error("Failed to transfer tokens: {0}")]
     Transfer(String),
 
@@ -357,27 +357,27 @@ pub enum Error {
     #[error("Transfer is invalid because it can't be serialized")]
     InvalidTransfer(bcs::Error),
 
-    /// [`fungible::ApplicationCall::Balance`] could not be serialized.
+    /// [`Simplefungible::ApplicationCall::Balance`] could not be serialized.
     #[error("Can't check balance because the query can't be serialized")]
     InvalidBalanceQuery(bcs::Error),
 
-    /// Fungible Token application did not return the campaign's balance.
+    /// SimpleFungible Token application did not return the campaign's balance.
     #[error("Failed to read application balance: {0}")]
     Balance(String),
 
-    /// Fungible Token application returned an invalid balance.
+    /// SimpleFungible Token application returned an invalid balance.
     #[error("Received an invalid balance from token application")]
     InvalidBalance(bcs::Error),
 
-    /// [`fungible::SessionCall::Balance`] could not be serialized.
+    /// [`Simplefungible::SessionCall::Balance`] could not be serialized.
     #[error("Can't check session balance because the query can't be serialized")]
     InvalidSessionBalanceQuery(bcs::Error),
 
-    /// Fungible Token application did not return the session's balance.
+    /// SimpleFungible Token application did not return the session's balance.
     #[error("Failed to read session balance: {0}")]
     SessionBalance(String),
 
-    /// Fungible Token application returned an invalid session balance.
+    /// SimpleFungible Token application returned an invalid session balance.
     #[error("Received an invalid session balance from token application")]
     InvalidSessionBalance(bcs::Error),
 

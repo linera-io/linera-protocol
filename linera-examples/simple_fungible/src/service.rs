@@ -5,15 +5,15 @@
 
 mod state;
 
-use self::state::FungibleToken;
+use self::state::SimpleFungibleToken;
 use async_trait::async_trait;
 use linera_sdk::{QueryContext, Service, SimpleStateStorage};
 use thiserror::Error;
 
-linera_sdk::service!(FungibleToken);
+linera_sdk::service!(SimpleFungibleToken);
 
 #[async_trait]
-impl Service for FungibleToken {
+impl Service for SimpleFungibleToken {
     type Error = Error;
     type Storage = SimpleStateStorage<Self>;
 

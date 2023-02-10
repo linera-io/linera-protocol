@@ -1182,17 +1182,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fungible"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "bcs",
- "linera-sdk",
- "serde",
- "thiserror",
-]
-
-[[package]]
 name = "futures"
 version = "0.3.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2593,8 +2582,19 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "bcs",
- "fungible",
  "futures",
+ "linera-sdk",
+ "serde",
+ "simple_fungible",
+ "thiserror",
+]
+
+[[package]]
+name = "simple_fungible"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bcs",
  "linera-sdk",
  "serde",
  "thiserror",
