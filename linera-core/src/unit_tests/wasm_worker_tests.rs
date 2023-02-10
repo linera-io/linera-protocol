@@ -355,7 +355,7 @@ where
     // * 1 byte equal to zero that corresponds to the KeyTag::Value of RegisterView
     let chosen_key = vec![0, 0, 0, 0, 0];
     creator_state
-        .users_kv
+        .view_users
         .try_load_entry_mut(application_id)
         .await?
         .insert(chosen_key.clone(), initial_value_bytes);
@@ -391,7 +391,7 @@ where
     let expected_value = initial_value + increment;
     let expected_state_bytes = bcs::to_bytes(&expected_value)?;
     creator_state
-        .users_kv
+        .view_users
         .try_load_entry_mut(application_id)
         .await?
         .insert(chosen_key.clone(), expected_state_bytes);

@@ -32,9 +32,9 @@ pub struct ExecutionStateView<C> {
     /// System application.
     pub system: SystemExecutionStateView<C>,
     /// User applications (Simple based).
-    pub users: ReentrantCollectionView<C, UserApplicationId, RegisterView<C, Vec<u8>>>,
+    pub simple_users: ReentrantCollectionView<C, UserApplicationId, RegisterView<C, Vec<u8>>>,
     /// User applications (View based).
-    pub users_kv: ReentrantCollectionView<C, UserApplicationId, KeyValueStoreView<C>>,
+    pub view_users: ReentrantCollectionView<C, UserApplicationId, KeyValueStoreView<C>>,
 }
 
 #[cfg(any(test, feature = "test"))]

@@ -302,7 +302,7 @@ where
     async fn try_read_my_state(&self) -> Result<Vec<u8>, ExecutionError> {
         let state = self
             .execution_state_mut()
-            .users
+            .simple_users
             .try_load_entry_mut(self.application_id())
             .await?
             .get()
@@ -313,7 +313,7 @@ where
     async fn view_lock_user_state(&self) -> Result<(), ExecutionError> {
         let view = self
             .execution_state_mut()
-            .users_kv
+            .view_users
             .try_load_entry_mut(self.application_id())
             .await?;
         self.active_view_user_states_mut()
@@ -401,7 +401,7 @@ where
     async fn try_read_and_lock_my_state(&self) -> Result<Vec<u8>, ExecutionError> {
         let view = self
             .execution_state_mut()
-            .users
+            .simple_users
             .try_load_entry_mut(self.application_id())
             .await?;
         let state = view.get().to_vec();
