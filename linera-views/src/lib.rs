@@ -31,6 +31,9 @@ pub mod set_view;
 /// The collection_view
 pub mod collection_view;
 
+/// Support for GraphQL
+pub mod graphql;
+
 /// The reentrant_collection_view
 #[cfg(not(target_arch = "wasm32"))]
 pub mod reentrant_collection_view;

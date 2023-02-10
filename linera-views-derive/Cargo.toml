@@ -13,3 +13,5 @@ syn = { version = "1.0.107", features = ["full", "extra-traits"] }
 quote = "1.0"
 proc-macro2 = "1.0"
 convert_case = "0.6.0"
+serde = { version =  "1.0.152", features = ["derive"] }
+async-graphql = "5.0.5"
