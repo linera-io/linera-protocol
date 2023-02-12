@@ -78,7 +78,7 @@ pub enum ViewError {
         /// backend can be e.g. RocksDb / AmazonDb / Memory / etc.
         backend: String,
         /// error is the specific problem that occurred within that context
-        error: String
+        error: String,
     },
 
     /// Errors can happen within the Wasm guest and have to be transmitted within the Host/Guest where only elementary types can pass.
