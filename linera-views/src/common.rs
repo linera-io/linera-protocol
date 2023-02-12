@@ -52,14 +52,24 @@ pub(crate) fn get_interval(key_prefix: Vec<u8>) -> (Bound<Vec<u8>>, Bound<Vec<u8
 
 /// A write operation as requested by a view when it needs to persist staged changes.
 #[derive(Debug)]
-#[allow(missing_docs)]
 pub enum WriteOperation {
     /// Delete the given key.
-    Delete { key: Vec<u8> },
+    Delete {
+        /// The key that will be deleted
+        key: Vec<u8>,
+    },
     /// Delete all the keys matching the given prefix.
-    DeletePrefix { key_prefix: Vec<u8> },
+    DeletePrefix {
+        /// The prefix of the keys to be deleted
+        key_prefix: Vec<u8>,
+    },
     /// Set the value of the given key.
-    Put { key: Vec<u8>, value: Vec<u8> },
+    Put {
+        /// The key to be inserted or replaced
+        key: Vec<u8>,
+        /// The value to be inserted on the key
+        value: Vec<u8>,
+    },
 }
 
 /// A batch of writes inside a transaction;

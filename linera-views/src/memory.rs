@@ -95,8 +95,8 @@ impl KeyValueOperations for MemoryClient {
 
 /// The error type for [`MemoryContext`]
 #[derive(Error, Debug)]
-#[allow(missing_docs)]
 pub enum MemoryContextError {
+    /// Serialization error with BCS
     #[error("BCS error: {0}")]
     Bcs(#[from] bcs::Error),
 }

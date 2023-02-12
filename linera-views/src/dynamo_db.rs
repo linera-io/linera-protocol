@@ -598,41 +598,52 @@ pub enum InvalidTableName {
 
 /// Errors that occur when using [`DynamoDbContext`].
 #[derive(Debug, Error)]
-#[allow(missing_docs)]
 pub enum DynamoDbContextError {
+    /// An error occurred while putting the item
     #[error(transparent)]
     Put(#[from] Box<SdkError<aws_sdk_dynamodb::error::PutItemError>>),
 
+    /// An error occurred while getting the item
     #[error(transparent)]
     Get(#[from] Box<SdkError<aws_sdk_dynamodb::error::GetItemError>>),
 
+    /// An error occurred while deleting the item
     #[error(transparent)]
     Delete(#[from] Box<SdkError<aws_sdk_dynamodb::error::DeleteItemError>>),
 
+    /// An error occurred while writing a batch of item
     #[error(transparent)]
     BatchWriteItem(#[from] Box<SdkError<aws_sdk_dynamodb::error::BatchWriteItemError>>),
 
+    /// An error occurred while doing a Query
     #[error(transparent)]
     Query(#[from] Box<SdkError<aws_sdk_dynamodb::error::QueryError>>),
 
+    /// The stored key is missing
     #[error("The stored key attribute is missing")]
     MissingKey,
 
+    /// The type of the keys was not correct (It should have been a binary blob)
     #[error("Key was stored as {0}, but it was expected to be stored as a binary blob")]
     WrongKeyType(String),
 
+    /// The value attribute is missing
     #[error("The stored value attribute is missing")]
     MissingValue,
 
+    /// The value was stored as the wrong type (it should be a binary blob)
     #[error("Value was stored as {0}, but it was expected to be stored as a binary blob")]
     WrongValueType(String),
 
+    /// A BCS error occurred
     #[error(transparent)]
     BcsError(#[from] bcs::Error),
 
+    /// An error occurred while creating the table
     #[error(transparent)]
     CreateTable(#[from] Box<CreateTableError>),
 
+    /// The item was not found
     #[error("Item not found in DynamoDB table: {0}")]
     NotFound(String),
 }

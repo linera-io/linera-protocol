@@ -19,11 +19,12 @@ pub fn get_endpoint() -> Result<Endpoint, EndpointError> {
 
 /// Failure to get the LocalStack endpoint.
 #[derive(Debug, Error)]
-#[allow(missing_docs)]
 pub enum EndpointError {
+    /// The endpoint was missing for the {LOCALSTACK_ENDPOINT:?} environment variable
     #[error("Missing LocalStack endpoint address in {LOCALSTACK_ENDPOINT:?} environment variable")]
     MissingEndpoint(#[from] env::VarError),
 
+    /// LocalStack endpoint address is not a valid URI
     #[error("LocalStack endpoint address is not a valid URI")]
     InvalidUri(#[from] InvalidUri),
 }
