@@ -582,14 +582,16 @@ impl AsRef<String> for TableName {
 
 /// Error when validating a table name.
 #[derive(Debug, Error)]
-#[allow(missing_docs)]
 pub enum InvalidTableName {
+    /// The table name should be at least 3 characters
     #[error("Table name must have at least 3 characters")]
     TooShort,
 
+    /// The table name should be at most 63 characters
     #[error("Table name must be at most 63 characters")]
     TooLong,
 
+    /// allowed characters are lowercase letters, numbers, periods and hyphens
     #[error("Table name must only contain lowercase letters, numbers, periods and hyphens")]
     InvalidCharacter,
 }
