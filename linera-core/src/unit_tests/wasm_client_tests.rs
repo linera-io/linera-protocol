@@ -62,7 +62,7 @@ where
     publisher.process_inbox().await.unwrap();
 
     let (contract_path, service_path) =
-        linera_execution::wasm_test::get_example_bytecode_paths("counter")?;
+        linera_execution::wasm_test::get_example_bytecode_paths("simple_counter")?;
     let (bytecode_id, cert) = publisher
         .publish_bytecode(
             Bytecode::load_from_file(contract_path).await?,

@@ -17,9 +17,9 @@ linera-sdk = { path = "../../linera-sdk", features = ["test"] }
 webassembly-test = "0.1.0"
 
 [[bin]]
-name = "counter_contract"
+name = "simple_counter_contract"
 path = "src/contract.rs"
 
 [[bin]]
-name = "counter_service"
+name = "simple_counter_service"
 path = "src/service.rs"
