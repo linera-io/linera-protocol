@@ -711,19 +711,20 @@ impl From<DynamoDbContextError> for crate::views::ViewError {
 
 /// Error when creating a table for a new [`DynamoDbContext`] instance.
 #[derive(Debug, Error)]
-#[allow(missing_docs)]
 pub enum CreateTableError {
+    /// An error occurred while creating the table
     #[error(transparent)]
     CreateTable(#[from] SdkError<aws_sdk_dynamodb::error::CreateTableError>),
 }
 
 /// Error when creating a [`DynamoDbContext`] instance using a LocalStack instance.
 #[derive(Debug, Error)]
-#[allow(missing_docs)]
 pub enum LocalStackError {
+    /// An Endpoint error occurred
     #[error(transparent)]
     Endpoint(#[from] localstack::EndpointError),
 
+    /// An error occurred while creating the table
     #[error(transparent)]
     CreateTable(#[from] Box<CreateTableError>),
 }
