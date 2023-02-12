@@ -143,7 +143,7 @@ where
 
     let (bytecode_id1, cert1) = {
         let (contract_path, service_path) =
-            linera_execution::wasm_test::get_example_bytecode_paths("counter")?;
+            linera_execution::wasm_test::get_example_bytecode_paths("simple_counter")?;
         publisher
             .publish_bytecode(
                 Bytecode::load_from_file(contract_path).await?,
@@ -154,7 +154,7 @@ where
     };
     let (bytecode_id2, cert2) = {
         let (contract_path, service_path) =
-            linera_execution::wasm_test::get_example_bytecode_paths("meta_counter")?;
+            linera_execution::wasm_test::get_example_bytecode_paths("simple_meta_counter")?;
         publisher
             .publish_bytecode(
                 Bytecode::load_from_file(contract_path).await?,
