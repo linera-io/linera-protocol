@@ -12,7 +12,6 @@ use crate::client::client_tests::{
     MakeDynamoDbStoreClient, MakeMemoryStoreClient, MakeRocksdbStoreClient, StoreBuilder,
     TestBuilder, GUARD,
 };
-use simple_fungible::{AccountOwner, SignedTransfer, SignedTransferPayload, Transfer};
 use linera_base::data_types::*;
 use linera_execution::{
     system::Balance, ApplicationId, Bytecode, Destination, Effect, Operation, Query, Response,
@@ -21,6 +20,7 @@ use linera_execution::{
 use linera_storage::Store;
 use linera_views::views::ViewError;
 use serde::{de::DeserializeOwned, Serialize};
+use simple_fungible::{AccountOwner, SignedTransfer, SignedTransferPayload, Transfer};
 use std::{collections::BTreeMap, iter};
 use test_log::test;
 
