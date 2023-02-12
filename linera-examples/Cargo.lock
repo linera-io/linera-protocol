@@ -1714,6 +1714,7 @@ dependencies = [
  "futures",
  "generic-array",
  "hex",
+ "linera-base",
  "linera-views",
  "log",
  "serde",

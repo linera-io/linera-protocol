@@ -12,7 +12,7 @@ use crate::client::client_tests::{
     MakeDynamoDbStoreClient, MakeMemoryStoreClient, MakeRocksdbStoreClient, StoreBuilder,
     TestBuilder, GUARD,
 };
-use fungible::{AccountOwner, SignedTransfer, SignedTransferPayload, Transfer};
+use simple_fungible::{AccountOwner, SignedTransfer, SignedTransferPayload, Transfer};
 use linera_base::data_types::*;
 use linera_execution::{
     system::Balance, ApplicationId, Bytecode, Destination, Effect, Operation, Query, Response,
@@ -240,7 +240,7 @@ where
         .await?;
 
     let (contract_path, service_path) =
-        linera_execution::wasm_test::get_example_bytecode_paths("fungible")?;
+        linera_execution::wasm_test::get_example_bytecode_paths("simple_fungible")?;
     let (bytecode_id, pub_cert) = sender
         .publish_bytecode(
             Bytecode::load_from_file(contract_path).await?,
@@ -262,7 +262,7 @@ where
         .create_application(bytecode_id, initial_value_bytes, vec![])
         .await?;
 
-    // Make a transfer using the fungible app.
+    // Make a transfer using the simple_fungible app.
     let mut payload = SignedTransferPayload {
         token_id: convert(&application_id)?,
         source_chain: convert(&sender.chain_id())?,
