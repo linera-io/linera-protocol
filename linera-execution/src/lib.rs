@@ -33,6 +33,7 @@ use async_graphql::SimpleObject;
 use async_trait::async_trait;
 use custom_debug_derive::Debug;
 use dashmap::DashMap;
+use derive_more::Display;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{BlockHeight, ChainId, EffectId, Timestamp},
@@ -593,4 +594,18 @@ impl std::fmt::Debug for Bytecode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         f.debug_tuple("Bytecode").finish()
     }
+}
+
+/// The runtime to use for running the application.
+#[derive(Clone, Copy, Display)]
+#[cfg_attr(any(feature = "wasmtime", feature = "wasmer"), derive(Debug, Default))]
+pub enum WasmRuntime {
+    #[cfg(feature = "wasmer")]
+    #[cfg_attr(not(feature = "wasmtime"), default)]
+    #[display(fmt = "wasmer")]
+    Wasmer,
+    #[cfg(feature = "wasmtime")]
+    #[default]
+    #[display(fmt = "wasmtime")]
+    Wasmtime,
 }
