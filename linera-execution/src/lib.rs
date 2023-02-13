@@ -242,6 +242,9 @@ pub trait ReadableStorage: Send + Sync {
     /// The current application id.
     fn application_id(&self) -> UserApplicationId;
 
+    /// The current application parameters.
+    fn application_parameters(&self) -> Vec<u8>;
+
     /// Read the system balance.
     fn read_system_balance(&self) -> crate::system::Balance;
 

@@ -121,10 +121,10 @@ where
         // Create the execution runtime for this transaction.
         let mut session_manager = SessionManager::default();
         let mut results = Vec::new();
-        let mut application_ids = vec![application_id];
+        let mut applications = vec![application_description];
         let runtime = ExecutionRuntime::new(
             chain_id,
-            &mut application_ids,
+            &mut applications,
             self,
             &mut session_manager,
             &mut results,
@@ -145,7 +145,9 @@ where
                     .await?
             }
         };
-        assert_eq!(application_ids, vec![application_id]);
+        // Check that applications were correctly stacked and unstacked.
+        assert_eq!(applications.len(), 1);
+        assert_eq!(UserApplicationId::from(&applications[0]), application_id);
         // Make sure to declare the application first for all recipients of the user
         // execution result.
         let mut system_result = RawExecutionResult::default();
@@ -258,10 +260,10 @@ where
                 // Create the execution runtime for this transaction.
                 let mut session_manager = SessionManager::default();
                 let mut results = Vec::new();
-                let mut application_ids = vec![application_id];
+                let mut applications = vec![application_description];
                 let runtime = ExecutionRuntime::new(
                     context.chain_id,
-                    &mut application_ids,
+                    &mut applications,
                     self,
                     &mut session_manager,
                     &mut results,
@@ -270,7 +272,9 @@ where
                 let response = application
                     .query_application(context, &runtime, query)
                     .await?;
-                assert_eq!(application_ids, vec![application_id]);
+                // Check that applications were correctly stacked and unstacked.
+                assert_eq!(applications.len(), 1);
+                assert_eq!(UserApplicationId::from(&applications[0]), application_id);
                 Ok(Response::User(response))
             }
             _ => Err(ExecutionError::InvalidQuery),

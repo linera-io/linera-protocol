@@ -4,7 +4,7 @@
 use crate::{
     execution::ExecutionStateView, CallResult, ExecutionError, ExecutionResult,
     ExecutionRuntimeContext, NewSession, QueryableStorage, ReadableStorage, SessionId,
-    UserApplicationCode, UserApplicationId, WritableStorage,
+    UserApplicationCode, UserApplicationDescription, UserApplicationId, WritableStorage,
 };
 use async_trait::async_trait;
 use custom_debug_derive::Debug;
@@ -30,8 +30,8 @@ use tokio::sync::{Mutex, MutexGuard, OwnedMutexGuard, OwnedRwLockWriteGuard};
 pub(crate) struct ExecutionRuntime<'a, C, const WRITABLE: bool> {
     /// The current chain ID.
     chain_id: ChainId,
-    /// The current stack of application IDs.
-    application_ids: Arc<Mutex<&'a mut Vec<UserApplicationId>>>,
+    /// The current stack of application descriptions.
+    applications: Arc<Mutex<&'a mut Vec<UserApplicationDescription>>>,
     /// The storage view on the execution state.
     execution_state: Arc<Mutex<&'a mut ExecutionStateView<C>>>,
     /// All the sessions and their IDs.
@@ -77,7 +77,7 @@ where
 {
     pub(crate) fn new(
         chain_id: ChainId,
-        application_ids: &'a mut Vec<UserApplicationId>,
+        applications: &'a mut Vec<UserApplicationDescription>,
         execution_state: &'a mut ExecutionStateView<C>,
         session_manager: &'a mut SessionManager,
         execution_results: &'a mut Vec<ExecutionResult>,
@@ -85,7 +85,7 @@ where
         assert_eq!(chain_id, execution_state.context().extra().chain_id());
         Self {
             chain_id,
-            application_ids: Arc::new(Mutex::new(application_ids)),
+            applications: Arc::new(Mutex::new(applications)),
             execution_state: Arc::new(Mutex::new(execution_state)),
             session_manager: Arc::new(Mutex::new(session_manager)),
             active_simple_user_states: Arc::default(),
@@ -95,8 +95,8 @@ where
         }
     }
 
-    fn application_ids_mut(&self) -> MutexGuard<'_, &'a mut Vec<UserApplicationId>> {
-        self.application_ids
+    fn applications_mut(&self) -> MutexGuard<'_, &'a mut Vec<UserApplicationDescription>> {
+        self.applications
             .try_lock()
             .expect("single-threaded execution should not lock `application_ids`")
     }
@@ -140,18 +140,20 @@ where
     async fn load_application(
         &self,
         id: UserApplicationId,
-    ) -> Result<UserApplicationCode, ExecutionError> {
+    ) -> Result<(UserApplicationCode, UserApplicationDescription), ExecutionError> {
         let description = self
             .execution_state_mut()
             .system
             .registry
             .describe_application(id)
             .await?;
-        self.execution_state_mut()
+        let code = self
+            .execution_state_mut()
             .context()
             .extra()
             .get_user_application(&description)
-            .await
+            .await?;
+        Ok((code, description))
     }
 
     fn forward_sessions(
@@ -285,10 +287,18 @@ where
     }
 
     fn application_id(&self) -> UserApplicationId {
-        *self
-            .application_ids_mut()
+        self.applications_mut()
             .last()
-            .expect("at least one application id should be present in the stack")
+            .expect("at least one application description should be present in the stack")
+            .into()
+    }
+
+    fn application_parameters(&self) -> Vec<u8> {
+        self.applications_mut()
+            .last()
+            .expect("at least one application description should be present in the stack")
+            .parameters
+            .clone()
     }
 
     fn read_system_balance(&self) -> crate::system::Balance {
@@ -386,16 +396,16 @@ where
         argument: &[u8],
     ) -> Result<Vec<u8>, ExecutionError> {
         // Load the application.
-        let application = self.load_application(queried_id).await?;
+        let (code, description) = self.load_application(queried_id).await?;
         // Make the call to user code.
         let query_context = crate::QueryContext {
             chain_id: self.chain_id,
         };
-        self.application_ids_mut().push(queried_id);
-        let value = application
+        self.applications_mut().push(description);
+        let value = code
             .query_application(&query_context, self, argument)
             .await?;
-        self.application_ids_mut().pop();
+        self.applications_mut().pop();
         Ok(value)
     }
 }
@@ -459,7 +469,7 @@ where
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<CallResult, ExecutionError> {
         // Load the application.
-        let application = self.load_application(callee_id).await?;
+        let (code, description) = self.load_application(callee_id).await?;
         // Change the owners of forwarded sessions.
         self.forward_sessions(&forwarded_sessions, self.application_id(), callee_id)?;
         // Make the call to user code.
@@ -468,11 +478,11 @@ where
             chain_id: self.chain_id,
             authenticated_caller_id,
         };
-        self.application_ids_mut().push(callee_id);
-        let raw_result = application
+        self.applications_mut().push(description);
+        let raw_result = code
             .call_application(&callee_context, self, argument, forwarded_sessions)
             .await?;
-        self.application_ids_mut().pop();
+        self.applications_mut().pop();
         // Interpret the results of the call.
         self.execution_results_mut().push(ExecutionResult::User(
             callee_id,
@@ -496,7 +506,7 @@ where
     ) -> Result<CallResult, ExecutionError> {
         // Load the application.
         let callee_id = session_id.application_id;
-        let application = self.load_application(callee_id).await?;
+        let (code, description) = self.load_application(callee_id).await?;
         // Change the owners of forwarded sessions.
         self.forward_sessions(&forwarded_sessions, self.application_id(), callee_id)?;
         // Load the session.
@@ -507,8 +517,8 @@ where
             chain_id: self.chain_id,
             authenticated_caller_id,
         };
-        self.application_ids_mut().push(callee_id);
-        let raw_result = application
+        self.applications_mut().push(description);
+        let raw_result = code
             .call_session(
                 &callee_context,
                 self,
@@ -518,7 +528,7 @@ where
                 forwarded_sessions,
             )
             .await?;
-        self.application_ids_mut().pop();
+        self.applications_mut().pop();
         // Interpret the results of the call.
         if raw_result.close_session {
             // Terminate the session.
