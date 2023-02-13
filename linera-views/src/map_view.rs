@@ -159,6 +159,7 @@ where
         Ok(self.context.read_key(&key).await?)
     }
 
+    /// load the value in updates if that is at all possible
     async fn load_value(&mut self, short_key: &[u8]) -> Result<(), ViewError> {
         if !self.was_cleared && !self.updates.contains_key(short_key) {
             let key = self.context.base_tag_index(KeyTag::Index as u8, short_key);
@@ -327,6 +328,56 @@ where
         Ok(hasher.finalize())
     }
 }
+
+impl<C, I, V> MapView<C, I, V>
+where
+    C: Context,
+    ViewError: From<C::Error>,
+    I: Sync + Clone + Send + Serialize + DeserializeOwned,
+    V: Clone + Sync + Default + Serialize + DeserializeOwned + 'static,
+{
+    fn set_value_in_update(&mut self, short_key: &[u8]) {
+        let value = self.updates.get_mut(&short_key.to_vec());
+        if let Some(value) = value {
+            match value {
+                Update::Removed => {
+                    *value = Update::Set(V::default());
+                },
+                _ => {},
+            }
+        } else {
+            self.updates.insert(short_key.to_vec(), Update::Set(V::default()));
+        }
+    }
+
+    async fn load_value_or_default(&mut self, short_key: &[u8]) -> Result<(), ViewError> {
+        if self.was_cleared {
+            self.set_value_in_update(short_key);
+        } else {
+            if self.updates.contains_key(short_key) {
+                self.set_value_in_update(short_key);
+            } else {
+                let key = self.context.base_tag_index(KeyTag::Index as u8, short_key);
+                let value = self.context.read_key(&key).await?.unwrap_or_default();
+                self.updates.insert(short_key.to_vec(), Update::Set(value));
+            }
+        }
+        Ok(())
+    }
+
+    /// Obtain a mutable reference to a value at a given position if available
+    pub async fn get_mut_value(&mut self, index: &I) -> Result<&mut V, ViewError> {
+        let short_key = C::derive_short_key(index)?;
+        self.load_value_or_default(&short_key).await?;
+        if let Some(Update::Set(value)) = self.updates.get_mut(&short_key.clone()) {
+            return Ok(value);
+        } else {
+            unreachable!();
+        }
+    }
+}
+
+
 
 #[async_trait]
 impl<C, I, V> HashableView<C> for MapView<C, I, V>
