@@ -138,7 +138,8 @@ where
                 Err(err) => Err(err),
             };
             if let Err(NodeError::ApplicationBytecodeNotFound { .. }) = &result {
-                let mut chain = self.store.load_chain(certificate.value.chain_id()).await?;
+                let mut chain =
+                    Box::new(self.store.load_chain(certificate.value.chain_id()).await?);
                 if let Ok(apps) = chain
                     .applications_for_block(certificate.value.block())
                     .await
