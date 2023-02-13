@@ -327,6 +327,7 @@ where
     let initial_value_bytes = bcs::to_bytes(&initial_value)?;
     let create_operation = SystemOperation::CreateApplication {
         bytecode_id,
+        parameters: vec![],
         initialization_argument: initial_value_bytes.clone(),
         required_application_ids: vec![],
     };
@@ -343,7 +344,7 @@ where
         bytecode_location,
         creation: application_id.creation,
         required_application_ids: vec![],
-        initialization_argument: initial_value_bytes.clone(),
+        parameters: vec![],
     };
     let create_block = make_block(
         Epoch::from(0),

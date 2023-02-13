@@ -30,7 +30,7 @@ pub fn create_dummy_user_application_description() -> UserApplicationDescription
             index: 1,
         },
         required_application_ids: vec![],
-        initialization_argument: vec![],
+        parameters: vec![],
     }
 }
 

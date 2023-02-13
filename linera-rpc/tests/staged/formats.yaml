@@ -674,6 +674,7 @@ SystemOperation:
         STRUCT:
           - bytecode_id:
               TYPENAME: BytecodeId
+          - parameters: BYTES
           - initialization_argument: BYTES
           - required_application_ids:
               SEQ:
@@ -688,7 +689,7 @@ UserApplicationDescription:
         TYPENAME: BytecodeLocation
     - creation:
         TYPENAME: EffectId
-    - initialization_argument: BYTES
+    - parameters: BYTES
     - required_application_ids:
         SEQ:
           TYPENAME: UserApplicationId

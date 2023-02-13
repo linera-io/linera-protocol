@@ -89,7 +89,7 @@ where
 }
 
 enum UserAction<'a> {
-    Initialize(&'a OperationContext),
+    Initialize(&'a OperationContext, Vec<u8>),
     Operation(&'a OperationContext, &'a [u8]),
     Effect(&'a EffectContext, &'a [u8]),
 }
@@ -131,14 +131,8 @@ where
         );
         // Make the call to user code.
         let result = match action {
-            UserAction::Initialize(context) => {
-                application
-                    .initialize(
-                        context,
-                        &runtime,
-                        &application_description.initialization_argument,
-                    )
-                    .await?
+            UserAction::Initialize(context, argument) => {
+                application.initialize(context, &runtime, &argument).await?
             }
             UserAction::Operation(context, operation) => {
                 application
@@ -192,8 +186,8 @@ where
             (ApplicationId::System, Operation::System(op)) => {
                 let (result, new_application) = self.system.execute_operation(context, op).await?;
                 let mut results = vec![ExecutionResult::System(result)];
-                if let Some(application_id) = new_application {
-                    let user_action = UserAction::Initialize(context);
+                if let Some((application_id, argument)) = new_application {
+                    let user_action = UserAction::Initialize(context, argument);
                     results.extend(
                         self.run_user_action(application_id, context.chain_id, user_action)
                             .await?,

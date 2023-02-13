@@ -80,7 +80,7 @@ where
     let initial_value = 10_u128;
     let initial_value_bytes = bcs::to_bytes(&initial_value)?;
     let (application_id, _) = creator
-        .create_application(bytecode_id, initial_value_bytes, vec![])
+        .create_application(bytecode_id, initial_value_bytes, vec![], vec![])
         .await
         .unwrap();
 
@@ -173,14 +173,15 @@ where
 
     let initial_value = 10_u128;
     let (application_id1, _) = creator
-        .create_application(bytecode_id1, bcs::to_bytes(&initial_value)?, vec![])
+        .create_application(bytecode_id1, bcs::to_bytes(&initial_value)?, vec![], vec![])
         .await
         .unwrap();
     let (application_id2, _) = creator
         .create_application(
             bytecode_id2,
             bcs::to_bytes(&application_id1)?,
-            vec![application_id1],
+            vec![],
+            vec![],
         )
         .await
         .unwrap();
@@ -259,7 +260,7 @@ where
         iter::once((AccountOwner::Key(convert(&sender_kp.public())?), 1_000_000)).collect();
     let initial_value_bytes = bcs::to_bytes(&accounts)?;
     let (application_id, _cert) = sender
-        .create_application(bytecode_id, initial_value_bytes, vec![])
+        .create_application(bytecode_id, vec![], initial_value_bytes, vec![])
         .await?;
 
     // Make a transfer using the fungible app.
