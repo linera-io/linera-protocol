@@ -31,7 +31,6 @@ impl<E> MemoryContext<E> {
 }
 
 /// Provide a MemoryContext<()> that can be used for tests.
-#[cfg(any(test, feature = "test"))]
 pub async fn get_memory_context() -> MemoryContext<()> {
     let state = Arc::new(Mutex::new(BTreeMap::new()));
     let guard = state.lock_arc().await;

@@ -30,30 +30,54 @@ use std::collections::BTreeSet;
 use test_log::test;
 
 #[test(tokio::test)]
-async fn test_memory_handle_certificates_to_create_application() -> Result<(), anyhow::Error> {
+async fn test_memory_handle_certificates_to_create_application_both() -> Result<(), anyhow::Error> {
+    test_memory_handle_certificates_to_create_application(true).await?;
+    test_memory_handle_certificates_to_create_application(false).await
+}
+
+async fn test_memory_handle_certificates_to_create_application(
+    use_view: bool,
+) -> Result<(), anyhow::Error> {
     let client = MemoryStoreClient::default();
-    run_test_handle_certificates_to_create_application(client).await
+    run_test_handle_certificates_to_create_application(client, use_view).await
 }
 
 #[test(tokio::test)]
-async fn test_rocksdb_handle_certificates_to_create_application() -> Result<(), anyhow::Error> {
+async fn test_rocksdb_handle_certificates_to_create_application_both() -> Result<(), anyhow::Error>
+{
+    test_rocksdb_handle_certificates_to_create_application(true).await?;
+    test_rocksdb_handle_certificates_to_create_application(false).await
+}
+
+async fn test_rocksdb_handle_certificates_to_create_application(
+    use_view: bool,
+) -> Result<(), anyhow::Error> {
     let dir = tempfile::TempDir::new().unwrap();
     let client = RocksdbStoreClient::new(dir.path().to_path_buf());
-    run_test_handle_certificates_to_create_application(client).await
+    run_test_handle_certificates_to_create_application(client, use_view).await
 }
 
 #[test(tokio::test)]
 #[ignore]
-async fn test_dynamo_db_handle_certificates_to_create_application() -> Result<(), anyhow::Error> {
+async fn test_dynamo_db_handle_certificates_to_create_application_bool() -> Result<(), anyhow::Error>
+{
+    test_dynamo_db_handle_certificates_to_create_application(true).await?;
+    test_dynamo_db_handle_certificates_to_create_application(false).await
+}
+
+async fn test_dynamo_db_handle_certificates_to_create_application(
+    use_view: bool,
+) -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
     let (client, _) =
         DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table).await?;
-    run_test_handle_certificates_to_create_application(client).await
+    run_test_handle_certificates_to_create_application(client, use_view).await
 }
 
 async fn run_test_handle_certificates_to_create_application<S>(
     client: S,
+    use_view: bool,
 ) -> Result<(), anyhow::Error>
 where
     S: Store + Clone + Send + Sync + 'static,
@@ -78,8 +102,9 @@ where
     .await;
 
     // Publish some bytecode.
+    let name_counter = if use_view { "counter2" } else { "counter" };
     let (contract_path, service_path) =
-        linera_execution::wasm_test::get_example_bytecode_paths("counter2")?;
+        linera_execution::wasm_test::get_example_bytecode_paths(name_counter)?;
     let publish_operation = SystemOperation::PublishBytecode {
         contract: Bytecode::load_from_file(contract_path).await?,
         service: Bytecode::load_from_file(service_path).await?,
@@ -354,11 +379,19 @@ where
     //   has just one RegisterView<C,u128>
     // * 1 byte equal to zero that corresponds to the KeyTag::Value of RegisterView
     let chosen_key = vec![0, 0, 0, 0, 0];
-    creator_state
-        .view_users
-        .try_load_entry_mut(application_id)
-        .await?
-        .insert(chosen_key.clone(), initial_value_bytes);
+    if use_view {
+        creator_state
+            .view_users
+            .try_load_entry_mut(application_id)
+            .await?
+            .insert(chosen_key.clone(), initial_value_bytes);
+    } else {
+        creator_state
+            .simple_users
+            .try_load_entry_mut(application_id)
+            .await?
+            .set(initial_value_bytes);
+    }
     let create_block_proposal = Value::ConfirmedBlock {
         block: create_block,
         effects: vec![],
@@ -391,11 +424,19 @@ where
     );
     let expected_value = initial_value + increment;
     let expected_state_bytes = bcs::to_bytes(&expected_value)?;
-    creator_state
-        .view_users
-        .try_load_entry_mut(application_id)
-        .await?
-        .insert(chosen_key.clone(), expected_state_bytes);
+    if use_view {
+        creator_state
+            .view_users
+            .try_load_entry_mut(application_id)
+            .await?
+            .insert(chosen_key.clone(), expected_state_bytes);
+    } else {
+        creator_state
+            .simple_users
+            .try_load_entry_mut(application_id)
+            .await?
+            .set(expected_state_bytes);
+    }
     creator_state.system.timestamp.set(Timestamp::from(5));
     let run_block_proposal = Value::ConfirmedBlock {
         block: run_block,
