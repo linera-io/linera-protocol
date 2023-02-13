@@ -5,7 +5,7 @@ extern crate syn;
 use crate::util::{create_entry_name, snakify};
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
-use quote::{__private::ext::RepToTokensExt, quote};
+use quote::quote;
 use syn::{parse_macro_input, Field, GenericArgument, ItemStruct, PathArguments, Type, TypePath};
 
 fn get_seq_parameter(generics: syn::Generics) -> Vec<syn::Ident> {
@@ -231,11 +231,7 @@ fn generic_argument_from_type_path(type_path: &TypePath) -> Vec<&Type> {
         .expect("type path should have at least one segment")
         .arguments;
 
-    let set_type = arguments
-        .next()
-        .expect("type path segment should have at least one argument");
-
-    let angle = match set_type {
+    let angle = match arguments {
         PathArguments::AngleBracketed(angle) => angle,
         _ => {
             unreachable!("")
@@ -375,6 +371,11 @@ fn generate_graphql_code_for_field(field: Field) -> (TokenStream2, Option<TokenS
                 }
             };
             (r#impl, None)
+        }
+        "MapView" => {
+            unimplemented!(
+                "'MapView' is not currently supported by the 'GraphQLView' derive macro."
+            )
         }
         _ => {
             let r#impl = quote! {
