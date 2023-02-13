@@ -23,8 +23,8 @@ enum KeyTag {
 #[derive(Debug)]
 pub struct RegisterView<C, T> {
     context: C,
-    stored_value: T,
-    update: Option<T>,
+    stored_value: Box<T>,
+    update: Option<Box<T>>,
     stored_hash: Option<HashOutput>,
     hash: Mutex<Option<HashOutput>>,
 }
@@ -42,7 +42,7 @@ where
 
     async fn load(context: C) -> Result<Self, ViewError> {
         let key = context.base_tag(KeyTag::Value as u8);
-        let stored_value = context.read_key(&key).await?.unwrap_or_default();
+        let stored_value = Box::new(context.read_key(&key).await?.unwrap_or_default());
         let key = context.base_tag(KeyTag::Hash as u8);
         let hash = context.read_key(&key).await?;
         Ok(Self {
@@ -82,7 +82,7 @@ where
     }
 
     fn clear(&mut self) {
-        self.update = Some(T::default());
+        self.update = Some(Box::new(T::default()));
         *self.hash.get_mut() = None;
     }
 }
@@ -101,7 +101,7 @@ where
 
     /// Set the value in the register.
     pub fn set(&mut self, value: T) {
-        self.update = Some(value);
+        self.update = Some(Box::new(value));
         *self.hash.get_mut() = None;
     }
 

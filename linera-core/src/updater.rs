@@ -138,8 +138,7 @@ where
                 Err(err) => Err(err),
             };
             if let Err(NodeError::ApplicationBytecodeNotFound { .. }) = &result {
-                let mut chain =
-                    Box::new(self.store.load_chain(certificate.value.chain_id()).await?);
+                let mut chain = self.store.load_chain(certificate.value.chain_id()).await?;
                 if let Ok(apps) = chain
                     .applications_for_block(certificate.value.block())
                     .await
@@ -308,7 +307,7 @@ where
             // Obtain chain state.
             let range = usize::from(initial_block_height)..usize::from(target_block_height);
             if !range.is_empty() {
-                let chain = Box::new(self.store.load_chain(chain_id).await?);
+                let chain = self.store.load_chain(chain_id).await?;
                 // Send the requested certificates in order.
                 let keys = chain.confirmed_log.read(range).await?;
                 drop(chain);
@@ -327,7 +326,7 @@ where
     ) -> Result<(), NodeError> {
         let mut info = BTreeMap::new();
         {
-            let mut chain = Box::new(self.store.load_chain(chain_id).await?);
+            let mut chain = self.store.load_chain(chain_id).await?;
             for id in chain.communication_states.indices().await? {
                 let state = chain.communication_states.load_entry_mut(id).await?;
                 for origin in state.inboxes.indices().await? {

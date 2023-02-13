@@ -250,7 +250,7 @@ impl Iterator for DynamoDbKeyValueIteratorOwned {
 /// A set of key-values returned by a search query on DynamoDb.
 pub struct DynamoDbKeyValues {
     prefix_len: usize,
-    response: aws_sdk_dynamodb::output::QueryOutput,
+    response: QueryOutput,
 }
 
 impl KeyValueIterable<DynamoDbContextError> for DynamoDbKeyValues {
