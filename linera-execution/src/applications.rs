@@ -16,6 +16,7 @@ use linera_views::{
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
+use linera_base::crypto::BcsSignable;
 #[cfg(any(test, feature = "test"))]
 use {
     async_lock::Mutex, linera_views::memory::MemoryContext, std::collections::BTreeMap,
@@ -52,6 +53,14 @@ pub struct UserApplicationId {
     pub bytecode_id: BytecodeId,
     /// The unique ID of the application's creation.
     pub creation: EffectId,
+}
+
+impl BcsSignable for UserApplicationId {}
+
+impl UserApplicationId {
+    pub fn crypto_hash(&self) -> CryptoHash {
+        CryptoHash::new(self)
+    }
 }
 
 /// Description of the necessary information to run a user application.
