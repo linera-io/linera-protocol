@@ -6,7 +6,7 @@ use crate::{
     system::SystemExecutionStateView,
     ApplicationId, Effect, EffectContext, ExecutionError, ExecutionResult, ExecutionRuntimeContext,
     Operation, OperationContext, Query, QueryContext, RawExecutionResult, Response, SystemEffect,
-    UserApplicationId,
+    UserApplicationDescription, UserApplicationId,
 };
 use linera_base::{
     data_types::{ChainId, Owner},
@@ -314,5 +314,26 @@ where
             }
             _ => Err(ExecutionError::InvalidQuery),
         }
+    }
+
+    pub async fn list_applications(
+        &self,
+    ) -> Result<Vec<(UserApplicationId, UserApplicationDescription)>, ExecutionError> {
+        let mut applications = vec![];
+        for index in self.system.registry.known_applications.indices().await? {
+            let application_description = self.system
+                .registry
+                .known_applications
+                .get(&index)
+                .await?;
+            match application_description {
+                Some(application_description) => {
+                    applications.push((index, application_description))
+                },
+                None => {}
+            }
+
+        }
+        Ok(applications)
     }
 }

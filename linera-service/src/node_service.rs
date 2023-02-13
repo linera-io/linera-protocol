@@ -1,5 +1,6 @@
 use async_graphql::{
-    futures_util::Stream, http::GraphiQLSource, EmptyMutation, Error, Object, Schema, Subscription,
+    futures_util::Stream, http::GraphiQLSource, EmptyMutation, Error, Object, Schema, SimpleObject,
+    Subscription,
 };
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{response, response::IntoResponse, routing::get, Extension, Router, Server};
@@ -9,6 +10,9 @@ use linera_chain::ChainStateView;
 use linera_core::{
     client::{ChainClient, ValidatorNodeProvider},
     worker::Notification,
+};
+use linera_execution::{
+    ApplicationId, ExecutionRuntimeContext, UserApplicationDescription, UserApplicationId,
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -49,6 +53,44 @@ where
 {
     async fn chain(&self, chain_id: ChainId) -> Result<Arc<ChainStateView<S::Context>>, Error> {
         Ok(self.0.lock().await.chain_state_view(chain_id).await?)
+    }
+
+    async fn applications(&self, chain_id: ChainId) -> Result<Vec<ApplicationOverview>, Error> {
+        let applications = self
+            .0
+            .lock()
+            .await
+            .chain_state_view(chain_id)
+            .await?
+            .execution_state
+            .list_applications()
+            .await?;
+
+        let overviews = applications
+            .into_iter()
+            .map(|application| ApplicationOverview::new(application.0, application.1))
+            .collect();
+
+        Ok(overviews)
+    }
+}
+
+#[derive(SimpleObject)]
+pub struct ApplicationOverview {
+    id: UserApplicationId,
+    description: UserApplicationDescription,
+    link: String,
+}
+
+impl ApplicationOverview {
+    fn new(id: UserApplicationId, description: UserApplicationDescription) -> Self {
+        // TODO: port should not be hard-coded
+        let port = 8080;
+        Self {
+            id,
+            description,
+            link: format!("localhost:{}/applications/{}", port, id.crypto_hash()),
+        }
     }
 }
 

@@ -1,6 +1,6 @@
 use crate::{
     system::Balance, ApplicationId, ChainOwnership, ChannelId, ChannelName, ExecutionStateView,
-    SystemExecutionStateView, UserApplicationId,
+    SystemExecutionStateView, UserApplicationDescription, UserApplicationId,
 };
 use async_graphql::{scalar, Error};
 use linera_base::{
@@ -14,6 +14,7 @@ scalar!(ApplicationId);
 scalar!(Balance);
 scalar!(ChainOwnership);
 scalar!(ChannelName);
+scalar!(UserApplicationDescription);
 scalar!(UserApplicationId);
 
 #[async_graphql::Object]
