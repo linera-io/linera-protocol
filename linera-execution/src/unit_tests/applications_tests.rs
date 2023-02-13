@@ -35,7 +35,7 @@ fn app_description(index: usize, deps: Vec<usize>) -> UserApplicationDescription
         bytecode_id: bytecode_id(0),
         bytecode_location: location(0),
         creation: effect_id(index),
-        initialization_argument: vec![],
+        parameters: vec![],
         required_application_ids: deps.into_iter().map(app_id).collect(),
     }
 }

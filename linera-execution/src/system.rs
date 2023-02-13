@@ -127,6 +127,9 @@ pub enum SystemOperation {
         bytecode_id: BytecodeId,
         #[serde(with = "serde_bytes")]
         #[debug(with = "hex_debug")]
+        parameters: Vec<u8>,
+        #[serde(with = "serde_bytes")]
+        #[debug(with = "hex_debug")]
         initialization_argument: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
     },
@@ -305,8 +308,13 @@ where
         &mut self,
         context: &OperationContext,
         operation: &SystemOperation,
-    ) -> Result<(RawExecutionResult<SystemEffect>, Option<UserApplicationId>), SystemExecutionError>
-    {
+    ) -> Result<
+        (
+            RawExecutionResult<SystemEffect>,
+            Option<(UserApplicationId, Vec<u8>)>,
+        ),
+        SystemExecutionError,
+    > {
         use SystemOperation::*;
         let mut result = RawExecutionResult::default();
         let mut new_application = None;
@@ -521,6 +529,7 @@ where
             }
             CreateApplication {
                 bytecode_id,
+                parameters,
                 initialization_argument,
                 required_application_ids,
             } => {
@@ -529,13 +538,9 @@ where
                     creation: (*context).into(),
                 };
                 self.registry
-                    .create_application(
-                        id,
-                        initialization_argument.clone(),
-                        required_application_ids.clone(),
-                    )
+                    .create_application(id, parameters.clone(), required_application_ids.clone())
                     .await?;
-                new_application = Some(id);
+                new_application = Some((id, initialization_argument.clone()));
             }
         }
 

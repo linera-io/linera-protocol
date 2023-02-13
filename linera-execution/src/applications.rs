@@ -64,10 +64,10 @@ pub struct UserApplicationDescription {
     pub bytecode_location: BytecodeLocation,
     /// The unique ID of the application's creation.
     pub creation: EffectId,
-    /// The argument used during application initialization.
+    /// The parameters of the application.
     #[serde(with = "serde_bytes")]
     #[debug(with = "hex_debug")]
-    pub initialization_argument: Vec<u8>,
+    pub parameters: Vec<u8>,
     /// Required dependencies.
     pub required_application_ids: Vec<UserApplicationId>,
 }
@@ -190,7 +190,7 @@ where
     pub async fn create_application(
         &mut self,
         application_id: UserApplicationId,
-        initialization_argument: Vec<u8>,
+        parameters: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
     ) -> Result<(), SystemExecutionError> {
         // Make sure that referenced applications ids have been registered.
@@ -210,9 +210,9 @@ where
         let description = UserApplicationDescription {
             bytecode_location,
             bytecode_id,
+            parameters,
             creation,
             required_application_ids,
-            initialization_argument,
         };
         self.known_applications
             .insert(&application_id, description)?;

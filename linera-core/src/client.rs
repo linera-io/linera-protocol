@@ -1050,6 +1050,7 @@ where
     pub async fn create_application(
         &mut self,
         bytecode_id: BytecodeId,
+        parameters: Vec<u8>,
         initialization_argument: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
     ) -> Result<(UserApplicationId, Certificate)> {
@@ -1070,6 +1071,7 @@ where
                     ApplicationId::System,
                     Operation::System(SystemOperation::CreateApplication {
                         bytecode_id,
+                        parameters,
                         initialization_argument,
                         required_application_ids,
                     }),
