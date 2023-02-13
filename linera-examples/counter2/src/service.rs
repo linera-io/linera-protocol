@@ -52,21 +52,17 @@ pub enum Error {
 mod tests {
     use super::Error;
     use crate::Counter;
-    use async_lock::Mutex;
     use futures_util::FutureExt;
     use linera_sdk::{ChainId, QueryContext, Service};
-    use linera_views::{memory::MemoryContext, views::View};
-    use std::{collections::BTreeMap, sync::Arc};
+    use linera_views::{memory::get_memory_context, views::View};
     use webassembly_test::webassembly_test;
 
     #[webassembly_test]
     fn query() {
         let value = 61_098_721_u128;
-        let guard = Arc::new(Mutex::new(BTreeMap::new()))
-            .lock_arc()
+        let context = get_memory_context()
             .now_or_never()
-            .unwrap();
-        let context = MemoryContext::new(guard, ());
+            .expect("Failed to acquire the guard");
         let mut counter = Counter::load(context)
             .now_or_never()
             .unwrap()
@@ -86,11 +82,9 @@ mod tests {
     #[webassembly_test]
     fn invalid_query() {
         let value = 4_u128;
-        let guard = Arc::new(Mutex::new(BTreeMap::new()))
-            .lock_arc()
+        let context = get_memory_context()
             .now_or_never()
-            .unwrap();
-        let context = MemoryContext::new(guard, ());
+            .expect("Failed to acquire the guard");
         let mut counter = Counter::load(context)
             .now_or_never()
             .unwrap()

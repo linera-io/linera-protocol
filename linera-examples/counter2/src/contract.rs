@@ -12,9 +12,7 @@ use linera_sdk::{
     EffectContext, ExecutionResult, OperationContext, Session, SessionCallResult, SessionId,
     ViewStateStorage,
 };
-use linera_views::common::Context;
-/// Alias to the application type, so that the boilerplate module can reference it.
-use linera_views::views::ViewError;
+use linera_views::{common::Context, views::ViewError};
 use thiserror::Error;
 
 /// TODO(#434): Remove the type alias
@@ -22,7 +20,7 @@ type WritableCounter = Counter<WasmContext>;
 linera_sdk::contract!(WritableCounter);
 
 #[async_trait]
-impl<C: Context> Contract for Counter<C>
+impl<C> Contract for Counter<C>
 where
     C: Context + Send + Sync + Clone + 'static,
     ViewError: From<<C as Context>::Error>,
@@ -105,14 +103,15 @@ pub enum Error {
 mod tests {
     use super::Error;
     use crate::Counter;
-    use async_lock::Mutex;
     use futures_util::FutureExt;
     use linera_sdk::{
         ApplicationCallResult, BlockHeight, CalleeContext, ChainId, Contract, EffectContext,
         EffectId, ExecutionResult, OperationContext, Session,
     };
-    use linera_views::{memory::MemoryContext, views::View};
-    use std::{collections::BTreeMap, sync::Arc};
+    use linera_views::{
+        memory::{get_memory_context, MemoryContext},
+        views::View,
+    };
     use webassembly_test::webassembly_test;
 
     #[webassembly_test]
@@ -187,11 +186,9 @@ mod tests {
     }
 
     fn create_and_initialize_counter(initial_value: u128) -> Counter<MemoryContext<()>> {
-        let guard = Arc::new(Mutex::new(BTreeMap::new()))
-            .lock_arc()
+        let context = get_memory_context()
             .now_or_never()
-            .unwrap();
-        let context = MemoryContext::new(guard, ());
+            .expect("Failed to acquire the guard");
         let mut counter = Counter::load(context)
             .now_or_never()
             .unwrap()

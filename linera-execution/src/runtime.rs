@@ -37,21 +37,19 @@ pub(crate) struct ExecutionRuntime<'a, C, const WRITABLE: bool> {
     /// All the sessions and their IDs.
     session_manager: Arc<Mutex<&'a mut SessionManager>>,
     /// Track active (i.e. locked) applications for which re-entrancy is disallowed.
-    active_user_states: Arc<Mutex<ActiveUserStates<C>>>,
+    active_simple_user_states: Arc<Mutex<ActiveSimpleUserStates<C>>>,
     /// Track active (i.e. locked) applications for which re-entrancy is disallowed.
-    active_userkv_states: Arc<Mutex<ActiveUserkvStates<C>>>,
+    active_view_user_states: Arc<Mutex<ActiveViewUserStates<C>>>,
     /// Track active (i.e. locked) sessions for which re-entrancy is disallowed.
     active_sessions: Arc<Mutex<ActiveSessions>>,
     /// Accumulate the externally visible results (e.g. cross-chain messages) of applications.
     execution_results: Arc<Mutex<&'a mut Vec<ExecutionResult>>>,
 }
 
-type ActiveUserStates<C> =
-    BTreeMap<UserApplicationId, OwnedRwLockWriteGuard<RegisterView<C, Vec<u8>>>>;
-
-type ActiveUserkvStates<C> =
+type ActiveViewUserStates<C> =
     BTreeMap<UserApplicationId, OwnedRwLockWriteGuard<KeyValueStoreView<C>>>;
-
+type ActiveSimpleUserStates<C> =
+    BTreeMap<UserApplicationId, OwnedRwLockWriteGuard<RegisterView<C, Vec<u8>>>>;
 type ActiveSessions = BTreeMap<SessionId, OwnedMutexGuard<SessionState>>;
 
 #[derive(Debug, Clone, Default)]
@@ -90,8 +88,8 @@ where
             application_ids: Arc::new(Mutex::new(application_ids)),
             execution_state: Arc::new(Mutex::new(execution_state)),
             session_manager: Arc::new(Mutex::new(session_manager)),
-            active_user_states: Arc::default(),
-            active_userkv_states: Arc::default(),
+            active_simple_user_states: Arc::default(),
+            active_view_user_states: Arc::default(),
             active_sessions: Arc::default(),
             execution_results: Arc::new(Mutex::new(execution_results)),
         }
@@ -115,16 +113,16 @@ where
             .expect("single-threaded execution should not lock `session_manager`")
     }
 
-    fn active_user_states_mut(&self) -> MutexGuard<'_, ActiveUserStates<C>> {
-        self.active_user_states
+    fn active_simple_user_states_mut(&self) -> MutexGuard<'_, ActiveSimpleUserStates<C>> {
+        self.active_simple_user_states
             .try_lock()
-            .expect("single-threaded execution should not lock `active_user_states`")
+            .expect("single-threaded execution should not lock `active_simple_user_states`")
     }
 
-    fn active_userkv_states_mut(&self) -> MutexGuard<'_, ActiveUserkvStates<C>> {
-        self.active_userkv_states
+    fn active_view_user_states_mut(&self) -> MutexGuard<'_, ActiveViewUserStates<C>> {
+        self.active_view_user_states
             .try_lock()
-            .expect("single-threaded execution should not lock `active_userkv_states`")
+            .expect("single-threaded execution should not lock `active_view_user_states`")
     }
 
     fn active_sessions_mut(&self) -> MutexGuard<'_, ActiveSessions> {
@@ -304,7 +302,7 @@ where
     async fn try_read_my_state(&self) -> Result<Vec<u8>, ExecutionError> {
         let state = self
             .execution_state_mut()
-            .users
+            .simple_users
             .try_load_entry_mut(self.application_id())
             .await?
             .get()
@@ -312,21 +310,21 @@ where
         Ok(state)
     }
 
-    async fn lock_userkv_state(&self) -> Result<(), ExecutionError> {
+    async fn lock_view_user_state(&self) -> Result<(), ExecutionError> {
         let view = self
             .execution_state_mut()
-            .users_kv
+            .view_users
             .try_load_entry_mut(self.application_id())
             .await?;
-        self.active_userkv_states_mut()
+        self.active_view_user_states_mut()
             .insert(self.application_id(), view);
         Ok(())
     }
 
-    async fn unlock_userkv_state(&self) -> Result<(), ExecutionError> {
+    async fn unlock_view_user_state(&self) -> Result<(), ExecutionError> {
         // Make the view available again.
         match self
-            .active_userkv_states_mut()
+            .active_view_user_states_mut()
             .remove(&self.application_id())
         {
             Some(_) => Ok(()),
@@ -334,34 +332,40 @@ where
         }
     }
 
-    async fn pass_userkv_read_key_bytes(
-        &self,
-        key: Vec<u8>,
-    ) -> Result<Option<Vec<u8>>, ExecutionError> {
+    async fn read_key_bytes(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, ExecutionError> {
         // read a key from the KV store
-        match self.active_userkv_states_mut().get(&self.application_id()) {
+        match self
+            .active_view_user_states_mut()
+            .get(&self.application_id())
+        {
             Some(view) => Ok(view.get(&key).await?),
             None => Err(ExecutionError::ApplicationStateNotLocked),
         }
     }
 
-    async fn pass_userkv_find_keys_by_prefix(
+    async fn find_keys_by_prefix(
         &self,
         key_prefix: Vec<u8>,
     ) -> Result<Vec<Vec<u8>>, ExecutionError> {
         // Read keys matching a prefix. We have to collect since iterators do not pass the wit barrier
-        match self.active_userkv_states_mut().get(&self.application_id()) {
+        match self
+            .active_view_user_states_mut()
+            .get(&self.application_id())
+        {
             Some(view) => Ok(view.find_keys_by_prefix(&key_prefix).await?),
             None => Err(ExecutionError::ApplicationStateNotLocked),
         }
     }
 
-    async fn pass_userkv_find_key_values_by_prefix(
+    async fn find_key_values_by_prefix(
         &self,
         key_prefix: Vec<u8>,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError> {
         // Read key/values matching a prefix. We have to collect since iterators do not pass the wit barrier
-        match self.active_userkv_states_mut().get(&self.application_id()) {
+        match self
+            .active_view_user_states_mut()
+            .get(&self.application_id())
+        {
             Some(view) => Ok(view.find_key_values_by_prefix(&key_prefix).await?),
             None => Err(ExecutionError::ApplicationStateNotLocked),
         }
@@ -406,19 +410,22 @@ where
     async fn try_read_and_lock_my_state(&self) -> Result<Vec<u8>, ExecutionError> {
         let view = self
             .execution_state_mut()
-            .users
+            .simple_users
             .try_load_entry_mut(self.application_id())
             .await?;
         let state = view.get().to_vec();
         // Remember the view. This will prevent reentrancy.
-        self.active_user_states_mut()
+        self.active_simple_user_states_mut()
             .insert(self.application_id(), view);
         Ok(state)
     }
 
     fn save_and_unlock_my_state(&self, state: Vec<u8>) -> Result<(), ExecutionError> {
         // Make the view available again.
-        match self.active_user_states_mut().remove(&self.application_id()) {
+        match self
+            .active_simple_user_states_mut()
+            .remove(&self.application_id())
+        {
             Some(mut view) => {
                 // Set the state.
                 view.set(state);
@@ -429,20 +436,17 @@ where
     }
 
     fn unlock_my_state(&self) {
-        self.active_user_states_mut().remove(&self.application_id());
+        self.active_simple_user_states_mut()
+            .remove(&self.application_id());
     }
 
     async fn write_batch_and_unlock(&self, batch: Batch) -> Result<(), ExecutionError> {
-        // Make the view available again.
+        // Write the batch and make the view available again.
         match self
-            .active_userkv_states_mut()
+            .active_view_user_states_mut()
             .remove(&self.application_id())
         {
-            Some(mut view) => {
-                // Write the batch in the view
-                view.write_batch(batch).await?;
-                Ok(())
-            }
+            Some(mut view) => Ok(view.write_batch(batch).await?),
             None => Err(ExecutionError::ApplicationStateNotLocked),
         }
     }

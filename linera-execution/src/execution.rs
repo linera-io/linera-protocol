@@ -31,10 +31,10 @@ use {
 pub struct ExecutionStateView<C> {
     /// System application.
     pub system: SystemExecutionStateView<C>,
-    /// User applications.
-    pub users: ReentrantCollectionView<C, UserApplicationId, RegisterView<C, Vec<u8>>>,
-    /// User applications (KV system).
-    pub users_kv: ReentrantCollectionView<C, UserApplicationId, KeyValueStoreView<C>>,
+    /// User applications (Simple based).
+    pub simple_users: ReentrantCollectionView<C, UserApplicationId, RegisterView<C, Vec<u8>>>,
+    /// User applications (View based).
+    pub view_users: ReentrantCollectionView<C, UserApplicationId, KeyValueStoreView<C>>,
 }
 
 #[cfg(any(test, feature = "test"))]

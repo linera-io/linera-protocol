@@ -43,9 +43,6 @@ jobs:
       uses: arduino/setup-protoc@v1
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
-    - name: Compile `linera-views` with WASM
-      run: |
-        cargo build --locked --target wasm32-unknown-unknown -p linera-views
     - name: Build WASM test runner
       run: |
         cargo build --locked --release --bin test-runner

@@ -4,7 +4,7 @@ use crate::{
     common::{get_interval, Batch, ContextFromDb, KeyValueOperations, WriteOperation},
     views::ViewError,
 };
-use async_lock::{MutexGuardArc, RwLock};
+use async_lock::{Mutex, MutexGuardArc, RwLock};
 use async_trait::async_trait;
 use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
 use thiserror::Error;
@@ -28,6 +28,13 @@ impl<E> MemoryContext<E> {
             extra,
         }
     }
+}
+
+/// Provide a MemoryContext<()> that can be used for tests.
+pub async fn get_memory_context() -> MemoryContext<()> {
+    let state = Arc::new(Mutex::new(BTreeMap::new()));
+    let guard = state.lock_arc().await;
+    MemoryContext::new(guard, ())
 }
 
 #[async_trait]

@@ -1,5 +1,5 @@
 [package]
-name = "counter2"
+name = "fungible2"
 version = "0.1.0"
 authors = ["Linera <contact@linera.io>"]
 edition = "2021"
@@ -7,19 +7,15 @@ edition = "2021"
 [dependencies]
 async-trait = "0.1.52"
 bcs = "0.1.3"
-linera-sdk = { path = "../../linera-sdk" }
+linera-sdk = { path = "../../linera-sdk", features = ["crypto"] }
 linera-views = { path = "../../linera-views" }
+serde = { version = "1.0.130", features = ["derive"] }
 thiserror = "1.0.31"
-futures-util = "0.3.26"
-
-[dev-dependencies]
-linera-sdk = { path = "../../linera-sdk", features = ["test"] }
-webassembly-test = "0.1.0"
 
 [[bin]]
-name = "counter2_contract"
+name = "fungible2_contract"
 path = "src/contract.rs"
 
 [[bin]]
-name = "counter2_service"
+name = "fungible2_service"
 path = "src/service.rs"

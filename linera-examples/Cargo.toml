@@ -1,10 +1,12 @@
 [workspace]
 members = [
         "counter",
-        "counter2",
         "crowd-funding",
         "fungible",
         "meta-counter",
+        "counter2",
+        "crowd-funding2",
+        "fungible2",
 ]
 
 [profile.release]

@@ -725,7 +725,6 @@ dependencies = [
 name = "counter2"
 version = "0.1.0"
 dependencies = [
- "async-lock",
  "async-trait",
  "bcs",
  "futures-util",
@@ -912,6 +911,20 @@ dependencies = [
  "fungible",
  "futures",
  "linera-sdk",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
+name = "crowd-funding2"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bcs",
+ "fungible2",
+ "futures",
+ "linera-sdk",
+ "linera-views",
  "serde",
  "thiserror",
 ]
@@ -1215,6 +1228,18 @@ dependencies = [
  "async-trait",
  "bcs",
  "linera-sdk",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
+name = "fungible2"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bcs",
+ "linera-sdk",
+ "linera-views",
  "serde",
  "thiserror",
 ]
