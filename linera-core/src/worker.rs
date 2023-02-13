@@ -163,13 +163,6 @@ pub enum WorkerError {
     InvalidLiteCertificate,
     #[error("An additional certificate was provided that is not required: {certificate_hash}.")]
     UnneededCertificate { certificate_hash: CryptoHash },
-    #[error(
-        "Could not check signatures for additional certificate: {certificate_hash}, epoch {epoch}."
-    )]
-    MissingEpochForRequiredCertificate {
-        certificate_hash: CryptoHash,
-        epoch: Epoch,
-    },
 }
 
 impl From<linera_chain::ChainError> for WorkerError {
@@ -794,18 +787,10 @@ where
         }
         // Write the certificates so that the bytecode is available during execution.
         for cert in &blob_certificates {
-            if self.storage.read_certificate(cert.hash).await.is_err() {
-                let committee = chain
-                    .execution_state
-                    .system
-                    .committees
-                    .get()
-                    .get(&cert.value.block().epoch)
-                    .ok_or_else(|| WorkerError::MissingEpochForRequiredCertificate {
-                        certificate_hash: cert.hash,
-                        epoch: cert.value.block().epoch,
-                    })?;
-                certificate.check(committee)?;
+            if self.storage.read_certificate(cert.hash).await.is_ok() {
+                // TODO(#443): We can't check the certificate's signatures, because it might be
+                // very old, with a committee that's not trusted anymore. We should store the
+                // blob without signatures.
                 self.storage.write_certificate(cert.clone()).await?;
             }
         }
