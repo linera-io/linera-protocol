@@ -196,7 +196,7 @@ impl<'a> Iterator for DynamoDbKeyIterator<'a> {
 /// A set of keys returned by a search query on DynamoDb.
 pub struct DynamoDbKeys {
     prefix_len: usize,
-    response: QueryOutput,
+    response: Box<QueryOutput>,
 }
 
 impl KeyIterable<DynamoDbContextError> for DynamoDbKeys {
@@ -250,7 +250,7 @@ impl Iterator for DynamoDbKeyValueIteratorOwned {
 /// A set of key-values returned by a search query on DynamoDb.
 pub struct DynamoDbKeyValues {
     prefix_len: usize,
-    response: aws_sdk_dynamodb::output::QueryOutput,
+    response: Box<QueryOutput>,
 }
 
 impl KeyValueIterable<DynamoDbContextError> for DynamoDbKeyValues {
@@ -297,7 +297,7 @@ impl KeyValueOperations for DynamoDbClient {
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::Keys, DynamoDbContextError> {
-        let response = self.get_query_output(KEY_ATTRIBUTE, key_prefix).await?;
+        let response = Box::new(self.get_query_output(KEY_ATTRIBUTE, key_prefix).await?);
         Ok(DynamoDbKeys {
             prefix_len: key_prefix.len(),
             response,
@@ -308,9 +308,10 @@ impl KeyValueOperations for DynamoDbClient {
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, DynamoDbContextError> {
-        let response = self
-            .get_query_output(KEY_VALUE_ATTRIBUTE, key_prefix)
-            .await?;
+        let response = Box::new(
+            self.get_query_output(KEY_VALUE_ATTRIBUTE, key_prefix)
+                .await?,
+        );
         Ok(DynamoDbKeyValues {
             prefix_len: key_prefix.len(),
             response,
