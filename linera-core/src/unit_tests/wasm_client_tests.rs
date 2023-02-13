@@ -12,6 +12,7 @@ use crate::client::client_tests::{
     MakeDynamoDbStoreClient, MakeMemoryStoreClient, MakeRocksdbStoreClient, StoreBuilder,
     TestBuilder, GUARD,
 };
+use fungible::{AccountOwner, SignedTransfer, SignedTransferPayload, Transfer};
 use linera_base::data_types::*;
 use linera_execution::{
     system::Balance, ApplicationId, Bytecode, Destination, Effect, Operation, Query, Response,
@@ -20,7 +21,6 @@ use linera_execution::{
 use linera_storage::Store;
 use linera_views::views::ViewError;
 use serde::{de::DeserializeOwned, Serialize};
-use simple_fungible::{AccountOwner, SignedTransfer, SignedTransferPayload, Transfer};
 use std::{collections::BTreeMap, iter};
 use test_log::test;
 
@@ -62,7 +62,7 @@ where
     publisher.process_inbox().await.unwrap();
 
     let (contract_path, service_path) =
-        linera_execution::wasm_test::get_example_bytecode_paths("simple_counter")?;
+        linera_execution::wasm_test::get_example_bytecode_paths("counter")?;
     let (bytecode_id, cert) = publisher
         .publish_bytecode(
             Bytecode::load_from_file(contract_path).await?,
@@ -143,7 +143,7 @@ where
 
     let (bytecode_id1, cert1) = {
         let (contract_path, service_path) =
-            linera_execution::wasm_test::get_example_bytecode_paths("simple_counter")?;
+            linera_execution::wasm_test::get_example_bytecode_paths("counter")?;
         publisher
             .publish_bytecode(
                 Bytecode::load_from_file(contract_path).await?,
@@ -154,7 +154,7 @@ where
     };
     let (bytecode_id2, cert2) = {
         let (contract_path, service_path) =
-            linera_execution::wasm_test::get_example_bytecode_paths("simple_meta_counter")?;
+            linera_execution::wasm_test::get_example_bytecode_paths("meta_counter")?;
         publisher
             .publish_bytecode(
                 Bytecode::load_from_file(contract_path).await?,
@@ -240,7 +240,7 @@ where
         .await?;
 
     let (contract_path, service_path) =
-        linera_execution::wasm_test::get_example_bytecode_paths("simple_fungible")?;
+        linera_execution::wasm_test::get_example_bytecode_paths("fungible")?;
     let (bytecode_id, pub_cert) = sender
         .publish_bytecode(
             Bytecode::load_from_file(contract_path).await?,
@@ -262,7 +262,7 @@ where
         .create_application(bytecode_id, initial_value_bytes, vec![])
         .await?;
 
-    // Make a transfer using the simple_fungible app.
+    // Make a transfer using the fungible app.
     let mut payload = SignedTransferPayload {
         token_id: convert(&application_id)?,
         source_chain: convert(&sender.chain_id())?,

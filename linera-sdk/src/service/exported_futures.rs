@@ -8,7 +8,10 @@
 //! service type that implements [`linera_sdk::Service`].
 
 use crate::{
-    service::{self, system_api, system_api::HostServiceWasmContext},
+    service::{
+        self,
+        system_api::{self, ReadableWasmContext},
+    },
     ExportedFuture, Service, ServiceLogger, SimpleStateStorage, ViewStateStorage,
 };
 use linera_views::views::ContainerView;
@@ -33,7 +36,7 @@ where
         argument: Vec<u8>,
     ) -> ExportedFuture<Result<Vec<u8>, String>> {
         ExportedFuture::new(async move {
-            let application: Application = system_api::simple_load().await;
+            let application: Application = system_api::load().await;
             application
                 .query_application(&context.into(), &argument)
                 .await
@@ -44,19 +47,19 @@ where
 
 impl<Application> ServiceStateStorage for ViewStateStorage<Application>
 where
-    Application: Service + ContainerView<HostServiceWasmContext>,
+    Application: Service + ContainerView<ReadableWasmContext>,
 {
     fn query_application(
         context: service::QueryContext,
         argument: Vec<u8>,
     ) -> ExportedFuture<Result<Vec<u8>, String>> {
         ExportedFuture::new(async move {
-            let application: Application = system_api::view_lock().await;
+            let application: Application = system_api::lock_and_load_view().await;
             let result = application
                 .query_application(&context.into(), &argument)
                 .await;
             if result.is_ok() {
-                system_api::view_unlock(application).await;
+                system_api::unlock_view(application).await;
             }
             result.map_err(|error| error.to_string())
         })

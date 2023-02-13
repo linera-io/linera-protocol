@@ -79,7 +79,7 @@ where
 
     // Publish some bytecode.
     let (contract_path, service_path) =
-        linera_execution::wasm_test::get_example_bytecode_paths("view_counter")?;
+        linera_execution::wasm_test::get_example_bytecode_paths("counter2")?;
     let publish_operation = SystemOperation::PublishBytecode {
         contract: Bytecode::load_from_file(contract_path).await?,
         service: Bytecode::load_from_file(service_path).await?,
@@ -366,10 +366,11 @@ where
     };
     let create_certificate = make_certificate(&committee, &worker, create_block_proposal);
 
-    let result = worker
+    let info = worker
         .fully_handle_certificate(create_certificate.clone())
-        .await;
-    let info = result.unwrap().info;
+        .await
+        .unwrap()
+        .info;
     assert_eq!(ChainId::root(2), info.chain_id);
     assert_eq!(Balance::from(0), info.system_balance);
     assert_eq!(BlockHeight::from(2), info.next_block_height);

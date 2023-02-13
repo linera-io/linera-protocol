@@ -310,7 +310,7 @@ where
         Ok(state)
     }
 
-    async fn view_lock_user_state(&self) -> Result<(), ExecutionError> {
+    async fn lock_view_user_state(&self) -> Result<(), ExecutionError> {
         let view = self
             .execution_state_mut()
             .view_users
@@ -321,7 +321,7 @@ where
         Ok(())
     }
 
-    async fn view_unlock_user_state(&self) -> Result<(), ExecutionError> {
+    async fn unlock_view_user_state(&self) -> Result<(), ExecutionError> {
         // Make the view available again.
         match self
             .active_view_user_states_mut()
@@ -332,7 +332,7 @@ where
         }
     }
 
-    async fn view_read_key_bytes(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, ExecutionError> {
+    async fn read_key_bytes(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, ExecutionError> {
         // read a key from the KV store
         match self
             .active_view_user_states_mut()
@@ -343,7 +343,7 @@ where
         }
     }
 
-    async fn view_find_keys_by_prefix(
+    async fn find_keys_by_prefix(
         &self,
         key_prefix: Vec<u8>,
     ) -> Result<Vec<Vec<u8>>, ExecutionError> {
@@ -357,7 +357,7 @@ where
         }
     }
 
-    async fn view_find_key_values_by_prefix(
+    async fn find_key_values_by_prefix(
         &self,
         key_prefix: Vec<u8>,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError> {
@@ -440,7 +440,7 @@ where
             .remove(&self.application_id());
     }
 
-    async fn view_write_batch_and_unlock(&self, batch: Batch) -> Result<(), ExecutionError> {
+    async fn write_batch_and_unlock(&self, batch: Batch) -> Result<(), ExecutionError> {
         // Write the batch and make the view available again.
         match self
             .active_view_user_states_mut()

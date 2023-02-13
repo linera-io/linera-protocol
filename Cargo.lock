@@ -1552,6 +1552,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fungible"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bcs",
+ "linera-sdk",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
 name = "futures"
 version = "0.3.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2168,6 +2179,7 @@ dependencies = [
  "bcs",
  "dashmap",
  "env_logger",
+ "fungible",
  "futures",
  "linera-base",
  "linera-chain",
@@ -2180,7 +2192,6 @@ dependencies = [
  "proptest",
  "rand 0.7.3",
  "serde",
- "simple_fungible",
  "tempfile",
  "test-log",
  "test-strategy",
@@ -3662,17 +3673,6 @@ checksum = "bbf644ad016b75129f01a34a355dcb8d66a5bc803e417c7a77cc5d5ee9fa0f18"
 dependencies = [
  "console",
  "similar",
-]
-
-[[package]]
-name = "simple_fungible"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "bcs",
- "linera-sdk",
- "serde",
- "thiserror",
 ]
 
 [[package]]

@@ -1,0 +1,25 @@
+[package]
+name = "counter"
+version = "0.1.0"
+authors = ["Linera <contact@linera.io>"]
+edition = "2021"
+
+[dependencies]
+async-trait = "0.1.52"
+bcs = "0.1.3"
+futures = "0.3.17"
+linera-sdk = { path = "../../linera-sdk" }
+serde = { version = "1.0.130", features = ["derive"] }
+thiserror = "1.0.31"
+
+[dev-dependencies]
+linera-sdk = { path = "../../linera-sdk", features = ["test"] }
+webassembly-test = "0.1.0"
+
+[[bin]]
+name = "counter_contract"
+path = "src/contract.rs"
+
+[[bin]]
+name = "counter_service"
+path = "src/service.rs"

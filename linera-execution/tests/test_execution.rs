@@ -86,14 +86,14 @@ impl UserApplication for TestApplication {
         let app_id = storage.application_id();
         // Modify our state.
         let chosen_key = vec![0];
-        storage.view_lock_user_state().await?;
-        let state = storage.view_read_key_bytes(chosen_key.clone()).await?;
+        storage.lock_view_user_state().await?;
+        let state = storage.read_key_bytes(chosen_key.clone()).await?;
         let mut state = state.unwrap_or_default();
         state.extend(operation);
         let mut batch = Batch::default();
         batch.put_key_value_bytes(chosen_key, state);
         storage
-            .view_write_batch_and_unlock(batch)
+            .write_batch_and_unlock(batch)
             .await
             .expect("State is locked at the start of the operation");
         // Call ourselves after the state => ok.
@@ -121,12 +121,12 @@ impl UserApplication for TestApplication {
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         // Who we are.
         let app_id = storage.application_id();
-        storage.view_lock_user_state().await?;
+        storage.lock_view_user_state().await?;
         // Call ourselves while the state is locked => not ok.
         storage
             .try_call_application(/* authenticate */ true, app_id, &[], vec![])
             .await?;
-        storage.view_unlock_user_state().await?;
+        storage.unlock_view_user_state().await?;
         Ok(RawExecutionResult::default())
     }
 
@@ -171,10 +171,10 @@ impl UserApplication for TestApplication {
         _argument: &[u8],
     ) -> Result<Vec<u8>, ExecutionError> {
         let chosen_key = vec![0];
-        storage.view_lock_user_state().await?;
-        let state = storage.view_read_key_bytes(chosen_key).await?;
+        storage.lock_view_user_state().await?;
+        let state = storage.read_key_bytes(chosen_key).await?;
         let state = state.unwrap_or_default();
-        storage.view_unlock_user_state().await?;
+        storage.unlock_view_user_state().await?;
         Ok(state)
     }
 }

@@ -1,0 +1,20 @@
+[package]
+name = "fungible"
+version = "0.1.0"
+authors = ["Linera <contact@linera.io>"]
+edition = "2021"
+
+[dependencies]
+async-trait = "0.1.52"
+bcs = "0.1.3"
+linera-sdk = { path = "../../linera-sdk", features = ["crypto"] }
+serde = { version = "1.0.130", features = ["derive"] }
+thiserror = "1.0.31"
+
+[[bin]]
+name = "fungible_contract"
+path = "src/contract.rs"
+
+[[bin]]
+name = "fungible_service"
+path = "src/service.rs"

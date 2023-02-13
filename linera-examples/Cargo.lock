@@ -722,6 +722,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "counter2"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bcs",
+ "futures-util",
+ "linera-sdk",
+ "linera-views",
+ "thiserror",
+ "webassembly-test",
+]
+
+[[package]]
 name = "cpp_demangle"
 version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -887,6 +900,33 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4fb766fa798726286dbbb842f174001dab8abc7b627a1dd86e0b7222a95d929f"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "crowd-funding"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bcs",
+ "fungible",
+ "futures",
+ "linera-sdk",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
+name = "crowd-funding2"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bcs",
+ "fungible2",
+ "futures",
+ "linera-sdk",
+ "linera-views",
+ "serde",
+ "thiserror",
 ]
 
 [[package]]
@@ -1179,6 +1219,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a9c384f161156f5260c24a097c56119f9be8c798586aecc13afbcbe7b7e26bf8"
 dependencies = [
  "percent-encoding",
+]
+
+[[package]]
+name = "fungible"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bcs",
+ "linera-sdk",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
+name = "fungible2"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bcs",
+ "linera-sdk",
+ "linera-views",
+ "serde",
+ "thiserror",
 ]
 
 [[package]]
@@ -1852,6 +1915,18 @@ dependencies = [
  "keccak",
  "rand_core 0.5.1",
  "zeroize",
+]
+
+[[package]]
+name = "meta-counter"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bcs",
+ "linera-sdk",
+ "serde",
+ "thiserror",
+ "webassembly-test",
 ]
 
 [[package]]
@@ -2578,42 +2653,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "74233d3b3b2f6d4b006dc19dee745e73e2a6bfb6f93607cd3b02bd5b00797d7c"
 
 [[package]]
-name = "simple_crowd-funding"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "bcs",
- "futures",
- "linera-sdk",
- "serde",
- "simple_fungible",
- "thiserror",
-]
-
-[[package]]
-name = "simple_fungible"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "bcs",
- "linera-sdk",
- "serde",
- "thiserror",
-]
-
-[[package]]
-name = "simple_meta-counter"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "bcs",
- "linera-sdk",
- "serde",
- "thiserror",
- "webassembly-test",
-]
-
-[[package]]
 name = "slab"
 version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3027,45 +3066,6 @@ name = "version_check"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
-
-[[package]]
-name = "view_counter"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "bcs",
- "futures-util",
- "linera-sdk",
- "linera-views",
- "thiserror",
- "webassembly-test",
-]
-
-[[package]]
-name = "view_crowd-funding"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "bcs",
- "futures",
- "linera-sdk",
- "linera-views",
- "serde",
- "thiserror",
- "view_fungible",
-]
-
-[[package]]
-name = "view_fungible"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "bcs",
- "linera-sdk",
- "linera-views",
- "serde",
- "thiserror",
-]
 
 [[package]]
 name = "waker-fn"

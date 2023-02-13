@@ -13,64 +13,64 @@ enum log-level {
     error,
 }
 
-resource view-lock {
-    static new: func() -> view-lock
-    poll: func() -> poll-view-lock
+resource load {
+    static new: func() -> load
+    poll: func() -> poll-load
 }
 
-variant poll-view-lock {
+variant poll-load {
+    pending,
+    ready(result<list<u8>, string>),
+}
+
+resource lock {
+    static new: func() -> lock
+    poll: func() -> poll-lock
+}
+
+variant poll-lock {
     pending,
     ready(result<unit, string>),
 }
 
-resource view-unlock {
-    static new: func() -> view-unlock
-    poll: func() -> poll-view-unlock
+resource unlock {
+    static new: func() -> unlock
+    poll: func() -> poll-unlock
 }
 
-variant poll-view-unlock {
+variant poll-unlock {
     pending,
     ready(result<unit, string>),
 }
 
-resource view-read-key-bytes {
-    static new: func(key: list<u8>) -> view-read-key-bytes
-    poll: func() -> poll-view-read-key-bytes
+resource read-key-bytes {
+    static new: func(key: list<u8>) -> read-key-bytes
+    poll: func() -> poll-read-key-bytes
 }
 
-variant poll-view-read-key-bytes {
+variant poll-read-key-bytes {
     pending,
     ready(result<option<list<u8>>, string>),
 }
 
-resource view-find-keys {
-    static new: func(prefix: list<u8>) -> view-find-keys
-    poll: func() -> poll-view-find-keys
+resource find-keys {
+    static new: func(prefix: list<u8>) -> find-keys
+    poll: func() -> poll-find-keys
 }
 
-variant poll-view-find-keys {
+variant poll-find-keys {
     pending,
     ready(result<list<list<u8>>, string>),
 }
 
-resource view-find-key-values {
-    static new: func(prefix: list<u8>) -> view-find-key-values
-    poll: func() -> poll-view-find-key-values
+resource find-key-values {
+    static new: func(prefix: list<u8>) -> find-key-values
+    poll: func() -> poll-find-key-values
 }
 
-variant poll-view-find-key-values {
+variant poll-find-key-values {
     pending,
     ready(result<list<tuple<list<u8>,list<u8>>>, string>),
-}
-
-resource simple-load {
-    static new: func() -> simple-load
-    poll: func() -> poll-simple-load
-}
-
-variant poll-simple-load {
-    pending,
-    ready(result<list<u8>, string>),
 }
 
 resource try-query-application {
@@ -79,7 +79,7 @@ resource try-query-application {
         argument: list<u8>,
     ) -> try-query-application
 
-    poll: func() -> poll-simple-load
+    poll: func() -> poll-load
 }
 
 record application-id {

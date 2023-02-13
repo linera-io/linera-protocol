@@ -354,13 +354,13 @@ impl<S: Copy> SystemApi<S> {
 }
 
 impl writable_system::WritableSystem for SystemApi<&'static dyn WritableStorage> {
-    type SimpleLoad = HostFuture<'static, Result<Vec<u8>, ExecutionError>>;
-    type SimpleLoadAndLock = HostFuture<'static, Result<Vec<u8>, ExecutionError>>;
-    type ViewLock = HostFuture<'static, Result<(), ExecutionError>>;
-    type ViewReadKeyBytes = HostFuture<'static, Result<Option<Vec<u8>>, ExecutionError>>;
-    type ViewFindKeys = HostFuture<'static, Result<Vec<Vec<u8>>, ExecutionError>>;
-    type ViewFindKeyValues = HostFuture<'static, Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError>>;
-    type ViewWriteBatch = HostFuture<'static, Result<(), ExecutionError>>;
+    type Load = HostFuture<'static, Result<Vec<u8>, ExecutionError>>;
+    type LoadAndLock = HostFuture<'static, Result<Vec<u8>, ExecutionError>>;
+    type Lock = HostFuture<'static, Result<(), ExecutionError>>;
+    type ReadKeyBytes = HostFuture<'static, Result<Option<Vec<u8>>, ExecutionError>>;
+    type FindKeys = HostFuture<'static, Result<Vec<Vec<u8>>, ExecutionError>>;
+    type FindKeyValues = HostFuture<'static, Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError>>;
+    type WriteBatch = HostFuture<'static, Result<(), ExecutionError>>;
     type TryCallApplication = HostFuture<'static, Result<CallResult, ExecutionError>>;
     type TryCallSession = HostFuture<'static, Result<CallResult, ExecutionError>>;
 
@@ -380,137 +380,125 @@ impl writable_system::WritableSystem for SystemApi<&'static dyn WritableStorage>
         self.storage().read_system_timestamp().micros()
     }
 
-    fn simple_load_new(&mut self) -> Self::SimpleLoad {
+    fn load_new(&mut self) -> Self::Load {
         self.future_queue.add(self.storage().try_read_my_state())
     }
 
-    fn simple_load_poll(&mut self, future: &Self::SimpleLoad) -> writable_system::PollSimpleLoad {
-        use writable_system::PollSimpleLoad;
+    fn load_poll(&mut self, future: &Self::Load) -> writable_system::PollLoad {
+        use writable_system::PollLoad;
         match future.poll(&mut self.context) {
-            Poll::Pending => PollSimpleLoad::Pending,
-            Poll::Ready(Ok(bytes)) => PollSimpleLoad::Ready(Ok(bytes)),
-            Poll::Ready(Err(error)) => PollSimpleLoad::Ready(Err(error.to_string())),
+            Poll::Pending => PollLoad::Pending,
+            Poll::Ready(Ok(bytes)) => PollLoad::Ready(Ok(bytes)),
+            Poll::Ready(Err(error)) => PollLoad::Ready(Err(error.to_string())),
         }
     }
 
-    fn simple_load_and_lock_new(&mut self) -> Self::SimpleLoadAndLock {
+    fn load_and_lock_new(&mut self) -> Self::LoadAndLock {
         self.future_queue
             .add(self.storage().try_read_and_lock_my_state())
     }
 
-    fn simple_load_and_lock_poll(
-        &mut self,
-        future: &Self::SimpleLoadAndLock,
-    ) -> writable_system::PollSimpleLoad {
-        use writable_system::PollSimpleLoad;
+    fn load_and_lock_poll(&mut self, future: &Self::LoadAndLock) -> writable_system::PollLoad {
+        use writable_system::PollLoad;
         match future.poll(&mut self.context) {
-            Poll::Pending => PollSimpleLoad::Pending,
-            Poll::Ready(Ok(bytes)) => PollSimpleLoad::Ready(Ok(bytes)),
-            Poll::Ready(Err(error)) => PollSimpleLoad::Ready(Err(error.to_string())),
+            Poll::Pending => PollLoad::Pending,
+            Poll::Ready(Ok(bytes)) => PollLoad::Ready(Ok(bytes)),
+            Poll::Ready(Err(error)) => PollLoad::Ready(Err(error.to_string())),
         }
     }
 
-    fn simple_store_and_unlock(&mut self, state: &[u8]) -> bool {
+    fn store_and_unlock(&mut self, state: &[u8]) -> bool {
         self.storage()
             .save_and_unlock_my_state(state.to_owned())
             .is_ok()
     }
 
-    fn view_lock_new(&mut self) -> Self::ViewLock {
-        HostFuture::new(self.storage().view_lock_user_state())
+    fn lock_new(&mut self) -> Self::Lock {
+        HostFuture::new(self.storage().lock_view_user_state())
     }
 
-    fn view_lock_poll(&mut self, future: &Self::ViewLock) -> writable_system::PollViewLock {
-        use writable_system::PollViewLock;
+    fn lock_poll(&mut self, future: &Self::Lock) -> writable_system::PollLock {
+        use writable_system::PollLock;
         match future.poll(&mut self.context) {
-            Poll::Pending => PollViewLock::Pending,
-            Poll::Ready(Ok(())) => PollViewLock::Ready(Ok(())),
-            Poll::Ready(Err(error)) => PollViewLock::Ready(Err(error.to_string())),
+            Poll::Pending => PollLock::Pending,
+            Poll::Ready(Ok(())) => PollLock::Ready(Ok(())),
+            Poll::Ready(Err(error)) => PollLock::Ready(Err(error.to_string())),
         }
     }
 
-    fn view_read_key_bytes_new(&mut self, key: &[u8]) -> Self::ViewReadKeyBytes {
-        HostFuture::new(self.storage().view_read_key_bytes(key.to_owned()))
+    fn read_key_bytes_new(&mut self, key: &[u8]) -> Self::ReadKeyBytes {
+        HostFuture::new(self.storage().read_key_bytes(key.to_owned()))
     }
 
-    fn view_read_key_bytes_poll(
+    fn read_key_bytes_poll(
         &mut self,
-        future: &Self::ViewReadKeyBytes,
-    ) -> writable_system::PollViewReadKeyBytes {
-        use writable_system::PollViewReadKeyBytes;
+        future: &Self::ReadKeyBytes,
+    ) -> writable_system::PollReadKeyBytes {
+        use writable_system::PollReadKeyBytes;
         match future.poll(&mut self.context) {
-            Poll::Pending => PollViewReadKeyBytes::Pending,
-            Poll::Ready(Ok(opt_list)) => PollViewReadKeyBytes::Ready(Ok(opt_list)),
-            Poll::Ready(Err(error)) => PollViewReadKeyBytes::Ready(Err(error.to_string())),
+            Poll::Pending => PollReadKeyBytes::Pending,
+            Poll::Ready(Ok(opt_list)) => PollReadKeyBytes::Ready(Ok(opt_list)),
+            Poll::Ready(Err(error)) => PollReadKeyBytes::Ready(Err(error.to_string())),
         }
     }
 
-    fn view_find_keys_new(&mut self, key_prefix: &[u8]) -> Self::ViewFindKeys {
+    fn find_keys_new(&mut self, key_prefix: &[u8]) -> Self::FindKeys {
+        HostFuture::new(self.storage().find_keys_by_prefix(key_prefix.to_owned()))
+    }
+
+    fn find_keys_poll(&mut self, future: &Self::FindKeys) -> writable_system::PollFindKeys {
+        use writable_system::PollFindKeys;
+        match future.poll(&mut self.context) {
+            Poll::Pending => PollFindKeys::Pending,
+            Poll::Ready(Ok(keys)) => PollFindKeys::Ready(Ok(keys)),
+            Poll::Ready(Err(error)) => PollFindKeys::Ready(Err(error.to_string())),
+        }
+    }
+
+    fn find_key_values_new(&mut self, key_prefix: &[u8]) -> Self::FindKeyValues {
         HostFuture::new(
             self.storage()
-                .view_find_keys_by_prefix(key_prefix.to_owned()),
+                .find_key_values_by_prefix(key_prefix.to_owned()),
         )
     }
 
-    fn view_find_keys_poll(
+    fn find_key_values_poll(
         &mut self,
-        future: &Self::ViewFindKeys,
-    ) -> writable_system::PollViewFindKeys {
-        use writable_system::PollViewFindKeys;
+        future: &Self::FindKeyValues,
+    ) -> writable_system::PollFindKeyValues {
+        use writable_system::PollFindKeyValues;
         match future.poll(&mut self.context) {
-            Poll::Pending => PollViewFindKeys::Pending,
-            Poll::Ready(Ok(keys)) => PollViewFindKeys::Ready(Ok(keys)),
-            Poll::Ready(Err(error)) => PollViewFindKeys::Ready(Err(error.to_string())),
+            Poll::Pending => PollFindKeyValues::Pending,
+            Poll::Ready(Ok(key_values)) => PollFindKeyValues::Ready(Ok(key_values)),
+            Poll::Ready(Err(error)) => PollFindKeyValues::Ready(Err(error.to_string())),
         }
     }
 
-    fn view_find_key_values_new(&mut self, key_prefix: &[u8]) -> Self::ViewFindKeyValues {
-        HostFuture::new(
-            self.storage()
-                .view_find_key_values_by_prefix(key_prefix.to_owned()),
-        )
-    }
-
-    fn view_find_key_values_poll(
+    fn write_batch_new(
         &mut self,
-        future: &Self::ViewFindKeyValues,
-    ) -> writable_system::PollViewFindKeyValues {
-        use writable_system::PollViewFindKeyValues;
-        match future.poll(&mut self.context) {
-            Poll::Pending => PollViewFindKeyValues::Pending,
-            Poll::Ready(Ok(key_values)) => PollViewFindKeyValues::Ready(Ok(key_values)),
-            Poll::Ready(Err(error)) => PollViewFindKeyValues::Ready(Err(error.to_string())),
-        }
-    }
-
-    fn view_write_batch_new(
-        &mut self,
-        list_oper: Vec<writable_system::ViewWriteOperation>,
-    ) -> Self::ViewWriteBatch {
+        list_oper: Vec<writable_system::WriteOperation>,
+    ) -> Self::WriteBatch {
         let mut batch = Batch::default();
         for x in list_oper {
             match x {
-                writable_system::ViewWriteOperation::Delete(key) => batch.delete_key(key.to_vec()),
-                writable_system::ViewWriteOperation::Deleteprefix(key_prefix) => {
+                writable_system::WriteOperation::Delete(key) => batch.delete_key(key.to_vec()),
+                writable_system::WriteOperation::Deleteprefix(key_prefix) => {
                     batch.delete_key_prefix(key_prefix.to_vec())
                 }
-                writable_system::ViewWriteOperation::Put(key_value) => {
+                writable_system::WriteOperation::Put(key_value) => {
                     batch.put_key_value_bytes(key_value.0.to_vec(), key_value.1.to_vec())
                 }
             }
         }
-        HostFuture::new(self.storage().view_write_batch_and_unlock(batch))
+        HostFuture::new(self.storage().write_batch_and_unlock(batch))
     }
 
-    fn view_write_batch_poll(
-        &mut self,
-        future: &Self::ViewWriteBatch,
-    ) -> writable_system::PollViewWriteBatch {
-        use writable_system::PollViewWriteBatch;
+    fn write_batch_poll(&mut self, future: &Self::WriteBatch) -> writable_system::PollWriteBatch {
+        use writable_system::PollWriteBatch;
         match future.poll(&mut self.context) {
-            Poll::Pending => PollViewWriteBatch::Pending,
-            Poll::Ready(Ok(())) => PollViewWriteBatch::Ready(Ok(())),
-            Poll::Ready(Err(error)) => PollViewWriteBatch::Ready(Err(error.to_string())),
+            Poll::Pending => PollWriteBatch::Pending,
+            Poll::Ready(Ok(())) => PollWriteBatch::Ready(Ok(())),
+            Poll::Ready(Err(error)) => PollWriteBatch::Ready(Err(error.to_string())),
         }
     }
 
@@ -593,12 +581,12 @@ impl writable_system::WritableSystem for SystemApi<&'static dyn WritableStorage>
 }
 
 impl queryable_system::QueryableSystem for SystemApi<&'static dyn QueryableStorage> {
-    type SimpleLoad = HostFuture<'static, Result<Vec<u8>, ExecutionError>>;
-    type ViewLock = HostFuture<'static, Result<(), ExecutionError>>;
-    type ViewUnlock = HostFuture<'static, Result<(), ExecutionError>>;
-    type ViewReadKeyBytes = HostFuture<'static, Result<Option<Vec<u8>>, ExecutionError>>;
-    type ViewFindKeys = HostFuture<'static, Result<Vec<Vec<u8>>, ExecutionError>>;
-    type ViewFindKeyValues = HostFuture<'static, Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError>>;
+    type Load = HostFuture<'static, Result<Vec<u8>, ExecutionError>>;
+    type Lock = HostFuture<'static, Result<(), ExecutionError>>;
+    type Unlock = HostFuture<'static, Result<(), ExecutionError>>;
+    type ReadKeyBytes = HostFuture<'static, Result<Option<Vec<u8>>, ExecutionError>>;
+    type FindKeys = HostFuture<'static, Result<Vec<Vec<u8>>, ExecutionError>>;
+    type FindKeyValues = HostFuture<'static, Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError>>;
     type TryQueryApplication = HostFuture<'static, Result<Vec<u8>, ExecutionError>>;
 
     fn chain_id(&mut self) -> queryable_system::ChainId {
@@ -617,96 +605,90 @@ impl queryable_system::QueryableSystem for SystemApi<&'static dyn QueryableStora
         self.storage().read_system_timestamp().micros()
     }
 
-    fn view_lock_new(&mut self) -> Self::ViewLock {
-        HostFuture::new(self.storage().view_lock_user_state())
-    }
-
-    fn simple_load_new(&mut self) -> Self::SimpleLoad {
+    fn load_new(&mut self) -> Self::Load {
         self.future_queue.add(self.storage().try_read_my_state())
     }
 
-    fn simple_load_poll(&mut self, future: &Self::SimpleLoad) -> queryable_system::PollSimpleLoad {
-        use queryable_system::PollSimpleLoad;
+    fn load_poll(&mut self, future: &Self::Load) -> queryable_system::PollLoad {
+        use queryable_system::PollLoad;
         match future.poll(&mut self.context) {
-            Poll::Pending => PollSimpleLoad::Pending,
-            Poll::Ready(Ok(bytes)) => PollSimpleLoad::Ready(Ok(bytes)),
-            Poll::Ready(Err(error)) => PollSimpleLoad::Ready(Err(error.to_string())),
+            Poll::Pending => PollLoad::Pending,
+            Poll::Ready(Ok(bytes)) => PollLoad::Ready(Ok(bytes)),
+            Poll::Ready(Err(error)) => PollLoad::Ready(Err(error.to_string())),
         }
     }
 
-    fn view_lock_poll(&mut self, future: &Self::ViewLock) -> queryable_system::PollViewLock {
-        use queryable_system::PollViewLock;
+    fn lock_new(&mut self) -> Self::Lock {
+        HostFuture::new(self.storage().lock_view_user_state())
+    }
+
+    fn lock_poll(&mut self, future: &Self::Lock) -> queryable_system::PollLock {
+        use queryable_system::PollLock;
         match future.poll(&mut self.context) {
-            Poll::Pending => PollViewLock::Pending,
-            Poll::Ready(Ok(())) => PollViewLock::Ready(Ok(())),
-            Poll::Ready(Err(error)) => PollViewLock::Ready(Err(error.to_string())),
+            Poll::Pending => PollLock::Pending,
+            Poll::Ready(Ok(())) => PollLock::Ready(Ok(())),
+            Poll::Ready(Err(error)) => PollLock::Ready(Err(error.to_string())),
         }
     }
 
-    fn view_unlock_new(&mut self) -> Self::ViewUnlock {
-        HostFuture::new(self.storage().view_unlock_user_state())
+    fn unlock_new(&mut self) -> Self::Unlock {
+        HostFuture::new(self.storage().unlock_view_user_state())
     }
 
-    fn view_unlock_poll(&mut self, future: &Self::ViewUnlock) -> queryable_system::PollViewUnlock {
-        use queryable_system::PollViewUnlock;
+    fn unlock_poll(&mut self, future: &Self::Lock) -> queryable_system::PollUnlock {
+        use queryable_system::PollUnlock;
         match future.poll(&mut self.context) {
-            Poll::Pending => PollViewUnlock::Pending,
-            Poll::Ready(Ok(())) => PollViewUnlock::Ready(Ok(())),
-            Poll::Ready(Err(error)) => PollViewUnlock::Ready(Err(error.to_string())),
+            Poll::Pending => PollUnlock::Pending,
+            Poll::Ready(Ok(())) => PollUnlock::Ready(Ok(())),
+            Poll::Ready(Err(error)) => PollUnlock::Ready(Err(error.to_string())),
         }
     }
 
-    fn view_read_key_bytes_new(&mut self, key: &[u8]) -> Self::ViewReadKeyBytes {
-        HostFuture::new(self.storage().view_read_key_bytes(key.to_owned()))
+    fn read_key_bytes_new(&mut self, key: &[u8]) -> Self::ReadKeyBytes {
+        HostFuture::new(self.storage().read_key_bytes(key.to_owned()))
     }
 
-    fn view_read_key_bytes_poll(
+    fn read_key_bytes_poll(
         &mut self,
-        future: &Self::ViewReadKeyBytes,
-    ) -> queryable_system::PollViewReadKeyBytes {
-        use queryable_system::PollViewReadKeyBytes;
+        future: &Self::ReadKeyBytes,
+    ) -> queryable_system::PollReadKeyBytes {
+        use queryable_system::PollReadKeyBytes;
         match future.poll(&mut self.context) {
-            Poll::Pending => PollViewReadKeyBytes::Pending,
-            Poll::Ready(Ok(opt_list)) => PollViewReadKeyBytes::Ready(Ok(opt_list)),
-            Poll::Ready(Err(error)) => PollViewReadKeyBytes::Ready(Err(error.to_string())),
+            Poll::Pending => PollReadKeyBytes::Pending,
+            Poll::Ready(Ok(opt_list)) => PollReadKeyBytes::Ready(Ok(opt_list)),
+            Poll::Ready(Err(error)) => PollReadKeyBytes::Ready(Err(error.to_string())),
         }
     }
 
-    fn view_find_keys_new(&mut self, key_prefix: &[u8]) -> Self::ViewFindKeys {
+    fn find_keys_new(&mut self, key_prefix: &[u8]) -> Self::FindKeys {
+        HostFuture::new(self.storage().find_keys_by_prefix(key_prefix.to_owned()))
+    }
+
+    fn find_keys_poll(&mut self, future: &Self::FindKeys) -> queryable_system::PollFindKeys {
+        use queryable_system::PollFindKeys;
+        match future.poll(&mut self.context) {
+            Poll::Pending => PollFindKeys::Pending,
+            Poll::Ready(Ok(keys)) => PollFindKeys::Ready(Ok(keys)),
+            Poll::Ready(Err(error)) => PollFindKeys::Ready(Err(error.to_string())),
+        }
+    }
+
+    fn find_key_values_new(&mut self, key_prefix: &[u8]) -> Self::FindKeyValues {
         HostFuture::new(
             self.storage()
-                .view_find_keys_by_prefix(key_prefix.to_owned()),
+                .find_key_values_by_prefix(key_prefix.to_owned()),
         )
     }
 
-    fn view_find_keys_poll(
+    fn find_key_values_poll(
         &mut self,
-        future: &Self::ViewFindKeys,
-    ) -> queryable_system::PollViewFindKeys {
-        use queryable_system::PollViewFindKeys;
+        future: &Self::FindKeyValues,
+    ) -> queryable_system::PollFindKeyValues {
+        use queryable_system::PollFindKeyValues;
         match future.poll(&mut self.context) {
-            Poll::Pending => PollViewFindKeys::Pending,
-            Poll::Ready(Ok(keys)) => PollViewFindKeys::Ready(Ok(keys)),
-            Poll::Ready(Err(error)) => PollViewFindKeys::Ready(Err(error.to_string())),
-        }
-    }
-
-    fn view_find_key_values_new(&mut self, key_prefix: &[u8]) -> Self::ViewFindKeyValues {
-        HostFuture::new(
-            self.storage()
-                .view_find_key_values_by_prefix(key_prefix.to_owned()),
-        )
-    }
-
-    fn view_find_key_values_poll(
-        &mut self,
-        future: &Self::ViewFindKeyValues,
-    ) -> queryable_system::PollViewFindKeyValues {
-        use queryable_system::PollViewFindKeyValues;
-        match future.poll(&mut self.context) {
-            Poll::Pending => PollViewFindKeyValues::Pending,
-            Poll::Ready(Ok(key_values)) => PollViewFindKeyValues::Ready(Ok(key_values)),
-            Poll::Ready(Err(error)) => PollViewFindKeyValues::Ready(Err(error.to_string())),
+            Poll::Pending => PollFindKeyValues::Pending,
+            Poll::Ready(Ok(key_values)) => PollFindKeyValues::Ready(Ok(key_values)),
+            Poll::Ready(Err(error)) => PollFindKeyValues::Ready(Err(error.to_string())),
         }
     }
 
@@ -728,12 +710,12 @@ impl queryable_system::QueryableSystem for SystemApi<&'static dyn QueryableStora
     fn try_query_application_poll(
         &mut self,
         future: &Self::TryQueryApplication,
-    ) -> queryable_system::PollSimpleLoad {
-        use queryable_system::PollSimpleLoad;
+    ) -> queryable_system::PollLoad {
+        use queryable_system::PollLoad;
         match future.poll(&mut self.context) {
-            Poll::Pending => PollSimpleLoad::Pending,
-            Poll::Ready(Ok(result)) => PollSimpleLoad::Ready(Ok(result)),
-            Poll::Ready(Err(error)) => PollSimpleLoad::Ready(Err(error.to_string())),
+            Poll::Pending => PollLoad::Pending,
+            Poll::Ready(Ok(result)) => PollLoad::Ready(Ok(result)),
+            Poll::Ready(Err(error)) => PollLoad::Ready(Err(error.to_string())),
         }
     }
 

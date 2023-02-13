@@ -12,12 +12,34 @@ use linera_views::{
 use serde::de::DeserializeOwned;
 use std::{fmt, future::Future, task::Poll};
 
-#[derive(Default, Clone)]
-pub struct HostServiceWasmClient;
+/// Load the contract state, without locking it for writes.
+pub async fn load<State>() -> State
+where
+    State: Default + DeserializeOwned,
+{
+    let future = system::Load::new();
+    load_using(future::poll_fn(|_context| future.poll().into())).await
+}
 
-impl HostServiceWasmClient {
+/// Helper function to load the contract state or create a new one if it doesn't exist.
+async fn load_using<State>(future: impl Future<Output = Result<Vec<u8>, String>>) -> State
+where
+    State: Default + DeserializeOwned,
+{
+    let bytes = future.await.expect("Failed to load contract state");
+    if bytes.is_empty() {
+        State::default()
+    } else {
+        bcs::from_bytes(&bytes).expect("Invalid contract state")
+    }
+}
+
+#[derive(Default, Clone)]
+pub struct ReadableWasmClient;
+
+impl ReadableWasmClient {
     async fn find_keys_by_prefix_load(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, ViewError> {
-        let future = system::ViewFindKeys::new(key_prefix);
+        let future = system::FindKeys::new(key_prefix);
         future::poll_fn(|_context| future.poll().into()).await
     }
 
@@ -25,19 +47,19 @@ impl HostServiceWasmClient {
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ViewError> {
-        let future = system::ViewFindKeyValues::new(key_prefix);
+        let future = system::FindKeyValues::new(key_prefix);
         future::poll_fn(|_context| future.poll().into()).await
     }
 }
 
 #[async_trait]
-impl KeyValueOperations for HostServiceWasmClient {
+impl KeyValueOperations for ReadableWasmClient {
     type Error = ViewError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
-        let future = system::ViewReadKeyBytes::new(key);
+        let future = system::ReadKeyBytes::new(key);
         future::poll_fn(|_context| future.poll().into()).await
     }
 
@@ -59,16 +81,16 @@ impl KeyValueOperations for HostServiceWasmClient {
     }
 }
 
-pub type HostServiceWasmContext = ContextFromDb<(), HostServiceWasmClient>;
+pub type ReadableWasmContext = ContextFromDb<(), ReadableWasmClient>;
 
-pub trait DefaultServiceContext {
+pub trait ReadableWasmContextExt {
     fn new() -> Self;
 }
 
-impl DefaultServiceContext for HostServiceWasmContext {
+impl ReadableWasmContextExt for ReadableWasmContext {
     fn new() -> Self {
         Self {
-            db: HostServiceWasmClient::default(),
+            db: ReadableWasmClient::default(),
             base_key: Vec::new(),
             extra: (),
         }
@@ -76,45 +98,23 @@ impl DefaultServiceContext for HostServiceWasmContext {
 }
 
 /// Load the service state, without locking it for writes.
-pub async fn view_lock<State: View<HostServiceWasmContext>>() -> State {
-    let future = system::ViewLock::new();
+pub async fn lock_and_load_view<State: View<ReadableWasmContext>>() -> State {
+    let future = system::Lock::new();
     future::poll_fn(|_context| -> Poll<Result<(), ViewError>> { future.poll().into() })
         .await
         .expect("Failed to lock contract state");
-    view_load_using::<State>().await
+    load_view_using::<State>().await
 }
 
 /// Load the service state, without locking it for writes.
-pub async fn view_unlock<State: View<HostServiceWasmContext>>(_state: State) {
-    let future = system::ViewUnlock::new();
+pub async fn unlock_view<State: View<ReadableWasmContext>>(_state: State) {
+    let future = system::Unlock::new();
     future::poll_fn(|_context| future.poll().into()).await;
 }
 
-/// Load the contract state, without locking it for writes.
-pub async fn simple_load<State>() -> State
-where
-    State: Default + DeserializeOwned,
-{
-    let future = system::SimpleLoad::new();
-    simple_load_using(future::poll_fn(|_context| future.poll().into())).await
-}
-
-/// Helper function to load the contract state or create a new one if it doesn't exist.
-async fn simple_load_using<State>(future: impl Future<Output = Result<Vec<u8>, String>>) -> State
-where
-    State: Default + DeserializeOwned,
-{
-    let bytes = future.await.expect("Failed to load contract state");
-    if bytes.is_empty() {
-        State::default()
-    } else {
-        bcs::from_bytes(&bytes).expect("Invalid contract state")
-    }
-}
-
 /// Helper function to load the service state or create a new one if it doesn't exist.
-pub async fn view_load_using<State: View<HostServiceWasmContext>>() -> State {
-    let context = HostServiceWasmContext::new();
+pub async fn load_view_using<State: View<ReadableWasmContext>>() -> State {
+    let context = ReadableWasmContext::new();
     State::load(context)
         .await
         .expect("Failed to load contract state")
