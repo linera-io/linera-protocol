@@ -48,32 +48,40 @@ pub trait View<C>: Sized {
 }
 
 /// Main error type for the crate.
-#[allow(missing_docs)]
 #[derive(Error, Debug)]
 pub enum ViewError {
-    #[error("the entry with key {0} was removed thus cannot be loaded any more")]
-    RemovedEntry(String),
-
+    /// An error occurred while doing BCS serialization.
     #[error("failed to serialize value to calculate its hash")]
     Serialization(#[from] bcs::Error),
 
-    #[error("trying to access a collection view while some entries are still being accessed")]
+    /// We failed to acquire an entry in a CollectionView or a ReentrantCollectionView
+    #[error("trying to access a collection view or reentrant collection view while some entries are still being accessed")]
     CannotAcquireCollectionEntry,
 
+    /// Input output error
     #[error("IO error")]
     Io(#[from] std::io::Error),
 
+    /// An error happened while trying to lock
     #[cfg(not(target_arch = "wasm32"))]
     #[error("Failed to lock collection entry: {0}")]
     TryLockError(#[from] tokio::sync::TryLockError),
 
+    /// Tokio errors can happen while joining
     #[cfg(not(target_arch = "wasm32"))]
     #[error("Panic in sub-task: {0}")]
     TokioJoinError(#[from] tokio::task::JoinError),
 
+    /// Errors within the context can occur and are presented as ViewError
     #[error("Storage operation error in {backend}: {error}")]
-    ContextError { backend: String, error: String },
+    ContextError {
+        /// backend can be e.g. RocksDb / AmazonDb / Memory / etc.
+        backend: String,
+        /// error is the specific problem that occurred within that context
+        error: String,
+    },
 
+    /// Errors can happen within the Wasm guest and have to be transmitted within the Host/Guest where only elementary types can pass.
     #[error("Following error occurs in wasm code: {0}")]
     WasmHostGuestError(String),
 

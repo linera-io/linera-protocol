@@ -1,8 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![allow(missing_docs)]
-
 use crate::common::{
     WriteOperation,
     WriteOperation::{Delete, Put},
@@ -150,6 +148,7 @@ pub async fn list_tables(client: &aws_sdk_dynamodb::Client) -> Result<Vec<String
         .expect("List of tables was not returned"))
 }
 
+/// Shuffle the values entries randomly
 pub fn random_shuffle<R: RngCore, T: Clone>(rng: &mut R, values: &mut Vec<T>) {
     let n = values.len();
     for _ in 0..4 * n {
@@ -164,6 +163,7 @@ pub fn random_shuffle<R: RngCore, T: Clone>(rng: &mut R, values: &mut Vec<T>) {
     }
 }
 
+/// Take a random number generator, a key_prefix and extend it by n random bytes.
 pub fn get_random_byte_vector<R: RngCore>(rng: &mut R, key_prefix: &[u8], n: usize) -> Vec<u8> {
     let mut v = key_prefix.to_vec();
     for _ in 0..n {
@@ -173,6 +173,7 @@ pub fn get_random_byte_vector<R: RngCore>(rng: &mut R, key_prefix: &[u8], n: usi
     v
 }
 
+/// Build a random k element subset of n
 pub fn get_random_kset<R: RngCore>(rng: &mut R, n: usize, k: usize) -> Vec<usize> {
     let mut values = Vec::new();
     for u in 0..n {
@@ -182,6 +183,10 @@ pub fn get_random_kset<R: RngCore>(rng: &mut R, n: usize, k: usize) -> Vec<usize
     values[..k].to_vec()
 }
 
+/// Take a random number generator, a key_prefix and generate
+/// pairs (key,value) with key obtained by appending 8 bytes at random to key_prefix
+/// and value obtained by appending 8 bytes to the trivial vector.
+/// We return n such (key,value) pairs which are all distinct
 pub fn get_random_key_value_vec_prefix<R: RngCore>(
     rng: &mut R,
     key_prefix: Vec<u8>,
@@ -203,6 +208,8 @@ pub fn get_random_key_value_vec_prefix<R: RngCore>(
     }
 }
 
+/// Take a random number generator rng, a number n and return n random (key,value)
+/// which are all distinct with key and value are of length 8.
 pub fn get_random_key_value_vec<R: RngCore>(rng: &mut R, n: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
     get_random_key_value_vec_prefix(rng, Vec::new(), n)
 }

@@ -141,14 +141,16 @@ impl<E: Clone + Send + Sync> RocksdbContext<E> {
 
 /// The error type for [`RocksdbContext`]
 #[derive(Error, Debug)]
-#[allow(missing_docs)]
 pub enum RocksdbContextError {
+    /// Tokio join error in Rocksdb
     #[error("tokio join error: {0}")]
     TokioJoinError(#[from] tokio::task::JoinError),
 
+    /// Rocksdb error
     #[error("Rocksdb error: {0}")]
     Rocksdb(#[from] rocksdb::Error),
 
+    /// BCS serialization error
     #[error("BCS error: {0}")]
     Bcs(#[from] bcs::Error),
 }
