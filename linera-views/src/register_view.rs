@@ -82,7 +82,7 @@ where
     }
 
     fn clear(&mut self) {
-        self.update = Some(Box::new(T::default()));
+        self.update = Some(Box::default());
         *self.hash.get_mut() = None;
     }
 }
