@@ -1,5 +1,6 @@
 chain-id: func() -> chain-id
 application-id: func() -> application-id
+application-parameters: func() -> list<u8>
 read-system-balance: func() -> system-balance
 read-system-timestamp: func() -> timestamp
 

@@ -368,6 +368,10 @@ impl<'storage> WritableSystem for SystemApi<&'storage dyn WritableStorage> {
         self.storage.application_id().into()
     }
 
+    fn application_parameters(&mut self) -> Vec<u8> {
+        self.storage.application_parameters()
+    }
+
     fn read_system_balance(&mut self) -> writable_system::SystemBalance {
         self.storage.read_system_balance().into()
     }
@@ -591,6 +595,10 @@ impl<'storage> QueryableSystem for SystemApi<&'storage dyn QueryableStorage> {
 
     fn application_id(&mut self) -> queryable_system::ApplicationId {
         self.storage.application_id().into()
+    }
+
+    fn application_parameters(&mut self) -> Vec<u8> {
+        self.storage.application_parameters()
     }
 
     fn read_system_balance(&mut self) -> queryable_system::SystemBalance {
