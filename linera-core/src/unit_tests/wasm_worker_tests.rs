@@ -109,7 +109,7 @@ where
         contract: Bytecode::load_from_file(contract_path).await?,
         service: Bytecode::load_from_file(service_path).await?,
     };
-    let publish_effect = SystemEffect::BytecodePublished;
+    let publish_effect = SystemEffect::BytecodePublished { operation_index: 0 };
     let publish_block = make_block(
         Epoch::from(0),
         publisher_chain.into(),

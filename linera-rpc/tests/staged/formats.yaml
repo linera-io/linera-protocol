@@ -565,7 +565,9 @@ SystemEffect:
           - channel_id:
               TYPENAME: ChannelId
     5:
-      BytecodePublished: UNIT
+      BytecodePublished:
+        STRUCT:
+          - operation_index: U64
     6:
       BytecodeLocations:
         STRUCT:
