@@ -610,6 +610,16 @@ pub enum WasmRuntime {
     Wasmtime,
 }
 
+impl WasmRuntime {
+    /// Returns all available WebAssembly runtimes.
+    pub const ALL: &[WasmRuntime] = &[
+        #[cfg(feature = "wasmer")]
+        WasmRuntime::Wasmer,
+        #[cfg(feature = "wasmtime")]
+        WasmRuntime::Wasmtime,
+    ];
+}
+
 impl FromStr for WasmRuntime {
     type Err = InvalidWasmRuntime;
 
