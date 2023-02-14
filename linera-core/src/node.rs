@@ -367,31 +367,63 @@ where
         Ok((effects, info))
     }
 
-    async fn try_process_certificates(
+    async fn try_process_certificates<A>(
         &mut self,
+        name: ValidatorName,
+        client: &mut A,
         chain_id: ChainId,
         certificates: Vec<Certificate>,
-    ) -> Option<ChainInfo> {
+    ) -> Option<ChainInfo>
+    where
+        A: ValidatorNode + Send + Sync + 'static + Clone,
+    {
         let mut info = None;
         for certificate in certificates {
             if let Value::ConfirmedBlock { block, .. } = &certificate.value {
                 if block.chain_id == chain_id {
-                    match self.handle_certificate(certificate.clone()).await {
+                    let error = match self.handle_certificate(certificate.clone()).await {
                         Ok(response) => {
                             info = Some(response.info);
                             // Continue with the next certificate.
                             continue;
                         }
-                        Err(e) => {
-                            // The certificate is not as expected. Give up.
-                            log::warn!(
-                                "Failed to process network certificate {}: {}",
-                                certificate.hash,
-                                e
-                            );
-                            return info;
+                        Err(NodeError::ApplicationBytecodeNotFound {
+                            bytecode_location, ..
+                        }) => {
+                            let Some(blob) = self.try_download_blob_from(name, client, bytecode_location).await else {
+                                // The certificate is not as expected. Give up.
+                                log::warn!(
+                                    "Failed to process network blob",
+                                );
+                                return info;
+                            };
+                            // TODO(#443): we should store values/blobs separately to avoid overwriting
+                            // certificates without checking quorums (which requires the history of the
+                            // chain due to reconfigurations).
+                            self.storage_client()
+                                .await
+                                .write_certificate(blob)
+                                .await
+                                .unwrap();
+                            // TODO(#325): pass the blob in the next call instead of writing it directly.
+                            match self.handle_certificate(certificate.clone()).await {
+                                Ok(response) => {
+                                    info = Some(response.info);
+                                    // Continue with the next certificate.
+                                    continue;
+                                }
+                                Err(e) => e,
+                            }
                         }
-                    }
+                        Err(e) => e,
+                    };
+                    // The certificate is not as expected. Give up.
+                    log::warn!(
+                        "Failed to process network certificate {}: {}",
+                        certificate.hash,
+                        error
+                    );
+                    return info;
                 }
             }
             // The certificate is not as expected. Give up.
@@ -472,6 +504,36 @@ where
         }
     }
 
+    async fn try_download_blob_from<A>(
+        &mut self,
+        name: ValidatorName,
+        client: &mut A,
+        location: BytecodeLocation,
+    ) -> Option<Certificate>
+    where
+        A: ValidatorNode + Send + Sync + 'static + Clone,
+    {
+        let range = BlockHeightRange {
+            start: location.height,
+            limit: Some(1),
+        };
+        let query = ChainInfoQuery::new(location.chain_id).with_sent_certificates_in_range(range);
+        if let Ok(response) = client.handle_chain_info_query(query).await {
+            if response.check(name).is_ok() {
+                let ChainInfo {
+                    mut requested_sent_certificates,
+                    ..
+                } = response.info;
+                if let Some(certificate) = requested_sent_certificates.pop() {
+                    if certificate.hash == location.certificate_hash {
+                        return Some(certificate);
+                    }
+                }
+            }
+        }
+        None
+    }
+
     async fn try_download_certificates_from<A>(
         &mut self,
         name: ValidatorName,
@@ -494,8 +556,13 @@ where
                     requested_sent_certificates,
                     ..
                 } = response.info;
-                self.try_process_certificates(chain_id, requested_sent_certificates)
-                    .await;
+                self.try_process_certificates(
+                    name,
+                    &mut client,
+                    chain_id,
+                    requested_sent_certificates,
+                )
+                .await;
             }
         }
         Ok(())
@@ -554,7 +621,12 @@ where
             }
         };
         if self
-            .try_process_certificates(chain_id, info.requested_sent_certificates)
+            .try_process_certificates(
+                name,
+                &mut client,
+                chain_id,
+                info.requested_sent_certificates,
+            )
             .await
             .is_none()
         {

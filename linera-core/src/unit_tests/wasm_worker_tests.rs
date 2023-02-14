@@ -181,6 +181,8 @@ where
     });
     let bytecode_location = BytecodeLocation {
         certificate_hash: publish_certificate.hash,
+        chain_id: publisher_chain.into(),
+        height: publish_block_height,
         operation_index: 0,
     };
     let broadcast_effect = SystemEffect::BytecodeLocations {

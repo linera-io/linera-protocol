@@ -48,6 +48,8 @@ fn location(operation_index: usize) -> BytecodeLocation {
 
     BytecodeLocation {
         certificate_hash: CryptoHash::new(&Dummy),
+        chain_id: ChainId::root(0),
+        height: BlockHeight(0),
         operation_index,
     }
 }
