@@ -156,7 +156,7 @@ pub enum SystemEffect {
     /// Unsubscribe to a channel.
     Unsubscribe { id: ChainId, channel_id: ChannelId },
     /// Notify that a new application bytecode was published.
-    BytecodePublished,
+    BytecodePublished { operation_index: usize },
     /// Share the locations of published bytecodes.
     BytecodeLocations {
         locations: Vec<(BytecodeId, BytecodeLocation)>,
@@ -299,8 +299,8 @@ where
             && self.admin_id.get().is_some()
     }
 
-    /// Execute the sender's side of the operation.
-    /// Return a list of recipients who need to be notified.
+    /// Executes the sender's side of an operation and returns a list of actions to be
+    /// taken.
     pub async fn execute_operation(
         &mut self,
         context: &OperationContext,
@@ -514,7 +514,9 @@ where
                 // the bytecode-id next.
                 result.effects.push((
                     Destination::Recipient(context.chain_id),
-                    SystemEffect::BytecodePublished,
+                    SystemEffect::BytecodePublished {
+                        operation_index: context.index,
+                    },
                 ));
             }
             CreateApplication {
@@ -586,11 +588,11 @@ where
                 ));
                 result.unsubscribe.push((channel_id.name.clone(), *id));
             }
-            BytecodePublished => {
+            BytecodePublished { operation_index } => {
                 let bytecode_id = BytecodeId(context.effect_id);
                 let bytecode_location = BytecodeLocation {
                     certificate_hash: context.certificate_hash,
-                    operation_index: context.effect_id.index,
+                    operation_index: *operation_index,
                 };
                 self.registry
                     .register_published_bytecode(bytecode_id, bytecode_location)?;
