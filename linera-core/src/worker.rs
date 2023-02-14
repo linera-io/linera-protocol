@@ -28,7 +28,7 @@ use linera_views::{
 use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, VecDeque},
+    collections::{BTreeMap, BTreeSet, HashSet, VecDeque},
     iter,
     num::NonZeroUsize,
     sync::Arc,
@@ -768,18 +768,18 @@ where
         let block = certificate.value.block();
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
         // Find all certificates containing bytecode used when executing this block.
-        let apps = match &certificate.value {
-            Value::ValidatedBlock { .. } => HashMap::new(),
+        let blob_hashes = match &certificate.value {
+            Value::ValidatedBlock { .. } => HashSet::new(),
             Value::ConfirmedBlock { .. } => chain
-                .applications_for_block(certificate.value.block())
+                .bytecode_for_block(certificate.value.block())
                 .await?
-                .into_iter()
-                .map(|app| (app.bytecode_location.certificate_hash, app))
+                .into_values()
+                .map(|bytecode_location| bytecode_location.certificate_hash)
                 .collect(),
         };
         for cert in &blob_certificates {
             ensure!(
-                apps.contains_key(&cert.hash),
+                blob_hashes.contains(&cert.hash),
                 WorkerError::UnneededCertificate {
                     certificate_hash: cert.hash
                 }
@@ -787,7 +787,7 @@ where
         }
         // Write the certificates so that the bytecode is available during execution.
         for cert in &blob_certificates {
-            if self.storage.read_certificate(cert.hash).await.is_ok() {
+            if let Err(ViewError::NotFound(_)) = self.storage.read_certificate(cert.hash).await {
                 // TODO(#443): We can't check the certificate's signatures, because it might be
                 // very old, with a committee that's not trusted anymore. We should store the
                 // blob without signatures.

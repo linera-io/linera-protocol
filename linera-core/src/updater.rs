@@ -139,16 +139,10 @@ where
             };
             if let Err(NodeError::ApplicationBytecodeNotFound { .. }) = &result {
                 let mut chain = self.store.load_chain(certificate.value.chain_id()).await?;
-                if let Ok(apps) = chain
-                    .applications_for_block(certificate.value.block())
-                    .await
-                {
+                if let Ok(bytecodes) = chain.bytecode_for_block(certificate.value.block()).await {
                     if let Ok(blob_certificates) = self
                         .store
-                        .read_certificates(
-                            apps.iter()
-                                .map(|app| app.bytecode_location.certificate_hash),
-                        )
+                        .read_certificates(bytecodes.values().map(|bc| bc.certificate_hash))
                         .await
                     {
                         result = self
