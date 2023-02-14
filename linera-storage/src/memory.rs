@@ -6,7 +6,7 @@ use async_lock::Mutex;
 use async_trait::async_trait;
 use dashmap::DashMap;
 use linera_base::{crypto::CryptoHash, data_types::ChainId};
-use linera_chain::data_types::Certificate;
+use linera_chain::data_types::{Certificate, LiteCertificate, Value};
 use linera_execution::{UserApplicationCode, UserApplicationId};
 use linera_views::{
     memory::{MemoryContext, MemoryContextError, MemoryStoreMap},
@@ -17,7 +17,8 @@ use std::{collections::BTreeMap, sync::Arc};
 #[derive(Clone, Default)]
 struct MemoryStore {
     chains: DashMap<ChainId, Arc<Mutex<MemoryStoreMap>>>,
-    certificates: DashMap<CryptoHash, Certificate>,
+    certificates: DashMap<CryptoHash, LiteCertificate>,
+    values: DashMap<CryptoHash, Value>,
     user_applications: Arc<DashMap<UserApplicationId, UserApplicationCode>>,
 }
 
@@ -47,17 +48,34 @@ impl Store for MemoryStoreClient {
         ChainStateView::load(db_context).await
     }
 
-    async fn read_certificate(&self, hash: CryptoHash) -> Result<Certificate, ViewError> {
-        let entry = self
-            .0
-            .certificates
-            .get(&hash)
-            .ok_or_else(|| ViewError::NotFound(format!("certificate for hash {:?}", hash)))?;
+    async fn read_value(&self, hash: CryptoHash) -> Result<Value, ViewError> {
+        let maybe_value = self.0.values.get(&hash);
+        let entry = maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
         Ok(entry.value().clone())
     }
 
+    async fn write_value(&self, value: Value) -> Result<(), ViewError> {
+        let hash = CryptoHash::new(&value);
+        self.0.values.insert(hash, value);
+        Ok(())
+    }
+
+    async fn read_certificate(&self, hash: CryptoHash) -> Result<Certificate, ViewError> {
+        let maybe_cert = self.0.certificates.get(&hash);
+        let cert = maybe_cert.ok_or_else(|| ViewError::not_found("certificate for hash", hash))?;
+        let maybe_value = self.0.values.get(&hash);
+        let value = maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
+        let cert = cert.value().clone();
+        let value = value.value().clone();
+        Ok(cert
+            .with_value(value)
+            .ok_or(ViewError::InconsistentEntries)?)
+    }
+
     async fn write_certificate(&self, certificate: Certificate) -> Result<(), ViewError> {
-        self.0.certificates.insert(certificate.hash, certificate);
+        let (cert, value) = certificate.split();
+        self.0.values.insert(cert.value.value_hash, value);
+        self.0.certificates.insert(cert.value.value_hash, cert);
         Ok(())
     }
 }

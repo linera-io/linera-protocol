@@ -20,7 +20,10 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{ChainDescription, ChainId, Epoch, Owner, Timestamp},
 };
-use linera_chain::{data_types::Certificate, ChainError, ChainStateView};
+use linera_chain::{
+    data_types::{Certificate, Value},
+    ChainError, ChainStateView,
+};
 use linera_execution::{
     system::Balance, ChainOwnership, ExecutionError, ExecutionRuntimeContext, UserApplicationCode,
     UserApplicationDescription, UserApplicationId,
@@ -46,16 +49,22 @@ pub trait Store: Sized {
     /// Alias to provide simpler trait bounds `ViewError: From<Self::ContextError>`
     type ContextError: std::error::Error + Debug + Sync + Send;
 
-    /// Load the view of a chain state.
+    /// Loads the view of a chain state.
     async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError>;
 
-    /// Read the certificate with the given hash.
+    /// Reads the value with the given hash.
+    async fn read_value(&self, hash: CryptoHash) -> Result<Value, ViewError>;
+
+    /// Writes the given value.
+    async fn write_value(&self, value: Value) -> Result<(), ViewError>;
+
+    /// Reads the certificate with the given hash.
     async fn read_certificate(&self, hash: CryptoHash) -> Result<Certificate, ViewError>;
 
-    /// Write the given certificate.
+    /// Writes the given certificate.
     async fn write_certificate(&self, certificate: Certificate) -> Result<(), ViewError>;
 
-    /// Load the view of a chain state and check that it is active.
+    /// Loads the view of a chain state and checks that it is active.
     async fn load_active_chain(
         &self,
         id: ChainId,
@@ -69,7 +78,7 @@ pub trait Store: Sized {
         Ok(chain)
     }
 
-    /// Read a number of certificates in parallel.
+    /// Reads a number of certificates in parallel.
     async fn read_certificates<I: IntoIterator<Item = CryptoHash> + Send>(
         &self,
         keys: I,
@@ -93,7 +102,7 @@ pub trait Store: Sized {
         Ok(certs)
     }
 
-    /// Initialize a chain in a simple way (used for testing and to create a genesis state).
+    /// Initializes a chain in a simple way (used for testing and to create a genesis state).
     async fn create_chain(
         &self,
         committee: Committee,
@@ -137,7 +146,7 @@ pub trait Store: Sized {
         WasmRuntime::default()
     }
 
-    /// Create a [`UserApplication`] instance using the bytecode in storage referenced by the
+    /// Creates a [`UserApplication`] instance using the bytecode in storage referenced by the
     /// `application_description`.
     #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
     async fn load_application(
