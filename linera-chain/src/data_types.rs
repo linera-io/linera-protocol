@@ -575,6 +575,16 @@ impl Certificate {
             chain_id: self.value.chain_id(),
         }
     }
+
+    pub fn split(self) -> (LiteCertificate, Value) {
+        (
+            LiteCertificate {
+                value: self.lite(),
+                signatures: self.signatures,
+            },
+            self.value,
+        )
+    }
 }
 
 /// Verifies certificate signatures.

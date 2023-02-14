@@ -90,6 +90,17 @@ pub enum ViewError {
     /// FIXME(#148): This belongs to a future `linera_storage::StoreError`.
     #[error("Entry does not exist in memory: {0}")]
     NotFound(String),
+
+    /// The database is corrupt: Entries don't have the expected hash.
+    #[error("Inconsistent database entries")]
+    InconsistentEntries,
+}
+
+impl ViewError {
+    /// Creates a `NotFound` error with the given message and key.
+    pub fn not_found<T: Debug>(msg: &str, key: T) -> ViewError {
+        ViewError::NotFound(format!("{} {:?}", msg, key))
+    }
 }
 
 /// A view that supports hashing its values.

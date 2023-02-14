@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use dashmap::DashMap;
 use futures::Future;
 use linera_base::{crypto::CryptoHash, data_types::ChainId};
-use linera_chain::data_types::Certificate;
+use linera_chain::data_types::{Certificate, LiteCertificate, Value};
 use linera_execution::{UserApplicationCode, UserApplicationId, WasmRuntime};
 use linera_views::{
     common::{Batch, Context},
@@ -127,10 +127,15 @@ impl DynamoDbStore {
         ))
     }
 
+    /// Obtain a [`MapView`] of values.
+    async fn values(&self) -> Result<MapView<DynamoDbContext<()>, CryptoHash, Value>, ViewError> {
+        MapView::load(self.context.clone_with_sub_scope(&BaseKey::Value, ())?).await
+    }
+
     /// Obtain a [`MapView`] of certificates.
     async fn certificates(
         &self,
-    ) -> Result<MapView<DynamoDbContext<()>, CryptoHash, Certificate>, ViewError> {
+    ) -> Result<MapView<DynamoDbContext<()>, CryptoHash, LiteCertificate>, ViewError> {
         MapView::load(
             self.context
                 .clone_with_sub_scope(&BaseKey::Certificate, ())?,
@@ -147,6 +152,7 @@ impl DynamoDbStore {
 enum BaseKey {
     ChainState(ChainId),
     Certificate,
+    Value,
 }
 
 #[async_trait]
@@ -170,21 +176,42 @@ impl Store for DynamoDbStoreClient {
         ChainStateView::load(db_context).await
     }
 
+    async fn read_value(&self, hash: CryptoHash) -> Result<Value, ViewError> {
+        let values = self.0.values().await?;
+        let maybe_value = values.get(&hash).await?;
+        maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))
+    }
+
+    async fn write_value(&self, value: Value) -> Result<(), ViewError> {
+        let hash = CryptoHash::new(&value);
+        let mut values = self.0.values().await?;
+        values.insert(&hash, value)?;
+        let mut batch = Batch::default();
+        values.flush(&mut batch)?;
+        self.0.context.write_batch(batch).await?;
+        Ok(())
+    }
+
     async fn read_certificate(&self, hash: CryptoHash) -> Result<Certificate, ViewError> {
-        self.0
-            .certificates()
-            .await?
-            .get(&hash)
-            .await?
-            .ok_or_else(|| ViewError::NotFound(format!("certificate for hash {:?}", hash)))
+        let values = self.0.values().await?;
+        let maybe_value = values.get(&hash).await?;
+        let value = maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
+        let certificates = self.0.certificates().await?;
+        let maybe_cert = certificates.get(&hash).await?;
+        let cert = maybe_cert.ok_or_else(|| ViewError::not_found("certificate for hash", hash))?;
+        cert.with_value(value).ok_or(ViewError::InconsistentEntries)
     }
 
     async fn write_certificate(&self, certificate: Certificate) -> Result<(), ViewError> {
-        let mut certificates = self.0.certificates().await?;
         let hash = certificate.hash;
-        certificates.insert(&hash, certificate)?;
+        let (cert, value) = certificate.split();
+        let mut certificates = self.0.certificates().await?;
+        let mut values = self.0.values().await?;
+        certificates.insert(&hash, cert)?;
+        values.insert(&hash, value)?;
         let mut batch = Batch::default();
         certificates.flush(&mut batch)?;
+        values.flush(&mut batch)?;
         self.0.context.write_batch(batch).await?;
         Ok(())
     }
