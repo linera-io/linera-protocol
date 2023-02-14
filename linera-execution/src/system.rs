@@ -349,8 +349,14 @@ pub enum SystemExecutionError {
     InvalidCommitteeCreation,
     #[error("Failed to remove committee")]
     InvalidCommitteeRemoval,
-    #[error("Invalid subscription request to channel {1} on chain {0}")]
-    InvalidSubscription(ChainId, SystemChannel),
+    #[error(
+        "Attempted to subscribe to the admin channel ({1}) of this chain's ({0}) admin chain {1}"
+    )]
+    InvalidAdminSubscription(ChainId, SystemChannel),
+    #[error("Attempted to subscribe to self on channel {1} on chain {0}")]
+    SelfSubscription(ChainId, SystemChannel),
+    #[error("Attempted to subscribe to a channel which does not exist ({1}) on chain {0}")]
+    NoSuchChannel(ChainId, SystemChannel),
     #[error("Invalid unsubscription request to channel {1} on chain {0}")]
     InvalidUnsubscription(ChainId, SystemChannel),
     #[error("Amount overflow")]
@@ -604,16 +610,14 @@ where
                 ));
             }
             Subscribe { chain_id, channel } => {
-                // We should not subscribe to ourself in this case.
                 ensure!(
                     context.chain_id != *chain_id,
-                    SystemExecutionError::InvalidSubscription(context.chain_id, *channel)
+                    SystemExecutionError::SelfSubscription(context.chain_id, *channel)
                 );
                 if *channel == SystemChannel::Admin {
-                    // Can only subscribe to the admin channel of this chain's admin chain.
                     ensure!(
                         self.admin_id.get().as_ref() == Some(chain_id),
-                        SystemExecutionError::InvalidSubscription(context.chain_id, *channel)
+                        SystemExecutionError::InvalidAdminSubscription(context.chain_id, *channel)
                     );
                 }
                 let channel_id = ChannelId {
@@ -622,7 +626,7 @@ where
                 };
                 ensure!(
                     !self.subscriptions.contains(&channel_id).await?,
-                    SystemExecutionError::InvalidSubscription(context.chain_id, *channel)
+                    SystemExecutionError::NoSuchChannel(context.chain_id, *channel)
                 );
                 self.subscriptions.insert(&channel_id)?;
                 result.effects.push((
