@@ -592,6 +592,8 @@ where
                 let bytecode_id = BytecodeId(context.effect_id);
                 let bytecode_location = BytecodeLocation {
                     certificate_hash: context.certificate_hash,
+                    chain_id: context.effect_id.chain_id,
+                    height: context.effect_id.height,
                     operation_index: *operation_index,
                 };
                 self.registry

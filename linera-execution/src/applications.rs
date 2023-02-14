@@ -3,7 +3,11 @@
 
 use crate::SystemExecutionError;
 use custom_debug_derive::Debug;
-use linera_base::{crypto::CryptoHash, data_types::EffectId, hex_debug};
+use linera_base::{
+    crypto::CryptoHash,
+    data_types::{BlockHeight, ChainId, EffectId},
+    hex_debug,
+};
 use linera_views::{
     common::Context,
     map_view::MapView,
@@ -97,11 +101,16 @@ impl From<&UserApplicationDescription> for UserApplicationId {
 pub struct BytecodeId(pub EffectId);
 
 /// A reference to where the application bytecode is stored.
+// TODO(#443): remove chain_id and height.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct BytecodeLocation {
     /// The certificate that published the bytecode.
     pub certificate_hash: CryptoHash,
-    /// The index in the certificate of the operation that published the bytecode.
+    /// The chain id of the certificate.
+    pub chain_id: ChainId,
+    /// The height of the certificate.
+    pub height: BlockHeight,
+    /// The index in the certificate of the operation that published the bytecode (not the effect!).
     pub operation_index: usize,
 }
 

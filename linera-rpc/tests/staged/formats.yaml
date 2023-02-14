@@ -80,6 +80,10 @@ BytecodeLocation:
   STRUCT:
     - certificate_hash:
         TYPENAME: CryptoHash
+    - chain_id:
+        TYPENAME: ChainId
+    - height:
+        TYPENAME: BlockHeight
     - operation_index: U64
 Certificate:
   STRUCT:
