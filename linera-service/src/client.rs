@@ -2,8 +2,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![deny(warnings)]
-
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use futures::StreamExt;
