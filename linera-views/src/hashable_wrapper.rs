@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    common::{Batch, Context},
+    batch::Batch,
+    common::{Context, MIN_VIEW_TAG},
     views::{HashableView, Hasher, View, ViewError},
 };
 use async_lock::Mutex;
@@ -23,9 +24,9 @@ pub struct WrappedHashableContainerView<C, W, O> {
 #[repr(u8)]
 enum KeyTag {
     /// Prefix for the indices of the view
-    Index = 0,
+    Index = MIN_VIEW_TAG,
     /// Prefix for the hash
-    Hash = 1,
+    Hash,
 }
 
 #[async_trait]

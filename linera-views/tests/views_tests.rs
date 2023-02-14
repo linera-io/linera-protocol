@@ -4,11 +4,12 @@
 use async_lock::Mutex;
 use async_trait::async_trait;
 use linera_views::{
-    collection_view::CollectionView,
-    common::{
-        Batch, Context, WriteOperation,
+    batch::{
+        Batch, WriteOperation,
         WriteOperation::{Delete, DeletePrefix, Put},
     },
+    collection_view::CollectionView,
+    common::Context,
     key_value_store_view::{KeyValueStoreMemoryContext, KeyValueStoreView},
     log_view::LogView,
     map_view::MapView,
@@ -19,8 +20,8 @@ use linera_views::{
     rocksdb::{RocksdbContext, DB},
     set_view::SetView,
     test_utils::{
-        get_random_key_value_operations, get_random_key_value_vec, random_shuffle,
-        span_random_reordering_put_delete,
+        get_random_byte_vector, get_random_key_value_operations, get_random_key_value_vec,
+        random_shuffle, span_random_reordering_put_delete,
     },
     views::{CryptoHashRootView, HashableView, Hasher, RootView, View, ViewError},
 };
@@ -31,7 +32,10 @@ use std::{
 };
 
 #[cfg(feature = "aws")]
-use linera_views::{dynamo_db::DynamoDbContext, test_utils::LocalStackTestContext};
+use linera_views::{
+    dynamo_db::DynamoDbContext,
+    test_utils::LocalStackTestContext,
+};
 
 #[allow(clippy::type_complexity)]
 #[derive(CryptoHashRootView)]
@@ -608,8 +612,8 @@ async fn test_views_in_rocksdb() {
     }
 }
 
-#[tokio::test]
 #[cfg(feature = "aws")]
+#[tokio::test]
 async fn test_views_in_dynamo_db() -> Result<(), anyhow::Error> {
     let mut store = DynamoDbTestStore::new().await?;
     let config = TestConfig::default();
@@ -1010,4 +1014,47 @@ async fn check_hash_memoization_persistence_large() {
     let key_value_vector = get_random_key_value_vec(&mut rng, n);
     let mut store = MemoryTestStore::default();
     check_hash_memoization_persistence(&mut rng, &mut store, key_value_vector).await;
+}
+
+#[cfg(test)]
+async fn check_large_write<S>(store: &mut S, vector: Vec<u8>)
+where
+    S: StateStore,
+    ViewError: From<<<S as StateStore>::Context as Context>::Error>,
+{
+    let hash1 = {
+        let mut view = store.load(1).await.unwrap();
+        for val in vector {
+            view.log.push(val as u32);
+        }
+        let hash = view.hash().await.unwrap();
+        view.save().await.unwrap();
+        hash
+    };
+    let view = store.load(1).await.unwrap();
+    let hash2 = view.hash().await.unwrap();
+    assert_eq!(hash1, hash2);
+}
+
+#[tokio::test]
+#[cfg(feature = "aws")]
+async fn check_large_write_dynamo_db() -> Result<(), anyhow::Error> {
+    // By writing 1000 elements we seriously check the Amazon journaling
+    // writing system.
+    let n = 1000;
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2);
+    let vector = get_random_byte_vector(&mut rng, &[], n);
+    let mut store = DynamoDbTestStore::new().await?;
+    check_large_write(&mut store, vector).await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn check_large_write_memory() -> Result<(), anyhow::Error> {
+    let n = 1000;
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2);
+    let vector = get_random_byte_vector(&mut rng, &[], n);
+    let mut store = MemoryTestStore::default();
+    check_large_write(&mut store, vector).await;
+    Ok(())
 }

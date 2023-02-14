@@ -14,11 +14,7 @@ use linera_base::{
     data_types::{BlockHeight, ChainDescription, ChainId, Owner},
 };
 use linera_execution::*;
-use linera_views::{
-    common::{Batch, Context},
-    memory::MemoryContext,
-    views::View,
-};
+use linera_views::{batch::Batch, common::Context, memory::MemoryContext, views::View};
 use std::sync::Arc;
 
 #[tokio::test]

@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    common::{Batch, Context, HashOutput},
+    batch::Batch,
+    common::{Context, HashOutput, MIN_VIEW_TAG},
     views::{HashableView, Hasher, View, ViewError},
 };
 use async_lock::Mutex;
@@ -14,9 +15,9 @@ use std::fmt::Debug;
 #[repr(u8)]
 enum KeyTag {
     /// Prefix for the storing of the value
-    Value = 0,
+    Value = MIN_VIEW_TAG,
     /// Prefix for the hash
-    Hash = 1,
+    Hash,
 }
 
 /// A view that supports modifying a single value of type `T`.

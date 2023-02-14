@@ -1,7 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::common::{get_upper_bound, Batch, ContextFromDb, KeyValueStoreClient, WriteOperation};
+use crate::{
+    batch::{Batch, WriteOperation},
+    common::{get_upper_bound, ContextFromDb, KeyValueStoreClient},
+};
 use async_trait::async_trait;
 use std::{
     ops::{Bound, Bound::Excluded},
@@ -85,7 +88,11 @@ impl KeyValueStoreClient for RocksdbClient {
         Ok(key_values)
     }
 
-    async fn write_batch(&self, mut batch: Batch) -> Result<(), RocksdbContextError> {
+    async fn write_batch(
+        &self,
+        mut batch: Batch,
+        _base_key: &[u8],
+    ) -> Result<(), RocksdbContextError> {
         let db = self.clone();
         // NOTE: The delete_range functionality of rocksdb needs to have an upper bound in order to work.
         // Thus in order to have the system working, we need to handle the unlikely case of having to
@@ -124,6 +131,10 @@ impl KeyValueStoreClient for RocksdbClient {
             Ok(())
         })
         .await??;
+        Ok(())
+    }
+
+    async fn clear_journal(&self, _base_key: &[u8]) -> Result<(), Self::Error> {
         Ok(())
     }
 }

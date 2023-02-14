@@ -6,7 +6,8 @@ use crate::{ApplicationId, ChainId, SessionId, SystemBalance, Timestamp};
 use async_trait::async_trait;
 use futures::future;
 use linera_views::{
-    common::{Batch, ContextFromDb, KeyValueStoreClient, WriteOperation},
+    batch::{Batch, WriteOperation},
+    common::{ContextFromDb, KeyValueStoreClient},
     views::{RootView, View, ViewError},
 };
 use serde::{de::DeserializeOwned, Serialize};
@@ -89,7 +90,7 @@ impl KeyValueStoreClient for WasmClient {
         Ok(key_values)
     }
 
-    async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
+    async fn write_batch(&self, batch: Batch, _base_key: &[u8]) -> Result<(), ViewError> {
         let mut list_oper = Vec::new();
         for op in &batch.operations {
             match op {
@@ -106,6 +107,10 @@ impl KeyValueStoreClient for WasmClient {
         }
         let future = system::WriteBatch::new(&list_oper);
         let () = future::poll_fn(|_context| future.poll().into()).await;
+        Ok(())
+    }
+
+    async fn clear_journal(&self, _base_key: &[u8]) -> Result<(), Self::Error> {
         Ok(())
     }
 }

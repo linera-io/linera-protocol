@@ -13,7 +13,8 @@ use linera_base::{
     ensure, hex_debug,
 };
 use linera_views::{
-    common::{Batch, Context},
+    batch::Batch,
+    common::Context,
     key_value_store_view::KeyValueStoreView,
     register_view::RegisterView,
     views::{View, ViewError},

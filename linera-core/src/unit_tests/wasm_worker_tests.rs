@@ -421,10 +421,6 @@ where
             initial_value_bytes.clone(),
         )
         .await?;
-    // chosen_key is formed of two parts:
-    // * 4 bytes equal to 0 that correspond to the base_key of the first index since "counter"
-    //   has just one RegisterView<C,u128>
-    // * 1 byte equal to zero that corresponds to the KeyTag::Value of RegisterView
     let create_block_proposal =
         HashedValue::new_confirmed(create_block, vec![], creator_state.crypto_hash().await?);
     let create_certificate = make_certificate(&committee, &worker, create_block_proposal);

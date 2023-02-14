@@ -6,7 +6,8 @@ use crate::{ApplicationId, ChainId, SystemBalance, Timestamp};
 use async_trait::async_trait;
 use futures::future;
 use linera_views::{
-    common::{Batch, ContextFromDb, KeyValueStoreClient},
+    batch::Batch,
+    common::{ContextFromDb, KeyValueStoreClient},
     views::{View, ViewError},
 };
 use serde::de::DeserializeOwned;
@@ -76,8 +77,12 @@ impl KeyValueStoreClient for ReadableWasmClient {
         Ok(key_values)
     }
 
-    async fn write_batch(&self, _batch: Batch) -> Result<(), ViewError> {
-        Ok(())
+    async fn write_batch(&self, _batch: Batch, _base_key: &[u8]) -> Result<(), ViewError> {
+        unreachable!();
+    }
+
+    async fn clear_journal(&self, _base_key: &[u8]) -> Result<(), Self::Error> {
+        unreachable!();
     }
 }
 

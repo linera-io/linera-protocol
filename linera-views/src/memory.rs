@@ -1,7 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    common::{get_interval, Batch, ContextFromDb, KeyValueStoreClient, WriteOperation},
+    batch::{Batch, WriteOperation},
+    common::{get_interval, ContextFromDb, KeyValueStoreClient},
     views::ViewError,
 };
 use async_lock::{Mutex, MutexGuardArc, RwLock};
@@ -75,7 +76,7 @@ impl KeyValueStoreClient for MemoryClient {
         Ok(key_values)
     }
 
-    async fn write_batch(&self, batch: Batch) -> Result<(), MemoryContextError> {
+    async fn write_batch(&self, batch: Batch, _base_key: &[u8]) -> Result<(), MemoryContextError> {
         let mut map = self.write().await;
         for ent in batch.operations {
             match ent {
@@ -96,6 +97,10 @@ impl KeyValueStoreClient for MemoryClient {
                 }
             }
         }
+        Ok(())
+    }
+
+    async fn clear_journal(&self, _base_key: &[u8]) -> Result<(), Self::Error> {
         Ok(())
     }
 }

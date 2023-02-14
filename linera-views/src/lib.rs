@@ -7,6 +7,9 @@
 
 #![deny(missing_docs)]
 
+/// The definition of the batches for writing in the datatbase.
+pub mod batch;
+
 /// The definitions used for the memory/rocksdb/dynamo_db
 pub mod common;
 

@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    common::{Batch, Context},
+    batch::Batch,
+    common::Context,
     memory::MemoryContext,
     queue_view::QueueView,
     rocksdb::RocksdbContext,

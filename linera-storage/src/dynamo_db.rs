@@ -9,11 +9,9 @@ use linera_base::{crypto::CryptoHash, data_types::ChainId};
 use linera_chain::data_types::{Certificate, HashedValue, LiteCertificate, Value};
 use linera_execution::{UserApplicationCode, UserApplicationId, WasmRuntime};
 use linera_views::{
-    common::{Batch, Context},
-    dynamo_db::{
-        Config, CreateTableError, DynamoDbContext, DynamoDbContextError, LocalStackError,
-        TableName, TableStatus,
-    },
+    batch::Batch,
+    common::Context,
+    dynamo_db::{Config, DynamoDbContext, DynamoDbContextError, TableName, TableStatus},
     map_view::MapView,
     views::{View, ViewError},
 };
@@ -38,7 +36,7 @@ impl DynamoDbStoreClient {
     pub async fn new(
         table: TableName,
         wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<(Self, TableStatus), CreateTableError> {
+    ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         Self::with_store(DynamoDbStore::new(table, wasm_runtime)).await
     }
 
@@ -46,7 +44,7 @@ impl DynamoDbStoreClient {
         config: impl Into<Config>,
         table: TableName,
         wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<(Self, TableStatus), CreateTableError> {
+    ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         Self::with_store(DynamoDbStore::from_config(
             config.into(),
             table,
@@ -58,7 +56,7 @@ impl DynamoDbStoreClient {
     pub async fn with_localstack(
         table: TableName,
         wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<(Self, TableStatus), LocalStackError> {
+    ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         Self::with_store(DynamoDbStore::with_localstack(table, wasm_runtime)).await
     }
 
@@ -75,7 +73,7 @@ impl DynamoDbStore {
     pub async fn new(
         table: TableName,
         wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<(Self, TableStatus), CreateTableError> {
+    ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         Self::with_context(
             |key_prefix, extra| DynamoDbContext::new(table, key_prefix, extra),
             wasm_runtime,
@@ -87,7 +85,7 @@ impl DynamoDbStore {
         config: Config,
         table: TableName,
         wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<(Self, TableStatus), CreateTableError> {
+    ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         Self::with_context(
             |key_prefix, extra| DynamoDbContext::from_config(config, table, key_prefix, extra),
             wasm_runtime,
@@ -98,7 +96,7 @@ impl DynamoDbStore {
     pub async fn with_localstack(
         table: TableName,
         wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<(Self, TableStatus), LocalStackError> {
+    ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         Self::with_context(
             |key_prefix, extra| DynamoDbContext::with_localstack(table, key_prefix, extra),
             wasm_runtime,
@@ -128,7 +126,12 @@ impl DynamoDbStore {
 
     /// Obtain a [`MapView`] of values.
     async fn values(&self) -> Result<MapView<DynamoDbContext<()>, CryptoHash, Value>, ViewError> {
-        MapView::load(self.context.clone_with_sub_scope(&BaseKey::Value, ())?).await
+        MapView::load(
+            self.context
+                .clone_with_sub_scope(&BaseKey::Value, ())
+                .await?,
+        )
+        .await
     }
 
     /// Obtain a [`MapView`] of certificates.
@@ -137,7 +140,8 @@ impl DynamoDbStore {
     ) -> Result<MapView<DynamoDbContext<()>, CryptoHash, LiteCertificate>, ViewError> {
         MapView::load(
             self.context
-                .clone_with_sub_scope(&BaseKey::Certificate, ())?,
+                .clone_with_sub_scope(&BaseKey::Certificate, ())
+                .await?,
         )
         .await
     }
@@ -171,7 +175,8 @@ impl Store for DynamoDbStoreClient {
         let db_context = self
             .0
             .context
-            .clone_with_sub_scope(&BaseKey::ChainState(id), runtime_context)?;
+            .clone_with_sub_scope(&BaseKey::ChainState(id), runtime_context)
+            .await?;
         ChainStateView::load(db_context).await
     }
 

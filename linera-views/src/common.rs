@@ -1,11 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::views::ViewError;
+use crate::{batch::Batch, views::ViewError};
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
-    collections::{BTreeMap, BTreeSet},
     fmt::Debug,
     ops::{
         Bound,
@@ -25,6 +24,9 @@ pub(crate) enum Update<T> {
     Removed,
     Set(T),
 }
+
+/// The minimum value for the view tags. values in 0..MIN_VIEW_TAG are used for other purposes
+pub const MIN_VIEW_TAG: u8 = 1;
 
 /// When wanting to find the entries in a BTreeMap with a specific prefix,
 /// one option is to iterate over all keys. Another is to select an interval
@@ -48,131 +50,6 @@ pub(crate) fn get_upper_bound(key_prefix: &[u8]) -> Bound<Vec<u8>> {
 pub(crate) fn get_interval(key_prefix: Vec<u8>) -> (Bound<Vec<u8>>, Bound<Vec<u8>>) {
     let upper_bound = get_upper_bound(&key_prefix);
     (Included(key_prefix), upper_bound)
-}
-
-/// A write operation as requested by a view when it needs to persist staged changes.
-#[derive(Debug)]
-pub enum WriteOperation {
-    /// Delete the given key.
-    Delete {
-        /// The key that will be deleted
-        key: Vec<u8>,
-    },
-    /// Delete all the keys matching the given prefix.
-    DeletePrefix {
-        /// The prefix of the keys to be deleted
-        key_prefix: Vec<u8>,
-    },
-    /// Set the value of the given key.
-    Put {
-        /// The key to be inserted or replaced
-        key: Vec<u8>,
-        /// The value to be inserted on the key
-        value: Vec<u8>,
-    },
-}
-
-/// A batch of writes inside a transaction;
-#[derive(Default)]
-pub struct Batch {
-    /// The entries of batch
-    pub operations: Vec<WriteOperation>,
-}
-
-impl Batch {
-    /// Create an empty batch
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// building a batch from a function
-    pub async fn build<F>(builder: F) -> Result<Self, ViewError>
-    where
-        F: FnOnce(&mut Batch) -> futures::future::BoxFuture<Result<(), ViewError>> + Send + Sync,
-    {
-        let mut batch = Batch::new();
-        builder(&mut batch).await?;
-        Ok(batch)
-    }
-
-    /// A key may appear multiple times in the batch
-    /// The construction of BatchWriteItem and TransactWriteItem for DynamoDb does
-    /// not allow this to happen.
-    pub fn simplify(self) -> Self {
-        let mut map_delete_insert = BTreeMap::new();
-        let mut set_key_prefix = BTreeSet::new();
-        for op in self.operations {
-            match op {
-                WriteOperation::Delete { key } => {
-                    map_delete_insert.insert(key, None);
-                }
-                WriteOperation::Put { key, value } => {
-                    map_delete_insert.insert(key, Some(value));
-                }
-                WriteOperation::DeletePrefix { key_prefix } => {
-                    let key_list: Vec<Vec<u8>> = map_delete_insert
-                        .range(get_interval(key_prefix.clone()))
-                        .map(|x| x.0.to_vec())
-                        .collect();
-                    for key in key_list {
-                        map_delete_insert.remove(&key);
-                    }
-                    let key_prefix_list: Vec<Vec<u8>> = set_key_prefix
-                        .range(get_interval(key_prefix.clone()))
-                        .map(|x: &Vec<u8>| x.to_vec())
-                        .collect();
-                    for key_prefix in key_prefix_list {
-                        set_key_prefix.remove(&key_prefix);
-                    }
-                    set_key_prefix.insert(key_prefix);
-                }
-            }
-        }
-        let mut operations = Vec::with_capacity(set_key_prefix.len() + map_delete_insert.len());
-        // It is important to note that DeletePrefix operations have to be done before other
-        // insert operations.
-        for key_prefix in set_key_prefix {
-            operations.push(WriteOperation::DeletePrefix { key_prefix });
-        }
-        for (key, val) in map_delete_insert {
-            match val {
-                Some(value) => operations.push(WriteOperation::Put { key, value }),
-                None => operations.push(WriteOperation::Delete { key }),
-            }
-        }
-        Self { operations }
-    }
-
-    /// Insert a Put { key, value } into the batch
-    #[inline]
-    pub fn put_key_value(
-        &mut self,
-        key: Vec<u8>,
-        value: &impl Serialize,
-    ) -> Result<(), bcs::Error> {
-        let bytes = bcs::to_bytes(value)?;
-        self.put_key_value_bytes(key, bytes);
-        Ok(())
-    }
-
-    /// Insert a Put { key, value } into the batch
-    #[inline]
-    pub fn put_key_value_bytes(&mut self, key: Vec<u8>, value: Vec<u8>) {
-        self.operations.push(WriteOperation::Put { key, value });
-    }
-
-    /// Insert a Delete { key } into the batch
-    #[inline]
-    pub fn delete_key(&mut self, key: Vec<u8>) {
-        self.operations.push(WriteOperation::Delete { key });
-    }
-
-    /// Insert a DeletePrefix { key_prefix } into the batch
-    #[inline]
-    pub fn delete_key_prefix(&mut self, key_prefix: Vec<u8>) {
-        self.operations
-            .push(WriteOperation::DeletePrefix { key_prefix });
-    }
 }
 
 /// How to iterate over the keys returned by a search query.
@@ -228,7 +105,7 @@ pub trait KeyValueStoreClient {
     ) -> Result<Self::KeyValues, Self::Error>;
 
     /// Write the batch in the database.
-    async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error>;
+    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), Self::Error>;
 
     /// Read a single key and deserialize the result if present.
     async fn read_key<V: DeserializeOwned>(&self, key: &[u8]) -> Result<Option<V>, Self::Error>
@@ -243,6 +120,10 @@ pub trait KeyValueStoreClient {
             None => Ok(None),
         }
     }
+
+    /// Clearing any journal entry that may remain.
+    /// The journal located at the base_key will be cleared if existing.
+    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), Self::Error>;
 }
 
 #[doc(hidden)]
@@ -429,12 +310,14 @@ where
     }
 
     fn base_tag(&self, tag: u8) -> Vec<u8> {
+        assert!(tag >= MIN_VIEW_TAG, "tag should be at least MIN_VIEW_TAG");
         let mut key = self.base_key.clone();
         key.extend_from_slice(&[tag]);
         key
     }
 
     fn base_tag_index(&self, tag: u8, index: &[u8]) -> Vec<u8> {
+        assert!(tag >= MIN_VIEW_TAG, "tag should be at least MIN_VIEW_TAG");
         let mut key = self.base_key.clone();
         key.extend_from_slice(&[tag]);
         key.extend_from_slice(index);
@@ -452,6 +335,7 @@ where
     }
 
     fn derive_tag_key<I: Serialize>(&self, tag: u8, index: &I) -> Result<Vec<u8>, Self::Error> {
+        assert!(tag >= MIN_VIEW_TAG, "tag should be at least MIN_VIEW_TAG");
         let mut key = self.base_key.clone();
         key.extend_from_slice(&[tag]);
         bcs::serialize_into(&mut key, index)?;
@@ -498,7 +382,7 @@ where
     }
 
     async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error> {
-        self.db.write_batch(batch).await?;
+        self.db.write_batch(batch, &self.base_key).await?;
         Ok(())
     }
 

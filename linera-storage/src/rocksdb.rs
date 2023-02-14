@@ -8,7 +8,8 @@ use linera_base::{crypto::CryptoHash, data_types::ChainId};
 use linera_chain::data_types::{Certificate, HashedValue, LiteCertificate, Value};
 use linera_execution::{UserApplicationCode, UserApplicationId, WasmRuntime};
 use linera_views::{
-    common::{Batch, KeyValueStoreClient},
+    batch::Batch,
+    common::KeyValueStoreClient,
     rocksdb::{RocksdbClient, RocksdbContext, RocksdbContextError, DB},
     views::{View, ViewError},
 };
@@ -87,7 +88,7 @@ impl Store for RocksdbStoreClient {
         let value_key = bcs::to_bytes(&BaseKey::Value(value.hash()))?;
         let mut batch = Batch::new();
         batch.put_key_value(value_key.to_vec(), &value)?;
-        self.0.db.write_batch(batch).await?;
+        self.0.db.write_batch(batch, &[]).await?;
         Ok(())
     }
 
@@ -115,7 +116,7 @@ impl Store for RocksdbStoreClient {
         let mut batch = Batch::new();
         batch.put_key_value(cert_key.to_vec(), &cert)?;
         batch.put_key_value(value_key.to_vec(), &value)?;
-        self.0.db.write_batch(batch).await?;
+        self.0.db.write_batch(batch, &[]).await?;
         Ok(())
     }
 

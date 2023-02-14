@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    common::{Batch, Context, HashOutput},
+    batch::Batch,
+    common::{Context, HashOutput, MIN_VIEW_TAG},
     views::{HashableView, Hasher, View, ViewError},
 };
 use async_lock::Mutex;
@@ -14,11 +15,11 @@ use std::{collections::VecDeque, fmt::Debug, ops::Range};
 #[repr(u8)]
 enum KeyTag {
     /// Prefix for the storing of the variable stored_count
-    Store = 0,
+    Store = MIN_VIEW_TAG,
     /// Prefix for the indices of the log
-    Index = 1,
+    Index,
     /// Prefix for the hash
-    Hash = 2,
+    Hash,
 }
 
 /// A view that supports a FIFO queue for values of type `T`.
