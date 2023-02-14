@@ -336,6 +336,7 @@ where
     I: Sync + Clone + Send + Serialize + DeserializeOwned,
     V: Clone + Sync + Default + Serialize + DeserializeOwned + 'static,
 {
+    /// Set the value in the updates to default if removed or absent
     fn set_value_in_update(&mut self, short_key: &[u8]) {
         let value = self.updates.get_mut(&short_key.to_vec());
         if let Some(value) = value {
@@ -348,6 +349,7 @@ where
         }
     }
 
+    /// load the value in updates and set it to default if missing
     async fn load_value_or_default(&mut self, short_key: &[u8]) -> Result<(), ViewError> {
         if self.was_cleared || self.updates.contains_key(short_key) {
             self.set_value_in_update(short_key);
@@ -359,7 +361,8 @@ where
         Ok(())
     }
 
-    /// Obtain a mutable reference to a value at a given position if available
+    /// Obtain a mutable reference to a value at a given position.
+    /// Default value if the index is missing.
     pub async fn get_mut_value(&mut self, index: &I) -> Result<&mut V, ViewError> {
         let short_key = C::derive_short_key(index)?;
         self.load_value_or_default(&short_key).await?;
