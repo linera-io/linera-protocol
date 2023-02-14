@@ -806,7 +806,7 @@ where
             let start = range.start.into();
             let end = match range.limit {
                 None => chain.confirmed_log.count(),
-                Some(limit) => std::cmp::max(start + limit, chain.confirmed_log.count()),
+                Some(limit) => std::cmp::min(start + limit, chain.confirmed_log.count()),
             };
             let keys = chain.confirmed_log.read(start..end).await?;
             let certs = self.storage.read_certificates(keys).await?;
