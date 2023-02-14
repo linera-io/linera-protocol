@@ -913,7 +913,7 @@ where
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), anyhow::Error> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let options = ClientOptions::from_args();
     let mut context = ClientContext::from_options(&options);
@@ -947,7 +947,8 @@ async fn main() {
                 context.wallet_state.insert(chain);
             }
             context.save_chains();
-            genesis_config.write(&options.genesis_config_path).unwrap();
+            genesis_config.write(&options.genesis_config_path)?;
+            Ok(())
         }
         command => {
             let genesis_config = context.genesis_config.clone();
@@ -955,8 +956,8 @@ async fn main() {
             options
                 .storage_config
                 .run_with_storage(&genesis_config, wasm_runtime, Job(context, command))
-                .await
-                .unwrap()
+                .await?;
+            Ok(())
         }
     }
 }
