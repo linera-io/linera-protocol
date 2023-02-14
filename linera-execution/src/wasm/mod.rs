@@ -12,7 +12,6 @@
 
 mod async_boundary;
 mod common;
-mod runtime;
 #[cfg(feature = "wasmer")]
 #[path = "wasmer.rs"]
 mod wasmer;
@@ -20,10 +19,6 @@ mod wasmer;
 #[path = "wasmtime.rs"]
 mod wasmtime;
 
-use self::{
-    common::WasmRuntimeContext,
-    runtime::{Contract, Service},
-};
 use crate::{
     ApplicationCallResult, Bytecode, CalleeContext, EffectContext, ExecutionError,
     OperationContext, QueryContext, QueryableStorage, RawExecutionResult, SessionCallResult,
@@ -66,32 +61,6 @@ impl WasmApplication {
             runtime,
         })
     }
-
-    /// Prepare a runtime instance to call into the WASM contract.
-    fn prepare_contract_runtime<'storage>(
-        &self,
-        storage: &'storage dyn WritableStorage,
-    ) -> Result<WasmRuntimeContext<Contract<'storage>>, WasmExecutionError> {
-        match self.runtime {
-            #[cfg(feature = "wasmtime")]
-            WasmRuntime::Wasmtime => self.prepare_contract_runtime_with_wasmtime(storage),
-            #[cfg(feature = "wasmer")]
-            WasmRuntime::Wasmer => self.prepare_contract_runtime_with_wasmer(storage),
-        }
-    }
-
-    /// Prepare a runtime instance to call into the WASM service.
-    fn prepare_service_runtime<'storage>(
-        &self,
-        storage: &'storage dyn QueryableStorage,
-    ) -> Result<WasmRuntimeContext<Service<'storage>>, WasmExecutionError> {
-        match self.runtime {
-            #[cfg(feature = "wasmtime")]
-            WasmRuntime::Wasmtime => self.prepare_service_runtime_with_wasmtime(storage),
-            #[cfg(feature = "wasmer")]
-            WasmRuntime::Wasmer => self.prepare_service_runtime_with_wasmer(storage),
-        }
-    }
 }
 
 /// Errors that can occur when executing a user application in a WebAssembly module.
@@ -119,10 +88,20 @@ impl UserApplication for WasmApplication {
         storage: &dyn WritableStorage,
         argument: &[u8],
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
-        let result = self
-            .prepare_contract_runtime(storage)?
-            .initialize(context, argument)
-            .await?;
+        let result = match self.runtime {
+            #[cfg(feature = "wasmtime")]
+            WasmRuntime::Wasmtime => {
+                self.prepare_contract_runtime_with_wasmtime(storage)?
+                    .initialize(context, argument)
+                    .await?
+            }
+            #[cfg(feature = "wasmer")]
+            WasmRuntime::Wasmer => {
+                self.prepare_contract_runtime_with_wasmer(storage)?
+                    .initialize(context, argument)
+                    .await?
+            }
+        };
         Ok(result)
     }
 
@@ -132,10 +111,20 @@ impl UserApplication for WasmApplication {
         storage: &dyn WritableStorage,
         operation: &[u8],
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
-        let result = self
-            .prepare_contract_runtime(storage)?
-            .execute_operation(context, operation)
-            .await?;
+        let result = match self.runtime {
+            #[cfg(feature = "wasmtime")]
+            WasmRuntime::Wasmtime => {
+                self.prepare_contract_runtime_with_wasmtime(storage)?
+                    .execute_operation(context, operation)
+                    .await?
+            }
+            #[cfg(feature = "wasmer")]
+            WasmRuntime::Wasmer => {
+                self.prepare_contract_runtime_with_wasmer(storage)?
+                    .execute_operation(context, operation)
+                    .await?
+            }
+        };
         Ok(result)
     }
 
@@ -145,10 +134,20 @@ impl UserApplication for WasmApplication {
         storage: &dyn WritableStorage,
         effect: &[u8],
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
-        let result = self
-            .prepare_contract_runtime(storage)?
-            .execute_effect(context, effect)
-            .await?;
+        let result = match self.runtime {
+            #[cfg(feature = "wasmtime")]
+            WasmRuntime::Wasmtime => {
+                self.prepare_contract_runtime_with_wasmtime(storage)?
+                    .execute_effect(context, effect)
+                    .await?
+            }
+            #[cfg(feature = "wasmer")]
+            WasmRuntime::Wasmer => {
+                self.prepare_contract_runtime_with_wasmer(storage)?
+                    .execute_effect(context, effect)
+                    .await?
+            }
+        };
         Ok(result)
     }
 
@@ -159,10 +158,20 @@ impl UserApplication for WasmApplication {
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, ExecutionError> {
-        let result = self
-            .prepare_contract_runtime(storage)?
-            .call_application(context, argument, forwarded_sessions)
-            .await?;
+        let result = match self.runtime {
+            #[cfg(feature = "wasmtime")]
+            WasmRuntime::Wasmtime => {
+                self.prepare_contract_runtime_with_wasmtime(storage)?
+                    .call_application(context, argument, forwarded_sessions)
+                    .await?
+            }
+            #[cfg(feature = "wasmer")]
+            WasmRuntime::Wasmer => {
+                self.prepare_contract_runtime_with_wasmer(storage)?
+                    .call_application(context, argument, forwarded_sessions)
+                    .await?
+            }
+        };
         Ok(result)
     }
 
@@ -175,16 +184,32 @@ impl UserApplication for WasmApplication {
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<SessionCallResult, ExecutionError> {
-        let result = self
-            .prepare_contract_runtime(storage)?
-            .call_session(
-                context,
-                session_kind,
-                session_data,
-                argument,
-                forwarded_sessions,
-            )
-            .await?;
+        let result = match self.runtime {
+            #[cfg(feature = "wasmtime")]
+            WasmRuntime::Wasmtime => {
+                self.prepare_contract_runtime_with_wasmtime(storage)?
+                    .call_session(
+                        context,
+                        session_kind,
+                        session_data,
+                        argument,
+                        forwarded_sessions,
+                    )
+                    .await?
+            }
+            #[cfg(feature = "wasmer")]
+            WasmRuntime::Wasmer => {
+                self.prepare_contract_runtime_with_wasmer(storage)?
+                    .call_session(
+                        context,
+                        session_kind,
+                        session_data,
+                        argument,
+                        forwarded_sessions,
+                    )
+                    .await?
+            }
+        };
         Ok(result)
     }
 
@@ -194,10 +219,20 @@ impl UserApplication for WasmApplication {
         storage: &dyn QueryableStorage,
         argument: &[u8],
     ) -> Result<Vec<u8>, ExecutionError> {
-        let result = self
-            .prepare_service_runtime(storage)?
-            .query_application(context, argument)
-            .await?;
+        let result = match self.runtime {
+            #[cfg(feature = "wasmtime")]
+            WasmRuntime::Wasmtime => {
+                self.prepare_service_runtime_with_wasmtime(storage)?
+                    .query_application(context, argument)
+                    .await?
+            }
+            #[cfg(feature = "wasmer")]
+            WasmRuntime::Wasmer => {
+                self.prepare_service_runtime_with_wasmer(storage)?
+                    .query_application(context, argument)
+                    .await?
+            }
+        };
         Ok(result)
     }
 }

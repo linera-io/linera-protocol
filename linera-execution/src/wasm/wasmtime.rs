@@ -31,7 +31,7 @@ use self::{
 use super::{
     async_boundary::{ContextForwarder, HostFuture, HostFutureQueue},
     common::{self, ApplicationRuntimeContext, WasmRuntimeContext},
-    runtime, WasmApplication, WasmExecutionError,
+    WasmApplication, WasmExecutionError,
 };
 use crate::{CallResult, ExecutionError, QueryableStorage, SessionId, WritableStorage};
 use linera_views::common::Batch;
@@ -69,7 +69,7 @@ impl WasmApplication {
     pub fn prepare_contract_runtime_with_wasmtime<'storage>(
         &self,
         storage: &'storage dyn WritableStorage,
-    ) -> Result<WasmRuntimeContext<runtime::Contract<'storage>>, WasmExecutionError> {
+    ) -> Result<WasmRuntimeContext<Contract<'storage>>, WasmExecutionError> {
         let engine = Engine::default();
         let mut linker = Linker::new(&engine);
 
@@ -85,9 +85,9 @@ impl WasmApplication {
 
         Ok(WasmRuntimeContext {
             context_forwarder,
-            application: application.into(),
-            store: store.into(),
-            _storage_guard: ().into(),
+            application,
+            store,
+            _storage_guard: (),
         })
     }
 
@@ -95,7 +95,7 @@ impl WasmApplication {
     pub fn prepare_service_runtime_with_wasmtime<'storage>(
         &self,
         storage: &'storage dyn QueryableStorage,
-    ) -> Result<WasmRuntimeContext<runtime::Service<'storage>>, WasmExecutionError> {
+    ) -> Result<WasmRuntimeContext<Service<'storage>>, WasmExecutionError> {
         let engine = Engine::default();
         let mut linker = Linker::new(&engine);
 
@@ -111,9 +111,9 @@ impl WasmApplication {
 
         Ok(WasmRuntimeContext {
             context_forwarder,
-            application: application.into(),
-            store: store.into(),
-            _storage_guard: ().into(),
+            application,
+            store,
+            _storage_guard: (),
         })
     }
 }
