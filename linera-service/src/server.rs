@@ -2,8 +2,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![deny(warnings)]
-
 use anyhow::{anyhow, ensure};
 use async_trait::async_trait;
 use futures::future::join_all;
