@@ -263,8 +263,12 @@ pub mod test {
         ))
     }
 
-    pub async fn build_example_application(name: &str) -> Result<WasmApplication, std::io::Error> {
+    pub async fn build_example_application(
+        name: &str,
+        wasm_runtime: impl Into<Option<WasmRuntime>>,
+    ) -> Result<WasmApplication, std::io::Error> {
         let (contract, service) = get_example_bytecode_paths(name)?;
-        WasmApplication::from_files(&contract, &service, WasmRuntime::default()).await
+        WasmApplication::from_files(&contract, &service, wasm_runtime.into().unwrap_or_default())
+            .await
     }
 }

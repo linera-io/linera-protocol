@@ -34,7 +34,7 @@ async fn test_counter_wasm_application() -> anyhow::Result<()> {
         .await?;
     view.context().extra.user_applications().insert(
         app_id,
-        Arc::new(linera_execution::wasm_test::build_example_application("counter").await?),
+        Arc::new(linera_execution::wasm_test::build_example_application("counter", None).await?),
     );
 
     let context = OperationContext {
