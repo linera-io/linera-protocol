@@ -155,7 +155,7 @@ where
         if self.was_cleared {
             return Ok(None);
         }
-        let key = self.context.derive_tag_key(KeyTag::Index as u8, &index)?;
+        let key = self.context.base_tag_index(KeyTag::Index as u8, &short_key);
         Ok(self.context.read_key(&key).await?)
     }
 
