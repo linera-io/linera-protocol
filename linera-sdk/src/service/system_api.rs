@@ -130,6 +130,11 @@ pub fn current_application_id() -> ApplicationId {
     system::application_id().into()
 }
 
+/// Retrieve the current application parameters.
+pub fn current_application_parameters() -> Vec<u8> {
+    system::application_parameters()
+}
+
 /// Retrieve the current system balance.
 pub fn current_system_balance() -> SystemBalance {
     system::read_system_balance().into()
