@@ -391,6 +391,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "counter-no-args"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bcs",
+ "futures",
+ "linera-sdk",
+ "serde",
+ "thiserror",
+ "webassembly-test",
+]
+
+[[package]]
 name = "counter2"
 version = "0.1.0"
 dependencies = [
