@@ -60,12 +60,9 @@ jobs:
     - name: Compile the workspace with the default features (build)
       run: |
         cargo build --locked
-    - name: Run all tests using the default features (currently Wasmtime)
+    - name: Run all tests using the default features
       run: |
         cargo test --locked
-    - name: Re-run WASM tests using Wasmer
-      run: |
-        cargo test --locked --no-default-features --features wasmer wasm
 
   lint:
     runs-on: ubuntu-latest
