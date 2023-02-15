@@ -16,7 +16,7 @@ use fungible::{AccountOwner, SignedTransfer, SignedTransferPayload, Transfer};
 use linera_base::data_types::*;
 use linera_execution::{
     system::Balance, ApplicationId, Bytecode, Destination, Effect, Operation, Query, Response,
-    SystemEffect, UserApplicationDescription,
+    SystemEffect, UserApplicationDescription, WasmRuntime,
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -32,13 +32,21 @@ async fn test_memory_create_application() -> Result<(), anyhow::Error> {
 #[test(tokio::test)]
 async fn test_rocksdb_create_application() -> Result<(), anyhow::Error> {
     let _lock = GUARD.lock().await;
-    run_test_create_application(MakeRocksdbStoreClient::default()).await
+    for &wasm_runtime in WasmRuntime::ALL {
+        run_test_create_application(MakeRocksdbStoreClient::with_wasm_runtime(wasm_runtime))
+            .await?;
+    }
+    Ok(())
 }
 
 #[test(tokio::test)]
 #[ignore]
 async fn test_dynamo_db_create_application() -> Result<(), anyhow::Error> {
-    run_test_create_application(MakeDynamoDbStoreClient::default()).await
+    for &wasm_runtime in WasmRuntime::ALL {
+        run_test_create_application(MakeDynamoDbStoreClient::with_wasm_runtime(wasm_runtime))
+            .await?;
+    }
+    Ok(())
 }
 
 async fn run_test_create_application<B>(store_builder: B) -> Result<(), anyhow::Error>
@@ -112,13 +120,25 @@ async fn test_memory_run_application_with_dependency() -> Result<(), anyhow::Err
 #[test(tokio::test)]
 async fn test_rocksdb_run_application_with_dependency() -> Result<(), anyhow::Error> {
     let _lock = GUARD.lock().await;
-    run_test_run_application_with_dependency(MakeRocksdbStoreClient::default()).await
+    for &wasm_runtime in WasmRuntime::ALL {
+        run_test_run_application_with_dependency(MakeRocksdbStoreClient::with_wasm_runtime(
+            wasm_runtime,
+        ))
+        .await?;
+    }
+    Ok(())
 }
 
 #[test(tokio::test)]
 #[ignore]
 async fn test_dynamo_db_run_application_with_dependency() -> Result<(), anyhow::Error> {
-    run_test_run_application_with_dependency(MakeDynamoDbStoreClient::default()).await
+    for &wasm_runtime in WasmRuntime::ALL {
+        run_test_run_application_with_dependency(MakeDynamoDbStoreClient::with_wasm_runtime(
+            wasm_runtime,
+        ))
+        .await?;
+    }
+    Ok(())
 }
 
 async fn run_test_run_application_with_dependency<B>(store_builder: B) -> Result<(), anyhow::Error>
@@ -224,13 +244,21 @@ async fn test_memory_cross_chain_message() -> Result<(), anyhow::Error> {
 #[test(tokio::test)]
 async fn test_rocksdb_cross_chain_message() -> Result<(), anyhow::Error> {
     let _lock = GUARD.lock().await;
-    run_test_cross_chain_message(MakeRocksdbStoreClient::default()).await
+    for &wasm_runtime in WasmRuntime::ALL {
+        run_test_cross_chain_message(MakeRocksdbStoreClient::with_wasm_runtime(wasm_runtime))
+            .await?;
+    }
+    Ok(())
 }
 
 #[test(tokio::test)]
 #[ignore]
 async fn test_dynamo_db_cross_chain_message() -> Result<(), anyhow::Error> {
-    run_test_cross_chain_message(MakeDynamoDbStoreClient::default()).await
+    for &wasm_runtime in WasmRuntime::ALL {
+        run_test_cross_chain_message(MakeDynamoDbStoreClient::with_wasm_runtime(wasm_runtime))
+            .await?;
+    }
+    Ok(())
 }
 
 async fn run_test_cross_chain_message<B>(store_builder: B) -> Result<(), anyhow::Error>

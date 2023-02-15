@@ -52,9 +52,12 @@ async fn test_rocksdb_handle_certificates_to_create_application_both() -> Result
 async fn test_rocksdb_handle_certificates_to_create_application(
     use_view: bool,
 ) -> Result<(), anyhow::Error> {
-    let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), Some(WasmRuntime::default()));
-    run_test_handle_certificates_to_create_application(client, use_view).await
+    for &wasm_runtime in WasmRuntime::ALL {
+        let dir = tempfile::TempDir::new().unwrap();
+        let client = RocksdbStoreClient::new(dir.path().to_path_buf(), Some(wasm_runtime));
+        run_test_handle_certificates_to_create_application(client, use_view).await?;
+    }
+    Ok(())
 }
 
 #[test(tokio::test)]
@@ -68,15 +71,18 @@ async fn test_dynamo_db_handle_certificates_to_create_application_bool() -> Resu
 async fn test_dynamo_db_handle_certificates_to_create_application(
     use_view: bool,
 ) -> Result<(), anyhow::Error> {
-    let table = "linera".parse().expect("Invalid table name");
-    let localstack = LocalStackTestContext::new().await?;
-    let (client, _) = DynamoDbStoreClient::from_config(
-        localstack.dynamo_db_config(),
-        table,
-        Some(WasmRuntime::default()),
-    )
-    .await?;
-    run_test_handle_certificates_to_create_application(client, use_view).await
+    for &wasm_runtime in WasmRuntime::ALL {
+        let table = "linera".parse().expect("Invalid table name");
+        let localstack = LocalStackTestContext::new().await?;
+        let (client, _) = DynamoDbStoreClient::from_config(
+            localstack.dynamo_db_config(),
+            table,
+            Some(wasm_runtime),
+        )
+        .await?;
+        run_test_handle_certificates_to_create_application(client, use_view).await?;
+    }
+    Ok(())
 }
 
 async fn run_test_handle_certificates_to_create_application<S>(
