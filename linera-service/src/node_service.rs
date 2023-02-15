@@ -89,7 +89,7 @@ impl ApplicationOverview {
         Self {
             id,
             description,
-            link: format!("localhost:{}/applications/{}", port, id.crypto_hash()),
+            link: format!("http://localhost:{}/applications/{}", port, id.crypto_hash()),
         }
     }
 }
