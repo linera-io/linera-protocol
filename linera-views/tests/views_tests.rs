@@ -535,14 +535,41 @@ where
     if config.with_map {
         {
             let mut view = store.load(1).await.unwrap();
-            let value = view.map.get_mut_value(&"Geia".to_string()).await.unwrap();
+            let value = view
+                .map
+                .get_mut_or_default(&"Geia".to_string())
+                .await
+                .unwrap();
             assert_eq!(*value, 0);
             *value = 42;
+            let value = view
+                .map
+                .get_mut_or_default(&"Geia".to_string())
+                .await
+                .unwrap();
+            assert_eq!(*value, 42);
             view.save().await.unwrap();
         }
         {
             let view = store.load(1).await.unwrap();
             assert_eq!(view.map.get(&"Geia".to_string()).await.unwrap(), Some(42));
+        }
+        {
+            let mut view = store.load(1).await.unwrap();
+            let value = view
+                .map
+                .get_mut_or_default(&"Geia".to_string())
+                .await
+                .unwrap();
+            assert_eq!(*value, 42);
+            *value = 43;
+            view.rollback();
+            let value = view
+                .map
+                .get_mut_or_default(&"Geia".to_string())
+                .await
+                .unwrap();
+            assert_eq!(*value, 42);
         }
     }
     if config.with_map {

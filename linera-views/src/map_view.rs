@@ -363,7 +363,7 @@ where
 
     /// Obtain a mutable reference to a value at a given position.
     /// Default value if the index is missing.
-    pub async fn get_mut_value(&mut self, index: &I) -> Result<&mut V, ViewError> {
+    pub async fn get_mut_or_default(&mut self, index: &I) -> Result<&mut V, ViewError> {
         let short_key = C::derive_short_key(index)?;
         self.load_value_or_default(&short_key).await?;
         if let Some(Update::Set(value)) = self.updates.get_mut(&short_key.clone()) {

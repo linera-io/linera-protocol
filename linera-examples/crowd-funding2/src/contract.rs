@@ -224,7 +224,7 @@ where
     async fn finish_pledge(&mut self, source: AccountOwner, amount: u128) -> Result<(), Error> {
         match self.status.get() {
             Status::Active => {
-                let value = self.pledges.get_mut_value(&source).await?;
+                let value = self.pledges.get_mut_or_default(&source).await?;
                 *value += amount;
                 Ok(())
             }
