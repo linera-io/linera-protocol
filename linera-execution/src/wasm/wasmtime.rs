@@ -37,7 +37,7 @@ use super::{
 use crate::{CallResult, ExecutionError, QueryableStorage, SessionId, WritableStorage};
 use linera_views::common::Batch;
 use std::task::Poll;
-use wasmtime::{Engine, Linker, Module, Store, Trap};
+use wasmtime::{Config, Engine, Linker, Module, Store, Trap};
 use wit_bindgen_host_wasmtime_rust::Le;
 
 /// Type representing the [Wasmtime](https://wasmtime.dev/) runtime for contracts.
@@ -71,7 +71,10 @@ impl WasmApplication {
         &self,
         storage: &'storage dyn WritableStorage,
     ) -> Result<WasmRuntimeContext<'storage, Contract<'storage>>, WasmExecutionError> {
-        let engine = Engine::default();
+        let mut config = Config::default();
+        config.consume_fuel(true);
+
+        let engine = Engine::new(&config).map_err(WasmExecutionError::CreateWasmtimeEngine)?;
         let mut linker = Linker::new(&engine);
 
         writable_system::add_to_linker(&mut linker, ContractState::system_api)?;
@@ -84,6 +87,10 @@ impl WasmApplication {
         let (contract, _instance) =
             contract::Contract::instantiate(&mut store, &module, &mut linker, ContractState::data)?;
         let application = Contract { contract };
+
+        store
+            .add_fuel(10_000_000)
+            .expect("Fuel consumption wasn't properly enabled");
 
         Ok(WasmRuntimeContext {
             context_forwarder,

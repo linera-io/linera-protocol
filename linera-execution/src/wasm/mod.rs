@@ -71,6 +71,9 @@ pub enum WasmExecutionError {
     #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
     #[error("Failed to load WASM module")]
     LoadModule(#[from] anyhow::Error),
+    #[cfg(feature = "wasmtime")]
+    #[error("Failed to create and configure Wasmtime runtime")]
+    CreateWasmtimeEngine(#[source] anyhow::Error),
     #[cfg(feature = "wasmer")]
     #[error("Failed to execute WASM module (Wasmer)")]
     ExecuteModuleInWasmer(#[from] ::wasmer::RuntimeError),
