@@ -5,7 +5,7 @@ authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 
 [features]
-default = ["wasmtime"]
+default = ["wasmer", "wasmtime"]
 test = ["tokio/macros", "async-lock"]
 wasmer = ["dep:wasmer", "wit-bindgen-host-wasmer-rust"]
 wasmtime = ["dep:wasmtime", "wit-bindgen-host-wasmtime-rust"]
