@@ -321,18 +321,14 @@ where
     ) -> Result<Vec<(UserApplicationId, UserApplicationDescription)>, ExecutionError> {
         let mut applications = vec![];
         for index in self.system.registry.known_applications.indices().await? {
-            let application_description = self.system
-                .registry
-                .known_applications
-                .get(&index)
-                .await?;
+            let application_description =
+                self.system.registry.known_applications.get(&index).await?;
             match application_description {
                 Some(application_description) => {
                     applications.push((index, application_description))
-                },
+                }
                 None => {}
             }
-
         }
         Ok(applications)
     }

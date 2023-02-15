@@ -2,8 +2,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::Context;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use colored::Colorize;
 use futures::StreamExt;
 use linera_base::{
     committee::ValidatorState,
@@ -23,7 +25,7 @@ use linera_core::{
 };
 use linera_execution::{
     system::{Account, Amount, Balance, Recipient, SystemOperation, UserData},
-    ApplicationId, Operation, WasmRuntime,
+    ApplicationId, Bytecode, Operation, WasmRuntime,
 };
 use linera_rpc::{
     config::NetworkProtocol, grpc_network::GrpcMassClient, mass::MassClient,
@@ -569,6 +571,14 @@ enum ClientCommand {
         #[structopt(long = "port", default_value = "8080")]
         port: NonZeroU16,
     },
+
+    /// Create an application.
+    #[structopt(name = "publish")]
+    Publish {
+        contract: PathBuf,
+        service: PathBuf,
+        publisher: Option<ChainId>,
+    },
 }
 
 struct Job(ClientContext, ClientCommand);
@@ -904,6 +914,51 @@ where
                 let service = linera_service::node_service::NodeService::new(chain_client, port);
 
                 service.run().await?;
+            }
+
+            Publish {
+                contract,
+                service,
+                publisher,
+            } => {
+                let start_time = Instant::now();
+                let chain_id = publisher.unwrap_or(context.genesis_config.admin_id);
+                let mut chain_client = context.make_chain_client(storage, chain_id);
+
+                info!("Loading bytecode files...");
+                let contract_bytecode = Bytecode::load_from_file(&contract).await.context(
+                    format!("failed to load contract bytecode from {:?}", &contract),
+                )?;
+                let service_bytecode = Bytecode::load_from_file(&service).await.context(
+                    format!("failed to load service bytecode from {:?}", &service),
+                )?;
+
+                info!("Publishing bytecode...");
+                let (bytecode_id, cert) = chain_client
+                    .publish_bytecode(contract_bytecode, service_bytecode)
+                    .await
+                    .context("failed to publish bytecode")?;
+
+                info!("{}", "Bytecode published successfully!".green().bold());
+                info!("Bytecode Id: {}", format!("{:?}", bytecode_id).bold());
+
+                info!("Synchronizing...");
+                chain_client.synchronize_and_recompute_balance().await?;
+                chain_client.process_inbox().await?;
+
+                info!("Processing inbox...");
+                chain_client.receive_certificate(cert).await?;
+                chain_client.process_inbox().await?;
+
+                info!("Creating application...");
+                let (application_id, _) = chain_client
+                    .create_application(bytecode_id, vec![], vec![], vec![])
+                    .await
+                    .context("failed to create application")?;
+
+                info!("{}", "Application published successfully!".green().bold());
+                info!("Application Id: {}\n", format!("{:?}", application_id).bold());
+                info!("Time elapsed: {}s", start_time.elapsed().as_secs())
             }
 
             CreateGenesisConfig { .. } => unreachable!(),
