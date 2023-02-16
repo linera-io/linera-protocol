@@ -336,41 +336,34 @@ where
     I: Sync + Clone + Send + Serialize + DeserializeOwned,
     V: Clone + Sync + Default + Serialize + DeserializeOwned + 'static,
 {
-    /// Set the value in the updates to default if removed or absent
-    fn set_value_in_update(&mut self, short_key: &[u8]) {
-        let value = self.updates.get_mut(&short_key.to_vec());
-        if let Some(value) = value {
-            if let Update::Removed = value {
-                *value = Update::Set(V::default());
-            }
-        } else {
-            self.updates
-                .insert(short_key.to_vec(), Update::Set(V::default()));
-        }
-    }
-
-    /// load the value in updates and set it to default if missing
-    async fn load_value_or_default(&mut self, short_key: &[u8]) -> Result<(), ViewError> {
-        if self.was_cleared || self.updates.contains_key(short_key) {
-            self.set_value_in_update(short_key);
-        } else {
-            let key = self.context.base_tag_index(KeyTag::Index as u8, short_key);
-            let value = self.context.read_key(&key).await?.unwrap_or_default();
-            self.updates.insert(short_key.to_vec(), Update::Set(value));
-        }
-        Ok(())
-    }
-
     /// Obtain a mutable reference to a value at a given position.
     /// Default value if the index is missing.
     pub async fn get_mut_or_default(&mut self, index: &I) -> Result<&mut V, ViewError> {
         let short_key = C::derive_short_key(index)?;
-        self.load_value_or_default(&short_key).await?;
-        if let Some(Update::Set(value)) = self.updates.get_mut(&short_key.clone()) {
-            Ok(value)
-        } else {
-            unreachable!();
-        }
+        use std::collections::btree_map::Entry;
+
+        let update : &mut Update<V> = match self.updates.entry(short_key.clone()) {
+            Entry::Vacant(e) if self.was_cleared => {
+                e.insert(Update::Set(V::default()))     // type: &mut Update<V>
+            }
+            Entry::Vacant(e) => {
+                let key = self.context.base_tag_index(KeyTag::Index as u8, &short_key);
+                let value = self.context.read_key(&key).await?.unwrap_or_default();
+                e.insert(Update::Set(value))
+            }
+            Entry::Occupied(entry) => {
+                let entry = entry.into_mut();
+                match entry {
+                    Update::Set(_) => &mut *entry,
+                    Update::Removed => {
+                        *entry = Update::Set(V::default());
+                        &mut *entry
+                    }
+                }
+            }
+        };
+        let Update::Set(value) = update else { unreachable!() };
+        Ok(value)
     }
 }
 
