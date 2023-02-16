@@ -155,10 +155,11 @@ where
         if self.was_cleared {
             return Ok(None);
         }
-        let key = self.context.derive_tag_key(KeyTag::Index as u8, &index)?;
+        let key = self.context.base_tag_index(KeyTag::Index as u8, &short_key);
         Ok(self.context.read_key(&key).await?)
     }
 
+    /// load the value in updates if that is at all possible
     async fn load_value(&mut self, short_key: &[u8]) -> Result<(), ViewError> {
         if !self.was_cleared && !self.updates.contains_key(short_key) {
             let key = self.context.base_tag_index(KeyTag::Index as u8, short_key);
@@ -325,6 +326,42 @@ where
         .await?;
         hasher.update_with_bcs_bytes(&count)?;
         Ok(hasher.finalize())
+    }
+}
+
+impl<C, I, V> MapView<C, I, V>
+where
+    C: Context,
+    ViewError: From<C::Error>,
+    I: Sync + Clone + Send + Serialize + DeserializeOwned,
+    V: Clone + Sync + Default + Serialize + DeserializeOwned + 'static,
+{
+    /// Obtain a mutable reference to a value at a given position.
+    /// Default value if the index is missing.
+    pub async fn get_mut_or_default(&mut self, index: &I) -> Result<&mut V, ViewError> {
+        let short_key = C::derive_short_key(index)?;
+        use std::collections::btree_map::Entry;
+
+        let update = match self.updates.entry(short_key.clone()) {
+            Entry::Vacant(e) if self.was_cleared => e.insert(Update::Set(V::default())),
+            Entry::Vacant(e) => {
+                let key = self.context.base_tag_index(KeyTag::Index as u8, &short_key);
+                let value = self.context.read_key(&key).await?.unwrap_or_default();
+                e.insert(Update::Set(value))
+            }
+            Entry::Occupied(entry) => {
+                let entry = entry.into_mut();
+                match entry {
+                    Update::Set(_) => &mut *entry,
+                    Update::Removed => {
+                        *entry = Update::Set(V::default());
+                        &mut *entry
+                    }
+                }
+            }
+        };
+        let Update::Set(value) = update else { unreachable!() };
+        Ok(value)
     }
 }
 
