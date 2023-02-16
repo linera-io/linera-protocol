@@ -342,7 +342,7 @@ where
         let short_key = C::derive_short_key(index)?;
         use std::collections::btree_map::Entry;
 
-        let update: &mut Update<V> = match self.updates.entry(short_key.clone()) {
+        let update = match self.updates.entry(short_key.clone()) {
             Entry::Vacant(e) if self.was_cleared => e.insert(Update::Set(V::default())),
             Entry::Vacant(e) => {
                 let key = self.context.base_tag_index(KeyTag::Index as u8, &short_key);
