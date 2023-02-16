@@ -314,6 +314,12 @@ pub struct CallResult {
 
 #[async_trait]
 pub trait WritableStorage: ReadableStorage {
+    /// Returns the amount of execution fuel remaining before execution is aborted.
+    fn remaining_fuel(&self) -> u64;
+
+    /// Sets the amount of execution fuel remaining before execution is aborted.
+    fn set_remaining_fuel(&self, remaining_fuel: u64);
+
     /// Read the application state and prevent further reading/loading until the state is saved.
     async fn try_read_and_lock_my_state(&self) -> Result<Vec<u8>, ExecutionError>;
 

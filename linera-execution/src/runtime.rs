@@ -432,6 +432,12 @@ where
     ViewError: From<C::Error>,
     C::Extra: ExecutionRuntimeContext,
 {
+    fn remaining_fuel(&self) -> u64 {
+        10_000_000
+    }
+
+    fn set_remaining_fuel(&self, remaining_fuel: u64) {}
+
     async fn try_read_and_lock_my_state(&self) -> Result<Vec<u8>, ExecutionError> {
         let view = self
             .execution_state_mut()
