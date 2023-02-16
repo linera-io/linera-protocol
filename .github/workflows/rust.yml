@@ -44,12 +44,13 @@ jobs:
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Build WASM test runner
+      # use debug mode to avoid building wasmtime in release mode
       run: |
-        cargo build --locked --release --bin test-runner
+        cargo build --locked --bin test-runner
     - name: Run WASM application tests
       run: |
         cd linera-examples
-        cargo test --target wasm32-unknown-unknown
+        CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=../target/debug/test-runner cargo test --target wasm32-unknown-unknown
     - name: Build example applications
       run: |
         cd linera-examples
