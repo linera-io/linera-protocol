@@ -21,7 +21,10 @@ use linera_views::{
 use std::{
     collections::{btree_map, BTreeMap},
     ops::DerefMut,
-    sync::Arc,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
 };
 use tokio::sync::{Mutex, MutexGuard, OwnedMutexGuard, OwnedRwLockWriteGuard};
 
@@ -32,6 +35,8 @@ pub(crate) struct ExecutionRuntime<'a, C, const WRITABLE: bool> {
     chain_id: ChainId,
     /// The current stack of application descriptions.
     applications: Arc<Mutex<&'a mut Vec<ApplicationStatus>>>,
+    /// The amount of fuel available for executing the application.
+    remaining_fuel: Arc<AtomicU64>,
     /// The storage view on the execution state.
     execution_state: Arc<Mutex<&'a mut ExecutionStateView<C>>>,
     /// All the sessions and their IDs.
@@ -103,6 +108,7 @@ where
             active_view_user_states: Arc::default(),
             active_sessions: Arc::default(),
             execution_results: Arc::new(Mutex::new(execution_results)),
+            remaining_fuel: Arc::new(AtomicU64::new(10_000_000)),
         }
     }
 
@@ -433,10 +439,12 @@ where
     C::Extra: ExecutionRuntimeContext,
 {
     fn remaining_fuel(&self) -> u64 {
-        10_000_000
+        self.remaining_fuel.load(Ordering::Acquire)
     }
 
-    fn set_remaining_fuel(&self, remaining_fuel: u64) {}
+    fn set_remaining_fuel(&self, remaining_fuel: u64) {
+        self.remaining_fuel.store(remaining_fuel, Ordering::Release);
+    }
 
     async fn try_read_and_lock_my_state(&self) -> Result<Vec<u8>, ExecutionError> {
         let view = self
