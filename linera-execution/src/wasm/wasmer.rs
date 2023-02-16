@@ -74,7 +74,10 @@ impl WasmApplication {
         &self,
         storage: &'storage dyn WritableStorage,
     ) -> Result<WasmRuntimeContext<'static, Contract<'storage>>, WasmExecutionError> {
-        let metering = Arc::new(Metering::new(10_000_000, Self::operation_cost));
+        let metering = Arc::new(Metering::new(
+            storage.remaining_fuel(),
+            Self::operation_cost,
+        ));
         let mut compiler_config = Cranelift::default();
         compiler_config.push_middleware(metering);
 

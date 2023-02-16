@@ -89,7 +89,7 @@ impl WasmApplication {
         let application = Contract { contract };
 
         store
-            .add_fuel(10_000_000)
+            .add_fuel(storage.remaining_fuel())
             .expect("Fuel consumption wasn't properly enabled");
 
         Ok(WasmRuntimeContext {
