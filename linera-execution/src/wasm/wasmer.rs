@@ -35,10 +35,10 @@ use linera_views::common::Batch;
 use std::{marker::PhantomData, mem, sync::Arc, task::Poll};
 use tokio::sync::Mutex;
 use wasmer::{
-    imports, wasmparser::Operator, CompilerConfig, Cranelift, EngineBuilder, Module, RuntimeError,
-    Store,
+    imports, wasmparser::Operator, CompilerConfig, Cranelift, EngineBuilder, Instance, Module,
+    RuntimeError, Store,
 };
-use wasmer_middlewares::Metering;
+use wasmer_middlewares::metering::{self, Metering, MeteringPoints};
 use wit_bindgen_host_wasmer_rust::Le;
 
 /// Type representing the [Wasmer](https://wasmer.io/) contract runtime.
@@ -53,7 +53,27 @@ pub struct Contract<'storage> {
 impl<'storage> ApplicationRuntimeContext for Contract<'storage> {
     type Store = Store;
     type Error = RuntimeError;
-    type Extra = StorageGuard<'storage, &'static dyn WritableStorage>;
+    type Extra = WasmerContractExtra<'storage>;
+
+    fn finalize(context: &mut WasmRuntimeContext<Self>) {
+        let storage_guard = context
+            .extra
+            .storage_guard
+            .storage
+            .try_lock()
+            .expect("Unexpected concurrent access to WritableStorage");
+        let storage = storage_guard
+            .as_ref()
+            .expect("Storage guard dropped prematurely");
+
+        let remaining_fuel =
+            match metering::get_remaining_points(&mut context.store, &context.extra.instance) {
+                MeteringPoints::Exhausted => 0,
+                MeteringPoints::Remaining(fuel) => fuel,
+            };
+
+        storage.set_remaining_fuel(remaining_fuel);
+    }
 }
 
 /// Type representing the [Wasmer](https://wasmer.io/) service runtime.
@@ -105,7 +125,10 @@ impl WasmApplication {
             application,
             future_queue,
             store,
-            extra: storage_guard,
+            extra: WasmerContractExtra {
+                instance,
+                storage_guard,
+            },
         })
     }
 
@@ -771,6 +794,12 @@ impl queryable_system::QueryableSystem for SystemApi<&'static dyn QueryableStora
     fn log(&mut self, message: &str, level: queryable_system::LogLevel) {
         log::log!(level.into(), "{message}");
     }
+}
+
+/// Extra parameters necessary when cleaning up after contract execution.
+pub struct WasmerContractExtra<'storage> {
+    storage_guard: StorageGuard<'storage, &'static dyn WritableStorage>,
+    instance: Instance,
 }
 
 /// A guard to unsure that the [`WritableStorage`] trait object isn't called after it's no longer
