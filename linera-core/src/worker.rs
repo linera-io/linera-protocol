@@ -287,14 +287,20 @@ where
         let (response, actions) = self
             .handle_certificate(certificate, blob_certificates)
             .await?;
-        let mut requests = VecDeque::from(actions.cross_chain_requests);
-        while let Some(request) = requests.pop_front() {
-            let actions = self.handle_cross_chain_request(request).await?;
-            requests.extend(actions.cross_chain_requests);
-            if let Some(notifications) = notifications.as_mut() {
-                notifications.extend(actions.notifications);
-            }
-        }
+        std::thread::scope(|s| {
+            s.spawn(|| {
+                let rt = tokio::runtime::Runtime::new().unwrap();
+                let mut requests = VecDeque::from(actions.cross_chain_requests);
+                while let Some(request) = requests.pop_front() {
+                    let actions = rt.block_on(self.handle_cross_chain_request(request))?;
+                    requests.extend(actions.cross_chain_requests);
+                    if let Some(notifications) = notifications.as_mut() {
+                        notifications.extend(actions.notifications);
+                    }
+                }
+                Ok::<(), WorkerError>(())
+            });
+        });
         Ok(response)
     }
 
