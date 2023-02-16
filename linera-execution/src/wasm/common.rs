@@ -25,6 +25,9 @@ pub trait ApplicationRuntimeContext: Sized {
 
     /// Extra runtime-specific data.
     type Extra: Send + Unpin;
+
+    /// Finalizes the runtime context, running any extra clean-up operations.
+    fn finalize(_context: &mut WasmRuntimeContext<Self>) {}
 }
 
 /// Common interface to calling a user contract in a WebAssembly module.
@@ -403,6 +406,15 @@ where
                 .query_application_new(&mut self.store, (*context).into(), argument);
 
         GuestFuture::new(future, self)
+    }
+}
+
+impl<A> Drop for WasmRuntimeContext<'_, A>
+where
+    A: ApplicationRuntimeContext,
+{
+    fn drop(&mut self) {
+        A::finalize(self);
     }
 }
 
