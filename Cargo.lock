@@ -2341,6 +2341,7 @@ dependencies = [
  "colored",
  "env_logger",
  "futures",
+ "hex",
  "linera-base",
  "linera-chain",
  "linera-core",

@@ -1,5 +1,5 @@
 [package]
-name = "counter-no-args"
+name = "counter-graphql"
 version = "0.1.0"
 authors = ["Linera <contact@linera.io>"]
 edition = "2021"
@@ -8,6 +8,7 @@ edition = "2021"
 async-trait = "0.1.52"
 bcs = "0.1.3"
 futures = "0.3.17"
+hex = "0.4.3"
 linera-sdk = { path = "../../linera-sdk" }
 serde = { version = "1.0.130", features = ["derive"] }
 thiserror = "1.0.31"
@@ -17,9 +18,9 @@ linera-sdk = { path = "../../linera-sdk", features = ["test"] }
 webassembly-test = "0.1.0"
 
 [[bin]]
-name = "counter_no_args_contract"
+name = "counter_graphql_contract"
 path = "src/contract.rs"
 
 [[bin]]
-name = "counter_no_args_service"
+name = "counter_graphql_service"
 path = "src/service.rs"

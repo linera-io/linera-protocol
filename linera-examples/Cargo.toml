@@ -2,7 +2,7 @@
 members = [
         "counter",
         "counter2",
-        "counter-no-args",
+        "counter-graphql",
         "crowd-funding",
         "fungible",
         "meta-counter",
