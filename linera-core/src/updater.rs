@@ -214,13 +214,14 @@ where
                         });
                     }
                 }
-                Err(NodeError::MissingCrossChainUpdate { .. }) => {
+                Err(e @ NodeError::MissingCrossChainUpdate { .. }) => {
                     if count < self.retries {
                         // We just called `send_chain_information_for_senders` but it may
                         // take time to receive the missing messages: let's retry.
                         tokio::time::sleep(self.delay).await;
                         count += 1;
                     } else {
+                        log::error!("Missing cross-chain updates: {:?}", e);
                         return Err(NodeError::ProposedBlockWithLaggingMessages {
                             chain_id,
                             retries: self.retries,
