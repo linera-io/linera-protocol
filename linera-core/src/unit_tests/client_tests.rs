@@ -12,7 +12,7 @@ use crate::{
     worker::{ValidatorWorker, WorkerError, WorkerState},
 };
 use async_trait::async_trait;
-use futures::lock::Mutex;
+use futures::{lock::Mutex, Future};
 use linera_base::{committee::Committee, crypto::*, data_types::*};
 use linera_chain::data_types::{Block, BlockProposal, Certificate, LiteCertificate, Value};
 use linera_execution::{
@@ -27,12 +27,17 @@ use std::{
     sync::Arc,
 };
 use test_log::test;
+use tokio::sync::oneshot;
 
 #[cfg(feature = "aws")]
 use {linera_storage::DynamoDbStoreClient, linera_views::test_utils::LocalStackTestContext};
 
 /// An validator used for testing. "Faulty" validators ignore block proposals (but not
 /// certificates or info queries) and have the wrong initial balance for all chains.
+///
+/// All methods are executed in a separate Tokio runtime, so that canceling a client task
+/// doesn't cause the validator's tasks to be canceled: In a real network, a validator also
+/// wouldn't cancel tasks if the client stopped waiting for the response.
 struct LocalValidator<S> {
     is_faulty: bool,
     state: WorkerState<S>,
@@ -51,35 +56,20 @@ where
         &mut self,
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, NodeError> {
-        let validator = self.0.clone();
-        let mut validator = validator.lock().await;
-        if validator.is_faulty {
-            Err(ArithmeticError::SequenceOverflow.into())
-        } else {
-            let response = validator.state.handle_block_proposal(proposal).await?;
-            Ok(response)
-        }
+        self.run_in_new_runtime(move |validator, sender| {
+            validator.do_handle_block_proposal(proposal, sender)
+        })
+        .await
     }
 
     async fn handle_lite_certificate(
         &mut self,
         certificate: LiteCertificate,
     ) -> Result<ChainInfoResponse, NodeError> {
-        let validator = self.0.clone();
-        let mut validator = validator.lock().await;
-        let value = validator
-            .state
-            .recent_value(&certificate.value.value_hash)
-            .ok_or(NodeError::MissingCertificateValue)?
-            .clone();
-        let full_cert = certificate
-            .with_value(value)
-            .ok_or(WorkerError::InvalidLiteCertificate)?;
-        let response = validator
-            .state
-            .fully_handle_certificate(full_cert, vec![])
-            .await?;
-        Ok(response)
+        self.run_in_new_runtime(move |validator, sender| {
+            validator.do_handle_lite_certificate(certificate, sender)
+        })
+        .await
     }
 
     async fn handle_certificate(
@@ -87,28 +77,20 @@ where
         certificate: Certificate,
         blob_certificates: Vec<Certificate>,
     ) -> Result<ChainInfoResponse, NodeError> {
-        let validator = self.0.clone();
-        let mut validator = validator.lock().await;
-        let response = validator
-            .state
-            .fully_handle_certificate(certificate, blob_certificates)
-            .await?;
-        Ok(response)
+        self.run_in_new_runtime(move |validator, sender| {
+            validator.do_handle_certificate(certificate, blob_certificates, sender)
+        })
+        .await
     }
 
     async fn handle_chain_info_query(
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, NodeError> {
-        let response = self
-            .0
-            .clone()
-            .lock()
-            .await
-            .state
-            .handle_chain_info_query(query)
-            .await?;
-        Ok(response)
+        self.run_in_new_runtime(move |validator, sender| {
+            validator.do_handle_chain_info_query(query, sender)
+        })
+        .await
     }
 
     async fn subscribe(&mut self, _chains: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
@@ -118,10 +100,96 @@ where
     }
 }
 
-impl<S> LocalValidatorClient<S> {
+impl<S> LocalValidatorClient<S>
+where
+    S: Store + Clone + Send + Sync + 'static,
+    ViewError: From<S::ContextError>,
+{
     fn new(is_faulty: bool, state: WorkerState<S>) -> Self {
         let validator = LocalValidator { is_faulty, state };
         Self(Arc::new(Mutex::new(validator)))
+    }
+
+    /// Executes the future produced by `f` in a new thread in a new Tokio runtime.
+    /// Returns the value that the future puts into the sender.
+    async fn run_in_new_runtime<F, R, T>(&self, f: F) -> T
+    where
+        T: Send + 'static,
+        R: Future<Output = Result<(), T>>,
+        F: FnOnce(Self, oneshot::Sender<T>) -> R + Send + 'static,
+    {
+        let validator = self.clone();
+        let (sender, receiver) = oneshot::channel();
+        let _join_handle = std::thread::spawn(move || {
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            if runtime.block_on(f(validator, sender)).is_err() {
+                log::debug!("result could not be sent");
+            }
+        });
+        receiver.await.unwrap()
+    }
+
+    async fn do_handle_block_proposal(
+        self,
+        proposal: BlockProposal,
+        sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
+    ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
+        let mut validator = self.0.lock().await;
+        let result = if validator.is_faulty {
+            Err(ArithmeticError::SequenceOverflow.into())
+        } else {
+            validator.state.handle_block_proposal(proposal).await
+        };
+        sender.send(result.map_err(Into::into))
+    }
+
+    async fn do_handle_lite_certificate(
+        self,
+        certificate: LiteCertificate,
+        sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
+    ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
+        let mut validator = self.0.lock().await;
+        let result = async move {
+            let value = validator
+                .state
+                .recent_value(&certificate.value.value_hash)
+                .ok_or(NodeError::MissingCertificateValue)?
+                .clone();
+            let full_cert = certificate
+                .with_value(value)
+                .ok_or(WorkerError::InvalidLiteCertificate)?;
+            let response = validator
+                .state
+                .fully_handle_certificate(full_cert, vec![])
+                .await?;
+            Ok(response)
+        }
+        .await;
+        sender.send(result)
+    }
+
+    async fn do_handle_certificate(
+        self,
+        certificate: Certificate,
+        blob_certificates: Vec<Certificate>,
+        sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
+    ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
+        let mut validator = self.0.lock().await;
+        let result = validator
+            .state
+            .fully_handle_certificate(certificate, blob_certificates)
+            .await;
+        sender.send(result.map_err(Into::into))
+    }
+
+    async fn do_handle_chain_info_query(
+        self,
+        query: ChainInfoQuery,
+        sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
+    ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
+        let mut validator = self.0.lock().await;
+        let result = validator.state.handle_chain_info_query(query).await;
+        sender.send(result.map_err(Into::into))
     }
 }
 
