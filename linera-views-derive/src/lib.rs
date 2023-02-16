@@ -373,9 +373,22 @@ fn generate_graphql_code_for_field(field: Field) -> (TokenStream2, Option<TokenS
             (r#impl, None)
         }
         "MapView" => {
-            unimplemented!(
-                "'MapView' is not currently supported by the 'GraphQLView' derive macro."
-            )
+            let generic_arguments = generic_argument_from_type_path(&type_path);
+            let index_ident = generic_arguments
+                .get(1)
+                .expect("no index specified for 'CollectionView'");
+            let generic_ident = generic_arguments
+                .get(2)
+                .expect("no generic type specified for 'CollectionView'");
+
+            let index_name = snakify(index_ident);
+
+            let r#impl = quote! {
+                async fn #field_name(&self, #index_name: #index_ident) -> Result<Option<#generic_ident>, async_graphql::Error> {
+                    Ok(self.#field_name.get(&#index_name).await?)
+                }
+            };
+            (r#impl, None)
         }
         _ => {
             let r#impl = quote! {
@@ -687,6 +700,7 @@ pub mod tests {
                 set: SetView<C, HashSet<usize>>,
                 log: LogView<C, usize>,
                 queue: QueueView<C, usize>,
+                map: MapView<C, String, usize>
             }
         );
 
@@ -753,6 +767,9 @@ pub mod tests {
                 async fn queue(&self, count: Option<usize>) -> Result<Vec<usize>, async_graphql::Error> {
                     let count = count.unwrap_or_else(|| self.queue.count());
                     Ok(self.queue.read_front(count).await?)
+                }
+                async fn map(&self, string: String) -> Result<Option<usize>, async_graphql::Error> {
+                    Ok(self.map.get(&string).await?)
                 }
             }
 
