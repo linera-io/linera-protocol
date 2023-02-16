@@ -25,7 +25,7 @@ use linera_base::data_types::ChainId;
 use linera_chain::data_types;
 use linera_core::{
     node::{NodeError, NotificationStream, ValidatorNode},
-    worker::{NetworkActions, Notification, ValidatorWorker, WorkerState},
+    worker::{NetworkActions, Notification, ValidatorWorker, WorkerError, WorkerState},
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -358,11 +358,19 @@ where
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                warn!(
-                    "[{}] Failed to handle lite certificate: {}",
-                    self.state.nickname(),
-                    error
-                );
+                if let WorkerError::MissingCertificateValue = &error {
+                    debug!(
+                        "[{}] Failed to handle lite certificate: {}",
+                        self.state.nickname(),
+                        error
+                    );
+                } else {
+                    warn!(
+                        "[{}] Failed to handle lite certificate: {}",
+                        self.state.nickname(),
+                        error
+                    );
+                }
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
         }

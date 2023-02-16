@@ -391,30 +391,35 @@ where
         for certificate in certificates {
             if let Value::ConfirmedBlock { block, .. } = &certificate.value {
                 if block.chain_id == chain_id {
-                    // TODO: Add required certificates to chain info?
                     let error = match self.handle_certificate(certificate.clone(), vec![]).await {
                         Ok(response) => {
                             info = Some(response.info);
                             // Continue with the next certificate.
                             continue;
                         }
-                        Err(NodeError::ApplicationBytecodeNotFound {
-                            bytecode_location, ..
-                        }) => {
-                            let Some(blob) = self.try_download_blob_from(name, client, bytecode_location).await else {
-                                // The certificate is not as expected. Give up.
-                                log::warn!(
-                                    "Failed to process network blob",
-                                );
-                                return info;
-                            };
-                            // TODO(#443): we should store values/blobs separately to avoid overwriting
-                            // certificates without checking quorums (which requires the history of the
-                            // chain due to reconfigurations).
-                            match self
-                                .handle_certificate(certificate.clone(), vec![blob])
-                                .await
+                        mut result @ Err(NodeError::ApplicationBytecodeNotFound { .. }) => {
+                            let mut blobs: Vec<Certificate> = vec![];
+                            while let Err(NodeError::ApplicationBytecodeNotFound {
+                                bytecode_location,
+                                ..
+                            }) = &result
                             {
+                                let Some(blob) = self.try_download_blob_from(name, client, *bytecode_location).await else {
+                                    // The certificate is not as expected. Give up.
+                                    log::warn!(
+                                        "Failed to process network blob",
+                                    );
+                                    return info;
+                                };
+                                blobs.push(blob);
+                                // TODO(#443): we should store values/blobs separately to avoid overwriting
+                                // certificates without checking quorums (which requires the history of the
+                                // chain due to reconfigurations).
+                                result = self
+                                    .handle_certificate(certificate.clone(), blobs.clone())
+                                    .await;
+                            }
+                            match result {
                                 Ok(response) => {
                                     info = Some(response.info);
                                     // Continue with the next certificate.
@@ -510,6 +515,27 @@ where
                 target_next_block_height,
             })
         }
+    }
+
+    pub async fn download_blob<A>(
+        &mut self,
+        mut validators: Vec<(ValidatorName, A)>,
+        location: BytecodeLocation,
+    ) -> Option<Certificate>
+    where
+        A: ValidatorNode + Send + Sync + 'static + Clone,
+    {
+        // Sequentially try each validator in random order.
+        validators.shuffle(&mut rand::thread_rng());
+        for (name, mut client) in validators {
+            if let Some(blob) = self
+                .try_download_blob_from(name, &mut client, location)
+                .await
+            {
+                return Some(blob);
+            }
+        }
+        None
     }
 
     async fn try_download_blob_from<A>(
