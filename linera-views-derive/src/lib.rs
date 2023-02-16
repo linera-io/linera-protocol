@@ -376,10 +376,10 @@ fn generate_graphql_code_for_field(field: Field) -> (TokenStream2, Option<TokenS
             let generic_arguments = generic_argument_from_type_path(&type_path);
             let index_ident = generic_arguments
                 .get(1)
-                .expect("no index specified for 'CollectionView'");
+                .expect("no index specified for 'MapView'");
             let generic_ident = generic_arguments
                 .get(2)
-                .expect("no generic type specified for 'CollectionView'");
+                .expect("no generic type specified for 'MapView'");
 
             let index_name = snakify(index_ident);
 

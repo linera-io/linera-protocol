@@ -22,7 +22,6 @@ use linera_views::{
     collection_view::CollectionView,
     common::Context,
     log_view::LogView,
-    map_view::MapView,
     register_view::RegisterView,
     set_view::SetView,
     views::{GraphQLView, HashableContainerView, View, ViewError},
@@ -52,9 +51,6 @@ pub struct ChainStateView<C> {
 
     /// Communication state of applications.
     pub communication_states: CollectionView<C, ApplicationId, CommunicationStateView<C>>,
-
-    /// Fuel for a given application.
-    pub fuel: MapView<C, UserApplicationId, u64>,
 }
 
 /// Block-chaining state.
