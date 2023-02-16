@@ -7,13 +7,9 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use colored::Colorize;
 use futures::StreamExt;
-use linera_base::{
-    committee::ValidatorState,
-    crypto::{CryptoHash, KeyPair},
-    data_types::{
-        BlockHeight, ChainDescription, ChainId, Epoch, Owner, RoundNumber, Timestamp, ValidatorName,
-    },
-};
+use linera_base::{committee::ValidatorState, crypto::{CryptoHash, KeyPair}, data_types::{
+    BlockHeight, ChainDescription, ChainId, Epoch, Owner, RoundNumber, Timestamp, ValidatorName,
+}, hex_debug};
 use linera_chain::data_types::{
     Block, BlockAndRound, BlockProposal, Certificate, SignatureAggregator, Value, Vote,
 };
@@ -577,6 +573,7 @@ enum ClientCommand {
     Publish {
         contract: PathBuf,
         service: PathBuf,
+        arguments: String,
         publisher: Option<ChainId>,
     },
 }
@@ -919,11 +916,15 @@ where
             Publish {
                 contract,
                 service,
+                arguments,
                 publisher,
             } => {
                 let start_time = Instant::now();
                 let chain_id = publisher.unwrap_or(context.genesis_config.admin_id);
                 let mut chain_client = context.make_chain_client(storage, chain_id);
+
+                info!("Processing arguments...");
+                let arguments = hex::decode(&arguments)?;
 
                 info!("Loading bytecode files...");
                 let contract_bytecode = Bytecode::load_from_file(&contract).await.context(
@@ -952,7 +953,7 @@ where
 
                 info!("Creating application...");
                 let (application_id, _) = chain_client
-                    .create_application(bytecode_id, vec![], vec![], vec![])
+                    .create_application(bytecode_id, vec![], arguments, vec![])
                     .await
                     .context("failed to create application")?;
 

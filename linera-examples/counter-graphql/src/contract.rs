@@ -5,6 +5,7 @@
 
 mod state;
 
+use std::num::ParseIntError;
 use self::state::Counter;
 use async_trait::async_trait;
 use linera_sdk::{
@@ -23,8 +24,10 @@ impl Contract for Counter {
     async fn initialize(
         &mut self,
         _context: &OperationContext,
-        _argument: &[u8],
+        argument: &[u8],
     ) -> Result<ExecutionResult, Self::Error> {
+        let value_as_str: String = hex::encode(argument);
+        self.value = value_as_str.parse()?;
         Ok(ExecutionResult::default())
     }
 
@@ -85,6 +88,10 @@ pub enum Error {
     /// Invalid serialized increment value.
     #[error("Invalid serialized increment value")]
     InvalidIncrement(#[from] bcs::Error),
+
+    /// Could not parse the given argument into an u128.
+    #[error("Parse error")]
+    ParseIntError(#[from] ParseIntError)
 }
 
 #[cfg(test)]
