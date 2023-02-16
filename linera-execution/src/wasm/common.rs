@@ -23,8 +23,8 @@ pub trait ApplicationRuntimeContext: Sized {
     /// How to store the application's in-memory state.
     type Store: Send + Unpin;
 
-    /// How to clean up the system storage interface after the application has executed.
-    type StorageGuard: Send + Unpin;
+    /// Extra runtime-specific data.
+    type Extra: Send + Unpin;
 }
 
 /// Common interface to calling a user contract in a WebAssembly module.
@@ -209,7 +209,8 @@ where
     pub(crate) store: A::Store,
 
     /// Guard type to clean up any host state after the call to the WASM application finishes.
-    pub(crate) _storage_guard: A::StorageGuard,
+    #[allow(dead_code)]
+    pub(crate) extra: A::Extra,
 }
 
 impl<'context, A> WasmRuntimeContext<'context, A>
@@ -351,8 +352,8 @@ where
     where
         A: Unpin + 'session_data,
         A::Store: Unpin,
-        A::StorageGuard: Unpin,
         A::Error: Unpin,
+        A::Extra: Unpin,
     {
         let forwarded_sessions: Vec<_> = forwarded_sessions
             .into_iter()

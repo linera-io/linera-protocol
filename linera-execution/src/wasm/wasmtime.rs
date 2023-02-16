@@ -50,8 +50,8 @@ pub struct Contract<'storage> {
 
 impl<'storage> ApplicationRuntimeContext for Contract<'storage> {
     type Store = Store<ContractState<'storage>>;
-    type StorageGuard = ();
     type Error = Trap;
+    type Extra = ();
 }
 
 /// Type representing the [Wasmtime](https://wasmtime.dev/) runtime for services.
@@ -61,8 +61,8 @@ pub struct Service<'storage> {
 
 impl<'storage> ApplicationRuntimeContext for Service<'storage> {
     type Store = Store<ServiceState<'storage>>;
-    type StorageGuard = ();
     type Error = Trap;
+    type Extra = ();
 }
 
 impl WasmApplication {
@@ -97,7 +97,7 @@ impl WasmApplication {
             application,
             future_queue,
             store,
-            _storage_guard: (),
+            extra: (),
         })
     }
 
@@ -125,7 +125,7 @@ impl WasmApplication {
             application,
             future_queue,
             store,
-            _storage_guard: (),
+            extra: (),
         })
     }
 }
