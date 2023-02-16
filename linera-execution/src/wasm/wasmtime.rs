@@ -52,6 +52,14 @@ impl<'storage> ApplicationRuntimeContext for Contract<'storage> {
     type Store = Store<ContractState<'storage>>;
     type Error = Trap;
     type Extra = ();
+
+    fn finalize(context: &mut WasmRuntimeContext<Self>) {
+        let storage = context.store.data().system_api.storage;
+        let initial_fuel = storage.remaining_fuel();
+        let remaining_fuel = initial_fuel - context.store.fuel_consumed().unwrap_or(0);
+
+        storage.set_remaining_fuel(remaining_fuel);
+    }
 }
 
 /// Type representing the [Wasmtime](https://wasmtime.dev/) runtime for services.
