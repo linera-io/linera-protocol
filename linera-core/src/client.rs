@@ -554,13 +554,31 @@ where
         // certificate is still active.
         let nodes = self.make_validator_nodes(remote_committee).await?;
         self.node_client
-            .download_certificates(nodes, block.chain_id, block.height)
+            .download_certificates(nodes.clone(), block.chain_id, block.height)
             .await?;
-        // TODO: Add required certificates to chain info.
-        let blob_certificates = vec![];
-        // Process the received operation.
-        self.process_certificate(certificate, blob_certificates)
-            .await?;
+        // Process the received operations. Download required blobs if necessary.
+        let mut blobs: Vec<Certificate> = vec![];
+        while let Err(err) = self
+            .process_certificate(certificate.clone(), blobs.clone())
+            .await
+        {
+            if let NodeError::ApplicationBytecodeNotFound {
+                bytecode_location, ..
+            } = &err
+            {
+                if let Some(blob) = self
+                    .node_client
+                    .download_blob(nodes.clone(), *bytecode_location)
+                    .await
+                {
+                    blobs.push(blob);
+                    continue; // Got the required blob; retry.
+                }
+            }
+            // The certificate is not as expected. Give up.
+            log::warn!("Failed to process network blob",);
+            return Err(err.into());
+        }
         // Make sure a quorum of validators (according to our new local committee) are up-to-date
         // for data availability.
         let local_committee = self.local_committee().await?;

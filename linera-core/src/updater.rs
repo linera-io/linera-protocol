@@ -137,20 +137,25 @@ where
                 }
                 Err(err) => Err(err),
             };
-            if let Err(NodeError::ApplicationBytecodeNotFound { .. }) = &result {
-                let mut chain = self.store.load_chain(certificate.value.chain_id()).await?;
-                if let Ok(bytecodes) = chain.bytecode_for_block(certificate.value.block()).await {
-                    if let Ok(blob_certificates) = self
-                        .store
-                        .read_certificates(bytecodes.values().map(|bc| bc.certificate_hash))
-                        .await
-                    {
-                        result = self
-                            .client
-                            .handle_certificate(certificate.clone(), blob_certificates)
-                            .await;
-                    }
+            let mut blobs: Vec<Certificate> = vec![];
+            while let Err(NodeError::ApplicationBytecodeNotFound {
+                bytecode_location, ..
+            }) = &result
+            {
+                let hash = bytecode_location.certificate_hash;
+                if blobs.iter().any(|blob| blob.hash == hash) {
+                    log::warn!("validator requested {:?} but it was already sent", hash);
+                    break;
                 }
+                match self.store.read_certificate(hash).await {
+                    Ok(blob) => blobs.push(blob),
+                    Err(ViewError::NotFound(_)) => break,
+                    Err(err) => Err(err)?,
+                };
+                result = self
+                    .client
+                    .handle_certificate(certificate.clone(), blobs.clone())
+                    .await;
             }
             match result {
                 Ok(response) => {
