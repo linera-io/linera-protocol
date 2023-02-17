@@ -428,11 +428,11 @@ enum ClientCommand {
     Transfer {
         /// Sending chain id (must be one of our chains)
         #[structopt(long = "from")]
-        sender: ChainId,
+        sender: Account,
 
         /// Recipient chain id
         #[structopt(long = "to")]
-        recipient: ChainId,
+        recipient: Account,
 
         /// Amount to transfer
         amount: Amount,
@@ -589,16 +589,11 @@ where
                 recipient,
                 amount,
             } => {
-                let mut chain_client = context.make_chain_client(storage, sender);
+                let mut chain_client = context.make_chain_client(storage, sender.chain_id);
                 info!("Starting transfer");
                 let time_start = Instant::now();
                 let certificate = chain_client
-                    .transfer_to_account(
-                        /* TODO */ None,
-                        amount,
-                        Account::chain(recipient),
-                        UserData::default(),
-                    )
+                    .transfer_to_account(sender.owner, amount, recipient, UserData::default())
                     .await
                     .unwrap();
                 let time_total = time_start.elapsed().as_micros();
