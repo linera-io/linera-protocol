@@ -399,6 +399,7 @@ where
                     height: message.event.height,
                     index: message.event.index,
                 },
+                authenticated_signer: None,
             };
             let results = self
                 .execution_state
@@ -418,6 +419,7 @@ where
                 chain_id,
                 height: block.height,
                 index,
+                authenticated_signer: None,
             };
             let results = self
                 .execution_state

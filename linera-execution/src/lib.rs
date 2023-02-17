@@ -36,7 +36,7 @@ use dashmap::DashMap;
 use derive_more::Display;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{BlockHeight, ChainId, EffectId, Timestamp},
+    data_types::{BlockHeight, ChainId, EffectId, Owner, Timestamp},
     hex_debug,
 };
 use linera_views::{common::Batch, views::ViewError};
@@ -201,6 +201,8 @@ pub trait ExecutionRuntimeContext {
 pub struct OperationContext {
     /// The current chain id.
     pub chain_id: ChainId,
+    /// The authenticated signer of the operation, if any.
+    pub authenticated_signer: Option<Owner>,
     /// The current block height.
     pub height: BlockHeight,
     /// The current index of the operation.
@@ -211,6 +213,8 @@ pub struct OperationContext {
 pub struct EffectContext {
     /// The current chain id.
     pub chain_id: ChainId,
+    /// The authenticated signer of the operation that created the effect, if any.
+    pub authenticated_signer: Option<Owner>,
     /// The current block height.
     pub height: BlockHeight,
     /// The hash of the remote certificate that created the effect.
@@ -224,6 +228,8 @@ pub struct EffectContext {
 pub struct CalleeContext {
     /// The current chain id.
     pub chain_id: ChainId,
+    /// The authenticated signer for the execution thread, if any.
+    pub authenticated_signer: Option<Owner>,
     /// `None` if the caller doesn't want this particular call to be authenticated (e.g.
     /// for safety reasons).
     pub authenticated_caller_id: Option<UserApplicationId>,
