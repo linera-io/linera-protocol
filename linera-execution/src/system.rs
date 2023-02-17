@@ -25,6 +25,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
     fmt::{self, Display, Formatter},
+    str::FromStr,
 };
 use thiserror::Error;
 
@@ -250,6 +251,34 @@ impl Account {
         Account {
             chain_id,
             owner: Some(owner),
+        }
+    }
+}
+
+impl std::fmt::Display for Account {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.owner {
+            Some(owner) => write!(f, "{}:{}", self.chain_id, owner),
+            None => write!(f, "{}", self.chain_id),
+        }
+    }
+}
+
+impl FromStr for Account {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let parts: Vec<&str> = s.split(':').collect();
+        anyhow::ensure!(
+            parts.len() <= 2,
+            "Expecting format `chain-id:address` or `chain-id`"
+        );
+        if parts.len() == 1 {
+            Ok(Account::chain(s.parse()?))
+        } else {
+            let chain_id = parts[0].parse()?;
+            let owner = parts[1].parse()?;
+            Ok(Account::owner(chain_id, owner))
         }
     }
 }
