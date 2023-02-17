@@ -16,6 +16,7 @@ use linera_base::{
 };
 use linera_views::{
     common::Context,
+    map_view::MapView,
     register_view::RegisterView,
     set_view::SetView,
     views::{HashableContainerView, View, ViewError},
@@ -48,8 +49,10 @@ pub struct SystemExecutionStateView<C> {
     pub committees: RegisterView<C, BTreeMap<Epoch, Committee>>,
     /// Ownership of the chain.
     pub ownership: RegisterView<C, ChainOwnership>,
-    /// Balance of the chain.
+    /// Balance of the chain (unattributed, shared between owners).
     pub balance: RegisterView<C, Balance>,
+    /// Balances attributed to current/past/future owners.
+    pub balances: MapView<C, Owner, Balance>,
     /// The timestamp of the most recent block.
     pub timestamp: RegisterView<C, Timestamp>,
     /// Track the locations of known bytecodes as well as the descriptions of known applications.
@@ -67,6 +70,7 @@ pub struct SystemExecutionState {
     pub committees: BTreeMap<Epoch, Committee>,
     pub ownership: ChainOwnership,
     pub balance: Balance,
+    pub balances: BTreeMap<Owner, Balance>,
     pub timestamp: Timestamp,
     pub registry: ApplicationRegistry,
 }
