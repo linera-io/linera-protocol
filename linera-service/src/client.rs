@@ -161,6 +161,7 @@ impl ClientContext {
                 operations: vec![(
                     ApplicationId::System,
                     Operation::System(SystemOperation::Transfer {
+                        owner: None,
                         recipient: Recipient::Account(Account::chain(next_recipient)),
                         amount: Amount::from(1),
                         user_data: UserData::default(),
@@ -592,7 +593,12 @@ where
                 info!("Starting transfer");
                 let time_start = Instant::now();
                 let certificate = chain_client
-                    .transfer_to_chain(amount, Account::chain(recipient), UserData::default())
+                    .transfer_to_chain(
+                        /* TODO */ None,
+                        amount,
+                        Account::chain(recipient),
+                        UserData::default(),
+                    )
                     .await
                     .unwrap();
                 let time_total = time_start.elapsed().as_micros();
