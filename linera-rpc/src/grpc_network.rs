@@ -389,7 +389,7 @@ where
         match self
             .state
             .clone()
-            .handle_certificate(cert_with_deps.certificate, cert_with_deps.blob_certificates)
+            .handle_certificate(cert_with_deps.certificate, cert_with_deps.blobs)
             .await
         {
             Ok((info, actions)) => {
@@ -485,12 +485,9 @@ impl ValidatorNode for GrpcClient {
     async fn handle_certificate(
         &mut self,
         certificate: data_types::Certificate,
-        blob_certificates: Vec<data_types::Certificate>,
+        blobs: Vec<data_types::Value>,
     ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
-        let cert_with_deps = data_types::CertificateWithDependencies {
-            certificate,
-            blob_certificates,
-        };
+        let cert_with_deps = data_types::CertificateWithDependencies { certificate, blobs };
         client_delegate!(self, handle_certificate, cert_with_deps)
     }
 
@@ -541,10 +538,10 @@ impl MassClient for GrpcMassClient {
                 RpcMessage::BlockProposal(proposal) => {
                     mass_client_delegate!(client, handle_block_proposal, proposal, responses)
                 }
-                RpcMessage::Certificate(certificate, blob_certificates) => {
+                RpcMessage::Certificate(certificate, blobs) => {
                     let cert_with_deps = Box::new(data_types::CertificateWithDependencies {
                         certificate: *certificate,
-                        blob_certificates,
+                        blobs,
                     });
                     mass_client_delegate!(client, handle_certificate, cert_with_deps, responses)
                 }

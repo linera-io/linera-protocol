@@ -64,7 +64,7 @@ pub trait ValidatorWorker {
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-        blob_certificates: Vec<Certificate>,
+        blobs: Vec<Value>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError>;
 
     /// Handle information queries on chains.
@@ -274,9 +274,9 @@ where
     pub(crate) async fn fully_handle_certificate(
         &mut self,
         certificate: Certificate,
-        blob_certificates: Vec<Certificate>,
+        blobs: Vec<Value>,
     ) -> Result<ChainInfoResponse, WorkerError> {
-        self.fully_handle_certificate_with_notifications(certificate, blob_certificates, None)
+        self.fully_handle_certificate_with_notifications(certificate, blobs, None)
             .await
     }
 
@@ -284,12 +284,10 @@ where
     pub(crate) async fn fully_handle_certificate_with_notifications(
         &mut self,
         certificate: Certificate,
-        blob_certificates: Vec<Certificate>,
+        blobs: Vec<Value>,
         mut notifications: Option<&mut Vec<Notification>>,
     ) -> Result<ChainInfoResponse, WorkerError> {
-        let (response, actions) = self
-            .handle_certificate(certificate, blob_certificates)
-            .await?;
+        let (response, actions) = self.handle_certificate(certificate, blobs).await?;
         let mut requests = VecDeque::from(actions.cross_chain_requests);
         while let Some(request) = requests.pop_front() {
             let actions = self.handle_cross_chain_request(request).await?;
@@ -410,7 +408,7 @@ where
     async fn process_confirmed_block(
         &mut self,
         certificate: Certificate,
-        blob_certificates: &[Certificate],
+        blobs: &[Value],
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let (block, effects, state_hash) = match &certificate.value {
             Value::ConfirmedBlock {
@@ -429,20 +427,20 @@ where
             .into_values()
             .map(|bytecode_location| bytecode_location.certificate_hash)
             .collect();
-        for cert in blob_certificates {
+        for value in blobs {
             ensure!(
-                blob_hashes.contains(&cert.hash),
+                blob_hashes.contains(&CryptoHash::new(value)),
                 WorkerError::UnneededCertificate {
-                    certificate_hash: cert.hash
+                    certificate_hash: CryptoHash::new(value)
                 }
             );
         }
         // Write the certificates so that the bytecode is available during execution.
-        for cert in blob_certificates {
+        for value in blobs {
             // TODO(#443): We can't check the certificate's signatures, because it might be
             // very old, with a committee that's not trusted anymore. We should store the
             // blob without signatures.
-            self.storage.write_certificate(cert.clone()).await?;
+            self.storage.write_value(value.clone()).await?;
         }
         // Check that the chain is active and ready for this confirmation.
         let tip = chain.tip_state.get();
@@ -793,37 +791,36 @@ where
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-        blob_certificates: Vec<Certificate>,
+        blobs: Vec<Value>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         log::trace!("{} <-- {:?}", self.nickname, certificate);
         if matches!(certificate.value, Value::ValidatedBlock { .. }) {
             ensure!(
-                blob_certificates.is_empty(),
+                blobs.is_empty(),
                 WorkerError::UnneededCertificate {
-                    certificate_hash: blob_certificates[0].hash,
+                    certificate_hash: CryptoHash::new(&blobs[0]),
                 }
             );
         }
-        let certificates_to_cache: Vec<_> = blob_certificates
+        let values_to_cache: Vec<_> = blobs
             .iter()
-            .chain(iter::once(&certificate))
-            .filter(|cert| !self.recent_values.contains(&cert.hash))
+            .chain(iter::once(&certificate.value))
+            .filter(|value| !self.recent_values.contains(&CryptoHash::new(*value)))
             .cloned()
             .collect();
         let (info, actions) = match &certificate.value {
             Value::ValidatedBlock { .. } => {
                 // Confirm the validated block.
-                let info = self.process_validated_block(certificate.clone()).await?;
+                let info = self.process_validated_block(certificate).await?;
                 (info, NetworkActions::default())
             }
             Value::ConfirmedBlock { .. } => {
                 // Execute the confirmed block.
-                self.process_confirmed_block(certificate, &blob_certificates)
-                    .await?
+                self.process_confirmed_block(certificate, &blobs).await?
             }
         };
-        for cert in certificates_to_cache {
-            self.cache_recent_value(cert.hash, cert.value);
+        for value in values_to_cache {
+            self.cache_recent_value(CryptoHash::new(&value), value);
         }
         Ok((info, actions))
     }

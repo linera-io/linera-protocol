@@ -358,8 +358,8 @@ pub struct Certificate {
 pub struct CertificateWithDependencies {
     /// Certificate that may require blobs (e.g. bytecode) for execution.
     pub certificate: Certificate,
-    /// Certificates containing blobs (e.g. bytecode) that the other one depends on.
-    pub blob_certificates: Vec<Certificate>,
+    /// Values containing blobs (e.g. bytecode) that the other one depends on.
+    pub blobs: Vec<Value>,
 }
 
 impl Origin {

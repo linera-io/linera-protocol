@@ -158,8 +158,8 @@ pub trait Store: Sized {
             bytecode_location,
             ..
         } = application_description;
-        let certificate = self
-            .read_certificate(bytecode_location.certificate_hash)
+        let value = self
+            .read_value(bytecode_location.certificate_hash)
             .await
             .map_err(|error| match error {
                 ViewError::NotFound(_) => ExecutionError::ApplicationBytecodeNotFound(Box::new(
@@ -167,7 +167,7 @@ pub trait Store: Sized {
                 )),
                 _ => error.into(),
             })?;
-        let operations = &certificate.value.block().operations;
+        let operations = &value.block().operations;
         match operations.get(bytecode_location.operation_index) {
             Some((
                 ApplicationId::System,
