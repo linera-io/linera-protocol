@@ -157,6 +157,7 @@ fn make_transfer_block_proposal(
         Epoch::from(0),
         chain_id,
         vec![SystemOperation::Transfer {
+            owner: None,
             recipient,
             amount,
             user_data: UserData::default(),
@@ -244,6 +245,7 @@ async fn make_transfer_certificate_for_epoch<S>(
         epoch,
         chain_id,
         vec![SystemOperation::Transfer {
+            owner: None,
             recipient,
             amount,
             user_data: UserData::default(),
@@ -781,6 +783,7 @@ where
                     (
                         ApplicationId::System,
                         Operation::System(SystemOperation::Transfer {
+                            owner: None,
                             recipient,
                             amount: Amount::from(1),
                             user_data: UserData::default(),
@@ -789,6 +792,7 @@ where
                     (
                         ApplicationId::System,
                         Operation::System(SystemOperation::Transfer {
+                            owner: None,
                             recipient,
                             amount: Amount::from(2),
                             user_data: UserData::default(),
@@ -844,6 +848,7 @@ where
                 operations: vec![(
                     ApplicationId::System,
                     Operation::System(SystemOperation::Transfer {
+                        owner: None,
                         recipient,
                         amount: Amount::from(3),
                         user_data: UserData::default(),
@@ -2597,6 +2602,7 @@ where
                     (
                         ApplicationId::System,
                         Operation::System(SystemOperation::Transfer {
+                            owner: None,
                             recipient: Recipient::Account(Account::chain(user_id)),
                             amount: Amount::from(2),
                             user_data: UserData::default(),
@@ -3013,6 +3019,7 @@ where
                 operations: vec![(
                     ApplicationId::System,
                     Operation::System(SystemOperation::Transfer {
+                        owner: None,
                         recipient: Recipient::Account(Account::chain(admin_id)),
                         amount: Amount::from(1),
                         user_data: UserData::default(),
@@ -3220,6 +3227,7 @@ where
                 operations: vec![(
                     ApplicationId::System,
                     Operation::System(SystemOperation::Transfer {
+                        owner: None,
                         recipient: Recipient::Account(Account::chain(admin_id)),
                         amount: Amount::from(1),
                         user_data: UserData::default(),

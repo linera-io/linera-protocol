@@ -605,6 +605,9 @@ SystemOperation:
     0:
       Transfer:
         STRUCT:
+          - owner:
+              OPTION:
+                TYPENAME: Owner
           - recipient:
               TYPENAME: Recipient
           - amount:

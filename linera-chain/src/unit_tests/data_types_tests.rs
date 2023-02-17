@@ -21,6 +21,7 @@ fn test_signed_values() {
         operations: vec![(
             ApplicationId::System,
             Operation::System(SystemOperation::Transfer {
+                owner: None,
                 recipient: Recipient::Account(Account::chain(ChainId::root(2))),
                 amount: Amount::from(1),
                 user_data: UserData::default(),
@@ -61,6 +62,7 @@ fn test_certificates() {
         operations: vec![(
             ApplicationId::System,
             Operation::System(SystemOperation::Transfer {
+                owner: None,
                 recipient: Recipient::Account(Account::chain(ChainId::root(1))),
                 amount: Amount::from(1),
                 user_data: UserData::default(),

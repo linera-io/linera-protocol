@@ -78,8 +78,10 @@ pub struct SystemExecutionState {
 /// A system operation.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum SystemOperation {
-    /// Transfer `amount` units of value to the recipient.
+    /// Transfer `amount` units of value from the given owner's account to the recipient.
+    /// If no owner is given, try to take the units out of the unattributed account.
     Transfer {
+        owner: Option<Owner>,
         recipient: Recipient,
         amount: Amount,
         user_data: UserData,
@@ -283,8 +285,10 @@ pub enum SystemExecutionError {
     InvalidCommittees,
     #[error("{epoch:?} is not recognized by chain {chain_id:}")]
     InvalidEpoch { chain_id: ChainId, epoch: Epoch },
-    #[error("Transfers must have positive amount")]
+    #[error("Transfer must have positive amount")]
     IncorrectTransferAmount,
+    #[error("Transfer from owned account must be authenticated")]
+    UnauthenticatedTransferOwner,
     #[error(
         "The transferred amount must be not exceed the current chain balance: {current_balance}"
     )]
@@ -424,19 +428,32 @@ where
                 self.subscriptions.clear();
             }
             Transfer {
-                amount, recipient, ..
+                owner,
+                amount,
+                recipient,
+                ..
             } => {
+                if owner.is_some() {
+                    ensure!(
+                        &context.authenticated_signer == owner,
+                        SystemExecutionError::UnauthenticatedTransferOwner
+                    );
+                }
                 ensure!(
                     *amount > Amount::zero(),
                     SystemExecutionError::IncorrectTransferAmount
                 );
+                let balance = match &owner {
+                    Some(owner) => self.balances.get_mut_or_default(owner).await?,
+                    None => self.balance.get_mut(),
+                };
                 ensure!(
-                    *self.balance.get() >= (*amount).into(),
+                    *balance >= (*amount).into(),
                     SystemExecutionError::InsufficientFunding {
-                        current_balance: (*self.balance.get()).into()
+                        current_balance: (*balance).into()
                     }
                 );
-                self.balance.get_mut().try_sub_assign((*amount).into())?;
+                balance.try_sub_assign((*amount).into())?;
                 if let Recipient::Account(account) = recipient {
                     result.effects.push((
                         Destination::Recipient(account.chain_id),

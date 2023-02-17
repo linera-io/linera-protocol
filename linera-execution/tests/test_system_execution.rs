@@ -26,6 +26,7 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
         ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(state)
             .await;
     let operation = SystemOperation::Transfer {
+        owner: None,
         amount: Amount::from(4),
         recipient: Recipient::Burn,
         user_data: UserData::default(),

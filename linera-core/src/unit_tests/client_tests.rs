@@ -563,6 +563,7 @@ where
         .await?;
     let certificate = sender
         .transfer_to_chain(
+            None,
             Amount::from(3),
             Account::chain(ChainId::root(2)),
             UserData(Some(*b"hello...........hello...........")),
@@ -631,6 +632,7 @@ where
     // Can still use the chain.
     sender
         .transfer_to_chain(
+            None,
             Amount::from(3),
             Account::chain(ChainId::root(2)),
             UserData::default(),
@@ -689,6 +691,7 @@ where
     // Cannot use the chain any more.
     assert!(sender
         .transfer_to_chain(
+            None,
             Amount::from(3),
             Account::chain(ChainId::root(2)),
             UserData::default()
@@ -746,6 +749,7 @@ where
     // Can still use the chain with the old client.
     sender
         .transfer_to_chain(
+            None,
             Amount::from(3),
             Account::chain(ChainId::root(2)),
             UserData::default(),
@@ -772,6 +776,7 @@ where
     assert_eq!(client.local_balance().await.unwrap(), Balance::from(1));
     client
         .transfer_to_chain(
+            None,
             Amount::from(1),
             Account::chain(ChainId::root(3)),
             UserData::default(),
@@ -871,7 +876,12 @@ where
     });
     // Transfer before creating the chain.
     sender
-        .transfer_to_chain(Amount::from(3), Account::chain(new_id), UserData::default())
+        .transfer_to_chain(
+            None,
+            Amount::from(3),
+            Account::chain(new_id),
+            UserData::default(),
+        )
         .await
         .unwrap();
     // Open the new chain.
@@ -902,6 +912,7 @@ where
     assert_eq!(client.local_balance().await.unwrap(), Balance::from(3));
     client
         .transfer_to_chain(
+            None,
             Amount::from(3),
             Account::chain(ChainId::root(3)),
             UserData::default(),
@@ -947,7 +958,12 @@ where
     let (new_id, creation_certificate) = sender.open_chain(new_owner).await.unwrap();
     // Transfer after creating the chain.
     let transfer_certificate = sender
-        .transfer_to_chain(Amount::from(3), Account::chain(new_id), UserData::default())
+        .transfer_to_chain(
+            None,
+            Amount::from(3),
+            Account::chain(new_id),
+            UserData::default(),
+        )
         .await
         .unwrap();
     assert_eq!(sender.next_block_height, BlockHeight::from(2));
@@ -970,6 +986,7 @@ where
     assert_eq!(client.local_balance().await.unwrap(), Balance::from(3));
     client
         .transfer_to_chain(
+            None,
             Amount::from(3),
             Account::chain(ChainId::root(3)),
             UserData::default(),
@@ -1031,6 +1048,7 @@ where
     // Cannot use the chain any more.
     assert!(sender
         .transfer_to_chain(
+            None,
             Amount::from(3),
             Account::chain(ChainId::root(2)),
             UserData::default()
@@ -1070,6 +1088,7 @@ where
         .await?;
     assert!(sender
         .transfer_to_chain_unsafe_unconfirmed(
+            None,
             Amount::from(3),
             Account::chain(ChainId::root(2)),
             UserData(Some(*b"hello...........hello...........")),
@@ -1125,6 +1144,7 @@ where
 
     let certificate = client1
         .transfer_to_chain(
+            None,
             Amount::from(3),
             Account::chain(client2.chain_id),
             UserData::default(),
@@ -1179,6 +1199,7 @@ where
     assert_eq!(client2.next_block_height, BlockHeight::from(0));
     client2
         .transfer_to_chain(
+            None,
             Amount::from(1),
             Account::chain(client1.chain_id),
             UserData::default(),
@@ -1237,6 +1258,7 @@ where
         .await?;
     let certificate = client1
         .transfer_to_chain_unsafe_unconfirmed(
+            None,
             Amount::from(2),
             Account::chain(client2.chain_id),
             UserData::default(),
@@ -1302,6 +1324,7 @@ where
     // Confirming to a quorum of nodes only at the end.
     client1
         .transfer_to_chain_unsafe_unconfirmed(
+            None,
             Amount::from(1),
             Account::chain(client2.chain_id),
             UserData::default(),
@@ -1310,6 +1333,7 @@ where
         .unwrap();
     client1
         .transfer_to_chain_unsafe_unconfirmed(
+            None,
             Amount::from(1),
             Account::chain(client2.chain_id),
             UserData::default(),
@@ -1329,6 +1353,7 @@ where
     // Sending money from client2 fails, as a consequence.
     assert!(client2
         .transfer_to_chain_unsafe_unconfirmed(
+            None,
             Amount::from(2),
             Account::chain(client3.chain_id),
             UserData::default(),
@@ -1345,6 +1370,7 @@ where
     );
     let certificate = client2
         .transfer_to_chain(
+            None,
             Amount::from(2),
             Account::chain(client3.chain_id),
             UserData::default(),
@@ -1407,6 +1433,7 @@ where
     // Sending money from the admin chain is supported.
     let cert = admin
         .transfer_to_chain(
+            None,
             Amount::from(2),
             Account::chain(ChainId::root(1)),
             UserData(None),
@@ -1415,6 +1442,7 @@ where
         .unwrap();
     admin
         .transfer_to_chain(
+            None,
             Amount::from(1),
             Account::chain(ChainId::root(1)),
             UserData(None),
@@ -1446,6 +1474,7 @@ where
     // Try to make a transfer back to the admin chain.
     let cert = user
         .transfer_to_chain(
+            None,
             Amount::from(2),
             Account::chain(ChainId::root(0)),
             UserData(None),
@@ -1467,6 +1496,7 @@ where
     // Try again to make a transfer back to the admin chain.
     let cert = user
         .transfer_to_chain(
+            None,
             Amount::from(1),
             Account::chain(ChainId::root(0)),
             UserData(None),

@@ -717,6 +717,7 @@ where
     /// Send money.
     async fn transfer(
         &mut self,
+        owner: Option<Owner>,
         amount: Amount,
         recipient: Recipient,
         user_data: UserData,
@@ -734,6 +735,7 @@ where
             vec![(
                 ApplicationId::System,
                 Operation::System(SystemOperation::Transfer {
+                    owner,
                     recipient,
                     amount,
                     user_data,
@@ -960,17 +962,24 @@ where
     /// Send tokens to a chain.
     pub async fn transfer_to_chain(
         &mut self,
+        owner: Option<Owner>,
         amount: Amount,
         account: Account,
         user_data: UserData,
     ) -> Result<Certificate> {
-        self.transfer(amount, Recipient::Account(account), user_data)
+        self.transfer(owner, amount, Recipient::Account(account), user_data)
             .await
     }
 
     /// Burn tokens.
-    pub async fn burn(&mut self, amount: Amount, user_data: UserData) -> Result<Certificate> {
-        self.transfer(amount, Recipient::Burn, user_data).await
+    pub async fn burn(
+        &mut self,
+        owner: Option<Owner>,
+        amount: Amount,
+        user_data: UserData,
+    ) -> Result<Certificate> {
+        self.transfer(owner, amount, Recipient::Burn, user_data)
+            .await
     }
 
     /// Attempt to synchronize with validators and re-compute our balance.
@@ -1264,6 +1273,7 @@ where
     /// Do not confirm the transaction.
     pub async fn transfer_to_chain_unsafe_unconfirmed(
         &mut self,
+        owner: Option<Owner>,
         amount: Amount,
         account: Account,
         user_data: UserData,
@@ -1271,6 +1281,7 @@ where
         self.execute_operation(
             ApplicationId::System,
             Operation::System(SystemOperation::Transfer {
+                owner,
                 recipient: Recipient::Account(account),
                 amount,
                 user_data,
