@@ -2,13 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    runtime::{ExecutionRuntime, SessionManager},
+    runtime::{ApplicationStatus, ExecutionRuntime, SessionManager},
     system::SystemExecutionStateView,
     ApplicationId, Effect, EffectContext, ExecutionError, ExecutionResult, ExecutionRuntimeContext,
     Operation, OperationContext, Query, QueryContext, RawExecutionResult, Response, SystemEffect,
     UserApplicationId,
 };
-use linera_base::{data_types::ChainId, ensure};
+use linera_base::{
+    data_types::{ChainId, Owner},
+    ensure,
+};
 use linera_views::{
     key_value_store_view::KeyValueStoreView,
     reentrant_collection_view::ReentrantCollectionView,
@@ -101,6 +104,17 @@ enum UserAction<'a> {
     Effect(&'a EffectContext, &'a [u8]),
 }
 
+impl<'a> UserAction<'a> {
+    fn signer(&self) -> Option<Owner> {
+        use UserAction::*;
+        match self {
+            Initialize(context, _) => context.authenticated_signer,
+            Operation(context, _) => context.authenticated_signer,
+            Effect(context, _) => context.authenticated_signer,
+        }
+    }
+}
+
 impl<C> ExecutionStateView<C>
 where
     C: Context + Clone + Send + Sync + 'static,
@@ -115,7 +129,7 @@ where
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
         // Try to load the application. This may fail if the corresponding
         // bytecode-publishing certificate doesn't exist yet on this validator.
-        let application_description = self
+        let description = self
             .system
             .registry
             .describe_application(application_id)
@@ -123,12 +137,17 @@ where
         let application = self
             .context()
             .extra()
-            .get_user_application(&application_description)
+            .get_user_application(&description)
             .await?;
+        let signer = action.signer();
         // Create the execution runtime for this transaction.
         let mut session_manager = SessionManager::default();
         let mut results = Vec::new();
-        let mut applications = vec![application_description];
+        let mut applications = vec![ApplicationStatus {
+            id: application_id,
+            parameters: description.parameters,
+            signer,
+        }];
         let runtime = ExecutionRuntime::new(
             chain_id,
             &mut applications,
@@ -154,7 +173,7 @@ where
         };
         // Check that applications were correctly stacked and unstacked.
         assert_eq!(applications.len(), 1);
-        assert_eq!(UserApplicationId::from(&applications[0]), application_id);
+        assert_eq!(applications[0].id, application_id);
         // Make sure to declare the application first for all recipients of the user
         // execution result.
         let mut system_result = RawExecutionResult::default();
@@ -254,7 +273,7 @@ where
             }
             (ApplicationId::User(application_id), Query::User(query)) => {
                 // Load the application.
-                let application_description = self
+                let description = self
                     .system
                     .registry
                     .describe_application(application_id)
@@ -262,12 +281,16 @@ where
                 let application = self
                     .context()
                     .extra()
-                    .get_user_application(&application_description)
+                    .get_user_application(&description)
                     .await?;
                 // Create the execution runtime for this transaction.
                 let mut session_manager = SessionManager::default();
                 let mut results = Vec::new();
-                let mut applications = vec![application_description];
+                let mut applications = vec![ApplicationStatus {
+                    id: application_id,
+                    parameters: description.parameters,
+                    signer: None,
+                }];
                 let runtime = ExecutionRuntime::new(
                     context.chain_id,
                     &mut applications,
@@ -281,7 +304,7 @@ where
                     .await?;
                 // Check that applications were correctly stacked and unstacked.
                 assert_eq!(applications.len(), 1);
-                assert_eq!(UserApplicationId::from(&applications[0]), application_id);
+                assert_eq!(applications[0].id, application_id);
                 Ok(Response::User(response))
             }
             _ => Err(ExecutionError::InvalidQuery),

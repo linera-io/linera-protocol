@@ -48,6 +48,7 @@ async fn test_counter_wasm_application() -> anyhow::Result<()> {
             chain_id: ChainId::root(0),
             height: BlockHeight(0),
             index: 0,
+            authenticated_signer: None,
         };
         let increments = [2_u128, 9, 7, 1000];
         for increment in &increments {

@@ -9,7 +9,7 @@ use crate::{
 use async_trait::async_trait;
 use custom_debug_derive::Debug;
 use linera_base::{
-    data_types::{ChainId, Timestamp},
+    data_types::{ChainId, Owner, Timestamp},
     ensure, hex_debug,
 };
 use linera_views::{
@@ -31,7 +31,7 @@ pub(crate) struct ExecutionRuntime<'a, C, const WRITABLE: bool> {
     /// The current chain ID.
     chain_id: ChainId,
     /// The current stack of application descriptions.
-    applications: Arc<Mutex<&'a mut Vec<UserApplicationDescription>>>,
+    applications: Arc<Mutex<&'a mut Vec<ApplicationStatus>>>,
     /// The storage view on the execution state.
     execution_state: Arc<Mutex<&'a mut ExecutionStateView<C>>>,
     /// All the sessions and their IDs.
@@ -44,6 +44,17 @@ pub(crate) struct ExecutionRuntime<'a, C, const WRITABLE: bool> {
     active_sessions: Arc<Mutex<ActiveSessions>>,
     /// Accumulate the externally visible results (e.g. cross-chain messages) of applications.
     execution_results: Arc<Mutex<&'a mut Vec<ExecutionResult>>>,
+}
+
+/// The runtime status of an application.
+#[derive(Debug, Clone)]
+pub(crate) struct ApplicationStatus {
+    /// The application id.
+    pub(crate) id: UserApplicationId,
+    /// The parameters from the application description.
+    pub(crate) parameters: Vec<u8>,
+    /// The authenticated signer for the execution thread, if any.
+    pub(crate) signer: Option<Owner>,
 }
 
 type ActiveViewUserStates<C> =
@@ -77,7 +88,7 @@ where
 {
     pub(crate) fn new(
         chain_id: ChainId,
-        applications: &'a mut Vec<UserApplicationDescription>,
+        applications: &'a mut Vec<ApplicationStatus>,
         execution_state: &'a mut ExecutionStateView<C>,
         session_manager: &'a mut SessionManager,
         execution_results: &'a mut Vec<ExecutionResult>,
@@ -95,7 +106,7 @@ where
         }
     }
 
-    fn applications_mut(&self) -> MutexGuard<'_, &'a mut Vec<UserApplicationDescription>> {
+    fn applications_mut(&self) -> MutexGuard<'_, &'a mut Vec<ApplicationStatus>> {
         self.applications
             .try_lock()
             .expect("single-threaded execution should not lock `application_ids`")
@@ -290,7 +301,7 @@ where
         self.applications_mut()
             .last()
             .expect("at least one application description should be present in the stack")
-            .into()
+            .id
     }
 
     fn application_parameters(&self) -> Vec<u8> {
@@ -401,7 +412,11 @@ where
         let query_context = crate::QueryContext {
             chain_id: self.chain_id,
         };
-        self.applications_mut().push(description);
+        self.applications_mut().push(ApplicationStatus {
+            id: queried_id,
+            parameters: description.parameters,
+            signer: None,
+        });
         let value = code
             .query_application(&query_context, self, argument)
             .await?;
@@ -468,17 +483,32 @@ where
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<CallResult, ExecutionError> {
+        let caller = self
+            .applications_mut()
+            .last()
+            .expect("caller must exist")
+            .clone();
         // Load the application.
         let (code, description) = self.load_application(callee_id).await?;
         // Change the owners of forwarded sessions.
-        self.forward_sessions(&forwarded_sessions, self.application_id(), callee_id)?;
+        self.forward_sessions(&forwarded_sessions, caller.id, callee_id)?;
         // Make the call to user code.
-        let authenticated_caller_id = authenticated.then_some(self.application_id());
+        let authenticated_signer = match caller.signer {
+            Some(signer) if authenticated => Some(signer),
+            _ => None,
+        };
+        let authenticated_caller_id = authenticated.then_some(caller.id);
         let callee_context = crate::CalleeContext {
             chain_id: self.chain_id,
+            authenticated_signer,
             authenticated_caller_id,
         };
-        self.applications_mut().push(description);
+        self.applications_mut().push(ApplicationStatus {
+            id: callee_id,
+            parameters: description.parameters,
+            // Allow further nested calls to be authenticated if this one is.
+            signer: authenticated_signer,
+        });
         let raw_result = code
             .call_application(&callee_context, self, argument, forwarded_sessions)
             .await?;
@@ -504,20 +534,35 @@ where
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<CallResult, ExecutionError> {
-        // Load the application.
         let callee_id = session_id.application_id;
+        let caller = self
+            .applications_mut()
+            .last()
+            .expect("caller must exist")
+            .clone();
+        // Load the application.
         let (code, description) = self.load_application(callee_id).await?;
         // Change the owners of forwarded sessions.
-        self.forward_sessions(&forwarded_sessions, self.application_id(), callee_id)?;
+        self.forward_sessions(&forwarded_sessions, caller.id, callee_id)?;
         // Load the session.
         let mut session_data = self.try_load_session(session_id, self.application_id())?;
         // Make the call to user code.
-        let authenticated_caller_id = authenticated.then_some(self.application_id());
+        let authenticated_signer = match caller.signer {
+            Some(signer) if authenticated => Some(signer),
+            _ => None,
+        };
+        let authenticated_caller_id = authenticated.then_some(caller.id);
         let callee_context = crate::CalleeContext {
             chain_id: self.chain_id,
+            authenticated_signer,
             authenticated_caller_id,
         };
-        self.applications_mut().push(description);
+        self.applications_mut().push(ApplicationStatus {
+            id: callee_id,
+            parameters: description.parameters,
+            // Allow further nested calls to be authenticated if this one is.
+            signer: authenticated_signer,
+        });
         let raw_result = code
             .call_session(
                 &callee_context,

@@ -35,6 +35,7 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
         chain_id: ChainId::root(0),
         height: BlockHeight(0),
         index: 0,
+        authenticated_signer: None,
     };
     let results = view
         .execute_operation(
@@ -77,6 +78,7 @@ async fn test_simple_system_effect() -> anyhow::Result<()> {
             height: BlockHeight(0),
             index: 0,
         },
+        authenticated_signer: None,
     };
     let results = view
         .execute_effect(ApplicationId::System, &context, &Effect::System(effect))

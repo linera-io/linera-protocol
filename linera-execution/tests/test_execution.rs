@@ -9,7 +9,10 @@ mod utils;
 
 use self::utils::create_dummy_user_application_description;
 use async_trait::async_trait;
-use linera_base::data_types::{BlockHeight, ChainDescription, ChainId};
+use linera_base::{
+    crypto::PublicKey,
+    data_types::{BlockHeight, ChainDescription, ChainId, Owner},
+};
 use linera_execution::*;
 use linera_views::{
     common::{Batch, Context},
@@ -41,6 +44,7 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
         chain_id: ChainId::root(0),
         height: BlockHeight(0),
         index: 0,
+        authenticated_signer: None,
     };
 
     let result = view
@@ -58,17 +62,20 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
     Ok(())
 }
 
-struct TestApplication;
+struct TestApplication {
+    owner: Owner,
+}
 
 #[async_trait]
 impl UserApplication for TestApplication {
     /// Nothing needs to be done during initialization.
     async fn initialize(
         &self,
-        _context: &OperationContext,
+        context: &OperationContext,
         _storage: &dyn WritableStorage,
         _argument: &[u8],
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
+        assert_eq!(context.authenticated_signer, Some(self.owner));
         Ok(RawExecutionResult::default())
     }
 
@@ -78,11 +85,12 @@ impl UserApplication for TestApplication {
     /// leaked if the operation is empty.
     async fn execute_operation(
         &self,
-        _context: &OperationContext,
+        context: &OperationContext,
         storage: &dyn WritableStorage,
         operation: &[u8],
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         // Who we are.
+        assert_eq!(context.authenticated_signer, Some(self.owner));
         let app_id = storage.application_id();
         // Modify our state.
         let chosen_key = vec![0];
@@ -106,7 +114,7 @@ impl UserApplication for TestApplication {
             // Call the session to close it.
             let session_id = call_result.sessions[0];
             storage
-                .try_call_session(/* authenticate */ true, session_id, &[], vec![])
+                .try_call_session(/* authenticate */ false, session_id, &[], vec![])
                 .await?;
         }
         Ok(RawExecutionResult::default())
@@ -115,11 +123,12 @@ impl UserApplication for TestApplication {
     /// Attempt to call ourself while the state is locked.
     async fn execute_effect(
         &self,
-        _context: &EffectContext,
+        context: &EffectContext,
         storage: &dyn WritableStorage,
         _effect: &[u8],
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         // Who we are.
+        assert_eq!(context.authenticated_signer, Some(self.owner));
         let app_id = storage.application_id();
         storage.lock_view_user_state().await?;
         // Call ourselves while the state is locked => not ok.
@@ -133,11 +142,12 @@ impl UserApplication for TestApplication {
     /// Create a session.
     async fn call_application(
         &self,
-        _context: &CalleeContext,
+        context: &CalleeContext,
         _storage: &dyn WritableStorage,
         _argument: &[u8],
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, ExecutionError> {
+        assert_eq!(context.authenticated_signer, Some(self.owner));
         Ok(ApplicationCallResult {
             create_sessions: vec![NewSession {
                 kind: 0,
@@ -150,13 +160,14 @@ impl UserApplication for TestApplication {
     /// Close the session.
     async fn call_session(
         &self,
-        _context: &CalleeContext,
+        context: &CalleeContext,
         _storage: &dyn WritableStorage,
         _session_kind: u64,
         _session_data: &mut Vec<u8>,
         _argument: &[u8],
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<SessionCallResult, ExecutionError> {
+        assert_eq!(context.authenticated_signer, None);
         Ok(SessionCallResult {
             inner: ApplicationCallResult::default(),
             close_session: true,
@@ -181,6 +192,7 @@ impl UserApplication for TestApplication {
 
 #[tokio::test]
 async fn test_simple_user_operation() -> anyhow::Result<()> {
+    let owner = Owner::from(PublicKey::debug(0));
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
     let mut view =
@@ -195,12 +207,13 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     view.context()
         .extra()
         .user_applications()
-        .insert(app_id, Arc::new(TestApplication));
+        .insert(app_id, Arc::new(TestApplication { owner }));
 
     let context = OperationContext {
         chain_id: ChainId::root(0),
         height: BlockHeight(0),
         index: 0,
+        authenticated_signer: Some(owner),
     };
     let result = view
         .execute_operation(
@@ -233,6 +246,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()> {
+    let owner = Owner::from(PublicKey::debug(0));
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
     let mut view =
@@ -247,12 +261,13 @@ async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()>
     view.context()
         .extra()
         .user_applications()
-        .insert(app_id, Arc::new(TestApplication));
+        .insert(app_id, Arc::new(TestApplication { owner }));
 
     let context = OperationContext {
         chain_id: ChainId::root(0),
         height: BlockHeight(0),
         index: 0,
+        authenticated_signer: Some(owner),
     };
 
     let result = view

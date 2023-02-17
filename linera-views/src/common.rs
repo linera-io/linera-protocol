@@ -223,7 +223,7 @@ pub trait KeyValueOperations {
     ) -> Result<Self::KeyValues, Self::Error>;
 
     /// Write the batch in the database.
-    async fn write_batch(&self, mut batch: Batch) -> Result<(), Self::Error>;
+    async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error>;
 
     /// Read a single key and deserialize the result if present.
     async fn read_key<V: DeserializeOwned>(&self, key: &[u8]) -> Result<Option<V>, Self::Error>
