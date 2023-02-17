@@ -7,7 +7,6 @@ use anyhow::Error;
 
 /// Test if the table for the storage is created when needed.
 #[tokio::test]
-#[ignore]
 async fn table_is_created() -> Result<(), Error> {
     let localstack = LocalStackTestContext::new().await?;
     let client = aws_sdk_dynamodb::Client::from_conf(localstack.dynamo_db_config());
@@ -29,7 +28,6 @@ async fn table_is_created() -> Result<(), Error> {
 
 /// Test if two independent tables for two separate storages are created.
 #[tokio::test]
-#[ignore]
 async fn separate_tables_are_created() -> Result<(), Error> {
     let localstack = LocalStackTestContext::new().await?;
     let client = aws_sdk_dynamodb::Client::from_conf(localstack.dynamo_db_config());

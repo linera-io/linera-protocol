@@ -9,7 +9,6 @@ use linera_views::{
         Batch, Context, WriteOperation,
         WriteOperation::{Delete, DeletePrefix, Put},
     },
-    dynamo_db::DynamoDbContext,
     key_value_store_view::{KeyValueStoreMemoryContext, KeyValueStoreView},
     log_view::LogView,
     map_view::MapView,
@@ -21,7 +20,7 @@ use linera_views::{
     set_view::SetView,
     test_utils::{
         get_random_key_value_operations, get_random_key_value_vec, random_shuffle,
-        span_random_reordering_put_delete, LocalStackTestContext,
+        span_random_reordering_put_delete,
     },
     views::{ContainerView, HashableContainerView, HashableView, Hasher, View, ViewError},
 };
@@ -30,6 +29,9 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     sync::Arc,
 };
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "aws"))]
+use linera_views::{dynamo_db::DynamoDbContext, test_utils::LocalStackTestContext};
 
 #[allow(clippy::type_complexity)]
 #[derive(HashableContainerView)]
@@ -122,11 +124,13 @@ impl StateStore for RocksdbTestStore {
     }
 }
 
+#[cfg(all(not(target_arch = "wasm32"), feature = "aws"))]
 pub struct DynamoDbTestStore {
     localstack: LocalStackTestContext,
     accessed_chains: BTreeSet<usize>,
 }
 
+#[cfg(all(not(target_arch = "wasm32"), feature = "aws"))]
 impl DynamoDbTestStore {
     pub async fn new() -> Result<Self, anyhow::Error> {
         Ok(DynamoDbTestStore {
@@ -136,6 +140,7 @@ impl DynamoDbTestStore {
     }
 }
 
+#[cfg(all(not(target_arch = "wasm32"), feature = "aws"))]
 #[async_trait]
 impl StateStore for DynamoDbTestStore {
     type Context = DynamoDbContext<usize>;
@@ -673,7 +678,7 @@ async fn test_views_in_rocksdb() {
 }
 
 #[tokio::test]
-#[ignore]
+#[cfg(all(not(target_arch = "wasm32"), feature = "aws"))]
 async fn test_views_in_dynamo_db() -> Result<(), anyhow::Error> {
     let mut store = DynamoDbTestStore::new().await?;
     let config = TestConfig::default();

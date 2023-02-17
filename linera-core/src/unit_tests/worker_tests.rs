@@ -30,14 +30,14 @@ use linera_execution::{
     ExecutionStateView, Operation, Query, Response, SystemExecutionState, SystemQuery,
     SystemResponse, UserApplicationId,
 };
-use linera_storage::{DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient, Store};
-use linera_views::{
-    test_utils::LocalStackTestContext,
-    views::{HashableContainerView, ViewError},
-};
+use linera_storage::{MemoryStoreClient, RocksdbStoreClient, Store};
+use linera_views::views::{HashableContainerView, ViewError};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use test_log::test;
+
+#[cfg(feature = "aws")]
+use {linera_storage::DynamoDbStoreClient, linera_views::test_utils::LocalStackTestContext};
 
 #[derive(Serialize, Deserialize)]
 struct Dummy;
@@ -298,8 +298,8 @@ async fn test_rocksdb_handle_block_proposal_bad_signature() {
     run_test_handle_block_proposal_bad_signature(client).await;
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_handle_block_proposal_bad_signature() -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
@@ -372,8 +372,8 @@ async fn test_rocksdb_handle_block_proposal_zero_amount() {
     run_test_handle_block_proposal_zero_amount(client).await;
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_handle_block_proposal_zero_amount() -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
@@ -443,8 +443,8 @@ async fn test_rocksdb_handle_block_proposal_ticks() {
     run_test_handle_block_proposal_ticks(client).await;
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_handle_block_proposal_ticks() -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
@@ -544,8 +544,8 @@ async fn test_rocksdb_handle_block_proposal_unknown_sender() {
     run_test_handle_block_proposal_unknown_sender(client).await;
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_handle_block_proposal_unknown_sender() -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
@@ -617,8 +617,8 @@ async fn test_rocksdb_handle_block_proposal_with_chaining() {
     run_test_handle_block_proposal_with_chaining(client).await;
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_handle_block_proposal_with_chaining() -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
@@ -727,8 +727,8 @@ async fn test_rocksdb_handle_block_proposal_with_incoming_messages() {
     run_test_handle_block_proposal_with_incoming_messages(client).await;
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_handle_block_proposal_with_incoming_messages() -> Result<(), anyhow::Error>
 {
     let table = "linera".parse().expect("Invalid table name");
@@ -1196,8 +1196,8 @@ async fn test_rocksdb_handle_block_proposal_exceed_balance() {
     run_test_handle_block_proposal_exceed_balance(client).await;
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_handle_block_proposal_exceed_balance() -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
@@ -1263,8 +1263,8 @@ async fn test_rocksdb_handle_block_proposal() {
     run_test_handle_block_proposal(client).await;
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_handle_block_proposal() -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
@@ -1332,8 +1332,8 @@ async fn test_rocksdb_handle_block_proposal_replay() {
     run_test_handle_block_proposal_replay(client).await;
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_handle_block_proposal_replay() -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
@@ -1404,8 +1404,8 @@ async fn test_rocksdb_handle_certificate_unknown_sender() {
     run_test_handle_certificate_unknown_sender(client).await;
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_handle_certificate_unknown_sender() -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
@@ -1458,8 +1458,8 @@ async fn test_rocksdb_handle_certificate_bad_block_height() {
     run_test_handle_certificate_bad_block_height(client).await;
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_handle_certificate_bad_block_height() -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
@@ -1524,8 +1524,8 @@ async fn test_rocksdb_handle_certificate_with_anticipated_incoming_message() {
     run_test_handle_certificate_with_anticipated_incoming_message(client).await;
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_handle_certificate_with_anticipated_incoming_message(
 ) -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
@@ -1677,8 +1677,8 @@ async fn test_rocksdb_handle_certificate_receiver_balance_overflow() {
     run_test_handle_certificate_receiver_balance_overflow(client).await;
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_handle_certificate_receiver_balance_overflow() -> Result<(), anyhow::Error>
 {
     let table = "linera".parse().expect("Invalid table name");
@@ -1770,8 +1770,8 @@ async fn test_rocksdb_handle_certificate_receiver_equal_sender() {
     run_test_handle_certificate_receiver_equal_sender(client).await;
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_handle_certificate_receiver_equal_sender() -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
@@ -1877,8 +1877,8 @@ async fn test_rocksdb_handle_cross_chain_request() {
     run_test_handle_cross_chain_request(client).await;
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_handle_cross_chain_request() -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
@@ -1999,8 +1999,8 @@ async fn test_rocksdb_handle_cross_chain_request_no_recipient_chain() {
     run_test_handle_cross_chain_request_no_recipient_chain(client).await;
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_handle_cross_chain_request_no_recipient_chain() -> Result<(), anyhow::Error>
 {
     let table = "linera".parse().expect("Invalid table name");
@@ -2068,8 +2068,8 @@ async fn test_rocksdb_handle_cross_chain_request_no_recipient_chain_on_client() 
     run_test_handle_cross_chain_request_no_recipient_chain_on_client(client).await;
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_handle_cross_chain_request_no_recipient_chain_on_client(
 ) -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
@@ -2154,8 +2154,8 @@ async fn test_rocksdb_handle_certificate_to_active_recipient() {
     run_test_handle_certificate_to_active_recipient(client).await;
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_handle_certificate_to_active_recipient() -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
@@ -2346,8 +2346,8 @@ async fn test_rocksdb_handle_certificate_to_inactive_recipient() {
     run_test_handle_certificate_to_inactive_recipient(client).await;
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_handle_certificate_to_inactive_recipient() -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
@@ -2410,8 +2410,8 @@ async fn test_rocksdb_chain_creation_with_committee_creation() {
     run_test_chain_creation_with_committee_creation(client).await;
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_chain_creation_with_committee_creation() -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
@@ -2934,8 +2934,8 @@ async fn test_rocksdb_transfers_and_committee_creation() {
     run_test_transfers_and_committee_creation(client).await;
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_transfers_and_committee_creation() -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
@@ -3139,8 +3139,8 @@ async fn test_rocksdb_transfers_and_committee_removal() {
     run_test_transfers_and_committee_removal(client).await;
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_transfers_and_committee_removal() -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;

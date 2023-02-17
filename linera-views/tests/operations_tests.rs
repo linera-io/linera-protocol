@@ -4,17 +4,19 @@
 use async_lock::{Mutex, RwLock};
 use linera_views::{
     common::{Batch, KeyIterable, KeyValueOperations},
-    dynamo_db::DynamoDbClient,
     key_value_store_view::ViewContainer,
     memory::MemoryContext,
     rocksdb::DB,
-    test_utils::{get_random_key_value_vec_prefix, LocalStackTestContext},
+    test_utils::get_random_key_value_vec_prefix,
 };
 use rand::SeedableRng;
 use std::{
     collections::{BTreeMap, HashMap},
     sync::Arc,
 };
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "aws"))]
+use linera_views::{dynamo_db::DynamoDbClient, test_utils::LocalStackTestContext};
 
 #[cfg(test)]
 async fn test_ordering_keys_key_value_vec<OP: KeyValueOperations + Sync>(
@@ -96,8 +98,8 @@ async fn test_ordering_rocksdb() {
     test_ordering_keys(key_value_operation).await;
 }
 
+#[cfg(all(not(target_arch = "wasm32"), feature = "aws"))]
 #[tokio::test]
-#[ignore]
 async fn test_ordering_dynamodb() {
     let localstack = LocalStackTestContext::new().await.unwrap();
     let (key_value_operation, _) = DynamoDbClient::from_config(

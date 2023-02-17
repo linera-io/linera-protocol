@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod chain_guards;
+#[cfg(feature = "aws")]
 mod dynamo_db;
 mod memory;
 mod rocksdb;
 
-pub use crate::{
-    dynamo_db::DynamoDbStoreClient, memory::MemoryStoreClient, rocksdb::RocksdbStoreClient,
-};
+#[cfg(feature = "aws")]
+pub use crate::dynamo_db::DynamoDbStoreClient;
+pub use crate::{memory::MemoryStoreClient, rocksdb::RocksdbStoreClient};
 
 use async_trait::async_trait;
 use chain_guards::ChainGuard;

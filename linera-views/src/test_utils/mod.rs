@@ -5,20 +5,28 @@ use crate::common::{
     WriteOperation,
     WriteOperation::{Delete, Put},
 };
-use anyhow::{Context, Error};
-use aws_sdk_s3::Endpoint;
-use aws_types::SdkConfig;
 use rand::{Rng, RngCore};
-use std::{collections::HashSet, env};
-use tokio::sync::{Mutex, MutexGuard};
+use std::collections::HashSet;
 
+#[cfg(feature = "aws")]
+use {
+    anyhow::{Context, Error},
+    aws_sdk_s3::Endpoint,
+    aws_types::SdkConfig,
+    std::env,
+    tokio::sync::{Mutex, MutexGuard},
+};
+
+#[cfg(feature = "aws")]
 /// A static lock to prevent multiple tests from using the same LocalStack instance at the same
 /// time.
 static LOCALSTACK_GUARD: Mutex<()> = Mutex::const_new(());
 
+#[cfg(feature = "aws")]
 /// Name of the environment variable with the address to a LocalStack instance.
 const LOCALSTACK_ENDPOINT: &str = "LOCALSTACK_ENDPOINT";
 
+#[cfg(feature = "aws")]
 /// A type to help tests that need a LocalStack instance.
 pub struct LocalStackTestContext {
     base_config: SdkConfig,
@@ -26,6 +34,7 @@ pub struct LocalStackTestContext {
     _guard: MutexGuard<'static, ()>,
 }
 
+#[cfg(feature = "aws")]
 impl LocalStackTestContext {
     /// Creates an instance of [`LocalStackTestContext`], loading the necessary LocalStack
     /// configuration.
@@ -125,6 +134,7 @@ impl LocalStackTestContext {
     }
 }
 
+#[cfg(feature = "aws")]
 /// Helper function to list the names of buckets registered on S3.
 pub async fn list_buckets(client: &aws_sdk_s3::Client) -> Result<Vec<String>, Error> {
     Ok(client
@@ -138,6 +148,7 @@ pub async fn list_buckets(client: &aws_sdk_s3::Client) -> Result<Vec<String>, Er
         .collect())
 }
 
+#[cfg(feature = "aws")]
 /// Helper function to list the names of tables registered on DynamoDB.
 pub async fn list_tables(client: &aws_sdk_dynamodb::Client) -> Result<Vec<String>, Error> {
     Ok(client

@@ -21,13 +21,13 @@ use linera_execution::{
     ChannelId, Destination, Effect, ExecutionStateView, SystemExecutionState,
     UserApplicationDescription, UserApplicationId, WasmRuntime,
 };
-use linera_storage::{DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient, Store};
-use linera_views::{
-    test_utils::LocalStackTestContext,
-    views::{HashableContainerView, ViewError},
-};
+use linera_storage::{MemoryStoreClient, RocksdbStoreClient, Store};
+use linera_views::views::{HashableContainerView, ViewError};
 use std::collections::BTreeSet;
 use test_log::test;
+
+#[cfg(feature = "aws")]
+use {linera_storage::DynamoDbStoreClient, linera_views::test_utils::LocalStackTestContext};
 
 #[test(tokio::test)]
 async fn test_memory_handle_certificates_to_create_application_both() -> Result<(), anyhow::Error> {
@@ -60,14 +60,15 @@ async fn test_rocksdb_handle_certificates_to_create_application(
     Ok(())
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_handle_certificates_to_create_application_bool() -> Result<(), anyhow::Error>
 {
     test_dynamo_db_handle_certificates_to_create_application(true).await?;
     test_dynamo_db_handle_certificates_to_create_application(false).await
 }
 
+#[cfg(feature = "aws")]
 async fn test_dynamo_db_handle_certificates_to_create_application(
     use_view: bool,
 ) -> Result<(), anyhow::Error> {
