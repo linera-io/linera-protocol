@@ -557,7 +557,7 @@ where
             .download_certificates(nodes.clone(), block.chain_id, block.height)
             .await?;
         // Process the received operations. Download required blobs if necessary.
-        let mut blobs: Vec<Certificate> = vec![];
+        let mut blobs = vec![];
         while let Err(err) = self
             .process_certificate(certificate.clone(), blobs.clone())
             .await

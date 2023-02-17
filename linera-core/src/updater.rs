@@ -226,7 +226,7 @@ where
                         tokio::time::sleep(self.delay).await;
                         count += 1;
                     } else {
-                        log::error!("Missing cross-chain updates: {:?}", e);
+                        log::info!("Missing cross-chain updates: {:?}", e);
                         return Err(NodeError::ProposedBlockWithLaggingMessages {
                             chain_id,
                             retries: self.retries,
