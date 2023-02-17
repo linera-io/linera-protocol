@@ -23,7 +23,7 @@ use linera_chain::{
     ChainManagerInfo, ChainStateView,
 };
 use linera_execution::{
-    system::{Address, Amount, Balance, SystemChannel, SystemOperation, UserData},
+    system::{Account, Amount, Balance, Recipient, SystemChannel, SystemOperation, UserData},
     ApplicationId, Bytecode, BytecodeId, Effect, Operation, Query, Response, SystemEffect,
     UserApplicationId,
 };
@@ -718,7 +718,7 @@ where
     async fn transfer(
         &mut self,
         amount: Amount,
-        recipient: Address,
+        recipient: Recipient,
         user_data: UserData,
     ) -> Result<Certificate> {
         let balance = self.synchronize_and_recompute_balance().await?;
@@ -961,16 +961,16 @@ where
     pub async fn transfer_to_chain(
         &mut self,
         amount: Amount,
-        recipient: ChainId,
+        account: Account,
         user_data: UserData,
     ) -> Result<Certificate> {
-        self.transfer(amount, Address::Account(recipient), user_data)
+        self.transfer(amount, Recipient::Account(account), user_data)
             .await
     }
 
     /// Burn tokens.
     pub async fn burn(&mut self, amount: Amount, user_data: UserData) -> Result<Certificate> {
-        self.transfer(amount, Address::Burn, user_data).await
+        self.transfer(amount, Recipient::Burn, user_data).await
     }
 
     /// Attempt to synchronize with validators and re-compute our balance.
@@ -1265,13 +1265,13 @@ where
     pub async fn transfer_to_chain_unsafe_unconfirmed(
         &mut self,
         amount: Amount,
-        recipient: ChainId,
+        account: Account,
         user_data: UserData,
     ) -> Result<Certificate> {
         self.execute_operation(
             ApplicationId::System,
             Operation::System(SystemOperation::Transfer {
-                recipient: Address::Account(recipient),
+                recipient: Recipient::Account(account),
                 amount,
                 user_data,
             }),

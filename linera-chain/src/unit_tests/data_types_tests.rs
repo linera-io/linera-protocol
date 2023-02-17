@@ -4,7 +4,7 @@
 
 use super::*;
 use linera_execution::{
-    system::{Address, Amount, SystemOperation, UserData},
+    system::{Account, Amount, Recipient, SystemOperation, UserData},
     ApplicationId,
 };
 
@@ -21,7 +21,7 @@ fn test_signed_values() {
         operations: vec![(
             ApplicationId::System,
             Operation::System(SystemOperation::Transfer {
-                recipient: Address::Account(ChainId::root(2)),
+                recipient: Recipient::Account(Account::chain(ChainId::root(2))),
                 amount: Amount::from(1),
                 user_data: UserData::default(),
             }),
@@ -61,7 +61,7 @@ fn test_certificates() {
         operations: vec![(
             ApplicationId::System,
             Operation::System(SystemOperation::Transfer {
-                recipient: Address::Account(ChainId::root(1)),
+                recipient: Recipient::Account(Account::chain(ChainId::root(1))),
                 amount: Amount::from(1),
                 user_data: UserData::default(),
             }),

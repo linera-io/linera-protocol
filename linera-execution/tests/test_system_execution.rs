@@ -8,7 +8,7 @@ use linera_base::{
     data_types::{BlockHeight, ChainDescription, ChainId, EffectId},
 };
 use linera_execution::{
-    system::{Address, Amount, Balance, UserData},
+    system::{Account, Amount, Balance, Recipient, UserData},
     ApplicationId, Effect, EffectContext, ExecutionResult, ExecutionStateView, Operation,
     OperationContext, Query, QueryContext, RawExecutionResult, Response, SystemEffect,
     SystemExecutionState, SystemOperation, SystemQuery, SystemResponse,
@@ -27,7 +27,7 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
             .await;
     let operation = SystemOperation::Transfer {
         amount: Amount::from(4),
-        recipient: Address::Burn,
+        recipient: Recipient::Burn,
         user_data: UserData::default(),
     };
     let context = OperationContext {
@@ -65,7 +65,7 @@ async fn test_simple_system_effect() -> anyhow::Result<()> {
             .await;
     let effect = SystemEffect::Credit {
         amount: Amount::from(4),
-        recipient: ChainId::root(0),
+        account: Account::chain(ChainId::root(0)),
     };
     let context = EffectContext {
         chain_id: ChainId::root(0),

@@ -49,9 +49,9 @@ pub struct SystemExecutionStateView<C> {
     pub committees: RegisterView<C, BTreeMap<Epoch, Committee>>,
     /// Ownership of the chain.
     pub ownership: RegisterView<C, ChainOwnership>,
-    /// Balance of the chain (unattributed, shared between owners).
+    /// Balance of the chain (unattributed).
     pub balance: RegisterView<C, Balance>,
-    /// Balances attributed to current/past/future owners.
+    /// Balances attributed to a given owner.
     pub balances: MapView<C, Owner, Balance>,
     /// The timestamp of the most recent block.
     pub timestamp: RegisterView<C, Timestamp>,
@@ -80,7 +80,7 @@ pub struct SystemExecutionState {
 pub enum SystemOperation {
     /// Transfer `amount` units of value to the recipient.
     Transfer {
-        recipient: Address,
+        recipient: Recipient,
         amount: Amount,
         user_data: UserData,
     },
@@ -143,7 +143,7 @@ pub enum SystemOperation {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum SystemEffect {
     /// Credit `amount` units of value to the recipient.
-    Credit { recipient: ChainId, amount: Amount },
+    Credit { account: Account, amount: Amount },
     /// Create (or activate) a new chain by installing the given authentication key.
     OpenChain {
         id: ChainId,
@@ -217,13 +217,39 @@ impl Display for SystemChannel {
     }
 }
 
-/// A recipient's address.
+/// The recipient of a transfer.
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Serialize, Deserialize)]
-pub enum Address {
+pub enum Recipient {
     /// This is mainly a placeholder for future extensions.
     Burn,
-    /// We currently support only one user account per chain.
-    Account(ChainId),
+    /// Transfer to the system balance of the given owner (or any owner) at the given
+    /// chain.
+    Account(Account),
+}
+
+/// A system account.
+#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Serialize, Deserialize)]
+pub struct Account {
+    /// The chain of the account.
+    pub chain_id: ChainId,
+    /// The owner of the account.
+    pub owner: Option<Owner>,
+}
+
+impl Account {
+    pub fn chain(chain_id: ChainId) -> Self {
+        Account {
+            chain_id,
+            owner: None,
+        }
+    }
+
+    pub fn owner(chain_id: ChainId, owner: Owner) -> Self {
+        Account {
+            chain_id,
+            owner: Some(owner),
+        }
+    }
 }
 
 /// A non-negative amount of money to be transferred.
@@ -411,12 +437,12 @@ where
                     }
                 );
                 self.balance.get_mut().try_sub_assign((*amount).into())?;
-                if let Address::Account(id) = recipient {
+                if let Recipient::Account(account) = recipient {
                     result.effects.push((
-                        Destination::Recipient(*id),
+                        Destination::Recipient(account.chain_id),
                         SystemEffect::Credit {
                             amount: *amount,
-                            recipient: *id,
+                            account: *account,
                         },
                     ));
                 }
@@ -561,13 +587,23 @@ where
         let mut result = RawExecutionResult::default();
         use SystemEffect::*;
         match effect {
-            Credit { amount, recipient } if context.chain_id == *recipient => {
-                let new_balance = self
-                    .balance
-                    .get()
-                    .try_add((*amount).into())
-                    .unwrap_or_else(|_| Balance::max());
-                self.balance.set(new_balance);
+            Credit { amount, account } if context.chain_id == account.chain_id => {
+                match &account.owner {
+                    None => {
+                        let new_balance = self
+                            .balance
+                            .get()
+                            .try_add((*amount).into())
+                            .unwrap_or_else(|_| Balance::max());
+                        self.balance.set(new_balance);
+                    }
+                    Some(owner) => {
+                        let balance = self.balances.get_mut_or_default(owner).await?;
+                        *balance = balance
+                            .try_add((*amount).into())
+                            .unwrap_or_else(|_| Balance::max());
+                    }
+                }
             }
             SetCommittees {
                 admin_id,
