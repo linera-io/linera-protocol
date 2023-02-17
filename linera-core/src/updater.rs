@@ -9,9 +9,10 @@ use crate::{
 use futures::{future, StreamExt};
 use linera_base::{
     committee::Committee,
+    crypto::CryptoHash,
     data_types::{BlockHeight, ChainDescription, ChainId, EffectId, ValidatorName},
 };
-use linera_chain::data_types::{BlockProposal, Certificate, LiteVote};
+use linera_chain::data_types::{BlockProposal, Certificate, LiteVote, Value};
 use linera_storage::Store;
 use linera_views::views::ViewError;
 use std::{
@@ -137,18 +138,18 @@ where
                 }
                 Err(err) => Err(err),
             };
-            let mut blobs: Vec<Certificate> = vec![];
+            let mut blobs: Vec<Value> = vec![];
             while let Err(NodeError::ApplicationBytecodeNotFound {
                 bytecode_location, ..
             }) = &result
             {
                 let hash = bytecode_location.certificate_hash;
                 // TODO(#474): This check is not sufficient in case of bad actors.
-                if blobs.iter().any(|blob| blob.hash == hash) {
+                if blobs.iter().any(|blob| CryptoHash::new(blob) == hash) {
                     log::warn!("validator requested {:?} but it was already sent", hash);
                     break;
                 }
-                match self.store.read_certificate(hash).await {
+                match self.store.read_value(hash).await {
                     Ok(blob) => blobs.push(blob),
                     Err(ViewError::NotFound(_)) => break,
                     Err(err) => Err(err)?,

@@ -10,7 +10,7 @@ use log::{debug, error, info, warn};
 use tokio::time;
 
 use linera_base::data_types::ChainId;
-use linera_chain::data_types::{BlockProposal, Certificate, LiteCertificate};
+use linera_chain::data_types::{BlockProposal, Certificate, LiteCertificate, Value};
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
     node::{NodeError, NotificationStream, ValidatorNode},
@@ -197,13 +197,8 @@ where
                         Err(error) => Err(error.into()),
                     }
                 }
-                RpcMessage::Certificate(message, blob_certificates) => {
-                    match self
-                        .server
-                        .state
-                        .handle_certificate(*message, blob_certificates)
-                        .await
-                    {
+                RpcMessage::Certificate(message, blobs) => {
+                    match self.server.state.handle_certificate(*message, blobs).await {
                         Ok((info, actions)) => {
                             // Cross-shard requests
                             self.handle_network_actions(actions).await;
@@ -372,10 +367,9 @@ impl ValidatorNode for SimpleClient {
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-        blob_certificates: Vec<Certificate>,
+        blobs: Vec<Value>,
     ) -> Result<ChainInfoResponse, NodeError> {
-        self.send_recv_info((certificate, blob_certificates).into())
-            .await
+        self.send_recv_info((certificate, blobs).into()).await
     }
 
     /// Handle information queries for this chain.

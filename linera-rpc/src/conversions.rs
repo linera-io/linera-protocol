@@ -448,13 +448,13 @@ impl TryFrom<grpc::CertificateWithDependencies> for CertificateWithDependencies 
     type Error = ProtoConversionError;
 
     fn try_from(cert_with_deps: grpc::CertificateWithDependencies) -> Result<Self, Self::Error> {
-        let mut blob_certificates = vec![];
-        for cert in cert_with_deps.blob_certificates {
-            blob_certificates.push(try_proto_convert!(Some(cert)));
+        let mut blobs = vec![];
+        for value in cert_with_deps.blobs {
+            blobs.push(bcs::from_bytes(value.as_slice())?);
         }
         Ok(CertificateWithDependencies {
             certificate: try_proto_convert!(cert_with_deps.certificate),
-            blob_certificates,
+            blobs,
         })
     }
 }
@@ -465,10 +465,10 @@ impl TryFrom<CertificateWithDependencies> for grpc::CertificateWithDependencies 
     fn try_from(cert_with_deps: CertificateWithDependencies) -> Result<Self, Self::Error> {
         Ok(Self {
             certificate: Some(cert_with_deps.certificate.try_into()?),
-            blob_certificates: cert_with_deps
-                .blob_certificates
+            blobs: cert_with_deps
+                .blobs
                 .into_iter()
-                .map(grpc::Certificate::try_from)
+                .map(|value| bcs::to_bytes(&value))
                 .collect::<Result<_, _>>()?,
         })
     }

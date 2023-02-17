@@ -75,10 +75,10 @@ where
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-        blob_certificates: Vec<Certificate>,
+        blobs: Vec<Value>,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
-            validator.do_handle_certificate(certificate, blob_certificates, sender)
+            validator.do_handle_certificate(certificate, blobs, sender)
         })
         .await
     }
@@ -165,13 +165,13 @@ where
     async fn do_handle_certificate(
         self,
         certificate: Certificate,
-        blob_certificates: Vec<Certificate>,
+        blobs: Vec<Value>,
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
         let mut validator = self.0.lock().await;
         let result = validator
             .state
-            .fully_handle_certificate(certificate, blob_certificates)
+            .fully_handle_certificate(certificate, blobs)
             .await;
         sender.send(result.map_err(Into::into))
     }

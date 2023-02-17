@@ -495,7 +495,7 @@ RpcMessage:
         TUPLE:
           - TYPENAME: Certificate
           - SEQ:
-              TYPENAME: Certificate
+              TYPENAME: Value
     2:
       LiteCertificate:
         NEWTYPE:

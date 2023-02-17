@@ -768,11 +768,11 @@ where
     async fn process_certificate(
         &mut self,
         certificate: Certificate,
-        blob_certificates: Vec<Certificate>,
+        blobs: Vec<Value>,
     ) -> Result<(), NodeError> {
         let info = self
             .node_client
-            .handle_certificate(certificate, blob_certificates)
+            .handle_certificate(certificate, blobs)
             .await?
             .info;
         if info.chain_id == self.chain_id
@@ -862,7 +862,7 @@ where
             "A different operation was executed in parallel (consider retrying the operation)"
         );
         // Since `handle_block_proposal` succeeded, we have the needed bytecode.
-        // Leaving blob_certificates empty.
+        // Leaving blobs empty.
         self.process_certificate(final_certificate.clone(), vec![])
             .await?;
         self.pending_block = None;
